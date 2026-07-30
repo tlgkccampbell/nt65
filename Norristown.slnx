@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Norristown.Analysis/Norristown.Analysis.csproj" />
+    <Project Path="src/Norristown.Server/Norristown.Server.csproj" />
+    <Project Path="src/Norristown.Syntax/Norristown.Syntax.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests/Directory.Build.props" />
+    <Project Path="tests/Norristown.Analysis.Tests/Norristown.Analysis.Tests.csproj" />
+    <Project Path="tests/Norristown.Server.Tests/Norristown.Server.Tests.csproj" />
+    <Project Path="tests/Norristown.Syntax.Tests/Norristown.Syntax.Tests.csproj" />
+  </Folder>
+</Solution>

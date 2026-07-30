@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Norristown.Syntax\Norristown.Syntax.csproj" />
+  </ItemGroup>
+
+</Project>
