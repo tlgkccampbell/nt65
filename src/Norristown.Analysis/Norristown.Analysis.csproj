@@ -10,4 +10,12 @@
     <ProjectReference Include="..\Norristown.Syntax\Norristown.Syntax.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Norristown.Analysis.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Lexing\" />
+  </ItemGroup>
+
 </Project>
