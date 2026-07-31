@@ -268,7 +268,7 @@
                     parameterName, change, $"The change runs past the end of a text of {Length} characters.");
             }
 
-            if (change.Span.Start < 0)
+            if (change.Span.Start < previousEnd)
             {
                 throw new ArgumentException(
                     $"The change {change} overlaps another change in the same batch.", parameterName);

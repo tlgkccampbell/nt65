@@ -4,12 +4,15 @@ namespace Norristown.Analysis.Tests.Text
 {
     public sealed class LinePositionTests
     {
-        [Fact]
-        public void Constructor_SetsLineAndColumn()
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(123, 234)]
+        [InlineData(234, 345)]
+        public void Constructor_SetsLineAndColumn(Int32 line, Int32 column)
         {
-            var position = new LinePosition(123, 234);
-            Assert.Equal(123, position.Line);
-            Assert.Equal(234, position.Column);
+            var position = new LinePosition(line, column);
+            Assert.Equal(line, position.Line);
+            Assert.Equal(column, position.Column);
         }
 
         [Theory]
