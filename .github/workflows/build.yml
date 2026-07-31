@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Norristown.slnx
+
+      - name: Build
+        run: dotnet build Norristown.slnx --no-restore --configuration Release
+
+      # --ignore-exit-code 8 tolerates test projects that don't contain any tests yet
+      - name: Test
+        run: >
+          dotnet test --solution Norristown.slnx --no-build --configuration Release
+          --coverage --coverage-output-format cobertura
+          --ignore-exit-code 8
+
+      - name: Generate coverage report
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator -reports:"TestResults/*.cobertura.xml" -targetdir:coveragereport "-reporttypes:MarkdownSummaryGithub"
+
+      - name: Publish coverage to job summary
+        run: cat coveragereport/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Forked PRs get a read-only token and can't post comments
+      - name: Post coverage comment on PR
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          path: coveragereport/SummaryGithub.md
