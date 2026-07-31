@@ -1,4 +1,4 @@
-﻿namespace Norristown.Analysis.Text
+﻿namespace Norristown.Syntax.Text
 {
     /// <summary>
     /// An immutable snapshot of one source file's text.

@@ -1,4 +1,4 @@
-﻿namespace Norristown.Analysis.Text
+﻿namespace Norristown.Syntax.Text
 {
     /// <summary>
     /// A zero-based position within a <see cref="SourceText"/>; a (line, column) pair.

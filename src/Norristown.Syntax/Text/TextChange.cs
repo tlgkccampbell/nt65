@@ -1,4 +1,4 @@
-﻿namespace Norristown.Analysis.Text
+﻿namespace Norristown.Syntax.Text
 {
     /// <summary>
     /// A replacement of one range of a <see cref="SourceText"/> with new text.

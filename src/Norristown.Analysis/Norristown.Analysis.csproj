@@ -14,8 +14,4 @@
     <InternalsVisibleTo Include="Norristown.Analysis.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Lexing\" />
-  </ItemGroup>
-
 </Project>

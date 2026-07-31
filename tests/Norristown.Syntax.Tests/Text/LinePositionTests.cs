@@ -1,6 +1,6 @@
-﻿using Norristown.Analysis.Text;
+﻿using Norristown.Syntax.Text;
 
-namespace Norristown.Analysis.Tests.Text
+namespace Norristown.Syntax.Tests.Text
 {
     public sealed class LinePositionTests
     {

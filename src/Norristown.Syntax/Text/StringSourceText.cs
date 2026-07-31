@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Norristown.Analysis.Text
+namespace Norristown.Syntax.Text
 {
     /// <summary>
     /// A basic implementation of <see cref="SourceText"/> representing the entire text

@@ -1,4 +1,4 @@
-﻿namespace Norristown.Analysis.Text
+﻿namespace Norristown.Syntax.Text
 {
     /// <summary>
     /// A contiguous range of characters in a source text.
