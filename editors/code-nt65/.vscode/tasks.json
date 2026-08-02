@@ -1,0 +1,32 @@
+// See https://go.microsoft.com/fwlink/?LinkId=733558
+// for the documentation about the tasks.json format
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "label": "build: server",
+            "type": "shell",
+            "command": "dotnet",
+            "args": ["build", "Norristown.slnx"],
+            "options": { "cwd": "${workspaceFolder}/../.." },
+            "problemMatcher": "$msCompile",
+            "presentation": { "reveal": "silent", "clear": true }
+        },    
+        {
+            "label": "build: extension",
+            "type": "shell",
+            "command": "npm",
+            "args": ["run", "build"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent" }
+        },
+        {
+            "label": "build: extension + server",
+            "dependsOn": ["build: server", "build: extension"],
+            "dependsOrder": "sequence",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        }
+	]
+}

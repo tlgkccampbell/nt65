@@ -1,6 +1,6 @@
 # nt65-code README
 
-This is the README for your extension "nt65-code". After writing up a brief description, we recommend including the following sections.
+This is the README for your extension "code-nt65". After writing up a brief description, we recommend including the following sections.
 
 ## Features
 
