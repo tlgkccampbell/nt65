@@ -1,0 +1,27 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+indent_style = space
+
+# Only rules that something in the build actually runs belong here. StyleCop is deliberately
+# not a dependency, so its SA rules would do nothing; the conventions no first-party analyzer
+# can check (member ordering, one type per file) live in CLAUDE.md and are not enforced.
+[*.cs]
+indent_size = 4
+
+# System directives first, outside the namespace, and no unnecessary ones.
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace
+dotnet_diagnostic.IDE0005.severity = warning
+
+# File-scoped namespaces.
+csharp_style_namespace_declarations = file_scoped
+dotnet_diagnostic.IDE0161.severity = warning
+
+# Whitespace and wrapping, as dotnet format would write them.
+dotnet_diagnostic.IDE0055.severity = warning
+
+[*.{json,yml,yaml}]
+indent_size = 2

@@ -208,6 +208,14 @@ looking inside any line. Every block opener is a keyword line, a macro call or a
 continuation line, which gives error recovery an anchor when braces are unbalanced
 mid-edit; there are no bare `{` blocks, `.scope {` serves that purpose.
 
+Recovery uses that anchor only when it must. While the braces balance, the tree is exactly
+the prefix sum, so a construct written where it may not appear, such as a `.proc` inside a
+`.proc`, keeps the structure it was written with and is reported by the parser rather than
+guessed at by the block layer. Where they do not balance, a `}` with no open block is
+reported and treated as an ordinary line, and a `.proc` or `.macro` opener inside a proc or
+a macro closes the blocks back to outside it, so the items after a missing `}` are still
+found.
+
 ## 5. Program structure
 
 A program is the set of `.nt65` files handed to the transpiler. Each file is a sequence

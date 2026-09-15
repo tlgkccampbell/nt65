@@ -4,7 +4,7 @@ using System.Text;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// Lexes one line at a time, with no state carried between lines (§4). Whitespace before
+/// Lexes one line at a time, with no state carried between lines. Whitespace before
 /// the first token is its leading trivia; whitespace and a comment after a token, up to the
 /// line break, are its trailing trivia; the line break is the text of the final
 /// <see cref="SyntaxKind.EndOfLine"/> token, which carries the trivia of a line with no
@@ -192,7 +192,7 @@ public static class Lexer
 
     /// <summary>
     /// A character or string literal, up to its closing quote or the end of the line. The
-    /// escapes are <c>\n \r \t \\ \" \' \xHH</c> (§4) in both. Returns the first error.
+    /// escapes are <c>\n \r \t \\ \" \' \xHH</c> in both. Returns the first error.
     /// </summary>
     private static string? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {

@@ -3,6 +3,9 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>Norristown.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <!-- Test classes and methods are public because the runner discovers them, not because
+         they are an API, so they carry no XML documentation. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.1" />

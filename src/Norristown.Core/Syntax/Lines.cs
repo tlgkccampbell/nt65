@@ -2,57 +2,6 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax;
 
-/// <summary>
-/// A line's kind from its first one or two tokens (§4). What a kind means inside a
-/// particular block (an enum member, a list item, a splice) is the parser's business.
-/// </summary>
-public enum LineKind
-{
-    /// <summary>No tokens: whitespace and comments only.</summary>
-    Blank,
-    /// <summary><c>.word</c>, or any other directive, including block openers.</summary>
-    Directive,
-    /// <summary><c>name :</c>, optionally followed by a statement.</summary>
-    Label,
-    /// <summary><c>name = expr</c>.</summary>
-    Constant,
-    /// <summary><c>name ! (...)</c>.</summary>
-    MacroCall,
-    /// <summary>An identifier alone.</summary>
-    BareIdentifier,
-    /// <summary>A mnemonic.</summary>
-    Instruction,
-    /// <summary>Anything else; list items inside <c>.list</c>, an error elsewhere.</summary>
-    Expression,
-    /// <summary><c>}</c>, optionally continuing with <c>.else {</c>, <c>.elseif expr {</c> or <c>name {</c>.</summary>
-    BlockClose,
-}
-
-/// <summary>The kind of block a line opens, from the statement that ends in <c>{</c>.</summary>
-public enum BlockKind
-{
-    None,
-    /// <summary>A block whose opener names no known block construct.</summary>
-    Unknown,
-    Proc,
-    Scope,
-    Macro,
-    Enum,
-    Struct,
-    Union,
-    Charmap,
-    List,
-    Segment,
-    /// <summary><c>.if</c>, <c>.elseif</c> or <c>.else</c>.</summary>
-    If,
-    Repeat,
-    Each,
-    /// <summary>A multi-line <c>.tag T {</c> initializer.</summary>
-    TagInitializer,
-    /// <summary>A block argument of a macro call, first or continuation.</summary>
-    MacroBlock,
-}
-
 internal static class Lines
 {
     public static LineKind Classify(ImmutableArray<GreenToken> tokens)
@@ -70,8 +19,8 @@ internal static class Lines
         }
 
         // A register or mnemonic in label or constant position still makes a label or a
-        // constant: struct members and initializer values may use those names (§6.3), and
-        // elsewhere the reserved-word error is clearer than an unrecognized line.
+        // constant: struct members and initializer values may use those names, and elsewhere
+        // the reserved-word error is clearer than an unrecognized line.
         if (first is SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.Register or SyntaxKind.Mnemonic)
         {
             if (second == SyntaxKind.Colon)
@@ -89,7 +38,7 @@ internal static class Lines
     }
 
     /// <summary>
-    /// Whether the line opens and closes a block (§4). A <c>{</c> inside a parenthesis still
+    /// Whether the line opens and closes a block. A <c>{</c> inside a parenthesis still
     /// open on the line does not open one, so a half-typed <c>m!({</c> swallows nothing.
     /// </summary>
     public static (bool Opens, bool Closes) Braces(ImmutableArray<GreenToken> tokens)

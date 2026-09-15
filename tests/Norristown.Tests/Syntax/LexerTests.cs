@@ -4,8 +4,6 @@ namespace Norristown.Tests.Syntax;
 
 public sealed class LexerTests
 {
-    private static string Lex(string line) => SyntaxDump.Tokens(Lexer.LexLine(line));
-
     [Theory]
     // Identifiers and scoped names. `::` is one token, so `z::foo` walks into scope z.
     [InlineData("foo _bar Baz9", "Identifier:foo Identifier:_bar Identifier:Baz9")]
@@ -110,4 +108,6 @@ public sealed class LexerTests
         Assert.NotSame(Lexer.LexLine("rts ; x").Tokens[0], Lexer.LexLine("rts ; x").Tokens[0]);
         Assert.NotSame(Lexer.LexLine("$").Tokens[0], Lexer.LexLine("$").Tokens[0]);
     }
+
+    private static string Lex(string line) => SyntaxDump.Tokens(Lexer.LexLine(line));
 }

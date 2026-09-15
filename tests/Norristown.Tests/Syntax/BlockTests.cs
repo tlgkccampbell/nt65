@@ -2,41 +2,36 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
 
-public sealed class LineKindTests
-{
-    [Theory]
-    [InlineData("", LineKind.Blank)]
-    [InlineData("   ; a comment", LineKind.Blank)]
-    [InlineData(".word 1, 2", LineKind.Directive)]
-    [InlineData("    .proc draw {", LineKind.Directive)]
-    [InlineData("loop: lda #1", LineKind.Label)]
-    [InlineData("@loop:", LineKind.Label)]
-    [InlineData("z:", LineKind.Label)]
-    [InlineData("x: .word", LineKind.Label)] // a struct member may be named like a register
-    [InlineData("boss:   .tag Actor { x = 100 }", LineKind.Label)]
-    [InlineData("SCREEN = $0400", LineKind.Constant)]
-    [InlineData("@n = 1", LineKind.Constant)]
-    [InlineData("x = 16", LineKind.Constant)] // an initializer value for a member named x
-    [InlineData("set16!(ptr, SCREEN)", LineKind.MacroCall)]
-    [InlineData("if!(cs) {", LineKind.MacroCall)]
-    [InlineData("red", LineKind.BareIdentifier)]
-    [InlineData("  body    ; splice", LineKind.BareIdentifier)]
-    [InlineData("lda #1", LineKind.Instruction)]
-    [InlineData("jeq @far", LineKind.Instruction)]
-    [InlineData("asl", LineKind.Instruction)]
-    [InlineData("cmd_move - 1, cmd_fire - 1", LineKind.Expression)]
-    [InlineData("gfx::init", LineKind.Expression)]
-    [InlineData("@done", LineKind.Expression)]
-    [InlineData("x", LineKind.Expression)]
-    [InlineData("42", LineKind.Expression)]
-    [InlineData("}", LineKind.BlockClose)]
-    [InlineData("} .elseif LEVEL > 2 {", LineKind.BlockClose)]
-    [InlineData("} else {", LineKind.BlockClose)]
-    public void ClassifiedByTheFirstTokens(string line, LineKind kind) => Assert.Equal(kind, Lexer.LexLine(line).LineKind);
-}
-
 public sealed class BlockTests
 {
+    private const string ThreeProcsBlocks = """
+        Proc 1-3
+        Proc 4-9
+          Scope 5-7
+        Segment 10-12
+        Proc 13-15
+
+        """;
+
+    private static readonly string[] ThreeProcs =
+    [
+        ".proc a {",
+        "    rts",
+        "}",
+        ".proc b {",
+        "    .scope {",
+        "        nop",
+        "    }",
+        "    rts",
+        "}",
+        ".rodata {",
+        "table: .byte 1",
+        "}",
+        ".proc c {",
+        "    rts",
+        "}",
+    ];
+
     [Theory]
     [InlineData(".proc f {", 1, BlockKind.Proc)]
     [InlineData(".proc f: a16, i8 -> a8, i8 {   ; comment", 1, BlockKind.Proc)]
@@ -66,11 +61,6 @@ public sealed class BlockTests
         Assert.Equal(kind, green.OpensBlockKind);
     }
 
-    private static SyntaxTree Parse(params string[] lines) => SyntaxTree.Parse("main.nt65", string.Join("\n", lines) + "\n");
-
-    private static string[] Messages(SyntaxTree tree) =>
-        [.. tree.Diagnostics.Select(d => $"{d.Span.Line}:{d.Span.StartColumn}: {d.Message}")];
-
     [Fact]
     public void ContinuationLinesChainSiblingBlocks()
     {
@@ -99,34 +89,6 @@ public sealed class BlockTests
         Assert.Empty(tree.Diagnostics);
         Assert.Equal(tree.Text, tree.Root.ToFullString());
     }
-
-    private static readonly string[] ThreeProcs =
-    [
-        ".proc a {",
-        "    rts",
-        "}",
-        ".proc b {",
-        "    .scope {",
-        "        nop",
-        "    }",
-        "    rts",
-        "}",
-        ".rodata {",
-        "table: .byte 1",
-        "}",
-        ".proc c {",
-        "    rts",
-        "}",
-    ];
-
-    private const string ThreeProcsBlocks = """
-        Proc 1-3
-        Proc 4-9
-          Scope 5-7
-        Segment 10-12
-        Proc 13-15
-
-        """;
 
     [Fact]
     public void AHalfTypedMacroCallSwallowsNothing()
@@ -206,4 +168,9 @@ public sealed class BlockTests
             [new Span("main.nt65", 2, 11, 14), new Span("main.nt65", 2, 16, 20)],
             tree.Diagnostics.Select(d => d.Span));
     }
+
+    private static SyntaxTree Parse(params string[] lines) => SyntaxTree.Parse("main.nt65", string.Join("\n", lines) + "\n");
+
+    private static string[] Messages(SyntaxTree tree) =>
+        [.. tree.Diagnostics.Select(d => $"{d.Span.Line}:{d.Span.StartColumn}: {d.Message}")];
 }

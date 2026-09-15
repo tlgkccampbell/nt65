@@ -7,7 +7,7 @@ namespace Norristown.Tests.Fixtures;
 /// <list type="bullet">
 /// <item><c>**/*.nt65</c>, the program, with expected diagnostics written inline as trailing
 /// comments: <c>;! error: message</c> on the line the diagnostic is reported on;</item>
-/// <item><c>nt65.json</c>, optional (not read until projects exist, Stage 6);</item>
+/// <item><c>nt65.json</c>, optional and not read yet;</item>
 /// <item><c>expected/**/*.s</c>, the output snapshot, one file per generated file, at the
 /// output's path.</item>
 /// </list>
@@ -43,6 +43,21 @@ internal sealed partial record FixtureCase(string Name, string Directory, IReadO
     public static string RelativePath(string directory, string path) =>
         System.IO.Path.GetRelativePath(directory, path).Replace(System.IO.Path.DirectorySeparatorChar, '/');
 
+    public static IEnumerable<string> ParseInlineDiagnostics(SourceFile file)
+    {
+        var lines = file.Text.ReplaceLineEndings("\n").Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            // A `;!` inside a string literal would be misread; fixtures should not do that.
+            foreach (Match m in InlineDiagnostic().Matches(lines[i]))
+                yield return $"{file.Path}:{i + 1}: {m.Groups["severity"].Value}: {m.Groups["message"].Value.Trim()}";
+        }
+    }
+
+    /// <summary>The comparison form: file, line, severity and message. Columns are not checked.</summary>
+    public static string Format(Diagnostic d) =>
+        $"{d.Span.File}:{d.Span.Line}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}";
+
     /// <summary>Expected output, keyed by output path.</summary>
     public SortedDictionary<string, string> ExpectedOutputs()
     {
@@ -59,21 +74,6 @@ internal sealed partial record FixtureCase(string Name, string Directory, IReadO
     /// <summary>Expected diagnostics from the inline <c>;!</c> comments, as formatted by <see cref="Format"/>.</summary>
     public List<string> ExpectedDiagnostics() =>
         [.. Sources.SelectMany(ParseInlineDiagnostics).Order(StringComparer.Ordinal)];
-
-    public static IEnumerable<string> ParseInlineDiagnostics(SourceFile file)
-    {
-        var lines = file.Text.ReplaceLineEndings("\n").Split('\n');
-        for (var i = 0; i < lines.Length; i++)
-        {
-            // A `;!` inside a string literal would be misread; fixtures should not do that.
-            foreach (Match m in InlineDiagnostic().Matches(lines[i]))
-                yield return $"{file.Path}:{i + 1}: {m.Groups["severity"].Value}: {m.Groups["message"].Value.Trim()}";
-        }
-    }
-
-    /// <summary>The comparison form: file, line, severity and message. Columns are not checked.</summary>
-    public static string Format(Diagnostic d) =>
-        $"{d.Span.File}:{d.Span.Line}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}";
 
     [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*:(?<message>.*)$")]
     private static partial Regex InlineDiagnostic();

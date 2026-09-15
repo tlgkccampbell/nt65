@@ -3,24 +3,17 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// The block layer (§4): a pass over the lines' brace values that never looks inside a
-/// line. When the braces balance, the tree is exactly what the prefix sum gives. When they
-/// do not, two recovery rules keep the damage local:
+/// The block layer: a pass over the lines' brace values that never looks inside a line.
+/// When the braces balance, the tree is what the prefix sum over those values gives. When
+/// they do not, two recovery rules keep the damage local:
 /// <list type="bullet">
 /// <item>a <c>}</c> with no open block is reported and treated as an ordinary line;</item>
 /// <item>a <c>.proc</c> or <c>.macro</c> opener inside a proc or a macro closes the blocks
-/// back to outside it, since neither may appear there (§6.1, §11.3). These openers are the
-/// anchors the design promises for recovery.</item>
+/// back to outside it, since neither may appear there.</item>
 /// </list>
-/// Balanced braces never trigger the second rule, so a proc written inside a proc keeps its
-/// structure and can be reported as such by the parser.
 /// </summary>
 internal static class Blocks
 {
-    public readonly record struct Error(int Line, int Token, string Message);
-
-    private sealed record Frame(int Line, ImmutableArray<GreenNode>.Builder Children);
-
     public static GreenFile Build(ImmutableArray<GreenLine> lines, List<Error> errors)
     {
         var balanced = IsBalanced(lines);
@@ -102,4 +95,8 @@ internal static class Blocks
         }
         return depth == 0;
     }
+
+    public readonly record struct Error(int Line, int Token, string Message);
+
+    private sealed record Frame(int Line, ImmutableArray<GreenNode>.Builder Children);
 }

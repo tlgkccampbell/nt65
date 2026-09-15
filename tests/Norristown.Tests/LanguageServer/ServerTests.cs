@@ -8,14 +8,6 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>Drives the server in-process over a pair of streams, the way an editor would.</summary>
 public sealed class ServerTests
 {
-    private sealed class Client
-    {
-        public TaskCompletionSource<JsonElement> LogMessage { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        [JsonRpcMethod("window/logMessage", UseSingleObjectParameterDeserialization = true)]
-        public void OnLogMessage(JsonElement message) => LogMessage.TrySetResult(message);
-    }
-
     [Fact]
     public async Task InitializesLogsTheConnectionAndExits()
     {
@@ -43,5 +35,13 @@ public sealed class ServerTests
         await rpc.InvokeWithParameterObjectAsync<JsonElement>("shutdown", null, timeout);
         await rpc.NotifyWithParameterObjectAsync("exit", null);
         await server.WaitAsync(TimeSpan.FromSeconds(10), timeout);
+    }
+
+    private sealed class Client
+    {
+        public TaskCompletionSource<JsonElement> LogMessage { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        [JsonRpcMethod("window/logMessage", UseSingleObjectParameterDeserialization = true)]
+        public void OnLogMessage(JsonElement message) => LogMessage.TrySetResult(message);
     }
 }

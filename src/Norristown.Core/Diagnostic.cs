@@ -1,15 +1,13 @@
 namespace Norristown;
 
-/// <summary>A range on one line. Lines and columns are 1-based; <see cref="EndColumn"/> is exclusive.</summary>
-public readonly record struct Span(string File, int Line, int StartColumn, int EndColumn);
-
-public enum Severity { Error, Warning, Info }
-
-public sealed record RelatedSpan(Span Span, string Message);
-
 /// <summary>Diagnostics are data: a span, a severity, a message and optional related spans.</summary>
+/// <param name="Span">Where it is reported.</param>
+/// <param name="Severity">How much it matters.</param>
+/// <param name="Message">What to tell the programmer.</param>
+/// <param name="Related">Other places that explain it.</param>
 public sealed record Diagnostic(Span Span, Severity Severity, string Message, IReadOnlyList<RelatedSpan> Related)
 {
+    /// <summary>A diagnostic with no related spans.</summary>
     public Diagnostic(Span span, Severity severity, string message)
         : this(span, severity, message, []) { }
 }

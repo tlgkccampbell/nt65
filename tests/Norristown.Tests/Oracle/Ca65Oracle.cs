@@ -5,10 +5,6 @@ using System.Text.RegularExpressions;
 
 namespace Norristown.Tests.Oracle;
 
-/// <param name="Messages">Everything ca65 printed. Success means ca65 exited cleanly and printed nothing.</param>
-/// <param name="LineBytes">Bytes ca65 generated for each source line; <c>LineBytes[0]</c> is line 1.</param>
-internal sealed record AssemblyResult(bool Succeeded, string Messages, IReadOnlyList<int> LineBytes);
-
 /// <summary>
 /// Runs ca65 built from the pinned cc65 commit (scripts/cc65.commit), and nothing else: not
 /// whatever is on PATH, and not a build that reports another commit.
@@ -19,9 +15,6 @@ internal sealed partial class Ca65Oracle
         Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65"),
         File.ReadAllText(Repo.Path("scripts", "cc65.commit")).Trim(),
         Repo.Path(".cache", "oracle")));
-
-    /// <summary>The pinned build, checked once per test run.</summary>
-    public static Ca65Oracle Pinned => pinned.Value;
 
     private readonly string ca65;
     private readonly string commit;
@@ -38,6 +31,9 @@ internal sealed partial class Ca65Oracle
         this.cacheDirectory = cacheDirectory;
     }
 
+    /// <summary>The pinned build, checked once per test run.</summary>
+    public static Ca65Oracle Pinned => pinned.Value;
+
     /// <summary>Throws unless the <c>ca65 --version</c> output names <paramref name="pinnedCommit"/>.</summary>
     public static void CheckVersion(string versionOutput, string pinnedCommit)
     {
@@ -48,6 +44,34 @@ internal sealed partial class Ca65Oracle
                 $"refusing to use ca65: it reports \"{versionOutput.Trim()}\", but the pinned cc65 commit is " +
                 $"{pinnedCommit}; run scripts/build-cc65.ps1");
         }
+    }
+
+    /// <summary>
+    /// Byte counts per line of the included file (listing level 2). A ca65 listing row is
+    /// <c>AAAAAAr L  BB BB BB BB  source</c>: address and relocation flag, include level,
+    /// up to four bytes in a 13-column field, then the source text with trailing blanks
+    /// removed. Bytes past the fourth go on continuation rows with no source text; a blank
+    /// source line also has no text, but never has bytes.
+    /// </summary>
+    public static int[] ParseListing(string listing, int sourceLines)
+    {
+        var counts = new List<int>();
+        foreach (var row in listing.ReplaceLineEndings("\n").Split('\n'))
+        {
+            var m = ListingRow().Match(row);
+            if (!m.Success || m.Groups["level"].Value != "2")
+                continue;
+            var byteCount = m.Groups["bytes"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            var text = m.Groups["text"].Value;
+            if (text.Length == 0 && byteCount > 0 && counts.Count > 0)
+                counts[^1] += byteCount;
+            else
+                counts.Add(byteCount);
+        }
+        // ca65 lists one extra empty row for the end of the included file.
+        if (counts.Count < sourceLines)
+            throw new InvalidOperationException($"listing has {counts.Count} rows for {sourceLines} source lines");
+        return [.. counts.Take(sourceLines)];
     }
 
     /// <summary>Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached by content.</summary>
@@ -93,34 +117,6 @@ internal sealed partial class Ca65Oracle
         {
             work.Delete(recursive: true);
         }
-    }
-
-    /// <summary>
-    /// Byte counts per line of the included file (listing level 2). A ca65 listing row is
-    /// <c>AAAAAAr L  BB BB BB BB  source</c>: address and relocation flag, include level,
-    /// up to four bytes in a 13-column field, then the source text with trailing blanks
-    /// removed. Bytes past the fourth go on continuation rows with no source text; a blank
-    /// source line also has no text, but never has bytes.
-    /// </summary>
-    public static int[] ParseListing(string listing, int sourceLines)
-    {
-        var counts = new List<int>();
-        foreach (var row in listing.ReplaceLineEndings("\n").Split('\n'))
-        {
-            var m = ListingRow().Match(row);
-            if (!m.Success || m.Groups["level"].Value != "2")
-                continue;
-            var byteCount = m.Groups["bytes"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-            var text = m.Groups["text"].Value;
-            if (text.Length == 0 && byteCount > 0 && counts.Count > 0)
-                counts[^1] += byteCount;
-            else
-                counts.Add(byteCount);
-        }
-        // ca65 lists one extra empty row for the end of the included file.
-        if (counts.Count < sourceLines)
-            throw new InvalidOperationException($"listing has {counts.Count} rows for {sourceLines} source lines");
-        return [.. counts.Take(sourceLines)];
     }
 
     private static (int ExitCode, string Output) Execute(string exe, string[] arguments, string? workingDirectory)

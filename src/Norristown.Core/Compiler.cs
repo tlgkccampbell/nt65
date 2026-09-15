@@ -2,15 +2,15 @@ using Norristown.Syntax;
 
 namespace Norristown;
 
-public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyList<Diagnostic> Diagnostics);
-
 /// <summary>
 /// The whole pipeline, from a set of source files to ca65 output and diagnostics. The
 /// order of <c>files</c> must not affect the result.
 /// </summary>
 public static class Compiler
 {
-    // Stage 1: lexing and blocks only, so a program yields syntax diagnostics and no output.
+    // Lexing and blocks are the only layers so far, so a program yields syntax diagnostics
+    // and no output.
+    /// <summary>Compiles <paramref name="files"/> as one program.</summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files)
     {
         var diagnostics = files

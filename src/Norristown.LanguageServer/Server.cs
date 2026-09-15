@@ -1,8 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Norristown.LanguageServer.Protocol;
 using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
+
+// The Protocol folder holds hand-written LSP types, only for the messages the server
+// handles. Property names are camel-cased by the formatter.
 
 internal sealed class Server
 {
@@ -29,14 +33,6 @@ internal sealed class Server
         }
     }
 
-    internal static SystemTextJsonFormatter CreateFormatter()
-    {
-        var formatter = new SystemTextJsonFormatter();
-        formatter.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        formatter.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-        return formatter;
-    }
-
     [JsonRpcMethod("initialize")]
     public InitializeResult Initialize(InitializeParams request)
     {
@@ -55,4 +51,12 @@ internal sealed class Server
 
     [JsonRpcMethod("exit")]
     public void Exit() => rpc!.Dispose();
+
+    internal static SystemTextJsonFormatter CreateFormatter()
+    {
+        var formatter = new SystemTextJsonFormatter();
+        formatter.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        formatter.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        return formatter;
+    }
 }

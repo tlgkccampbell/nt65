@@ -19,12 +19,22 @@ public sealed class SyntaxNode
         Position = position;
     }
 
+    /// <summary>The tree this node belongs to.</summary>
     public SyntaxTree Tree { get; }
+
+    /// <summary>The node containing this one, or null for the root.</summary>
     public SyntaxNode? Parent { get; }
+
+    /// <summary>The green node this one wraps.</summary>
     public GreenNode Green { get; }
+
+    /// <summary>Where the node starts in the file's text, trivia included.</summary>
     public int Position { get; }
 
+    /// <summary>What the node is.</summary>
     public SyntaxKind Kind => Green.Kind;
+
+    /// <summary>The node's range in the file's text, trivia included.</summary>
     public TextSpan FullSpan => new(Position, Green.FullWidth);
 
     /// <summary>The 0-based line this node starts on.</summary>
@@ -74,6 +84,7 @@ public sealed class SyntaxNode
         }
     }
 
+    /// <summary>Every node below this one, parents before children.</summary>
     public IEnumerable<SyntaxNode> DescendantNodes()
     {
         foreach (var child in ChildNodes)
@@ -84,20 +95,9 @@ public sealed class SyntaxNode
         }
     }
 
+    /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
+    /// <summary>The node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
-}
-
-public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, int Position)
-{
-    public SyntaxKind Kind => Green.Kind;
-    public string Text => Green.Text;
-
-    /// <summary>The token's text, without trivia.</summary>
-    public TextSpan Span => new(Position + Green.LeadingWidth, Green.Text.Length);
-
-    public TextSpan FullSpan => new(Position, Green.FullWidth);
-
-    public override string ToString() => Text;
 }

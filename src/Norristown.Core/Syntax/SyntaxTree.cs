@@ -2,14 +2,6 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax;
 
-public readonly record struct TextSpan(int Start, int Length)
-{
-    public int End => Start + Length;
-}
-
-/// <summary>Replaces <see cref="Length"/> characters at <see cref="Start"/> with <see cref="NewText"/>.</summary>
-public readonly record struct TextChange(int Start, int Length, string NewText);
-
 /// <summary>
 /// One file's syntax: its lines, each lexed on its own, and the block structure over them.
 /// A tree is immutable; <see cref="WithChange"/> gives the tree for an edited text, reusing
@@ -19,17 +11,6 @@ public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
     private SyntaxNode? root;
-
-    public string Path { get; }
-    public string Text { get; }
-
-    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
-    public ImmutableArray<GreenLine> Lines { get; }
-
-    /// <summary>The offset in <see cref="Text"/> where each line starts.</summary>
-    public ImmutableArray<int> LineStarts { get; }
-
-    public GreenFile Green { get; }
 
     private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
     {
@@ -42,8 +23,31 @@ public sealed class SyntaxTree
         diagnostics = new(() => CollectDiagnostics(blockErrors));
     }
 
+    /// <summary>The file's logical path, as it appears in diagnostics.</summary>
+    public string Path { get; }
+
+    /// <summary>The file's text.</summary>
+    public string Text { get; }
+
+    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
+    public ImmutableArray<GreenLine> Lines { get; }
+
+    /// <summary>The offset in <see cref="Text"/> where each line starts.</summary>
+    public ImmutableArray<int> LineStarts { get; }
+
+    /// <summary>The file's lines and blocks.</summary>
+    public GreenFile Green { get; }
+
+    /// <summary>The root node, created on first use.</summary>
+    public SyntaxNode Root => root ??= new SyntaxNode(this, null, Green, 0);
+
+    /// <summary>Lexical and block-structure errors.</summary>
+    public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
+
+    /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
 
+    /// <summary>Parses <paramref name="text"/> as the file at <paramref name="path"/>.</summary>
     public static SyntaxTree Parse(string path, string text)
     {
         var starts = SplitLines(text);
@@ -98,11 +102,6 @@ public sealed class SyntaxTree
         return new SyntaxTree(Path, text, starts, lines.MoveToImmutable());
     }
 
-    public SyntaxNode Root => root ??= new SyntaxNode(this, null, Green, 0);
-
-    /// <summary>Lexical and block-structure errors.</summary>
-    public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
-
     /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
     public int GetLineIndex(int position)
     {
@@ -116,29 +115,6 @@ public sealed class SyntaxTree
         var line = GetLineIndex(span.Start);
         var column = span.Start - LineStarts[line] + 1;
         return new Span(Path, line + 1, column, column + span.Length);
-    }
-
-    private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
-    {
-        var result = new List<Diagnostic>();
-        Diagnostic At(int line, int token, string message)
-        {
-            var green = Lines[line];
-            var column = green.TextOffset(token) + 1;
-            return new Diagnostic(new Span(Path, line + 1, column, column + green.Tokens[token].Text.Length), Severity.Error, message);
-        }
-
-        for (var i = 0; i < Lines.Length; i++)
-        {
-            var tokens = Lines[i].Tokens;
-            for (var t = 0; t < tokens.Length; t++)
-            {
-                if (tokens[t].Error is { } error)
-                    result.Add(At(i, t, error));
-            }
-        }
-        result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
-        return result;
     }
 
     /// <summary>Line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each end a line, as in LSP.</summary>
@@ -165,4 +141,27 @@ public sealed class SyntaxTree
 
     private static ReadOnlySpan<char> LineText(string text, ImmutableArray<int> starts, int line) =>
         text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
+
+    private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
+    {
+        var result = new List<Diagnostic>();
+        Diagnostic At(int line, int token, string message)
+        {
+            var green = Lines[line];
+            var column = green.TextOffset(token) + 1;
+            return new Diagnostic(new Span(Path, line + 1, column, column + green.Tokens[token].Text.Length), Severity.Error, message);
+        }
+
+        for (var i = 0; i < Lines.Length; i++)
+        {
+            var tokens = Lines[i].Tokens;
+            for (var t = 0; t < tokens.Length; t++)
+            {
+                if (tokens[t].Error is { } error)
+                    result.Add(At(i, t, error));
+            }
+        }
+        result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
+        return result;
+    }
 }
