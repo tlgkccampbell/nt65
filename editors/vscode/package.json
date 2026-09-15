@@ -1,0 +1,35 @@
+{
+  "name": "nt65",
+  "displayName": "nt65 (Norristown Assembler)",
+  "description": "nt65 assembly: starts the Norristown language server.",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "nt65",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "nt65",
+        "aliases": ["nt65"],
+        "extensions": [".nt65"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "nt65",
+      "properties": {
+        "nt65.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Norristown language server executable. Empty uses the Debug build in this repository."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

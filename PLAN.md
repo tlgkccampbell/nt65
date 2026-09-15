@@ -24,8 +24,8 @@ Treat the design as the best current statement of intent, not as a contract:
   records, no ADRs and no spec documents. This is a proof of concept; process is not the
   deliverable.
 
-Internal interfaces (AST shape, module boundaries, the fixture format) are ours to change
-whenever the work calls for it.
+Internal interfaces (syntax node shapes, module boundaries, the fixture format) are ours to
+change whenever the work calls for it.
 
 ## Approach
 
@@ -47,13 +47,19 @@ language surface and can be reordered, deferred or dropped at the user's call.
 
 ## Technology
 
+**Names.** *nt65* is the language, and `nt65` is the command: the executable, the `.nt65`
+file extension, `nt65.json` and the VS Code language id. The tool that implements it is
+the **Norristown Assembler**, named after Norristown, Pennsylvania, where MOS Technology
+had its headquarters. It stands to nt65 as Roslyn stands to C#. The solution, projects
+and namespaces use `Norristown` (`Norristown.Core`, `Norristown.LanguageServer`, ...),
+never `Nt65`.
+
 **C# on .NET 10** (SDK 10.0.302 is installed). One solution holds the analysis core, the
 CLI, the language server and the tests.
 
-- **Language server.** Choose the library in Stage 0: `OmniSharp.Extensions.LanguageServer`
-  is the established full-featured option; `StreamJsonRpc` with hand-written types for
-  the few requests we use is the lighter one. Take whichever gets a server talking to VS
-  Code with less friction.
+- **Language server.** `StreamJsonRpc` with hand-written types for the few requests we use
+  (chosen in Stage 0 over `OmniSharp.Extensions.LanguageServer`, which is unmaintained
+  since 2023 and heavy on dependencies). Add protocol types as stages need them.
 - **Editor client.** A minimal VS Code extension that only launches the server and ships
   the TextMate grammar. It is the one piece not written in C#, and should stay a few dozen
   lines.
@@ -71,8 +77,8 @@ number does not say what ca65 accepts. nt65 pins a commit instead: **cc65
 `e11fb5c39371046ebe25485f984f644c5a0d65d3`** (2026-08-20, the head of `master` when this
 plan was written). `DESIGN.md` §13 states the same pin.
 
-- `tools/cc65.commit` holds the SHA. A script clones cc65, checks out that commit and
-  builds `ca65` and `ld65` into `.tools/cc65/` (ignored by git). `make` and MinGW `gcc` are
+- `scripts/cc65.commit` holds the SHA. A script clones cc65, checks out that commit and
+  builds `ca65` and `ld65` into `.cache/cc65/` (ignored by git). `make` and MinGW `gcc` are
   installed.
 - The oracle uses only that build, never whatever is on `PATH`. It checks that
   `ca65 --version` reports the pinned commit and refuses to run otherwise. The copy at
@@ -86,23 +92,24 @@ plan was written). `DESIGN.md` §13 states the same pin.
 One analysis core, used by both the CLI and the server. The server never runs ca65.
 
 ```
-Nt65.slnx
+Norristown.slnx
 src/
-  Nt65.Core/            one project; folders and namespaces per layer:
-    Syntax/             lexer (per line), line kinds, block layer, parser, AST
-    Project/            nt65.json, file set, defines, segment and range tables, CPU
-    Semantics/          scopes, declarations, resolution, constant and shape evaluation
-    Expand/             .if, .repeat, .each, macros
-    Layout/             instruction and data sizes, branch range, long branches
-    Flow/               basic blocks, .next/.patch, 65816 processor-state analysis
-    Emit/               ca65 output, names, header, .dbg
-  Nt65.Cli/             nt65 build
-  Nt65.LanguageServer/  language server
+  Norristown.Core/            one project; folders and namespaces per layer:
+    Syntax/                   lexer (per line), line kinds, block layer, parser, red/green trees
+    Project/                  nt65.json, file set, defines, segment and range tables, CPU
+    Semantics/                scopes, declarations, resolution, constant and shape evaluation
+    Expand/                   .if, .repeat, .each, macros
+    Layout/                   instruction and data sizes, branch range, long branches
+    Flow/                     basic blocks, .next/.patch, 65816 processor-state analysis
+    Emit/                     ca65 output, names, header, .dbg
+  Norristown.Cli/             the nt65 command (nt65 build)
+  Norristown.LanguageServer/  language server
 tests/
-  Nt65.Tests/           unit, fixture, oracle and server tests
+  Norristown.Tests/           unit, fixture, oracle and server tests
   fixtures/
-editors/vscode/         thin client: launches the server, TextMate grammar
-tools/                  cc65.commit, cc65 build script, test and gate scripts
+editors/vscode/               thin client: launches the server, TextMate grammar
+scripts/                      cc65.commit, cc65 build script, test and gate scripts
+.cache/                       git-ignored and rebuildable: cc65 checkout and build, oracle cache
 ```
 
 Keep the core in one project, split by folder, so incremental builds stay quick. Split it
@@ -114,9 +121,27 @@ from Stage 1:
 - **Lexing is per line with no cross-line state**, and the block tree is a separate pass
   over per-line +1/−1/0 values (§4). The parser never aborts a file: a bad line becomes
   an error node and the next line parses normally.
-- **Everything carries a source span** (file, line, column range). Generated output lines
-  carry the span they came from, including the call site for macro expansions, which is
-  what `.dbg line` needs (§13).
+- **Syntax trees are built the way Roslyn builds them: red/green, and laid out for reuse
+  when parsing incrementally.**
+  - *Green nodes* are immutable and hold a kind, a width and children, with no parent and
+    no absolute position. So after an edit, the node for an unchanged line is still the
+    same object, wherever the edit moved it.
+  - *Red nodes* are thin wrappers, created on demand, that add the parent and the absolute
+    position. Everything above the parser works with red nodes.
+  - Trees are full fidelity. Whitespace, comments and line breaks are trivia attached to
+    tokens, and a tree's text is exactly its source, including error nodes and missing
+    tokens.
+  - The green tree is shaped for reuse: one node per line, under nodes for the block
+    structure. A line's syntax depends only on its tokens and the kind of block around it
+    (§3.1). So an edit re-lexes and re-parses only the lines it touches, plus any line
+    whose enclosing block kind changed. It rebuilds only the path from those lines to the
+    root, and reuses everything else by reference.
+  - Tokens and small nodes that recur often (mnemonics, registers, punctuation with common
+    trivia) are shared through a green-node cache, as in Roslyn.
+  - Lexer tokens are green tokens from Stage 1, so nothing has to be converted later.
+- **Everything carries a source span** (file, line, column range). In syntax, spans come
+  from red nodes. Generated output lines carry the span they came from, including the
+  call site for macro expansions, which is what `.dbg line` needs (§13).
 - **Diagnostics are data**: a span, a severity, a message and optional related spans. No
   diagnostic code tables.
 - **No order dependence.** A program is a set of files. The test harness shuffles file
@@ -140,8 +165,8 @@ whether it can be made faster.
   content, so unchanged output is not reassembled.
 - **Server tests** drive the server in-process (open, change, hover, definition,
   rename) without an editor.
-- **Commands**: `tools/test.ps1` (fixtures and units; the edit loop),
-  `tools/test.ps1 -Ca65` (oracle only), `tools/gate.ps1` (build, both suites; run once
+- **Commands**: `scripts/test.ps1` (fixtures and units; the edit loop),
+  `scripts/test.ps1 -Ca65` (oracle only), `scripts/gate.ps1` (build, both suites; run once
   per stage or unit of work). Fail fast, and let a single fixture be selected by name.
 - **DESIGN.md is a corpus.** As each construct comes online, turn the design's examples
   for it into fixtures. An example that doesn't work is a design finding. For example,
@@ -155,14 +180,14 @@ before moving on. Section numbers refer to `DESIGN.md`.
 ### Stage 0: Skeleton and harness
 
 **Build.** The solution layout, build settings (nullable on, warnings as errors) and
-test project. The cc65 pin: `tools/cc65.commit` and the script that builds ca65 and ld65
+test project. The cc65 pin: `scripts/cc65.commit` and the script that builds ca65 and ld65
 at that commit. A `nt65 build` CLI that accepts files and does nothing yet. The fixture
 harness with inline diagnostics and output snapshots. The ca65 oracle runner with caching
 and the pinned-version check. The LSP library choice, and a VS Code extension shell that
 starts an empty server.
 
 **Check.**
-- `tools/test.ps1` runs an empty suite, and `tools/gate.ps1` runs a trivial oracle case.
+- `scripts/test.ps1` runs an empty suite, and `scripts/gate.ps1` runs a trivial oracle case.
 - The oracle refuses to run with a ca65 that is not the pinned build.
 - The §13 output header, pasted into a `.s` by hand, assembles on the pinned ca65 with no
   warnings. If it doesn't, the header in the design is wrong. Raise it now,
@@ -192,7 +217,7 @@ lexer's token classes.
 
 ### Stage 2: Parser for the core language
 
-**Build.** A parser from lines to an AST for the core items: labels, constants, cheap
+**Build.** A parser from lines to a red/green syntax tree for the core items: labels, constants, cheap
 locals, data directives (`.byte .word .dword .addr .faraddr .res .asciiz`), `.proc` with
 its full signature syntax (parsed and kept, not yet used), extern procs, `.scope`,
 segment declarations, segment blocks and shortcuts, `.export`, `.import` in all its
@@ -209,14 +234,18 @@ parentheses of §9.
 - Fixtures for each item and operand form, and for each parenthesis trap
   (`1 << i + 1`, `a || b && c`, `#<label+1`).
 - The §6.2 and §13 input examples parse without errors.
-- An AST printer round-trips fixtures to readable form, which is useful for every later
-  stage.
+- Full fidelity: every fixture's tree gives back its source text byte for byte.
+- A tree printer renders fixtures in readable form, which is useful for every later stage.
+- Incremental parsing: replaying a sequence of edits gives the same tree as parsing from
+  scratch each time. Green nodes for untouched lines are reused by reference, checked by
+  identity in the test.
 
 ### Stage 3: Language server online (syntax)
 
-**Build.** A server that keeps an open-document cache, re-parses a document on change and
-publishes syntax diagnostics. Document symbols (outline: procs, scopes, labels, constants,
-segment blocks). Folding ranges from the block tree.
+**Build.** A server that keeps an open-document cache, re-parses a document incrementally
+on change (reusing green nodes from the previous tree) and publishes syntax diagnostics.
+Document symbols (outline: procs, scopes, labels, constants, segment blocks). Folding
+ranges from the block tree.
 
 **Check.**
 - In VS Code, typing a syntax error shows it immediately, and fixing it clears it.
@@ -429,7 +458,7 @@ definition, arguments and defines. `.incbin` files as dependencies.
 A few lines to the user, in the conversation or the commit message, not a new document:
 
 - what now works, and how to see it (a command, a fixture, something to try in the editor);
-- the gate result, and how long `tools/test.ps1` and `tools/gate.ps1` take;
+- the gate result, and how long `scripts/test.ps1` and `scripts/gate.ps1` take;
 - design problems found, what was fixed directly, and what needs a decision;
 - anything deferred to a later stage.
 

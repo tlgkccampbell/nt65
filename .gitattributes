@@ -1,0 +1,9 @@
+# LF everywhere, whatever core.autocrlf says. Fixture snapshots are compared byte for
+# byte, and `.dbg file` records source sizes, so line endings must not depend on the
+# machine that checked the repository out. (The compiler still accepts CRLF in source.)
+* text=auto eol=lf
+
+# Binary inputs for .incbin and similar fixtures.
+*.bin binary
+*.chr binary
+*.png binary
