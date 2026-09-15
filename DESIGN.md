@@ -161,7 +161,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   (§6.2).
 - **Reserved words:** all mnemonics of all three CPUs and the long branches of §7.6
   (case-insensitive), the
-  registers `a`, `x`, `y`, `s` (case-insensitive), and every `.directive`. A user
+  registers `a`, `x`, `y`, `s` (case-insensitive), and every `.directive` (also
+  case-insensitive). The mnemonics are the canonical WDC names, with the bit number in
+  `bbr0`–`bbr7`, `bbs0`–`bbs7`, `rmb0`–`rmb7` and `smb0`–`smb7` as ca65 spells them;
+  ca65's alternative 65816 spellings (`tad`, `swa`, ...) are ordinary identifiers. A user
   symbol, a macro parameter or a member of an anonymous enum cannot be named `lda` or
   `X`. Members of a named struct, union or enum are exempt: they are always reached
   through `::`, where a register name or mnemonic is unambiguous (`Point::x`). The
@@ -169,7 +172,8 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   and is a breaking change.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` is a
   CPU name, one token, valid only where a CPU is named (§5.1).
-- **Strings:** `"..."` with fixed escapes `\n \r \t \\ \" \xHH`. Outside a charmap
+- **Strings:** `"..."` with fixed escapes `\n \r \t \\ \" \' \xHH`, which character
+  literals share. Outside a charmap
   (§8), character and string literals are ASCII: a non-ASCII character is an error, and
   `\xHH` writes any byte.
 - **Address-size prefixes:** `z:`, `a:`, `f:` (as in ca65), and `d:` for a constant
@@ -214,7 +218,7 @@ declarations and segment blocks.
 
 ### 5.1 CPU
 
-```
+```nt65
 .cpu 65816
 ```
 
@@ -226,7 +230,7 @@ diagnostic ("`stz` is not available on the 6502"). Code that differs between CPU
 
 ### 5.2 Segments
 
-```
+```nt65
 .segment "ZP2": zp              ; declaration: this segment is zero page
 
 .segment "ZP2" {
@@ -266,7 +270,7 @@ A segment block may appear anywhere an item may appear, including inside a `.pro
 It changes the segment of its contents, not their scope, which is the structured form
 of the `.pushseg` / `.popseg` idiom:
 
-```
+```nt65
 .proc draw {
     ldx #0
 @loop:
@@ -373,7 +377,7 @@ address size (from its value, or from its segment), and for data its size in byt
   each cheap local a generated name (§13).
 - Two files may not export the same name.
 
-```
+```nt65
 .proc init {
     .scope {                ; clear RAM
         ldx #0
@@ -398,7 +402,7 @@ address size (from its value, or from its segment), and for data its size in byt
 These are the declarative part of ca65's type vocabulary, kept with brace syntax. They
 declare constants and sizes and never generate code.
 
-```
+```nt65
 .enum Color {
     red                 ; 0
     green = 5
@@ -440,7 +444,7 @@ names may be register names or mnemonics (§4).
 
 **Instances.** In data, `.tag T` allocates one instance and `.tag T, n` an array of n:
 
-```
+```nt65
 player: .tag Player
 actors: .tag Player, MAX_ACTORS
 ```
@@ -456,7 +460,7 @@ these are ordinary indexed operands that nt65 sizes from the segment of the labe
 **Initialized instances.** `.tag T { ... }` emits one instance with values, which is what
 record macros are written for in ca65:
 
-```
+```nt65
 .struct Actor {
     x:  .word
     y:  .word
@@ -493,7 +497,7 @@ A list is a named sequence of expressions, declared once and used wherever the s
 items would otherwise be written out more than once, such as the low and high bytes of a
 split pointer table:
 
-```
+```nt65
 .list handlers {
     cmd_move
     cmd_fire
@@ -519,7 +523,7 @@ constant, by value.
 
 Standard forms, as in ca65:
 
-```
+```nt65
     inx                 ; implied
     asl a               ; accumulator (bare "asl" also accepted)
     lda #$10            ; immediate
@@ -586,7 +590,7 @@ routine's entry, and every construct the analyzer cannot follow is recognized
 syntactically and must be annotated (§7.4). The analysis, and every check in §7.3–§7.5
 that depends on it, runs only on the 65816.
 
-```
+```nt65
 .proc render: a16, i8 -> a8, i8 {
     lda #$1234          ; 16-bit immediate
     sep #$20            ; A is now 8-bit
@@ -687,7 +691,7 @@ and `(name::member,s),y` are that member's offset from the current stack pointer
 computed from the pushes and pulls since the `.frame`, so a push between two reads cannot
 silently shift them:
 
-```
+```nt65
 .struct Locals {
     count: .word
     src:   .addr
@@ -758,7 +762,7 @@ the analysis, which errors wherever the width is unknown, so a label reached by 
 from further down the file is sized by the width that arrives there, not by the code
 above it:
 
-```
+```text
 .proc fill: a16 {               fill:
     sep #$20                        sep #$20
     bra @b                          bra fill__b
@@ -820,7 +824,7 @@ label:
 Examples. A jump table inside a proc: the targets need no declarations because the
 `.next` edges carry the state at the jump.
 
-```
+```nt65
 .proc dispatch: a8, i16 {
     lda cmd
     asl a
@@ -844,7 +848,7 @@ Every item of `@table` is a code label, so `.next @table` says the same.
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:
 
-```
+```nt65
 .proc nmi: a?, i? {
     rep #$30
     pha
@@ -864,7 +868,7 @@ analysis stack holds no saved P for it:
 
 The `bit` skip trick:
 
-```
+```nt65
 @set_one:
     lda #1
     .byte $2c           ; bit abs: swallows the next instruction
@@ -893,7 +897,7 @@ program that never leaves bank 0 with D at 0 need not say anything.
 **Declarations.** A segment may state which direct page it is meant to be reached
 through and which bank it lives in, in the segment table (§5.2, §5.3):
 
-```
+```nt65
 .segment "ZP2": zp, dp = $2100
 .segment "WRAM": abs, bank = $7e
 ```
@@ -963,7 +967,7 @@ addresses, and sizes come in two kinds with different names:
   resolved by ca65 and ld65. The end of a proc or scope is the end of its own bytes in
   its segment; nested segment blocks do not count.
 
-```
+```nt65
     ldx #.spanof(reloc)             ; bytes to copy
     .word .spanof(module)           ; length in a header
 .assert .spanof(irq) <= 64, error, "irq handler too big"
@@ -1005,7 +1009,7 @@ true bound.
 
 ## 8. Data
 
-```
+```nt65
     .byte 1, 2, $ff, 'A', "text"
     .word $1234, label
     .dword $12345678
@@ -1040,7 +1044,7 @@ is run.
 **Text encoding.** `.charmap` declares a named mapping from characters to bytes. It is
 a declaration, not a mode, and is applied explicitly where text is emitted:
 
-```
+```nt65
 .charmap screen {
     'A'..'Z' = $01          ; a range maps to consecutive values
     '@'      = $00
@@ -1110,7 +1114,7 @@ conditions never test the program (§10). Macro bodies add `.mode`, `.byteof` an
 **Functions.** `.func` declares a pure expression function, which is what a function-like
 `.define` is used for in ca65:
 
-```
+```nt65
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 
     .word rgb15(31, 0, 0)
@@ -1131,7 +1135,7 @@ symbolically for ca65 and ld65 to resolve.
 
 ## 10. Conditional assembly and repetition
 
-```
+```nt65
 .if DEBUG {
     jsr trace
 } .elseif LEVEL > 2 {
@@ -1175,7 +1179,7 @@ works when `TRACE` is not defined.
 there, and a declaration in a branch that is not taken does not exist. The same name
 may be declared under several `.if`s, in one chain or in separate ones:
 
-```
+```nt65
 .if PLATFORM == 1 {
     LINES = 262
 }
@@ -1193,7 +1197,7 @@ with none is undefined. Both are reported for the configuration being built, as 
 `.each` repeats its body once per item of a list (§6.4) or a `list` parameter (§11.2), or
 once per member of a named enum, in order:
 
-```
+```nt65
 .each handlers, h {
     .addr h - 1                     ; an RTS dispatch table
 }
@@ -1225,7 +1229,7 @@ instruction idioms, structured control built from blocks, computed data and debu
 wrappers, and a macro system that serves only those can stay restricted enough to
 analyze.
 
-```
+```nt65
 .macro set16(dest: operand, value) {
     lda #<value
     sta dest
@@ -1312,7 +1316,7 @@ inputs changed.
   an immediate `#e` it is `#((e >> (8 * n)) & $FF)`, and for a mode that accepts
   `+ const` it is `p + n`. One macro then serves constants and memory alike:
 
-```
+```nt65
 .macro mov16(dest: operand, src: operand) {
     lda .byteof(src, 0)
     sta dest
@@ -1331,7 +1335,7 @@ inputs changed.
 - **Lists.** A `list` parameter follows every other parameter except blocks and takes the
   remaining positional arguments. `.countof(p)` is a constant.
 
-```
+```nt65
 .macro push(regs: list(one(a, x, y))) {
     .each regs, r {
         .if r == a {
@@ -1359,7 +1363,7 @@ A `.next` or `.patch` directly after a macro call applies to the last statement 
 expansion, as it would to any statement above it (§7.4). That is how a caller annotates a
 macro that leaves data in the instruction stream:
 
-```
+```nt65
 .macro skip2() {
     .byte $2c           ; bit abs: swallows the next two bytes
 }
@@ -1401,7 +1405,7 @@ proc would branch into them, out of sight of the first proc's flow analysis (§6
 A trailing block binds to a `block` parameter, which is how structured constructs are
 built as library code rather than language features:
 
-```
+```nt65
 .macro times_x(count, body: block) {
     ldx #count
 @loop:
@@ -1422,7 +1426,7 @@ continuation line naming its parameter, `} name {`, and a block parameter may de
 empty, `= {}`. `.empty(p)` is true when a block argument has no statements, and a
 condition may test it:
 
-```
+```nt65
 .macro branch_unless(c: one(eq, ne, cs, cc), target: ident) {
     .if c == eq {
         bne target
@@ -1461,7 +1465,7 @@ the items of a proc signature other than `near`, `far` and `inline` (§7.3). Unl
 proc's, a macro's items default to `*`: a macro assumes and changes nothing it does not
 declare.
 
-```
+```nt65
 .macro add16(dest: operand, value: operand): a8 {
     clc
     lda dest
@@ -1504,7 +1508,7 @@ ca65's.
 
 Every file is a module. Its symbols are private unless exported:
 
-```
+```nt65
 .export fill_page, SCREEN, Player, set16
 ```
 
@@ -1532,7 +1536,7 @@ ca65 never reads nt65 source; everything the two share is a linker symbol.
 Symbols and routines that live outside nt65 (hand-written ca65, cc65 output, ROM entry
 points) are declared explicitly:
 
-```
+```nt65
 .import _printf: proc(a8, i16)      ; a routine, with its signature (§7.3)
 .import zp_scratch: zp
 .import far_table: far
@@ -1575,7 +1579,7 @@ it would itself warn). Options such as `--feature bracket_as_indirect` (which wo
 silently turn `lda [dp],y` into `lda (dp),y`), `--smart`, `-i` and `--cpu` then have no
 effect:
 
-```
+```ca65
 .setcpu "65816"
 .smart -
 .case +
@@ -1668,7 +1672,7 @@ macros, and a comment naming the call precedes the expansion.
 
 `main.nt65`:
 
-```
+```nt65
 ; Fill four pages of screen memory with spaces, forever.
 .cpu 6502
 
@@ -1716,7 +1720,7 @@ SCREEN_PAGES = 4
 `main.s` (generated; the `.dbg line` directive before each generated line is omitted
 here):
 
-```
+```ca65
 ; Generated by nt65 from main.nt65. Do not edit.
 .setcpu "6502"
 .smart -
@@ -1914,7 +1918,7 @@ Recorded so the reasoning survives. None is open.
 
 ## Appendix A. Grammar sketch
 
-```
+```text
 file        := item*
 item        := label-line | const | data | proc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | export | import | cpu

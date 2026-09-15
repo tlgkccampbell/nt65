@@ -1,0 +1,168 @@
+using System.Collections.Immutable;
+
+namespace Norristown.Syntax;
+
+public readonly record struct TextSpan(int Start, int Length)
+{
+    public int End => Start + Length;
+}
+
+/// <summary>Replaces <see cref="Length"/> characters at <see cref="Start"/> with <see cref="NewText"/>.</summary>
+public readonly record struct TextChange(int Start, int Length, string NewText);
+
+/// <summary>
+/// One file's syntax: its lines, each lexed on its own, and the block structure over them.
+/// A tree is immutable; <see cref="WithChange"/> gives the tree for an edited text, reusing
+/// the green lines the edit did not touch.
+/// </summary>
+public sealed class SyntaxTree
+{
+    private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
+    private SyntaxNode? root;
+
+    public string Path { get; }
+    public string Text { get; }
+
+    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
+    public ImmutableArray<GreenLine> Lines { get; }
+
+    /// <summary>The offset in <see cref="Text"/> where each line starts.</summary>
+    public ImmutableArray<int> LineStarts { get; }
+
+    public GreenFile Green { get; }
+
+    private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
+    {
+        Path = path;
+        Text = text;
+        LineStarts = lineStarts;
+        Lines = lines;
+        var blockErrors = new List<Blocks.Error>();
+        Green = Blocks.Build(lines, blockErrors);
+        diagnostics = new(() => CollectDiagnostics(blockErrors));
+    }
+
+    public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
+
+    public static SyntaxTree Parse(string path, string text)
+    {
+        var starts = SplitLines(text);
+        var lines = ImmutableArray.CreateBuilder<GreenLine>(starts.Length);
+        for (var i = 0; i < starts.Length; i++)
+            lines.Add(Lexer.LexLine(LineText(text, starts, i)));
+        return new SyntaxTree(path, text, starts, lines.MoveToImmutable());
+    }
+
+    /// <summary>
+    /// The tree for this text with <paramref name="change"/> applied. Only the lines the
+    /// change touches are lexed again; every other line keeps its green node.
+    /// </summary>
+    public SyntaxTree WithChange(TextChange change)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(change.Start);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(change.Start + change.Length, Text.Length);
+
+        var text = string.Concat(Text.AsSpan(0, change.Start), change.NewText, Text.AsSpan(change.Start + change.Length));
+        var starts = SplitLines(text);
+        var oldEnd = change.Start + change.Length;
+        var delta = change.NewText.Length - change.Length;
+        int oldCount = LineStarts.Length, newCount = starts.Length;
+
+        // A line keeps its node when all of its text lies outside the change and the new text
+        // splits it at the same place, which also covers a \r\n joined or split by the edit.
+        var prefix = 0;
+        while (prefix < oldCount && prefix < newCount
+            && LineEnd(Text, LineStarts, prefix) <= change.Start
+            && LineEnd(text, starts, prefix) == LineEnd(Text, LineStarts, prefix))
+        {
+            prefix++;
+        }
+        var suffix = 0;
+        while (suffix < oldCount - prefix && suffix < newCount - prefix)
+        {
+            int oldLine = oldCount - 1 - suffix, newLine = newCount - 1 - suffix;
+            if (LineStarts[oldLine] < oldEnd || starts[newLine] != LineStarts[oldLine] + delta
+                || LineEnd(text, starts, newLine) != LineEnd(Text, LineStarts, oldLine) + delta)
+            {
+                break;
+            }
+            suffix++;
+        }
+
+        var lines = ImmutableArray.CreateBuilder<GreenLine>(newCount);
+        lines.AddRange(Lines, prefix);
+        for (var i = prefix; i < newCount - suffix; i++)
+            lines.Add(Lexer.LexLine(LineText(text, starts, i)));
+        for (var i = oldCount - suffix; i < oldCount; i++)
+            lines.Add(Lines[i]);
+        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable());
+    }
+
+    public SyntaxNode Root => root ??= new SyntaxNode(this, null, Green, 0);
+
+    /// <summary>Lexical and block-structure errors.</summary>
+    public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
+
+    /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
+    public int GetLineIndex(int position)
+    {
+        var index = LineStarts.BinarySearch(position);
+        return index >= 0 ? index : ~index - 1;
+    }
+
+    /// <summary>A diagnostic span for a range on one line.</summary>
+    public Span GetSpan(TextSpan span)
+    {
+        var line = GetLineIndex(span.Start);
+        var column = span.Start - LineStarts[line] + 1;
+        return new Span(Path, line + 1, column, column + span.Length);
+    }
+
+    private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
+    {
+        var result = new List<Diagnostic>();
+        Diagnostic At(int line, int token, string message)
+        {
+            var green = Lines[line];
+            var column = green.TextOffset(token) + 1;
+            return new Diagnostic(new Span(Path, line + 1, column, column + green.Tokens[token].Text.Length), Severity.Error, message);
+        }
+
+        for (var i = 0; i < Lines.Length; i++)
+        {
+            var tokens = Lines[i].Tokens;
+            for (var t = 0; t < tokens.Length; t++)
+            {
+                if (tokens[t].Error is { } error)
+                    result.Add(At(i, t, error));
+            }
+        }
+        result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
+        return result;
+    }
+
+    /// <summary>Line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each end a line, as in LSP.</summary>
+    private static ImmutableArray<int> SplitLines(string text)
+    {
+        var starts = ImmutableArray.CreateBuilder<int>();
+        starts.Add(0);
+        var span = text.AsSpan();
+        var offset = 0;
+        while (true)
+        {
+            var i = span[offset..].IndexOfAny('\r', '\n');
+            if (i < 0)
+                break;
+            offset += i;
+            offset += span[offset] == '\r' && offset + 1 < span.Length && span[offset + 1] == '\n' ? 2 : 1;
+            starts.Add(offset);
+        }
+        return starts.ToImmutable();
+    }
+
+    private static int LineEnd(string text, ImmutableArray<int> starts, int line) =>
+        line + 1 < starts.Length ? starts[line + 1] : text.Length;
+
+    private static ReadOnlySpan<char> LineText(string text, ImmutableArray<int> starts, int line) =>
+        text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
+}

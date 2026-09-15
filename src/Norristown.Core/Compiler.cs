@@ -1,3 +1,5 @@
+using Norristown.Syntax;
+
 namespace Norristown;
 
 public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyList<Diagnostic> Diagnostics);
@@ -8,6 +10,16 @@ public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyLis
 /// </summary>
 public static class Compiler
 {
-    // Stage 0: no layers yet, so every program compiles to nothing.
-    public static Compilation Compile(IReadOnlyCollection<SourceFile> files) => new([], []);
+    // Stage 1: lexing and blocks only, so a program yields syntax diagnostics and no output.
+    public static Compilation Compile(IReadOnlyCollection<SourceFile> files)
+    {
+        var diagnostics = files
+            .SelectMany(file => SyntaxTree.Parse(file).Diagnostics)
+            .OrderBy(d => d.Span.File, StringComparer.Ordinal)
+            .ThenBy(d => d.Span.Line)
+            .ThenBy(d => d.Span.StartColumn)
+            .ThenBy(d => d.Message, StringComparer.Ordinal)
+            .ToList();
+        return new([], diagnostics);
+    }
 }

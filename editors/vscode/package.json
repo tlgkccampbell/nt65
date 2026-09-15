@@ -1,7 +1,7 @@
 {
   "name": "nt65",
   "displayName": "nt65 (Norristown Assembler)",
-  "description": "nt65 assembly: starts the Norristown language server.",
+  "description": "nt65 assembly: highlighting, and the Norristown language server.",
   "version": "0.0.1",
   "private": true,
   "publisher": "nt65",
@@ -16,6 +16,13 @@
         "aliases": ["nt65"],
         "extensions": [".nt65"],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "nt65",
+        "scopeName": "source.nt65",
+        "path": "./syntaxes/nt65.tmLanguage.json"
       }
     ],
     "configuration": {

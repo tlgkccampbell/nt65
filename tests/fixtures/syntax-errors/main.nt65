@@ -1,0 +1,10 @@
+; Lexical and block-structure errors reach the compiler's diagnostics.
+.proc main {
+    lda #$1G            ;! error: invalid hexadecimal number `$1G`
+    .byte 'ab'            ;! error: a character literal holds exactly one character
+    m!({                ; half typed: the brace is inside a parenthesis
+    rts
+}
+}                       ;! error: unmatched `}`
+.proc other {           ;! error: missing `}` to close this block
+    rts
