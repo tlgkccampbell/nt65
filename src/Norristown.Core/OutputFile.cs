@@ -7,7 +7,8 @@ namespace Norristown;
 /// <param name="Text">The ca65 source.</param>
 /// <param name="LineBytes">
 /// How many bytes nt65 expects each line of <see cref="Text"/> to assemble to (§7.6), one
-/// entry per line. These are the lengths the analysis works from, so comparing them with
+/// entry per line, or -1 for a line whose length only the assembler settles, such as an
+/// <c>.align</c>. These are the lengths the analysis works from, so comparing them with
 /// what ca65 actually generates is what says the two agree.
 /// </param>
 public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> LineBytes)

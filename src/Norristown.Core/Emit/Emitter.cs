@@ -31,6 +31,7 @@ public sealed class Emitter
     private readonly StringBuilder output = new();
     private readonly List<int> lineBytes = [];
     private readonly List<string> segmentStack = [];
+    private readonly HashSet<Symbol> exported = [];
     private string segment = SegmentTable.DefaultSegment;
     private string? written;
     private bool pendingBlank;
@@ -174,6 +175,22 @@ public sealed class Emitter
                 if (!any)
                     Blank();
                 any = true;
+                exported.Add(reference.Symbol);
+
+                // A type is not a symbol to the linker: what crosses is each of its members,
+                // as the flat constant it becomes.
+                if (reference.Symbol.Kind is SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union)
+                {
+                    foreach (var member in reference.Symbol.Body?.Symbols ?? [])
+                    {
+                        exported.Add(member);
+                        Line(member.Value.AsNumber() is >= 0 and < 0x100
+                            ? $".exportzp {names.Of(member)}"
+                            : $".export {names.Of(member)}");
+                    }
+                    continue;
+                }
+
                 var name = names.Of(reference.Symbol);
                 Line(reference.Symbol.AddressSize switch
                 {
@@ -256,10 +273,39 @@ public sealed class Emitter
     {
         var lines = block.ChildNodes;
         var opener = lines.Length > 0 ? lines[0].Statement : null;
-        if (Constructs.IsDeferred(kind) || !Constructs.IsEmitted(kind))
+        if (Constructs.IsDeferred(kind))
         {
             if (opener is not null)
                 NotTranspiled(opener);
+            return;
+        }
+
+        // A structure, a union, a list and a character mapping say what something means
+        // without generating anything. An exported layout is the exception: its members
+        // travel as flat constants, so the file that declares them has to define them.
+        if (kind is BlockKind.List or BlockKind.Charmap)
+            return;
+        if (kind is BlockKind.Struct or BlockKind.Union)
+        {
+            Offsets(lines[0], opener);
+            return;
+        }
+
+        // An enum writes its members out as the constants they are.
+        if (kind == BlockKind.Enum)
+        {
+            for (var i = 1; i < lines.Length; i++)
+            {
+                if (lines[i].Statement is { Kind: SyntaxKind.EnumMember } member)
+                    EnumMember(lines[i], member);
+            }
+            pendingBlank = true;
+            return;
+        }
+
+        if (kind == BlockKind.TagInitializer)
+        {
+            Initialized(lines[0], opener, [.. lines.Skip(1).Select(line => line.Statement).OfType<SyntaxNode>()]);
             return;
         }
 
@@ -332,6 +378,13 @@ public sealed class Emitter
                 Constant(line, statement);
                 break;
 
+            case SyntaxKind.DataDirective when Constructs.IsTag(statement):
+                if (HasValues(statement))
+                    Initialized(line, statement, []);
+                else
+                    Reserved(line, statement, statement);
+                break;
+
             case SyntaxKind.DataDirective when layout.Of(statement) is null:
                 NotTranspiled(statement);
                 break;
@@ -347,16 +400,15 @@ public sealed class Emitter
 
             // The types, text and data of Stage 7 are read and bound, but nothing is written
             // for them yet, so a file that uses one is refused rather than written out short.
-            case SyntaxKind.EnumDeclaration:
-            case SyntaxKind.StructDeclaration:
-            case SyntaxKind.UnionDeclaration:
-            case SyntaxKind.CharmapDeclaration:
-            case SyntaxKind.ListDeclaration:
+            // A function, and the openers of the blocks above, exist for the analysis: a
+            // call is written as its body, and a type as the constants it names.
             case SyntaxKind.FuncDeclaration:
             case SyntaxKind.EnumMember:
             case SyntaxKind.CharmapEntry:
             case SyntaxKind.ListItems:
             case SyntaxKind.TagValue:
+                break;
+
             case SyntaxKind.UnsupportedLine:
                 NotTranspiled(statement);
                 break;
@@ -387,6 +439,17 @@ public sealed class Emitter
     {
         var label = statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.Label);
         var rest = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.Label);
+        if (rest is { Kind: SyntaxKind.DataDirective } && Constructs.IsTag(rest))
+        {
+            if (HasValues(rest))
+            {
+                Initialized(line, statement, []);
+                return;
+            }
+            LabelOnly(line, statement, label);
+            Reserved(line, statement, rest);
+            return;
+        }
         if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest) is null)
         {
             NotTranspiled(rest);
@@ -419,6 +482,212 @@ public sealed class Emitter
         if (label.ChildTokens.Length > 1)
             edits.Replace[label.ChildTokens[1].Position] = "";
         Code(line, Render(statement, edits), bytes);
+    }
+
+    /// <summary>
+    /// An instance, which is room for one or more of its type. The type itself writes
+    /// nothing, so the output reserves the bytes and names the type in a comment.
+    /// </summary>
+    private void Reserved(SyntaxNode line, SyntaxNode statement, SyntaxNode directive)
+    {
+        if (model.RoomFor(directive) is not { } room)
+        {
+            NotTranspiled(directive);
+            return;
+        }
+        var named = directive.ChildNodes.FirstOrDefault();
+        var type = named is null ? null : model.ReferenceAt(named.Span.Start)?.Symbol.QualifiedName;
+        var text = $"{Indent(statement)}    .res {room.Bytes}";
+        Code(line, type is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + type,
+            (int)room.Bytes);
+    }
+
+    /// <summary>The label of a line whose statement is written separately.</summary>
+    private void LabelOnly(SyntaxNode line, SyntaxNode statement, SyntaxNode? label)
+    {
+        if (label is not { ChildTokens.Length: > 0 }
+            || model.ReferenceAt(label.ChildTokens[0].Span.Start) is not { } reference)
+        {
+            return;
+        }
+        Code(line, Indent(statement) + LabelText(names.Of(reference.Symbol)), 0);
+    }
+
+    /// <summary>
+    /// The members of an exported layout, each written out as the constant offset it is.
+    /// A layout nothing exports says nothing to ca65 and is left out entirely.
+    /// </summary>
+    private void Offsets(SyntaxNode line, SyntaxNode? opener)
+    {
+        if (opener is null || opener.ChildTokens.Length == 0)
+            return;
+        var named = opener.ChildTokens.FirstOrDefault(token =>
+            token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
+        if (named.Parent is null || model.ReferenceAt(named.Span.Start) is not { } reference)
+            return;
+
+        foreach (var member in reference.Symbol.Body?.Symbols ?? [])
+        {
+            if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
+                Code(line, $"{Indent(opener)}{names.Of(member)} = {Constant(offset)}", 0);
+        }
+    }
+
+    /// <summary>Whether a <c>.tag</c> carries the values of an initialized instance.</summary>
+    private static bool HasValues(SyntaxNode statement) =>
+        statement.ChildNodes.Any(child => child.Kind == SyntaxKind.TagValues);
+
+    /// <summary>One enum member, which is a constant like any other.</summary>
+    private void EnumMember(SyntaxNode line, SyntaxNode statement)
+    {
+        if (statement.ChildTokens.Length == 0
+            || model.ReferenceAt(statement.ChildTokens[0].Span.Start) is not { } reference
+            || reference.Symbol.Value.AsNumber() is not { } value)
+        {
+            return;
+        }
+        Code(line, $"{Indent(statement)}{names.Of(reference.Symbol)} = {Constant(value)}", 0);
+    }
+
+    /// <summary>
+    /// An initialized instance: the type decides the layout, so the output writes one
+    /// directive per member in the type's order, whatever order the values were written in,
+    /// and a member no value names is zero.
+    /// </summary>
+    private void Initialized(SyntaxNode line, SyntaxNode? opener, IReadOnlyList<SyntaxNode> values)
+    {
+        if (opener is null)
+            return;
+        var directive = opener.Kind == SyntaxKind.LabeledLine
+            ? opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.DataDirective)
+            : opener;
+        if (directive is null || model.RoomFor(directive) is not { } room)
+        {
+            NotTranspiled(opener);
+            return;
+        }
+
+        // The label first, then the members, so the instance starts where the label does.
+        if (opener.Kind == SyntaxKind.LabeledLine
+            && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.Label) is { ChildTokens.Length: > 0 } label
+            && model.ReferenceAt(label.ChildTokens[0].Span.Start) is { } reference)
+        {
+            Code(line, Indent(opener) + LabelText(names.Of(reference.Symbol)), 0);
+        }
+
+        if (directive.ChildNodes.FirstOrDefault() is not { } named || model.ReferenceAt(named.Span.Start) is not { } type)
+        {
+            NotTranspiled(opener);
+            return;
+        }
+
+        var written = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
+        foreach (var value in values.Concat(
+            directive.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.TagValues)?.ChildNodes ?? []))
+        {
+            if (value.Kind == SyntaxKind.TagValue && value.ChildTokens.Length > 0)
+                written[value.ChildTokens[0].Text] = value;
+        }
+
+        var bytes = Fields(line, Indent(opener), type.Symbol, written, path: "");
+        if (bytes != room.Bytes)
+            NotTranspiled(opener);
+    }
+
+    /// <summary>
+    /// The members of a type, one directive each, in the order the type declares them. A
+    /// member that is itself a type is written out the same way, so a nested initializer
+    /// reaches the fields inside it.
+    /// </summary>
+    private long Fields(
+        SyntaxNode line, string indent, Symbol type, IReadOnlyDictionary<string, SyntaxNode> written, string path)
+    {
+        long bytes = 0;
+        foreach (var member in type.Body?.Symbols ?? [])
+        {
+            if (member.Kind != SymbolKind.Member || member.Size is not { } size)
+                continue;
+            var given = written.GetValueOrDefault(member.Name);
+            var named = path.Length == 0 ? member.Name : $"{path}::{member.Name}";
+
+            // A nested type takes a braced list of its own members; anything else is a value.
+            if (member.Type is { } inner && inner.IsLayout)
+            {
+                bytes += Fields(line, indent, inner, ValuesIn(given), named);
+                continue;
+            }
+
+            var text = $"{indent}    {Member(member, given)}";
+            Code(line, text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + named, (int)size);
+            bytes += size;
+        }
+        return bytes;
+    }
+
+    /// <summary>The members a nested initializer names, by name; empty when none was given.</summary>
+    private static IReadOnlyDictionary<string, SyntaxNode> ValuesIn(SyntaxNode? given)
+    {
+        var values = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
+        foreach (var value in given?.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.TagValues)?.ChildNodes ?? [])
+        {
+            if (value.Kind == SyntaxKind.TagValue && value.ChildTokens.Length > 0)
+                values[value.ChildTokens[0].Text] = value;
+        }
+        return values;
+    }
+
+    /// <summary>
+    /// One member of an initialized instance, written with the directive the type gave it.
+    /// A member no value names is zero, and a member reserved by <c>.res</c> takes text,
+    /// padded with zeros to the room it has.
+    /// </summary>
+    private string Member(Symbol member, SyntaxNode? given)
+    {
+        var size = member.Size ?? 0;
+        var directive = member.Data is { ChildTokens.Length: > 0 } data
+            ? data.ChildTokens[0].Text.ToLowerInvariant()
+            : ".res";
+        var value = given?.ChildNodes.LastOrDefault();
+
+        if (directive is ".res" or ".tag")
+            return $".byte {string.Join(", ", Padded(value, size))}";
+        return $"{directive} {(value is null ? Constant(0) : Rendered(value))}";
+    }
+
+    /// <summary>The bytes a reserved member takes, from the text it was given and zeros after it.</summary>
+    private IEnumerable<string> Padded(SyntaxNode? value, long size)
+    {
+        var bytes = value is null ? [] : model.BytesOf(value)?.ToList() ?? [];
+        for (var i = 0; i < size; i++)
+            yield return Hex(i < bytes.Count ? bytes[i] & 0xff : 0, 2);
+    }
+
+    /// <summary>
+    /// An expression written out rather than edited in place: a call becomes what it stands
+    /// for, and every nested operation is parenthesized, so nothing depends on how ca65
+    /// reads precedence.
+    /// </summary>
+    private string Rendered(SyntaxNode node)
+    {
+        switch (node.Kind)
+        {
+            case SyntaxKind.ParenthesizedExpression:
+                return node.ChildNodes.Length > 0 ? "(" + Rendered(node.ChildNodes[0]) + ")" : "";
+            case SyntaxKind.BinaryExpression when node.ChildNodes.Length == 2 && node.ChildTokens.Length > 0:
+                return $"({Rendered(node.ChildNodes[0])} {node.ChildTokens[0].Text} {Rendered(node.ChildNodes[1])})";
+            case SyntaxKind.UnaryExpression when node.ChildNodes.Length == 1 && node.ChildTokens.Length > 0:
+                return $"({node.ChildTokens[0].Text}{Rendered(node.ChildNodes[0])})";
+            default:
+                break;
+        }
+
+        // Anything with a value nt65 knows is written as that value; anything else keeps its
+        // own spelling, with names flattened.
+        if (model.ValueOf(node).AsNumber() is { } value)
+            return Constant(value);
+        var edits = new Edits();
+        Substitute(node, edits, nested: false);
+        return Render(node, edits).Trim();
     }
 
     /// <summary>A label, or the assignment that stands in for one ca65 would misread (§13).</summary>
@@ -489,7 +758,7 @@ public sealed class Emitter
     {
         Segment();
         Flush();
-        if (bytes > 0)
+        if (bytes != 0)
             Line($".dbg line, \"{source}\", {line.LineIndex + 1}");
         Line(text, bytes);
     }
@@ -604,12 +873,21 @@ public sealed class Emitter
                 Text(node, edits);
                 return;
 
+            case SyntaxKind.CallExpression:
+                Applied(node, edits);
+                return;
+
             case SyntaxKind.AbsoluteOperand:
                 Prefix(node, edits);
                 break;
 
             case SyntaxKind.DataDirective:
                 Terminated(node, edits);
+
+                // An `.incbin` names a file rather than holding data, so its path is left a
+                // path — pointed at the file from wherever the output lands.
+                if (Included(node, edits))
+                    return;
                 break;
 
             case SyntaxKind.BinaryExpression:
@@ -651,6 +929,28 @@ public sealed class Emitter
         edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", $00";
     }
 
+    /// <summary>
+    /// The path of an <c>.incbin</c>, rewritten so that ca65 finds the file from the output
+    /// rather than from the source. Returns whether the directive was one.
+    /// </summary>
+    private bool Included(SyntaxNode directive, Edits edits)
+    {
+        if (directive.ChildTokens.Length == 0
+            || !directive.ChildTokens[0].Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        if (directive.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.StringExpression } path
+            && path.ChildTokens.Length > 0
+            && model.ValueOf(path) is { Kind: ValueKind.String, Text: { } named })
+        {
+            var at = source.LastIndexOf('/');
+            edits.Replace[path.ChildTokens[0].Position] =
+                "\"" + (at < 0 ? named : source[..(at + 1)] + named) + "\"";
+        }
+        return true;
+    }
+
     private void Name(SyntaxNode name, Edits edits)
     {
         var tokens = name.ChildTokens;
@@ -661,6 +961,24 @@ public sealed class Emitter
         var last = tokens.LastOrDefault(token => token.Kind is not SyntaxKind.ColonColon);
         if (last.Parent is null || model.ReferenceAt(last.Span.Start) is not { } reference)
             return;
+
+        // A list stands for its own items wherever data takes them.
+        if (model.ItemsOf(name) is { Count: > 0 } items)
+        {
+            edits.Replace[tokens[0].Position] = string.Join(", ", items.Select(Rendered));
+            for (var i = 1; i < tokens.Length; i++)
+                edits.Replace[tokens[i].Position] = "";
+            edits.Comments.Add(name.GetText().Trim());
+            return;
+        }
+
+        // A member is an offset: the offsets along the path added up, on the address the
+        // path starts from when it starts at an instance rather than at a type.
+        if (reference.Symbol.Kind == SymbolKind.Member)
+        {
+            MemberPath(name, tokens, edits);
+            return;
+        }
 
         // A define and a checked import are written as their value, never by name (§5.3,
         // §12): a `-D` given to ca65 then cannot collide with a define, and a checked import
@@ -675,6 +993,77 @@ public sealed class Emitter
             edits.Replace[tokens[i].Position] = "";
         if (byValue)
             edits.Comments.Add(symbol.QualifiedName);
+    }
+
+    /// <summary>
+    /// A path through a type or an instance. Through a type it is a number; through an
+    /// instance it is that instance plus the offset, which is what ca65 and ld65 resolve.
+    /// Either way the path it came from is kept in a comment.
+    /// </summary>
+    private void MemberPath(SyntaxNode name, IReadOnlyList<SyntaxToken> tokens, Edits edits)
+    {
+        Symbol? start = null;
+        long offset = 0;
+        foreach (var token in tokens)
+        {
+            if (token.Kind == SyntaxKind.ColonColon || model.ReferenceAt(token.Span.Start) is not { } part)
+                continue;
+            if (part.Symbol.Kind == SymbolKind.Member)
+                offset += part.Symbol.Value.AsNumber() ?? 0;
+            else if (part.Symbol.IsAddress)
+                start ??= part.Symbol;
+        }
+
+        var text = start is null
+            ? Constant(offset)
+            : offset == 0 ? names.Of(start) : $"{names.Of(start)}+{offset}";
+        edits.Replace[tokens[0].Position] = text;
+        for (var i = 1; i < tokens.Count; i++)
+            edits.Replace[tokens[i].Position] = "";
+        edits.Comments.Add(name.GetText().Trim());
+    }
+
+    /// <summary>
+    /// A call written out as what it stands for: a charmap applied to text becomes the bytes
+    /// it maps them to, and a function call becomes its value. A call nt65 cannot work out
+    /// is refused rather than passed to ca65, which knows neither.
+    /// </summary>
+    private void Applied(SyntaxNode call, Edits edits)
+    {
+        var tokens = Tokens(call);
+        if (tokens.Count == 0)
+            return;
+
+        // A built-in the analysis answers keeps the ordinary path.
+        if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is null)
+        {
+            if (model.ValueOf(call).AsNumber() is { } builtin)
+            {
+                edits.Replace[tokens[0].Position] = Constant(builtin);
+                for (var i = 1; i < tokens.Count; i++)
+                    edits.Replace[tokens[i].Position] = "";
+                return;
+            }
+            foreach (var child in call.ChildNodes)
+                Substitute(child, edits, nested: false);
+            return;
+        }
+
+        string? text = null;
+        if (model.BytesOf(call) is { Count: > 0 } bytes)
+            text = string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
+        else if (model.ValueOf(call).AsNumber() is { } value)
+            text = Constant(value);
+
+        if (text is null)
+        {
+            NotTranspiled(call);
+            return;
+        }
+        edits.Replace[tokens[0].Position] = text;
+        for (var i = 1; i < tokens.Count; i++)
+            edits.Replace[tokens[i].Position] = "";
+        edits.Comments.Add(call.GetText().Trim());
     }
 
     /// <summary>Text becomes byte values, with the source spelling kept in a comment (§8, §13).</summary>

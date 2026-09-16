@@ -1,0 +1,80 @@
+; The declarative constructs, as the design writes them: enumerations, structures, unions,
+; lists, character mappings and functions. None of them generates anything by itself; what
+; they mean shows up where they are used.
+.cpu 6502
+
+.enum Color {
+    red                 ; 0
+    green = 5
+    blue                ; 6
+}
+
+.struct Point {
+x:      .word
+y:      .word
+}
+
+.struct Player {
+pos:    .tag Point
+hp:     .byte
+name:   .res 8
+}
+
+.union Value {
+b:      .byte
+w:      .word
+}
+
+.charmap screen {
+    'A'..'Z' = $01      ; a range maps to consecutive values
+    '@'      = $00
+    ' '      = $20
+}
+
+.func rgb15(r, g, b) = r | (g << 5) | (b << 10)
+
+.list handlers {
+    Color::red
+    Color::green, Color::blue
+}
+
+MAX_ACTORS = 3
+
+.bss {
+player: .tag Player
+actors: .tag Player, MAX_ACTORS
+}
+
+.rodata {
+; A member offset and a type size are numbers, with the path they came from in a comment.
+sizes:  .byte .sizeof(Player), .sizeof(Point), .sizeof(Value)
+counts: .byte .countof(actors), .countof(handlers)
+offs:   .byte Player::pos::y, Player::hp, Point::y
+
+; Text reaches the output as bytes whether a mapping is applied to it or not.
+plain:  .byte "HI"
+mapped: .byte screen("HI@")
+one:    .byte screen('Z')
+
+; A call is worth what its body is worth, and a list stands for its own items.
+color:  .word rgb15(31, 0, 0)
+table:  .byte handlers
+lo:     .lobytes handlers
+
+; An instance written out with values, on one line and over several.
+boss:   .tag Player { pos = { x = 100, y = 40 }, hp = 99 }
+
+hero:   .tag Player {
+    hp = 3
+    name = "ZIP"
+}
+}
+
+.proc main {
+    ; A field of an instance is that instance plus the offset of the field.
+    lda player::hp
+    ldx actors::pos::x
+    lda #Color::green
+    lda #.sizeof(Player)
+    rts
+}

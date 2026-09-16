@@ -43,7 +43,10 @@ public sealed class ProgramModel
     /// declares is a define, visible everywhere.
     /// </summary>
     public static ProgramModel Create(
-        IReadOnlyList<SyntaxTree> trees, SegmentTable segments, SyntaxTree? defines = null)
+        IReadOnlyList<SyntaxTree> trees,
+        SegmentTable segments,
+        SyntaxTree? defines = null,
+        Func<string, long?>? binaryLength = null)
     {
         // What is wrong with the program rather than with one file: a name two files export,
         // a constant defined in terms of itself across files, a file shadowing a define.
@@ -80,14 +83,15 @@ public sealed class ProgramModel
             }
         }
 
-        Evaluator.EvaluateSymbols(segments, [.. bound.SelectMany(result => result.Symbols)], resolved, program);
+        Evaluator.EvaluateSymbols(
+            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, program, binaryLength);
         CheckDefineNames(modules, defines, program);
 
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
             files.Add(new SemanticModel(trees[i], segments, bound[i], resolved,
-                program.Where(d => d.Span.File == trees[i].Path)));
+                program.Where(d => d.Span.File == trees[i].Path), binaryLength));
         }
         return new ProgramModel(files, segments, symbols, Norristown.Diagnostics.Ordered(
             bound.SelectMany(result => result.Diagnostics).Concat(program)));

@@ -4,129 +4,135 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// How many bytes a data directive generates (§8, §7.6), and what its values must satisfy
-/// for ca65 to accept them. String and character data becomes bytes in the output, so a
-/// string's length is its byte count.
+/// What a data directive must satisfy for ca65 to accept it, and how many bytes it comes
+/// to. How much room a directive takes is a question about what the program means, so it is
+/// answered once, by the semantic model; what is left here is what the assembler will
+/// refuse: a value too wide for the directive holding it, text that is not bytes, and a
+/// reservation whose count nt65 cannot work out.
 /// </summary>
 public static class DataLengths
 {
     /// <summary>
-    /// The length of <paramref name="directive"/>, or null when it is a directive a later
-    /// stage brings online. Anything wrong with its values goes to
-    /// <paramref name="diagnostics"/>, which callers that have already reported pass as null.
+    /// A line whose length depends on where it lands rather than on what it says. An
+    /// <c>.align</c> generates however many bytes it takes to reach the next boundary, so
+    /// nt65 writes it out and makes no claim about its length.
+    /// </summary>
+    public const int Unpredictable = -1;
+
+    /// <summary>
+    /// The length of <paramref name="directive"/>, <see cref="Unpredictable"/> for one whose
+    /// length only the assembler settles, or null for one nt65 cannot write at all. Anything
+    /// wrong with its values goes to <paramref name="diagnostics"/>, which callers that have
+    /// already reported pass as null.
     /// </summary>
     public static int? Of(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics)
     {
         if (directive.ChildTokens.Length == 0)
             return null;
+        Check(directive, model, diagnostics);
+        if (directive.ChildTokens[0].Text.Equals(".align", StringComparison.OrdinalIgnoreCase))
+            return Unpredictable;
+        return model.RoomFor(directive) is { } room && room.Bytes is >= 0 and <= int.MaxValue
+            ? (int)room.Bytes
+            : null;
+    }
+
+    /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
+    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model) => model.BytesOf(argument);
+
+    /// <summary>What the assembler would refuse about a directive's values.</summary>
+    private static void Check(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics)
+    {
         var name = directive.ChildTokens[0].Text.ToLowerInvariant();
-        var arguments = directive.ChildNodes;
+        var operands = directive.ChildNodes;
 
         switch (name)
         {
             case ".byte":
-                var bytes = 0;
-                foreach (var argument in arguments)
-                    bytes += Element(argument, model, diagnostics, limit: (-128, 255), width: 1);
-                return bytes;
-
-            case ".word":
-                return Fixed(arguments, model, diagnostics, width: 2, limit: (-32768, 65535));
-            case ".addr":
-                return Fixed(arguments, model, diagnostics, width: 2, limit: null);
-            case ".faraddr":
-                return Fixed(arguments, model, diagnostics, width: 3, limit: null);
-            case ".dword":
-                return Fixed(arguments, model, diagnostics, width: 4, limit: (-2147483648, 4294967295));
-
-            // `.asciiz` is one zero byte after the text, as ca65 writes it.
             case ".asciiz":
-                var text = 0;
-                foreach (var argument in arguments)
-                    text += Element(argument, model, diagnostics, limit: (-128, 255), width: 1);
-                return text + 1;
+                Values(operands, model, diagnostics, (-128, 255));
+                break;
+            case ".word":
+                Values(operands, model, diagnostics, (-32768, 65535));
+                break;
+            case ".dword":
+                Values(operands, model, diagnostics, (-2147483648, 4294967295));
+                break;
+
+            // An address directive takes whatever fits its own width, and the byte
+            // directives take an address and keep one byte of it, so neither limits a value.
+            case ".addr":
+            case ".faraddr":
+            case ".lobytes":
+            case ".hibytes":
+                Values(operands, model, diagnostics, null);
+                break;
 
             case ".res":
-                return Reserved(directive, arguments, model, diagnostics);
+                Reserved(operands, model, diagnostics);
+                break;
 
-            // `.align` and `.incbin` arrive with Stage 7, and the rest are not data at all.
+            case ".align":
+                Alignment(operands, model, diagnostics);
+                break;
+
             default:
-                return null;
+                break;
         }
     }
 
-    /// <summary>The bytes a string or character literal becomes (§8, §13), or null for anything else.</summary>
-    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model)
+    private static void Values(
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        (long Low, long High)? limit)
     {
-        if (argument.Kind is not (SyntaxKind.StringExpression or SyntaxKind.CharacterExpression))
-            return null;
-        var value = model.ValueOf(argument);
-        return value.Kind switch
+        foreach (var operand in operands)
         {
-            ValueKind.String => [.. value.Text!.Select(c => (long)c)],
-            ValueKind.Number => [value.Number],
-            _ => null,
-        };
-    }
-
-    /// <summary>One element of a byte-wide directive: a string is its bytes, anything else is one.</summary>
-    private static int Element(
-        SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit, int width)
-    {
-        CheckAscii(argument, model, diagnostics);
-        if (Bytes(argument, model) is { } bytes)
-        {
-            foreach (var value in bytes)
+            CheckAscii(operand, model, diagnostics);
+            if (Bytes(operand, model) is { } bytes)
             {
-                if (value is < 0 or > 255)
-                    Report(argument, model, diagnostics, $"`{(char)value}` is not a byte; a charmap (§8) maps text to bytes");
+                foreach (var value in bytes)
+                {
+                    if (value is < 0 or > 255)
+                        Report(operand, model, diagnostics, $"`{(char)value}` is not a byte; a charmap maps text to bytes");
+                }
+                continue;
             }
-            return bytes.Count * width;
+            if (limit is { } range)
+                CheckRange(operand, model, diagnostics, range);
         }
-        CheckRange(argument, model, diagnostics, limit);
-        return width;
     }
 
-    private static int Fixed(
-        IReadOnlyList<SyntaxNode> arguments, SemanticModel model, List<Diagnostic>? diagnostics,
-        int width, (long Low, long High)? limit)
+    /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant.</summary>
+    private static void Reserved(
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics)
     {
-        var length = 0;
-        foreach (var argument in arguments)
-        {
-            // A string in a word-wide directive is still one element per byte, each widened.
-            length += limit is { } range
-                ? Element(argument, model, diagnostics, range, width)
-                : Element(argument, model, diagnostics, (long.MinValue, long.MaxValue), width);
-        }
-        return length;
-    }
+        if (operands.Count == 0)
+            return;
+        if (operands.Count > 1)
+            CheckRange(operands[1], model, diagnostics, (-128, 255));
 
-    /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant (§7.6).</summary>
-    private static int? Reserved(
-        SyntaxNode directive, IReadOnlyList<SyntaxNode> arguments, SemanticModel model, List<Diagnostic>? diagnostics)
-    {
-        if (arguments.Count == 0)
-            return null;
-        if (arguments.Count > 1)
-            CheckRange(arguments[1], model, diagnostics, (-128, 255));
-
-        var count = model.ValueOf(arguments[0]).AsNumber();
+        var count = model.ValueOf(operands[0]).AsNumber();
         if (count is null)
-        {
-            Report(arguments[0], model, diagnostics, "a `.res` count must be a constant");
-            return null;
-        }
-        if (count is < 0 or > 0xffffff)
-        {
-            Report(arguments[0], model, diagnostics, $"a `.res` count must be between 0 and $ffffff, not {count}");
-            return null;
-        }
-        return (int)count;
+            Report(operands[0], model, diagnostics, "a `.res` count must be a constant");
+        else if (count is < 0 or > 0xffffff)
+            Report(operands[0], model, diagnostics, $"a `.res` count must be between 0 and $ffffff, not {count}");
+    }
+
+    /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
+    private static void Alignment(
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics)
+    {
+        if (operands.Count == 0)
+            return;
+        var boundary = model.ValueOf(operands[0]).AsNumber();
+        if (boundary is null)
+            Report(operands[0], model, diagnostics, "an `.align` boundary must be a constant");
+        else if (boundary is < 1 or > 0x10000 || (boundary & (boundary - 1)) != 0)
+            Report(operands[0], model, diagnostics, $"an `.align` boundary must be a power of two, not {boundary}");
     }
 
     /// <summary>
-    /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte (§4), so a character
+    /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character
     /// typed directly above <c>$7f</c> is an error rather than a byte of some encoding.
     /// </summary>
     private static void CheckAscii(SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics)

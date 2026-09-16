@@ -79,6 +79,9 @@ public sealed partial class OracleTests
             }
             for (var i = 0; i < lines.Length; i++)
             {
+                // A line nt65 makes no claim about is one the assembler settles for itself.
+                if (output.LineBytes[i] < 0)
+                    continue;
                 if (result.LineBytes[i] != output.LineBytes[i])
                 {
                     yield return $"[{fixture}] {output.Path}:{i + 1}: nt65 says {output.LineBytes[i]} bytes, " +
@@ -138,6 +141,64 @@ public sealed partial class OracleTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("HOST_VERSION is not $0102", result.Messages);
+    }
+
+    /// <summary>
+    /// An initialized instance is one directive per member, and the bytes it comes to are
+    /// the bytes a programmer would have written by hand. Assembling both and comparing the
+    /// linked images is what says the layout is right rather than merely plausible.
+    /// </summary>
+    [Fact]
+    public void AnInitializedInstanceAssemblesToTheBytesWrittenByHand()
+    {
+        const string Nt65 = """
+            .struct Point {
+            x:      .word
+            y:      .word
+            }
+
+            .struct Actor {
+            pos:    .tag Point
+            hp:     .byte
+            name:   .res 4
+            }
+
+            .rodata {
+            boss:   .tag Actor { pos = { x = 100, y = 40 }, hp = 99, name = "ZIP" }
+
+            hero:   .tag Actor {
+                hp = 3
+                pos = { y = 7 }
+            }
+            }
+            """;
+
+        const string ByHand = """
+            .setcpu "6502"
+            .segment "RODATA": absolute
+            boss:
+                .word 100
+                .word 40
+                .byte 99
+                .byte $5a, $49, $50, $00
+            hero:
+                .word 0
+                .word 7
+                .byte 3
+                .byte $00, $00, $00, $00
+            """;
+
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)]);
+        Assert.Empty(generated.Diagnostics);
+
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Outputs).Text)]);
+        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
+
+        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
+        Assert.True(fromHand.Succeeded, fromHand.Messages);
+        Assert.NotEmpty(fromHand.Binary);
+        Assert.Equal(fromHand.Binary, fromNt65.Binary);
     }
 
     /// <summary>The linker configuration and the hand-written modules of a fixture, or null.</summary>

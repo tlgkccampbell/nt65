@@ -79,7 +79,7 @@ public sealed class TypeSyntaxTests
     {
         var model = Analysis.Model(Source);
 
-        Assert.Equal(["r", "g", "b"], model.Symbol("rgb15").Parameters.Select(p => p.Text));
+        Assert.Equal(["r", "g", "b"], model.Symbol("rgb15").ParameterSymbols.Select(p => p.Name));
         Assert.Single(model.Symbol("rgb15").Items);
         Assert.Equal(2, model.Symbol("handlers").Items.Count);
         Assert.Equal(2, model.Symbol("screen").Entries.Count);
@@ -97,27 +97,22 @@ public sealed class TypeSyntaxTests
     }
 
     /// <summary>
-    /// Nothing is written for any of them yet. A file that uses one produces no output and
-    /// says so, rather than quietly leaving the construct out of the ca65.
+    /// A type says what something means without generating anything, so nothing is written
+    /// for it; an enum writes its members out as the constants they are.
     /// </summary>
-    [Theory]
-    [InlineData(".enum Color {\nred\n}\n", ".enum")]
-    [InlineData(".struct Point {\nx:      .word\n}\n", ".struct")]
-    [InlineData(".union Value {\nb:      .byte\n}\n", ".union")]
-    [InlineData(".charmap screen {\n' ' = $20\n}\n", ".charmap")]
-    [InlineData(".list items {\n1, 2\n}\n", ".list")]
-    [InlineData(".func twice(n) = n * 2\n", ".func")]
-    [InlineData("here:   .tag Point\n", ".tag")]
-    [InlineData("    .align 256\n", ".align")]
-    [InlineData("    .incbin \"sprites.bin\"\n", ".incbin")]
-    [InlineData("    .lobytes 1, 2\n", ".lobytes")]
-    [InlineData("    .hibytes 1, 2\n", ".hibytes")]
-    public void NothingIsWrittenForThemYet(string source, string directive)
+    [Fact]
+    public void ATypeWritesNothingAndAnEnumWritesItsMembers()
     {
-        var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);
+        var output = Compiled(Source + "\n.proc main {\n    rts\n}\n");
 
-        Assert.Empty(compilation.Outputs);
-        Assert.Contains(compilation.Diagnostics, d => d.Message == $"`{directive}` is not transpiled yet");
+        Assert.Contains("Color__red = $00", output);
+        Assert.Contains("Color__green = $05", output);
+        Assert.Contains("Color__blue = $06", output);
+        Assert.DoesNotContain(".struct", output);
+        Assert.DoesNotContain(".union", output);
+        Assert.DoesNotContain(".charmap", output);
+        Assert.DoesNotContain(".list", output);
+        Assert.DoesNotContain(".func", output);
     }
 
     /// <summary>The design's own examples of each construct read without complaint.</summary>
@@ -127,5 +122,13 @@ public sealed class TypeSyntaxTests
         var tree = SyntaxTree.Parse("main.nt65", Source);
 
         Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>The ca65 a program becomes, which must be a program that compiles.</summary>
+    private static string Compiled(string source)
+    {
+        var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);
+        Assert.Empty(compilation.Diagnostics);
+        return Assert.Single(compilation.Outputs).Text;
     }
 }

@@ -23,10 +23,12 @@ internal sealed class Binder
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
     private readonly List<Use> exports = [];
+    private readonly HashSet<Symbol> resolving = [];
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
     private Scope scope;
     private string segment = SegmentTable.DefaultSegment;
+    private Symbol? previousEnumMember;
 
     private Binder(SyntaxTree tree, SegmentTable segments)
     {
@@ -136,6 +138,7 @@ internal sealed class Binder
                 break;
             case BlockKind.Enum:
                 scope = OpenType(opener, SymbolKind.Enum);
+                previousEnumMember = null;
                 break;
             case BlockKind.Struct:
                 scope = OpenType(opener, SymbolKind.Struct);
@@ -168,6 +171,8 @@ internal sealed class Binder
 
         scope = outerScope;
         segment = outerSegment;
+        if (kind == BlockKind.Enum)
+            previousEnumMember = null;
     }
 
     /// <summary>
@@ -292,15 +297,7 @@ internal sealed class Binder
                 break;
 
             case SyntaxKind.FuncDeclaration:
-                var body = statement.ChildNodes.LastOrDefault(c => c.Kind != SyntaxKind.ParameterList);
-                var parameters = statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ParameterList);
-                if (NameToken(statement) is { } function)
-                {
-                    Declare(function, SymbolKind.Func, value: null,
-                        items: body is null ? [] : [body],
-                        parameters: [.. parameters?.ChildTokens.Where(t => t.Kind != SyntaxKind.Comma
-                            && t.Kind != SyntaxKind.OpenParen && t.Kind != SyntaxKind.CloseParen) ?? []]);
-                }
+                BindFunc(statement);
                 break;
 
             case SyntaxKind.ConstantDeclaration:
@@ -401,10 +398,48 @@ internal sealed class Binder
         if (NameToken(statement) is not { } name)
             return;
         var value = statement.ChildNodes.FirstOrDefault();
-        var previous = scope.Symbols.LastOrDefault(symbol => symbol.Kind == SymbolKind.Constant);
-        if (Declare(name, SymbolKind.Constant, value) is { } member)
-            member.PreviousMember = previous;
+        var member = Declare(name, SymbolKind.Constant, value, follows: value is null);
+        if (member is not null)
+        {
+            member.PreviousMember = previousEnumMember;
+            previousEnumMember = member;
+        }
         CollectUses(value);
+    }
+
+    /// <summary>
+    /// A function and the parameters its body names. The parameters live in a scope of their
+    /// own, which nothing outside the body can reach, so the body reads as ordinary code and
+    /// a call is the body with each parameter standing for its argument.
+    /// </summary>
+    private void BindFunc(SyntaxNode statement)
+    {
+        var body = statement.ChildNodes.LastOrDefault(child => child.Kind != SyntaxKind.ParameterList);
+        var written = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ParameterList);
+        if (NameToken(statement) is not { } name)
+            return;
+
+        var symbol = Declare(name, SymbolKind.Func, value: null, items: body is null ? [] : [body]);
+        if (symbol is null)
+            return;
+
+        var inside = new Scope(ScopeKind.Type, null, scope, symbol);
+        symbol.Body = inside;
+
+        var outer = scope;
+        scope = inside;
+        var parameters = new List<Symbol>();
+        foreach (var token in written?.ChildTokens ?? [])
+        {
+            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
+                && Declare(token, SymbolKind.Constant) is { } parameter)
+            {
+                parameters.Add(parameter);
+            }
+        }
+        symbol.ParameterSymbols = parameters;
+        CollectUses(body);
+        scope = outer;
     }
 
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
@@ -451,7 +486,7 @@ internal sealed class Binder
         SyntaxNode? type = null,
         IReadOnlyList<SyntaxNode>? items = null,
         IReadOnlyList<SyntaxNode>? entries = null,
-        IReadOnlyList<SyntaxToken>? parameters = null)
+        bool follows = false)
     {
         // A member of a named type may be called after a register or a mnemonic: nothing can
         // be written there but a member name, so there is nothing for it to shadow.
@@ -469,7 +504,7 @@ internal sealed class Binder
             TypeExpression = type,
             Items = items ?? [],
             Entries = entries ?? [],
-            Parameters = parameters ?? [],
+            FollowsPrevious = follows,
         };
 
         if (owner.Declare(symbol) is { } existing)
@@ -575,7 +610,7 @@ internal sealed class Binder
 
         // A part after `::`: the scope to look in is the one the part before it opened, and a
         // leading `::` starts at the file's own top level.
-        var container = previous is null ? fileScope : previous.Body;
+        var container = previous is null ? fileScope : BodyOf(previous);
         if (container is null)
         {
             Report(token.Span, $"`{previous!.DisplayName}` is a {previous.KindText}, not a scope");
@@ -609,6 +644,53 @@ internal sealed class Binder
         Report(token.Span, $"`{symbol.QualifiedName}` is declared in `{file}` and is not exported",
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         return symbol;
+    }
+
+    /// <summary>
+    /// What a name may reach into. A routine or a scope opens its own; a member or an
+    /// instance opens the one belonging to the type it names, which is what makes the fields
+    /// of a `.tag` reachable through it.
+    /// </summary>
+    private Scope? BodyOf(Symbol symbol)
+    {
+        if (symbol.Body is { } own)
+            return own;
+        if (symbol.TypeExpression is null || !resolving.Add(symbol))
+            return null;
+        var type = TypeOf(symbol);
+        resolving.Remove(symbol);
+        return type?.Body;
+    }
+
+    /// <summary>
+    /// The type a <c>.tag</c> names, resolved from where it was written. This runs on demand
+    /// rather than in order, because a name may reach into a type the file declares later.
+    /// </summary>
+    private Symbol? TypeOf(Symbol symbol)
+    {
+        if (symbol.Type is { } known)
+            return known;
+        if (symbol.TypeExpression is not { } named)
+            return null;
+
+        Symbol? part = null;
+        var path = false;
+        foreach (var token in named.ChildTokens)
+        {
+            if (token.Kind == SyntaxKind.ColonColon)
+            {
+                path = true;
+                continue;
+            }
+            part = path
+                ? (part is null ? fileScope : BodyOf(part))?.FindMember(token.Text)
+                : symbol.Scope.Lookup(token.Text) ?? program.Lookup(token.Text, tree);
+            path = true;
+            if (part is null)
+                return null;
+        }
+        symbol.Type = part;
+        return part;
     }
 
     private void Report(TextSpan span, string message, params RelatedSpan[] related) =>

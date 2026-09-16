@@ -15,14 +15,17 @@ public sealed class SemanticModel
 {
     private readonly IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved;
     private readonly ILookup<Symbol, SymbolReference> bySymbol;
+    private readonly Func<string, long?>? binaryLength;
 
     internal SemanticModel(
         SyntaxTree tree,
         SegmentTable segments,
         Binder.Result bound,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IEnumerable<Diagnostic> fromTheProgram)
+        IEnumerable<Diagnostic> fromTheProgram,
+        Func<string, long?>? binaryLength = null)
     {
+        this.binaryLength = binaryLength;
         Tree = tree;
         Segments = segments;
         FileScope = bound.FileScope;
@@ -95,6 +98,20 @@ public sealed class SemanticModel
 
     /// <summary>What an expression is worth, for an editor to show (§9).</summary>
     public Value ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, Segments, resolved);
+
+    /// <summary>
+    /// How much room a data directive takes: the bytes it generates and how many elements
+    /// they are. Null where nt65 cannot say, such as for an <c>.align</c>.
+    /// </summary>
+    public DataSize? RoomFor(SyntaxNode directive) =>
+        Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength);
+
+    /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
+    public IReadOnlyList<long>? BytesOf(SyntaxNode operand) =>
+        Evaluator.BytesOf(operand, Segments, resolved);
+
+    /// <summary>The items an operand stands for when it names a list, or null when it does not.</summary>
+    public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) => Evaluator.ItemsOf(operand, resolved);
 
     /// <summary>
     /// The address size of an expression (§7.2). <c>*</c> takes the size of

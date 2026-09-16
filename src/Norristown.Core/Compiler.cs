@@ -62,7 +62,15 @@ public static class Compiler
     /// The same, for files that are already parsed. An editor keeps its trees across edits
     /// and re-parses only what changed, so analysis takes them rather than their text.
     /// </summary>
-    public static ProgramAnalysis Analyze(IReadOnlyCollection<SyntaxTree> files, ProjectSettings project)
+    public static ProgramAnalysis Analyze(IReadOnlyCollection<SyntaxTree> files, ProjectSettings project) =>
+        Analyze(files, project, BinaryLengthOnDisk);
+
+    /// <summary>
+    /// The same, with <paramref name="binaryLength"/> answering how long the file an
+    /// <c>.incbin</c> names is. A test gives its own rather than writing files to disk.
+    /// </summary>
+    public static ProgramAnalysis Analyze(
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength)
     {
         var trees = files.OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
 
@@ -80,7 +88,7 @@ public static class Compiler
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports (§12).
-        var program = ProgramModel.Create(trees, segments, defines);
+        var program = ProgramModel.Create(trees, segments, defines, binaryLength);
         diagnostics.AddRange(trees.SelectMany(tree => tree.Diagnostics));
         diagnostics.AddRange(program.Diagnostics);
 
@@ -103,6 +111,19 @@ public static class Compiler
             }
         }
         return new ProgramAnalysis(program, target, layouts, defines, Diagnostics.Ordered(diagnostics));
+    }
+
+    /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>
+    private static long? BinaryLengthOnDisk(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? new FileInfo(path).Length : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -69,8 +69,8 @@ public sealed class Symbol
     /// <summary>The type a <c>.tag</c> names, once resolved.</summary>
     public Symbol? Type { get; internal set; }
 
-    /// <summary>A function's parameter names, in order.</summary>
-    public IReadOnlyList<SyntaxToken> Parameters { get; internal init; } = [];
+    /// <summary>A function's parameters, in order, as the symbols its body names.</summary>
+    public IReadOnlyList<Symbol> ParameterSymbols { get; internal set; } = [];
 
     /// <summary>A list's items, or a function's body as its single item.</summary>
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
@@ -82,10 +82,16 @@ public sealed class Symbol
     public SyntaxNode? Data { get; internal init; }
 
     /// <summary>
-    /// The enum member written before this one. A member with no value of its own is the one
-    /// before it plus one, and the first is zero.
+    /// The enum member written before this one, or null for the first. A member with no value
+    /// of its own follows it.
     /// </summary>
     public Symbol? PreviousMember { get; internal set; }
+
+    /// <summary>
+    /// Whether this is an enum member that was given no value, and so is the member before it
+    /// plus one, or zero when it is the first.
+    /// </summary>
+    public bool FollowsPrevious { get; internal init; }
 
     /// <summary>The address size of §7.2, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
