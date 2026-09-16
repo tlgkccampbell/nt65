@@ -72,6 +72,18 @@ public sealed class Symbol
     /// <summary>A function's parameters, in order, as the symbols its body names.</summary>
     public IReadOnlyList<Symbol> ParameterSymbols { get; internal set; } = [];
 
+    /// <summary>A macro's parameters, in the order they are written.</summary>
+    public IReadOnlyList<MacroParameter> Parameters { get; internal set; } = [];
+
+    /// <summary>What a macro parameter accepts; meaningless for every other kind of symbol.</summary>
+    public MacroParameter? Parameter { get; internal set; }
+
+    /// <summary>
+    /// The macros this macro's body calls, with the call each was named at. A macro may not
+    /// reach itself through them, which is what makes every expansion bounded (§11.1).
+    /// </summary>
+    public List<(Symbol Callee, Span At)> Calls { get; } = [];
+
     /// <summary>A list's items, or a function's body as its single item.</summary>
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
 
@@ -173,6 +185,8 @@ public sealed class Symbol
         SymbolKind.Charmap => "character mapping",
         SymbolKind.List => "list",
         SymbolKind.Binding => "repetition binding",
+        SymbolKind.Macro => "macro",
+        SymbolKind.MacroParameter => "macro parameter",
         _ => "function",
     };
 

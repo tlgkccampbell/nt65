@@ -1,8 +1,8 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What kind of scope a <see cref="Scope"/> is. Only these three start one: segment blocks
-/// and <c>.if</c> bodies place their contents in the scope around them.
+/// What kind of scope a <see cref="Scope"/> is. Segment blocks and <c>.if</c> bodies start
+/// none: they place their contents in the scope around them.
 /// </summary>
 public enum ScopeKind
 {
@@ -14,6 +14,12 @@ public enum ScopeKind
 
     /// <summary>A <c>.scope</c> body, named or anonymous.</summary>
     Scope,
+
+    /// <summary>
+    /// A <c>.macro</c> body. It carries the macro's name, so what it declares is named after
+    /// it in the output, but nothing outside the body can reach any of it.
+    /// </summary>
+    Macro,
 
     /// <summary>
     /// The body of an <c>.enum</c>, <c>.struct</c> or <c>.union</c>: a scope of constants

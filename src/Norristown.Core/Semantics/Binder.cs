@@ -7,9 +7,14 @@ namespace Norristown.Semantics;
 /// Builds one file's scopes and declarations and resolves the names it uses.
 /// <para>
 /// Declarations are collected first and resolved afterwards, so a name may be used before
-/// the line that declares it. Blocks belonging to a later stage — macros, <c>.repeat</c> and
-/// <c>.each</c> — are not bound at all: their contents mean something this stage does not
-/// implement, and half a rule would be worse than none.
+/// the line that declares it.
+/// </para>
+/// <para>
+/// A macro body is read once, wherever many times it is expanded. It sees the scope the
+/// macro is declared in, and what it declares belongs to a scope of its own that nothing
+/// outside can reach, so an expansion never declares a name in its caller. The block
+/// argument of a call is the other way round: it is the caller's own code, and its names
+/// resolve there.
 /// </para>
 /// <para>
 /// An <c>.if</c> is neither: its conditions were answered before any of this ran, so a
@@ -39,6 +44,9 @@ internal sealed class Binder
     private string segment = SegmentTable.DefaultSegment;
     private Symbol? previousEnumMember;
     private SyntaxToken? repetition;
+
+    // The call a `} name {` continues, which is the one its block argument belongs to.
+    private SyntaxNode? openCall;
 
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
@@ -128,16 +136,40 @@ internal sealed class Binder
     /// </summary>
     private void WalkBlock(SyntaxNode block, BlockKind kind)
     {
-        if (Constructs.IsDeferred(kind))
-            return;
-
         var lines = block.ChildNodes;
         var opener = lines.Length > 0 ? lines[0].Statement : null;
+        if (opener is not null)
+            CheckAllowedHere(opener);
+
+        // A `} name {` continues the call just above it; anything else between them, and
+        // there is no call left for it to continue.
+        if (kind != BlockKind.MacroBlock)
+            openCall = null;
         var outerScope = scope;
         var outerSegment = segment;
 
         switch (kind)
         {
+            case BlockKind.Macro:
+                scope = OpenMacro(opener);
+                break;
+
+            // A block argument is written at the call and belongs to it: its names resolve
+            // in the caller, and the cheap locals it declares are private to it, because the
+            // same block may be spliced in more than one place.
+            case BlockKind.MacroBlock:
+                if (opener is { Kind: SyntaxKind.MacroCall or SyntaxKind.LabeledLine })
+                {
+                    BindStatement(opener);
+                    openCall = Macros.CallIn(opener);
+                }
+                else if (opener is { Kind: SyntaxKind.BlockContinuation })
+                {
+                    BindContinuation(opener);
+                }
+                scope = new Scope(ScopeKind.Scope, null, scope, null);
+                break;
+
             case BlockKind.Proc:
                 scope = OpenScope(ScopeKind.Proc, opener, SymbolKind.Proc);
                 break;
@@ -270,6 +302,146 @@ internal sealed class Binder
     }
 
     /// <summary>
+    /// The scope a <c>.macro</c> opens: its parameters, and everything its body declares. The
+    /// scope carries the macro's name, so a label in the body is named after it in the
+    /// output, but nothing outside can reach into it, which is what makes each expansion's
+    /// locals its own.
+    /// </summary>
+    private Scope OpenMacro(SyntaxNode? opener)
+    {
+        if (opener is not { Kind: SyntaxKind.MacroDeclaration })
+        {
+            if (opener is not null)
+                BindStatement(opener);
+            return new Scope(ScopeKind.Macro, null, scope, null);
+        }
+
+        CheckMacroPlacement(opener);
+        var written = NameToken(opener);
+        var symbol = written is { } name ? Declare(name, SymbolKind.Macro) : null;
+        var body = new Scope(ScopeKind.Macro, symbol?.Name ?? written?.Text, scope, symbol);
+        if (symbol is not null)
+            symbol.Body = body;
+
+        // A default is written in the header, so it resolves where the macro is declared
+        // rather than in the body it is used in.
+        var declarations = Macros.ParametersOf(opener);
+        foreach (var parameter in declarations)
+            CollectUses(Macros.DefaultOf(parameter));
+
+        var outer = scope;
+        scope = body;
+        var parameters = new List<MacroParameter>();
+        foreach (var parameter in declarations)
+        {
+            if (Macros.NameOf(parameter) is not { } spelled
+                || Declare(spelled, SymbolKind.MacroParameter) is not { } declared)
+            {
+                continue;
+            }
+            declared.Parameter = Macros.Describe(parameter, declared);
+            parameters.Add(declared.Parameter);
+        }
+        scope = outer;
+        if (symbol is not null)
+            symbol.Parameters = parameters;
+        CheckParameterOrder(declarations, parameters);
+        return body;
+    }
+
+    /// <summary>
+    /// <c>.macro</c> at file level or in a <c>.scope</c> outside any routine. One declared in
+    /// a proc would see that proc's cheap locals, and an expansion in another proc would
+    /// branch into them, out of sight of the first proc's flow analysis (§11.3).
+    /// </summary>
+    private void CheckMacroPlacement(SyntaxNode opener)
+    {
+        for (var around = scope; around is { Kind: not ScopeKind.File }; around = around.Parent)
+        {
+            if (around.Kind is not (ScopeKind.Proc or ScopeKind.Macro))
+                continue;
+            Report(opener.ChildTokens[0].Span,
+                around.Kind == ScopeKind.Proc
+                    ? "a `.macro` belongs at file level or in a `.scope`, not inside a routine"
+                    : "a `.macro` belongs at file level or in a `.scope`, not inside another macro");
+            return;
+        }
+    }
+
+    /// <summary>
+    /// The order the parameters have to be written in: at most one <c>list</c>, which takes
+    /// every remaining positional argument, and the blocks after it, which are written after
+    /// the parentheses and so cannot be positional at all.
+    /// </summary>
+    private void CheckParameterOrder(IReadOnlyList<SyntaxNode> written, IReadOnlyList<MacroParameter> parameters)
+    {
+        MacroParameter? list = null;
+        MacroParameter? block = null;
+        for (var i = 0; i < parameters.Count && i < written.Count; i++)
+        {
+            var parameter = parameters[i];
+            var at = written[i].Span;
+            if (parameter.IsBlock)
+            {
+                block = parameter;
+                continue;
+            }
+            if (block is not null)
+            {
+                Report(at, $"`{parameter.Name}` comes after the `block` parameter `{block.Name}`, "
+                    + "and a block is written after the parentheses");
+            }
+            if (list is not null)
+            {
+                Report(at, $"`{parameter.Name}` comes after the `list` parameter `{list.Name}`, "
+                    + "which takes every remaining argument");
+            }
+            if (parameter.Kind == ParameterKind.List)
+                list = list is null ? parameter : list;
+        }
+    }
+
+    /// <summary><c>} name {</c>: the next block argument of the call this one continues.</summary>
+    private void BindContinuation(SyntaxNode opener)
+    {
+        if (openCall is null)
+        {
+            if (opener.ChildTokens.Length > 1)
+                Report(opener.ChildTokens[1].Span, "this block continues no macro call");
+            return;
+        }
+    }
+
+    /// <summary>
+    /// What a macro body and a block argument may not hold. A body would declare in its
+    /// caller or make something program-wide depend on how often it is called; a block
+    /// argument is spliced wherever the body names it, so anything it declared would be
+    /// declared once per splice.
+    /// </summary>
+    private void CheckAllowedHere(SyntaxNode statement)
+    {
+        if (!InMacroBody)
+            return;
+        if (Macros.Forbidden(statement) is not { } why)
+            return;
+        Report(statement.ChildTokens.Length > 0 ? statement.ChildTokens[0].Span : statement.Span, why);
+    }
+
+    /// <summary>Whether the walk is inside a macro body, however many scopes deep.</summary>
+    private bool InMacroBody
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind == ScopeKind.Macro)
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
     /// A <c>.charmap</c> or a <c>.list</c>, whose lines are entries rather than declarations:
     /// the block is one symbol holding them. A list's items name symbols, and those names
     /// belong to the scope the list is written in.
@@ -332,8 +504,11 @@ internal sealed class Binder
 
     private void WalkLine(SyntaxNode line)
     {
-        if (line.Statement is { } statement)
-            BindStatement(statement);
+        if (line.Statement is not { } statement)
+            return;
+        openCall = null;
+        CheckAllowedHere(statement);
+        BindStatement(statement);
     }
 
     private void BindStatement(SyntaxNode statement)
@@ -386,6 +561,10 @@ internal sealed class Binder
             case SyntaxKind.ImportDirective:
                 foreach (var item in statement.ChildNodes)
                     BindImportItem(item);
+                break;
+
+            case SyntaxKind.BlockSplice:
+                BindSplice(statement);
                 break;
 
             case SyntaxKind.InstructionStatement:
@@ -495,6 +674,23 @@ internal sealed class Binder
         scope = outer;
     }
 
+    /// <summary>
+    /// A name on its own, which splices the block argument bound to it. Only a macro body
+    /// can hold one: everywhere else a name alone is the line the parser could not read.
+    /// </summary>
+    private void BindSplice(SyntaxNode statement)
+    {
+        if (statement.ChildTokens.Length == 0)
+            return;
+        var token = statement.ChildTokens[0];
+        if (!InMacroBody)
+        {
+            Report(token.Span, "expected a label, a constant, an instruction or a directive");
+            return;
+        }
+        uses.Add(new Use(token, scope, Path: false, First: true, Last: true, Splice: true));
+    }
+
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
     private void CollectUses(SyntaxNode? node)
     {
@@ -575,7 +771,13 @@ internal sealed class Binder
 
         if (owner.Declare(symbol) is { } existing)
         {
-            Report(name.Span, $"`{symbol.DisplayName}` is already declared in this scope",
+            // A body that declared the name an `ident` parameter stands for would be
+            // declaring a name in its caller, which is what says it plainly here.
+            Report(name.Span,
+                existing.Parameter is { Kind: ParameterKind.Ident }
+                    ? $"`{symbol.DisplayName}` is an `ident` parameter, and a body may not declare "
+                        + "the name it stands for"
+                    : $"`{symbol.DisplayName}` is already declared in this scope",
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(symbol);
@@ -620,7 +822,7 @@ internal sealed class Binder
     {
         Symbol? previous = null;
         var broken = false;
-        foreach (var (token, at, path, first, last) in uses)
+        foreach (var (token, at, path, first, last, splice) in uses)
         {
             if (first)
             {
@@ -636,9 +838,18 @@ internal sealed class Binder
 
             previous = Resolve(token, at, path, previous, last);
             if (previous is null)
+            {
                 broken = true;
+            }
             else
+            {
                 references.Add(new SymbolReference(previous, token.Span, false));
+                if (splice && previous.Parameter is not { Kind: ParameterKind.Block })
+                {
+                    Report(token.Span, $"`{token.Text}` is a {previous.KindText}; a name written on its "
+                        + "own splices a `block` parameter, and nothing else belongs on a line alone");
+                }
+            }
         }
         references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
     }
@@ -733,6 +944,11 @@ internal sealed class Binder
     /// </summary>
     private Scope? BodyOf(Symbol symbol)
     {
+        // A macro has a body scope, but it is not one a path may reach into: what a body
+        // declares is local to each expansion, so there is no one symbol to name from
+        // outside (§11.3).
+        if (symbol.Kind == SymbolKind.Macro)
+            return null;
         if (symbol.Body is { } own)
             return own;
         if (symbol.TypeExpression is null || !resolving.Add(symbol))
@@ -793,5 +1009,7 @@ internal sealed class Binder
     /// <param name="Path">Whether a <c>::</c> comes before it, so it names a member of a scope.</param>
     /// <param name="First">Whether it is the first part of the name it belongs to.</param>
     /// <param name="Last">Whether it is the last part, and so the symbol the whole name stands for.</param>
-    private readonly record struct Use(SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last);
+    /// <param name="Splice">Whether the name stands alone on a line, and so splices a block.</param>
+    private readonly record struct Use(
+        SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last, bool Splice = false);
 }

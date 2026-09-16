@@ -37,7 +37,8 @@ public sealed class Scope
     /// <summary>
     /// Whether every scope from here out to the file has a name, so what is declared here
     /// can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is inline code, and
-    /// nothing outside it can name what it declares.
+    /// nothing outside it can name what it declares; neither is a macro body, whose
+    /// declarations are local to each expansion and so are no one name at all.
     /// </summary>
     public bool IsReachableByPath
     {
@@ -45,7 +46,7 @@ public sealed class Scope
         {
             for (var scope = this; scope.Kind != ScopeKind.File; scope = scope.Parent!)
             {
-                if (scope.Name is null)
+                if (scope.Name is null || scope.Kind == ScopeKind.Macro)
                     return false;
             }
             return true;

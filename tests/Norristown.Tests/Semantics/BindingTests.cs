@@ -219,24 +219,6 @@ public sealed class BindingTests
         Assert.Equal(["3: `SIZE` is a constant, not a scope"], model.Problems());
     }
 
-    /// <summary>
-    /// A macro body means what its expansion means, so its names are not the file's and
-    /// nothing in it declares or resolves yet.
-    /// </summary>
-    [Fact]
-    public void AMacroBodyIsNotBound()
-    {
-        var model = Analysis.Model("""
-            .macro set16(dest, value) {
-                lda #<value
-                sta dest
-            }
-            """);
-
-        Assert.Empty(model.Problems());
-        Assert.Empty(model.Symbols);
-    }
-
     /// <summary>A segment block changes the segment of its contents, not their scope.</summary>
     [Fact]
     public void ASegmentBlockDoesNotStartAScope()

@@ -53,4 +53,10 @@ public enum SymbolKind
 
     /// <summary>The name a <c>.repeat</c> or an <c>.each</c> binds: one value per turn.</summary>
     Binding,
+
+    /// <summary><c>.macro name(...) { }</c>: a body expanded at each of its calls.</summary>
+    Macro,
+
+    /// <summary>One parameter of a macro: the name its body gives an argument.</summary>
+    MacroParameter,
 }
