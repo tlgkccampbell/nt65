@@ -122,6 +122,13 @@ public sealed class Symbol
     /// </summary>
     public Signature? Signature { get; internal set; }
 
+    /// <summary>
+    /// The processor state a macro declares it expects and leaves, or null for a macro that
+    /// declares none, whose expansions are analyzed as the code they contain. Kept apart from
+    /// <see cref="Signature"/>, because a macro is expanded rather than called.
+    /// </summary>
+    public Signature? MacroSignature { get; internal set; }
+
     /// <summary>The address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
 

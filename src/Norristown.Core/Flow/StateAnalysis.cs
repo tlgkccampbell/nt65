@@ -294,8 +294,11 @@ public sealed class StateAnalysis
             case "tcs":
                 return state with { Stack = null };
 
+            // A return with a `.next` is a jump to the address the routine pushed, and pulls it.
             case "rts":
             case "rtl":
+                if (next is not null)
+                    return state with { Stack = Pull(stack, mnemonic == "rts" ? 2 : 3) };
                 CheckReturn(step, mnemonic, processor, routine);
                 return state;
 
@@ -316,6 +319,14 @@ public sealed class StateAnalysis
         if (transfer == Transfer.Call)
             return state with { Processor = Called(step, mnemonic, target, state.Processor) };
 
+        // A relative call comes back to the label after it, having pulled what the `per` and
+        // any `phk` pushed.
+        if (flow.RelativeCallAt(step) is { } relative)
+        {
+            return new FlowState(
+                RelativelyCalled(step, mnemonic, relative, state.Processor), Pull(state.Stack, relative.Pushed));
+        }
+
         // Where an indirect call goes is what its `.next` says, and it returns with whatever
         // the routines it names return with. With nothing named, nothing is known after it.
         if (calls)
@@ -331,6 +342,8 @@ public sealed class StateAnalysis
 
         if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee })
             CheckTailCall(step, mnemonic, target, callee, state.Processor, routine);
+        else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && DeclaredElsewhere(target, routine) is { } declared)
+            CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
         if (next is not null)
         {
             foreach (var named in Routines(next, step.On))
@@ -373,6 +386,51 @@ public sealed class StateAnalysis
             Report(step, $"`{target.DisplayName}` is near, and is called with `jsr`");
         CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", callee, state);
         return Exited(callee, state);
+    }
+
+    /// <summary>
+    /// A call written as <c>per</c> and a branch, checked as <c>jsr</c> or, with a <c>phk</c>
+    /// before it, as <c>jsl</c>.
+    /// </summary>
+    private ProcessorState RelativelyCalled(Step step, string mnemonic, RelativeCall call, ProcessorState state)
+    {
+        var target = call.Routine;
+        var callee = target.Signature!;
+        if (callee.IsFar && !call.IsFar)
+            Report(step, $"`{target.DisplayName}` is far, and a relative call to it pushes the bank with `phk` before the `per`");
+        else if (!callee.IsFar && call.IsFar)
+            Report(step, $"`{target.DisplayName}` is near, and a relative call to it pushes no bank: the `phk` is one byte too many");
+        CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", callee, state);
+        return Exited(callee, state);
+    }
+
+    /// <summary>
+    /// What a <c>.state</c> declares at a label inside another routine, which a jump into that
+    /// routine has to meet; null when the label is in this routine or declares nothing. Only
+    /// the parts it gives are checked.
+    /// </summary>
+    private ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
+    {
+        foreach (var region in flow.Regions)
+        {
+            if (region.Routine == routine)
+                continue;
+            if (region.Blocks.FirstOrDefault(block => block.Label == label && block.IsDeclared) is not { } declared)
+                continue;
+            var state = ProcessorState.Unknown;
+            foreach (var item in StateItem.Read(declared.Steps[0].Statement))
+            {
+                state = item.Part switch
+                {
+                    StatePart.A => state with { A = item.Width },
+                    StatePart.Index => state with { Index = item.Width },
+                    StatePart.E => state with { E = item.Mode },
+                    _ => state,
+                };
+            }
+            return state;
+        }
+        return null;
     }
 
     /// <summary>
@@ -485,7 +543,9 @@ public sealed class StateAnalysis
         }
         else if (!IsKnown(width))
         {
-            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and it is not known here");
+            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and it is not known here: "
+                + "a `.state` says what it is");
+
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
         {

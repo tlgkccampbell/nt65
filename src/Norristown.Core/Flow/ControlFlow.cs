@@ -20,6 +20,9 @@ public sealed class ControlFlow
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly List<FlowRegion> regions = [];
+    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<SyntaxNode>> annotations = [];
+    private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls = [];
+    private readonly HashSet<(int Position, Expansion? On)> returnAddresses = [];
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
     {
@@ -45,7 +48,8 @@ public sealed class ControlFlow
             .GroupBy(step => (step.Routine, step.Stream)))
         {
             var routine = run.Key.Routine!;
-            var units = Units([.. run]);
+            var units = flow.Units([.. run]);
+            flow.FindRelativeCalls(units);
             var blocks = flow.Blocks(units);
 
             // The routine is entered where its own name stands; a region that is a detour
@@ -55,19 +59,36 @@ public sealed class ControlFlow
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
-            flow.CheckDataReachedByFallingThrough(units, diagnostics);
+            flow.CheckDataReachedByFallingThrough(units, flow.CheckInlineData(units, diagnostics), diagnostics);
+            flow.CheckRunningOn(units, diagnostics);
         }
+
+        // On the 65816 the analysis consumes what flow it cannot see, so each construct that
+        // hides some has to say what it hides.
+        if (layout.Cpu == Project.Cpu.Wdc65816)
+            Requirements.Check(model, layout, flow, diagnostics);
 
         flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
         return flow;
     }
+
+    /// <summary>The annotations written under <paramref name="step"/>'s statement, in order.</summary>
+    internal IReadOnlyList<SyntaxNode> AnnotationsOf(Step step) =>
+        annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
+
+    /// <summary>The call a branch makes, for a branch written as a relative call; null for every other statement.</summary>
+    internal RelativeCall? RelativeCallAt(Step step) =>
+        relativeCalls.TryGetValue((step.Statement.Position, step.On), out var call) ? call : null;
+
+    /// <summary>Whether a statement is the <c>per</c> that pushes a relative call's return address.</summary>
+    internal bool IsReturnAddress(Step step) => returnAddresses.Contains((step.Statement.Position, step.On));
 
     /// <summary>
     /// The statements of one region, each with the annotations written under it. An
     /// annotation is about the statement above it, so it belongs to that statement rather
     /// than standing on its own.
     /// </summary>
-    private static List<Unit> Units(IReadOnlyList<Step> steps)
+    private List<Unit> Units(IReadOnlyList<Step> steps)
     {
         var units = new List<Unit>();
         foreach (var step in steps)
@@ -79,8 +100,54 @@ public sealed class ControlFlow
             }
             units.Add(new Unit(step));
         }
+        foreach (var unit in units.Where(unit => unit.Annotations.Count > 0))
+            annotations[(unit.Step.Statement.Position, unit.Step.On)] = unit.Annotations;
         return units;
     }
+
+    /// <summary>
+    /// The branches that are calls: <c>per L-1</c> directly before <c>brl f</c> or
+    /// <c>bra f</c> to a routine, with <c>L</c> the label directly after the branch, and a
+    /// <c>phk</c> directly before the <c>per</c> for a far one.
+    /// </summary>
+    private void FindRelativeCalls(IReadOnlyList<Unit> units)
+    {
+        for (var i = 1; i + 1 < units.Count; i++)
+        {
+            var branch = units[i].Step;
+            var push = units[i - 1];
+            if (!(IsInstruction(branch.Statement, "brl") || IsInstruction(branch.Statement, "bra"))
+                || !IsInstruction(push.Step.Statement, "per") || push.Next is not null || units[i].Next is not null
+                || units[i + 1].Step.Label is not { } after
+                || Targets.Of(model, Transfers.TargetOf(branch.Statement, AddressingMode.Relative), branch.On)
+                    is not { Symbol.Signature: not null } routine
+                || !NamesTheAddressBefore(push.Step, after))
+            {
+                continue;
+            }
+            var far = i >= 2 && IsInstruction(units[i - 2].Step.Statement, "phk");
+            relativeCalls[(branch.Statement.Position, branch.On)] = new RelativeCall(routine.Symbol, far);
+            returnAddresses.Add((push.Step.Statement.Position, push.Step.On));
+
+        }
+    }
+
+    /// <summary>Whether a <c>per</c> pushes <c>L-1</c>, the byte before <paramref name="label"/>, as a return address is.</summary>
+    private bool NamesTheAddressBefore(Step push, Symbol label)
+    {
+        if (push.Statement.ChildNodes.FirstOrDefault()?.ChildNodes.FirstOrDefault() is not
+            { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] } difference
+            || !difference.ChildTokens.Any(token => token.Kind == SyntaxKind.Minus))
+        {
+            return false;
+        }
+        return Targets.Of(model, left, push.On)?.Symbol == label
+            && model.ValueOf(right, push.On).AsNumber() == 1;
+    }
+
+    private static bool IsInstruction(SyntaxNode statement, string mnemonic) =>
+        statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
+        && statement.ChildTokens[0].Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The blocks of one region. A label starts a block, and a statement that transfers
@@ -169,10 +236,11 @@ public sealed class ControlFlow
             var transfer = Transfers.Of(tail.Step.Statement, mode);
             if (transfer is not (Transfer.Branch or Transfer.Jump or Transfer.Call))
                 continue;
+            var calls = transfer == Transfer.Call || RelativeCallAt(tail.Step) is not null;
             if (Targets.Of(model, Transfers.TargetOf(tail.Step.Statement, mode), tail.Step.On) is { } target
                 && found.TryGetValue(target, out var reached))
             {
-                Edge(i, reached, transfer == Transfer.Call ? EdgeKind.Call : EdgeKind.Taken);
+                Edge(i, reached, calls ? EdgeKind.Call : EdgeKind.Taken);
             }
         }
 
@@ -330,23 +398,140 @@ public sealed class ControlFlow
     /// opcodes ca65 has not got. A <c>.next</c> on the data says where flow goes instead of
     /// through it.
     /// </summary>
-    private void CheckDataReachedByFallingThrough(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    private void CheckDataReachedByFallingThrough(
+        IReadOnlyList<Unit> units, HashSet<Unit> inline, List<Diagnostic> diagnostics)
     {
+        // On the 65816 flow that runs into data reaches the analysis, which cannot follow it,
+        // so there the annotation is required rather than suggested.
+        var severity = layout.Cpu == Project.Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
         var fromCode = false;
         foreach (var unit in units)
         {
             if (unit.Step.Label is not null)
                 continue;
             var data = unit.Step.Statement.Kind == SyntaxKind.DataDirective;
+
+            // The data a routine returns past is skipped, and flow carries on after it.
+            if (inline.Contains(unit))
+            {
+                fromCode = true;
+                continue;
+            }
             if (data && fromCode && unit.Next is null)
             {
                 diagnostics.Add(new Diagnostic(
-                    unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), Severity.Warning,
+                    unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), severity,
                     "the instruction above runs into this data. `.next` on it says where flow goes instead"));
             }
 
             // A run of data is one run: only what code runs into is worth saying.
             fromCode = !data && RunsOn(unit);
+        }
+    }
+
+    /// <summary>
+    /// The data after each call to a routine that returns past it, which has to be what the
+    /// routine's <c>inline</c> item says: <c>n</c> bytes of data, or one <c>.asciiz</c>. This
+    /// holds on every CPU, because the call returns past it whatever the processor.
+    /// </summary>
+    private HashSet<Unit> CheckInlineData(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    {
+        var skipped = new HashSet<Unit>();
+        for (var i = 0; i < units.Count; i++)
+        {
+            if (CalledAt(units[i]) is not { Signature.Inline: { } inline } routine)
+                continue;
+            var call = units[i].Step.Statement;
+            var name = routine.DisplayName;
+
+            if (inline.IsAsciiz)
+            {
+                if (i + 1 < units.Count && units[i + 1].Step.Label is null
+                    && units[i + 1].Step.Statement is { Kind: SyntaxKind.DataDirective } text
+                    && text.ChildTokens.Length > 0
+                    && text.ChildTokens[0].Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped.Add(units[i + 1]);
+                }
+                else
+                {
+                    Report(call, $"`{name}` returns past one `.asciiz` written after each call, and none follows this one");
+                }
+                continue;
+            }
+
+            if (inline.Expression is not { } count
+                || model.ValueOf(count, units[i].Step.On).AsNumber() is not { } bytes || bytes < 0)
+            {
+                Report(call, $"`{name}` returns past `{inline.Text}`, which needs a constant count of bytes");
+                continue;
+            }
+
+            // The data is the run of it directly after the call, as long as it takes to make up
+            // the count.
+            var taken = 0L;
+            for (var j = i + 1; j < units.Count && taken < bytes; j++)
+            {
+                if (units[j].Step.Label is not null || units[j].Step.Statement.Kind != SyntaxKind.DataDirective)
+                    break;
+                taken += layout.Of(units[j].Step.Statement, units[j].Step.On)?.Length ?? 0;
+                skipped.Add(units[j]);
+            }
+            if (taken != bytes)
+            {
+                Report(call, $"`{name}` returns past {Bytes(bytes)} of data written after each call, and "
+                    + (taken == 0 ? "none follows this one" : $"{Bytes(taken)} follow this one"));
+            }
+        }
+        return skipped;
+
+        void Report(SyntaxNode node, string message) =>
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+
+        static string Bytes(long count) => count == 1 ? "1 byte" : $"{count} bytes";
+    }
+
+    /// <summary>The routine a statement calls, directly or as a relative call; null for anything else.</summary>
+    private Symbol? CalledAt(Unit unit)
+    {
+        if (RelativeCallAt(unit.Step) is { } relative)
+            return relative.Routine;
+        var statement = unit.Step.Statement;
+        var mode = layout.Of(statement, unit.Step.On)?.Mode;
+        return Transfers.Of(statement, mode) == Transfer.Call
+            ? Targets.Of(model, Transfers.TargetOf(statement, mode), unit.Step.On)?.Symbol
+            : null;
+    }
+
+    /// <summary>
+    /// A <c>.next</c> that names a routine where flow would otherwise run on says that flow
+    /// runs into that routine, which is true only when the routine starts where the statement
+    /// ends, in the same stream of bytes.
+    /// </summary>
+    private void CheckRunningOn(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    {
+        foreach (var unit in units)
+        {
+            if (unit.Next is not { } next || unit.Step.Label is not null
+                || Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode)
+                    != Transfer.Through)
+            {
+                continue;
+            }
+            var end = layout.Placed(unit.Step.Statement, unit.Step.On);
+            foreach (var written in Annotations.TargetsOf(next))
+            {
+                if (Targets.Of(model, written, unit.Step.On) is not { Symbol: { Signature: not null } routine })
+                    continue;
+                if (end is { } here && layout.Placed(routine) is { } there
+                    && there.Stream == here.Stream && there.Offset == here.End)
+                {
+                    continue;
+                }
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
+                    $"`.next {routine.DisplayName}` says flow runs on into `{routine.DisplayName}`, and it does not "
+                    + "start where this statement ends: a routine runs into the one written directly after it"));
+            }
         }
     }
 
@@ -370,6 +555,9 @@ public sealed class ControlFlow
         var transfer = Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode);
         if (transfer is Transfer.Call or Transfer.Elsewhere && IsCall(unit.Step.Statement))
             return true;
+        if (RelativeCallAt(unit.Step) is not null)
+            return true;
+
         return unit.Next is null && transfer is Transfer.Through or Transfer.Branch or Transfer.Call;
     }
 

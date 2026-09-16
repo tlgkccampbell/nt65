@@ -41,6 +41,7 @@ vector:     .addr forms
     pei (ptr)
     per @here
 @here:
+    .state a8, i16          ; `per` names the label, so something may arrive here unseen
     wdm #1
     cop #2
     brk #3

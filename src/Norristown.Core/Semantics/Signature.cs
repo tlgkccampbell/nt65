@@ -10,10 +10,20 @@ namespace Norristown.Semantics;
 /// <param name="Entry">The state the routine assumes when it is called.</param>
 /// <param name="Exit">The state it returns with. A part the exit does not give is the entry's.</param>
 /// <param name="IsFar">Whether it is entered by <c>jsl</c> and left by <c>rtl</c>.</param>
-public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar)
+/// <param name="Inline">
+/// The <c>inline n</c> or <c>inline .asciiz</c> item, for a routine that returns past data
+/// written after each call; null for every other.
+/// </param>
+public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
     /// <summary>What a routine that writes no signature declares: <c>a8, i8, native, near</c>.</summary>
     public static Signature Default { get; } = new(ProcessorState.Default, ProcessorState.Default, false);
+
+    /// <summary>What a macro that writes no signature declares: that it assumes and changes nothing.</summary>
+    public static Signature Unchanged { get; } = new(
+        new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
+        new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
+        false);
 
     /// <summary>How the routine is called and left, as the item that says so.</summary>
     public string Distance => IsFar ? "far" : "near";
@@ -27,10 +37,22 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// wrong with it. <paramref name="syntax"/> is the <c>: entry -&gt; exit</c> of a proc or
     /// the <c>proc(...)</c> of an import, or null where nothing was written.
     /// </summary>
-    public static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report)
+    public static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report) =>
+        Read(syntax, report, forMacro: false);
+
+    /// <summary>
+    /// Reads the signature a macro writes. A macro's items default to <c>*</c>, because a
+    /// macro assumes and changes nothing it does not declare, and <c>near</c>, <c>far</c>
+    /// and <c>inline</c> describe how a routine is called, which a macro is not.
+    /// </summary>
+    public static Signature ReadMacro(SyntaxNode? syntax, Action<TextSpan, string> report) =>
+        Read(syntax, report, forMacro: true);
+
+    private static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report, bool forMacro)
     {
+        var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
         if (syntax is null)
-            return Default;
+            return forMacro ? Unchanged : Default;
 
         var arrow = syntax.ChildTokens.FirstOrDefault(token => token.Kind == SyntaxKind.Arrow);
         var lists = syntax.ChildNodes.Where(node => node.Kind == SyntaxKind.StateList).ToList();
@@ -38,11 +60,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var exitList = arrow.Parent is null ? null : lists.FirstOrDefault(list => list.Position > arrow.Position);
 
         bool? far = null;
+        StateItem? inline = null;
         var entry = Take(entryList);
         var exit = Take(exitList);
 
         var entryState = new ProcessorState(
-            entry.A?.Width ?? Width.Eight, entry.Index?.Width ?? Width.Eight, entry.E?.Mode ?? ProcessorMode.Native);
+            entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E);
         var exitState = new ProcessorState(
             exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exit.E?.Mode ?? entryState.E);
 
@@ -56,7 +79,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exitState = exitState with { E = entryState.E };
         CheckEmulation(entry, entryState);
         CheckEmulation(exit, exitState);
-        return new Signature(entryState, exitState, far ?? false);
+        return new Signature(entryState, exitState, far ?? false, inline);
 
         Parts Take(SyntaxNode? list)
         {
@@ -74,6 +97,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     case StatePart.E:
                         parts.E = Once(parts.E, item);
                         break;
+                    case StatePart.Distance when forMacro:
+                    case StatePart.Inline when forMacro:
+                        report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and a macro is expanded");
+                        break;
+                    case StatePart.Inline:
+                        if (list != entryList)
+                            report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and belongs before `->`");
+                        else
+                            inline = Once(inline, item);
+                        break;
                     case StatePart.Distance:
                         if (far is { } said && said != item.IsFar)
                         {
@@ -83,8 +116,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                         far = item.IsFar;
                         break;
 
-                    // The data after a call, the direct page and the data bank belong to the
-                    // analyses that check them.
+                    // The direct page and the data bank belong to the analysis that checks them.
                     default:
                         break;
                 }

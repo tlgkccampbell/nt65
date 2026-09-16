@@ -12,7 +12,7 @@ value:  .res 2
 
 ; An immediate needs a known width.
 .proc unknown_width: a? {
-    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here
+    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here: a `.state` says what it is
     rts
 }
 
@@ -28,7 +28,7 @@ value:  .res 2
     beq @done
     rep #$20
 @done:
-    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here
+    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here: a `.state` says what it is
     sep #$20
     rts
 }
@@ -106,4 +106,5 @@ value:  .res 2
     jml @near               ;! error: `jml` takes a far target, and this one is absolute: `jmp` reaches it
 @near:
     jml $008000
+    .next ?                 ; a constant address is somewhere the analysis does not follow
 }

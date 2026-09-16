@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1269, 0
+.dbg file, "main.nt65", 1358, 0
 
 .import far_routine: far
 
@@ -70,52 +70,52 @@ forms:
 .dbg line, "main.nt65", 42
     per forms__here
 forms__here:
-.dbg line, "main.nt65", 44
-    .byte $42, 1
 .dbg line, "main.nt65", 45
-    cop #2
+    .byte $42, 1
 .dbg line, "main.nt65", 46
-    brk #3
+    cop #2
 .dbg line, "main.nt65", 47
-    phb
+    brk #3
 .dbg line, "main.nt65", 48
-    phd
+    phb
 .dbg line, "main.nt65", 49
-    phk
+    phd
 .dbg line, "main.nt65", 50
-    plb
+    phk
 .dbg line, "main.nt65", 51
-    pld
+    plb
 .dbg line, "main.nt65", 52
-    plp
+    pld
 .dbg line, "main.nt65", 53
-    rep #$20
+    plp
 .dbg line, "main.nt65", 54
-    tcd
+    rep #$20
 .dbg line, "main.nt65", 55
-    tdc
+    tcd
 .dbg line, "main.nt65", 56
-    tcs
+    tdc
 .dbg line, "main.nt65", 57
-    tsc
+    tcs
 .dbg line, "main.nt65", 58
-    txy
+    tsc
 .dbg line, "main.nt65", 59
-    tyx
+    txy
 .dbg line, "main.nt65", 60
-    xba
+    tyx
 .dbg line, "main.nt65", 61
-    jsl far_routine
+    xba
 .dbg line, "main.nt65", 62
+    jsl far_routine
+.dbg line, "main.nt65", 63
     brl forms__out
 forms__out:
-.dbg line, "main.nt65", 64
+.dbg line, "main.nt65", 65
     jsr (vector,x)
 
 long_jumps:
-.dbg line, "main.nt65", 69
+.dbg line, "main.nt65", 70
     jml [vector]
 
 tail:
-.dbg line, "main.nt65", 74
+.dbg line, "main.nt65", 75
     jml far_routine

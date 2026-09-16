@@ -1,0 +1,121 @@
+; Each construct the 65816's analysis cannot follow, written without the annotation it
+; needs, and the diagnostic that says which one.
+.cpu 65816
+
+.import print: proc(inline .asciiz)
+.import beep: proc(inline 2)
+.import far_away: proc(far)
+
+.bss {
+cmd:    .res 1
+}
+
+; An indirect jump and an indirect call.
+.proc indirect {
+    jmp (@table,x)          ;! error: `jmp (@table,x)` goes where its operand points, which the analysis cannot see: `.next` names the labels it reaches, or `.next ?` ends the path
+@table: .addr @go           ;! error: `@go` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `indirect` naming it carries the state to it
+@go:
+    jsr (@table,x)          ;! error: `jsr (@table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+    rts
+}
+
+; A computed jump.
+.proc computed {
+    jmp computed+3          ;! error: `jmp computed+3` goes to a computed address, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not an instruction boundary
+}
+
+; `rts` used as a jump.
+.proc pushed {
+    pea @there - 1          ;! error: `@there` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `pushed` naming it carries the state to it
+    rts                     ;! error: `rts` here returns to an address this block pushed, which makes it a jump: `.next` names where it goes
+@there:
+    rts
+}
+
+; Inline data that does not match the declaration.
+.proc talk {
+    jsr print               ;! error: `print` returns past one `.asciiz` written after each call, and none follows this one
+    jsr beep                ;! error: `beep` returns past 2 bytes of data written after each call, and 1 byte follow this one
+    .byte 1
+    rts
+}
+
+; Data reached by falling through.
+.proc skip {
+    lda #1
+    .byte $2c               ;! error: the instruction above runs into this data. `.next` on it says where flow goes instead
+    lda #2
+    rts
+}
+
+; A jump into another routine, to a label nothing declares.
+.proc owner {
+    rts
+inner:
+    rts
+}
+
+.proc intruder {
+    jmp owner::inner        ;! error: `inner` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
+}
+
+; A declared label, jumped into in the wrong state.
+.proc declared {
+    rts
+entry:
+    .state a16, i8, native
+    lda #$1234
+    sep #$20
+    rts
+}
+
+.proc wrong_state {
+    jmp declared::entry     ;! error: `jmp entry` needs `a16`, and A is 8-bit here
+}
+
+; A jump to a label on data.
+.proc onto_data {
+    beq @data               ;! error: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes
+    rts
+@data:
+    .byte $ea               ;! error: `onto_data` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+}
+
+; Falling off the end, and a `.next` naming a routine that is not the next one written.
+.proc falls {
+    nop
+    .next ?
+}
+
+.proc off_the_end {
+    nop                     ;! error: `off_the_end` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+}
+
+.proc not_adjacent {
+    nop
+    .next falls             ;! error: `.next falls` says flow runs on into `falls`, and it does not start where this statement ends: a routine runs into the one written directly after it
+}
+
+; Self-modifying code without `.patch`.
+.proc patching {
+@op:
+    lda $0400
+    sta @op+1               ;! error: `sta @op+1` writes into the instruction at `@op`: `.patch @op` acknowledges it
+    rts
+}
+
+; A relative call to a far routine that pushes no bank.
+.proc relative {
+    per @back - 1
+    brl far_away            ;! error: `far_away` is far, and a relative call to it pushes the bank with `phk` before the `per`
+@back:
+    rts
+}
+
+; An exported label inside a routine is another way in.
+.proc exported_inner {
+    rts
+.export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other files jump into the routine: a `.state` after the label says what the state is there
+inside:
+    rts
+}

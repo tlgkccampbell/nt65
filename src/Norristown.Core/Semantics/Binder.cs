@@ -271,9 +271,12 @@ internal sealed class Binder
     }
 
     /// <summary>The signature a proc or an extern proc writes after its name, or the default.</summary>
-    private Signature ReadSignature(SyntaxNode declaration) =>
-        Signature.Read(declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature),
-            (span, message) => Report(span, message));
+    private Signature ReadSignature(SyntaxNode declaration)
+    {
+        var written = declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature);
+        CollectUses(written);
+        return Signature.Read(written, (span, message) => Report(span, message));
+    }
 
     /// <summary>
     /// The scope an <c>.enum</c>, <c>.struct</c> or <c>.union</c> opens. An anonymous one
@@ -338,6 +341,11 @@ internal sealed class Binder
         var body = new Scope(ScopeKind.Macro, symbol?.Name ?? written?.Text, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
+        if (symbol is not null && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature) is { } signature)
+        {
+            symbol.MacroSignature = Signature.ReadMacro(signature, (span, message) => Report(span, message));
+            CollectUses(signature);
+        }
 
         // A default is written in the header, so it resolves where the macro is declared
         // rather than in the body it is used in.
@@ -667,6 +675,7 @@ internal sealed class Binder
             if (item.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ImportSignature) is { } signature)
             {
                 symbol.Signature = Signature.Read(signature, (span, message) => Report(span, message));
+                CollectUses(signature);
                 if (symbol.Signature.IsFar)
                     symbol.AddressSize = AddressSize.Far;
             }

@@ -19,6 +19,13 @@ public readonly record struct StateItem(
     /// <summary>The item as it is written, for a message that names it.</summary>
     public string Text => Node.GetText().Trim();
 
+    /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
+    public SyntaxNode? Expression => Node.ChildNodes.FirstOrDefault();
+
+    /// <summary>Whether an <c>inline</c> item says <c>inline .asciiz</c>.</summary>
+    public bool IsAsciiz => Node.ChildTokens.Any(token =>
+        token.Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>The items of a state list, or of a <c>.state</c>, in the order they are written.</summary>
     public static IEnumerable<StateItem> Read(SyntaxNode? list)
     {

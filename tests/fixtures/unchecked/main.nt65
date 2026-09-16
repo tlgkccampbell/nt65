@@ -1,0 +1,158 @@
+; Assembly's tricks on the 65816, each with the annotation that tells the analysis what it
+; cannot see for itself. Here the analysis consumes processor state, so the annotations
+; that are optional on the 6502 are required, and every one below is needed.
+.cpu 65816
+
+.import print: proc(inline .asciiz)
+.import beep: proc(inline 2)
+.export dispatch, nmi, restore, set, table_jump, relative, far_relative, first, second
+.export patching, enter, jumper
+
+.bss {
+cmd:        .res 1
+value:      .res 1
+nmi_flag:   .res 1
+saved_p:    .res 1
+}
+
+; A jump table inside a proc: the targets need no declarations, because the `.next` edges
+; carry the state at the jump.
+.proc dispatch: a8, i16 {
+    lda cmd
+    asl a
+    tax
+    jmp (@table,x)
+    .next @move, @fire
+
+@table: .addr @move, @fire
+
+@move:
+    lda #1
+    rts
+@fire:
+    lda #2
+    rts
+}
+
+; An interrupt handler: nothing is known on entry, so the widths are set before any
+; immediate needs them.
+.proc nmi: a?, i? {
+    rep #$30
+    pha
+    sep #$20
+    lda #1
+    sta nmi_flag
+    rep #$20
+    pla
+    rti
+}
+
+; A `plp` that restores a status byte saved elsewhere: the analysis stack holds no saved P
+; for it, so a `.state` says what it holds.
+.proc restore: a8 -> a16 {
+    lda saved_p
+    pha
+    plp
+    .state a16, i8      ; the analyzer cannot know what was in saved_p
+    rts
+}
+
+; The `bit` skip trick.
+.proc set {
+    beq @set_two
+@set_one:
+    lda #1
+    .byte $2c           ; bit abs: swallows the next instruction
+    .next @store
+@set_two:
+    lda #2
+@store:
+    sta value
+    rts
+}
+
+; `rts` used as a jump: the table holds each target less one, and the return goes where
+; the pushed address says.
+.proc table_jump: a16, i16 {
+    lda cmd
+    and #$00ff
+    asl a
+    tax
+    lda @targets,x
+    pha
+    rts
+    .next @targets
+
+@targets: .addr @one - 1, @two - 1
+
+@one:
+    rts
+@two:
+    rts
+}
+
+; A routine that returns past the data written after each call.
+.proc talk {
+    jsr print
+    .asciiz "hello"
+    jsr beep
+    .byte 10, 20
+    rts
+}
+
+; Relative calls: `per` pushes the return address and a branch goes to the routine. With
+; `phk` before them, the bank is pushed too, and the call is far.
+.proc relative {
+    per @back - 1
+    brl talk
+@back:
+    rts
+}
+
+.proc far_relative: far {
+    phk
+    per @back - 1
+    brl far_target
+@back:
+    rtl
+}
+
+.proc far_target: far {
+    rtl
+}
+
+; One routine running into the next: the `.next` is checked as a tail call, and the two
+; have to be written one after the other.
+.proc first: a16 -> a8 {
+    lda #$1234
+    sep #$20
+    .next second
+}
+.proc second: a8 {
+    lda #$12
+    rts
+}
+
+; Self-modifying code: the store writes into the operand of the instruction at `@op`.
+.proc patching {
+    lda #$60
+@op:
+    sta $0400
+    sta @op+1
+    .patch @op
+    rts
+}
+
+; A second entry point, declared, which another routine jumps into.
+.proc enter: a16 -> a8 {
+    lda #$1234
+    sep #$20
+into:
+    .state a8
+    lda #$12
+    rts
+}
+
+.proc jumper {
+    jmp enter::into
+}
