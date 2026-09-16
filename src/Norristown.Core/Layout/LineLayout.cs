@@ -8,4 +8,8 @@ namespace Norristown.Layout;
 /// <param name="Length">How many bytes the line generates.</param>
 /// <param name="Mode">The addressing mode, for an instruction; null for data.</param>
 /// <param name="Prefix">The <c>z:</c> or <c>a:</c> to write before the operand, or null.</param>
-public sealed record LineLayout(int Length, AddressingMode? Mode, string? Prefix);
+/// <param name="Inverted">
+/// Whether a long branch is written as the inverted short branch over a <c>jmp</c>, which is
+/// the form it takes when nt65 does not know the target to be in range.
+/// </param>
+public sealed record LineLayout(int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false);

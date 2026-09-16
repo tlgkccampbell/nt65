@@ -248,4 +248,19 @@ public sealed class SemanticModel
         }
         return null;
     }
+
+    /// <summary>
+    /// The same, with the level the argument was written at. What a call gave is the
+    /// caller's own expression, so anything read from it — the label it names, how wide an
+    /// address it is — is read where the caller stands rather than inside the body.
+    /// </summary>
+    public (MacroArgument Argument, Expansion? Caller)? GivenAt(Symbol parameter, Expansion? on)
+    {
+        for (var level = on; level is not null; level = level.Outer)
+        {
+            if (level.Call is { } call && InvocationAt(call)?.For(parameter) is { } argument)
+                return (argument, level.Outer);
+        }
+        return null;
+    }
 }

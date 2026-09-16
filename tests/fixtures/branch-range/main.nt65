@@ -1,0 +1,39 @@
+; The distance from a relative branch to its target is known when both sit in the same
+; segment block with no `.align` between them, and nt65 says so at edit time rather than
+; leaving it to ca65. Where the distance is unknown, ca65's own check stands.
+.cpu 6502
+
+.proc reaching {
+    lda count
+    beq @out                ;! error: `beq` would branch 129 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
+    .repeat 43, i {
+        sta count
+    }
+@out:
+    rts
+}
+
+; An `.align` generates however many bytes it takes to reach a boundary, which depends on
+; an address, so nothing after it stands at a distance nt65 knows from anything before it.
+.proc across_a_boundary {
+    beq @out
+    .align 256
+@out:
+    rts
+}
+
+; A nested segment block is a detour: the stream around it carries straight on, so a
+; branch across one is a distance like any other.
+.proc around_a_detour {
+    beq @out
+    .rodata {
+    table:  .res 200
+    }
+@out:
+    lda table
+    rts
+}
+
+.bss {
+count:  .res 1
+}

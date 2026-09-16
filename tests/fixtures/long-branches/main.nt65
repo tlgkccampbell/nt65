@@ -1,0 +1,39 @@
+; A long branch branches like its short form and reaches any near target. Each is
+; emitted as the short branch where nt65 knows the target to be in range, and otherwise
+; as the inverted branch over a `jmp`. ca65's own `longbranch` package can choose the
+; short form only for a target it has already seen, so its forward branches are always
+; long; here they are not.
+.cpu 6502
+
+; Forward, and near enough: the short branch, exactly as `beq` would have been written.
+.proc close_by {
+    lda count
+    jeq @out
+    inc count
+@out:
+    rts
+}
+
+; Forward, and one byte too far: the opposite branch over a `jmp` to the target.
+.proc way_off {
+    lda count
+    jeq @out
+    .repeat 43, i {
+        sta count
+    }
+@out:
+    rts
+}
+
+; Backwards, to a target already written, which is where ca65's own package can also
+; choose the short form.
+.proc looping {
+@top:
+    dec count
+    jne @top
+    rts
+}
+
+.bss {
+count:  .res 1
+}

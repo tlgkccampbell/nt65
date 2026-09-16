@@ -21,6 +21,22 @@ public sealed class CodeLayout
     private readonly Cpu cpu;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly List<Diagnostic> diagnostics = [];
+
+    // Where every line's bytes land, and where every label stands among them. A distance is
+    // known only within one stream, which is what branch range and the long branches read.
+    private readonly Dictionary<(int Position, Expansion? On), Placement> placements = [];
+    private readonly Dictionary<(Symbol Symbol, Expansion? At), Placement> labels = [];
+    private readonly Dictionary<int, int> filled = [];
+    private readonly List<Branch> branches = [];
+
+    // The long branches already found out of reach, which is what carries between walks:
+    // lengthening one moves everything after it, so the file is laid out again.
+    private readonly HashSet<(int Position, Expansion? On)> lengthened;
+
+    // The streams the walk is inside, innermost last. A nested segment block is a detour, so
+    // the stream around it resumes where it left off.
+    private readonly List<int> streams = [0];
+    private int nextStream = 1;
     private string segment = SegmentTable.DefaultSegment;
 
     // Which turn of which repetitions, and which expansion of which macros, the walk is
@@ -40,10 +56,11 @@ public sealed class CodeLayout
     /// </summary>
     private const int MaximumStatements = 65536;
 
-    private CodeLayout(SemanticModel model, Cpu cpu)
+    private CodeLayout(SemanticModel model, Cpu cpu, HashSet<(int Position, Expansion? On)> lengthened)
     {
         this.model = model;
         this.cpu = cpu;
+        this.lengthened = lengthened;
     }
 
     /// <summary>The CPU this file was laid out for.</summary>
@@ -55,8 +72,19 @@ public sealed class CodeLayout
     /// <summary>Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>.</summary>
     public static CodeLayout Create(SemanticModel model, Cpu cpu)
     {
-        var layout = new CodeLayout(model, cpu);
-        layout.WalkContainer(model.Tree.Root);
+        // Every long branch starts short, and those found out of reach are lengthened until
+        // none changes, which terminates because a branch only ever grows. Only the last
+        // walk is kept: the ones before it laid out a file that is not the one written.
+        var lengthened = new HashSet<(int Position, Expansion? On)>();
+        CodeLayout layout;
+        do
+        {
+            layout = new CodeLayout(model, cpu, lengthened);
+            layout.WalkContainer(model.Tree.Root);
+        }
+        while (layout.Lengthen());
+
+        layout.CheckBranchRange();
         layout.Diagnostics = Norristown.Diagnostics.Ordered(layout.diagnostics);
         return layout;
     }
@@ -67,6 +95,18 @@ public sealed class CodeLayout
     /// </summary>
     public LineLayout? Of(SyntaxNode statement, Expansion? on = null) =>
         lines.GetValueOrDefault((statement.Position, on));
+
+    /// <summary>Where a statement's bytes land, or null when it generates none.</summary>
+    public Placement? Placed(SyntaxNode statement, Expansion? on = null) =>
+        placements.TryGetValue((statement.Position, on), out var placement) ? placement : null;
+
+    /// <summary>
+    /// Where <paramref name="label"/> stands in the stream around it, or null when nothing
+    /// placed it. A label a macro body declares stands somewhere different at every
+    /// expansion, so which writing is being asked about is part of the question.
+    /// </summary>
+    public Placement? Placed(Symbol label, Expansion? on = null) =>
+        labels.TryGetValue((label, Expansion.Owning(on, label)), out var placement) ? placement : null;
 
     /// <summary>
     /// The modes an operand's shape could possibly be, before the mnemonic and the CPU have
@@ -210,11 +250,18 @@ public sealed class CodeLayout
         var lines = block.ChildNodes;
         var outer = segment;
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
+        {
             segment = Constructs.SegmentOf(opener) ?? segment;
+            streams.Add(nextStream++);
+        }
         else if (lines.Length > 0 && lines[0].Statement is { } other)
+        {
             Statement(other);
+        }
 
         Walk(lines, from: 1);
+        if (kind == BlockKind.Segment)
+            streams.RemoveAt(streams.Count - 1);
         segment = outer;
     }
 
@@ -287,9 +334,17 @@ public sealed class CodeLayout
             case SyntaxKind.LabeledLine:
                 foreach (var child in statement.ChildNodes)
                 {
-                    if (child.Kind != SyntaxKind.Label)
+                    if (child.Kind == SyntaxKind.Label)
+                        Mark(child);
+                    else
                         Statement(child);
                 }
+                break;
+
+            // A routine's name stands where its first byte does, which is what a branch to
+            // it reaches.
+            case SyntaxKind.ProcDeclaration:
+                Mark(statement);
                 break;
             default:
                 break;
@@ -306,6 +361,15 @@ public sealed class CodeLayout
         if (statement.ChildTokens.Length == 0)
             return;
         var mnemonic = statement.ChildTokens[0];
+
+        // A long branch is not one of the CPU's instructions but a choice between two of
+        // them, so it is laid out before the table has its say.
+        if (SyntaxFacts.LongBranches.Contains(mnemonic.Text))
+        {
+            LongBranch(statement, mnemonic);
+            return;
+        }
+
         var available = Instructions.Modes(cpu, mnemonic.Text);
         if (available.Count == 0)
         {
@@ -332,8 +396,135 @@ public sealed class CodeLayout
 
         var mode = Choose(mnemonic, operand, candidates, substituted);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
-        lines[(statement.Position, expansion)] = new LineLayout(Instructions.Length(mode), mode, prefix);
+        var length = Instructions.Length(mode);
+        lines[(statement.Position, expansion)] = new LineLayout(length, mode, prefix);
+        Place(statement, length);
+
+        // `bbr0 flags, @skip` branches to the second of its two expressions; every other
+        // relative form branches to its only one.
+        if (mode is AddressingMode.Relative or AddressingMode.DirectRelative && operand is not null)
+        {
+            var target = mode == AddressingMode.DirectRelative
+                ? operand.ChildNodes.LastOrDefault(child => child.Kind != SyntaxKind.AddressPrefix)
+                : Expression(operand);
+            if (target is not null)
+                branches.Add(new Branch(statement, expansion, target, Long: false));
+        }
     }
+
+    /// <summary>
+    /// A long branch, which branches like its short form but reaches any near target. It is
+    /// laid out short and lengthened only where the target turns out to be out of reach, so
+    /// a forward branch to a near target keeps the short form; ca65's own package can choose
+    /// that form only for a target it has already seen, so its forward branches are always
+    /// long.
+    /// </summary>
+    private void LongBranch(SyntaxNode statement, SyntaxToken mnemonic)
+    {
+        var operand = statement.ChildNodes.FirstOrDefault();
+        if (operand is null || Expression(operand) is not { } target
+            || !Plausible(operand).Contains(AddressingMode.Relative))
+        {
+            Report(operand?.Span ?? mnemonic.Span,
+                $"`{mnemonic.Text}` branches to a near target, and does not take this operand");
+            return;
+        }
+        if (WrittenPrefix(operand) is not null)
+        {
+            Report(operand.Span,
+                $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
+            return;
+        }
+        if (model.AddressSizeOf(target, segment, expansion) == AddressSize.Far)
+        {
+            Report(target.Span, $"`{mnemonic.Text}` takes a near target, and this one is far");
+            return;
+        }
+
+        var over = lengthened.Contains((statement.Position, expansion));
+        var length = Instructions.Length(AddressingMode.Relative)
+            + (over ? Instructions.Length(AddressingMode.Absolute) : 0);
+        branches.Add(new Branch(statement, expansion, target, Long: true));
+        lines[(statement.Position, expansion)] = new LineLayout(length, AddressingMode.Relative, null, over);
+        Place(statement, length);
+    }
+
+    /// <summary>
+    /// How far a branch reaches: from the instruction after it to its target, or null when
+    /// the two are not in one stream or the target is no label this file placed.
+    /// </summary>
+    private int? Distance(Branch branch)
+    {
+        if (placements.GetValueOrDefault((branch.Statement.Position, branch.On)) is not { Length: > 0 } from)
+            return null;
+        return Located(branch.Target, branch.On) is { } to && to.Stream == from.Stream
+            ? to.Offset - from.End
+            : null;
+    }
+
+    /// <summary>
+    /// Where the label an expression names stands. A macro parameter stands for what the
+    /// call gave it, and what the call gave was written in the caller, so it is placed at
+    /// the caller's level rather than at the body's.
+    /// </summary>
+    private Placement? Located(SyntaxNode expression, Expansion? on)
+    {
+        if (expression.Kind != SyntaxKind.NameExpression || model.SymbolOf(expression) is not { } symbol)
+            return null;
+        if (symbol.Kind == SymbolKind.MacroParameter)
+        {
+            return model.GivenAt(symbol, on) is { Argument.Value: { } given, Caller: var caller }
+                ? Located(given, caller)
+                : null;
+        }
+        return labels.TryGetValue((symbol, Expansion.Owning(on, symbol)), out var placement)
+            ? placement
+            : null;
+    }
+
+    /// <summary>
+    /// Lengthens every long branch this walk found out of reach, and says whether any
+    /// changed. A branch only ever grows, so asking again settles.
+    /// </summary>
+    private bool Lengthen()
+    {
+        var changed = false;
+        foreach (var branch in branches)
+        {
+            var at = (branch.Statement.Position, branch.On);
+            // A target at a distance nt65 does not know is always long: nothing says it is
+            // near enough, and a branch that cannot reach is no branch at all.
+            if (!branch.Long || lengthened.Contains(at) || Distance(branch) is { } reach && InRange(reach))
+                continue;
+            lengthened.Add(at);
+            changed = true;
+        }
+        return changed;
+    }
+
+    /// <summary>
+    /// The short branches that cannot reach what they name. A distance nt65 does not know is
+    /// left to ca65, whose own check stands; a long branch has been lengthened rather than
+    /// reported.
+    /// </summary>
+    private void CheckBranchRange()
+    {
+        foreach (var branch in branches)
+        {
+            if (branch.Long || Distance(branch) is not { } reach || InRange(reach))
+                continue;
+            var mnemonic = branch.Statement.ChildTokens[0].Text;
+            var longer = "j" + mnemonic[1..];
+            var fix = SyntaxFacts.LongBranches.Contains(longer)
+                ? $". `{longer}` reaches any near target"
+                : "";
+            ReportOnLine(branch.Target, branch.On,
+                $"`{mnemonic}` would branch {reach} bytes, and a branch reaches only -128 to 127{fix}");
+        }
+    }
+
+    /// <summary>Whether a distance is one a branch can reach.</summary>
+    private static bool InRange(int reach) => reach is >= -128 and <= 127;
 
     /// <summary>
     /// Whether the argument's mode has the next byte the body asked for. An immediate, the
@@ -461,8 +652,47 @@ public sealed class CodeLayout
 
     private void Data(SyntaxNode directive)
     {
-        if (DataLengths.Of(directive, model, diagnostics, expansion) is { } length)
-            lines[(directive.Position, expansion)] = new LineLayout(length, null, null);
+        if (DataLengths.Of(directive, model, diagnostics, expansion) is not { } length)
+            return;
+        lines[(directive.Position, expansion)] = new LineLayout(length, null, null);
+        Place(directive, length);
+    }
+
+    /// <summary>The stream the walk is writing into.</summary>
+    private int Stream => streams[^1];
+
+    /// <summary>
+    /// Records where a line's bytes land and moves the stream on. An <c>.align</c> ends the
+    /// stream instead: how many bytes it generates depends on an address, so nothing after
+    /// it stands at a distance nt65 knows from anything before it.
+    /// </summary>
+    private void Place(SyntaxNode statement, int length)
+    {
+        var offset = filled.GetValueOrDefault(Stream);
+        placements[(statement.Position, expansion)] = new Placement(Stream, offset, length);
+        if (length == DataLengths.Unpredictable)
+            streams[^1] = nextStream++;
+        else
+            filled[Stream] = offset + length;
+    }
+
+    /// <summary>
+    /// Records where a label stands: at the first byte generated after it, which is the
+    /// address a branch to it reaches.
+    /// </summary>
+    private void Mark(SyntaxNode declaration)
+    {
+        foreach (var token in declaration.ChildTokens)
+        {
+            if (token.Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
+                or SyntaxKind.Register or SyntaxKind.Mnemonic))
+            {
+                continue;
+            }
+            if (model.SymbolAt(token) is { } symbol)
+                labels[(symbol, Expansion.Owning(expansion, symbol))] = new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
+            return;
+        }
     }
 
     private static string Spell(AddressSize size) => size switch
@@ -474,4 +704,28 @@ public sealed class CodeLayout
 
     private void Report(TextSpan span, string message, Severity severity = Severity.Error) =>
         diagnostics.Add(new Diagnostic(model.Tree.GetSpan(span), severity, message));
+
+    /// <summary>
+    /// Something wrong with a line that may have been written in another file's macro body.
+    /// A body's line is reported at the call, which is in this file and is the side that
+    /// chose the arguments; the body line is named beside it.
+    /// </summary>
+    private void ReportOnLine(SyntaxNode node, Expansion? on, string message)
+    {
+        if (node.Tree == model.Tree)
+        {
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+        }
+        else if (on?.NearestCall is { } call)
+        {
+            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
+                [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
+        }
+    }
+
+    /// <summary>
+    /// A branch whose reach nt65 can check: where it stands, and the target it was written
+    /// with. A long branch is here too, because the same distance is what decides its form.
+    /// </summary>
+    private readonly record struct Branch(SyntaxNode Statement, Expansion? On, SyntaxNode Target, bool Long);
 }

@@ -35,6 +35,9 @@ public sealed class Emitter
     private readonly List<string> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
     private string segment = SegmentTable.DefaultSegment;
+
+    // The routine being written, which is what a generated label is named after.
+    private Symbol? routine;
     private string? written;
     private bool pendingBlank;
     private int depth;
@@ -391,16 +394,18 @@ public sealed class Emitter
         }
         else if (kind == BlockKind.Proc && opener is { Kind: SyntaxKind.ProcDeclaration })
         {
-            ProcLabel(lines[0], opener);
+            routine = ProcLabel(lines[0], opener);
         }
         else if (opener is not null && kind != BlockKind.Scope)
         {
             WalkLine(lines[0]);
         }
 
+        var outerRoutine = routine;
         depth++;
         Walk(lines, from: 1);
         depth--;
+        routine = outerRoutine;
 
         if (pushed)
         {
@@ -444,6 +449,13 @@ public sealed class Emitter
 
             case SyntaxKind.DataDirective when layout.Of(statement, expansion) is null:
                 NotTranspiled(statement);
+                break;
+
+            case SyntaxKind.InstructionStatement
+                when statement.ChildTokens.Length > 0
+                    && SyntaxFacts.LongBranches.Contains(statement.ChildTokens[0].Text)
+                    && layout.Of(statement, expansion) is { } laid:
+                Branch(line, statement, laid);
                 break;
 
             case SyntaxKind.InstructionStatement:
@@ -569,7 +581,7 @@ public sealed class Emitter
     }
 
     /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
-    private void ProcLabel(SyntaxNode line, SyntaxNode opener)
+    private Symbol? ProcLabel(SyntaxNode line, SyntaxNode opener)
     {
         foreach (var token in opener.ChildTokens)
         {
@@ -577,9 +589,38 @@ public sealed class Emitter
                 && model.SymbolAt(token) is { } reference)
             {
                 Code(line, Indent(opener) + LabelText(Named(reference)), 0);
-                return;
+                return reference;
             }
         }
+        return null;
+    }
+
+    /// <summary>
+    /// A long branch, written as the form nt65 chose for it: the plain short branch where
+    /// the target is in reach, and otherwise the opposite branch over a <c>jmp</c> to a
+    /// generated label. ca65's own package can only ever write the long form forwards,
+    /// because it chooses without knowing where the target lands.
+    /// </summary>
+    private void Branch(SyntaxNode line, SyntaxNode statement, LineLayout laid)
+    {
+        var mnemonic = statement.ChildTokens[0];
+        var (taken, skipped) = Instructions.FormsOf(mnemonic.Text);
+        var edits = new Edits();
+        Substitute(statement, edits, nested: false);
+
+        if (!laid.Inverted)
+        {
+            edits.Replace[mnemonic.Position] = taken;
+            Code(line, Render(statement, edits), laid.Length);
+            return;
+        }
+
+        var over = names.Generated((routine is null ? "" : Named(routine) + "__") + "over");
+        edits.Replace[mnemonic.Position] = "jmp";
+        var jump = Render(statement, edits);
+        Code(line, $"{Indent(statement)}{skipped} {over}", Instructions.Length(AddressingMode.Relative));
+        Line(jump, Instructions.Length(AddressingMode.Absolute));
+        Line($"{over}:");
     }
 
     private void LabeledLine(SyntaxNode line, SyntaxNode statement)

@@ -24,7 +24,7 @@ public sealed class FlatNames
 {
     private readonly Dictionary<Symbol, string> names = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), string> perExpansion = [];
-    private readonly Dictionary<string, Symbol> taken = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Symbol?> taken = new(StringComparer.Ordinal);
 
     private FlatNames() { }
 
@@ -49,7 +49,7 @@ public sealed class FlatNames
                 // Two declarations of the same name in the same scope are one problem, which
                 // binding has already reported; only names that differ in the source and meet
                 // in the output are news.
-                if (other.QualifiedName != symbol.QualifiedName)
+                if (other is not null && other.QualifiedName != symbol.QualifiedName)
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
                         $"`{symbol.QualifiedName}` and `{other.QualifiedName}` both become `{name}` in the output",
@@ -106,6 +106,20 @@ public sealed class FlatNames
             name = $"{basis}_{n}";
         taken[name] = symbol;
         perExpansion[at] = name;
+        return name;
+    }
+
+    /// <summary>
+    /// A name for something the output needs and the source never wrote, such as the label a
+    /// long branch skips over. It is derived from the source like every other generated
+    /// name, and made unique against everything already claimed.
+    /// </summary>
+    public string Generated(string basis)
+    {
+        var name = basis;
+        for (var n = 2; taken.ContainsKey(name); n++)
+            name = $"{basis}_{n}";
+        taken[name] = null;
         return name;
     }
 

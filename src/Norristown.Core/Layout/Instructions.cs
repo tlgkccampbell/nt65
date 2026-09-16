@@ -65,8 +65,30 @@ public static class Instructions
     /// <summary>Whether a mnemonic transfers control, so its target is near or far rather than sized.</summary>
     public static bool IsControlTransfer(string mnemonic) =>
         Modes(Cpu.Wdc65C02, mnemonic).Any(mode => mode is AddressingMode.Relative or AddressingMode.DirectRelative)
+        || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic)
         || mnemonic.Equals("jmp", StringComparison.OrdinalIgnoreCase)
         || mnemonic.Equals("jsr", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The two short branches a long branch is written with: the one it takes when the
+    /// target is in reach, and its opposite, which skips the <c>jmp</c> when it is not.
+    /// </summary>
+    public static (string Taken, string Skipped) FormsOf(string mnemonic)
+    {
+        var condition = mnemonic.ToLowerInvariant()[1..];
+        var opposite = condition switch
+        {
+            "eq" => "ne",
+            "ne" => "eq",
+            "cs" => "cc",
+            "cc" => "cs",
+            "mi" => "pl",
+            "pl" => "mi",
+            "vs" => "vc",
+            _ => "vs",
+        };
+        return ("b" + condition, "b" + opposite);
+    }
 
     private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502()
     {
