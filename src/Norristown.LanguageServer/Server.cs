@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Norristown.LanguageServer.Protocol;
+using Norristown.Semantics;
 using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
@@ -11,7 +12,7 @@ namespace Norristown.LanguageServer;
 internal sealed class Server
 {
     private readonly ServerLog log;
-    private readonly Documents documents = new();
+    private readonly Workspace workspace = new();
     private JsonRpc? rpc;
 
     private Server(ServerLog log) => this.log = log;
@@ -39,6 +40,10 @@ internal sealed class Server
     {
         var client = request.ClientInfo is { } info ? $"{info.Name} {info.Version}".TrimEnd() : "unknown client";
         log.Write($"connected: {client}");
+
+        // The project is read once, at the folder the client opened: its files are the program
+        // a name is resolved against (§5.3, §12).
+        workspace.Load(request.RootUri);
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
@@ -59,26 +64,29 @@ internal sealed class Server
     [JsonRpcMethod("textDocument/didOpen")]
     public Task DidOpenAsync(DidOpenTextDocumentParams request)
     {
-        var document = documents.Open(request.TextDocument);
+        var document = workspace.Open(request.TextDocument);
         log.Write($"opened {document.Uri} ({document.Tree.Lines.Length} lines)");
-        return PublishDiagnosticsAsync(document);
+        return PublishDiagnosticsAsync();
     }
 
     [JsonRpcMethod("textDocument/didChange")]
     public Task DidChangeAsync(DidChangeTextDocumentParams request)
     {
-        if (documents.Change(request.TextDocument, request.ContentChanges) is not { } document)
+        if (workspace.Change(request.TextDocument, request.ContentChanges) is null)
         {
             log.Write($"change to a document that is not open: {request.TextDocument.Uri}");
             return Task.CompletedTask;
         }
-        return PublishDiagnosticsAsync(document);
+
+        // An edit in one file can change what is wrong with another (§12), so every open
+        // document is republished rather than just the one that changed.
+        return PublishDiagnosticsAsync();
     }
 
     [JsonRpcMethod("textDocument/didClose")]
     public Task DidCloseAsync(DidCloseTextDocumentParams request)
     {
-        documents.Close(request.TextDocument.Uri);
+        workspace.Close(request.TextDocument.Uri);
         log.Write($"closed {request.TextDocument.Uri}");
 
         // The client holds what was last published until it is told otherwise, and a closed
@@ -89,47 +97,44 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/documentSymbol")]
     public IReadOnlyList<DocumentSymbol> DocumentSymbols(DocumentSymbolParams request) =>
-        documents.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : [];
+        workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : [];
 
     [JsonRpcMethod("textDocument/foldingRange")]
     public IReadOnlyList<FoldingRange> FoldingRanges(FoldingRangeParams request) =>
-        documents.Find(request.TextDocument.Uri) is { } document ? Lsp.ToFoldingRanges(document.Tree) : [];
+        workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToFoldingRanges(document.Tree) : [];
 
     [JsonRpcMethod("textDocument/hover")]
     public Hover? Hover(TextDocumentPositionParams request) =>
-        Find(request) is { } document ? Lsp.ToHover(document.Model, Offset(document, request)) : null;
+        At(request) is { } asked ? Lsp.ToHover(asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request) =>
-        Find(request) is { } document
-            ? Lsp.ToDefinition(document.Model, document.Uri, Offset(document, request))
-            : null;
+        At(request) is { } asked ? Lsp.ToDefinition(asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/references")]
     public IReadOnlyList<Location> References(ReferenceParams request) =>
-        Find(request) is { } document
-            ? Lsp.ToReferences(document.Model, document.Uri, Offset(document, request),
-                request.Context.IncludeDeclaration)
+        At(request) is { } asked
+            ? Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration)
             : [];
 
     [JsonRpcMethod("textDocument/documentHighlight")]
     public IReadOnlyList<DocumentHighlight> DocumentHighlights(TextDocumentPositionParams request) =>
-        Find(request) is { } document ? Lsp.ToHighlights(document.Model, Offset(document, request)) : [];
+        At(request) is { } asked ? Lsp.ToHighlights(asked.Model, asked.Position) : [];
 
     /// <summary>What a rename would replace, which a client asks for before offering one.</summary>
     [JsonRpcMethod("textDocument/prepareRename")]
     public Protocol.Range? PrepareRename(TextDocumentPositionParams request) =>
-        Find(request) is { } document ? Lsp.ToRenameRange(document.Model, Offset(document, request)) : null;
+        At(request) is { } asked ? Lsp.ToRenameRange(asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/rename")]
     public WorkspaceEdit? Rename(RenameParams request)
     {
-        if (Find(request) is not { } document)
+        if (At(request) is not { } asked)
             return null;
 
         // A name the language will not accept is the client's to show and the programmer's
         // to correct, so it comes back as a failed request rather than as an empty edit.
-        var (edit, problem) = Lsp.ToRename(document.Model, document.Uri, Offset(document, request), request.NewName);
+        var (edit, problem) = Lsp.ToRename(asked.Program, asked.Model, asked.Position, request.NewName);
         return problem is null ? edit : throw new LocalRpcException(problem);
     }
 
@@ -147,14 +152,38 @@ internal sealed class Server
         return formatter;
     }
 
-    private Task PublishDiagnosticsAsync(Document document) =>
-        rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
-            new PublishDiagnosticsParams(document.Uri, document.Version, Lsp.ToDiagnostics(document.Diagnostics)));
+    /// <summary>Publishes what is wrong with every open document, after anything changes.</summary>
+    private async Task PublishDiagnosticsAsync()
+    {
+        var analysis = workspace.Analysis();
+        foreach (var document in workspace.Open())
+        {
+            await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
+                new PublishDiagnosticsParams(document.Uri, document.Version,
+                    Lsp.ToDiagnostics(analysis.DiagnosticsFor(document.Tree.Path))));
+        }
+    }
 
-    /// <summary>The document a request names, or null when the client never opened it.</summary>
-    private Document? Find(TextDocumentPositionParams request) => documents.Find(request.TextDocument.Uri);
+    /// <summary>
+    /// What a request points at: the program, the file it is in, and where in that file. Null
+    /// when the client never opened the document, or when the program does not hold it.
+    /// </summary>
+    private Asked? At(TextDocumentPositionParams request)
+    {
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+            return null;
+        var analysis = workspace.Analysis();
+        if (analysis.ModelFor(document.Tree.Path) is not { } model)
+            return null;
+        return new Asked(
+            analysis.Program,
+            model,
+            document.Tree.GetPosition(request.Position.Line, request.Position.Character));
+    }
 
-    /// <summary>Where in the document's text the request points.</summary>
-    private static int Offset(Document document, TextDocumentPositionParams request) =>
-        document.Tree.GetPosition(request.Position.Line, request.Position.Character);
+    /// <summary>One request, resolved to what it is about.</summary>
+    /// <param name="Program">Every file, for a name that crosses one (§12).</param>
+    /// <param name="Model">The file the caret is in.</param>
+    /// <param name="Position">Where in that file's text.</param>
+    private sealed record Asked(ProgramModel Program, SemanticModel Model, int Position);
 }

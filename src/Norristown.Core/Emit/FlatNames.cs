@@ -26,11 +26,16 @@ public sealed class FlatNames
         var flat = new FlatNames();
         var taken = new Dictionary<string, Symbol>(StringComparer.Ordinal);
 
-        // The fixed spellings first, so that a generated name gives way to them and not the
+        // What another file exports keeps the spelling it was exported under, because that is
+        // the name in the object file (§12, §13); a local name claims its spelling after them.
+        foreach (var symbol in model.ExternalSymbols)
+            taken[symbol.FlatName] = symbol;
+
+        // The fixed spellings next, so that a generated name gives way to them and not the
         // other way round.
         foreach (var symbol in model.Symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var name = Join(symbol);
+            var name = symbol.FlatName;
             if (taken.TryGetValue(name, out var other))
             {
                 // Two declarations of the same name in the same scope are one problem, which
@@ -51,7 +56,7 @@ public sealed class FlatNames
 
         foreach (var symbol in model.Symbols.Where(symbol => !symbol.IsReachableByPath))
         {
-            var basis = Join(symbol);
+            var basis = symbol.FlatName;
             var name = basis;
             for (var n = 2; taken.ContainsKey(name); n++)
                 name = $"{basis}_{n}";
@@ -61,23 +66,9 @@ public sealed class FlatNames
         return flat;
     }
 
-    /// <summary>What <paramref name="symbol"/> is called in the output.</summary>
-    public string Of(Symbol symbol) => names.GetValueOrDefault(symbol, symbol.Name);
-
     /// <summary>
-    /// The name a symbol starts from: the scopes that can name it, joined with <c>__</c>.
-    /// A cheap local hangs off the routine it is private to, so <c>@loop</c> in
-    /// <c>draw</c> starts from <c>draw__loop</c>.
+    /// What <paramref name="symbol"/> is called in the output. A symbol another file
+    /// declares keeps its own file's spelling, which is what the linker sees.
     /// </summary>
-    private static string Join(Symbol symbol)
-    {
-        var name = symbol.Name;
-        var scope = symbol.IsReachableByPath ? symbol.Scope : symbol.Scope.NearestNamed();
-        for (; scope is { Kind: not ScopeKind.File }; scope = scope.Parent)
-        {
-            if (scope.Name is { } outer)
-                name = $"{outer}__{name}";
-        }
-        return name;
-    }
+    public string Of(Symbol symbol) => names.GetValueOrDefault(symbol, symbol.FlatName);
 }

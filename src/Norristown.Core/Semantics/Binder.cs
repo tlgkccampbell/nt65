@@ -21,7 +21,9 @@ internal sealed class Binder
     private readonly List<Symbol> symbols = [];
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
+    private readonly List<Use> exports = [];
     private readonly Scope fileScope;
+    private ProgramSymbols program = ProgramSymbols.Empty;
     private Scope scope;
     private string segment = SegmentTable.DefaultSegment;
 
@@ -33,13 +35,41 @@ internal sealed class Binder
         scope = fileScope;
     }
 
-    /// <summary>Binds <paramref name="tree"/> against the program's <paramref name="segments"/>.</summary>
-    public static Result Bind(SyntaxTree tree, SegmentTable segments)
+    /// <summary>The file being bound.</summary>
+    public SyntaxTree Tree => tree;
+
+    /// <summary>The file's top-level scope, which is what another file can reach into (§12).</summary>
+    public Scope FileScope => fileScope;
+
+    /// <summary>Binds <paramref name="tree"/> on its own, seeing no other file.</summary>
+    public static Result Bind(SyntaxTree tree, SegmentTable segments) =>
+        Collect(tree, segments).Resolve(ProgramSymbols.Empty);
+
+    /// <summary>
+    /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
+    /// resolved once every file of the program has been read.
+    /// </summary>
+    public static Binder Collect(SyntaxTree tree, SegmentTable segments)
     {
         var binder = new Binder(tree, segments);
         binder.WalkContainer(tree.Root);
-        binder.ResolveUses();
-        return new Result(binder.fileScope, binder.symbols, binder.references, binder.diagnostics);
+        return binder;
+    }
+
+    /// <summary>
+    /// What this file's <c>.export</c> items name (§12). Nothing is reported from here:
+    /// this answers what the program may see, before the program is known, and
+    /// <see cref="Resolve(ProgramSymbols)"/> reports on the same names afterwards.
+    /// </summary>
+    public IReadOnlyList<Symbol> Exported() =>
+        [.. exports.Select(export => export.Scope.Lookup(export.Token.Text)).OfType<Symbol>()];
+
+    /// <summary>Resolves the names the file uses, with <paramref name="program"/> for the ones it does not declare.</summary>
+    public Result Resolve(ProgramSymbols program)
+    {
+        this.program = program;
+        ResolveUses();
+        return new Result(fileScope, symbols, references, diagnostics);
     }
 
     /// <summary>The first token of a statement that could be a declared name.</summary>
@@ -207,8 +237,11 @@ internal sealed class Binder
                 // the parser has already refused one here.
                 foreach (var token in statement.ChildTokens)
                 {
-                    if (token.Kind == SyntaxKind.Identifier)
-                        uses.Add(new Use(token, scope, Path: false, First: true));
+                    if (token.Kind != SyntaxKind.Identifier)
+                        continue;
+                    var export = new Use(token, scope, Path: false, First: true, Last: true);
+                    uses.Add(export);
+                    exports.Add(export);
                 }
                 break;
 
@@ -271,11 +304,16 @@ internal sealed class Binder
                 else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                     or SyntaxKind.Register or SyntaxKind.Mnemonic)
                 {
-                    uses.Add(new Use(token, scope, path, first));
+                    uses.Add(new Use(token, scope, path, first, Last: false));
                     path = true;
                     first = false;
                 }
             }
+
+            // Which part is the last decides where an export is checked: another file has to
+            // have exported the `inner` of `outer::inner`, not the `outer` that leads to it.
+            if (!first)
+                uses[^1] = uses[^1] with { Last = true };
             return;
         }
         foreach (var child in node.ChildNodes)
@@ -343,7 +381,7 @@ internal sealed class Binder
     {
         Symbol? previous = null;
         var broken = false;
-        foreach (var (token, at, path, first) in uses)
+        foreach (var (token, at, path, first, last) in uses)
         {
             if (first)
             {
@@ -357,7 +395,7 @@ internal sealed class Binder
                 continue;
             }
 
-            previous = Resolve(token, at, path, previous);
+            previous = Resolve(token, at, path, previous, last);
             if (previous is null)
                 broken = true;
             else
@@ -370,7 +408,7 @@ internal sealed class Binder
     /// What one part of a written name means. <paramref name="previous"/> is what the part
     /// before it resolved to, so a path walks into a scope instead of looking outward again.
     /// </summary>
-    private Symbol? Resolve(SyntaxToken token, Scope at, bool path, Symbol? previous)
+    private Symbol? Resolve(SyntaxToken token, Scope at, bool path, Symbol? previous, bool last)
     {
         if (token.Kind == SyntaxKind.CheapLocal)
         {
@@ -387,10 +425,14 @@ internal sealed class Binder
 
         if (!path)
         {
-            var symbol = at.Lookup(token.Text);
-            if (symbol is null)
-                Report(token.Span, $"`{token.Text}` is not declared");
-            return symbol;
+            if (at.Lookup(token.Text) is { } symbol)
+                return symbol;
+
+            // A name the file does not declare may belong to another file of the program (§12).
+            if (program.Lookup(token.Text, tree) is { } external)
+                return CheckExported(token, external, last);
+            Report(token.Span, $"`{token.Text}` is not declared");
+            return null;
         }
 
         // A part after `::`: the scope to look in is the one the part before it opened, and a
@@ -408,8 +450,27 @@ internal sealed class Binder
             Report(token.Span, container.Kind == ScopeKind.File
                 ? $"`{token.Text}` is not declared at file scope"
                 : $"`{token.Text}` is not declared in `{container.Name}`");
+            return null;
         }
-        return member;
+        return CheckExported(token, member, last);
+    }
+
+    /// <summary>
+    /// A symbol another file declares may only be named if that file exports it (§12). The
+    /// check is on the last part of a name: <c>outer::inner</c> needs <c>inner</c> exported,
+    /// and <c>outer</c> is only the way in. The symbol is returned either way, so an editor
+    /// can still go to a declaration that is private rather than missing.
+    /// </summary>
+    private Symbol? CheckExported(SyntaxToken token, Symbol symbol, bool last)
+    {
+        if (!last || symbol.Tree == tree || program.IsExported(symbol))
+            return symbol;
+        // The file is named by its own name rather than by its whole path: the related span
+        // is what takes an editor there, and a path is long enough to bury the message.
+        var file = symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..];
+        Report(token.Span, $"`{symbol.QualifiedName}` is declared in `{file}` and is not exported",
+            new RelatedSpan(symbol.DeclarationSpan, "declared here"));
+        return symbol;
     }
 
     private void Report(TextSpan span, string message, params RelatedSpan[] related) =>
@@ -431,5 +492,6 @@ internal sealed class Binder
     /// <param name="Scope">The scope it was written in.</param>
     /// <param name="Path">Whether a <c>::</c> comes before it, so it names a member of a scope.</param>
     /// <param name="First">Whether it is the first part of the name it belongs to.</param>
-    private readonly record struct Use(SyntaxToken Token, Scope Scope, bool Path, bool First);
+    /// <param name="Last">Whether it is the last part, and so the symbol the whole name stands for.</param>
+    private readonly record struct Use(SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last);
 }

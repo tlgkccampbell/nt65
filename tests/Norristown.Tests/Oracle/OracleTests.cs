@@ -53,7 +53,7 @@ public sealed partial class OracleTests
     public void GeneratedOutputAssemblesToTheLengthsNt65Computed()
     {
         var outputs = FixtureCase.All()
-            .SelectMany(fixture => Compiler.Compile(fixture.Sources).Outputs.Select(o => (fixture.Name, Output: o)))
+            .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project).Outputs.Select(o => (fixture.Name, Output: o)))
             .ToList();
         Assert.NotEmpty(outputs);
         Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
@@ -86,6 +86,72 @@ public sealed partial class OracleTests
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A fixture with a <c>link/</c> directory holds a hand-written ca65 module and a linker
+    /// configuration. nt65's output must link against it: the object file is the only
+    /// boundary between the two (§12), so what nt65 exports has to be what ca65 imports and
+    /// the other way round.
+    /// </summary>
+    [Fact]
+    public void GeneratedOutputLinksWithHandWrittenCa65()
+    {
+        var linkable = FixtureCase.All().Where(fixture => LinkFiles(fixture) is not null).ToList();
+        Assert.NotEmpty(linkable);
+
+        var failures = Repo.CollectFailures(linkable, Check);
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+
+        static IEnumerable<string> Check(FixtureCase fixture)
+        {
+            var (config, handWritten) = LinkFiles(fixture)!.Value;
+            var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
+            var result = Ca65Oracle.Pinned.Link(config,
+                [.. compilation.Outputs.Select(o => (Path.GetFileName(o.Path), o.Text)), .. handWritten]);
+            if (!result.Succeeded)
+                yield return $"[{fixture.Name}] ld65 reported:\n{result.Messages}";
+            else if (result.Binary.Length == 0)
+                yield return $"[{fixture.Name}] linked, but wrote no bytes";
+        }
+    }
+
+    /// <summary>
+    /// A checked import is a promise nt65 made about a value it has already used in its own
+    /// arithmetic, and the linker is what keeps it: link the same program against a module
+    /// that defines the symbol differently and ld65 must refuse it (§12).
+    /// </summary>
+    [Fact]
+    public void ACheckedImportWithTheWrongValueFailsTheLink()
+    {
+        var fixture = FixtureCase.All().Single(f => f.Name == "modules");
+        var (config, handWritten) = LinkFiles(fixture)!.Value;
+        var wrong = handWritten
+            .Select(file => (file.Name, Source: file.Source.Replace("HOST_VERSION = $0102", "HOST_VERSION = $0103")))
+            .ToList();
+        Assert.Contains(wrong, file => file.Source.Contains("$0103"));
+
+        var result = Ca65Oracle.Pinned.Link(config,
+            [.. Compiler.Compile(fixture.Sources, fixture.Project).Outputs
+                .Select(o => (Path.GetFileName(o.Path), o.Text)),
+             .. wrong]);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("HOST_VERSION is not $0102", result.Messages);
+    }
+
+    /// <summary>The linker configuration and the hand-written modules of a fixture, or null.</summary>
+    private static (string Config, IReadOnlyList<(string Name, string Source)> Modules)? LinkFiles(FixtureCase fixture)
+    {
+        var directory = Path.Combine(fixture.Directory, "link");
+        if (!Directory.Exists(directory))
+            return null;
+        var config = Path.Combine(directory, "link.cfg");
+        if (!File.Exists(config))
+            return null;
+        return (Repo.ReadText(config), [.. Directory.GetFiles(directory, "*.s")
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Path.GetFileName(path), Repo.ReadText(path)))]);
     }
 
     [Fact]

@@ -264,6 +264,12 @@ The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
 a fold over every file.
 
+`far` needs the 65816. A far address is a bank and an offset, which no earlier processor
+has, and ca65 rejects a far address size outright when its CPU setting is a 6502 or a
+65C02 — for a segment declaration, an `.export` and an `.import` alike. A program built
+for those processors that declares a far segment, or imports a far symbol, is an error
+where it is written rather than output ca65 refuses (§3.2).
+
 On the 65816 a segment declaration may also carry `dp = expr` and `bank = expr`, which
 §7.5 uses to check direct-page and data-bank assumptions.
 
@@ -327,7 +333,8 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 - `defines`: the build configuration. Each define is a constant visible in every file,
   as if declared and exported once, and defines are the only symbols an `.if` condition
   may test (§10). `-D NAME=value` on the command line adds a define or overrides one
-  given here. A declaration in a file may not reuse a define's name. There is no way
+  given here, and `-D NAME` on its own defines it as 1, for a define a condition only
+  tests. A declaration in a file may not reuse a define's name. There is no way
   to declare a define in a source file. The output always writes a define as its value,
   never by name, so a `-D` given to ca65 cannot collide with it.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also

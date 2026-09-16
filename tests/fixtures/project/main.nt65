@@ -1,0 +1,19 @@
+; The project file says what this program is built for, where its output goes, what its
+; defines are worth and which segments it has (§5.3). Nothing here repeats any of it.
+
+.segment "FAST" {
+scratch:    .res 2
+}
+
+.segment "VRAM" {
+tiles:      .res 64
+}
+
+.proc start {
+    stz scratch             ; a 65C02 instruction, from the project's `cpu`
+    lda #DEBUG              ; a define, written out as its value
+    ldx #<VERSION
+    ldy #>VERSION
+    lda tiles
+    rts
+}

@@ -1,0 +1,26 @@
+; What another nt65 file exports is named as if it were declared here (§12). The output
+; imports an address and writes a constant out by value, because ca65 cannot use an imported
+; symbol where it needs a value.
+.cpu 6502
+
+.export main
+
+; Symbols that live outside nt65 are declared explicitly, with the size or signature nt65
+; needs. A checked import gives nt65 the value and asserts at link time that the definition
+; it is linked against agrees.
+.import host_tick: zp
+.import host_print: proc()
+.import HOST_VERSION = $0102
+
+.proc main {
+    lda #<SCREEN            ; a constant from gfx.nt65
+    sta ptr                 ; a zero-page label from gfx.nt65
+    lda #>SCREEN
+    sta ptr+1
+    lda host_tick
+    jsr clear
+    jsr clear::again        ; an interior label, named through the routine it is in
+    jsr host_print
+    lda #<HOST_VERSION      ; the checked import, written out as the value nt65 used
+    rts
+}

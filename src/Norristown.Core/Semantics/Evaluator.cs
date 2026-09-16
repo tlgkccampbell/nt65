@@ -16,12 +16,15 @@ namespace Norristown.Semantics;
 internal sealed class Evaluator
 {
     private readonly SegmentTable segments;
-    private readonly IReadOnlyDictionary<int, Symbol> resolved;
+    private readonly IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved;
     private readonly List<Diagnostic>? diagnostics;
     private readonly HashSet<Symbol> evaluated = [];
     private readonly List<Symbol> evaluating = [];
 
-    private Evaluator(SegmentTable segments, IReadOnlyDictionary<int, Symbol> resolved, List<Diagnostic>? diagnostics)
+    private Evaluator(
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        List<Diagnostic>? diagnostics)
     {
         this.segments = segments;
         this.resolved = resolved;
@@ -35,7 +38,7 @@ internal sealed class Evaluator
     public static void EvaluateSymbols(
         SegmentTable segments,
         IReadOnlyList<Symbol> symbols,
-        IReadOnlyDictionary<int, Symbol> resolved,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics)
     {
         var evaluator = new Evaluator(segments, resolved, diagnostics);
@@ -48,12 +51,18 @@ internal sealed class Evaluator
     /// from here: this answers a question an editor asked, about a file that has already had
     /// everything wrong with it reported.
     /// </summary>
-    public static Value ValueOf(SyntaxNode expression, SegmentTable segments, IReadOnlyDictionary<int, Symbol> resolved) =>
+    public static Value ValueOf(
+        SyntaxNode expression,
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
         new Evaluator(segments, resolved, null).Evaluate(expression);
 
     /// <summary>The address size of an expression (§7.2), with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
-        SyntaxNode expression, string segment, SegmentTable segments, IReadOnlyDictionary<int, Symbol> resolved) =>
+        SyntaxNode expression,
+        string segment,
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
         new Evaluator(segments, resolved, null).SizeOf(expression, segment);
 
     /// <summary>The wider of two address sizes, either of which may be unknown.</summary>
@@ -330,12 +339,16 @@ internal sealed class Evaluator
     private AddressSize? SegmentSize(string? segment) =>
         segment is null ? null : segments.Find(segment)?.Size;
 
-    /// <summary>What a name resolved to: the last part of the path, which is what it stands for.</summary>
+    /// <summary>
+    /// What a name resolved to: the last part of the path, which is what it stands for. The
+    /// file is part of the key, because following a name into another file lands on offsets
+    /// that mean something else there (§12).
+    /// </summary>
     private Symbol? SymbolOf(SyntaxNode name)
     {
         for (var i = name.ChildTokens.Length - 1; i >= 0; i--)
         {
-            if (resolved.TryGetValue(name.ChildTokens[i].Span.Start, out var symbol))
+            if (resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out var symbol))
                 return symbol;
         }
         return null;

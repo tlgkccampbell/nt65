@@ -6,30 +6,38 @@ namespace Norristown.Semantics;
 /// What one file means: its scopes and declarations (§6), what every name in it refers to,
 /// and what its expressions are worth (§9).
 /// <para>
-/// A model is built once from a syntax tree and is then read-only, so an editor may ask it
-/// anything from any thread. A file is analyzed on its own; names another file exports
-/// arrive with Stage 6.
+/// A model is built once and is then read-only, so an editor may ask it anything from any
+/// thread. A file is part of a program (§12): a name it does not declare may be one another
+/// file exports, so models are built together by <see cref="ProgramModel"/>.
 /// </para>
 /// </summary>
 public sealed class SemanticModel
 {
-    private readonly Dictionary<int, Symbol> resolved;
+    private readonly IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved;
     private readonly ILookup<Symbol, SymbolReference> bySymbol;
 
-    private SemanticModel(SyntaxTree tree, SegmentTable segments, Binder.Result bound)
+    internal SemanticModel(
+        SyntaxTree tree,
+        SegmentTable segments,
+        Binder.Result bound,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IEnumerable<Diagnostic> fromTheProgram)
     {
         Tree = tree;
         Segments = segments;
         FileScope = bound.FileScope;
         Symbols = bound.Symbols;
         References = bound.References;
-        resolved = bound.References
-            .Where(reference => !reference.IsDeclaration)
-            .ToDictionary(reference => reference.Span.Start, reference => reference.Symbol);
+        this.resolved = resolved;
 
-        Evaluator.EvaluateSymbols(segments, Symbols, resolved, bound.Diagnostics);
-        Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics);
+        Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
+        ExternalSymbols = [.. References
+            .Where(reference => !reference.IsDeclaration
+                && reference.Symbol.Tree != tree
+                && !reference.Symbol.IsDefine)
+            .Select(reference => reference.Symbol)
+            .Distinct()];
     }
 
     /// <summary>The file this model is of.</summary>
@@ -50,9 +58,16 @@ public sealed class SemanticModel
     /// <summary>What is wrong with the file's names and constants, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
-    /// <summary>Builds the model for <paramref name="tree"/> against <paramref name="segments"/>.</summary>
+    /// <summary>
+    /// The symbols this file names but another file declares, in the order it first names
+    /// them (§12). These are what its output imports; a define is not among them, because a
+    /// define is written as its value and is no symbol to the linker (§5.3).
+    /// </summary>
+    public IReadOnlyList<Symbol> ExternalSymbols { get; }
+
+    /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
     public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>
-        new(tree, segments, Binder.Bind(tree, segments));
+        ProgramModel.Create([tree], segments).Files[0];
 
     /// <summary>The name written at <paramref name="position"/>, or null if there is none.</summary>
     public SymbolReference? ReferenceAt(int position)

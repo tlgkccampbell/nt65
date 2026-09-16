@@ -9,7 +9,7 @@ internal static class FixtureRunner
 
     /// <summary>Runs one fixture and returns its failures, empty when it passes.</summary>
     public static IEnumerable<string> Run(FixtureCase fixture, bool update = false) =>
-        Run(fixture, Compiler.Compile, update);
+        Run(fixture, sources => Compiler.Compile(sources, fixture.Project), update);
 
     public static IEnumerable<string> Run(
         FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false)
@@ -37,7 +37,10 @@ internal static class FixtureRunner
         }
 
         var expectedDiagnostics = fixture.ExpectedDiagnostics();
-        var actualDiagnostics = compilation.Diagnostics.Select(FixtureCase.Format).Order(StringComparer.Ordinal).ToList();
+        var actualDiagnostics = compilation.Diagnostics
+            .Select(FixtureCase.Format)
+            .Order(StringComparer.Ordinal)
+            .ToList();
         foreach (var missing in expectedDiagnostics.Except(actualDiagnostics))
             Fail($"expected diagnostic not reported: {missing}");
         foreach (var extra in actualDiagnostics.Except(expectedDiagnostics))

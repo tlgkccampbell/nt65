@@ -39,9 +39,30 @@ public sealed class SegmentTable
     /// Declarations are read in file and line order so that a program built from the same
     /// files reports the same thing whatever order they arrive in.
     /// </summary>
-    public static SegmentTable Build(IEnumerable<SyntaxTree> trees, List<Diagnostic> diagnostics)
+    public static SegmentTable Build(IEnumerable<SyntaxTree> trees, List<Diagnostic> diagnostics) =>
+        Build(trees, [], diagnostics);
+
+    /// <summary>
+    /// The table for a program whose project file declares some of its segments (§5.3). Those
+    /// are read first, so a file declaring one of them is the declaration that is reported.
+    /// </summary>
+    public static SegmentTable Build(
+        IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, List<Diagnostic> diagnostics)
     {
         var segments = Predeclared();
+        foreach (var segment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
+        {
+            if (segments.TryGetValue(segment.Name, out var predeclared))
+            {
+                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Severity.Error,
+                    $"segment \"{segment.Name}\" is already declared",
+                    [new RelatedSpan(segment.Declaration.Value,
+                        $"\"{predeclared.Name}\" is one of the standard segment names, which are predeclared")]));
+                continue;
+            }
+            segments[segment.Name] = segment;
+        }
+
         var declarations = trees
             .SelectMany(Declarations)
             .OrderBy(d => d.Node.Tree.Path, StringComparer.Ordinal)

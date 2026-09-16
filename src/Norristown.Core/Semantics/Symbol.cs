@@ -35,6 +35,13 @@ public sealed class Symbol
     /// <summary>Whether it is a cheap local, <c>@name</c>, private to its proc or scope (§6.2).</summary>
     public bool IsCheapLocal { get; internal init; }
 
+    /// <summary>
+    /// Whether it is a build-configuration define (§5.3) rather than something a source file
+    /// declared. A define is an ordinary constant everywhere but in the output, which always
+    /// writes one as its value so that a <c>-D</c> given to ca65 cannot collide with it.
+    /// </summary>
+    public bool IsDefine { get; internal set; }
+
     /// <summary>The segment the declaration sits in, for an address; null for a constant.</summary>
     public string? Segment { get; internal set; }
 
@@ -76,6 +83,28 @@ public sealed class Symbol
             var name = DisplayName;
             for (var scope = Scope; scope is { Kind: not ScopeKind.File }; scope = scope.Parent!)
                 name = $"{scope.Name}::{name}";
+            return name;
+        }
+    }
+
+    /// <summary>
+    /// The name the output gives it (§13): the scopes that can name it, joined with
+    /// <c>__</c>, so <c>outer::inner</c> becomes <c>outer__inner</c>. For a symbol a path
+    /// cannot reach — a cheap local, or a name inside an anonymous scope — this is only the
+    /// name it starts from, and the file it is emitted into makes it unique.
+    /// </summary>
+    public string FlatName
+    {
+        get
+        {
+            var name = Name;
+            for (var scope = IsReachableByPath ? Scope : Scope.NearestNamed();
+                scope is { Kind: not ScopeKind.File };
+                scope = scope.Parent)
+            {
+                if (scope.Name is { } outer)
+                    name = $"{outer}__{name}";
+            }
             return name;
         }
     }

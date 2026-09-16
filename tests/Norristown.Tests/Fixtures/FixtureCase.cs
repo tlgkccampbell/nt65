@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Norristown.Project;
 
 namespace Norristown.Tests.Fixtures;
 
@@ -7,12 +8,18 @@ namespace Norristown.Tests.Fixtures;
 /// <list type="bullet">
 /// <item><c>**/*.nt65</c>, the program, with expected diagnostics written inline as trailing
 /// comments: <c>;! error: message</c> on the line the diagnostic is reported on;</item>
-/// <item><c>nt65.json</c>, optional and not read yet;</item>
+/// <item><c>nt65.json</c>, optional (§5.3). Its own expected diagnostics are written in
+/// <c>//</c> comments, which the reader skips;</item>
 /// <item><c>expected/**/*.s</c>, the output snapshot, one file per generated file, at the
 /// output's path.</item>
 /// </list>
 /// </summary>
-internal sealed partial record FixtureCase(string Name, string Directory, IReadOnlyList<SourceFile> Sources)
+internal sealed partial record FixtureCase(
+    string Name,
+    string Directory,
+    IReadOnlyList<SourceFile> Sources,
+    ProjectSettings Project,
+    SourceFile? ProjectFileText)
 {
     public const string ExpectedDirectory = "expected";
 
@@ -37,7 +44,17 @@ internal sealed partial record FixtureCase(string Name, string Directory, IReadO
             .Select(path => new SourceFile(RelativePath(directory, path), Repo.ReadText(path)))
             .OrderBy(file => file.Path, StringComparer.Ordinal)
             .ToList();
-        return new FixtureCase(System.IO.Path.GetFileName(directory), directory, sources);
+
+        var project = ProjectSettings.None;
+        SourceFile? projectFile = null;
+        var json = System.IO.Path.Combine(directory, Norristown.Project.ProjectFile.Name);
+        if (File.Exists(json))
+        {
+            projectFile = new SourceFile(Norristown.Project.ProjectFile.Name, Repo.ReadText(json));
+            project = Norristown.Project.ProjectFile.Read(projectFile.Path, projectFile.Text);
+        }
+        return new FixtureCase(
+            System.IO.Path.GetFileName(directory), directory, sources, project, projectFile);
     }
 
     public static string RelativePath(string directory, string path) =>
@@ -73,7 +90,9 @@ internal sealed partial record FixtureCase(string Name, string Directory, IReadO
 
     /// <summary>Expected diagnostics from the inline <c>;!</c> comments, as formatted by <see cref="Format"/>.</summary>
     public List<string> ExpectedDiagnostics() =>
-        [.. Sources.SelectMany(ParseInlineDiagnostics).Order(StringComparer.Ordinal)];
+        [.. Sources.Concat(ProjectFileText is null ? [] : new[] { ProjectFileText })
+            .SelectMany(ParseInlineDiagnostics)
+            .Order(StringComparer.Ordinal)];
 
     // A line may carry more than one annotation, so a message runs to the next `;` rather
     // than to the end of the line; no diagnostic nt65 writes contains one.

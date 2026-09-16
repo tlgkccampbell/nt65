@@ -8,26 +8,26 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
-/// <summary>The open-document cache: what an edit costs, and where the text ends up.</summary>
-public sealed class DocumentsTests
+/// <summary>The workspace as a document cache: what an edit costs, and where the text ends up.</summary>
+public sealed class WorkspaceTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
     private const string Source = ".proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
-    private static Documents OpenSource(out Document document)
+    private static Workspace OpenSource(out Document document)
     {
-        var documents = new Documents();
-        document = documents.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
-        return documents;
+        var workspace = new Workspace();
+        document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
+        return workspace;
     }
 
     /// <summary>The URI the editor uses becomes the path diagnostics and output carry.</summary>
     [Fact]
-    public void ADocumentsPathComesFromItsUri()
+    public void AWorkspacePathComesFromItsUri()
     {
-        Assert.Equal("c:/work/main.nt65", Documents.PathOf(Uri));
-        Assert.Equal("untitled:Untitled-1", Documents.PathOf("untitled:Untitled-1"));
+        Assert.Equal("c:/work/main.nt65", Workspace.PathOf(Uri));
+        Assert.Equal("untitled:Untitled-1", Workspace.PathOf("untitled:Untitled-1"));
     }
 
     /// <summary>
@@ -37,8 +37,8 @@ public sealed class DocumentsTests
     [Fact]
     public void AnEditReusesTheGreenNodesItDidNotTouch()
     {
-        var documents = OpenSource(out var opened);
-        var changed = documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+        var workspace = OpenSource(out var opened);
+        var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(new Range(new Position(1, 9), new Position(1, 10)), "1")]);
 
         Assert.NotNull(changed);
@@ -61,8 +61,8 @@ public sealed class DocumentsTests
     [InlineData(3, 8, 3, 13, "")]           // shortening an operand
     public void AnIncrementalEditMatchesAFreshParse(int startLine, int startCharacter, int endLine, int endCharacter, string text)
     {
-        var documents = OpenSource(out _);
-        var changed = documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+        var workspace = OpenSource(out _);
+        var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(
                 new Range(new Position(startLine, startCharacter), new Position(endLine, endCharacter)), text)]);
 
@@ -75,8 +75,8 @@ public sealed class DocumentsTests
     [Fact]
     public void AChangeWithNoRangeReplacesTheWholeDocument()
     {
-        var documents = OpenSource(out _);
-        var changed = documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+        var workspace = OpenSource(out _);
+        var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(null, "nop\n")]);
 
         Assert.NotNull(changed);
@@ -88,8 +88,8 @@ public sealed class DocumentsTests
     [Fact]
     public void PositionsOutsideTheDocumentAreClamped()
     {
-        var documents = OpenSource(out _);
-        var changed = documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+        var workspace = OpenSource(out _);
+        var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(new Range(new Position(99, 0), new Position(99, 4)), "nop\n")]);
 
         Assert.NotNull(changed);
@@ -99,18 +99,18 @@ public sealed class DocumentsTests
     [Fact]
     public void ChangingADocumentThatIsNotOpenIsIgnored()
     {
-        var documents = new Documents();
-        Assert.Null(documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+        var workspace = new Workspace();
+        Assert.Null(workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(null, "nop\n")]));
-        Assert.Null(documents.Find(Uri));
+        Assert.Null(workspace.Find(Uri));
     }
 
     [Fact]
     public void ClosingADocumentForgetsIt()
     {
-        var documents = OpenSource(out _);
-        Assert.NotNull(documents.Find(Uri));
-        documents.Close(Uri);
-        Assert.Null(documents.Find(Uri));
+        var workspace = OpenSource(out _);
+        Assert.NotNull(workspace.Find(Uri));
+        workspace.Close(Uri);
+        Assert.Null(workspace.Find(Uri));
     }
 }

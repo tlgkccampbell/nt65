@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -14,6 +15,39 @@ internal static class Analysis
         var tree = SyntaxTree.Parse(Path, text);
         return SemanticModel.Create(tree, SegmentTable.Build([tree], []));
     }
+
+    /// <summary>
+    /// The whole program for several files, the way the compiler reads it: every file sees
+    /// what the others export (§12).
+    /// </summary>
+    public static ProgramAnalysis Program(params (string Path, string Text)[] files) =>
+        Program(ProjectSettings.None, files);
+
+    /// <summary>The same, for a program the project file says something about (§5.3).</summary>
+    public static ProgramAnalysis Program(ProjectSettings project, params (string Path, string Text)[] files) =>
+        Compiler.Analyze([.. files.Select(file => new SourceFile(file.Path, file.Text))], project);
+
+    /// <summary>One file of a program, by the path it was given.</summary>
+    public static SemanticModel File(this ProgramAnalysis analysis, string path)
+    {
+        var model = analysis.ModelFor(path);
+        Assert.NotNull(model);
+        return model;
+    }
+
+    /// <summary>What the whole program says is wrong, as <c>file:line: message</c>.</summary>
+    public static IReadOnlyList<string> Problems(this ProgramAnalysis analysis) =>
+        [.. analysis.Diagnostics.Select(d => $"{d.Span.File}:{d.Span.Line}: {d.Message}")];
+
+    /// <summary>The ca65 a program becomes, by output path.</summary>
+    public static Dictionary<string, string> Outputs(params (string Path, string Text)[] files) =>
+        Outputs(ProjectSettings.None, files);
+
+    /// <summary>The same, for a program the project file says something about (§5.3).</summary>
+    public static Dictionary<string, string> Outputs(
+        ProjectSettings project, params (string Path, string Text)[] files) =>
+        Compiler.Compile([.. files.Select(file => new SourceFile(file.Path, file.Text))], project)
+            .Outputs.ToDictionary(output => output.Path, output => output.Text, StringComparer.Ordinal);
 
     /// <summary>The one symbol named <paramref name="name"/>, wherever it is declared.</summary>
     public static Symbol Symbol(this SemanticModel model, string name) =>

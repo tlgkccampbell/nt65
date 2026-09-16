@@ -1,0 +1,8 @@
+; What one module keeps to itself, and what two modules may not both claim (§12).
+.export shared
+
+; A segment the project file already declares (§5.2, §5.3).
+.segment "VRAM": abs    ;! error: segment "VRAM" is already declared
+
+shared = 1
+hidden = 2

@@ -1,0 +1,28 @@
+; A module (§12). Its symbols are private unless exported: `rows` and `palette` below are
+; named nowhere else in this program, and naming them from `main.nt65` is an error.
+.cpu 6502
+
+.export clear, SCREEN, ptr
+
+.zeropage {
+ptr:        .res 2
+}
+
+SCREEN = $0400
+rows   = 25
+
+.scope palette {
+    border = $0f
+}
+
+.proc clear {
+    ; An interior label is exported from inside the routine it belongs to, and another file
+    ; names it `clear::again`.
+    .export again
+    ldy #0
+again:
+    sta (ptr),y
+    iny
+    bne again
+    rts
+}

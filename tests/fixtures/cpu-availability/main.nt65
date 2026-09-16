@@ -7,7 +7,7 @@
 ptr:        .res 2
 }
 
-.segment "FAR": far
+.segment "FAR": far    ;! error: segment "FAR": a `far` address needs the 65816
 .segment "FAR" {
 away:       .res 1
 }

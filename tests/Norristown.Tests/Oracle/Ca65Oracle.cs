@@ -17,6 +17,7 @@ internal sealed partial class Ca65Oracle
         Repo.Path(".cache", "oracle")));
 
     private readonly string ca65;
+    private readonly string ld65;
     private readonly string commit;
     private readonly string? cacheDirectory;
 
@@ -27,6 +28,7 @@ internal sealed partial class Ca65Oracle
         var (_, output) = Execute(ca65Path, ["--version"], workingDirectory: null);
         CheckVersion(output, pinnedCommit);
         ca65 = ca65Path;
+        ld65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "ld65.exe" : "ld65");
         commit = pinnedCommit;
         this.cacheDirectory = cacheDirectory;
     }
@@ -112,6 +114,42 @@ internal sealed partial class Ca65Oracle
                 File.Move(temp, cached, overwrite: true);
             }
             return new AssemblyResult(true, "", bytes);
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Assembles each file and links them with ld65 against <paramref name="config"/>. This
+    /// is the check that nt65 output is an object file like any other: it links against a
+    /// module written by hand, and a linker assertion in it is a link error (§12).
+    /// </summary>
+    public LinkResult Link(string config, IReadOnlyList<(string Name, string Source)> files)
+    {
+        var work = Directory.CreateTempSubdirectory("nt65-ld65-");
+        try
+        {
+            File.WriteAllText(Path.Combine(work.FullName, "link.cfg"), config);
+            var objects = new List<string>();
+            foreach (var (name, source) in files)
+            {
+                File.WriteAllText(Path.Combine(work.FullName, name), source);
+                var target = Path.GetFileNameWithoutExtension(name) + ".o";
+                var (code, said) = Execute(ca65, ["-g", "-o", target, name], work.FullName);
+                if (code != 0 || said.Trim().Length > 0)
+                    return new LinkResult(false, $"ca65 on {name}:\n{said.Trim()}", []);
+                objects.Add(target);
+            }
+
+            var (exitCode, output) = Execute(ld65,
+                ["-C", "link.cfg", "-o", "linked.bin", .. objects.Order(StringComparer.Ordinal)], work.FullName);
+            if (exitCode != 0 || output.Trim().Length > 0)
+                return new LinkResult(false, output.Trim(), []);
+
+            var binary = Path.Combine(work.FullName, "linked.bin");
+            return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : []);
         }
         finally
         {

@@ -3,3 +3,6 @@
 bin/
 obj/
 node_modules/
+
+# `nt65 build` writes the transpiled file next to its source; fixture snapshots live in expected/.
+tests/fixtures/*/*.s

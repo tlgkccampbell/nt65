@@ -6,7 +6,7 @@
 .cpu 6510               ;! error: expected `6502`, `65c02` or `65816`
 .segment "X"            ;! error: expected `:` and an address size, or `{`
 .segment "Y": word      ;! error: expected `zp`, `abs` or `far`
-.import thing: quad     ;! error: expected `zp`, `abs`, `far` or `proc(...)` ;! error: `.import` is not transpiled yet
+.import thing: quad     ;! error: expected `zp`, `abs`, `far` or `proc(...)`
 gfx::init               ;! error: expected a label, a constant, an instruction or a directive
 
 .proc {                 ;! error: expected a routine name
