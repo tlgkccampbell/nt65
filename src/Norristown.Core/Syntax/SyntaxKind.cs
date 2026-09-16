@@ -273,6 +273,33 @@ public enum SyntaxKind : byte
     /// <summary><c>.error "message"</c>.</summary>
     ErrorDirective,
 
+    /// <summary>The line opening a <c>.macro</c>: its name, parameters and signature.</summary>
+    MacroDeclaration,
+
+    /// <summary>The parenthesized parameters of a <c>.macro</c>.</summary>
+    MacroParameterList,
+
+    /// <summary>One parameter: a name, the kind of argument it takes, and a default.</summary>
+    MacroParameter,
+
+    /// <summary>What a parameter accepts: <c>expr</c>, <c>one(...)</c>, <c>list(...)</c> and the rest.</summary>
+    ParameterKind,
+
+    /// <summary><c>{}</c>, the default of a <c>block</c> parameter that may be left out.</summary>
+    EmptyBlock,
+
+    /// <summary><c>name!(...)</c>, with the <c>{</c> of a block argument when one follows.</summary>
+    MacroCall,
+
+    /// <summary><c>} name {</c>: the line closing one block argument and opening the next.</summary>
+    BlockContinuation,
+
+    /// <summary>A line naming a <c>block</c> parameter, which splices its argument there.</summary>
+    BlockSplice,
+
+    /// <summary><c>name = arg</c> at a call, which binds the argument to that parameter.</summary>
+    NamedArgument,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 
@@ -353,4 +380,7 @@ public enum SyntaxKind : byte
 
     /// <summary><c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> before an operand.</summary>
     AddressPrefix,
+
+    /// <summary><c>{buf,x}</c>: a whole operand, written as the argument of a macro call.</summary>
+    BracedOperand,
 }

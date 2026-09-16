@@ -38,6 +38,28 @@ public sealed class OutlineTests
         """;
 
     [Fact]
+    public void MacrosAreNamedWithTheirParameters()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", """
+            .macro set16(dest: operand, value) {
+                lda #<value
+            @done:
+                sta dest
+            }
+
+            .macro add16(a: operand, b: operand): a8 {
+                clc
+            }
+            """);
+        Assert.Equal("""
+            Macro set16 1-5 [(dest: operand, value)]
+              Label @done 3-3
+            Macro add16 7-9 [(a: operand, b: operand): a8]
+
+            """.ReplaceLineEndings("\n"), SyntaxDump.Symbols(tree));
+    }
+
+    [Fact]
     public void OutlineNestsDeclarationsTheWayBlocksDo()
     {
         var tree = SyntaxTree.Parse("main.nt65", Sample);

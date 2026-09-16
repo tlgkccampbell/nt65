@@ -234,6 +234,7 @@ internal static class Lsp
         OutlineKind.Proc => Protocol.SymbolKind.Function,
         OutlineKind.Scope => Protocol.SymbolKind.Namespace,
         OutlineKind.Segment => Protocol.SymbolKind.Module,
+        OutlineKind.Macro => Protocol.SymbolKind.Function,
         OutlineKind.Constant => Protocol.SymbolKind.Constant,
         _ => Protocol.SymbolKind.Field,
     };

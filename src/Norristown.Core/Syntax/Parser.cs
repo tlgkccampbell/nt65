@@ -28,6 +28,10 @@ internal sealed class Parser
     private readonly List<Error> errors = [];
     private int index;
 
+    // Whether an operand is being read inside the braces of a macro argument, where `}` ends
+    // it as the end of a line does elsewhere.
+    private bool braced;
+
     private Parser(GreenLine line, BlockKind context)
     {
         tokens = line.Tokens;
@@ -42,6 +46,9 @@ internal sealed class Parser
     private SyntaxKind Next => index + 1 < tokens.Length ? tokens[index + 1].Kind : SyntaxKind.EndOfLine;
 
     private bool AtEnd => Kind == SyntaxKind.EndOfLine;
+
+    /// <summary>Whether an operand has run out: the end of the line, or the <c>}</c> around it.</summary>
+    private bool AtOperandEnd => AtEnd || (braced && Kind == SyntaxKind.CloseBrace);
 
     /// <summary>
     /// Whether a declaration could write its name here. Register names and mnemonics are
@@ -75,6 +82,17 @@ internal sealed class Parser
     }
 
     private void Report(string message) => Report(index, message);
+
+    /// <summary>
+    /// Reports only when nothing has been said about this line yet. A half-typed
+    /// <c>m!({</c> runs out of tokens inside an argument, inside the braces and inside the
+    /// parentheses; the first of those says what is missing, and the rest is the same news.
+    /// </summary>
+    private void ReportOnce(string message)
+    {
+        if (errors.Count == 0)
+            Report(message);
+    }
 
     private void Report(int token, string message) => errors.Add(new Error(token, message));
 
@@ -112,9 +130,12 @@ internal sealed class Parser
             LineKind.Constant => ParseConstantDeclaration(),
             LineKind.Instruction => Finish(ParseInstruction()),
             LineKind.Directive => ParseDirectiveLine(),
-            // A macro call, and a splice of a `block` parameter inside a macro body: Stage 9.
-            LineKind.MacroCall => Unsupported(),
-            LineKind.BareIdentifier when context == BlockKind.Macro => Unsupported(),
+            LineKind.MacroCall => Finish(ParseMacroCall()),
+
+            // A name on its own splices a `block` parameter. Which blocks may hold one is not
+            // a question about this line — a splice inside an `.if` inside a body is still a
+            // splice — so it is read as one everywhere and the binder says where it belongs.
+            LineKind.BareIdentifier => Finish(SyntaxKind.BlockSplice, [Advance()]),
             _ => ErrorLine("expected a label, a constant, an instruction or a directive"),
         };
     }
@@ -175,8 +196,11 @@ internal sealed class Parser
         if (AtEnd)
             return Finish(SyntaxKind.BlockCloseLine, [brace]);
 
-        // `} .elseif expr {` and `} .else {` close one branch and open the next. A macro
-        // call's `} name {` is Stage 9's.
+        // `} .elseif expr {` and `} .else {` close one branch and open the next; a macro
+        // call's `} name {` closes one block argument and opens the next.
+        if (AtName && Next == SyntaxKind.OpenBrace)
+            return Finish(SyntaxKind.BlockContinuation, [brace, Advance(), Advance()]);
+
         return SyntaxFacts.LineDirectiveKind(Current.Text) switch
         {
             SyntaxKind.ElseIfDirective => Finish(ParseIf(SyntaxKind.ElseIfDirective, brace)),
@@ -195,7 +219,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.Mnemonic)
             return Finish(SyntaxKind.LabeledLine, [label, ParseInstruction()]);
         if (Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang)
-            return Unsupported(label);
+            return Finish(SyntaxKind.LabeledLine, [label, ParseMacroCall()]);
         if (Kind != SyntaxKind.Directive)
         {
             Report("expected an instruction, a data directive or a macro call after a label");
@@ -243,6 +267,7 @@ internal sealed class Parser
             SyntaxKind.CharmapDeclaration => Finish(ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true)),
             SyntaxKind.ListDeclaration => Finish(ParseTypeBlock(SyntaxKind.ListDeclaration, named: true)),
             SyntaxKind.FuncDeclaration => Finish(ParseFunc()),
+            SyntaxKind.MacroDeclaration => Finish(ParseMacro()),
             SyntaxKind.IfDirective => Finish(ParseIf(SyntaxKind.IfDirective)),
             SyntaxKind.RepeatDirective => Finish(ParseRepetition(SyntaxKind.RepeatDirective)),
             SyntaxKind.EachDirective => Finish(ParseRepetition(SyntaxKind.EachDirective)),
@@ -434,6 +459,185 @@ internal sealed class Parser
     }
 
     /// <summary>
+    /// <c>.macro name(params) {</c>, with the processor state it expects and leaves. The
+    /// body is ordinary nt65 and parses on its own, so only the opener is read here.
+    /// </summary>
+    private GreenSyntax ParseMacro()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (AtName)
+            children.Add(Advance());
+        else
+            Report("expected a macro name");
+        if (Kind == SyntaxKind.OpenParen)
+            children.Add(ParseMacroParameterList());
+        else
+            ReportOnce("expected `(` and the parameters");
+        if (Kind == SyntaxKind.Colon)
+            children.Add(ParseSignature());
+        ExpectOpenBrace(children);
+        return new GreenSyntax(SyntaxKind.MacroDeclaration, children.ToImmutable());
+    }
+
+    private GreenNode ParseMacroParameterList()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseParen && !AtEnd)
+            ParseCommaSeparated(children, ParseMacroParameter);
+        if (Kind == SyntaxKind.CloseParen)
+            children.Add(Advance());
+        else
+            ReportOnce("expected `)`");
+        return new GreenSyntax(SyntaxKind.MacroParameterList, children.ToImmutable());
+    }
+
+    /// <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
+    private GreenNode? ParseMacroParameter()
+    {
+        if (!AtName)
+        {
+            Report("expected a parameter name");
+            return null;
+        }
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind == SyntaxKind.Colon)
+        {
+            children.Add(Advance());
+            children.Add(ParseParameterKind());
+        }
+        if (Kind == SyntaxKind.Equals)
+        {
+            children.Add(Advance());
+
+            // `= {}`: a block parameter a call may leave out, which is empty when it does.
+            children.Add(Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
+                ? new GreenSyntax(SyntaxKind.EmptyBlock, [Advance(), Advance()])
+                : ParseExpression());
+        }
+        return new GreenSyntax(SyntaxKind.MacroParameter, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// What a parameter takes: one of the fixed words, the listed words of a
+    /// <c>one(...)</c>, or a <c>list(...)</c> of one of those.
+    /// </summary>
+    private GreenNode ParseParameterKind()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsParameterKind(Current.Text))
+        {
+            Report("expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`");
+            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+        }
+
+        var listed = AtWord("one");
+        var nested = AtWord("list");
+        children.Add(Advance());
+        if (!listed && !nested)
+            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+
+        if (Kind != SyntaxKind.OpenParen)
+        {
+            Report("expected `(`");
+            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (listed)
+        {
+            // The words a `one` accepts are never looked up, so a register or a mnemonic
+            // among them is a word like any other.
+            ParseCommaSeparated(children, () =>
+            {
+                if (AtName)
+                    return Advance();
+                Report("expected a word");
+                return null;
+            });
+        }
+        else
+        {
+            children.Add(ParseParameterKind());
+        }
+        if (Kind == SyntaxKind.CloseParen)
+            children.Add(Advance());
+        else
+            ReportOnce("expected `)`");
+        return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.
+    /// An argument's syntax never depends on the kind of the parameter it binds to, so every
+    /// argument is read the same way and the kinds are checked once names are resolved.
+    /// </summary>
+    private GreenSyntax ParseMacroCall()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(Advance());
+        if (Kind == SyntaxKind.OpenParen)
+            children.Add(ParseMacroArguments());
+        else
+            Report("expected `(` and the arguments");
+        if (Kind == SyntaxKind.OpenBrace)
+            children.Add(Advance());
+        return new GreenSyntax(SyntaxKind.MacroCall, children.ToImmutable());
+    }
+
+    private GreenNode ParseMacroArguments()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseParen && !AtEnd)
+            ParseCommaSeparated(children, ParseArgument);
+        if (Kind == SyntaxKind.CloseParen)
+            children.Add(Advance());
+        else
+            ReportOnce("expected `)`");
+        return new GreenSyntax(SyntaxKind.ArgumentList, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// One argument: an expression, a braced operand, or a parameter named and then given
+    /// one of those. <c>=</c> appears in no expression, so a named argument is unambiguous.
+    /// </summary>
+    private GreenNode? ParseArgument()
+    {
+        if (AtName && Next == SyntaxKind.Equals)
+        {
+            var children = ImmutableArray.CreateBuilder<GreenNode>();
+            children.Add(Advance());
+            children.Add(Advance());
+            if (ParseArgument() is { } given)
+                children.Add(given);
+            return new GreenSyntax(SyntaxKind.NamedArgument, children.ToImmutable());
+        }
+        return Kind == SyntaxKind.OpenBrace ? ParseBracedOperand() : ParseExpression();
+    }
+
+    /// <summary>
+    /// <c>{buf,x}</c>: a whole operand as an argument. Only a braced one is an operand, so an
+    /// unbraced <c>(ptr)</c> stays the expression it reads as.
+    /// </summary>
+    private GreenNode ParseBracedOperand()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        var outer = braced;
+        braced = true;
+        children.Add(ParseOperand());
+        braced = outer;
+        if (Kind == SyntaxKind.CloseBrace)
+            children.Add(Advance());
+        else
+            ReportOnce("expected `}`");
+        return new GreenSyntax(SyntaxKind.BracedOperand, children.ToImmutable());
+    }
+
+    /// <summary>
     /// <c>.if expr {</c>, or the <c>.elseif</c> that continues one. The condition tests the
     /// build configuration, so it is an ordinary expression here and what it may name is
     /// settled once the configuration is known.
@@ -523,7 +727,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.OpenBrace)
             children.Add(Advance());
         else
-            Report("expected `{`");
+            ReportOnce("expected `{`");
     }
 
     private GreenSyntax ParseCpuDirective()
@@ -890,7 +1094,7 @@ internal sealed class Parser
                 children.Add(Advance());
                 children.Add(Advance());
             }
-            if (AtEnd)
+            if (AtOperandEnd)
                 return new GreenSyntax(kind, children.ToImmutable());
         }
 

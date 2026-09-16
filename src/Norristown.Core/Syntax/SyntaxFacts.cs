@@ -90,8 +90,7 @@ public static class SyntaxFacts
         [".each"] = SyntaxKind.EachDirective,
         [".assert"] = SyntaxKind.AssertDirective,
         [".error"] = SyntaxKind.ErrorDirective,
-        // Stage 9: macros.
-        [".macro"] = SyntaxKind.UnsupportedLine,
+        [".macro"] = SyntaxKind.MacroDeclaration,
         // Stages 10 to 12: control flow, processor state and the stack.
         [".next"] = SyntaxKind.UnsupportedLine,
         [".patch"] = SyntaxKind.UnsupportedLine,
@@ -120,11 +119,19 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> valuedStateParts =
         new[] { "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The kinds of argument a macro parameter may take, as they are written.</summary>
+    private static readonly FrozenSet<string> parameterKinds =
+        new[] { "expr", "const", "ident", "operand", "block", "one", "list" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Whether <paramref name="text"/> is a mnemonic, whatever its case.</summary>
     public static bool IsMnemonic(ReadOnlySpan<char> text) => mnemonicSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
 
     /// <summary>Whether <paramref name="text"/> is a register name, whatever its case.</summary>
     public static bool IsRegister(ReadOnlySpan<char> text) => registerSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
+
+    /// <summary>Whether <paramref name="text"/> names a kind of macro parameter.</summary>
+    public static bool IsParameterKind(string text) => parameterKinds.Contains(text);
 
     /// <summary>Whether an identifier may start with <paramref name="c"/>.</summary>
     public static bool IsIdentifierStart(char c) => char.IsAsciiLetter(c) || c == '_';

@@ -105,7 +105,9 @@ public sealed class BlockTests
             Proc 14-16
 
             """, SyntaxDump.Blocks(tree));
-        Assert.Empty(tree.Diagnostics);
+
+        // The line itself is unreadable, and that is all it is: one message, on it.
+        Assert.Equal(["6:13: expected an expression"], Messages(tree));
     }
 
     [Fact]

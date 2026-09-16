@@ -57,6 +57,12 @@ public static class Outline
                 return new OutlineItem(OutlineKind.Scope, scope?.Text ?? ".scope", null,
                     block.Span, scope?.Span ?? opener.ChildTokens[0].Span, children);
 
+            case SyntaxKind.MacroDeclaration when NameToken(opener) is { } macro:
+                // The parameters are what a reader needs beside the name, and the signature
+                // after them where there is one: together they are the whole header.
+                return new OutlineItem(OutlineKind.Macro, macro.Text, TextAfter(opener, macro)?.TrimEnd('{').TrimEnd(),
+                    block.Span, macro.Span, children);
+
             case SyntaxKind.SegmentBlock:
                 var directive = opener.ChildTokens[0];
                 var quoted = FirstToken(opener, SyntaxKind.StringLiteral);

@@ -12,6 +12,9 @@ public enum OutlineKind
     /// <summary>A segment block, written in full or as a shortcut.</summary>
     Segment,
 
+    /// <summary>A <c>.macro</c>, with its parameters.</summary>
+    Macro,
+
     /// <summary>A label, <c>name:</c> or <c>@name:</c>.</summary>
     Label,
 
