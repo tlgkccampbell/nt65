@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Opens this repository in an Extension Development Host with the nt65 client
+      // loaded. The client starts the Debug build of the server, which the pre-launch
+      // task has just rebuilt.
+      "name": "nt65 extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "${workspaceFolder}"
+      ],
+      "preLaunchTask": "build"
+    },
+    {
+      // The server runs as a child of the Extension Development Host, so it is attached
+      // to rather than launched: pick Norristown.LanguageServer from the list. Needs the
+      // C# extension.
+      "name": "Attach to the language server",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}

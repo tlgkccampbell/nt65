@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Windows holds a lock on a running server's executable, so close any Extension
+      // Development Host before building.
+      "label": "build",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/Norristown.slnx", "--nologo", "-v", "q", "-clp:NoSummary"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "test",
+      "type": "process",
+      "command": "pwsh",
+      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/test.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "gate",
+      "type": "process",
+      "command": "pwsh",
+      "args": ["-NoProfile", "-File", "${workspaceFolder}/scripts/gate.ps1"],
+      "problemMatcher": []
+    }
+  ]
+}
