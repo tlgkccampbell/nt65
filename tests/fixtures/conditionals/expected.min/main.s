@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1860, 0
+.dbg file, "main.nt65", 2204, 0
 
 .segment "CODE": absolute
 LINES = 262
@@ -87,3 +87,12 @@ grid:
     .byte ($01 * 3) + $01           ; row, col
 .dbg line, "main.nt65", 91
     .byte ($01 * 3) + $02           ; row, col
+
+.segment "CODE": absolute
+    COLUMNS = 40
+
+indented:
+.dbg line, "main.nt65", 108
+        lda #1
+.dbg line, "main.nt65", 112
+    rts

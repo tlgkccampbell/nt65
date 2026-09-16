@@ -9,10 +9,13 @@
 .export frame_count, nmi_ready, inidisp_shadow, pad_held, pad_pressed, pad_last
 .export game_state, player_x, player_y, dma_src, dma_len, dma_dst, scratch
 .export oam_shadow, Sprite, GameState, WRAM_BANK, CODE_BANK
-.export ppu_off, ppu_on, critical, mov16, dma_channel0
+.export ppu_off, ppu_on, critical, mov16, dma_channel0, rgb15
 
 CODE_BANK = $80
 WRAM_BANK = $7e
+
+; A BGR555 colour from 5-bit components.
+.func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 
 ; PPU registers ($21xx), mirrored in banks $00-$3f and $80-$bf
 INIDISP = $2100

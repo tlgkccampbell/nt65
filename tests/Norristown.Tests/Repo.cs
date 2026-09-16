@@ -5,6 +5,14 @@ internal static class Repo
 {
     public static readonly string Root = FindRoot();
 
+    /// <summary>
+    /// The text NT65_FIXTURE gives (<c>scripts/test.ps1 -Fixture</c>), or null. Fixtures and
+    /// corpus programs whose name contains it are the only ones run, and a test that needs
+    /// one particular case does nothing when it is not selected.
+    /// </summary>
+    public static string? Selection =>
+        Environment.GetEnvironmentVariable("NT65_FIXTURE") is { Length: > 0 } text ? text : null;
+
     public static string Path(params string[] parts) => System.IO.Path.Combine([Root, .. parts]);
 
     /// <summary>Reads a file as the compiler sees it: UTF-8, with <c>\r\n</c> left in place.</summary>

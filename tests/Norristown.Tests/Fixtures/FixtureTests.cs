@@ -10,7 +10,7 @@ public sealed class FixtureTests
     public void Fixtures()
     {
         var fixtures = FixtureCase.All();
-        if (Environment.GetEnvironmentVariable("NT65_FIXTURE") is { Length: > 0 } filter)
+        if (Repo.Selection is { } filter)
             Assert.True(fixtures.Count > 0, $"no fixture name contains \"{filter}\"");
         var failures = Repo.CollectFailures(fixtures, f => FixtureRunner.Run(f, FixtureRunner.UpdateMode));
         Assert.True(failures.Count == 0, $"{failures.Count} fixture failure(s):\n" + string.Join("\n", failures));

@@ -38,7 +38,7 @@ internal sealed partial record FixtureCase(
             return [];
 
         // NT65_FIXTURE selects fixtures whose name contains the given text (scripts/test.ps1 -Fixture).
-        var filter = Environment.GetEnvironmentVariable("NT65_FIXTURE");
+        var filter = Repo.Selection;
         return [.. System.IO.Directory.GetDirectories(root)
             .Select(dir => System.IO.Path.GetFileName(dir))
             .Where(name => string.IsNullOrEmpty(filter) || name.Contains(filter, StringComparison.OrdinalIgnoreCase))

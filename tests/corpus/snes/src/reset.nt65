@@ -29,9 +29,11 @@
 
 .segment "CODE0" {
 
-; The stubs run in bank $00 and jump long into these, at $80.
-.proc reset_long = reset: emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK
-.proc nmi_long = nmi: native, a?, i?, dp?, dbr?, far
+; The stubs run in bank $00 and jump long into these, at $80. A jump from one bank into a
+; near routine in another has no checked spelling yet, so these name the addresses rather
+; than the routines, and nothing checks them against `reset` and `nmi`.
+.proc reset_long = (CODE_BANK << 16) | .loword(reset): emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK
+.proc nmi_long = (CODE_BANK << 16) | .loword(nmi): native, a?, i?, dp?, dbr?, far
 
 ; Reset: leave emulation mode, set up the stack, D and B, clear memory and the PPU, then
 ; run the game.

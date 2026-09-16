@@ -1,0 +1,75 @@
+using Norristown.Project;
+using Norristown.Tests.Fixtures;
+
+namespace Norristown.Tests.Oracle;
+
+/// <summary>
+/// A realistic program under <c>tests/corpus</c>, built the way its <c>build.sh</c> builds it:
+/// its <c>nt65.json</c>, its sources, one linker configuration, and whatever hand-written ca65,
+/// include files and binaries sit beside them. Its <c>build/</c> directory is output and is
+/// never read.
+/// </summary>
+/// <param name="Name">The program's directory name.</param>
+/// <param name="Directory">Where it is.</param>
+/// <param name="Sources">Its nt65 sources, with paths relative to <paramref name="Directory"/>.</param>
+/// <param name="Project">Its <c>nt65.json</c>.</param>
+/// <param name="LinkerConfig">The text of its one <c>.cfg</c> file.</param>
+/// <param name="HandWritten">Its ca65 sources, relative to <paramref name="Directory"/>.</param>
+/// <param name="Other">Every other file, such as includes and binaries, relative to <paramref name="Directory"/>.</param>
+internal sealed record CorpusProgram(
+    string Name,
+    string Directory,
+    IReadOnlyList<SourceFile> Sources,
+    ProjectSettings Project,
+    string LinkerConfig,
+    IReadOnlyList<(string Name, string Source)> HandWritten,
+    IReadOnlyList<(string Name, byte[] Content)> Other)
+{
+    /// <summary>
+    /// Every corpus program, or those whose name contains NT65_FIXTURE
+    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>).
+    /// </summary>
+    public static IReadOnlyList<CorpusProgram> All()
+    {
+        var filter = Repo.Selection;
+        return [.. System.IO.Directory.GetDirectories(Repo.Path("tests", "corpus"))
+            .Where(dir => string.IsNullOrEmpty(filter)
+                || Path.GetFileName(dir).Contains(filter, StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal)
+            .Select(Load)];
+    }
+
+    public static CorpusProgram Load(string directory)
+    {
+        var build = Path.Combine(directory, "build") + Path.DirectorySeparatorChar;
+        var files = System.IO.Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+            .Where(path => !path.StartsWith(build, StringComparison.Ordinal))
+            .Select(path => (Path: path, Relative: FixtureCase.RelativePath(directory, path)))
+            .OrderBy(file => file.Relative, StringComparer.Ordinal)
+            .ToList();
+
+        var project = Repo.ReadText(Path.Combine(directory, ProjectFile.Name));
+        return new CorpusProgram(
+            Path.GetFileName(directory),
+            directory,
+            [.. files.Where(f => f.Relative.EndsWith(".nt65", StringComparison.Ordinal))
+                .Select(f => new SourceFile(f.Relative, Repo.ReadText(f.Path)))],
+            ProjectFile.Read(ProjectFile.Name, project),
+            Repo.ReadText(files.Single(f => f.Relative.EndsWith(".cfg", StringComparison.Ordinal)).Path),
+            [.. files.Where(f => f.Relative.EndsWith(".s", StringComparison.Ordinal))
+                .Select(f => (f.Relative, Repo.ReadText(f.Path)))],
+            [.. files.Where(f => !f.Relative.EndsWith(".nt65", StringComparison.Ordinal)
+                    && !f.Relative.EndsWith(".s", StringComparison.Ordinal))
+                .Select(f => (f.Relative, File.ReadAllBytes(f.Path)))]);
+    }
+
+    /// <summary>Compiles the program, with <paramref name="defines"/> overriding its own.</summary>
+    public Compilation Compile(params Define[] defines) =>
+        Compiler.Compile(Sources, Project.With(defines), BinaryLength);
+
+    private long? BinaryLength(string path)
+    {
+        var file = Path.Combine(Directory, path.Replace('/', Path.DirectorySeparatorChar));
+        return File.Exists(file) ? new FileInfo(file).Length : null;
+    }
+}

@@ -397,6 +397,20 @@ internal sealed class Evaluator
         return Value.Of(offset);
     }
 
+    /// <summary>The address a path of members starts from, such as the instance of <c>pos::y</c>, or null.</summary>
+    private Symbol? AddressAlong(SyntaxNode name)
+    {
+        foreach (var token in name.ChildTokens)
+        {
+            if (resolved.TryGetValue((name.Tree, token.Span.Start), out var part) && part.IsAddress)
+            {
+                EvaluateSymbol(part);
+                return part;
+            }
+        }
+        return null;
+    }
+
     /// <summary>An enum member with no value of its own: the one before it plus one, from zero.</summary>
     private long Follows(Symbol member)
     {
@@ -686,10 +700,12 @@ internal sealed class Evaluator
             }
             if (node.Kind == SyntaxKind.NameExpression)
             {
-                if (SymbolOf(node) is { IsAddress: true } symbol)
+                // A member reached through an instance, `pos::y`, is a place in the instance,
+                // and as wide an address as the instance is.
+                if ((SymbolOf(node) is { IsAddress: true } symbol ? symbol : AddressAlong(node)) is { } address)
                 {
                     named = true;
-                    widest = Widest(widest, symbol.AddressSize);
+                    widest = Widest(widest, address.AddressSize);
                 }
                 return;
             }
@@ -849,6 +865,10 @@ internal sealed class Evaluator
     /// </summary>
     private IReadOnlyList<long>? BytesIn(SyntaxNode operand)
     {
+        // A macro parameter given text is that text, as many bytes as it has.
+        if (operand.Kind == SyntaxKind.NameExpression && BoundItem(operand) is { } item)
+            return BytesIn(item);
+
         if (operand.Kind is SyntaxKind.StringExpression or SyntaxKind.CharacterExpression)
         {
             var value = Evaluate(operand);
@@ -909,6 +929,16 @@ internal sealed class Evaluator
             // The type a member names is worth keeping on it: emission walks into it, and
             // nothing else would have resolved it unless a path happened to reach through.
             member.Type ??= Constructs.TagTypeOf(member.Data) is { } named ? SymbolOf(named) : null;
+            // A member reserves one element and holds no value, so an operand would be silently
+            // ignored, and `colors: .word 16` read as sixteen words would be two bytes.
+            if (member.Data is { ChildTokens.Length: > 0, ChildNodes.Length: > 0 } valued
+                && valued.ChildTokens[0].Text.ToLowerInvariant() is var element
+                && element is ".byte" or ".word" or ".addr" or ".faraddr" or ".dword")
+            {
+                Report(valued.ChildNodes[0],
+                    $"`{member.Name}` is a member, which reserves one `{element}` and holds no value: room for several is `.res`");
+            }
+
             var room = RoomForMember(member.Data);
             if (room is null)
             {

@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 749, 0
+.dbg file, "gfx.nt65", 1059, 0
 
 .export clear
 .export SCREEN
@@ -36,14 +36,14 @@ Sprite__y = $01
 
 clear:
 
-.dbg line, "gfx.nt65", 34
+.dbg line, "gfx.nt65", 46
     ldy #0
 clear__again:
-.dbg line, "gfx.nt65", 36
+.dbg line, "gfx.nt65", 48
     sta (ptr),y
-.dbg line, "gfx.nt65", 37
+.dbg line, "gfx.nt65", 49
     iny
-.dbg line, "gfx.nt65", 38
+.dbg line, "gfx.nt65", 50
     bne clear__again
-.dbg line, "gfx.nt65", 39
+.dbg line, "gfx.nt65", 51
     rts

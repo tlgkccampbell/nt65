@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1038, 0
+.dbg file, "main.nt65", 1170, 0
 
 .export main
 
@@ -46,4 +46,12 @@ main:
 .dbg line, "main.nt65", 26
     ldx #$01                        ; Sprite::y
 .dbg line, "main.nt65", 27
+    lda #$01                        ; screen('A')
+.dbg line, "main.nt65", 28
+    ldy #$0f                        ; centred(10)
+.dbg line, "main.nt65", 29
     rts
+
+.segment "RODATA": absolute
+.dbg line, "main.nt65", 33
+shape:  .byte $3c, $42, $3c         ; glyphs

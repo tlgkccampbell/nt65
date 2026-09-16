@@ -1,0 +1,21 @@
+; An address slot holds an address of its width and nothing wider. ca65 would keep the low
+; bits of what does not fit, so nt65 says so instead.
+.cpu 65816
+
+.segment "FARDATA" {
+sprite: .byte 1, 2, 3
+}
+
+.rodata {
+    .addr sprite            ;! error: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
+    .addr sprite + 2        ;! error: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
+    .word sprite            ;! error: `sprite` is a far address, and `.word` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
+    .addr $12345            ;! error: $012345 does not fit in this directive
+    .faraddr $1234567       ;! error: $01234567 does not fit in this directive
+
+    ; What says which bits it keeps is fine.
+    .addr .loword(sprite)
+    .faraddr sprite + 1
+    .addr $ffff
+    .faraddr $ffffff
+}

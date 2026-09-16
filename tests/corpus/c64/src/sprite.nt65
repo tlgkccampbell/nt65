@@ -64,10 +64,10 @@ bytes:
     if!(cs) {
         lda player_y
         cmp #MIN_Y + SPEED
-        bcc @no_up              ; nested if! is lost by nt65
-        sbc #SPEED
-        sta player_y
-    @no_up:
+        if!(cs) {
+            sbc #SPEED
+            sta player_y
+        }
     }
     pla
     lsr a                       ; down
@@ -75,10 +75,10 @@ bytes:
     if!(cs) {
         lda player_y
         cmp #MAX_Y - SPEED
-        bcs @no_down
-        adc #SPEED
-        sta player_y
-    @no_down:
+        if!(cc) {
+            adc #SPEED
+            sta player_y
+        }
     }
     pla
     lsr a                       ; left

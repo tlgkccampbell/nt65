@@ -24,5 +24,11 @@
     lda #<HOST_VERSION      ; the checked import, written out as the value nt65 used
     lda #Color::white       ; an enum member from another file
     ldx #Sprite::y          ; and a member offset from one
+    lda #screen('A')        ; a charmap, a function and a list from gfx.nt65
+    ldy #centred(10)
     rts
+}
+
+.rodata {
+shape:  .byte glyphs
 }

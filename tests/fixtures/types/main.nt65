@@ -77,10 +77,17 @@ part:   .incbin "sprites.bin", 6, 4
     .align 16
 }
 
+.zeropage {
+cursor: .tag Player
+}
+
 .proc main {
     ; A field of an instance is that instance plus the offset of the field.
     lda player::hp
     ldx actors::pos::x
+    ; ...and as wide an address as the instance: a field of one in zero page is zero page.
+    lda cursor::hp
+    sta cursor::pos::x+1
     lda #Color::green
     lda #.sizeof(Player)
     rts

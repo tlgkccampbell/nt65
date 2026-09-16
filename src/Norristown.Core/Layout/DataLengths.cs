@@ -62,15 +62,23 @@ public static class DataLengths
                 break;
             case ".word":
                 Values(operands, model, diagnostics, (-32768, 65535), on);
+                NoFarAddresses(name, operands, model, diagnostics, on);
                 break;
             case ".dword":
                 Values(operands, model, diagnostics, (-2147483648, 4294967295), on);
                 break;
 
-            // An address directive takes whatever fits its own width, and the byte
-            // directives take an address and keep one byte of it, so neither limits a value.
+            // An address is unsigned, and one that does not fit is not the address meant: ca65
+            // would keep the low bits of it without a word.
             case ".addr":
+                Values(operands, model, diagnostics, (0, 0xffff), on);
+                NoFarAddresses(name, operands, model, diagnostics, on);
+                break;
             case ".faraddr":
+                Values(operands, model, diagnostics, (0, 0xffffff), on);
+                break;
+
+            // The byte directives take an address and keep one byte of it, so they limit nothing.
             case ".lobytes":
             case ".hibytes":
                 Values(operands, model, diagnostics, null, on);
@@ -82,6 +90,10 @@ public static class DataLengths
 
             case ".align":
                 Alignment(operands, model, diagnostics, on);
+                break;
+
+            case ".tag" when operands.Length > 0 && model.SymbolOf(operands[0]) is { IsLayout: true } type:
+                Initialized(type, InitializerValues(directive), model, diagnostics, on);
                 break;
 
             default:
@@ -107,6 +119,120 @@ public static class DataLengths
             }
             if (limit is { } range)
                 CheckRange(operand, model, diagnostics, range, on);
+        }
+    }
+
+    /// <summary>
+    /// The <c>member = value</c>s of an initialized instance: braced on the directive's line,
+    /// or the lines of the block the line opens.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> InitializerValues(SyntaxNode directive)
+    {
+        if (directive.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.TagValues) is { } braced)
+            return braced.ChildNodes.Where(c => c.Kind == SyntaxKind.TagValue);
+
+        var line = directive.Parent;
+        while (line is not null && line.Green is not GreenLine)
+            line = line.Parent;
+        if (line?.Parent is { Green: GreenBlock { BlockKind: BlockKind.TagInitializer } } block
+            && block.ChildNodes.Length > 0 && block.ChildNodes[0] == line)
+        {
+            return block.ChildNodes.Skip(1)
+                .Select(child => child.Statement)
+                .OfType<SyntaxNode>()
+                .Where(statement => statement.Kind == SyntaxKind.TagValue);
+        }
+        return [];
+    }
+
+    /// <summary>
+    /// The values an initialized instance gives its members, each of which must fit the room
+    /// the member has: a one-element member takes one value, and text a member reserved with
+    /// <c>.res</c>, no longer than the room. Anything else would be written past the member,
+    /// or cut short, with nothing said.
+    /// </summary>
+    private static void Initialized(
+        Symbol type, IEnumerable<SyntaxNode> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+    {
+        foreach (var value in values)
+        {
+            if (value.ChildTokens.Length == 0 || value.ChildNodes.LastOrDefault() is not { } given)
+                continue;
+            var name = value.ChildTokens[0].Text;
+            if (type.Body?.FindMember(name) is not { Kind: SymbolKind.Member } member)
+            {
+                Report(value, model, diagnostics, on, $"`{type.Name}` has no member `{name}`");
+                continue;
+            }
+
+            if (member.Type is { IsLayout: true } inner)
+            {
+                if (given.Kind == SyntaxKind.TagValues)
+                    Initialized(inner, given.ChildNodes.Where(c => c.Kind == SyntaxKind.TagValue), model, diagnostics, on);
+                else
+                    Report(given, model, diagnostics, on, $"`{name}` is a `{inner.Name}`, which takes a braced list of its members");
+                continue;
+            }
+            if (given.Kind == SyntaxKind.TagValues)
+            {
+                Report(given, model, diagnostics, on, $"`{name}` is not a record, and takes one value");
+                continue;
+            }
+
+            var element = member.Data is { ChildTokens.Length: > 0 } data ? data.ChildTokens[0].Text.ToLowerInvariant() : ".res";
+            var bytes = Bytes(given, model, on);
+            if (element == ".res")
+            {
+                if (bytes is not null && bytes.Count > member.Size)
+                    Report(given, model, diagnostics, on, $"`{name}` has room for {member.Size} bytes, and this is {bytes.Count}");
+                continue;
+            }
+            if (bytes is { Count: > 1 })
+            {
+                Report(given, model, diagnostics, on,
+                    $"`{name}` is one `{element}`, and this text is {bytes.Count} bytes: text takes a member reserved with `.res`");
+                continue;
+            }
+            if (bytes is null && element switch
+            {
+                ".byte" => (-128L, 255L),
+                ".word" => (-32768L, 65535L),
+                ".dword" => (-2147483648L, 4294967295L),
+                _ => ((long, long)?)null,
+            } is { } range)
+            {
+                CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{element}`");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A far address in a 16-bit slot. ca65 keeps the low 16 bits of one in an <c>.addr</c>
+    /// and refuses one in a <c>.word</c>, so either way what was written is not what is meant.
+    /// An address, or an address plus or minus a constant, is what is looked at: anything
+    /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
+    /// </summary>
+    private static void NoFarAddresses(
+        string directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        Expansion? on)
+    {
+        foreach (var operand in operands)
+        {
+            var address = operand;
+            if (operand is { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] }
+                && operand.ChildTokens.Any(t => t.Kind is SyntaxKind.Plus or SyntaxKind.Minus))
+            {
+                address = model.ValueOf(right, on).AsNumber() is not null ? left
+                    : model.ValueOf(left, on).AsNumber() is not null && operand.ChildTokens.Any(t => t.Kind == SyntaxKind.Plus) ? right
+                    : operand;
+            }
+            if (address.Kind == SyntaxKind.NameExpression && model.AddressSizeOf(address, null, on) == AddressSize.Far)
+            {
+                var written = address.GetText().Trim();
+                Report(operand, model, diagnostics, on,
+                    $"`{written}` is a far address, and `{directive}` holds 16 bits: `.faraddr` holds all of it, "
+                    + $"and `.loword({written})` the low 16 bits");
+            }
         }
     }
 
@@ -160,10 +286,10 @@ public static class DataLengths
 
     private static void CheckRange(
         SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit,
-        Expansion? on)
+        Expansion? on, string slot = "this directive")
     {
         if (model.ValueOf(argument, on).AsNumber() is { } value && (value < limit.Low || value > limit.High))
-            Report(argument, model, diagnostics, on, $"{Value.Of(value)} does not fit in this directive");
+            Report(argument, model, diagnostics, on, $"{Value.Of(value)} does not fit in {slot}");
     }
 
     private static void Report(

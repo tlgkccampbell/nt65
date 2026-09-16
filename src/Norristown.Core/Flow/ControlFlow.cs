@@ -320,6 +320,11 @@ public sealed class ControlFlow
                     yield return item;
                 continue;
             }
+
+            // Data that is not a table of code labels names nowhere code goes, which is
+            // reported where the targets are checked rather than followed into the bytes.
+            if (IsDataWithoutCodeLabels(target.Symbol, on))
+                continue;
             yield return target;
         }
     }
@@ -352,6 +357,35 @@ public sealed class ControlFlow
             : [];
 
     /// <summary>
+    /// Whether <paramref name="label"/> is a place in data that does not spread to code
+    /// labels: a label on data of another kind, or a label on a line of its own with data
+    /// below it. A table is read only from the <c>.addr</c> on the label's own line, so the
+    /// second is what a table written the ca65 way, one line per entry, comes to.
+    /// </summary>
+    private bool IsDataWithoutCodeLabels(Symbol label, Expansion? on)
+    {
+        if (label.Kind != SymbolKind.Label || Spread(label, on).Any())
+            return false;
+        if (label.Data is not null)
+            return true;
+
+        var tree = label.Tree;
+        for (var line = tree.GetLineIndex(label.NameSpan.Start) + 1; line < tree.Lines.Length; line++)
+        {
+            switch (tree.Statement(line).Kind)
+            {
+                case SyntaxKind.BlankLine:
+                    continue;
+                case SyntaxKind.DataDirective:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// A table item with the <c>- 1</c> of an RTS dispatch table taken off it, which is the
     /// same label either way.
     /// </summary>
@@ -372,11 +406,17 @@ public sealed class ControlFlow
         {
             foreach (var written in Annotations.TargetsOf(annotation.a))
             {
-                if (Targets.Of(model, written, annotation.On) is not { } target
-                    || target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
+                if (Targets.Of(model, written, annotation.On) is not { } target)
+                    continue;
+                if (IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
+                    diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
+                        $"`{target.Symbol.DisplayName}` holds no code labels: `.next` reads a table from the "
+                        + "`.addr` values written on the label's own line"));
                     continue;
                 }
+                if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
+                    continue;
                 diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
                     $"`{target.Symbol.DisplayName}` is a {target.Symbol.KindText}, and "
                     + $"`{Annotations.Spell(annotation.a)}` names somewhere code is"));

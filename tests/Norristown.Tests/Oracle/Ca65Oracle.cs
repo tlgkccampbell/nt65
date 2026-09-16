@@ -78,13 +78,14 @@ internal sealed partial class Ca65Oracle
 
     /// <summary>
     /// Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached
-    /// by content. <paramref name="alongside"/> are files the source needs beside it, such as
-    /// the binary an <c>.incbin</c> names.
+    /// by content. <paramref name="alongside"/> are files the source needs, such as the binary
+    /// an <c>.incbin</c> names. Both paths are relative to one working tree and may name
+    /// directories, so a relative path in the source finds what it would in a real build.
     /// </summary>
     public AssemblyResult Assemble(
         string fileName, string source, IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
     {
-        var seed = new StringBuilder(commit).Append('\0').Append(source);
+        var seed = new StringBuilder(commit).Append('\0').Append(fileName).Append('\0').Append(source);
         foreach (var (name, content) in alongside ?? [])
             seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
         var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
@@ -98,22 +99,23 @@ internal sealed partial class Ca65Oracle
             // The listing shows at most 12 bytes per line unless told otherwise, and only a
             // directive can tell it. A wrapper sets that and includes the file unchanged, so
             // ca65's messages keep the file's own name and line numbers.
-            File.WriteAllText(Path.Combine(work.FullName, fileName), source);
+            WriteText(work.FullName, fileName, source);
             foreach (var (name, content) in alongside ?? [])
-                File.WriteAllBytes(Path.Combine(work.FullName, name), content);
-            File.WriteAllText(Path.Combine(work.FullName, "oracle-wrapper.s"),
-                $".listbytes unlimited\n.include \"{fileName}\"\n");
+                WriteBytes(work.FullName, name, content);
+            var directory = Path.GetDirectoryName(Path.Combine(work.FullName, fileName))!;
+            File.WriteAllText(Path.Combine(directory, "oracle-wrapper.s"),
+                $".listbytes unlimited\n.include \"{Path.GetFileName(fileName)}\"\n");
 
             // Default warning level. -W2 is unusable: it warns that ca65's own predefined
             // CPU_* symbols are unused, even for an empty file.
             var (exitCode, output) = Execute(ca65,
-                ["-g", "-l", "oracle-wrapper.lst", "-o", "oracle-wrapper.o", "oracle-wrapper.s"], work.FullName);
+                ["-g", "-l", "oracle-wrapper.lst", "-o", "oracle-wrapper.o", "oracle-wrapper.s"], directory);
             var succeeded = exitCode == 0 && output.Trim().Length == 0;
             if (!succeeded)
                 return new AssemblyResult(false, output.Trim(), []);
 
             var sourceLines = source.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n').Length;
-            var listing = File.ReadAllText(Path.Combine(work.FullName, "oracle-wrapper.lst"));
+            var listing = File.ReadAllText(Path.Combine(directory, "oracle-wrapper.lst"));
             var bytes = ParseListing(listing, sourceLines);
 
             if (cached is not null)
@@ -134,27 +136,34 @@ internal sealed partial class Ca65Oracle
     /// <summary>
     /// Assembles each file and links them with ld65 against <paramref name="config"/>. This
     /// is the check that nt65 output is an object file like any other: it links against a
-    /// module written by hand, and a linker assertion in it is a link error.
+    /// module written by hand, and a linker assertion in it is a link error. Paths are
+    /// relative to one working tree, as for <see cref="Assemble"/>, and each file's own
+    /// directory is searched for what it includes.
     /// </summary>
-    public LinkResult Link(string config, IReadOnlyList<(string Name, string Source)> files)
+    public LinkResult Link(
+        string config, IReadOnlyList<(string Name, string Source)> files,
+        IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
     {
         var work = Directory.CreateTempSubdirectory("nt65-ld65-");
         try
         {
-            File.WriteAllText(Path.Combine(work.FullName, "link.cfg"), config);
+            File.WriteAllText(Path.Combine(work.FullName, "oracle-link.cfg"), config);
+            foreach (var (name, content) in alongside ?? [])
+                WriteBytes(work.FullName, name, content);
             var objects = new List<string>();
             foreach (var (name, source) in files)
             {
-                File.WriteAllText(Path.Combine(work.FullName, name), source);
-                var target = Path.GetFileNameWithoutExtension(name) + ".o";
-                var (code, said) = Execute(ca65, ["-g", "-o", target, name], work.FullName);
+                WriteText(work.FullName, name, source);
+                var target = Path.ChangeExtension(name, ".o");
+                var include = Path.GetDirectoryName(name) is { Length: > 0 } directory ? directory : ".";
+                var (code, said) = Execute(ca65, ["-g", "-I", include, "-o", target, name], work.FullName);
                 if (code != 0 || said.Trim().Length > 0)
                     return new LinkResult(false, $"ca65 on {name}:\n{said.Trim()}", []);
                 objects.Add(target);
             }
 
             var (exitCode, output) = Execute(ld65,
-                ["-C", "link.cfg", "-o", "linked.bin", .. objects.Order(StringComparer.Ordinal)], work.FullName);
+                ["-C", "oracle-link.cfg", "-o", "linked.bin", .. objects.Order(StringComparer.Ordinal)], work.FullName);
             if (exitCode != 0 || output.Trim().Length > 0)
                 return new LinkResult(false, output.Trim(), []);
 
@@ -165,6 +174,20 @@ internal sealed partial class Ca65Oracle
         {
             work.Delete(recursive: true);
         }
+    }
+
+    private static void WriteText(string root, string name, string text)
+    {
+        var path = Path.Combine(root, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, text);
+    }
+
+    private static void WriteBytes(string root, string name, byte[] content)
+    {
+        var path = Path.Combine(root, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, content);
     }
 
     private static (int ExitCode, string Output) Execute(string exe, string[] arguments, string? workingDirectory)

@@ -1,11 +1,6 @@
 ; Code and data that live in bank $81 and are reached with jsl.
 .cpu 65816
 
-; Exporting this from hw.nt65 emits a bad `.export rgb15`, so it lives here.
-.func rgb15(r, g, b) = r | (g << 5) | (b << 10)
-
-
-
 .scope bank1 {
 .export load_palette, spawn_player, level_speed
 

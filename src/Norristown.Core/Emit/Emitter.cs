@@ -253,9 +253,13 @@ public sealed class Emitter
                     continue;
 
                 // A macro is no symbol to the linker: what crosses is its expansion, written
-                // into whichever file called it.
-                if (reference.Kind == SymbolKind.Macro)
+                // into whichever file called it. A charmap, a function, a list and a define are
+                // used by value, and what crosses is the values, written where they are used.
+                if (reference.Kind is SymbolKind.Macro or SymbolKind.Charmap or SymbolKind.Func or SymbolKind.List
+                    || reference.IsDefine)
+                {
                     continue;
+                }
                 if (!any)
                     Blank();
                 any = true;
@@ -941,18 +945,20 @@ public sealed class Emitter
     /// <summary>
     /// An expression written out rather than edited in place: a call becomes what it stands
     /// for, and every nested operation is parenthesized, so nothing depends on how ca65
-    /// reads precedence.
+    /// reads precedence. What it would say in a comment goes to <paramref name="comments"/>,
+    /// the comments of the line it is written into, when there is one: text after it on that
+    /// line would otherwise land in its comment.
     /// </summary>
-    private string Rendered(SyntaxNode node)
+    private string Rendered(SyntaxNode node, List<string>? comments = null)
     {
         switch (node.Kind)
         {
             case SyntaxKind.ParenthesizedExpression:
-                return node.ChildNodes.Length > 0 ? "(" + Rendered(node.ChildNodes[0]) + ")" : "";
+                return node.ChildNodes.Length > 0 ? "(" + Rendered(node.ChildNodes[0], comments) + ")" : "";
             case SyntaxKind.BinaryExpression when node.ChildNodes.Length == 2 && node.ChildTokens.Length > 0:
-                return $"({Rendered(node.ChildNodes[0])} {node.ChildTokens[0].Text} {Rendered(node.ChildNodes[1])})";
+                return $"({Rendered(node.ChildNodes[0], comments)} {node.ChildTokens[0].Text} {Rendered(node.ChildNodes[1], comments)})";
             case SyntaxKind.UnaryExpression when node.ChildNodes.Length == 1 && node.ChildTokens.Length > 0:
-                return $"({node.ChildTokens[0].Text}{Rendered(node.ChildNodes[0])})";
+                return $"({node.ChildTokens[0].Text}{Rendered(node.ChildNodes[0], comments)})";
             default:
                 break;
         }
@@ -963,6 +969,19 @@ public sealed class Emitter
             return Constant(value);
         var edits = new Edits();
         Substitute(node, edits, nested: false);
+        return Inline(node, edits, comments);
+    }
+
+    /// <summary>
+    /// <paramref name="node"/> rendered to go inside another line: its comments are that
+    /// line's, given to <paramref name="comments"/>, or kept on the text when there is none.
+    /// </summary>
+    private string Inline(SyntaxNode node, Edits edits, List<string>? comments)
+    {
+        if (comments is null)
+            return Render(node, edits).Trim();
+        comments.AddRange(edits.Comments);
+        edits.Comments.Clear();
         return Render(node, edits).Trim();
     }
 
@@ -979,11 +998,11 @@ public sealed class Emitter
     /// `#&lt;(label+1)`. It keeps its own spelling: an argument is an expression, not a number,
     /// and a name in it is written the way the same name would be written anywhere else.
     /// </summary>
-    private string Substituted(SyntaxNode argument)
+    private string Substituted(SyntaxNode argument, List<string>? comments = null)
     {
         var edits = new Edits();
         Substitute(argument, edits, nested: false);
-        var text = Render(argument, edits).Trim();
+        var text = Inline(argument, edits, comments);
         return argument.Kind is SyntaxKind.BinaryExpression or SyntaxKind.UnaryExpression
             ? "(" + text + ")"
             : text;
@@ -1370,7 +1389,7 @@ public sealed class Emitter
         // A list stands for its own items wherever data takes them.
         if (model.ItemsOf(name) is { Count: > 0 } items)
         {
-            edits.Replace[tokens[0].Position] = string.Join(", ", items.Select(Rendered));
+            edits.Replace[tokens[0].Position] = string.Join(", ", items.Select(item => Rendered(item, edits.Comments)));
             for (var i = 1; i < tokens.Length; i++)
                 edits.Replace[tokens[i].Position] = "";
             edits.Comments.Add(name.GetText().Trim());
@@ -1390,7 +1409,7 @@ public sealed class Emitter
         var symbol = reference;
         if (symbol.Kind == SymbolKind.MacroParameter)
         {
-            if (Parameter(symbol) is not { } given)
+            if (Parameter(symbol, edits.Comments) is not { } given)
                 return;
             edits.Replace[tokens[0].Position] = given;
             for (var i = 1; i < tokens.Length; i++)
@@ -1407,7 +1426,7 @@ public sealed class Emitter
 
             // A list item is written as it stands, with its own names substituted; a number
             // is written as the number it is on this turn.
-            var written = bound.Item is { } item ? Rendered(item) : null;
+            var written = bound.Item is { } item ? Rendered(item, edits.Comments) : null;
             if (written is null && bound.Value.AsNumber() is { } turn)
                 written = Constant(turn);
             if (written is null)
@@ -1437,15 +1456,15 @@ public sealed class Emitter
     /// What a macro parameter stands for here: the operand a call gave, the expression it
     /// gave, or the word or number it stands for.
     /// </summary>
-    private string? Parameter(Symbol parameter)
+    private string? Parameter(Symbol parameter, List<string> comments)
     {
         if (model.BindingsOf(expansion)?.TryGetValue(parameter, out var bound) is not true)
             return null;
         if (bound.Value.IsWord)
             return bound.Value.Text;
         if (bound.Argument is { Parameter.Kind: ParameterKind.Operand } given)
-            return given.Operand is { } operand ? Substituted(operand) : null;
-        return bound.Item is { } item ? Substituted(item) : null;
+            return given.Operand is { } operand ? Substituted(operand, comments) : null;
+        return bound.Item is { } item ? Substituted(item, comments) : null;
     }
 
     /// <summary>
@@ -1550,7 +1569,7 @@ public sealed class Emitter
         if (Semantics.Operands.Substituted(model, operand, expansion) is not { } given)
             return false;
 
-        var text = Argument(given);
+        var text = Argument(given, edits.Comments);
         if (text is null)
             return false;
 
@@ -1571,7 +1590,7 @@ public sealed class Emitter
     /// The text of the operand a call gave, with whatever the body asked of it: the operand
     /// as it stands, the byte after it, or one byte of an immediate value.
     /// </summary>
-    private string? Argument(OperandSubstitution given)
+    private string? Argument(OperandSubstitution given, List<string> comments)
     {
         // `.byteof` on an immediate is a byte of the value, which is a number wherever nt65
         // knows it and a shift and a mask wherever only the linker will.
@@ -1581,7 +1600,7 @@ public sealed class Emitter
                 return null;
             if (model.ValueOf(value, expansion).AsNumber() is { } known)
                 return "#" + Constant((known >> (int)(8 * given.Offset)) & 0xff);
-            var shifted = Substituted(value);
+            var shifted = Substituted(value, comments);
             return given.Offset == 0
                 ? $"#({shifted} & $ff)"
                 : $"#(({shifted} >> {8 * given.Offset}) & $ff)";
@@ -1591,11 +1610,11 @@ public sealed class Emitter
         // whole, and with `+ n` on its expression when the body asked for a later byte.
         var offset = given.Offset;
         if (offset == 0)
-            return Substituted(given.Operand);
+            return Substituted(given.Operand, comments);
         if (given.Expression is not { } addressed)
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
-        var written = Substituted(addressed);
+        var written = Substituted(addressed, comments);
         return offset > 0 ? $"{written}+{offset}{index}" : $"{written}{offset}{index}";
     }
 

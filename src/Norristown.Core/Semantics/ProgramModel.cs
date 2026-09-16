@@ -142,6 +142,8 @@ public sealed class ProgramModel
         segments.Evaluate(expression => Evaluator.ValueOf(expression, segments, resolved).AsNumber(), segmentValues);
         foreach (var result in bound)
             Value(result.Symbols, segments, resolved, byFile);
+        foreach (var result in bound)
+            CheckAliases(result.Symbols, resolved, byFile);
         CheckDefineNames(modules, defines, tables);
 
         var all = byFile.Values.SelectMany(file => file).Concat(tables).Concat(segmentValues).ToList();
@@ -242,6 +244,8 @@ public sealed class ProgramModel
             found[diagnostic.Span.File].Add(diagnostic);
         foreach (var result in bound.Values)
             Value(result.Symbols, Segments, resolved, found);
+        foreach (var result in bound.Values)
+            CheckAliases(result.Symbols, resolved, found);
         CheckDefineNames(replaced, defines, tables);
 
         // A name whose meaning changed is news to every file that looked it up. A macro, a
@@ -324,6 +328,40 @@ public sealed class ProgramModel
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
             symbol.Signature = symbol.Signature?.Valued(ValueOf, Report);
             symbol.MacroSignature = symbol.MacroSignature?.Valued(ValueOf, Report);
+        }
+    }
+
+    /// <summary>
+    /// An extern proc that names a routine, <c>.proc r_long = r: far</c>, is another name for
+    /// that routine, and what it declares is what every call through it is checked against. So
+    /// it has to declare what the routine does: otherwise near code is reached with <c>jsl</c>,
+    /// or a caller is held to widths the routine never asked for, with nothing said. One that
+    /// declares nothing takes the routine's signature.
+    /// </summary>
+    private static void CheckAliases(
+        IEnumerable<Symbol> symbols, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
+    {
+        foreach (var alias in symbols)
+        {
+            if (alias is not { Kind: SymbolKind.ExternProc, Signature: { } declared, ValueExpression: { } value }
+                || Evaluator.SymbolNamed(value, resolved) is not { Signature: { } actual } routine
+                || routine.Kind == SymbolKind.ExternProc && routine == alias)
+            {
+                continue;
+            }
+            if (value.Parent?.ChildNodes.Any(child => child.Kind == SyntaxKind.ProcSignature) != true)
+            {
+                alias.Signature = actual;
+                continue;
+            }
+            var said = declared.IsFar != actual.IsFar
+                ? $"`{alias.Name}` is declared {declared.Distance}, and `{routine.DisplayName}` is {actual.Distance}"
+                : declared.Entry != actual.Entry || declared.Exit != actual.Exit || declared.Inline != actual.Inline
+                    ? $"`{alias.Name}` is declared `{declared}`, and `{routine.DisplayName}` is `{actual}`: "
+                        + "another name for a routine declares what the routine does"
+                    : null;
+            if (said is not null)
+                byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), Severity.Error, said));
         }
     }
 

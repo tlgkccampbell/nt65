@@ -16,6 +16,8 @@ public sealed partial class OracleTests
     public void HandWrittenFilesAssembleCleanly()
     {
         var files = Directory.GetFiles(Repo.Path("tests", "oracle"), "*.s").Order(StringComparer.Ordinal).ToList();
+        if (Repo.Selection is not null)
+            return;
         Assert.NotEmpty(files);
         var failures = Repo.CollectFailures(files, Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
@@ -57,8 +59,8 @@ public sealed partial class OracleTests
             .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project, fixture.BinaryLength)
                 .Outputs.Select(o => (Fixture: fixture, Output: o)))
             .ToList();
-        Assert.NotEmpty(outputs);
-        Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
+        if (Repo.Selection is null)
+            Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
 
         // Every fixture with no errors of its own must reach the assembler; one that quietly
         // produced nothing would be checked by nobody.
@@ -69,39 +71,10 @@ public sealed partial class OracleTests
             .ToList();
         Assert.True(missing.Count == 0, $"produced no output, so nothing checked it: {string.Join(", ", missing)}");
 
-        var failures = Repo.CollectFailures(outputs, o => Check(o.Fixture, o.Output));
+        var failures = Repo.CollectFailures(outputs,
+            o => AssemblesToComputedLengths(
+                o.Fixture.Name, o.Output, Path.GetFileName(o.Output.Path), o.Fixture.Binaries()));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
-
-        static IEnumerable<string> Check(FixtureCase source, OutputFile output)
-        {
-            var fixture = source.Name;
-            var result = Ca65Oracle.Pinned.Assemble(
-                Path.GetFileName(output.Path), output.Text, source.Binaries());
-            if (!result.Succeeded)
-            {
-                yield return $"[{fixture}] {output.Path}: ca65 reported:\n{result.Messages}";
-                yield break;
-            }
-
-            var lines = output.Text.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n');
-            if (output.LineBytes.Count != lines.Length)
-            {
-                yield return $"[{fixture}] {output.Path}: {lines.Length} lines, but nt65 has lengths for " +
-                    $"{output.LineBytes.Count}";
-                yield break;
-            }
-            for (var i = 0; i < lines.Length; i++)
-            {
-                // A line nt65 makes no claim about is one the assembler settles for itself.
-                if (output.LineBytes[i] < 0)
-                    continue;
-                if (result.LineBytes[i] != output.LineBytes[i])
-                {
-                    yield return $"[{fixture}] {output.Path}:{i + 1}: nt65 says {output.LineBytes[i]} bytes, " +
-                        $"ca65 generated {result.LineBytes[i]}:\n  {lines[i]}";
-                }
-            }
-        }
     }
 
     /// <summary>
@@ -114,7 +87,8 @@ public sealed partial class OracleTests
     public void GeneratedOutputLinksWithHandWrittenCa65()
     {
         var linkable = FixtureCase.All().Where(fixture => LinkFiles(fixture) is not null).ToList();
-        Assert.NotEmpty(linkable);
+        if (Repo.Selection is null)
+            Assert.NotEmpty(linkable);
 
         var failures = Repo.CollectFailures(linkable, Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
@@ -140,7 +114,11 @@ public sealed partial class OracleTests
     [Fact]
     public void ACheckedImportWithTheWrongValueFailsTheLink()
     {
-        var fixture = FixtureCase.All().Single(f => f.Name == "modules");
+        if (FixtureCase.All().SingleOrDefault(f => f.Name == "modules") is not { } fixture)
+        {
+            Assert.NotNull(Repo.Selection);
+            return;
+        }
         var (config, handWritten) = LinkFiles(fixture)!.Value;
         var wrong = handWritten
             .Select(file => (file.Name, Source: file.Source.Replace("HOST_VERSION = $0102", "HOST_VERSION = $0103")))
@@ -212,6 +190,41 @@ public sealed partial class OracleTests
         Assert.True(fromHand.Succeeded, fromHand.Messages);
         Assert.NotEmpty(fromHand.Binary);
         Assert.Equal(fromHand.Binary, fromNt65.Binary);
+    }
+
+    /// <summary>
+    /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and reports each
+    /// way ca65 disagrees with it: any message at all, or a line whose byte count is not the
+    /// one nt65 computed.
+    /// </summary>
+    internal static IEnumerable<string> AssemblesToComputedLengths(
+        string label, OutputFile output, string fileName, IReadOnlyList<(string Name, byte[] Content)> alongside)
+    {
+        var result = Ca65Oracle.Pinned.Assemble(fileName, output.Text, alongside);
+        if (!result.Succeeded)
+        {
+            yield return $"[{label}] {output.Path}: ca65 reported:\n{result.Messages}";
+            yield break;
+        }
+
+        var lines = output.Text.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n');
+        if (output.LineBytes.Count != lines.Length)
+        {
+            yield return $"[{label}] {output.Path}: {lines.Length} lines, but nt65 has lengths for " +
+                $"{output.LineBytes.Count}";
+            yield break;
+        }
+        for (var i = 0; i < lines.Length; i++)
+        {
+            // A line nt65 makes no claim about is one the assembler settles for itself.
+            if (output.LineBytes[i] < 0)
+                continue;
+            if (result.LineBytes[i] != output.LineBytes[i])
+            {
+                yield return $"[{label}] {output.Path}:{i + 1}: nt65 says {output.LineBytes[i]} bytes, " +
+                    $"ca65 generated {result.LineBytes[i]}:\n  {lines[i]}";
+            }
+        }
     }
 
     /// <summary>The linker configuration and the hand-written modules of a fixture, or null.</summary>

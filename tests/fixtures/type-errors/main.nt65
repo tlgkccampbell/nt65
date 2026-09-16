@@ -9,6 +9,7 @@
 x:      .word
 y:      .word
 bad:    .asciiz "no"    ;! error: `bad` reserves no room a member may take
+colors: .word 16        ;! error: `colors` is a member, which reserves one `.word` and holds no value: room for several is `.res`
 }
 
 ; A layout that holds itself has no size, which is the same ring any constant would be.
@@ -16,7 +17,22 @@ bad:    .asciiz "no"    ;! error: `bad` reserves no room a member may take
 self:   .tag Ring       ;! error: `self` reserves no room a member may take
 }
 
+; What an initialized instance gives each member has to fit the room the member has.
+.struct Named {
+name:   .addr
+count:  .byte
+at:     .tag Point
+title:  .res 3
+}
+
 .rodata {
+hero:   .tag Named { name = "HERO", count = 300, title = "LONG" }  ;! error: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res` ;! error: $012c does not fit in `count`, a `.byte` ;! error: `title` has room for 3 bytes, and this is 4
+boss:   .tag Named {
+    at = { x = 1, z = 2 }   ;! error: `Point` has no member `z`
+    count = 1
+    at = 3                  ;! error: `at` is a `Point`, which takes a braced list of its members
+    level = 1               ;! error: `Named` has no member `level`
+}
     .byte screen("hi")  ;! error: `screen` does not map `h` ;! error: `screen` is not transpiled yet
     .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given ;! error: `twice` is not transpiled yet
     .align 100          ;! error: an `.align` boundary must be a power of two, not 100

@@ -1,8 +1,8 @@
 # The edit loop: builds the test project and runs the fast suite (units, fixtures, server).
-# -Ca65 runs only the tests that assemble with the pinned ca65. -Fixture runs only fixtures
-# whose name contains the text. -Update rewrites expected fixture output instead of
-# comparing it. -Benchmark builds Release and runs only the timings, which print what an edit
-# costs; no gate runs them.
+# -Ca65 runs only the tests that assemble with the pinned ca65, the corpus programs among
+# them. -Fixture runs only fixtures and corpus programs whose name contains the text. -Update
+# rewrites expected fixture output instead of comparing it. -Benchmark builds Release and runs
+# only the timings, which print what an edit costs; no gate runs them.
 [CmdletBinding()]
 param(
     [switch]$Ca65,

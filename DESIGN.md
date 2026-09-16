@@ -358,7 +358,7 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 | `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. |
 | `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
-| `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. |
+| `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. An alias that writes a signature must write the routine's, and one that writes none takes it. |
 | `.scope [name] { ... }` | a scope. |
 | `.enum [name] { ... }` | constants (§6.3). |
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
@@ -498,7 +498,8 @@ hero:   .tag Actor {
 
 Each value names its member, so the struct decides the layout and reordering its members
 cannot misplace a value. A member is named at most once, and a member not named is
-zero. A value must fit its member as it would fit the matching data directive; a `.res n`
+zero. A value must fit its member as it would fit the matching data directive, and a
+member of one element takes one value, so text longer than a byte is not one; a `.res n`
 member takes a string of at most n bytes, padded with zeros; a `.tag` member takes a
 nested one-line initializer, `pos = { x = 1, y = 2 }`; a union takes at most one member.
 The one-line form balances its braces on its line, and the multi-line form is a block
@@ -1074,6 +1075,11 @@ true bound.
     .tag Player { hp = 5 }          ; an initialized instance (§6.3)
     .addr handlers                  ; a list's items (§6.4)
 ```
+
+An address slot holds an address of its width: `.addr` takes 0 to $FFFF and `.faraddr` 0
+to $FFFFFF. A far address in an `.addr` or a `.word` is an error rather than its low 16
+bits, which ca65 would keep in an `.addr` without a word; `.loword(x)` says those are what
+is meant.
 
 A label on a data directive gets a `.sizeof` in bytes and a `.countof` in elements from
 it: `.res 16` gives 16 and 16, `.word a, b` gives 4 and 2, `.tag Player, 8` gives

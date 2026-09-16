@@ -204,7 +204,11 @@ public sealed class Configuration
             return value.AsNumber() is { } number && number != 0;
         }
 
-        private void Leave(SyntaxNode block) => omitted.Add(block.Span);
+        // From the block's full start, indentation included, to its closing brace: `Includes`
+        // compares where a node starts, and an indented block starts at its line's leading
+        // whitespace, before its first token.
+        private void Leave(SyntaxNode block) =>
+            omitted.Add(new TextSpan(block.Position, block.Span.End - block.Position));
 
         private Value Evaluate(SyntaxNode node)
         {

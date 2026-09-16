@@ -2,7 +2,7 @@
 ; named nowhere else in this program, and naming them from `main.nt65` is an error.
 .cpu 6502
 
-.export clear, SCREEN, ptr, Color, Sprite
+.export clear, SCREEN, ptr, Color, Sprite, screen, centred, glyphs
 
 .zeropage {
 ptr:        .res 2
@@ -21,6 +21,18 @@ rows   = 25
 .struct Sprite {
 x:      .byte
 y:      .byte
+}
+
+; A charmap, a function and a list are used by value, so exporting one writes nothing for
+; the linker: what crosses is what they come to, written where they are used.
+.charmap screen {
+    'A'..'Z' = $01
+}
+
+.func centred(width) = (40 - width) / 2
+
+.list glyphs {
+    $3c, $42, $3c
 }
 
 .scope palette {

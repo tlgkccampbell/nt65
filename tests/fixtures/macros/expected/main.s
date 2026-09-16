@@ -7,13 +7,16 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2672, 0
+.dbg file, "main.nt65", 3247, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 7
+.dbg line, "main.nt65", 12
 ptr:        .res 2
-.dbg line, "main.nt65", 8
+.dbg line, "main.nt65", 13
 other:      .res 2
+pair:
+.dbg line, "main.nt65", 14
+    .res 2                          ; Pair
 
 .segment "CODE": absolute
 SCREEN = $0400
@@ -21,105 +24,143 @@ C4     = 60
 E4     = 64
 
 main:
-    ; set16!(ptr, SCREEN)  main.nt65:88
-.dbg line, "main.nt65", 88
+    ; set16!(ptr, SCREEN)  main.nt65:99
+.dbg line, "main.nt65", 99
     lda #<SCREEN
-.dbg line, "main.nt65", 88
+.dbg line, "main.nt65", 99
     sta z:ptr
-.dbg line, "main.nt65", 88
+.dbg line, "main.nt65", 99
     lda #>SCREEN
-.dbg line, "main.nt65", 88
+.dbg line, "main.nt65", 99
     sta z:ptr+1
-    ; set16!({buf,x}, $1234)  main.nt65:89
-.dbg line, "main.nt65", 89
+    ; set16!({buf,x}, $1234)  main.nt65:100
+.dbg line, "main.nt65", 100
     lda #<$1234
-.dbg line, "main.nt65", 89
+.dbg line, "main.nt65", 100
     sta a:buf,x
-.dbg line, "main.nt65", 89
+.dbg line, "main.nt65", 100
     lda #>$1234
-.dbg line, "main.nt65", 89
+.dbg line, "main.nt65", 100
     sta a:buf+1,x
-    ; mov16!(ptr, {#SCREEN})  main.nt65:90
-.dbg line, "main.nt65", 90
+    ; mov16!(ptr, {#SCREEN})  main.nt65:101
+.dbg line, "main.nt65", 101
     lda #$00
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 101
     sta z:ptr
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 101
     lda #$04
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 101
     sta z:ptr+1
-    ; mov16!(ptr, other)  main.nt65:91
-.dbg line, "main.nt65", 91
+    ; mov16!(ptr, other)  main.nt65:102
+.dbg line, "main.nt65", 102
     lda z:other
-.dbg line, "main.nt65", 91
+.dbg line, "main.nt65", 102
     sta z:ptr
-.dbg line, "main.nt65", 91
+.dbg line, "main.nt65", 102
     lda z:other+1
-.dbg line, "main.nt65", 91
+.dbg line, "main.nt65", 102
+    sta z:ptr+1
+    ; mov16!(ptr, pair::lo)  main.nt65:103
+.dbg line, "main.nt65", 103
+    lda z:pair                      ; pair::lo
+.dbg line, "main.nt65", 103
+    sta z:ptr
+.dbg line, "main.nt65", 103
+    lda z:pair+1                    ; pair::lo
+.dbg line, "main.nt65", 103
     sta z:ptr+1
 
-    ; push!(a, x, y)  main.nt65:93
-.dbg line, "main.nt65", 93
+    ; push!(a, x, y)  main.nt65:105
+.dbg line, "main.nt65", 105
             pha
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 105
             phx
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 105
             phy
 
-.dbg line, "main.nt65", 95
+.dbg line, "main.nt65", 107
     ldy #0
-    ; times_x!(8)  main.nt65:96
-.dbg line, "main.nt65", 96
+    ; times_x!(8)  main.nt65:108
+.dbg line, "main.nt65", 108
     ldx #8
 times_x__loop:
-.dbg line, "main.nt65", 97
+.dbg line, "main.nt65", 109
         sta (ptr),y
-.dbg line, "main.nt65", 98
+.dbg line, "main.nt65", 110
         iny
-.dbg line, "main.nt65", 96
+.dbg line, "main.nt65", 108
     dex
-.dbg line, "main.nt65", 96
+.dbg line, "main.nt65", 108
     bne times_x__loop
 
-.dbg line, "main.nt65", 101
+.dbg line, "main.nt65", 113
     lda a:count
-.dbg line, "main.nt65", 102
+.dbg line, "main.nt65", 114
     cmp #10
-    ; if!(cs)  main.nt65:103
-    ; branch_unless!(c, @skip)  main.nt65:77
-.dbg line, "main.nt65", 103
+    ; if!(cs)  main.nt65:115
+    ; branch_unless!(c, @skip)  main.nt65:88
+.dbg line, "main.nt65", 115
         bcc if__skip
-.dbg line, "main.nt65", 104
+.dbg line, "main.nt65", 116
         lda #0
-.dbg line, "main.nt65", 103
+.dbg line, "main.nt65", 115
         jmp if__done
 if__skip:
-.dbg line, "main.nt65", 106
+.dbg line, "main.nt65", 118
         inx
 if__done:
 
-    ; if!(eq)  main.nt65:109
-    ; branch_unless!(c, @skip)  main.nt65:77
-.dbg line, "main.nt65", 109
+    ; if!(eq)  main.nt65:121
+    ; branch_unless!(c, @skip)  main.nt65:88
+.dbg line, "main.nt65", 121
         bne if__skip_2
-.dbg line, "main.nt65", 110
+.dbg line, "main.nt65", 122
         nop
 if__skip_2:
 if__done_2:
-.dbg line, "main.nt65", 112
+
+    ; if!(ne)  main.nt65:127
+    ; branch_unless!(c, @skip)  main.nt65:88
+.dbg line, "main.nt65", 127
+        beq if__skip_3
+        ; if!(cc)  main.nt65:128
+    ; branch_unless!(c, @skip)  main.nt65:88
+.dbg line, "main.nt65", 128
+        bcs if__skip_4
+.dbg line, "main.nt65", 129
+            iny
+.dbg line, "main.nt65", 128
+        jmp if__done_3
+if__skip_4:
+            ; if!(eq)  main.nt65:131
+    ; branch_unless!(c, @skip)  main.nt65:88
+.dbg line, "main.nt65", 131
+        bne if__skip_5
+.dbg line, "main.nt65", 132
+                dey
+if__skip_5:
+if__done_4:
+if__done_3:
+if__skip_3:
+if__done_5:
+.dbg line, "main.nt65", 136
     rts
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 116
+.dbg line, "main.nt65", 140
 buf:    .res 256
-.dbg line, "main.nt65", 117
+.dbg line, "main.nt65", 141
 count:  .res 1
 
 .segment "RODATA": absolute
 tune:
-    ; note!(C4, frames = 8)  main.nt65:121
-.dbg line, "main.nt65", 121
+    ; note!(C4, frames = 8)  main.nt65:145
+.dbg line, "main.nt65", 145
     .byte C4, 8
-        ; note!(E4)  main.nt65:122
-.dbg line, "main.nt65", 122
+        ; note!(E4)  main.nt65:146
+.dbg line, "main.nt65", 146
     .byte E4, 1
+greeting:
+    ; message!("HI")  main.nt65:147
+.dbg line, "main.nt65", 147
+    .byte $48, $49, $00             ; "HI"

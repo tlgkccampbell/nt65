@@ -16,10 +16,13 @@ namespace Norristown.Semantics;
 /// </summary>
 public sealed class Expansion : IEquatable<Expansion>
 {
+    private readonly bool splice;
+
     private Expansion(
         Expansion? outer, Symbol? binding, Value value, SyntaxNode? item, int index,
-        SyntaxNode? call, SyntaxNode? body)
+        SyntaxNode? call, SyntaxNode? body, bool splice = false)
     {
+        this.splice = splice;
         Outer = outer;
         Binding = binding;
         Value = value;
@@ -69,7 +72,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// more than one place, and each splice writes its lines out again.
     /// </summary>
     public static Expansion Spliced(Expansion? outer, SyntaxNode splice, SyntaxNode block) =>
-        new(outer, null, Value.Unknown, splice, 0, null, block);
+        new(outer, null, Value.Unknown, splice, 0, null, block, splice: true);
 
     /// <summary>
     /// The level that writes out the place <paramref name="declared"/> was written, or null
@@ -94,6 +97,12 @@ public sealed class Expansion : IEquatable<Expansion>
     /// Whether <paramref name="definition"/> is already being expanded at <paramref name="at"/>
     /// or around it: a macro that reaches itself, which is reported where it is declared and is
     /// never written out again inside itself.
+    /// <para>
+    /// A block argument is the caller's code, not the macro's, so a call written in one is not
+    /// inside the macro it was given to: <c>if!(eq) { if!(ne) { ... } }</c> nests two calls
+    /// and reaches nothing. The walk steps from a splice straight out to the level that wrote
+    /// the macro whose body spliced it.
+    /// </para>
     /// </summary>
     public static bool Expanding(Expansion? at, SyntaxNode definition)
     {
@@ -101,8 +110,24 @@ public sealed class Expansion : IEquatable<Expansion>
         {
             if (level.Call is not null && level.Body == definition)
                 return true;
+            if (level.splice && level.Item is { } line)
+                level = SplicedBy(level, line) ?? level;
         }
         return false;
+    }
+
+    /// <summary>The expansion, around <paramref name="splice"/>, of the macro whose body holds <paramref name="line"/>.</summary>
+    private static Expansion? SplicedBy(Expansion splice, SyntaxNode line)
+    {
+        for (var level = splice.Outer; level is not null; level = level.Outer)
+        {
+            if (level.Call is not null && level.Body is { } body && body.Tree == line.Tree
+                && line.Position >= body.Position && line.Position < body.Position + body.Green.FullWidth)
+            {
+                return level;
+            }
+        }
+        return null;
     }
 
     /// <summary>

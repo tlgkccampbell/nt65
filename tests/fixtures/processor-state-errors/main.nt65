@@ -108,3 +108,13 @@ value:  .res 2
     jml $008000
     .next ?                 ; a constant address is somewhere the analysis does not follow
 }
+
+; Another name for a routine declares what the routine does, or every call through it is
+; checked against a routine that does not exist.
+.proc worker: a8, i16 {
+    rts
+}
+
+.proc worker_long = worker: a8, i16, far        ;! error: `worker_long` is declared far, and `worker` is near
+.proc worker_wide = worker: a16, i16            ;! error: `worker_wide` is declared `a16, i16, native, near`, and `worker` is `a8, i16, native, near`: another name for a routine declares what the routine does
+.proc worker_same = worker: a8, i16

@@ -19,6 +19,19 @@ cmd:    .res 1
     rts
 }
 
+; A table written a line per entry, as ca65 code writes one. A table is read only from the
+; `.addr` on its label's own line, so this label names data and no code at all.
+.rodata {
+handlers:
+    .addr falls
+    .addr off_the_end
+}
+
+.proc dispatch {
+    jmp (handlers,x)
+    .next handlers          ;! error: `handlers` holds no code labels: `.next` reads a table from the `.addr` values written on the label's own line
+}
+
 ; A computed jump.
 .proc computed {
     jmp computed+3          ;! error: `jmp computed+3` goes to a computed address, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not an instruction boundary

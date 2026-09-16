@@ -9,6 +9,15 @@ ptr:    .res 2
 score:  .res 2
 }
 
+.struct Pair {
+lo:     .byte
+hi:     .byte
+}
+
+.segment "BANK1" {
+pair:   .tag Pair
+}
+
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
 .segment "SLOW": abs, dp = $2100        ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
 .segment "WIDE": abs, bank = $100       ;! error: a bank is one byte
@@ -24,6 +33,7 @@ score:  .res 2
 .proc wrong: a8, i8, dp = $0000, dbr = $00 {
     lda ptr                 ;! error: `ptr` is in "ZP2", which is reached through the direct page at $2100, and D is $0000 here
     sta score               ;! error: `score` is in "WRAM", which is in bank $7e, and B is $00 here
+    lda pair::hi            ;! error: `pair` is in "BANK1", which is in bank $01, and B is $00 here
     rts
 }
 

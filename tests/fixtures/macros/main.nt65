@@ -3,9 +3,15 @@
 ; instruction idioms, structured control built from blocks, computed data and wrappers.
 .cpu 65c02
 
+.struct Pair {
+lo:         .byte
+hi:         .byte
+}
+
 .zeropage {
 ptr:        .res 2
 other:      .res 2
+pair:       .tag Pair
 }
 
 SCREEN = $0400
@@ -33,6 +39,11 @@ E4     = 64
 ; A `const` parameter with a default, and a body that emits data rather than code.
 .macro note(pitch: const, frames: const = 1) {
     .byte pitch, frames
+}
+
+; Text given to a parameter is written as bytes, and what the body writes after it follows it.
+.macro message(text) {
+    .asciiz text
 }
 
 ; A `list` of words, walked with `.each`. A condition in a body may compare them.
@@ -89,6 +100,7 @@ E4     = 64
     set16!({buf,x}, $1234)
     mov16!(ptr, {#SCREEN})
     mov16!(ptr, other)
+    mov16!(ptr, pair::lo)
 
     push!(a, x, y)
 
@@ -109,6 +121,18 @@ E4     = 64
     if!(eq) {
         nop
     }
+
+    ; A block argument is the caller's code, so the same macro may be called inside it,
+    ; in either branch and at any depth. Each call has its own `@skip` and `@done`.
+    if!(ne) {
+        if!(cc) {
+            iny
+        } else {
+            if!(eq) {
+                dey
+            }
+        }
+    }
     rts
 }
 
@@ -120,4 +144,5 @@ count:  .res 1
 .rodata {
 tune:   note!(C4, frames = 8)
         note!(E4)
+greeting: message!("HI")
 }

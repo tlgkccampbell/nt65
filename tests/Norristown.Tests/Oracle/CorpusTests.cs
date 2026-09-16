@@ -1,0 +1,74 @@
+using Norristown.Project;
+
+namespace Norristown.Tests.Oracle;
+
+/// <summary>
+/// The corpus: realistic programs, built, assembled and linked as their own build scripts
+/// do. Fixtures test each construct in its own form; these catch the combinations real code
+/// uses. They are part of the oracle suite, not the edit loop.
+/// </summary>
+[Trait("Category", "Oracle")]
+public sealed class CorpusTests
+{
+    [Fact]
+    public void EveryProgramBuildsAssemblesToTheComputedLengthsAndLinks()
+    {
+        var programs = CorpusProgram.All();
+        if (Repo.Selection is null)
+            Assert.NotEmpty(programs);
+        var failures = Repo.CollectFailures(programs, program => Check(program, program.Compile()));
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// A debug build and a release build of the C64 program differ only in what <c>DEBUG</c>
+    /// guards, however the guard is indented: the state check in <c>dispatch</c>
+    /// (<c>cpx #</c>, <c>bcc</c>, <c>brk #</c>) and the two border flashes of <c>trace!</c>
+    /// (<c>lda #</c>, <c>sta</c> absolute) in <c>main_loop</c>.
+    /// </summary>
+    [Fact]
+    public void TheC64ProgramBuiltWithoutDebugHasNoDebugCode()
+    {
+        var program = CorpusProgram.All().SingleOrDefault(p => p.Name == "c64");
+        if (program is null)
+            return;
+        var release = program.Compile(new Define("DEBUG", 0, default));
+        var failures = Check(program, release).ToList();
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+        var debug = program.Compile(new Define("DEBUG", 1, default));
+
+        Assert.DoesNotContain("brk", Main(release).Text);
+        Assert.Contains("brk", Main(debug).Text);
+        Assert.Equal((2 + 2 + 2) + 2 * (2 + 3), Bytes(Main(debug)) - Bytes(Main(release)));
+
+        static OutputFile Main(Compilation compilation) =>
+            compilation.Outputs.Single(o => o.Path.EndsWith("/main.s", StringComparison.Ordinal));
+        static int Bytes(OutputFile output) => output.LineBytes.Where(bytes => bytes > 0).Sum();
+    }
+
+    private static IEnumerable<string> Check(CorpusProgram program, Compilation compilation)
+    {
+        if (compilation.Diagnostics.Count > 0)
+        {
+            yield return $"[{program.Name}] nt65 reported:\n" + string.Join("\n", compilation.Diagnostics.Select(d =>
+                $"  {d.Span.File}:{d.Span.Line}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}"));
+            yield break;
+        }
+
+        var failures = Repo.CollectFailures(compilation.Outputs, output =>
+            OracleTests.AssemblesToComputedLengths(program.Name, output, output.Path, program.Other));
+        foreach (var failure in failures)
+            yield return failure;
+        if (failures.Count > 0)
+            yield break;
+
+        var result = Ca65Oracle.Pinned.Link(
+            program.LinkerConfig,
+            [.. program.HandWritten, .. compilation.Outputs.Select(o => (o.Path, o.Text))],
+            program.Other);
+        if (!result.Succeeded)
+            yield return $"[{program.Name}] ld65 reported:\n{result.Messages}";
+        else if (result.Binary.Length == 0)
+            yield return $"[{program.Name}] linked, but wrote no bytes";
+    }
+}

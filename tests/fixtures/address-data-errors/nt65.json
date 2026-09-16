@@ -1,0 +1,7 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "segments": {
+    "FARDATA": { "size": "far" }
+  }
+}

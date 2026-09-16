@@ -14,10 +14,9 @@ BEEP_CYCLES = 32
     jsr wait_short
     dey
     bne @loop
-    ; (an indented .if is not resolved: both branches were emitted)
-.if DEBUG {
-    lda #'B'
-    sta TXTPAGE1
-}
+    .if DEBUG {
+        lda #'B'
+        sta TXTPAGE1
+    }
     rts
 }

@@ -92,3 +92,22 @@ grid:
 }
 }
 }
+
+; Indentation means nothing: an indented chain is answered exactly as one at the margin,
+; at file level and in a proc.
+    .if PLATFORM == 1 {
+    COLUMNS = 40
+    } .else {
+    COLUMNS = 80
+    }
+
+.proc indented {
+    .if DEBUG {
+        lda #COLUMNS
+    } .elseif PLATFORM == 1 {
+        lda #1
+    } .else {
+        lda #2
+    }
+    rts
+}

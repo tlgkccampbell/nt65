@@ -59,12 +59,12 @@ timer: .res 1
 ; Jump to the handler for the current state; the handler's RTS returns to main_loop.
 .proc dispatch {
     ldx game_state
-.if DEBUG {                     ; nt65 bug: an indented .if in a proc ignores its condition
+    .if DEBUG {
         cpx #.countof(state_handlers)
         bcc @ok
         brk #$01                ; bad state
     @ok:
-}
+    }
     lda handler_lo,x
     sta @vector
     lda handler_hi,x
@@ -143,12 +143,12 @@ timer: .res 1
         lda #Color::yellow
         sta VIC_SPR0_COL
         dec lives
-        lda #State::game_over   ; nested if! is lost by nt65
-        ldx lives
-        beq @store
-        jsr player_reset
-        lda #State::playing
-    @store:
+        if!(eq) {
+            lda #State::game_over
+        } else {
+            jsr player_reset
+            lda #State::playing
+        }
         sta game_state
     }
     rts
