@@ -28,6 +28,8 @@ handler_hi: .hibytes state_handlers
 timer: .res 1
 }
 
+; Straight after the BASIC stub, whose SYS names this address.
+.segment "STARTUP" {
 .proc start {
     jsr CLRSCR
     poke!(VIC_BORDER, Color::black)
@@ -39,8 +41,8 @@ timer: .res 1
 
     lda #State::title
     sta game_state
-    ; fall into the main loop
-    .next main_loop
+    jmp main_loop
+}
 }
 
 .proc main_loop {

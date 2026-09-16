@@ -14,7 +14,8 @@ public sealed class MacroExpansionTests
             "the program did not transpile:\n" + string.Join(
                 "\n", Analysis.Program(("main.nt65", text)).Problems()));
         var lines = outputs["main.s"].Split('\n')
-            .SkipWhile(line => !line.StartsWith(".segment", StringComparison.Ordinal))
+            .SkipWhile(line => !line.StartsWith(".dbg file", StringComparison.Ordinal))
+            .Skip(1)
             .Where(line => !line.StartsWith(".dbg", StringComparison.Ordinal));
         return string.Join("\n", lines).Trim();
     }
@@ -23,10 +24,10 @@ public sealed class MacroExpansionTests
     public void ACallBecomesItsBodyWithTheArgumentsInPlace()
     {
         Assert.Equal("""
-            .segment "CODE": absolute
             SCREEN = $0400
             ptr = $10
 
+            .segment "CODE": absolute
             main:
                 ; set16!(ptr, SCREEN)  main.nt65:12
                 lda #<SCREEN
@@ -118,9 +119,9 @@ public sealed class MacroExpansionTests
     public void ABlockArgumentIsSplicedWhereTheBodyNamesIt()
     {
         Assert.Equal("""
-            .segment "CODE": absolute
             ptr = $10
 
+            .segment "CODE": absolute
             main:
                 ldy #0
                 ; times_x!(8)  main.nt65:13

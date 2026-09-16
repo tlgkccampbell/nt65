@@ -1,0 +1,4 @@
+; A function this file keeps to itself.
+.cpu 65816
+
+.func twice(n) = n * 2

@@ -17,6 +17,7 @@ tilemap:
     .repeat 32, i {
         .word i
     }
+tilemap_end:
 
 ; COLDATA gradient on channel 1: count, value pairs.
 gradient: .byte 40, $e0, 40, $e4, 40, $e8, 40, $ec, 40, $ef, 0
@@ -47,7 +48,7 @@ title_text: .byte bgtext("PRESS START")
     stx dma_src
     lda #^tilemap
     sta dma_src+2
-    ldx #.sizeof(tilemap)
+    ldx #tilemap_end - tilemap
     stx dma_len
     stz dma_dst
     stz dma_dst+1

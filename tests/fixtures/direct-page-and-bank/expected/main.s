@@ -22,7 +22,6 @@
 .export fast
 .export tail
 
-.segment "CODE": absolute
 HUD_PAGE = $0300
 
 .segment "ZP2": zeropage

@@ -9,7 +9,6 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 .dbg file, "main.nt65", 2171, 0
 
-.segment "CODE": absolute
     Color__red = $00
     Color__green = $05
     Color__blue = $06

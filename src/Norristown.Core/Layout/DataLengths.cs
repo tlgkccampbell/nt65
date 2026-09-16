@@ -58,10 +58,10 @@ public static class DataLengths
         {
             case ".byte":
             case ".asciiz":
-                Values(operands, model, diagnostics, (-128, 255), on);
+                Values(operands, model, diagnostics, (0, 255), on);
                 break;
             case ".word":
-                Values(operands, model, diagnostics, (-32768, 65535), on);
+                Values(operands, model, diagnostics, (0, 65535), on);
                 NoFarAddresses(name, operands, model, diagnostics, on);
                 break;
             case ".dword":
@@ -243,7 +243,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, (-128, 255), on);
+            CheckRange(operands[1], model, diagnostics, (0, 255), on);
 
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
@@ -288,9 +288,23 @@ public static class DataLengths
         SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit,
         Expansion? on, string slot = "this directive")
     {
-        if (model.ValueOf(argument, on).AsNumber() is { } value && (value < limit.Low || value > limit.High))
+        if (model.ValueOf(argument, on).AsNumber() is not { } value)
+            return;
+        if (value < 0 && limit.Low == 0 && Negative(value, limit.High) is { } negative)
+            Report(argument, model, diagnostics, on, negative);
+        else if (value < limit.Low || value > limit.High)
             Report(argument, model, diagnostics, on, $"{Value.Of(value)} does not fit in {slot}");
     }
+
+    /// <summary>
+    /// What to say about a negative value in a slot that holds 0 to <paramref name="high"/>,
+    /// or null when it does not fit even as a two's complement. ca65 refuses a negative
+    /// value in a byte or a word, so the unsigned value is what has to be written.
+    /// </summary>
+    public static string? Negative(long value, long high) =>
+        value >= -(high + 1) / 2
+            ? $"{value} is negative, and ca65 takes no negative value here: its two's complement is {Value.Of(value & high)}"
+            : null;
 
     private static void Report(
         SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on, string message) =>

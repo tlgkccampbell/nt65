@@ -17,5 +17,4 @@
 }
 }
 
-; nt65 emits `==` to ca65 here, so this link-time check cannot be written:
-; .assert start == $080D, error, "BASIC stub SYS address is out of date"
+.assert start == $080D, error, "BASIC stub SYS address is out of date"

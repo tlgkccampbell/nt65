@@ -15,6 +15,7 @@ palette:
     .word rgb15(31, 31, 0)
     .word rgb15(0, 31, 31)
     .word rgb15(31, 0, 31)
+palette_end:
 
 spawn_points:
     .word 32, 48
@@ -33,7 +34,7 @@ speeds:
     stx dma_src
     lda #^palette
     sta dma_src+2
-    ldx #.sizeof(palette)
+    ldx #palette_end - palette
     stx dma_len
     jsl cgram_copy_far
     plb

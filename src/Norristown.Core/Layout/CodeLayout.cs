@@ -68,6 +68,9 @@ public sealed class CodeLayout
     // recursion check, but a chain of macros over long lists is not, so it is counted too.
     private int expanded;
 
+    // Whether the immediate being laid out is sized by a register whose width is not known.
+    private bool sizeUnknown;
+
     /// <summary>
     /// How many statements one file's expansions may lay out before nt65 gives up. The
     /// recursion check bounds each expansion on its own, but a chain of macros over long
@@ -502,9 +505,19 @@ public sealed class CodeLayout
         var written = statement.ChildNodes.FirstOrDefault();
         var substituted = Operands.Substituted(model, written, expansion);
         CheckSubstitution(substituted);
+
+        // What an operand's expressions are worth is checked here, as a data directive's
+        // are, since no symbol holds them and nothing else evaluates them with anything to say.
+        foreach (var expression in written?.ChildNodes.Where(child => child.Kind != SyntaxKind.AddressPrefix) ?? [])
+            model.Check(expression, diagnostics, expansion, SpanOf);
         var operand = substituted?.Operand ?? written;
 
         var candidates = Plausible(operand).Where(available.Contains).ToArray();
+        if (candidates.Length == 0 && operand is null)
+        {
+            Report(mnemonic, $"`{mnemonic.Text}` needs an operand");
+            return;
+        }
         if (candidates.Length == 0)
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
@@ -519,6 +532,11 @@ public sealed class CodeLayout
         int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } register
             ? state?.Of(register) == Width.Sixteen ? 16 : 8
             : null;
+
+        // A width the analysis does not know has been reported where it is needed, and a value
+        // that does not fit a byte is no second mistake while nobody knows it is one byte.
+        sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } sized
+            && state?.Of(sized) is not (Width.Eight or Width.Sixteen);
 
         var mode = Choose(mnemonic, operand, candidates, substituted, bits);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
@@ -737,6 +755,22 @@ public sealed class CodeLayout
             {
                 Report(operand, $"`{mnemonic.Text}` has no {Spell(written)} form of this operand on the {CpuNames.Spell(cpu)}");
             }
+
+            // The one form there is reaches an address of its width and no wider: `(ptr),y`
+            // takes a zero-page pointer, and an absolute one would be cut to its low byte by
+            // the linker, if it noticed at all. A control transfer's target is checked for
+            // distance instead.
+            else if (WrittenPrefix(operand) is null
+                && !(Instructions.IsControlTransfer(mnemonic.Text) && candidates[0] is AddressingMode.Absolute
+                    or AddressingMode.Long or AddressingMode.Relative or AddressingMode.RelativeLong
+                    or AddressingMode.DirectRelative)
+                && Instructions.Width(candidates[0]) is { } reach
+                && Expression(operand) is { } pointer
+                && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
+            {
+                Report(operand, $"`{mnemonic.Text}` has only a {Spell(reach)} form of this operand, "
+                    + $"and `{pointer.GetText().Trim()}` is {Spell(wide)}");
+            }
             CheckOperand(mnemonic, operand, candidates[0], substituted, bits);
             return candidates[0];
         }
@@ -792,9 +826,17 @@ public sealed class CodeLayout
 
         // `.byteof` takes one byte of the value, so the value it is taken from is not the
         // one that has to fit.
-        if (mode == AddressingMode.Immediate && substituted is not { ByteOf: true }
-            && model.ValueOf(expression, expansion, SpanOf).AsNumber() is { } value
-            && (bits == 16 ? value is < -32768 or > 65535 : value is < -128 or > 255))
+        if (mode != AddressingMode.Immediate || substituted is { ByteOf: true }
+            || model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } value)
+        {
+            return;
+        }
+        var high = bits == 16 ? 0xffff : 0xff;
+        if (sizeUnknown && value is >= 0 and <= 0xffff)
+            return;
+        if (value < 0 && DataLengths.Negative(value, high) is { } negative)
+            Report(expression, negative);
+        else if (value < 0 || value > high)
         {
             Report(expression, bits == 16
                 ? $"this immediate is two bytes, and {Value.Of(value)} does not fit"

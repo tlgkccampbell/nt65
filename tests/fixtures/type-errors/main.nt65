@@ -33,8 +33,8 @@ boss:   .tag Named {
     at = 3                  ;! error: `at` is a `Point`, which takes a braced list of its members
     level = 1               ;! error: `Named` has no member `level`
 }
-    .byte screen("hi")  ;! error: `screen` does not map `h` ;! error: `screen` is not transpiled yet
-    .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given ;! error: `twice` is not transpiled yet
+    .byte screen("hi")  ;! error: `screen` does not map `h`
+    .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given
     .align 100          ;! error: an `.align` boundary must be a power of two, not 100
     .byte Point::z      ;! error: `z` is not declared in `Point`
 }

@@ -12,7 +12,7 @@ value:  .res 2
 
 ; An immediate needs a known width.
 .proc unknown_width: a? {
-    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here: a `.state` says what it is
+    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `unknown_width` says `a?` at entry: an `.ensure` sets it
     rts
 }
 
@@ -28,7 +28,7 @@ value:  .res 2
     beq @done
     rep #$20
 @done:
-    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here: a `.state` says what it is
+    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here, because the paths that reach here leave A 8-bit on one and 16-bit on another: an `.ensure` sets it whichever path was taken
     sep #$20
     rts
 }
@@ -118,3 +118,17 @@ value:  .res 2
 .proc worker_long = worker: a8, i16, far        ;! error: `worker_long` is declared far, and `worker` is near
 .proc worker_wide = worker: a16, i16            ;! error: `worker_wide` is declared `a16, i16, native, near`, and `worker` is `a8, i16, native, near`: another name for a routine declares what the routine does
 .proc worker_same = worker: a8, i16
+
+; What made a width unknown is named where the width is needed.
+.proc pulled {
+    plp
+    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
+    sep #$30
+    rts
+}
+
+.proc swapped: a8, i8 {
+    xce
+    ldx #1                  ;! error: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it says what it is
+    .next ?
+}

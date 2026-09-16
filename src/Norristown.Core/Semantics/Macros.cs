@@ -65,8 +65,11 @@ public static class Macros
     /// </summary>
     public static IReadOnlyList<SyntaxNode> BlocksOf(SyntaxNode call)
     {
-        if (LineOf(call) is not { Parent: { } block } || block.Green is not GreenBlock opened
-            || opened.BlockKind != BlockKind.MacroBlock || block.Parent is not { } container)
+        // The block around the call's line is the call's only when that line opens it: a call
+        // written inside another call's block argument is in that block, and opens none.
+        if (LineOf(call) is not { Parent: { } block } line || block.Green is not GreenBlock opened
+            || opened.BlockKind != BlockKind.MacroBlock || block.Parent is not { } container
+            || block.ChildNodes.Length == 0 || block.ChildNodes[0] != line)
         {
             return [];
         }

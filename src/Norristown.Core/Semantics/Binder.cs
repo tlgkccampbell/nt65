@@ -40,6 +40,7 @@ internal sealed class Binder
     private readonly List<Invocation> calls = [];
     private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
+    private readonly HashSet<Symbol> unexported = [];
 
     // Every name looked for in the other files, found or not: a file that declares or stops
     // declaring one of them, or changes what it means, changes what this file means.
@@ -101,6 +102,17 @@ internal sealed class Binder
     {
         this.program = program;
         ResolveUses(uses);
+
+        // An import is somebody else's symbol: exporting it would declare it in two places at
+        // once, which ca65 refuses. Every file that uses it declares its own `.import`.
+        foreach (var export in exports)
+        {
+            if (export.Scope.Lookup(export.Token.Text) is { Kind: SymbolKind.ImportedAddress or SymbolKind.ImportedConstant } imported)
+            {
+                Report(export.Token.Span,
+                    $"`{imported.Name}` is imported, and an import cannot be exported: each file that uses it imports it");
+            }
+        }
 
         // A call's arguments are resolved after everything else, because whether a name in
         // one is a name at all depends on the parameter it binds to: a `one` argument is a
@@ -948,9 +960,11 @@ internal sealed class Binder
         bool follows = false)
     {
         // A member of a named type may be called after a register or a mnemonic: nothing can
-        // be written there but a member name, so there is nothing for it to shadow.
-        if (kind != SymbolKind.Member && !CheckReservedWord(name))
-            return null;
+        // be written there but a member name, so there is nothing for it to shadow. Any other
+        // reserved name is reported, and declared all the same, so that what uses it and what
+        // counts it are not wrong a second time.
+        if (kind != SymbolKind.Member)
+            CheckReservedWord(name);
         if (kind != SymbolKind.Binding && repetition is { } repeated)
         {
             Report(name.Span, $"`{name.Text}` is declared inside a `{repeated.Text}` body. A name that "
@@ -1011,7 +1025,7 @@ internal sealed class Binder
 
     /// <summary>
     /// The reserved words: a symbol may not be named after a mnemonic or a register.
-    /// Members of a named struct, union or enum are exempt, and arrive with Stage 7.
+    /// Members of a named struct, union or enum are exempt.
     /// </summary>
     private bool CheckReservedWord(SyntaxToken name)
     {
@@ -1116,10 +1130,11 @@ internal sealed class Binder
             // A register or a mnemonic parses as a name so that a macro body may pass it as a
             // word. Outside one it can only be a mistake, and saying which reserved word it
             // is beats saying the name is not declared.
-            if (!word && !CheckReservedWord(token))
-                return null;
+            // A reserved name that was declared anyway has been reported where it was declared.
             if (at.Lookup(token.Text) is { } symbol)
                 return symbol;
+            if (!word && !CheckReservedWord(token))
+                return null;
 
             // A name the file does not declare may belong to another file of the program.
             if (LookUp(token.Text) is { } external)
@@ -1169,7 +1184,8 @@ internal sealed class Binder
     /// </summary>
     private Symbol? CheckExported(SyntaxToken token, Symbol symbol, bool last)
     {
-        if (!last || symbol.Tree == tree || program.IsExported(symbol))
+        // Said once, where the file first names it: every other use is the same mistake.
+        if (!last || symbol.Tree == tree || program.IsExported(symbol) || !unexported.Add(symbol))
             return symbol;
         // The file is named by its own name rather than by its whole path: the related span
         // is what takes an editor there, and a path is long enough to bury the message.

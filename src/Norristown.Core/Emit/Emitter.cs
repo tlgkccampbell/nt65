@@ -543,7 +543,7 @@ public sealed class Emitter
             case SyntaxKind.AssertDirective
                 when Constructs.AssertionOf(statement).Condition is { } condition
                     && model.ValueOf(condition, expansion, layout.SpanOf).AsNumber() is null:
-                Source(line, statement, 0);
+                Source(line, statement, 0, located: true);
                 break;
 
             case SyntaxKind.AssertDirective:
@@ -809,7 +809,7 @@ public sealed class Emitter
         foreach (var member in reference.Body?.Symbols ?? [])
         {
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
-                Code(line, $"{Indent(opener)}{Named(member)} = {Constant(offset)}", 0);
+                Definition($"{Indent(opener)}{Named(member)} = {Constant(offset)}");
         }
     }
 
@@ -826,7 +826,7 @@ public sealed class Emitter
         {
             return;
         }
-        Code(line, $"{Indent(statement)}{Named(reference)} = {Constant(value)}", 0);
+        Definition($"{Indent(statement)}{Named(reference)} = {Constant(value)}");
     }
 
     /// <summary>
@@ -956,7 +956,7 @@ public sealed class Emitter
             case SyntaxKind.ParenthesizedExpression:
                 return node.ChildNodes.Length > 0 ? "(" + Rendered(node.ChildNodes[0], comments) + ")" : "";
             case SyntaxKind.BinaryExpression when node.ChildNodes.Length == 2 && node.ChildTokens.Length > 0:
-                return $"({Rendered(node.ChildNodes[0], comments)} {node.ChildTokens[0].Text} {Rendered(node.ChildNodes[1], comments)})";
+                return $"({Rendered(node.ChildNodes[0], comments)} {Operator(node.ChildTokens[0])} {Rendered(node.ChildNodes[1], comments)})";
             case SyntaxKind.UnaryExpression when node.ChildNodes.Length == 1 && node.ChildTokens.Length > 0:
                 return $"({node.ChildTokens[0].Text}{Rendered(node.ChildNodes[0], comments)})";
             default:
@@ -984,6 +984,17 @@ public sealed class Emitter
         edits.Comments.Clear();
         return Render(node, edits).Trim();
     }
+
+    /// <summary>
+    /// An operator as ca65 spells it. ca65 writes equality `=` and inequality `&lt;&gt;`; its
+    /// `&amp;&amp;`, `||`, `^^` and `!` are nt65's.
+    /// </summary>
+    private static string Operator(SyntaxToken op) => op.Kind switch
+    {
+        SyntaxKind.EqualsEquals => "=",
+        SyntaxKind.BangEquals => "<>",
+        _ => op.Text,
+    };
 
     /// <summary>
     /// What a symbol is called in the output, at the level being written. A name a macro body
@@ -1024,7 +1035,11 @@ public sealed class Emitter
             edits.Replace[statement.ChildTokens[0].Position] = Named(reference);
             foreach (var child in statement.ChildNodes)
                 Substitute(child, edits, nested: false);
-            Code(line, Render(statement, edits), 0);
+            var text = Render(statement, edits);
+            if (statement.DescendantNodes().Any(node => node.Kind == SyntaxKind.CurrentAddressExpression))
+                Code(line, text, 0);
+            else
+                Definition(text);
         }
     }
 
@@ -1042,17 +1057,17 @@ public sealed class Emitter
 
         var edits = new Edits();
         Substitute(address, edits, nested: false);
-        Code(line, $"{Indent(statement)}{Named(reference)} = {Render(address, edits).TrimStart()}", 0);
+        Definition($"{Indent(statement)}{Named(reference)} = {Render(address, edits).TrimStart()}");
     }
 
-    private void Source(SyntaxNode line, SyntaxNode statement, int bytes)
+    private void Source(SyntaxNode line, SyntaxNode statement, int bytes, bool located = false)
     {
         Width(statement);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
         Slot(statement, edits);
         Direct(statement, edits);
-        Code(line, Render(statement, edits), bytes);
+        Code(line, Render(statement, edits), bytes, located);
     }
 
     /// <summary>
@@ -1150,23 +1165,45 @@ public sealed class Emitter
         var first = tokens.FirstOrDefault(token => token.Kind != SyntaxKind.EndOfLine);
         if (first.Parent is null)
             return;
+
+        // In a file that is already wrong, what cannot be written is almost always what the
+        // mistake left behind, and saying so again only buries the mistake.
+        if (diagnostics.Any(d => d.Severity == Severity.Error && d.Span.File == model.Tree.Path))
+            return;
         diagnostics.Add(Expansion.Problem(model.Tree, first.Parent.Tree, first.Span, expansion, Severity.Error,
             $"`{first.Text}` is not transpiled yet"));
     }
 
     /// <summary>
-    /// Writes one line that came from the source, with the debug line that maps it back
-    ///. Only a line that generates bytes gets one: ld65 attaches a span of bytes to
-    /// the line in effect while they were generated, so a directive before a label or a
-    /// constant records a line covering nothing, which no debugger can step to or break on.
+    /// Writes one line that came from the source, with the debug line that maps it back.
+    /// A line that generates bytes gets one, because ld65 attaches a span of bytes to the line
+    /// in effect while they were generated. So does one that is <paramref name="located"/>: an
+    /// assertion ca65 evaluates, whose failure ca65 notes as generated from the line in effect.
+    /// A label or a constant gets none, and neither do imports and exports: ld65 names the
+    /// output's own line for what goes wrong with those, whatever the debug line says, and each
+    /// would only record a line covering nothing.
     /// </summary>
-    private void Code(SyntaxNode line, string text, int bytes)
+    private void Code(SyntaxNode line, string text, int bytes, bool located = false)
     {
         Segment();
         Flush();
-        if (bytes != 0)
-            Line($".dbg line, \"{source}\", {(callLine ?? line).LineIndex + 1}");
+        if (bytes != 0 || located)
+            Located((callLine ?? line).LineIndex + 1);
         Line(text, bytes);
+    }
+
+    /// <summary>The debug line that says what follows came from line <paramref name="number"/>.</summary>
+    private void Located(int number) => Line($".dbg line, \"{source}\", {number}");
+
+    /// <summary>
+    /// Writes a definition that is in no segment: a constant, or a name for an address given
+    /// by other names. It is written where it stands, before any segment or in whichever one is
+    /// open, so a program of constants needs no segment in its linker configuration.
+    /// </summary>
+    private void Definition(string text)
+    {
+        Flush();
+        Line(text);
     }
 
     /// <summary>The <c>.segment</c> directive, written when what follows lands somewhere new.</summary>
@@ -1313,6 +1350,11 @@ public sealed class Emitter
 
             case SyntaxKind.BinaryExpression:
             case SyntaxKind.UnaryExpression:
+                foreach (var op in node.ChildTokens)
+                {
+                    if (Operator(op) is var spelled && spelled != op.Text)
+                        edits.Replace[op.Position] = spelled;
+                }
                 if (nested)
                 {
                     var tokens = Tokens(node);

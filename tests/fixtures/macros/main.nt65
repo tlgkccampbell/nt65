@@ -110,6 +110,11 @@ E4     = 64
         iny
     }
 
+    ; A call inside a block argument opens no block of its own, whatever takes one.
+    times_x!(2) {
+        set16!(ptr, SCREEN)
+    }
+
     lda count
     cmp #10
     if!(cs) {

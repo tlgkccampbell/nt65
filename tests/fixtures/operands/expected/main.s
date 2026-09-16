@@ -19,12 +19,12 @@ vector:     .res 2
 .dbg line, "main.nt65", 12
 buf:        .res 256
 
-.segment "CODE": absolute
 hi = $12
 lo = $34
 
 CHROUT = $ffd2
 
+.segment "CODE": absolute
 forms:
 .dbg line, "main.nt65", 22
     inx

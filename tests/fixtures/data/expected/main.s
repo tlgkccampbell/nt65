@@ -9,7 +9,6 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 .dbg file, "main.nt65", 647, 0
 
-.segment "CODE": absolute
 SCREEN = $0400
 
 .segment "RODATA": absolute

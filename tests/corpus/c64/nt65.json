@@ -5,6 +5,7 @@
   "defines": { "DEBUG": 1 },
   "segments": {
     "LOADADDR": { "size": "abs" },
-    "EXEHDR":   { "size": "abs" }
+    "EXEHDR":   { "size": "abs" },
+    "STARTUP":  { "size": "abs" }
   }
 }

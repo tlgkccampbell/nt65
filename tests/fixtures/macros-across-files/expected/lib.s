@@ -12,7 +12,6 @@
 .export SCREEN
 .export tiles
 
-.segment "CODE": absolute
 SCREEN = $0400
 
 .segment "RODATA": absolute

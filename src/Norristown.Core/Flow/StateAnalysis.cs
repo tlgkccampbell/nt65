@@ -101,7 +101,14 @@ public sealed class StateAnalysis
             .FirstOrDefault();
 
     /// <summary>What a routine's state is when it is entered: its declared entry, with nothing pushed.</summary>
-    private static FlowState Entry(Signature signature) => new(signature.Entry, AnalysisStack.Empty);
+    private static FlowState Entry(Signature signature, Symbol routine) => new(signature.Entry, AnalysisStack.Empty)
+    {
+        WhyA = signature.Entry.A == Width.Unknown ? EntryCause(routine, "a?") : null,
+        WhyIndex = signature.Entry.Index == Width.Unknown ? EntryCause(routine, "i?") : null,
+    };
+
+    private static WidthCause EntryCause(Symbol routine, string item) =>
+        new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
 
     /// <summary>The register an immediate's width comes from, as a message names it.</summary>
     private static string Spell(WidthRegister register) => register == WidthRegister.A ? "A" : "X and Y";
@@ -162,7 +169,7 @@ public sealed class StateAnalysis
 
         if (region.IsEntered && blocks.Count > 0)
         {
-            reached[0] = Entry(signature);
+            reached[0] = Entry(signature, region.Routine);
             pending.Add(0);
         }
         Settle();
@@ -246,9 +253,47 @@ public sealed class StateAnalysis
                 reaching[(step.Statement.Position, step.On)] = state;
             Step? previous = i > 0 ? block.Steps[i - 1] : null;
             var next = i == block.Steps.Count - 1 ? block.Next : null;
-            state = Through(step, previous, next, state, routine);
+            state = Explained(step, next, state, Through(step, previous, next, state, routine));
         }
         return state;
+    }
+
+    /// <summary>
+    /// The state after <paramref name="step"/>, with a cause for each width it made unknown and
+    /// the cause carried on for each it left unknown.
+    /// </summary>
+    private FlowState Explained(Step step, SyntaxNode? next, FlowState before, FlowState after) => after with
+    {
+        WhyA = Why(step, next, before.Processor.E, before.Processor.A, after.Processor.A, before.WhyA),
+        WhyIndex = Why(step, next, before.Processor.E, before.Processor.Index, after.Processor.Index, before.WhyIndex),
+    };
+
+    private WidthCause? Why(
+        Step step, SyntaxNode? next, ProcessorMode mode, Width before, Width after, WidthCause? carried)
+    {
+        if (after != Width.Unknown)
+            return null;
+        if (before == Width.Unknown)
+            return carried;
+
+        var statement = step.Statement;
+        if (statement.Kind == SyntaxKind.StateDirective)
+            return new("a `.state` says so", "the `.state` can say what it is");
+        if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
+            return null;
+        var written = $"`{statement.GetText().Trim()}`";
+        return statement.ChildTokens[0].Text.ToLowerInvariant() switch
+        {
+            "plp" => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            "xce" => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
+            "rep" when mode != ProcessorMode.Native && Constant(step) is not null
+                => new($"{written} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
+            "rep" or "sep" => new($"{written} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
+            "jsr" or "jsl" when next is not null && statement.ChildNodes.FirstOrDefault()?.Kind is not SyntaxKind.AbsoluteOperand
+                => new($"{written} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
+            "jsr" or "jsl" => new($"{written} returns with it unknown", "an `.ensure` after it sets it"),
+            _ => new($"{written} makes it unknown", "a `.state` after it says what it is"),
+        };
     }
 
     /// <summary>What one statement does to the state.</summary>
@@ -271,7 +316,7 @@ public sealed class StateAnalysis
         var processor = state.Processor;
         var stack = state.Stack;
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
-            CheckImmediate(step, mnemonic, register, processor, routine);
+            CheckImmediate(step, mnemonic, register, processor, register == WidthRegister.A ? state.WhyA : state.WhyIndex, routine);
         Slot(step, mode, stack);
         CheckMemory(step, mnemonic, mode, processor, routine);
 
@@ -411,9 +456,13 @@ public sealed class StateAnalysis
 
         // Where an indirect call goes is what its `.next` says, and it returns with whatever
         // the routines it names return with. With nothing named, nothing is known after it.
+        // With no `.next` at all, that has been reported, and the state is left alone so the
+        // one mistake is not reported again wherever the state is used.
         if (calls)
         {
-            var named = next is null ? [] : Routines(next, step.On).ToList();
+            if (next is null)
+                return state;
+            var named = Routines(next, step.On).ToList();
             if (named.Count == 0)
                 return state with { Processor = ProcessorState.Unknown };
             FlowState? merged = null;
@@ -528,9 +577,9 @@ public sealed class StateAnalysis
             ? $"`.next {target.DisplayName}`"
             : $"`{mnemonic} {target.DisplayName}`";
         if (mnemonic == "jml" && !callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is near, and is jumped to with `jmp`");
+            Report(step, $"`{target.DisplayName}` is near: a jump to it is `jmp {target.DisplayName}`");
         else if (mnemonic is not ("jml" or ".next") && callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is far, and is jumped to with `jml`");
+            Report(step, $"`{target.DisplayName}` is far: a jump to it is `jml {target.DisplayName}`");
         CheckEntry(step, what, callee, state);
 
         if (callee.IsFar != own.IsFar)
@@ -642,7 +691,8 @@ public sealed class StateAnalysis
     /// A width-dependent immediate, which ca65 sizes from the width it is told. The analysis
     /// is what tells it, so the width has to be known here.
     /// </summary>
-    private void CheckImmediate(Step step, string mnemonic, WidthRegister register, ProcessorState state, Symbol routine)
+    private void CheckImmediate(
+        Step step, string mnemonic, WidthRegister register, ProcessorState state, WidthCause? why, Symbol routine)
     {
         var width = state.Of(register);
         var item = register == WidthRegister.A ? "a" : "i";
@@ -653,9 +703,8 @@ public sealed class StateAnalysis
         }
         else if (!IsKnown(width))
         {
-            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and it is not known here: "
-                + "a `.state` says what it is");
-
+            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and it is not known here"
+                + (why is null ? ": a `.state` says what it is" : $", because {why.Reason}: {why.Fix}"));
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
         {

@@ -36,6 +36,7 @@ TRACE = 0
     jsr trace
     bne @again
 }
+    ldy #.countof(Cmd)          ; an enum counts its members
     lda #<LINES
     ldx #>LINES
     rts
@@ -57,6 +58,7 @@ TRACE = 0
 
 ; Where main lands is the linker's to say, so this one is written out for ld65.
     .assert main >= $0200, lderror, "main must be past the zero page"
+    .assert main != trace && main == main, lderror, "ca65 spells these operators its own way"
 
 ; A repetition is unrolled by nt65, so none of it reaches ca65 either.
 .list handlers {

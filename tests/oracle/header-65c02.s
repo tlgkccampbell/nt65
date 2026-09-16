@@ -1,6 +1,6 @@
 ; The output header nt65 writes, pasted by hand, with a few lines after it. It must
 ; assemble with no errors and no warnings on the pinned ca65. ";= N" is the byte count.
-.setcpu "65C02"
+.setcpu "W65C02"
 .smart -
 .case +
 .feature at_in_identifiers -, bracket_as_indirect -, c_comments -
@@ -27,3 +27,9 @@ main:
     .byte $48, $45, $4C, $4C, $4F, $00  ;= 6
 .dbg line, "main.nt65", 23
     jmp main                        ;= 3
+.dbg line, "main.nt65", 24
+    wai                             ;= 1
+    stp                             ;= 1
+    stz z:ptr                       ;= 2
+    lda (ptr)                       ;= 2
+    bbr0 ptr, main                  ;= 3

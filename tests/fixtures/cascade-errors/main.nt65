@@ -1,0 +1,47 @@
+; One mistake, one message: what a mistake leaves behind is not reported again.
+.cpu 65816
+
+; A parameter with a reserved name is reported where it is declared, and is still the
+; macro's parameter for its call and its uses.
+.macro load(x) {            ;! error: `x` is a register name and cannot be used as a name
+    lda #x
+    sta x
+}
+
+; A type with a reserved name, and an instance of it that therefore cannot be written.
+.struct S {                 ;! error: `S` is a register name and cannot be used as a name
+q:      .byte
+}
+
+.rodata {
+one:    .tag S { q = 1 }
+}
+
+.proc near_one: a8, i16 {
+    rts
+}
+
+.proc main: a8, i16 {
+    load!($10)
+
+    ; A name another file keeps to itself, named three times.
+    lda #twice(1)           ;! error: `twice` is declared in `lib.nt65` and is not exported
+    lda #twice(2)
+    lda #twice(3)
+
+    ; A call through a pointer with no `.next` leaves the state as it was.
+    jsr (table,x)           ;! error: `jsr (table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+
+    ; An instruction that needs an operand, and a far jump to a near routine.
+    jsr                     ;! error: `jsr` needs an operand
+    jml near_one            ;! error: `near_one` is near: a jump to it is `jmp near_one`
+table:
+    .addr near_one
+}
+
+; A 16-bit value in an immediate of unknown width is one mistake, not two.
+.proc unknown: a? {
+    lda #$1234              ;! error: `lda #` needs the width of A, and it is not known here, because `unknown` says `a?` at entry: an `.ensure` sets it
+    sep #$20
+    rts
+}

@@ -355,11 +355,11 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 | form | declares |
 |---|---|
 | `name:` | an address (label). May be followed by an instruction, data directive or macro call on the same line. |
-| `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. |
+| `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. A constant holding text is used through `.strlen` and `.strat`, and cannot be written as data. |
 | `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
 | `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. An alias that writes a signature must write the routine's, and one that writes none takes it. |
-| `.scope [name] { ... }` | a scope. |
+| `.scope [name] { ... }` | a scope. It is a namespace with no address of its own: its name is not an operand. |
 | `.enum [name] { ... }` | constants (§6.3). |
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
 | `name: .tag T [, n]`, `name: .tag T { ... }` | an instance, an array of instances or an initialized instance: a label that is also a scope of its fields (§6.3). |
@@ -592,6 +592,11 @@ appears:
 nt65 then picks the narrowest addressing mode the instruction offers that is at least
 that wide (`jmp zp_label` becomes absolute because `jmp` has no zero-page form) and
 writes the choice into the output with an explicit prefix.
+
+An instruction with only one form of an operand, such as `sta buf,y` on the 6502,
+`jmp (vec)` or `pei (dp)`, leaves ca65 nothing to choose, so the output writes no prefix
+there. nt65 checks instead that the operand is no wider than that one form reaches: an
+absolute pointer in `lda (ptr),y` is an error, where ca65 would pass it to the linker.
 
 On the 65816 a direct-page symbol keeps its meaning only as a direct operand: D plus its
 offset. An absolute or long operand built on a symbol whose segment declares a `dp` other
@@ -1114,6 +1119,11 @@ error when the mapping is applied. A mapping is an ordinary declaration,
 exported and used across files like a constant. `.strlen(s)` and `.strat(s, i)` remain
 for the cases a `.repeat` needs.
 
+A value in a `.byte`, a `.word`, a `.res` fill or an immediate is not negative: ca65
+refuses one, so nt65 reports it with its two's complement. A label with no data on its own
+line measures nothing, and `.sizeof` or `.countof` of one is an error. `.countof` of an
+enum is how many members it has.
+
 All character and string data, mapped or not, reaches the output as byte values (§13),
 so a ca65 target (`-t`) cannot translate it.
 
@@ -1608,6 +1618,8 @@ empty.
   `.export`s the names needed. An imported symbol is opaque to nt65: it can be an
   operand, sized by its import, but it cannot appear where nt65 needs its value (`.res`,
   `.repeat`, the `ranges` check of §7.5).
+- **An import is not exported.** It is somebody else's symbol, and each nt65 file that
+  uses it imports it.
 - **A checked import**, `.import NAME = value`, gives nt65 the value. nt65 uses `value`
   wherever `NAME` appears, and the output imports `NAME` and asserts `NAME = value` with
   `lderror`, so ld65 fails the link if the ca65 definition differs.
@@ -1631,7 +1643,8 @@ turns smart mode off, makes symbols case-sensitive, and switches off every ca65
 `.feature` that changes syntax (`addrsize` is deprecated and always on, and resetting
 it would itself warn). Options such as `--feature bracket_as_indirect` (which would
 silently turn `lda [dp],y` into `lda (dp),y`), `--smart`, `-i` and `--cpu` then have no
-effect:
+effect. A `65c02` program is set as ca65's `W65C02`, whose instruction set includes `wai`
+and `stp`:
 
 ```ca65
 .setcpu "65816"
@@ -1694,7 +1707,8 @@ macros, and a comment naming the call precedes the expansion.
 | nt65 | ca65 |
 |---|---|
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off, then `.dbg file` |
-| each generated line that produces bytes | preceded by `.dbg line` naming its `.nt65` file and line |
+| each generated line that produces bytes, and each `.assert` ca65 evaluates | preceded by `.dbg line` naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the debug line says, so those get none |
+| `a == b`, `a != b` | `a = b`, `a <> b`; nt65's other operators are ca65's |
 | `.segment "X": zp` declaration | nothing by itself |
 | `.segment "X" { }` | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
 | nested segment block | `.pushseg` / `.segment` ... `.popseg` |
@@ -1731,7 +1745,7 @@ macros, and a comment naming the call precedes the expansion.
 | `.incbin "f"` | `.incbin` with the path made relative to the output file |
 | cross-file reference to an address | `.import s` or `.importzp s` in the referencing file |
 | cross-file reference to a constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing file |
-| `NAME = expr` | `NAME = expr`, for a constant or an address alias |
+| `NAME = expr` | `NAME = expr`, for a constant or an address alias, written where it stands and opening no segment; one using `*` is in its segment |
 | a define | its value |
 
 ### Example

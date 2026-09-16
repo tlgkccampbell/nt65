@@ -24,7 +24,8 @@ public sealed class StateAnalysisTests
     [Fact]
     public void ARepInAnUnknownModeLeavesTheWidthsUnknown()
     {
-        Assert.Contains("main.nt65:3: `lda #` needs the width of A, and it is not known here: a `.state` says what it is",
+        Assert.Contains("main.nt65:3: `lda #` needs the width of A, and it is not known here, because `rep #$20` widens nothing "
+            + "in emulation mode, and the mode is not known: a `.state` before it says which mode it is",
             Problems(".proc p: e? {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
     }
 
@@ -125,7 +126,8 @@ public sealed class StateAnalysisTests
             }
             """;
 
-        Assert.Equal(["main.nt65:9: `lda #` needs the width of A, and it is not known here: a `.state` says what it is"], Problems(Text));
+        Assert.Equal(["main.nt65:9: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status "
+            + "that no `php` in this routine pushed: an `.ensure` after it sets it"], Problems(Text));
     }
 
     /// <summary>A routine that pulls what its caller pushed knows nothing about its stack any more.</summary>
@@ -237,7 +239,8 @@ public sealed class StateAnalysisTests
 
         var problem = Assert.Single(analysis.Diagnostics);
         Assert.Equal(7, problem.Span.Line);
-        Assert.Equal("`lda #` needs the width of A, and it is not known here: a `.state` says what it is", problem.Message);
+        Assert.Equal("`lda #` needs the width of A, and it is not known here, because `p` says `a?` at entry: "
+            + "an `.ensure` sets it", problem.Message);
         Assert.Equal(3, Assert.Single(problem.Related).Span.Line);
     }
 

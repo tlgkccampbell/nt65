@@ -17,10 +17,10 @@ ptr:        .res 2
 .dbg line, "main.nt65", 6
 frame:      .res 1
 
-.segment "CODE": absolute
 SCREEN       = $0400
 SCREEN_PAGES = 4
 
+.segment "CODE": absolute
 fill_page:
 .dbg line, "main.nt65", 16
     ldy #0

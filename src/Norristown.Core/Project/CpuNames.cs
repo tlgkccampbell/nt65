@@ -24,7 +24,7 @@ public static class CpuNames
     public static string SpellForCa65(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => "6502",
-        Cpu.Wdc65C02 => "65C02",
+        Cpu.Wdc65C02 => "W65C02",
         _ => "65816",
     };
 

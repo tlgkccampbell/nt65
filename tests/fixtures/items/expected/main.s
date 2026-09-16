@@ -21,7 +21,6 @@
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what main.nt65 was built against"
 .import raw
 
-.segment "CODE": absolute
 CHROUT = $FFD2
 alias = fill_page
 

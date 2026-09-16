@@ -22,7 +22,6 @@
 .dbg line, "gfx.nt65", 8
 ptr:        .res 2
 
-.segment "CODE": absolute
 SCREEN = $0400
 rows   = 25
 
@@ -34,6 +33,7 @@ Sprite__y = $01
 
     palette__border = $0f
 
+.segment "CODE": absolute
 clear:
 
 .dbg line, "gfx.nt65", 46

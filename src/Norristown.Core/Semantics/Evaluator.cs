@@ -131,8 +131,36 @@ internal sealed class Evaluator
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
     private void Bytes(SyntaxNode operand)
     {
-        if (BytesIn(operand) is null)
-            Evaluate(operand);
+        if (BytesIn(operand) is not null)
+            return;
+
+        // A named scope is a namespace and has no address of its own, so nothing is written
+        // for it and ca65 would find the name undefined. What a call does with its arguments,
+        // `.spanof` of a scope among them, is the call's to say.
+        foreach (var name in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
+        {
+            if (name.Kind == SyntaxKind.NameExpression && !InsideCall(name, operand)
+                && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.ChildTokens[^1].Text == scope.Name)
+                Report(name, $"`{scope.Name}` is a scope, which has no address: a label or a routine inside it does");
+        }
+
+        // A constant holding text has no spelling in the output: text is written where it is
+        // a literal, and a constant's is used through `.strlen` and `.strat`.
+        if (Evaluate(operand).IsString && operand.Kind != SyntaxKind.StringExpression)
+        {
+            Report(operand, $"`{operand.GetText().Trim()}` is text, which is written out only as a literal: "
+                + "a text constant is used through `.strlen` and `.strat`");
+        }
+    }
+
+    private static bool InsideCall(SyntaxNode node, SyntaxNode top)
+    {
+        for (var at = node.Parent; at is not null && at != top.Parent; at = at.Parent)
+        {
+            if (at.Kind == SyntaxKind.CallExpression)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>How much room a data directive takes, for a caller that has already reported.</summary>
@@ -531,6 +559,19 @@ internal sealed class Evaluator
             // `.countof(p)` of a `list` parameter is how many arguments the call gave it.
             if (name == ".countof" && Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
                 return Value.Of(listed.Items.Count);
+
+            // An enum counts its members.
+            if (name == ".countof" && measured.Kind == SymbolKind.Enum)
+                return Value.Of(measured.Body?.Symbols.Count(member => member.Kind == SymbolKind.Constant) ?? 0);
+
+            // A label measures the data written on its own line, and one with none there has
+            // nothing to measure: the data lines under it are not its own.
+            if (measured is { Kind: SymbolKind.Label, Data: null })
+            {
+                Report(arguments[0], $"`{measured.Name}` labels no data on its own line, so `{name}` has nothing "
+                    + "to measure: a label measures the data written on the same line");
+                return Value.Unknown;
+            }
             EvaluateSymbol(measured);
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             return room is { } number ? Value.Of(number) : Value.Unknown;
