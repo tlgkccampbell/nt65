@@ -1,0 +1,16 @@
+.zeropage {
+ptr:    .res 2
+}
+
+; A name of the file's own that an expansion's label would otherwise become: the
+; expansion's gives way, since only fixed spellings are kept.
+.proc delay__loop {
+    rts
+}
+
+.proc main {
+    set16!(ptr, SCREEN)
+    delay!(4)
+    delay!(8)
+    rts
+}

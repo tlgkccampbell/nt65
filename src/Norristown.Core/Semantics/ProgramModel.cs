@@ -75,6 +75,8 @@ public sealed class ProgramModel
         // Whether a macro can reach itself is a question about the program: a body in one
         // file may call a macro in another, and a cycle between the two is still one cycle.
         Macros.CheckRecursion(binders.SelectMany(binder => binder.DeclaredMacros()), program);
+        Macros.CheckExportedUses(
+            binders.SelectMany(binder => binder.DeclaredMacros()), symbols.IsExported, program);
 
         // One map for the program, keyed by file as well as position: evaluating a constant
         // in one file may follow a name into another, where the same offsets mean something
@@ -94,8 +96,13 @@ public sealed class ProgramModel
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
+            // What the macros this file calls use, their own calls included: an expansion
+            // lands here, so this file's output is what has to bring those names in.
+            var expanded = Macros.Reachable(binders[i].CalledMacros())
+                .SelectMany(macro => macro.Uses.Select(use => use.Used))
+                .ToList();
             files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved, declared,
-                program.Where(d => d.Span.File == trees[i].Path), binaryLength));
+                expanded, program.Where(d => d.Span.File == trees[i].Path), binaryLength));
         }
         return new ProgramModel(files, segments, symbols, Norristown.Diagnostics.Ordered(
             bound.SelectMany(result => result.Diagnostics).Concat(program)));

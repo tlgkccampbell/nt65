@@ -157,6 +157,52 @@ public static class Macros
     }
 
     /// <summary>
+    /// Every macro an expansion of <paramref name="called"/> can reach, the ones they call
+    /// included. What all of their bodies use is what a file that calls them has to bring in.
+    /// </summary>
+    public static IReadOnlyList<Symbol> Reachable(IEnumerable<Symbol> called)
+    {
+        var found = new List<Symbol>();
+        var seen = new HashSet<Symbol>();
+
+        void Visit(Symbol macro)
+        {
+            if (!seen.Add(macro))
+                return;
+            found.Add(macro);
+            foreach (var (callee, _) in macro.Calls)
+                Visit(callee);
+        }
+
+        foreach (var macro in called)
+            Visit(macro);
+        return found;
+    }
+
+    /// <summary>
+    /// A symbol an exported macro uses without being given it must itself be exported: the
+    /// expansion lands in another file, where an unexported name means nothing (§11.1).
+    /// </summary>
+    public static void CheckExportedUses(
+        IEnumerable<Symbol> macros, Func<Symbol, bool> isExported, List<Diagnostic> diagnostics)
+    {
+        foreach (var macro in macros)
+        {
+            if (!isExported(macro))
+                continue;
+            foreach (var (used, at) in macro.Uses)
+            {
+                if (used.Tree != macro.Tree || used.IsDefine || isExported(used))
+                    continue;
+                diagnostics.Add(new Diagnostic(at, Severity.Error,
+                    $"`{macro.Name}` is exported and uses `{used.DisplayName}`, which is not. A macro "
+                    + "expands in the file that calls it, and what it names there has to be reachable",
+                    [new RelatedSpan(used.DeclarationSpan, "declared here")]));
+            }
+        }
+    }
+
+    /// <summary>
     /// Why a macro body may not hold this statement, or null when it may. Each of these
     /// would either declare a name in the caller or make something program-wide depend on
     /// how many times the macro is called (§11.3).

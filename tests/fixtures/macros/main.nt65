@@ -1,0 +1,123 @@
+; The macros of §11: what nt65 keeps macros for once constants, lists, charmaps, enums,
+; initialized instances and long branches have taken the rest of the work away —
+; instruction idioms, structured control built from blocks, computed data and wrappers.
+.cpu 65c02
+
+.zeropage {
+ptr:        .res 2
+other:      .res 2
+}
+
+SCREEN = $0400
+C4     = 60
+E4     = 64
+
+; An `operand` parameter stands as a whole operand, so one macro serves a plain address and
+; an indexed one alike, and `dest+1` applies to the argument's expression.
+.macro set16(dest: operand, value) {
+    lda #<value
+    sta dest
+    lda #>value
+    sta dest+1
+}
+
+; `.byteof(p, n)` is byte n of an operand: a byte of the value for an immediate, and the
+; byte after it for a mode that has one. One macro then serves constants and memory.
+.macro mov16(dest: operand, src: operand) {
+    lda .byteof(src, 0)
+    sta dest
+    lda .byteof(src, 1)
+    sta dest+1
+}
+
+; A `const` parameter with a default, and a body that emits data rather than code.
+.macro note(pitch: const, frames: const = 1) {
+    .byte pitch, frames
+}
+
+; A `list` of words, walked with `.each`. A condition in a body may compare them.
+.macro push(regs: list(one(a, x, y))) {
+    .each regs, r {
+        .if r == a {
+            pha
+        } .elseif r == x {
+            phx
+        } .else {
+            phy
+        }
+    }
+}
+
+; A trailing block, which is how structured constructs are library code rather than
+; language features. `@loop` is local to each expansion.
+.macro times_x(count, body: block) {
+    ldx #count
+@loop:
+    body
+    dex
+    bne @loop
+}
+
+; A `one` parameter picked apart by a condition, and an `ident` parameter used as a target.
+.macro branch_unless(c: one(eq, ne, cs, cc), target: ident) {
+    .if c == eq {
+        bne target
+    } .elseif c == ne {
+        beq target
+    } .elseif c == cs {
+        bcc target
+    } .else {
+        bcs target
+    }
+}
+
+; Two blocks, the second named by its continuation and defaulting to empty. A macro calling
+; another macro is ordinary, so long as none of them can reach itself.
+.macro if(c: one(eq, ne, cs, cc), then: block, else: block = {}) {
+    branch_unless!(c, @skip)
+    then
+    .if !.empty(else) {
+        jmp @done
+    }
+@skip:
+    else
+@done:
+}
+
+.proc main {
+    set16!(ptr, SCREEN)
+    set16!({buf,x}, $1234)
+    mov16!(ptr, {#SCREEN})
+    mov16!(ptr, other)
+
+    push!(a, x, y)
+
+    ldy #0
+    times_x!(8) {
+        sta (ptr),y
+        iny
+    }
+
+    lda count
+    cmp #10
+    if!(cs) {
+        lda #0
+    } else {
+        inx
+    }
+
+    if!(eq) {
+        nop
+    }
+    rts
+}
+
+.bss {
+buf:    .res 256
+count:  .res 1
+}
+
+.rodata {
+tune:   note!(C4, frames = 8)
+        note!(E4)
+}

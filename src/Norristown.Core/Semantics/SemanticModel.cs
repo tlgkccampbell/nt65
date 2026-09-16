@@ -25,6 +25,7 @@ public sealed class SemanticModel
         Binder.Result bound,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> declared,
+        IReadOnlyList<Symbol> expanded,
         IEnumerable<Diagnostic> fromTheProgram,
         Func<string, long?>? binaryLength = null)
     {
@@ -42,12 +43,14 @@ public sealed class SemanticModel
         bySymbol = References.ToLookup(reference => reference.Symbol);
         // A struct member is written out as the number it is, so it is no symbol to the
         // linker either, any more than a define is.
+        // A macro this file calls is expanded into it, so what its body uses is named in this
+        // file's output and has to be brought in here, exactly as if the file had written it.
         ExternalSymbols = [.. References
-            .Where(reference => !reference.IsDeclaration
-                && reference.Symbol.Tree != tree
-                && !reference.Symbol.IsDefine
-                && reference.Symbol.Kind != SymbolKind.Member)
+            .Where(reference => !reference.IsDeclaration)
             .Select(reference => reference.Symbol)
+            .Concat(expanded)
+            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine
+                && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))
             .Distinct()];
     }
 
@@ -190,8 +193,7 @@ public sealed class SemanticModel
                 // about them read the argument itself.
                 bound.TryAdd(argument.Parameter.Symbol, argument.Parameter.Kind switch
                 {
-                    ParameterKind.One => new Expansion.Bound(
-                        argument.Word is { } word ? Value.Word(word) : Value.Unknown, null, argument),
+                    ParameterKind.One => new Expansion.Bound(WordFor(argument, level.Outer), null, argument),
                     ParameterKind.List or ParameterKind.Block =>
                         new Expansion.Bound(Value.Unknown, null, argument),
                     _ => new Expansion.Bound(Value.Unknown, argument.Value, argument),
@@ -199,6 +201,22 @@ public sealed class SemanticModel
             }
         }
         return bound;
+    }
+
+    /// <summary>
+    /// The word a <c>one</c> parameter stands for. An argument that names another
+    /// <c>one</c> parameter passes that one's word on, which is how a macro hands a word it
+    /// was given to the macro it calls (§11.2).
+    /// </summary>
+    private Value WordFor(MacroArgument argument, Expansion? outer)
+    {
+        if (argument.Value is { Kind: SyntaxKind.NameExpression } name
+            && SymbolOf(name) is { Kind: SymbolKind.MacroParameter } passed
+            && ArgumentFor(passed, outer) is { } given)
+        {
+            return WordFor(given, outer);
+        }
+        return argument.Word is { } word ? Value.Word(word) : Value.Unknown;
     }
 
     /// <summary>The macro a call names, wherever in the program the call was written.</summary>

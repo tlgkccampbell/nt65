@@ -185,6 +185,11 @@ public sealed class Emitter
             {
                 if (token.Kind != SyntaxKind.Identifier || model.SymbolAt(token) is not { } reference)
                     continue;
+
+                // A macro is no symbol to the linker: what crosses is its expansion, written
+                // into whichever file called it.
+                if (reference.Kind == SymbolKind.Macro)
+                    continue;
                 if (!any)
                     Blank();
                 any = true;
@@ -1214,13 +1219,13 @@ public sealed class Emitter
     /// </summary>
     private string? Parameter(Symbol parameter)
     {
-        if (model.ArgumentFor(parameter, expansion) is not { } argument)
+        if (model.BindingsOf(expansion)?.TryGetValue(parameter, out var bound) is not true)
             return null;
-        if (argument.Parameter.Kind == ParameterKind.Operand)
-            return argument.Operand is { } operand ? Substituted(operand) : null;
-        if (argument.Word is { } word)
-            return word;
-        return argument.Value is { } value ? Substituted(value) : null;
+        if (bound.Value.IsWord)
+            return bound.Value.Text;
+        if (bound.Argument is { Parameter.Kind: ParameterKind.Operand } given)
+            return given.Operand is { } operand ? Substituted(operand) : null;
+        return bound.Item is { } item ? Substituted(item) : null;
     }
 
     /// <summary>

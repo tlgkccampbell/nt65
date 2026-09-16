@@ -38,6 +38,7 @@ internal sealed class Binder
     private readonly List<Use> uses = [];
     private readonly List<Use> exports = [];
     private readonly List<Invocation> calls = [];
+    private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
@@ -100,6 +101,12 @@ internal sealed class Binder
 
     /// <summary>The macros this file declares, which is what the recursion check reads.</summary>
     public IEnumerable<Symbol> DeclaredMacros() => symbols.Where(symbol => symbol.Kind == SymbolKind.Macro);
+
+    /// <summary>
+    /// The macros this file calls outright, rather than from inside another macro's body.
+    /// What their bodies use is what the file's own output has to bring in.
+    /// </summary>
+    public IReadOnlyList<Symbol> CalledMacros() => called;
 
     /// <summary>The first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(SyntaxNode statement)
@@ -746,26 +753,31 @@ internal sealed class Binder
                 Report(callee.Span, $"`{callee.Text}` is a {symbol.KindText}, and `!` calls a macro");
                 continue;
             }
-            inside?.Calls.Add((symbol, tree.GetSpan(callee.Span)));
+            if (inside is not null)
+                inside.Calls.Add((symbol, tree.GetSpan(callee.Span)));
+            else
+                called.Add(symbol);
 
-            var invocation = MacroInvocation.Of(call, symbol, tree, diagnostics);
+            var invocation = MacroInvocation.Of(call, symbol, tree, diagnostics, at.Lookup);
             var written = new List<Use>();
             var outer = scope;
             scope = at;
             foreach (var argument in invocation.Arguments)
             {
-                if (argument.Parameter.Kind == ParameterKind.One)
-                    continue;
-                if (argument.Parameter.Accepts.Element is { Kind: ParameterKind.One })
-                    continue;
-
                 // A default was resolved where the macro is declared, so only what the call
                 // itself wrote is collected here.
                 if (!argument.Written)
                     continue;
-                CollectUses(argument.Value, written);
+
+                // A `one` argument is a word, which is never looked up — except that a word
+                // may be passed on from a `one` parameter of the macro whose body writes the
+                // call, and that is a name. So it is collected either way and stays silent
+                // when it turns out to be no name at all.
+                var words = argument.Parameter.Kind == ParameterKind.One
+                    || argument.Parameter.Accepts.Element is { Kind: ParameterKind.One };
+                CollectUses(argument.Value, written, words);
                 foreach (var item in argument.Items)
-                    CollectUses(item, written);
+                    CollectUses(item, written, words);
             }
             scope = outer;
             ResolveUses(written);
@@ -927,6 +939,7 @@ internal sealed class Binder
             else
             {
                 references.Add(new SymbolReference(previous, token.Span, false));
+                RecordBodyUse(at, previous, token);
                 if (splice && previous.Parameter is not { Kind: ParameterKind.Block })
                 {
                     Report(token.Span, $"`{token.Text}` is a {previous.KindText}; a name written on its "
@@ -934,6 +947,35 @@ internal sealed class Binder
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A name a macro body uses that it neither declared nor was given. An expansion needs it
+    /// wherever it lands, so the macro remembers it: the file that calls the macro brings it
+    /// in, and an exported macro may only use what is exported too (§11.1, §12).
+    /// </summary>
+    private static void RecordBodyUse(Scope at, Symbol used, SyntaxToken token)
+    {
+        Scope? body = null;
+        for (var around = at; around is not null; around = around.Parent)
+        {
+            if (around.Kind == ScopeKind.Macro)
+            {
+                body = around;
+                break;
+            }
+        }
+        if (body?.Owner is not { } macro)
+            return;
+
+        // What the body declares, and the parameters it was given, travel with it.
+        for (var owner = used.Scope; owner is not null; owner = owner.Parent)
+        {
+            if (owner == body)
+                return;
+        }
+        if (!macro.Uses.Any(seen => seen.Used == used))
+            macro.Uses.Add((used, used.Tree.GetSpan(token.Span)));
     }
 
     /// <summary>

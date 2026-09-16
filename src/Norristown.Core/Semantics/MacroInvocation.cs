@@ -39,7 +39,8 @@ public sealed class MacroInvocation
     /// wants to hear about it.
     /// </summary>
     public static MacroInvocation Of(
-        SyntaxNode call, Symbol macro, SyntaxTree tree, List<Diagnostic>? diagnostics)
+        SyntaxNode call, Symbol macro, SyntaxTree tree, List<Diagnostic>? diagnostics,
+        Func<string, Symbol?>? lookup = null)
     {
         var invocation = new MacroInvocation(macro, call);
         void Report(TextSpan span, string message) =>
@@ -231,6 +232,25 @@ public sealed class MacroInvocation
                     var word = value is { Kind: SyntaxKind.NameExpression, ChildTokens.Length: 1 }
                         ? value.ChildTokens[0].Text
                         : null;
+
+                    // A word may be passed on from a `one` parameter of the macro whose body
+                    // writes the call, so long as this list holds everything that one allows
+                    // (§11.2): which word it is is not known until there is an expansion.
+                    if (word is not null && lookup?.Invoke(word) is
+                        { Kind: SymbolKind.MacroParameter, Parameter.Accepts: { Kind: ParameterKind.One } passed })
+                    {
+                        var missing = passed.Words
+                            .Where(w => !accepts.Words.Any(o => o.Equals(w, StringComparison.OrdinalIgnoreCase)))
+                            .ToList();
+                        if (missing.Count > 0)
+                        {
+                            Report(value.Span, $"`{parameter.Name}` takes one of "
+                                + $"{string.Join(", ", accepts.Words.Select(w => $"`{w}`"))}, and `{word}` may "
+                                + $"also be {string.Join(", ", missing.Select(w => $"`{w}`"))}");
+                        }
+                        break;
+                    }
+
                     if (word is null || !accepts.Words.Any(w => w.Equals(word, StringComparison.OrdinalIgnoreCase)))
                     {
                         Report(value.Span, $"`{parameter.Name}` takes one of "

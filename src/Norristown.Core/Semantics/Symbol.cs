@@ -87,6 +87,13 @@ public sealed class Symbol
     /// </summary>
     public List<(Symbol Callee, Span At)> Calls { get; } = [];
 
+    /// <summary>
+    /// The names a macro's body uses that it did not declare and was not given: what an
+    /// expansion of it needs wherever it lands. A file that calls the macro has to be able to
+    /// reach all of them, and its output brings in the ones another file declares (§12).
+    /// </summary>
+    public List<(Symbol Used, Span At)> Uses { get; } = [];
+
     /// <summary>A list's items, or a function's body as its single item.</summary>
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
 

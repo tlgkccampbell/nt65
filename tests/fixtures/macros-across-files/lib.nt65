@@ -1,0 +1,26 @@
+; A macro is no symbol to the linker: what crosses a file boundary is its expansion,
+; written into whichever file called it, with whatever it uses brought in there.
+.export set16, delay, SCREEN, tiles
+
+SCREEN = $0400
+
+.rodata {
+tiles:  .byte 0, 1, 2, 3
+}
+
+.macro set16(dest: operand, value) {
+    lda #<value
+    sta dest
+    lda #>value
+    sta dest+1
+}
+
+; A body that uses a name it was not given. `tiles` is exported, so an expansion can
+; reach it wherever it lands.
+.macro delay(count) {
+    ldx #count
+@loop:
+    lda tiles
+    dex
+    bne @loop
+}
