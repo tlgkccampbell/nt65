@@ -17,6 +17,12 @@ namespace Norristown.Layout;
 /// How wide a 65816 immediate that follows a register's width is, 8 or 16; null for every
 /// other line, and on the CPUs whose immediates are always a byte.
 /// </param>
+/// <param name="Ensured">What an <c>.ensure</c> writes; null for every other line.</param>
+/// <param name="Slot">
+/// The <c>n</c> of <c>n,s</c> a stack-relative operand naming a frame's member comes to; null
+/// for every other line.
+/// </param>
 public sealed record LineLayout(
     int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null,
-    int? Bits = null);
+    int? Bits = null, Ensured? Ensured = null, int? Slot = null);
+

@@ -23,6 +23,11 @@ public sealed class StateAnalysis
     private readonly CodeLayout layout;
     private readonly ControlFlow flow;
     private readonly Dictionary<(int Position, Expansion? On), FlowState> reaching = [];
+    private readonly Dictionary<(int Position, Expansion? On), int> slots = [];
+
+    // The state at the start of each expansion of a macro with a signature, and of each block
+    // spliced into one, which is what the end of it is checked against and hands back.
+    private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
     private readonly List<Diagnostic> diagnostics = [];
 
     // Whether the walk is the last one, over converged states, which is the only one that
@@ -65,6 +70,14 @@ public sealed class StateAnalysis
     /// </summary>
     public FlowState? Before(SyntaxNode statement, Expansion? on = null) =>
         reaching.GetValueOrDefault((statement.Position, on));
+
+    /// <summary>
+    /// The <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s operand
+    /// comes to on the writing <paramref name="on"/>, or null where it names no slot or the
+    /// slot is not known.
+    /// </summary>
+    public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
+        slots.TryGetValue((statement.Position, on), out var slot) ? slot : null;
 
     /// <summary>
     /// The state reaching a statement, whichever writing of it is asked about. An editor asks
@@ -202,7 +215,7 @@ public sealed class StateAnalysis
         for (var i = 0; i < block.Steps.Count; i++)
         {
             var step = block.Steps[i];
-            if (final)
+            if (final && !step.Closes)
                 reaching[(step.Statement.Position, step.On)] = state;
             var previous = i > 0 ? block.Steps[i - 1].Statement : null;
             var next = i == block.Steps.Count - 1 ? block.Next : null;
@@ -217,6 +230,12 @@ public sealed class StateAnalysis
         var statement = step.Statement;
         if (statement.Kind == SyntaxKind.StateDirective)
             return Asserted(step, state);
+        if (statement.Kind == SyntaxKind.EnsureDirective)
+            return Ensured(step, state);
+        if (statement.Kind == SyntaxKind.FrameDirective)
+            return Framed(step, state);
+        if (step.IsMarker)
+            return Marked(step, state);
         if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
             return state;
 
@@ -226,6 +245,7 @@ public sealed class StateAnalysis
         var stack = state.Stack;
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
             CheckImmediate(step, mnemonic, register, processor, routine);
+        Slot(step, mode, stack);
 
         switch (mnemonic)
         {
@@ -457,7 +477,7 @@ public sealed class StateAnalysis
                 + $"`{routine.DisplayName}` is {own.Distance}: it would return to the caller the wrong way");
         }
         CheckExit(step, $"{what} is a tail call:", $"when `{target.DisplayName}` returns",
-            own.Exit, Exited(callee, state), routine);
+            own.Exit, Exited(callee, state), routine.DisplayName);
     }
 
     /// <summary>That the state here is what a routine's entry declares.</summary>
@@ -481,21 +501,22 @@ public sealed class StateAnalysis
         }
     }
 
-    /// <summary>That <paramref name="state"/> is what <paramref name="routine"/> declares it returns with.</summary>
+    /// <summary>That <paramref name="state"/> is what the routine or macro <paramref name="name"/> declares it returns with.</summary>
     /// <remarks><paramref name="where"/> says where <paramref name="state"/> holds, as the message puts it.</remarks>
     private void CheckExit(
-        Step step, string what, string where, ProcessorState exit, ProcessorState state, Symbol routine)
+        Step step, string what, string where, ProcessorState exit, ProcessorState state, string name)
     {
+        var lead = what.Length == 0 ? "" : what + " ";
         Part("a", "A", exit.A, state.A);
         Part("i", "X and Y", exit.Index, state.Index);
         if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
         {
-            Report(step, $"{what} `{routine.DisplayName}` says `e*`, so the mode must be what it was on entry, "
+            Report(step, $"{lead}`{name}` says `e*`, so the mode must be what it was on entry, "
                 + $"and {where} it may not be");
         }
         else if (IsKnown(exit.E) && exit.E != state.E)
         {
-            Report(step, $"{what} `{routine.DisplayName}` returns in {Mode(exit.E)} mode, and "
+            Report(step, $"{lead}`{name}` returns in {Mode(exit.E)} mode, and "
                 + (IsKnown(state.E)
                     ? $"the processor is in {Mode(state.E)} mode {where}"
                     : $"the mode is not known {where}"));
@@ -505,12 +526,12 @@ public sealed class StateAnalysis
         {
             if (declared == Width.Unchanged && here != Width.Unchanged)
             {
-                Report(step, $"{what} `{routine.DisplayName}` says `{item}*`, so {register} must be as wide as it "
+                Report(step, $"{lead}`{name}` says `{item}*`, so {register} must be as wide as it "
                     + $"was on entry, and {where} it may not be");
             }
             else if (IsKnown(declared) && declared != here)
             {
-                Report(step, $"{what} `{routine.DisplayName}` returns with `{ProcessorState.Spell(item, declared)}`, and "
+                Report(step, $"{lead}`{name}` returns with `{ProcessorState.Spell(item, declared)}`, and "
                     + (IsKnown(here) ? $"{register} {(register == "A" ? "is" : "are")} {Spell(here)} {where}"
                         : $"the width of {register} is not known {where}"));
             }
@@ -525,7 +546,7 @@ public sealed class StateAnalysis
             Report(step, $"`{routine.DisplayName}` is far, and returns with `rtl`");
         else if (mnemonic == "rtl" && !signature.IsFar)
             Report(step, $"`{routine.DisplayName}` is near, and returns with `rts`");
-        CheckExit(step, $"`{mnemonic}`:", "here", signature.Exit, state, routine);
+        CheckExit(step, $"`{mnemonic}`:", "here", signature.Exit, state, routine.DisplayName);
     }
 
     /// <summary>
@@ -538,7 +559,7 @@ public sealed class StateAnalysis
         var item = register == WidthRegister.A ? "a" : "i";
         if (width == Width.Unchanged)
         {
-            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and `{routine.DisplayName}` says "
+            Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and `{Owner(step, routine)}` says "
                 + $"`{item}*`, which assumes nothing about it");
         }
         else if (!IsKnown(width))
@@ -658,6 +679,158 @@ public sealed class StateAnalysis
     }
 
     /// <summary>
+    /// What says a <c>*</c> item holds at a step: the innermost macro with a signature it was
+    /// expanded from, or the routine.
+    /// </summary>
+    private string Owner(Step step, Symbol routine)
+    {
+        for (var level = step.On; level is not null; level = level.Outer)
+        {
+            if (level.Call is { } call && model.MacroAt(call) is { MacroSignature: not null } macro)
+                return macro.DisplayName + "!";
+        }
+        return routine.DisplayName;
+    }
+
+    /// <summary>
+    /// <c>.ensure a16, i8</c>: the widths it names hold after it, whatever it writes to make
+    /// them. A 16-bit width needs native mode, and only native mode known here says it is.
+    /// </summary>
+    private FlowState Ensured(Step step, FlowState state)
+    {
+        var processor = state.Processor;
+        foreach (var item in StateItem.Read(step.Statement))
+        {
+            if (item.Part is not (StatePart.A or StatePart.Index) || !IsKnown(item.Width))
+            {
+                ReportAt(item.Node, step, "`.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: "
+                    + $"`{item.Text}` is not one of them");
+                continue;
+            }
+            if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
+            {
+                ReportAt(item.Node, step, $"`.ensure {item.Text}` needs native mode, and "
+                    + (processor.E == ProcessorMode.Emulation
+                        ? "the processor is in emulation mode here, where both widths are 8 bits"
+                        : "the mode is not known here"));
+            }
+            // Emulation mode pins both widths at 8, whatever is written to change them.
+            if (processor.E == ProcessorMode.Emulation)
+                continue;
+            processor = item.Part == StatePart.A
+                ? processor with { A = item.Width }
+                : processor with { Index = item.Width };
+        }
+        return state with { Processor = processor };
+    }
+
+    /// <summary>
+    /// <c>.frame name: T</c>: the top <c>.sizeof(T)</c> bytes of the analysis stack become the
+    /// frame. Where the stack is not known, as after <c>tcs</c>, it becomes those bytes with
+    /// nothing known beneath them.
+    /// </summary>
+    private FlowState Framed(Step step, FlowState state)
+    {
+        var statement = step.Statement;
+        if (statement.ChildTokens.Length < 2 || model.SymbolAt(statement.ChildTokens[1]) is not { Kind: SymbolKind.Frame } frame)
+            return state;
+        if (statement.ChildNodes.FirstOrDefault() is not { } type
+            || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })
+        {
+            Report(step, $"`.frame {frame.DisplayName}` is laid out as a struct or a union, whose size says how many bytes it names");
+            return state;
+        }
+        if (state.Stack is not { } stack)
+            return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
+        if (stack.Framed(frame, (int)size) is { } framed)
+            return state with { Stack = framed };
+        Report(step, $"`{frame.DisplayName}` is {size} bytes, and only {stack.Depth} are pushed here");
+        return state;
+    }
+
+    /// <summary>
+    /// A frame's member named in an operand, which is only a place on the stack: it is a
+    /// stack-relative operand, and its offset counts every byte pushed since the frame.
+    /// </summary>
+    private void Slot(Step step, AddressingMode? mode, AnalysisStack? stack)
+    {
+        if (step.Statement.ChildNodes.FirstOrDefault() is not { } operand)
+            return;
+        foreach (var name in operand.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        {
+            var tokens = name.ChildTokens;
+            if (tokens.Length == 0 || model.SymbolAt(tokens[0]) is not { Kind: SymbolKind.Frame } frame)
+                continue;
+            var written = name.GetText().Trim();
+            if (mode is not (AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
+                || !name.Parent!.Kind.ToString().EndsWith("Operand", StringComparison.Ordinal))
+            {
+                ReportAt(name, step, $"`{written}` is a place on the stack, and is named only on its own as a "
+                    + $"stack-relative operand: `{written},s`");
+                continue;
+            }
+            if (stack is null)
+            {
+                ReportAt(name, step, $"`{written}` is counted from the stack pointer, and how much is pushed is not known here");
+                continue;
+            }
+            if (stack.Above(frame) is not { } above)
+            {
+                ReportAt(name, step, $"`{written}` is in `{frame.DisplayName}`, which is no longer on the stack here");
+                continue;
+            }
+            var size = frame.TypeExpression is { } type ? model.SymbolOf(type)?.Size ?? 0 : 0;
+            var offset = tokens.Length > 1 ? model.ValueOf(name, step.On).AsNumber() ?? 0 : 0;
+
+            // The frame's lowest byte is its last member's, and `1,s` is the byte on top.
+            if (final)
+                slots[(step.Statement.Position, step.On)] = (int)(above - size + 1 + offset + 1);
+        }
+    }
+
+    /// <summary>
+    /// Where an expansion of a macro with a state signature, or a block spliced into one,
+    /// starts or ends. A call is checked the way <c>jsr</c> is: the state must match the
+    /// entry, the body starts from it, its end must match the exit, and the state after the
+    /// call is the exit with its <c>*</c> items kept from the call. A block given to such a
+    /// macro has to leave the state as it found it.
+    /// </summary>
+    private FlowState Marked(Step step, FlowState state)
+    {
+        var key = (step.Statement.Position, step.On);
+        var processor = state.Processor;
+        if (step.Statement.Kind == SyntaxKind.BlockSplice)
+        {
+            if (!step.Closes)
+            {
+                started[key] = processor;
+            }
+            else if (started.TryGetValue(key, out var before) && before != processor
+                && step.On?.NearestCall is { } call && model.MacroAt(call) is { } owner)
+            {
+                Report(step, $"the block given to `{owner.DisplayName}!` has to leave the state as it found it: "
+                    + $"it starts with `{before}` and ends with `{processor}`");
+            }
+            return state;
+        }
+
+        if (model.MacroAt(step.Statement) is not { MacroSignature: { } signature } macro)
+            return state;
+        var name = macro.DisplayName + "!";
+        if (!step.Closes)
+        {
+            started[key] = processor;
+            CheckEntry(step, $"`{name}`", signature, processor);
+            return state with { Processor = signature.Entry };
+        }
+        CheckExit(step, "", "at the end of its body", signature.Exit, processor, name);
+        return state with
+        {
+            Processor = Exited(signature, started.TryGetValue(key, out var at) ? at : ProcessorState.Unknown),
+        };
+    }
+
+    /// <summary>
     /// Outside any routine there is no processor state: code that changes or depends on it
     /// belongs in a proc, where the analysis can follow it.
     /// </summary>
@@ -668,11 +841,13 @@ public sealed class StateAnalysis
             if (step.Routine is not null || step.Label is not null)
                 continue;
             var statement = step.Statement;
-            if (statement.Kind == SyntaxKind.StateDirective)
+            if (statement.Kind is SyntaxKind.StateDirective or SyntaxKind.EnsureDirective or SyntaxKind.FrameDirective)
             {
-                Report(step, "`.state` describes a point in a routine, and this is outside any `.proc`");
+                Report(step, $"`{statement.ChildTokens[0].Text.ToLowerInvariant()}` describes a point in a routine, "
+                    + "and this is outside any `.proc`");
                 continue;
             }
+
             if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
                 continue;
 

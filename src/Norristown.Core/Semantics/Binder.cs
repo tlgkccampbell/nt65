@@ -647,6 +647,14 @@ internal sealed class Binder
                 CollectUses(statement);
                 break;
 
+            // A frame is named like a `.tag` instance, so its members are reached through it.
+            case SyntaxKind.FrameDirective:
+                var type = statement.ChildNodes.FirstOrDefault();
+                if (NameToken(statement) is { } frame)
+                    Declare(frame, SymbolKind.Frame, type: type);
+                CollectUses(type);
+                break;
+
             // Everything else either declares nothing and names nothing — `.cpu`, a segment
             // declaration, a blank or closing line — or belongs to a later stage.
             default:

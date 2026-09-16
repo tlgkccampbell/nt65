@@ -211,6 +211,8 @@ public sealed class Symbol
         SymbolKind.Binding => "repetition binding",
         SymbolKind.Macro => "macro",
         SymbolKind.MacroParameter => "macro parameter",
+        SymbolKind.Frame => "stack frame",
+
         _ => "function",
     };
 

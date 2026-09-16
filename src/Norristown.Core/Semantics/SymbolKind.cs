@@ -59,4 +59,8 @@ public enum SymbolKind
 
     /// <summary>One parameter of a macro: the name its body gives an argument.</summary>
     MacroParameter,
+
+    /// <summary><c>.frame name: T</c>: the top bytes of the stack, laid out as a struct.</summary>
+    Frame,
+
 }

@@ -94,9 +94,9 @@ public static class SyntaxFacts
         [".next"] = SyntaxKind.NextDirective,
         [".patch"] = SyntaxKind.PatchDirective,
         [".state"] = SyntaxKind.StateDirective,
-        // Stage 12: setting widths and naming stack frames.
-        [".ensure"] = SyntaxKind.UnsupportedLine,
-        [".frame"] = SyntaxKind.UnsupportedLine,
+        [".ensure"] = SyntaxKind.EnsureDirective,
+        [".frame"] = SyntaxKind.FrameDirective,
+
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The built-in functions, and the three a macro body adds.</summary>

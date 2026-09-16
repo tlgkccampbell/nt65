@@ -275,6 +275,8 @@ internal sealed class Parser
             SyntaxKind.ErrorDirective => Finish(ParseError()),
             SyntaxKind.NextDirective => Finish(ParseNext()),
             SyntaxKind.StateDirective => Finish(ParseState()),
+            SyntaxKind.EnsureDirective => Finish(ParseEnsure()),
+            SyntaxKind.FrameDirective => Finish(ParseFrame()),
             SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
@@ -893,7 +895,41 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.StateDirective, children.ToImmutable());
     }
 
+    /// <summary>
+    /// <c>.ensure a16, i8</c>: the widths to make hold. It takes the items of a signature, and
+    /// which of them it accepts is the analysis's to say.
+    /// </summary>
+    private GreenSyntax ParseEnsure()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseStateList());
+        return new GreenSyntax(SyntaxKind.EnsureDirective, children.ToImmutable());
+    }
+
+    /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
+    private GreenSyntax ParseFrame()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.Identifier)
+        {
+            Report("expected a name for the frame");
+            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (Kind != SyntaxKind.Colon)
+        {
+            Report("expected `:` and the struct the frame is laid out as");
+            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
+        }
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
+    }
+
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
+
     private GreenSyntax ParsePatch()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();

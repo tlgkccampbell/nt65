@@ -561,6 +561,10 @@ public sealed class Emitter
                 Expand(line, statement);
                 break;
 
+            case SyntaxKind.EnsureDirective:
+                Ensure(line, statement);
+                break;
+
             case SyntaxKind.BlockSplice:
                 Splice(statement);
                 break;
@@ -722,7 +726,10 @@ public sealed class Emitter
             Width(rest);
         var edits = new Edits();
         if (rest is not null)
+        {
             Substitute(rest, edits, nested: false);
+            Slot(rest, edits);
+        }
 
         if (label is not { ChildTokens.Length: > 0 }
             || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
@@ -1019,7 +1026,45 @@ public sealed class Emitter
         Width(statement);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
+        Slot(statement, edits);
         Code(line, Render(statement, edits), bytes);
+    }
+
+    /// <summary>
+    /// An <c>.ensure</c>, written as the <c>rep</c> and <c>sep</c> the analysis found it needs,
+    /// which is nothing where the widths already hold.
+    /// </summary>
+    private void Ensure(SyntaxNode line, SyntaxNode directive)
+    {
+        if (layout.Of(directive, expansion)?.Ensured is not { } ensured)
+            return;
+        var indent = Indent(directive);
+        if (ensured.Reset != 0)
+            Code(line, $"{indent}rep #{Hex(ensured.Reset, 2)}", 2);
+        if (ensured.Set != 0)
+            Code(line, $"{indent}sep #{Hex(ensured.Set, 2)}", 2);
+    }
+
+    /// <summary>
+    /// A frame's member in a stack-relative operand, written as the offset from the stack
+    /// pointer the analysis counted for it here: ca65 knows nothing of frames.
+    /// </summary>
+    private void Slot(SyntaxNode statement, Edits edits)
+    {
+        if (layout.Of(statement, expansion)?.Slot is not { } slot
+            || statement.ChildNodes.FirstOrDefault() is not { } operand)
+        {
+            return;
+        }
+        foreach (var name in operand.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        {
+            var tokens = name.ChildTokens;
+            if (tokens.Length == 0 || model.SymbolAt(tokens[0]) is not { Kind: SymbolKind.Frame })
+                continue;
+            edits.Replace[tokens[0].Position] = slot.ToString(CultureInfo.InvariantCulture);
+            for (var i = 1; i < tokens.Length; i++)
+                edits.Replace[tokens[i].Position] = "";
+        }
     }
 
     /// <summary>

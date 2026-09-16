@@ -1,0 +1,86 @@
+; Setting widths with `.ensure`, naming stack frames with `.frame`, and macros that declare
+; the state they expect and leave.
+.cpu 65816
+
+.export copy, setup, mixed, unknown, entered, adder
+
+.struct Locals {
+    count: .word
+    src:   .addr
+}
+
+.bss {
+total:  .res 2
+}
+
+; A frame over two pushed words: each slot is counted from the stack pointer where it is
+; used, so the `pha` between two reads is counted.
+.proc copy: a16, i16 {
+    pea 0                   ; src
+    pea 0                   ; count
+    .frame locals: Locals
+    lda #8
+    sta locals::count,s     ; 1,s
+    pha
+    lda locals::src,s       ; 5,s: the pha is counted
+    ldy #0
+    lda (locals::src,s),y
+    pla
+    pla
+    pla
+    rts
+}
+
+; `.ensure` writes nothing where the widths already hold, and the `rep` or `sep` that sets
+; them where they do not.
+.proc setup: a8, i8 -> a16, i16 {
+    .ensure a8, i8          ; already so: nothing
+    .ensure a16             ; rep #$20
+    lda #$1234
+    .ensure a16, i16        ; A holds: rep #$10
+    ldx #$1234
+    rts
+}
+
+.proc mixed: a16, i8 -> a8, i16 {
+    .ensure a8, i16         ; both: rep #$10 and sep #$20
+    lda #$12
+    ldx #$1234
+    rts
+}
+
+; Where a width is not known, `.ensure` sets it all the same.
+.proc unknown: a?, i? -> a8, i8 {
+    .ensure a8, i8          ; sep #$30
+    lda #1
+    rts
+}
+
+; A frame made where the stack is not known, as after `tcs`.
+.proc entered: a16, i16 {
+    tsc
+    sec
+    sbc #4
+    tcs
+    .frame locals: Locals
+    lda locals::src,s       ; 3,s
+    .next ?
+}
+
+; A macro with a state signature is checked like a call: the state must match its entry,
+; and after it the state is its exit, with what it does not declare kept from the call.
+.macro add16(dest: operand, value: operand): a8 {
+    clc
+    lda dest
+    adc .byteof(value, 0)
+    sta dest
+    lda dest+1
+    adc .byteof(value, 1)
+    sta dest+1
+}
+
+.proc adder: a8, i16 {
+    add16!(total, {#$1234})
+    ldx #$1234              ; X and Y are still 16-bit: `add16!` says nothing about them
+    rts
+}

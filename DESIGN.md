@@ -701,9 +701,10 @@ them hold, emitting only what the analysis says is needed: nothing where the wid
 already hold, otherwise the `sep` or `rep` that sets them. Its effect on the state does
 not depend on what it emits, so the choice is made once the analysis has converged and
 the analysis never waits on its own output. A 16-bit width needs native mode known at
-that point. `.ensure` is the checked form of the macro-time width stacks of ca65 code,
-such as libSFX's `RW` family, which follow the text of a file rather than its control
-flow.
+that point; in emulation mode the widths stay 8. An `.ensure` no path reaches writes
+everything it names. `.ensure` is the checked form of the macro-time width stacks of ca65
+code, such as libSFX's `RW` family, which follow the text of a file rather than its
+control flow.
 
 **Stack frames.** `.frame name: T` names the top `.sizeof(T)` bytes of the analysis stack
 as a frame laid out as the struct `T`, usually directly after the instructions that make
@@ -736,8 +737,8 @@ silently shift them:
 ```
 
 A slot is an error where the stack depth is unknown, once the analysis stack no longer
-contains the frame, and anywhere other than a stack-relative operand. A frame ends with
-its proc.
+contains the frame, and anywhere other than a stack-relative operand. A `.frame` larger than
+what the proc has pushed is an error. A frame ends with its proc.
 
 **Checks.** After the analysis converges:
 
@@ -835,13 +836,13 @@ label:
 | indirect jump: `jmp (t,x)`, `jml [t]` | addressing mode | `.next` listing the targets, or `.next ?` |
 | indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines; the call returns with the merge of their exits |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
-| a routine that returns past inline data: `jsr print` then `.asciiz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration; the analysis skips it with no `.next`, on every CPU |
+| a routine that returns past inline data: `jsr print` then `.asciiz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.asciiz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
-| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
+| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label. Such a label may be a jump target, never a call target |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from this file is checked against for the parts it gives. Such a label may be a jump target, never a call target |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | handler or external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |

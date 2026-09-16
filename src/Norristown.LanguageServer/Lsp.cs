@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Norristown.Flow;
 using Norristown.Layout;
@@ -73,13 +74,25 @@ internal static class Lsp
     {
         if (layout is null || Statement(model.Tree, position) is not { } statement)
             return null;
-        if (statement.Kind != SyntaxKind.InstructionStatement
-            || layout.AnyOf(statement)?.Cycles is not { } cycles)
+        if (statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.EnsureDirective)
+            || layout.AnyOf(statement) is not { Cycles: { } cycles } laid)
         {
             return null;
         }
 
         var text = new StringBuilder($"**{Spell(cycles)}**");
+
+        // An `.ensure` writes what the analysis found it needs, which is worth seeing.
+        if (laid.Ensured is { } ensured)
+        {
+            var written = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
+                .Where(pair => pair.Flags != 0)
+                .Select(pair => $"`{pair.Mnemonic} #${pair.Flags.ToString("x2", CultureInfo.InvariantCulture)}`")
+                .ToList();
+            text.Append(written.Count == 0
+                ? "\n\nwrites nothing: the widths already hold"
+                : $"\n\nwrites {string.Join(" and ", written)}");
+        }
         if (Around(flow, statement)?.Cycles is { } block)
             text.Append($"\n\nthis block: {Spell(block)}");
 

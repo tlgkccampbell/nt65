@@ -160,6 +160,8 @@ public sealed class ParserTests
     [InlineData("    .align 256", SyntaxKind.DataDirective)]
     [InlineData("    .incbin \"sprites.bin\", 64, 32", SyntaxKind.DataDirective)]
     [InlineData("    .lobytes first, second", SyntaxKind.DataDirective)]
+    [InlineData("    .ensure a16, i8", SyntaxKind.EnsureDirective)]
+    [InlineData("    .frame locals: Locals", SyntaxKind.FrameDirective)]
     public void EveryCoreItemParses(string line, SyntaxKind kind)
     {
         Assert.Equal(kind, Statement(line).Kind);
@@ -178,6 +180,8 @@ public sealed class ParserTests
     [InlineData(".segment ZP2 {", "expected a segment name in quotes")]
     [InlineData(".segment \"X\": zp, page = 1", "expected `dp` or `bank`")]
     [InlineData(".cpu 6510", "expected `6502`, `65c02` or `65816`")]
+    [InlineData(".frame", "expected a name for the frame")]
+    [InlineData(".frame locals Locals", "expected `:` and the struct the frame is laid out as")]
     [InlineData(".frobnicate 1", "unknown directive `.frobnicate`")]
     [InlineData(".word .frobnicate(1)", "`.frobnicate` is not a function")]
     [InlineData(".word .sizeof", "expected `(` after `.sizeof`")]

@@ -125,7 +125,7 @@ public static class Compiler
                 var state = Flow.StateAnalysis.Of(model, layout, flow);
                 states.Add(state);
                 diagnostics.AddRange(state.Diagnostics);
-                layout = CodeLayout.Create(model, target, (statement, on) => state.Before(statement, on)?.Processor);
+                layout = CodeLayout.Create(model, target, state);
                 flow = Flow.ControlFlow.Of(model, layout);
             }
             layouts.Add(layout);

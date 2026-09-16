@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Norristown.Semantics;
 
 namespace Norristown.Flow;
 
@@ -35,6 +36,40 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         for (var i = 0; i < count; i++)
             builder.Add(entry);
         return new AnalysisStack(builder.ToImmutable());
+    }
+
+    /// <summary>
+    /// The stack with its top <paramref name="size"/> bytes named as <paramref name="frame"/>,
+    /// or null when fewer than that are on it. A frame named again moves to where it is named now.
+    /// </summary>
+    public AnalysisStack? Framed(Symbol frame, int size)
+    {
+        if (size > entries.Length)
+            return null;
+        var builder = entries.ToBuilder();
+        for (var i = 0; i < builder.Count; i++)
+        {
+            if (builder[i].Frame == frame)
+                builder[i] = builder[i] with { Frame = null };
+        }
+        var bottom = entries.Length - size;
+        builder[bottom] = builder[bottom] with { Frame = frame };
+        return new AnalysisStack(builder.ToImmutable());
+    }
+
+    /// <summary>A stack of <paramref name="size"/> bytes named as <paramref name="frame"/>, with nothing known beneath them.</summary>
+    public static AnalysisStack OnlyFrame(Symbol frame, int size) =>
+        Empty.Push(StackEntry.Opaque, size).Framed(frame, size)!;
+
+    /// <summary>How many bytes are above the lowest byte of <paramref name="frame"/>, or null when it is not on the stack.</summary>
+    public int? Above(Symbol frame)
+    {
+        for (var i = 0; i < entries.Length; i++)
+        {
+            if (entries[i].Frame == frame)
+                return entries.Length - i - 1;
+        }
+        return null;
     }
 
     /// <summary>

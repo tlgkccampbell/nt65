@@ -204,6 +204,20 @@ public sealed class SymbolRequestsTests
         Assert.Contains("state here: `a16, i8, native`, 1 pushed", hover.Contents.Value, StringComparison.Ordinal);
     }
 
+    /// <summary>An <c>.ensure</c> shows what the analysis found it has to write.</summary>
+    [Fact]
+    public async Task HoverOnAnEnsureShowsWhatItWrites()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, ".cpu 65816\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        var hover = await client.HoverAsync(Uri, new Position(2, 5), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("writes `rep #$20`", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DefinitionGoesToTheDeclaration()
     {

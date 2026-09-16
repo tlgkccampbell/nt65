@@ -309,6 +309,12 @@ public enum SyntaxKind : byte
     /// <summary><c>.state a16, i8</c>: asserts, and sets, the processor state at this point.</summary>
     StateDirective,
 
+    /// <summary><c>.ensure a16, i8</c>: makes the widths hold, emitting only the <c>rep</c> or <c>sep</c> needed.</summary>
+    EnsureDirective,
+
+    /// <summary><c>.frame locals: Locals</c>: names the top bytes of the stack as a struct.</summary>
+    FrameDirective,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 

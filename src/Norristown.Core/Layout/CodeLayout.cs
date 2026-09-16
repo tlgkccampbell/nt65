@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Norristown.Flow;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -22,7 +23,7 @@ public sealed class CodeLayout
 
     // What the processor-state analysis found reaching each statement, which sizes a 65816
     // immediate and times its instructions. Null on the first walk, before there is any.
-    private readonly Func<SyntaxNode, Expansion?, ProcessorState?>? states;
+    private readonly StateAnalysis? states;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly Dictionary<int, LineLayout> anyWriting = [];
     private readonly List<Diagnostic> diagnostics = [];
@@ -76,7 +77,7 @@ public sealed class CodeLayout
     private const int MaximumStatements = 65536;
 
     private CodeLayout(
-        SemanticModel model, Cpu cpu, Func<SyntaxNode, Expansion?, ProcessorState?>? states,
+        SemanticModel model, Cpu cpu, StateAnalysis? states,
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
         Dictionary<Symbol, long> settled)
     {
@@ -114,11 +115,11 @@ public sealed class CodeLayout
     /// <summary>
     /// Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>. On the 65816,
     /// <paramref name="states"/> says what state reaches each statement, which is what sizes
-    /// its immediates; without it they are laid out a byte wide, which is enough to find where
-    /// control goes, since no edge depends on a length.
+    /// its immediates, its <c>.ensure</c> directives and its frame slots; without it the
+    /// immediates are laid out a byte wide and every <c>.ensure</c> writes all it could, which
+    /// is enough to find where control goes, since no edge depends on a length.
     /// </summary>
-    public static CodeLayout Create(
-        SemanticModel model, Cpu cpu, Func<SyntaxNode, Expansion?, ProcessorState?>? states = null)
+    public static CodeLayout Create(SemanticModel model, Cpu cpu, StateAnalysis? states = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until
         // none changes, which terminates because a branch only ever grows. Only the last
@@ -355,10 +356,17 @@ public sealed class CodeLayout
             return;
         }
 
+        // A macro with a state signature is checked where its expansion starts and where it
+        // ends, so both are steps of their own.
         var outer = expansion;
+        var marked = cpu == Cpu.Wdc65816 && model.MacroAt(call) is { MacroSignature: not null };
+        if (marked)
+            steps.Add(new Step(call, outer, routine, Stream, null));
         expansion = Expansion.Of(outer, call, definition);
         Walk(definition.ChildNodes, from: 1);
         expansion = outer;
+        if (marked)
+            steps.Add(new Step(call, outer, routine, Stream, null, Closes: true));
     }
 
     /// <summary>
@@ -376,10 +384,17 @@ public sealed class CodeLayout
             return;
         }
 
+        // A block spliced into a macro with a state signature has to leave the state as it
+        // found it, which is checked across the two ends of the splice.
         var outer = expansion;
+        var marked = cpu == Cpu.Wdc65816 && outer?.NearestCall is { } call && model.MacroAt(call) is { MacroSignature: not null };
+        if (marked)
+            steps.Add(new Step(statement, outer, routine, Stream, null));
         expansion = Expansion.Spliced(outer, statement, block);
         Walk(Macros.LinesOf(block), 0);
         expansion = outer;
+        if (marked)
+            steps.Add(new Step(statement, outer, routine, Stream, null, Closes: true));
     }
 
     private void Statement(SyntaxNode statement)
@@ -435,7 +450,11 @@ public sealed class CodeLayout
             case SyntaxKind.NextDirective:
             case SyntaxKind.PatchDirective:
             case SyntaxKind.StateDirective:
+            case SyntaxKind.FrameDirective:
                 steps.Add(new Step(statement, expansion, routine, Stream, null));
+                break;
+            case SyntaxKind.EnsureDirective:
+                Ensure(statement);
                 break;
             default:
                 break;
@@ -488,7 +507,7 @@ public sealed class CodeLayout
         // On the 65816 an immediate is as wide as the register it goes to, which is what the
         // analysis found reaching it. Where it found nothing it has said so, and a byte keeps
         // the rest of the file laid out.
-        var state = states?.Invoke(statement, expansion);
+        var state = states?.Before(statement, expansion)?.Processor;
         int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } register
             ? state?.Of(register) == Width.Sixteen ? 16 : 8
             : null;
@@ -499,7 +518,8 @@ public sealed class CodeLayout
             bits = null;
         var length = Instructions.Length(mode) + (bits == 16 ? 1 : 0);
         Laid(statement, new LineLayout(
-            length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode, state), bits));
+            length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode, state), bits,
+            Slot: states?.SlotAt(statement, expansion)));
         Place(statement, length);
         steps.Add(new Step(statement, expansion, routine, Stream, null));
 
@@ -808,7 +828,24 @@ public sealed class CodeLayout
             Report(directive.Span, assertion.Message ?? "this assertion does not hold", assertion.Level);
     }
 
+    /// <summary>
+    /// An <c>.ensure</c>, which writes the <c>rep</c> and <c>sep</c> the analysis found it
+    /// needs. Before the analysis has run, it is laid out writing all it could.
+    /// </summary>
+    private void Ensure(SyntaxNode directive)
+    {
+        var state = states?.Before(directive, expansion)?.Processor;
+        var ensured = Ensured.Of(directive, state);
+        var cycles = new CycleCount(0);
+        foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
+            cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state) ?? new CycleCount(3);
+        Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
+        Place(directive, ensured.Length);
+        steps.Add(new Step(directive, expansion, routine, Stream, null));
+    }
+
     /// <summary>An <c>.error</c> the build reached: a configuration the file refuses to be built in.</summary>
+
     private void Refuse(SyntaxNode directive) =>
         Report(directive.Span, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported");
 

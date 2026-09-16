@@ -93,9 +93,11 @@ public sealed class ControlFlow
         var units = new List<Unit>();
         foreach (var step in steps)
         {
-            if (Annotations.Is(step.Statement) && units.Count > 0)
+            // An annotation after a macro call is about the last statement of its expansion,
+            // which is before the step that marks where the expansion ends.
+            if (Annotations.Is(step.Statement) && units.FindLast(unit => !unit.Step.IsMarker) is { } above)
             {
-                units[^1].Annotations.Add(step.Statement);
+                above.Annotations.Add(step.Statement);
                 continue;
             }
             units.Add(new Unit(step));
@@ -260,8 +262,9 @@ public sealed class ControlFlow
         var total = new CycleCount(0);
         foreach (var step in block.Steps)
         {
-            // A `.state` takes no time, because it is not there at all.
-            if (step.Statement.Kind == SyntaxKind.StateDirective)
+            // A `.state` and a `.frame` take no time, because they are not there at all, and
+            // neither do the ends of an expansion.
+            if (step.Statement.Kind is SyntaxKind.StateDirective or SyntaxKind.FrameDirective || step.IsMarker)
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
                 return null;
@@ -407,7 +410,7 @@ public sealed class ControlFlow
         var fromCode = false;
         foreach (var unit in units)
         {
-            if (unit.Step.Label is not null)
+            if (unit.Step.Label is not null || unit.Step.IsMarker)
                 continue;
             var data = unit.Step.Statement.Kind == SyntaxKind.DataDirective;
 
