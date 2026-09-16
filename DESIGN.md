@@ -1844,6 +1844,10 @@ Recorded so the reasoning survives. None is open.
 - **Segment blocks, not per-item attributes.** One placement mechanism, nestable, and
   the structured replacement for `.pushseg`/`.popseg`.
 - **JSON for the project file.**
+- **Whitespace binds nothing.** `lda # 1` is `lda #1`, as it is in ca65, which assembles
+  it without complaint. Maximal munch (§4) stays the one place spacing changes what a line
+  means; making `#` bind to its expression would be a second such rule, and would raise the
+  same question of `#< label`, `# (1+2)` and every other operand form.
 - **Register names are reserved** wherever a bare name can appear, macro parameters
   included, but not for members of named structs, unions and enums, which are only
   reached through `::`. The output never names members, so ca65's restriction on member
