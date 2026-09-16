@@ -1,0 +1,24 @@
+; What the declarative constructs make wrong.
+.charmap screen {
+    'A'..'Z' = $01
+}
+
+.func twice(n) = n * 2
+
+.struct Point {
+x:      .word
+y:      .word
+bad:    .asciiz "no"    ;! error: `bad` reserves no room a member may take
+}
+
+; A layout that holds itself has no size, which is the same ring any constant would be.
+.struct Ring {          ;! error: `Ring` is defined in terms of itself
+self:   .tag Ring       ;! error: `self` reserves no room a member may take
+}
+
+.rodata {
+    .byte screen("hi")  ;! error: `screen` does not map `h` ;! error: `screen` is not transpiled yet
+    .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given ;! error: `twice` is not transpiled yet
+    .align 100          ;! error: an `.align` boundary must be a power of two, not 100
+    .byte Point::z      ;! error: `z` is not declared in `Point`
+}

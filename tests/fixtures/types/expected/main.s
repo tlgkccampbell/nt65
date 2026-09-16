@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1743, 0
+.dbg file, "main.nt65", 2001, 0
 
 .segment "CODE": absolute
     Color__red = $00
@@ -66,16 +66,24 @@ hero:
 .dbg line, "main.nt65", 67
     .byte $5a, $49, $50, $00, $00, $00, $00, $00  ; name
 
+.dbg line, "main.nt65", 73
+blob:   .incbin "sprites.bin"
+.dbg line, "main.nt65", 74
+part:   .incbin "sprites.bin", 6, 4
+
+.dbg line, "main.nt65", 77
+    .align 16
+
 .segment "CODE": absolute
 main:
 
-.dbg line, "main.nt65", 75
+.dbg line, "main.nt65", 82
     lda a:player+4                  ; player::hp
-.dbg line, "main.nt65", 76
+.dbg line, "main.nt65", 83
     ldx a:actors                    ; actors::pos::x
-.dbg line, "main.nt65", 77
+.dbg line, "main.nt65", 84
     lda #Color__green
-.dbg line, "main.nt65", 78
+.dbg line, "main.nt65", 85
     lda #$0d
-.dbg line, "main.nt65", 79
+.dbg line, "main.nt65", 86
     rts

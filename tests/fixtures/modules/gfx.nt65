@@ -2,7 +2,7 @@
 ; named nowhere else in this program, and naming them from `main.nt65` is an error.
 .cpu 6502
 
-.export clear, SCREEN, ptr
+.export clear, SCREEN, ptr, Color, Sprite
 
 .zeropage {
 ptr:        .res 2
@@ -10,6 +10,18 @@ ptr:        .res 2
 
 SCREEN = $0400
 rows   = 25
+
+; An exported type is not a symbol to the linker: each of its members crosses instead, as
+; the flat constant it becomes.
+.enum Color {
+    black
+    white
+}
+
+.struct Sprite {
+x:      .byte
+y:      .byte
+}
 
 .scope palette {
     border = $0f

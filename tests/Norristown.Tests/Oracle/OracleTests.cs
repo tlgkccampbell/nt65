@@ -52,18 +52,31 @@ public sealed partial class OracleTests
     [Fact]
     public void GeneratedOutputAssemblesToTheLengthsNt65Computed()
     {
-        var outputs = FixtureCase.All()
-            .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project).Outputs.Select(o => (fixture.Name, Output: o)))
+        var fixtures = FixtureCase.All();
+        var outputs = fixtures
+            .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project, fixture.BinaryLength)
+                .Outputs.Select(o => (Fixture: fixture, Output: o)))
             .ToList();
         Assert.NotEmpty(outputs);
         Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
 
-        var failures = Repo.CollectFailures(outputs, o => Check(o.Name, o.Output));
+        // Every fixture with no errors of its own must reach the assembler; one that quietly
+        // produced nothing would be checked by nobody.
+        var written = outputs.Select(o => o.Fixture.Name).ToHashSet(StringComparer.Ordinal);
+        var missing = fixtures
+            .Where(f => f.ExpectedDiagnostics().Count == 0 && f.Sources.Count > 0 && !written.Contains(f.Name))
+            .Select(f => f.Name)
+            .ToList();
+        Assert.True(missing.Count == 0, $"produced no output, so nothing checked it: {string.Join(", ", missing)}");
+
+        var failures = Repo.CollectFailures(outputs, o => Check(o.Fixture, o.Output));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
 
-        static IEnumerable<string> Check(string fixture, OutputFile output)
+        static IEnumerable<string> Check(FixtureCase source, OutputFile output)
         {
-            var result = Ca65Oracle.Pinned.Assemble(Path.GetFileName(output.Path), output.Text);
+            var fixture = source.Name;
+            var result = Ca65Oracle.Pinned.Assemble(
+                Path.GetFileName(output.Path), output.Text, source.Binaries());
             if (!result.Succeeded)
             {
                 yield return $"[{fixture}] {output.Path}: ca65 reported:\n{result.Messages}";

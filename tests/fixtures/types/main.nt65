@@ -68,6 +68,13 @@ hero:   .tag Player {
     hp = 3
     name = "ZIP"
 }
+
+; A binary file is read for its length, and its path is written relative to the output.
+blob:   .incbin "sprites.bin"
+part:   .incbin "sprites.bin", 6, 4
+
+; An alignment generates however many bytes it takes, which only the assembler settles.
+    .align 16
 }
 
 .proc main {

@@ -90,6 +90,48 @@ public sealed class SymbolRequestsTests
         Assert.Equal(new Range(new Position(7, 10), new Position(7, 14)), hover.Range);
     }
 
+    /// <summary>
+    /// Hover over a type and its members says what an editor needs of a layout: the offset a
+    /// member sits at, how much room it takes, and the type it stands for.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnALayoutShowsOffsetsAndSizes()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, """
+            .struct Point {
+            x:      .word
+            y:      .word
+            }
+
+            .struct Player {
+            pos:    .tag Point
+            hp:     .byte
+            }
+
+            here:   .tag Player, 4
+            """);
+        await client.NextDiagnosticsAsync(timeout);
+
+        var member = await client.HoverAsync(Uri, new Position(7, 0), timeout);
+        Assert.NotNull(member);
+        Assert.Contains("**member** `Player::hp`", member.Contents.Value);
+        Assert.Contains("offset: `4`", member.Contents.Value);
+        Assert.Contains("size: `1` byte", member.Contents.Value);
+
+        var nested = await client.HoverAsync(Uri, new Position(6, 0), timeout);
+        Assert.NotNull(nested);
+        Assert.Contains("type: `Point`", nested.Contents.Value);
+        Assert.Contains("size: `4` bytes", nested.Contents.Value);
+
+        var array = await client.HoverAsync(Uri, new Position(10, 0), timeout);
+        Assert.NotNull(array);
+        Assert.Contains("**instance** `here`", array.Contents.Value);
+        Assert.Contains("size: `20` bytes", array.Contents.Value);
+        Assert.Contains("count: `4`", array.Contents.Value);
+    }
+
     /// <summary>A cheap local has no path, so hover names the routine it is private to (§6.2).</summary>
     [Fact]
     public async Task HoverOnACheapLocalSaysWhereItLives()

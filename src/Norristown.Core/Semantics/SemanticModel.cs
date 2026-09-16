@@ -35,10 +35,13 @@ public sealed class SemanticModel
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
+        // A struct member is written out as the number it is, so it is no symbol to the
+        // linker either, any more than a define is.
         ExternalSymbols = [.. References
             .Where(reference => !reference.IsDeclaration
                 && reference.Symbol.Tree != tree
-                && !reference.Symbol.IsDefine)
+                && !reference.Symbol.IsDefine
+                && reference.Symbol.Kind != SymbolKind.Member)
             .Select(reference => reference.Symbol)
             .Distinct()];
     }
@@ -105,6 +108,14 @@ public sealed class SemanticModel
     /// </summary>
     public DataSize? RoomFor(SyntaxNode directive) =>
         Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength);
+
+    /// <summary>
+    /// Evaluates an expression and reports what is wrong with it into
+    /// <paramref name="diagnostics"/>. Used for the operands of a data directive, which no
+    /// symbol holds and which nothing else would ever evaluate with anything to say.
+    /// </summary>
+    public void Check(SyntaxNode expression, List<Diagnostic> diagnostics) =>
+        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength);
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
     public IReadOnlyList<long>? BytesOf(SyntaxNode operand) =>

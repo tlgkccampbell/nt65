@@ -51,6 +51,26 @@ internal sealed class Evaluator
             evaluator.EvaluateSymbol(symbol);
     }
 
+    /// <summary>
+    /// Evaluates <paramref name="expression"/> and reports what is wrong with it. An
+    /// expression that is nobody's value — an operand of a data directive — is never reached
+    /// by the pass over the symbols, so whoever reads it asks for it to be checked.
+    /// </summary>
+    public static void Check(
+        SyntaxNode expression,
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        List<Diagnostic> diagnostics,
+        Func<string, long?>? binaryLength) =>
+        new Evaluator(segments, resolved, diagnostics, binaryLength).Bytes(expression);
+
+    /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
+    private void Bytes(SyntaxNode operand)
+    {
+        if (BytesIn(operand) is null)
+            Evaluate(operand);
+    }
+
     /// <summary>How much room a data directive takes, for a caller that has already reported.</summary>
     public static DataSize? DataSizeOf(
         SyntaxNode directive,

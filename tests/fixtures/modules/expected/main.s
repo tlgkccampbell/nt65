@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 923, 0
+.dbg file, "main.nt65", 1045, 0
 
 .export main
 
@@ -19,6 +19,7 @@ SCREEN = $0400
 .importzp ptr
 .import clear
 .import clear__again
+Color__white = $01
 
 .segment "CODE": absolute
 main:
@@ -41,4 +42,8 @@ main:
 .dbg line, "main.nt65", 24
     lda #<$0102                     ; HOST_VERSION
 .dbg line, "main.nt65", 25
+    lda #Color__white
+.dbg line, "main.nt65", 26
+    ldx #$01                        ; Sprite::y
+.dbg line, "main.nt65", 27
     rts

@@ -22,5 +22,7 @@
     jsr clear::again        ; an interior label, named through the routine it is in
     jsr host_print
     lda #<HOST_VERSION      ; the checked import, written out as the value nt65 used
+    lda #Color::white       ; an enum member from another file
+    ldx #Sprite::y          ; and a member offset from one
     rts
 }

@@ -24,9 +24,17 @@ public static class Compiler
         Compile(files, ProjectSettings.None with { Cpu = cpu });
 
     /// <summary>Compiles <paramref name="files"/> as the program <paramref name="project"/> describes (§5.3).</summary>
-    public static Compilation Compile(IReadOnlyCollection<SourceFile> files, ProjectSettings project)
+    public static Compilation Compile(IReadOnlyCollection<SourceFile> files, ProjectSettings project) =>
+        Compile(files, project, BinaryLengthOnDisk);
+
+    /// <summary>
+    /// The same, with <paramref name="binaryLength"/> answering how long the file an
+    /// <c>.incbin</c> names is, for a caller whose files are not where the paths say.
+    /// </summary>
+    public static Compilation Compile(
+        IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?> binaryLength)
     {
-        var analysis = Analyze(files, project);
+        var analysis = Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength);
         var diagnostics = new List<Diagnostic>(analysis.Diagnostics);
         var outputs = new List<OutputFile>();
 

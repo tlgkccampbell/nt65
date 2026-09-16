@@ -29,6 +29,11 @@ public static class DataLengths
     {
         if (directive.ChildTokens.Length == 0)
             return null;
+        if (diagnostics is not null)
+        {
+            foreach (var operand in directive.ChildNodes)
+                model.Check(operand, diagnostics);
+        }
         Check(directive, model, diagnostics);
         if (directive.ChildTokens[0].Text.Equals(".align", StringComparison.OrdinalIgnoreCase))
             return Unpredictable;

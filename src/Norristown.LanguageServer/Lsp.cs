@@ -150,8 +150,16 @@ internal static class Lsp
         // private to is worth saying instead (§6.2).
         if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
             text.Append($"\n- private to: `{owner}`");
-        if (symbol.Value.IsKnown)
+        if (symbol.Kind == SymbolKind.Member)
+            text.Append($"\n- offset: `{symbol.Value}`");
+        else if (symbol.Value.IsKnown)
             text.Append($"\n- value: `{symbol.Value}`");
+        if (symbol.Type is { } type)
+            text.Append($"\n- type: `{type.QualifiedName}`");
+        if (symbol.Size is { } room)
+            text.Append($"\n- size: `{room}` byte{(room == 1 ? "" : "s")}");
+        if (symbol.Count is { } count && symbol.Kind != SymbolKind.Member)
+            text.Append($"\n- count: `{count}`");
         if (symbol.AddressSize is { } size)
             text.Append($"\n- address size: `{Spell(size)}` ({(int)size} byte{((int)size == 1 ? "" : "s")})");
         if (symbol.IsAddress && symbol.Segment is { } segment)

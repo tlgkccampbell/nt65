@@ -50,7 +50,7 @@ public sealed class ProgramSymbols
                 declared.Add(symbol);
             }
 
-            foreach (var symbol in module.Exported)
+            foreach (var symbol in module.Exported.SelectMany(Spread))
             {
                 if (!exported.Add(symbol))
                     continue;
@@ -65,6 +65,20 @@ public sealed class ProgramSymbols
             }
         }
         return new ProgramSymbols(atFileScope, exported);
+    }
+
+    /// <summary>
+    /// What exporting one name makes visible. A type is not a symbol to the linker: what
+    /// crosses is each of its members, as the flat constant it becomes. The type itself
+    /// travels too, because a member is named through it.
+    /// </summary>
+    private static IEnumerable<Symbol> Spread(Symbol symbol)
+    {
+        yield return symbol;
+        if (symbol.Kind is not (SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+            yield break;
+        foreach (var member in symbol.Body?.Symbols ?? [])
+            yield return member;
     }
 
     /// <summary>

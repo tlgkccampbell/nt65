@@ -76,10 +76,18 @@ internal sealed partial class Ca65Oracle
         return [.. counts.Take(sourceLines)];
     }
 
-    /// <summary>Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached by content.</summary>
-    public AssemblyResult Assemble(string fileName, string source)
+    /// <summary>
+    /// Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached
+    /// by content. <paramref name="alongside"/> are files the source needs beside it, such as
+    /// the binary an <c>.incbin</c> names.
+    /// </summary>
+    public AssemblyResult Assemble(
+        string fileName, string source, IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
     {
-        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(commit + "\0" + source)));
+        var seed = new StringBuilder(commit).Append('\0').Append(source);
+        foreach (var (name, content) in alongside ?? [])
+            seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
+        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
         var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, key + ".txt");
         if (cached is not null && File.Exists(cached))
             return new AssemblyResult(true, "", [.. File.ReadAllText(cached).Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)]);
@@ -91,6 +99,8 @@ internal sealed partial class Ca65Oracle
             // directive can tell it. A wrapper sets that and includes the file unchanged, so
             // ca65's messages keep the file's own name and line numbers.
             File.WriteAllText(Path.Combine(work.FullName, fileName), source);
+            foreach (var (name, content) in alongside ?? [])
+                File.WriteAllBytes(Path.Combine(work.FullName, name), content);
             File.WriteAllText(Path.Combine(work.FullName, "oracle-wrapper.s"),
                 $".listbytes unlimited\n.include \"{fileName}\"\n");
 

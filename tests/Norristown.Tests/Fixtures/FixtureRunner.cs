@@ -9,7 +9,7 @@ internal static class FixtureRunner
 
     /// <summary>Runs one fixture and returns its failures, empty when it passes.</summary>
     public static IEnumerable<string> Run(FixtureCase fixture, bool update = false) =>
-        Run(fixture, sources => Compiler.Compile(sources, fixture.Project), update);
+        Run(fixture, sources => Compiler.Compile(sources, fixture.Project, fixture.BinaryLength), update);
 
     public static IEnumerable<string> Run(
         FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false)

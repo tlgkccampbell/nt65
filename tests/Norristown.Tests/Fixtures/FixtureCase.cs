@@ -75,6 +75,25 @@ internal sealed partial record FixtureCase(
     public static string Format(Diagnostic d) =>
         $"{d.Span.File}:{d.Span.Line}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}";
 
+    /// <summary>
+    /// How long a file an <c>.incbin</c> names is. A fixture's binaries sit beside its
+    /// sources, wherever the tests happen to be run from.
+    /// </summary>
+    public long? BinaryLength(string path)
+    {
+        var file = System.IO.Path.Combine(Directory, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        return File.Exists(file) ? new FileInfo(file).Length : null;
+    }
+
+    /// <summary>
+    /// The binaries a fixture's sources name, for an assembler that has to find them beside
+    /// the generated file rather than beside the fixture.
+    /// </summary>
+    public IReadOnlyList<(string Name, byte[] Content)> Binaries() =>
+        [.. System.IO.Directory.GetFiles(Directory, "*.bin")
+            .Order(StringComparer.Ordinal)
+            .Select(path => (System.IO.Path.GetFileName(path), File.ReadAllBytes(path)))];
+
     /// <summary>Expected output, keyed by output path.</summary>
     public SortedDictionary<string, string> ExpectedOutputs()
     {
