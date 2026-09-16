@@ -30,7 +30,7 @@ public sealed class ControlFlow
         this.layout = layout;
     }
 
-    /// <summary>Every region of every routine in the file.</summary>
+    /// <summary>Every routine in the file, one region each.</summary>
     public IReadOnlyList<FlowRegion> Regions => regions;
 
     /// <summary>What is wrong with the paths through this file.</summary>
@@ -43,19 +43,18 @@ public sealed class ControlFlow
         var diagnostics = new List<Diagnostic>();
 
         // A routine's bytes are one stream unless a nested segment block takes some of them
-        // somewhere else, and each stream is a path of its own.
-        foreach (var run in layout.Steps.Where(step => step.Routine is not null)
-            .GroupBy(step => (step.Routine, step.Stream)))
+        // somewhere else. Fall-through stays inside a stream, but a jump may go from one to
+        // another, so all of a routine's streams are one graph, its own stream first.
+        foreach (var run in layout.Steps.Where(step => step.Routine is not null).GroupBy(step => step.Routine))
         {
-            var routine = run.Key.Routine!;
-            var units = flow.Units([.. run]);
+            var routine = run.Key!;
+            var units = flow.Units([.. run.GroupBy(step => step.Stream).SelectMany(stream => stream)]);
             flow.FindRelativeCalls(units);
             var blocks = flow.Blocks(units);
 
-            // The routine is entered where its own name stands; a region that is a detour
-            // into another segment is entered by nothing fall-through can see.
+            // The routine is entered where its own name stands.
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
-            var region = new FlowRegion(routine, run.Key.Stream, entered, blocks);
+            var region = new FlowRegion(routine, entered, blocks);
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
@@ -118,7 +117,8 @@ public sealed class ControlFlow
         {
             var branch = units[i].Step;
             var push = units[i - 1];
-            if (!(IsInstruction(branch.Statement, "brl") || IsInstruction(branch.Statement, "bra"))
+            if (push.Step.Stream != branch.Stream || units[i + 1].Step.Stream != branch.Stream
+                || !(IsInstruction(branch.Statement, "brl") || IsInstruction(branch.Statement, "bra"))
                 || !IsInstruction(push.Step.Statement, "per") || push.Next is not null || units[i].Next is not null
                 || units[i + 1].Step.Label is not { } after
                 || Targets.Of(model, Transfers.TargetOf(branch.Statement, AddressingMode.Relative), branch.On)
@@ -127,10 +127,10 @@ public sealed class ControlFlow
             {
                 continue;
             }
-            var far = i >= 2 && IsInstruction(units[i - 2].Step.Statement, "phk");
+            var far = i >= 2 && units[i - 2].Step.Stream == branch.Stream
+                && IsInstruction(units[i - 2].Step.Statement, "phk");
             relativeCalls[(branch.Statement.Position, branch.On)] = new RelativeCall(routine.Symbol, far);
             returnAddresses.Add((push.Step.Statement.Position, push.Step.On));
-
         }
     }
 
@@ -167,8 +167,16 @@ public sealed class ControlFlow
         var open = false;
         var runsOn = false;
 
+        int? stream = null;
         foreach (var unit in units)
         {
+            // Nothing runs from the end of one stream into the start of the next.
+            if (unit.Step.Stream != stream)
+            {
+                open = false;
+                runsOn = false;
+                stream = unit.Step.Stream;
+            }
             if (unit.Step.Label is { } label)
             {
                 Open(label, unit.Step.On);
@@ -198,7 +206,7 @@ public sealed class ControlFlow
 
         void Open(Symbol? label, Expansion? on)
         {
-            blocks.Add(new BasicBlock(blocks.Count, label, on));
+            blocks.Add(new BasicBlock(blocks.Count, label, on, stream!.Value));
             tails.Add(null);
             fallenInto.Add(runsOn);
             open = true;
@@ -381,6 +389,7 @@ public sealed class ControlFlow
     /// written, so once the label exists the checks cover it; this is what pushes the
     /// programmer to write it down. A <c>.state</c> directly after the label declares it as
     /// an entry point, which acknowledges that it is reached from somewhere nt65 cannot see.
+    /// A label on data is read rather than run, so nothing reaching it is no news.
     /// </summary>
     private void CheckUnreachableLabels(FlowRegion region, List<Diagnostic> diagnostics)
     {
@@ -389,7 +398,7 @@ public sealed class ControlFlow
         foreach (var block in region.Blocks)
         {
             if (block.Index == 0 || block.Label is not { } label || block.Predecessors.Count > 0
-                || block.IsDeclared)
+                || block.IsDeclared || block.Steps is [{ Statement.Kind: SyntaxKind.DataDirective }, ..])
             {
                 continue;
             }
@@ -412,8 +421,14 @@ public sealed class ControlFlow
         // so there the annotation is required rather than suggested.
         var severity = layout.Cpu == Project.Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
         var fromCode = false;
+        int? stream = null;
         foreach (var unit in units)
         {
+            if (unit.Step.Stream != stream)
+            {
+                fromCode = false;
+                stream = unit.Step.Stream;
+            }
             if (unit.Step.Label is not null || unit.Step.IsMarker)
                 continue;
             var data = unit.Step.Statement.Kind == SyntaxKind.DataDirective;
@@ -454,6 +469,7 @@ public sealed class ControlFlow
             if (inline.IsAsciiz)
             {
                 if (i + 1 < units.Count && units[i + 1].Step.Label is null
+                    && units[i + 1].Step.Stream == units[i].Step.Stream
                     && units[i + 1].Step.Statement is { Kind: SyntaxKind.DataDirective } text
                     && text.ChildTokens.Length > 0
                     && text.ChildTokens[0].Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
@@ -479,7 +495,8 @@ public sealed class ControlFlow
             var taken = 0L;
             for (var j = i + 1; j < units.Count && taken < bytes; j++)
             {
-                if (units[j].Step.Label is not null || units[j].Step.Statement.Kind != SyntaxKind.DataDirective)
+                if (units[j].Step.Label is not null || units[j].Step.Stream != units[i].Step.Stream
+                    || units[j].Step.Statement.Kind != SyntaxKind.DataDirective)
                     break;
                 taken += layout.Of(units[j].Step.Statement, units[j].Step.On)?.Length ?? 0;
                 skipped.Add(units[j]);

@@ -232,15 +232,28 @@ internal sealed class Requirements
     /// </summary>
     private void CheckEnd(FlowRegion region)
     {
-        if (!region.IsEntered || region.Blocks.Count == 0)
+        if (!region.IsEntered)
             return;
-        var last = region.Blocks[^1];
+        foreach (var stream in region.Blocks.GroupBy(block => block.Stream))
+            CheckEnd(region, stream.Last(), stream.Key == region.Blocks[0].Stream);
+    }
+
+    /// <summary>
+    /// The end of one stream of a routine's bytes: its own, which runs into whatever is written
+    /// after the routine, or a nested segment block's, which runs into whatever that segment
+    /// holds next.
+    /// </summary>
+    private void CheckEnd(FlowRegion region, BasicBlock last, bool own)
+    {
         if (last.Index != 0 && !last.IsFallenInto && last.Predecessors.Count == 0 && !last.IsDeclared)
             return;
 
         var routine = region.Routine.DisplayName;
-        var message = $"`{routine}` runs off its end into whatever is written after it: `.next` naming the "
-            + "routine it runs into says so, or `.next ?` ends the path";
+        var message = own
+            ? $"`{routine}` runs off its end into whatever is written after it: `.next` naming the "
+                + "routine it runs into says so, or `.next ?` ends the path"
+            : $"`{routine}` runs off the end of a segment block into whatever that segment holds next: "
+                + "`.next` says where flow goes, or `.next ?` ends the path";
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;

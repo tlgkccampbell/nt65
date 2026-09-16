@@ -15,11 +15,12 @@ public sealed class BasicBlock
     private readonly List<FlowEdge> successors = [];
     private readonly List<int> predecessors = [];
 
-    internal BasicBlock(int index, Symbol? label, Expansion? on)
+    internal BasicBlock(int index, Symbol? label, Expansion? on, int stream)
     {
         Index = index;
         Label = label;
         On = on;
+        Stream = stream;
     }
 
     /// <summary>Which block it is, among its routine's.</summary>
@@ -30,6 +31,9 @@ public sealed class BasicBlock
 
     /// <summary>Which writing of the lines this block is, or null outside every expansion.</summary>
     public Expansion? On { get; }
+
+    /// <summary>Which stream of bytes it is in: its routine's own, or a nested segment block's.</summary>
+    public int Stream { get; }
 
     /// <summary>The statements in it, in order.</summary>
     public IReadOnlyList<Step> Steps => steps;

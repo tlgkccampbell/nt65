@@ -156,6 +156,55 @@ public sealed class RequirementsTests
         Assert.Equal("a16, i?, native", StateAt(analysis, "tax").Processor.ToString());
     }
 
+    /// <summary>
+    /// A nested segment block is part of its routine: a jump into it and back carries the
+    /// state both ways, as a jump within one stream of bytes does.
+    /// </summary>
+    [Fact]
+    public void AJumpIntoANestedSegmentBlockCarriesTheState()
+    {
+        const string Text = """
+            .proc p: a16 {
+                jmp @away
+            @back:
+                lda #$1234
+                rts
+                .data {
+            @away:
+                    lda #$5678
+                    jmp @back
+                }
+            }
+            """;
+        var analysis = Program(Text);
+
+        Assert.Empty(analysis.Problems());
+        Assert.Equal("a16, i8, native", StateAt(analysis, "lda #$5678").Processor.ToString());
+    }
+
+    /// <summary>
+    /// Code in a nested segment block that runs off its end runs into whatever that segment
+    /// holds next, which is no more the routine's than the end of the routine is.
+    /// </summary>
+    [Fact]
+    public void ANestedSegmentBlockThatRunsOffItsEndNeedsANext()
+    {
+        const string Text = """
+            .proc p {
+                jmp @away
+                .data {
+            @away:
+                    nop
+                }
+            }
+            """;
+
+        Assert.Equal(
+            ["main.nt65:6: `p` runs off the end of a segment block into whatever that segment holds next: "
+                + "`.next` says where flow goes, or `.next ?` ends the path"],
+            Program(Text).Problems());
+    }
+
     /// <summary>Only the state a declaration gives is checked at a jump into another routine.</summary>
     [Fact]
     public void AJumpIntoAnotherRoutineMeetsItsDeclaration()

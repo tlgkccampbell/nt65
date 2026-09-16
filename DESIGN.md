@@ -839,11 +839,12 @@ label:
 | a routine that returns past inline data: `jsr print` then `.asciiz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.asciiz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
-| label nothing names | no fall-through, branch, or address-taken use | reported as unreachable; a declaration acknowledges it |
+| label nothing names | no fall-through, branch, or address-taken use; a label on data is exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from this file is checked against for the parts it gives. Such a label may be a jump target, never a call target |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment |
+| falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | handler or external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
 | self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`; widths of `@op` are analyzed as written |
