@@ -25,9 +25,9 @@ TRACE = 0
     .error "this configuration is not supported"
 }
 
-; nt65 knows what these are worth, so neither reaches ca65.
-    .assert LINES == 312, error, "this platform has 312 lines"
-    .assert TRACE == 1, error, "debugging is on"
+; nt65 knows what these are worth whichever way the build goes, so neither reaches ca65.
+    .assert LINES > 200, error, "a platform has more than 200 lines"
+    .assert TRACE <= 2, error, "the trace level is 0, 1 or 2"
 
 .proc main {
     ; A branch belongs to the scope around it: `@again` is `main`'s cheap local.

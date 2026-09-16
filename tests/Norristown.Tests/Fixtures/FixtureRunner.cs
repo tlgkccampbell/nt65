@@ -48,7 +48,7 @@ internal static class FixtureRunner
 
         var expected = fixture.ExpectedOutputs();
         var actual = compilation.Outputs.ToDictionary(o => o.Path, o => o.Text, StringComparer.Ordinal);
-        var expectedDir = Path.Combine(fixture.Directory, FixtureCase.ExpectedDirectory);
+        var expectedDir = Path.Combine(fixture.Directory, fixture.ExpectedDirectory);
 
         if (update)
         {

@@ -69,6 +69,6 @@ public sealed class FixtureHarnessTests : IDisposable
     {
         foreach (var (path, text) in files)
             Repo.WriteText(Path.Combine(dir.FullName, path), text);
-        return FixtureCase.Load(dir.FullName);
+        return FixtureCase.Load(dir.FullName).Single();
     }
 }

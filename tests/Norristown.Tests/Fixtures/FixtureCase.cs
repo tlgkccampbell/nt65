@@ -13,15 +13,23 @@ namespace Norristown.Tests.Fixtures;
 /// <item><c>expected/**/*.s</c>, the output snapshot, one file per generated file, at the
 /// output's path.</item>
 /// </list>
+/// <para>
+/// A fixture may also be built more than one way: an <c>nt65.<em>label</em>.json</c> beside
+/// the project file is another configuration of the same sources, with its snapshot under
+/// <c>expected.<em>label</em></c>. What differs between two builds of one program is then
+/// two snapshots to read side by side. All of them must be clean, because an inline
+/// <c>;!</c> says nothing about which configuration reports it.
+/// </para>
 /// </summary>
 internal sealed partial record FixtureCase(
     string Name,
     string Directory,
     IReadOnlyList<SourceFile> Sources,
     ProjectSettings Project,
-    SourceFile? ProjectFileText)
+    SourceFile? ProjectFileText,
+    string ExpectedDirectory)
 {
-    public const string ExpectedDirectory = "expected";
+    public const string DefaultExpectedDirectory = "expected";
 
     public static IReadOnlyList<FixtureCase> All()
     {
@@ -35,26 +43,40 @@ internal sealed partial record FixtureCase(
             .Select(dir => System.IO.Path.GetFileName(dir))
             .Where(name => string.IsNullOrEmpty(filter) || name.Contains(filter, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal)
-            .Select(name => Load(System.IO.Path.Combine(root, name)))];
+            .SelectMany(name => Load(System.IO.Path.Combine(root, name)))];
     }
 
-    public static FixtureCase Load(string directory)
+    /// <summary>Every way <paramref name="directory"/> is built: one per configuration it holds.</summary>
+    public static IReadOnlyList<FixtureCase> Load(string directory)
     {
         var sources = System.IO.Directory.GetFiles(directory, "*.nt65", SearchOption.AllDirectories)
             .Select(path => new SourceFile(RelativePath(directory, path), Repo.ReadText(path)))
             .OrderBy(file => file.Path, StringComparer.Ordinal)
             .ToList();
+        var name = System.IO.Path.GetFileName(directory);
 
-        var project = ProjectSettings.None;
-        SourceFile? projectFile = null;
-        var json = System.IO.Path.Combine(directory, Norristown.Project.ProjectFile.Name);
-        if (File.Exists(json))
+        var cases = new List<FixtureCase>();
+        foreach (var json in System.IO.Directory.GetFiles(directory, "nt65*.json").Order(StringComparer.Ordinal))
         {
-            projectFile = new SourceFile(Norristown.Project.ProjectFile.Name, Repo.ReadText(json));
-            project = Norristown.Project.ProjectFile.Read(projectFile.Path, projectFile.Text);
+            // `nt65.json` is the fixture's own build; `nt65.<label>.json` is another one.
+            var file = System.IO.Path.GetFileName(json);
+            var label = file.Length > "nt65.json".Length ? file["nt65.".Length..^".json".Length] : "";
+
+            var text = new SourceFile(file, Repo.ReadText(json));
+            cases.Add(new FixtureCase(
+                label.Length == 0 ? name : $"{name} ({label})",
+                directory,
+                sources,
+                Norristown.Project.ProjectFile.Read(Norristown.Project.ProjectFile.Name, text.Text),
+                text,
+                label.Length == 0 ? DefaultExpectedDirectory : $"{DefaultExpectedDirectory}.{label}"));
         }
-        return new FixtureCase(
-            System.IO.Path.GetFileName(directory), directory, sources, project, projectFile);
+        if (cases.Count == 0)
+        {
+            cases.Add(new FixtureCase(
+                name, directory, sources, ProjectSettings.None, null, DefaultExpectedDirectory));
+        }
+        return cases;
     }
 
     public static string RelativePath(string directory, string path) =>
