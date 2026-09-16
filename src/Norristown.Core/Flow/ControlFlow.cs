@@ -295,8 +295,9 @@ public sealed class ControlFlow
 
     /// <summary>
     /// The labels one <c>.next</c> names. A target that is a list, or a data label whose
-    /// items are all code labels — each optionally minus one, as an RTS dispatch table
-    /// writes them — stands for every one of those labels.
+    /// items are all code labels or routines — each optionally minus one, as an RTS dispatch
+    /// table writes them — stands for every one of those labels, which is how an indirect
+    /// call names the routines in its table.
     /// </summary>
     internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(SyntaxNode next, Expansion? on)
     {
@@ -321,8 +322,11 @@ public sealed class ControlFlow
         var items = target.Kind == SymbolKind.List ? target.Items : ItemsOfTable(target);
         foreach (var item in items)
         {
-            if (Targets.Of(model, Stripped(item), on) is { } named && named.Symbol.Kind is SymbolKind.Label)
+            if (Targets.Of(model, Stripped(item), on) is { } named
+                && (named.Symbol.Kind is SymbolKind.Label || named.Symbol.Signature is not null))
+            {
                 yield return named;
+            }
             else
                 yield break;
         }

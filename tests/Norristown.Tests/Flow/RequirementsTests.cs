@@ -119,6 +119,43 @@ public sealed class RequirementsTests
         Assert.Equal(0, StateAt(analysis, "tax").Stack?.Depth);
     }
 
+    /// <summary>
+    /// A list or a table of routines stands for every routine in it, so an indirect call through
+    /// one is checked against each entry and returns with the merge of their exits.
+    /// </summary>
+    [Theory]
+    [InlineData(".list handlers {\n    wide\n    wider\n}\n")]
+    [InlineData(".rodata {\nhandlers: .addr wide, wider\n}\n")]
+    public void ANextNamingRoutinesInAListCallsEachOfThem(string handlers)
+    {
+        var text = """
+            .proc wide: a8 -> a16 {
+                rep #$20
+                rts
+            }
+            .proc wider: a8 -> a16, i16 {
+                rep #$30
+                rts
+            }
+            .proc p: a16 -> a16, i? {
+                jsr (handlers,x)
+                .next handlers
+                tax
+                rts
+            }
+
+            """ + handlers;
+        var analysis = Program(text);
+
+        Assert.Equal(
+            [
+                "main.nt65:11: `jsr wide` needs `a8`, and A is 16-bit here",
+                "main.nt65:11: `jsr wider` needs `a8`, and A is 16-bit here",
+            ],
+            analysis.Problems());
+        Assert.Equal("a16, i?, native", StateAt(analysis, "tax").Processor.ToString());
+    }
+
     /// <summary>Only the state a declaration gives is checked at a jump into another routine.</summary>
     [Fact]
     public void AJumpIntoAnotherRoutineMeetsItsDeclaration()
