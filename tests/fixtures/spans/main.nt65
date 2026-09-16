@@ -1,0 +1,40 @@
+; `.sizeof` and `.countof` describe a shape and are nt65 constants. `.endof` and
+; `.spanof` describe layout: the address just past something, and how many bytes it
+; takes. Those are address expressions like any label difference — usable in operands,
+; data and `.assert`, never where a constant is required — and ca65 and ld65 resolve them.
+.cpu 6502
+
+.proc reloc {
+    lda source
+    sta dest
+    rts
+}
+
+.rodata {
+; A header that says where the block is and how long it is. nt65 works the span out
+; itself, so an assertion about one is answered before ca65 runs.
+header: .addr reloc
+        .word .spanof(reloc)
+        .addr .endof(reloc)
+
+table:  .byte 1, 2, 4, 8
+count:  .byte .spanof(table)
+}
+
+.proc copy {
+    ldx #.spanof(reloc)
+@loop:
+    lda reloc,x
+    sta dest,x
+    dex
+    bne @loop
+    rts
+}
+
+.assert .spanof(reloc) == 7, error, "reloc is seven bytes"
+.assert .spanof(table) == 4, error, "the table is four bytes"
+
+.bss {
+source: .res 1
+dest:   .res 1
+}

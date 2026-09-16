@@ -109,6 +109,15 @@ public sealed class FlatNames
         return name;
     }
 
+    /// <summary>What already has <paramref name="name"/> in the output, or null when nothing has.</summary>
+    public Symbol? Claimed(string name) => taken.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Claims <paramref name="name"/> for a label the output needs and the source never
+    /// wrote, such as the end of a routine.
+    /// </summary>
+    public void Claim(string name) => taken[name] = null;
+
     /// <summary>
     /// A name for something the output needs and the source never wrote, such as the label a
     /// long branch skips over. It is derived from the source like every other generated

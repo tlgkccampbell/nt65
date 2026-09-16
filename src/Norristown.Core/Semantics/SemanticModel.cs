@@ -126,8 +126,14 @@ public sealed class SemanticModel
     /// What an expression is worth, for an editor to show. <paramref name="on"/> is the turn
     /// of the repetition it was written in, whose bindings it may name.
     /// </summary>
-    public Value ValueOf(SyntaxNode expression, Expansion? on = null) =>
-        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on));
+    /// <summary>
+    /// <paramref name="spans"/> answers how many bytes a routine, a scope or a data
+    /// declaration takes, for a caller that has laid the file out; without it a span is
+    /// simply unknown, as an address is. The model stays read-only either way: what only
+    /// layout knows is supplied by whoever asks rather than kept here.
+    /// </summary>
+    public Value ValueOf(SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null) =>
+        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans);
 
     /// <summary>The symbol a written name stands for, or null when it names none.</summary>
     public Symbol? SymbolOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
@@ -144,8 +150,10 @@ public sealed class SemanticModel
     /// <paramref name="diagnostics"/>. Used for the operands of a data directive, which no
     /// symbol holds and which nothing else would ever evaluate with anything to say.
     /// </summary>
-    public void Check(SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null) =>
-        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on));
+    public void Check(
+        SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
+        Func<Symbol, long?>? spans = null) =>
+        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans);
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
     public IReadOnlyList<long>? BytesOf(SyntaxNode operand, Expansion? on = null) =>

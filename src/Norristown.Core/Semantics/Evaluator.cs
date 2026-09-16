@@ -31,17 +31,23 @@ internal sealed class Evaluator
     private readonly Dictionary<Symbol, MacroArgument> given = [];
     private readonly Func<string, long?>? binaryLength;
 
+    // How many bytes a routine, a scope or a data declaration takes. Only layout knows, so
+    // only a caller that has laid the file out can answer it.
+    private readonly Func<Symbol, long?>? spans;
+
     private Evaluator(
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic>? diagnostics,
         Func<string, long?>? binaryLength = null,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null)
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Func<Symbol, long?>? spans = null)
     {
         this.segments = segments;
         this.resolved = resolved;
         this.diagnostics = diagnostics;
         this.binaryLength = binaryLength;
+        this.spans = spans;
 
         // A name a repetition binds stands for its value on this turn, which is what a
         // function's parameter already does for its argument.
@@ -83,8 +89,9 @@ internal sealed class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics,
         Func<string, long?>? binaryLength,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        new Evaluator(segments, resolved, diagnostics, binaryLength, bound).Bytes(expression);
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Func<Symbol, long?>? spans = null) =>
+        new Evaluator(segments, resolved, diagnostics, binaryLength, bound, spans).Bytes(expression);
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
     private void Bytes(SyntaxNode operand)
@@ -136,8 +143,9 @@ internal sealed class Evaluator
         SyntaxNode expression,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        new Evaluator(segments, resolved, null, null, bound).Evaluate(expression);
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Func<Symbol, long?>? spans = null) =>
+        new Evaluator(segments, resolved, null, null, bound, spans).Evaluate(expression);
 
     /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
@@ -420,10 +428,36 @@ internal sealed class Evaluator
                 : Value.Of(about.Block is null || Macros.LinesOf(about.Block).Count == 0);
         }
 
+        // `.endof` and `.spanof` describe layout rather than shape: they are address
+        // expressions like any label difference. Only the difference can ever be a number,
+        // because nt65 never knows an absolute address, and only a caller that has laid the
+        // file out can supply it.
+        if (name is ".endof" or ".spanof")
+        {
+            if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } laid)
+                return Value.Unknown;
+            if (!HasBytesOfItsOwn(laid))
+            {
+                Report(arguments[0], $"`{laid.Name}` is a {laid.KindText} and takes no bytes of its own, "
+                    + $"so `{name}` has nothing to measure");
+                return Value.Unknown;
+            }
+            return name == ".spanof" && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
+        }
+
         if (name is ".sizeof" or ".countof")
         {
             if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } measured)
                 return Value.Unknown;
+
+            // A routine and a scope have no shape: what they take is layout, which is
+            // resolved by ca65 and ld65 rather than being an nt65 constant.
+            if (measured.Kind is SymbolKind.Proc or SymbolKind.Scope)
+            {
+                Report(arguments[0], $"`{measured.Name}` is a {measured.KindText}, and `{name}` describes a shape. "
+                    + "`.spanof` is how many bytes it takes in the output");
+                return Value.Unknown;
+            }
 
             // `.countof(p)` of a `list` parameter is how many arguments the call gave it.
             if (name == ".countof" && Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
@@ -457,11 +491,20 @@ internal sealed class Evaluator
                 ? Value.Of(t[(int)at.Number])
                 : Value.Unknown,
 
-            // `.sizeof`, `.countof`, `.endof`, `.spanof`, `.target`, `.defined` and the three
-            // a macro body adds arrive with the stages that give them something to measure.
+            // `.target`, `.defined` and the three a macro body adds are answered before this
+            // point, each by the pass that knows what they ask about.
             _ => Value.Unknown,
         };
     }
+
+    /// <summary>
+    /// Whether a symbol has bytes of its own in the output, which is what an end and a span
+    /// are the end and the span of.
+    /// </summary>
+    private static bool HasBytesOfItsOwn(Symbol symbol) =>
+        symbol.Kind is SymbolKind.Proc or SymbolKind.Scope
+        || (symbol.Kind == SymbolKind.Label && symbol.Data is not null)
+        || symbol.Kind == SymbolKind.Instance;
 
     /// <summary>What a name's macro parameter was given, or null when it names no parameter.</summary>
     private MacroArgument? Argument(SyntaxNode name) =>
@@ -573,6 +616,13 @@ internal sealed class Evaluator
 
         void Walk(SyntaxNode node)
         {
+            // A span is the difference of two addresses, which is a number; an end is an
+            // address, as wide as the label it follows.
+            if (node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
+                && node.ChildTokens[0].Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
             if (node.Kind == SyntaxKind.CurrentAddressExpression)
             {
                 named = true;

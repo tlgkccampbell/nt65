@@ -37,6 +37,13 @@ public sealed class CodeLayout
     // lengthening one moves everything after it, so the file is laid out again.
     private readonly HashSet<(int Position, Expansion? On)> lengthened;
 
+    // How many bytes each measured routine, scope or data declaration takes. A `.spanof` may
+    // be written before the thing it measures, so what one walk works out is what the next
+    // one answers with; only what the file actually measures is tracked.
+    private readonly IReadOnlySet<Symbol> measured;
+    private readonly Dictionary<Symbol, long> settled;
+    private readonly Dictionary<Symbol, long> extents = [];
+
     // The streams the walk is inside, innermost last. A nested segment block is a detour, so
     // the stream around it resumes where it left off.
     private readonly List<int> streams = [0];
@@ -63,11 +70,15 @@ public sealed class CodeLayout
     /// </summary>
     private const int MaximumStatements = 65536;
 
-    private CodeLayout(SemanticModel model, Cpu cpu, HashSet<(int Position, Expansion? On)> lengthened)
+    private CodeLayout(
+        SemanticModel model, Cpu cpu, HashSet<(int Position, Expansion? On)> lengthened,
+        IReadOnlySet<Symbol> measured, Dictionary<Symbol, long> settled)
     {
         this.model = model;
         this.cpu = cpu;
         this.lengthened = lengthened;
+        this.measured = measured;
+        this.settled = settled;
     }
 
     /// <summary>The CPU this file was laid out for.</summary>
@@ -79,6 +90,13 @@ public sealed class CodeLayout
     /// <summary>Every statement of the file, in the order its bytes are written.</summary>
     public IReadOnlyList<Step> Steps => steps;
 
+    /// <summary>
+    /// How many bytes <paramref name="symbol"/> takes in the output, which is what
+    /// <c>.spanof</c> is worth, or null when nt65 cannot say — a span with an
+    /// <c>.align</c> in it depends on an address.
+    /// </summary>
+    public long? SpanOf(Symbol symbol) => settled.TryGetValue(symbol, out var span) ? span : null;
+
     /// <summary>Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>.</summary>
     public static CodeLayout Create(SemanticModel model, Cpu cpu)
     {
@@ -86,13 +104,15 @@ public sealed class CodeLayout
         // none changes, which terminates because a branch only ever grows. Only the last
         // walk is kept: the ones before it laid out a file that is not the one written.
         var lengthened = new HashSet<(int Position, Expansion? On)>();
+        var measured = Extents.MeasuredIn(model);
+        var settled = new Dictionary<Symbol, long>();
         CodeLayout layout;
         do
         {
-            layout = new CodeLayout(model, cpu, lengthened);
+            layout = new CodeLayout(model, cpu, lengthened, measured, settled);
             layout.WalkContainer(model.Tree.Root);
         }
-        while (layout.Lengthen());
+        while (layout.Lengthen() | layout.Settle());
 
         layout.CheckBranchRange();
         layout.Diagnostics = Norristown.Diagnostics.Ordered(layout.diagnostics);
@@ -265,6 +285,14 @@ public sealed class CodeLayout
         {
             routine = NameOf(declaration);
         }
+
+        // What a routine or a scope takes is the bytes between the two ends of its block, in
+        // its own stream: a nested segment block is somewhere else and does not count.
+        var spanning = kind is BlockKind.Proc or BlockKind.Scope && lines.Length > 0
+            && lines[0].Statement is { } header && NameOf(header) is { } named && measured.Contains(named)
+            ? named
+            : null;
+        var opened = (Stream, Offset: filled.GetValueOrDefault(Stream));
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
         {
             segment = Constructs.SegmentOf(opener) ?? segment;
@@ -276,6 +304,8 @@ public sealed class CodeLayout
         }
 
         Walk(lines, from: 1);
+        if (spanning is not null && Stream == opened.Stream)
+            extents[spanning] = filled.GetValueOrDefault(Stream) - opened.Offset;
         routine = outerRoutine;
         if (kind == BlockKind.Segment)
             streams.RemoveAt(streams.Count - 1);
@@ -349,12 +379,21 @@ public sealed class CodeLayout
                 Refuse(statement);
                 break;
             case SyntaxKind.LabeledLine:
+                Symbol? labelled = null;
                 foreach (var child in statement.ChildNodes)
                 {
                     if (child.Kind == SyntaxKind.Label)
+                    {
                         Mark(child);
-                    else
-                        Statement(child);
+                        labelled = NameOf(child);
+                        continue;
+                    }
+                    Statement(child);
+                    if (labelled is not null && measured.Contains(labelled)
+                        && placements.GetValueOrDefault((child.Position, expansion)) is { Length: >= 0 } placed)
+                    {
+                        extents[labelled] = placed.Length;
+                    }
                 }
                 break;
 
@@ -549,6 +588,29 @@ public sealed class CodeLayout
         }
     }
 
+    /// <summary>
+    /// Takes what this walk worked out about the measured spans, and says whether any of
+    /// them changed. A span is not what any length depends on here, so one more walk
+    /// settles them.
+    /// </summary>
+    private bool Settle()
+    {
+        var changed = false;
+        foreach (var symbol in measured)
+        {
+            var now = extents.TryGetValue(symbol, out var span) ? span : (long?)null;
+            var before = settled.TryGetValue(symbol, out var was) ? was : (long?)null;
+            if (now == before)
+                continue;
+            if (now is { } value)
+                settled[symbol] = value;
+            else
+                settled.Remove(symbol);
+            changed = true;
+        }
+        return changed;
+    }
+
     /// <summary>Whether a distance is one a branch can reach.</summary>
     private static bool InRange(int reach) => reach is >= -128 and <= 127;
 
@@ -646,7 +708,7 @@ public sealed class CodeLayout
         // `.byteof` takes one byte of the value, so the value it is taken from is not the
         // one that has to fit.
         if (mode == AddressingMode.Immediate && substituted is not { ByteOf: true }
-            && model.ValueOf(expression, expansion).AsNumber() is { } value
+            && model.ValueOf(expression, expansion, SpanOf).AsNumber() is { } value
             && value is < -128 or > 255)
         {
             Report(expression.Span, $"an immediate is one byte, and {Value.Of(value)} does not fit");
@@ -663,9 +725,9 @@ public sealed class CodeLayout
         var assertion = Constructs.AssertionOf(directive);
         if (assertion.Condition is not { } condition)
             return;
-        if (model.ValueOf(condition, expansion).AsNumber() is not { } value)
+        if (model.ValueOf(condition, expansion, SpanOf).AsNumber() is not { } value)
         {
-            model.Check(condition, diagnostics, expansion);
+            model.Check(condition, diagnostics, expansion, SpanOf);
             return;
         }
         if (value == 0)
