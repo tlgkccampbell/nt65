@@ -72,6 +72,10 @@ public sealed class ProgramModel
         var symbols = ProgramSymbols.Build(modules, program);
         var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
 
+        // Whether a macro can reach itself is a question about the program: a body in one
+        // file may call a macro in another, and a cycle between the two is still one cycle.
+        Macros.CheckRecursion(binders.SelectMany(binder => binder.DeclaredMacros()), program);
+
         // One map for the program, keyed by file as well as position: evaluating a constant
         // in one file may follow a name into another, where the same offsets mean something
         // else entirely.

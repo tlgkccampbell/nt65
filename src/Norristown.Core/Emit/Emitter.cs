@@ -459,6 +459,7 @@ public sealed class Emitter
                 break;
 
             case SyntaxKind.UnsupportedLine:
+            case SyntaxKind.MacroCall:
                 NotTranspiled(statement);
                 break;
 
@@ -499,7 +500,8 @@ public sealed class Emitter
             Reserved(line, statement, rest);
             return;
         }
-        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, iteration) is null)
+        if (rest is { Kind: SyntaxKind.MacroCall }
+            || (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, iteration) is null))
         {
             NotTranspiled(rest);
             return;

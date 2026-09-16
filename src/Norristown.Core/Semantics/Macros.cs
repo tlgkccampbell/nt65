@@ -59,6 +59,104 @@ public static class Macros
     };
 
     /// <summary>
+    /// The blocks a call opens, in order: the one its own line opens, and each
+    /// <c>} name {</c> after it, which the block layer makes a sibling rather than a child.
+    /// Empty when the call takes no block.
+    /// </summary>
+    public static IReadOnlyList<SyntaxNode> BlocksOf(SyntaxNode call)
+    {
+        if (LineOf(call) is not { Parent: { } block } || block.Green is not GreenBlock opened
+            || opened.BlockKind != BlockKind.MacroBlock || block.Parent is not { } container)
+        {
+            return [];
+        }
+
+        var blocks = new List<SyntaxNode>();
+        var started = false;
+        foreach (var sibling in container.ChildNodes)
+        {
+            if (sibling == block)
+                started = true;
+            else if (!started)
+                continue;
+            else if (sibling.Green is not GreenBlock { BlockKind: BlockKind.MacroBlock }
+                || sibling.ChildNodes is not [{ Statement.Kind: SyntaxKind.BlockContinuation }, ..])
+            {
+                break;
+            }
+            blocks.Add(sibling);
+        }
+        return blocks;
+    }
+
+    /// <summary>The line a node was written on.</summary>
+    public static SyntaxNode? LineOf(SyntaxNode node)
+    {
+        for (var above = node; above is not null; above = above.Parent)
+        {
+            if (above.Green is GreenLine)
+                return above;
+        }
+        return null;
+    }
+
+    /// <summary>The lines of a block argument: everything between the braces around it.</summary>
+    public static IReadOnlyList<SyntaxNode> LinesOf(SyntaxNode block)
+    {
+        var lines = block.ChildNodes;
+        var last = lines.Length;
+
+        // The line that opens the block is its first; the `}` that closes it is a line of its
+        // own, and a `} name {` belongs to the block it opens rather than to this one.
+        if (last > 1 && lines[last - 1].Statement is { Kind: SyntaxKind.BlockCloseLine })
+            last--;
+        return [.. lines.Take(last).Skip(1)];
+    }
+
+    /// <summary>
+    /// Reports any macro that can reach itself, directly or through others. nt65 checks this
+    /// from the names its bodies resolved to, without expanding anything, which is what makes
+    /// every expansion bounded (§11.1).
+    /// </summary>
+    public static void CheckRecursion(IEnumerable<Symbol> macros, List<Diagnostic> diagnostics)
+    {
+        var done = new HashSet<Symbol>();
+        var path = new List<Symbol>();
+        var reported = new HashSet<Symbol>();
+
+        void Visit(Symbol macro)
+        {
+            if (!done.Add(macro))
+                return;
+            path.Add(macro);
+            foreach (var (callee, at) in macro.Calls)
+            {
+                var start = path.IndexOf(callee);
+                if (start < 0)
+                {
+                    Visit(callee);
+                    continue;
+                }
+                if (!reported.Add(callee))
+                    continue;
+
+                // The cycle is named by what it goes through, so a reader can see which
+                // call to break rather than only that something is circular.
+                var through = path.Skip(start + 1).Select(step => $"`{step.Name}`").ToList();
+                diagnostics.Add(new Diagnostic(at, Severity.Error,
+                    through.Count == 0
+                        ? $"`{callee.Name}` calls itself, and every expansion has to be bounded"
+                        : $"`{callee.Name}` calls itself through {string.Join(", ", through)}, "
+                            + "and every expansion has to be bounded"));
+            }
+            path.RemoveAt(path.Count - 1);
+        }
+
+        foreach (var macro in macros)
+            Visit(macro);
+    }
+
+    /// <summary>
     /// Why a macro body may not hold this statement, or null when it may. Each of these
     /// would either declare a name in the caller or make something program-wide depend on
     /// how many times the macro is called (§11.3).

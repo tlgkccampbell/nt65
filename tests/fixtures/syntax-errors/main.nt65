@@ -2,7 +2,7 @@
 .proc main {
     lda #$1G            ;! error: invalid hexadecimal number `$1G`
     .byte 'ab'            ;! error: a character literal holds exactly one character
-    m!({                ;! error: expected an expression
+    m!({                ;! error: expected an expression ;! error: `m` is not declared ;! error: `m` is not transpiled yet
     rts
 }
 }                       ;! error: unmatched `}`

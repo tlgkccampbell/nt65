@@ -37,6 +37,7 @@ internal sealed class Binder
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
     private readonly List<Use> exports = [];
+    private readonly List<Invocation> calls = [];
     private readonly HashSet<Symbol> resolving = [];
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
@@ -44,9 +45,6 @@ internal sealed class Binder
     private string segment = SegmentTable.DefaultSegment;
     private Symbol? previousEnumMember;
     private SyntaxToken? repetition;
-
-    // The call a `} name {` continues, which is the one its block argument belongs to.
-    private SyntaxNode? openCall;
 
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
@@ -90,9 +88,18 @@ internal sealed class Binder
     public Result Resolve(ProgramSymbols program)
     {
         this.program = program;
-        ResolveUses();
+        ResolveUses(uses);
+
+        // A call's arguments are resolved after everything else, because whether a name in
+        // one is a name at all depends on the parameter it binds to: a `one` argument is a
+        // word, and words are never looked up.
+        ResolveCalls();
+        references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
         return new Result(fileScope, symbols, references, diagnostics);
     }
+
+    /// <summary>The macros this file declares, which is what the recursion check reads.</summary>
+    public IEnumerable<Symbol> DeclaredMacros() => symbols.Where(symbol => symbol.Kind == SymbolKind.Macro);
 
     /// <summary>The first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(SyntaxNode statement)
@@ -140,11 +147,6 @@ internal sealed class Binder
         var opener = lines.Length > 0 ? lines[0].Statement : null;
         if (opener is not null)
             CheckAllowedHere(opener);
-
-        // A `} name {` continues the call just above it; anything else between them, and
-        // there is no call left for it to continue.
-        if (kind != BlockKind.MacroBlock)
-            openCall = null;
         var outerScope = scope;
         var outerSegment = segment;
 
@@ -159,14 +161,9 @@ internal sealed class Binder
             // same block may be spliced in more than one place.
             case BlockKind.MacroBlock:
                 if (opener is { Kind: SyntaxKind.MacroCall or SyntaxKind.LabeledLine })
-                {
                     BindStatement(opener);
-                    openCall = Macros.CallIn(opener);
-                }
                 else if (opener is { Kind: SyntaxKind.BlockContinuation })
-                {
-                    BindContinuation(opener);
-                }
+                    CheckContinuation(block, opener);
                 scope = new Scope(ScopeKind.Scope, null, scope, null);
                 break;
 
@@ -401,15 +398,21 @@ internal sealed class Binder
         }
     }
 
-    /// <summary><c>} name {</c>: the next block argument of the call this one continues.</summary>
-    private void BindContinuation(SyntaxNode opener)
+    /// <summary>
+    /// <c>} name {</c>, which continues the block argument above it. Which parameter it
+    /// names is the call's business; all that is left here is a continuation with no call
+    /// above it at all, which the call never sees.
+    /// </summary>
+    private void CheckContinuation(SyntaxNode block, SyntaxNode opener)
     {
-        if (openCall is null)
+        if (block.Parent is { } container
+            && container.ChildNodes.IndexOf(block) is > 0 and var at
+            && container.ChildNodes[at - 1].Green is GreenBlock { BlockKind: BlockKind.MacroBlock })
         {
-            if (opener.ChildTokens.Length > 1)
-                Report(opener.ChildTokens[1].Span, "this block continues no macro call");
             return;
         }
+        if (opener.ChildTokens.Length > 1)
+            Report(opener.ChildTokens[1].Span, "this block continues no macro call");
     }
 
     /// <summary>
@@ -506,7 +509,6 @@ internal sealed class Binder
     {
         if (line.Statement is not { } statement)
             return;
-        openCall = null;
         CheckAllowedHere(statement);
         BindStatement(statement);
     }
@@ -567,6 +569,10 @@ internal sealed class Binder
                 BindSplice(statement);
                 break;
 
+            case SyntaxKind.MacroCall:
+                BindCall(statement);
+                break;
+
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
             case SyntaxKind.AssertDirective:
@@ -618,7 +624,10 @@ internal sealed class Binder
                 : SymbolKind.Label;
             Declare(label.ChildTokens[0], kind, data: rest, type: Constructs.TagTypeOf(rest));
         }
-        CollectUses(rest);
+        if (rest is { Kind: SyntaxKind.MacroCall })
+            BindCall(rest);
+        else
+            CollectUses(rest);
     }
 
     /// <summary>
@@ -691,8 +700,77 @@ internal sealed class Binder
         uses.Add(new Use(token, scope, Path: false, First: true, Last: true, Splice: true));
     }
 
+    /// <summary>
+    /// A call, kept whole until the file is read. Nothing in it can be resolved yet: the
+    /// macro it names may be declared further down or in another file, and what its
+    /// arguments mean follows from the parameters they bind to.
+    /// </summary>
+    private void BindCall(SyntaxNode call) => calls.Add(new Invocation(call, scope, EnclosingMacro));
+
+    /// <summary>The macro whose body the walk is inside, or null when it is in none.</summary>
+    private Symbol? EnclosingMacro
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind == ScopeKind.Macro)
+                    return around.Owner;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Matches each call to the macro it names and resolves the arguments that are names.
+    /// A <c>one</c> argument is a word compared against the parameter's list and never
+    /// looked up, so collecting it as a use would report a register or a mnemonic that is
+    /// doing exactly what it is there for.
+    /// </summary>
+    private void ResolveCalls()
+    {
+        foreach (var (call, at, inside) in calls)
+        {
+            if (Macros.CalleeOf(call) is not { } callee)
+                continue;
+            if (Resolve(callee, at, path: false, previous: null, last: true) is not { } symbol)
+                continue;
+            references.Add(new SymbolReference(symbol, callee.Span, false));
+            if (symbol.Kind != SymbolKind.Macro)
+            {
+                Report(callee.Span, $"`{callee.Text}` is a {symbol.KindText}, and `!` calls a macro");
+                continue;
+            }
+            inside?.Calls.Add((symbol, tree.GetSpan(callee.Span)));
+
+            var invocation = MacroInvocation.Of(call, symbol, tree, diagnostics);
+            var written = new List<Use>();
+            var outer = scope;
+            scope = at;
+            foreach (var argument in invocation.Arguments)
+            {
+                if (argument.Parameter.Kind == ParameterKind.One)
+                    continue;
+                if (argument.Parameter.Accepts.Element is { Kind: ParameterKind.One })
+                    continue;
+
+                // A default was resolved where the macro is declared, so only what the call
+                // itself wrote is collected here.
+                if (!argument.Written)
+                    continue;
+                CollectUses(argument.Value, written);
+                foreach (var item in argument.Items)
+                    CollectUses(item, written);
+            }
+            scope = outer;
+            ResolveUses(written);
+        }
+    }
+
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
-    private void CollectUses(SyntaxNode? node)
+    private void CollectUses(SyntaxNode? node) => CollectUses(node, uses);
+
+    private void CollectUses(SyntaxNode? node, List<Use> into)
     {
         if (node is null)
             return;
@@ -718,7 +796,7 @@ internal sealed class Binder
                 else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                     or SyntaxKind.Register or SyntaxKind.Mnemonic)
                 {
-                    uses.Add(new Use(token, scope, path, first, Last: false));
+                    into.Add(new Use(token, scope, path, first, Last: false));
                     path = true;
                     first = false;
                 }
@@ -727,11 +805,11 @@ internal sealed class Binder
             // Which part is the last decides where an export is checked: another file has to
             // have exported the `inner` of `outer::inner`, not the `outer` that leads to it.
             if (!first)
-                uses[^1] = uses[^1] with { Last = true };
+                into[^1] = into[^1] with { Last = true };
             return;
         }
         foreach (var child in node.ChildNodes)
-            CollectUses(child);
+            CollectUses(child, into);
     }
 
     private Symbol? Declare(
@@ -818,11 +896,11 @@ internal sealed class Binder
         return false;
     }
 
-    private void ResolveUses()
+    private void ResolveUses(IReadOnlyList<Use> list)
     {
         Symbol? previous = null;
         var broken = false;
-        foreach (var (token, at, path, first, last, splice) in uses)
+        foreach (var (token, at, path, first, last, splice) in list)
         {
             if (first)
             {
@@ -851,7 +929,6 @@ internal sealed class Binder
                 }
             }
         }
-        references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
     }
 
     /// <summary>
@@ -1012,4 +1089,10 @@ internal sealed class Binder
     /// <param name="Splice">Whether the name stands alone on a line, and so splices a block.</param>
     private readonly record struct Use(
         SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last, bool Splice = false);
+
+    /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
+    /// <param name="Call">The call.</param>
+    /// <param name="Scope">The scope it was written in, which its arguments resolve in.</param>
+    /// <param name="Inside">The macro whose body holds it, or null when it is called outright.</param>
+    private readonly record struct Invocation(SyntaxNode Call, Scope Scope, Symbol? Inside);
 }
