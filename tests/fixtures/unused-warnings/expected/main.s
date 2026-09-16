@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1730, 0
+.dbg file, "main.nt65", 1776, 0
 
 .exportzp WIDTH
 .export detour
@@ -23,37 +23,37 @@ DEPTH = 3
 .segment "CODE": absolute
 main:
     .a8
-.dbg line, "main.nt65", 31
+.dbg line, "main.nt65", 32
     lda #Mode__busy
 main__unnamed:
     .i8
-.dbg line, "main.nt65", 33
-    ldx #0
 .dbg line, "main.nt65", 34
+    ldx #0
+.dbg line, "main.nt65", 35
     rts
 
 main__dead:
-.dbg line, "main.nt65", 37
+.dbg line, "main.nt65", 38
     rts
 
 main__hook:
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 42
     rts
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 45
-table:  .byte 1, 2, 3
+.dbg line, "main.nt65", 46
+table:  .res 3
 
 .segment "CODE": absolute
 detour:
 
 .pushseg
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 52
-        nop
 .dbg line, "main.nt65", 53
+        nop
+.dbg line, "main.nt65", 54
         rts
 .popseg
 
-.dbg line, "main.nt65", 55
+.dbg line, "main.nt65", 56
     rts

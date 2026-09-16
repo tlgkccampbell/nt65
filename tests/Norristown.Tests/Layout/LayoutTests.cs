@@ -125,10 +125,11 @@ public sealed class LayoutTests
     public void AFarTargetIsNotNear()
     {
         var source = """
-            .segment "FAR": far
-            .segment "FAR" {
-            away:   .res 1
+            .segment FAR: far
+            .segment FAR {
+            .data away:   .byte
             }
+            .segment CODE
             .proc p {
                 jsr away
             }
@@ -146,12 +147,10 @@ public sealed class LayoutTests
     {
         var source = $$"""
             SIXTEEN = 16
-            .zeropage {
-            ptr:    .res 2
-            }
-            .bss {
-            buf:    .res 256
-            }
+            .segment ZEROPAGE
+            .data ptr:    .byte[2]
+            .segment BSS
+            .data buf:    .byte[256]
             .proc p {
             here:
                 {{line}}

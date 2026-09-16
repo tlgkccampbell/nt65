@@ -22,7 +22,7 @@ y:      .word
 }
 
 .struct Player {
-pos:    .tag Point
+pos:    .type Point
 hp:     .byte
 name:   .res 8
 }
@@ -47,47 +47,45 @@ w:      .word
 
 MAX_ACTORS = 3
 
-.bss {
-player: .tag Player
-actors: .tag Player, MAX_ACTORS
-}
+.segment BSS
+.data player: .type Player
+.data actors: .type Player[MAX_ACTORS]
 
-.rodata {
+.segment RODATA
 ; A member offset and a type size are numbers, with the path they came from in a comment.
-sizes:  .byte .sizeof(Player), .sizeof(Point), .sizeof(Value)
-counts: .byte .countof(actors), .countof(handlers)
-offs:   .byte Player::pos::y, Player::hp, Point::y
+.data sizes:  .byte .sizeof(Player), .sizeof(Point), .sizeof(Value)
+.data counts: .byte .countof(actors), .countof(handlers)
+.data offs:   .byte Player::pos::y, Player::hp, Point::y
 
 ; Text reaches the output as bytes whether a mapping is applied to it or not.
-plain:  .byte "HI"
-mapped: .byte screen("HI@")
-one:    .byte screen('Z')
+.data plain:  .byte "HI"
+.data mapped: .byte screen("HI@")
+.data one:    .byte screen('Z')
 
 ; A call is worth what its body is worth, and a list stands for its own items.
-color:  .word rgb15(31, 0, 0)
-table:  .byte handlers
-lo:     .lobytes handlers
+.data color:  .word rgb15(31, 0, 0)
+.data table:  .byte handlers
+.data lo:     .lobytes handlers
 
 ; An instance written out with values, on one line and over several.
-boss:   .tag Player { pos = { x = 100, y = 40 }, hp = 99 }
+.data boss:   .type Player { pos = { x = 100, y = 40 }, hp = 99 }
 
-hero:   .tag Player {
+.data hero:   .type Player {
     hp = 3
     name = "ZIP"
 }
 
 ; A binary file is read for its length, and its path is written relative to the output.
-blob:   .incbin "sprites.bin"
-part:   .incbin "sprites.bin", 6, 4
+.data blob:   .incbin "sprites.bin"
+.data part:   .incbin "sprites.bin", 6, 4
 
 ; An alignment generates however many bytes it takes, which only the assembler settles.
     .align 16
-}
 
-.zeropage {
-cursor: .tag Player
-}
+.segment ZEROPAGE
+.data cursor: .type Player
 
+.segment CODE
 .proc main {
     ; A field of an instance is that instance plus the offset of the field.
     lda player::hp
@@ -102,11 +100,10 @@ cursor: .tag Player
 }
 
 ; A union is written as the one member it is given, and zeros to its size.
-.rodata {
-as_word:    .tag Value { w = $1234 }
-as_byte:    .tag Value { b = 1 }
-as_nothing: .tag Value { }
-}
+.segment RODATA
+.data as_word:    .type Value { w = $1234 }
+.data as_byte:    .type Value { b = 1 }
+.data as_nothing: .type Value { }
 
 ; Exported, so that what the file only declares counts as used.
 .export as_word, as_byte, as_nothing, sizes, counts, offs, plain, mapped, one, color, table, lo, blob, part

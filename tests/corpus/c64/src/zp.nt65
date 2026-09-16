@@ -4,19 +4,17 @@
 .export ptr1, ptr2, frame_flag, frame_count, game_state, score, player_x, player_y
 .export joy_prev, lives, split_index
 
-.zeropage {
-ptr1:        .res 2
-ptr2:        .res 2
-}
+.segment ZEROPAGE
+.data ptr1:        .word
+.data ptr2:        .word
 
-.bss {
-frame_flag:  .res 1
-frame_count: .res 2
-game_state:  .res 1
-score:       .res 3          ; BCD, least significant byte first
-player_x:    .res 2          ; 9-bit sprite X
-player_y:    .res 1
-joy_prev:    .res 1
-lives:       .res 1
-split_index: .res 1
-}
+.segment BSS
+.data frame_flag:  .byte
+.data frame_count: .word
+.data game_state:  .byte
+.data score:       .byte[3]          ; BCD, least significant byte first
+.data player_x:    .word          ; 9-bit sprite X
+.data player_y:    .byte
+.data joy_prev:    .byte
+.data lives:       .byte
+.data split_index: .byte

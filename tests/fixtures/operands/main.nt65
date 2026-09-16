@@ -3,14 +3,12 @@
 ; offers more than one width.
 .cpu 6502
 
-.zeropage {
-ptr:        .res 2
-vector:     .res 2
-}
+.segment ZEROPAGE
+.data ptr:        .word
+.data vector:     .word
 
-.bss {
-buf:        .res 256
-}
+.segment BSS
+.data buf:        .byte[256]
 
 hi = $12
 lo = $34
@@ -18,6 +16,7 @@ lo = $34
 ; A routine at a fixed address, which the output writes as the constant it is.
 .proc CHROUT = $ffd2
 
+.segment CODE
 .proc forms {
     inx                     ; implied
     asl                     ; accumulator, bare

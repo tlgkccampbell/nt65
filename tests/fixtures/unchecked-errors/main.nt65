@@ -6,11 +6,11 @@
 .import beep: proc(inline 2)
 .import far_away: proc(far)
 
-.bss {
-cmd:    .res 1
-}
+.segment BSS
+.data cmd:    .byte
 
 ; An indirect jump and an indirect call.
+.segment CODE
 .proc indirect {
     jmp (@table,x)          ;! error: `jmp (@table,x)` goes where its operand points, which the analysis cannot see: `.next` names the labels it reaches, or `.next ?` ends the path
 @table: .addr @go           ;! error: `@go` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `indirect` naming it carries the state to it
@@ -19,17 +19,14 @@ cmd:    .res 1
     rts
 }
 
-; A table written a line per entry, as ca65 code writes one. A table is read only from the
-; `.addr` on its label's own line, so this label names data and no code at all.
-.rodata {
-handlers:
-    .addr falls
-    .addr off_the_end
-}
+; A table of anything but addresses names no code at all.
+.segment RODATA
+.data handlers: .word falls, off_the_end
 
+.segment CODE
 .proc dispatch {
     jmp (handlers,x)
-    .next handlers          ;! error: `handlers` holds no code labels: `.next` reads a table from the `.addr` values written on the label's own line
+    .next handlers          ;! error: `handlers` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
 }
 
 ; A computed jump.

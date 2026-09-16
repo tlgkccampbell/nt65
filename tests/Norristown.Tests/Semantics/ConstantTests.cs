@@ -108,9 +108,8 @@ public sealed class ConstantTests
     public void AnExpressionNamingAnAddressIsAnAlias()
     {
         var model = Analysis.Model("""
-            .zeropage {
-            ptr:    .res 2
-            }
+            .segment ZEROPAGE
+            .data ptr:    .byte[2]
             SCREEN  = $0400
             NEXT    = ptr + 1
             HERE    = *

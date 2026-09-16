@@ -114,7 +114,7 @@ public sealed class MacroBindingTests
             LOCAL = 1
             }
 
-                .byte m::LOCAL
+                .res m::LOCAL
             """);
 
         Assert.Equal(["5: `m` is a macro, not a scope"], model.Problems());

@@ -9,7 +9,7 @@ public enum OutlineKind
     /// <summary>A <c>.scope</c>, named or anonymous.</summary>
     Scope,
 
-    /// <summary>A segment block, written in full or as a shortcut.</summary>
+    /// <summary>A segment block, or a region.</summary>
     Segment,
 
     /// <summary>A <c>.macro</c>, with its parameters.</summary>
@@ -20,4 +20,7 @@ public enum OutlineKind
 
     /// <summary>A constant or address alias, <c>name = expr</c>.</summary>
     Constant,
+
+    /// <summary>A data declaration, <c>.data name: ...</c> or <c>.data name { }</c>.</summary>
+    Data,
 }

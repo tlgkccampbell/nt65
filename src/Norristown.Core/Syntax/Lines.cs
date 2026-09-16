@@ -58,6 +58,25 @@ internal static class Lines
         return (depth == 0, closes);
     }
 
+    /// <summary>
+    /// Whether the line is <c>.segment NAME</c> with neither a brace nor a size: a region line,
+    /// which places what follows it rather than what is inside it.
+    /// </summary>
+    public static bool IsRegion(ImmutableArray<GreenToken> tokens)
+    {
+        if (tokens[0].Kind != SyntaxKind.Directive
+            || !tokens[0].Text.Equals(".segment", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        foreach (var token in tokens)
+        {
+            if (token.Kind is SyntaxKind.Colon or SyntaxKind.OpenBrace)
+                return false;
+        }
+        return true;
+    }
+
     public static BlockKind BlockKindOf(ImmutableArray<GreenToken> tokens, LineKind kind)
     {
         // The statement that opens the block: after a label, or after the } of a continuation.
@@ -69,7 +88,7 @@ internal static class Lines
         };
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
-            return SyntaxFacts.BlockKindOfDirective(token.Text);
+            return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOfDirective(token.Text);
         if (token.Kind == SyntaxKind.Identifier)
         {
             var next = tokens[start + 1].Kind;
@@ -77,5 +96,41 @@ internal static class Lines
                 return BlockKind.MacroBlock;
         }
         return BlockKind.Unknown;
+    }
+
+    /// <summary>
+    /// What a block of data holds, which decides how its lines read. <c>.data name {</c> is
+    /// mixed data; an element type with a count, <c>.byte[] {</c>, holds values; and
+    /// <c>.type T {</c> with no count holds one record's <c>member = value</c> lines. Null for
+    /// a line that opens no data.
+    /// </summary>
+    private static BlockKind? DataBlockKind(ImmutableArray<GreenToken> tokens, int start)
+    {
+        var element = start;
+        if (tokens[start].Text.Equals(".data", StringComparison.OrdinalIgnoreCase))
+        {
+            element = -1;
+            for (var i = start + 1; i < tokens.Length; i++)
+            {
+                if (tokens[i].Kind == SyntaxKind.Colon)
+                {
+                    element = i + 1;
+                    break;
+                }
+            }
+            if (element < 0 || element >= tokens.Length)
+                return BlockKind.Data;
+        }
+
+        var directive = tokens[element];
+        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
+        if (directive.Kind != SyntaxKind.Directive || (!record && SyntaxFacts.ElementSize(directive.Text) is null))
+            return null;
+        for (var i = element + 1; i < tokens.Length; i++)
+        {
+            if (tokens[i].Kind == SyntaxKind.OpenBracket)
+                return BlockKind.DataBody;
+        }
+        return record ? BlockKind.RecordInitializer : null;
     }
 }

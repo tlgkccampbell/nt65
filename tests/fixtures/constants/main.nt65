@@ -10,9 +10,8 @@ LENGTH  = .strlen(TEXT)
 WIDE    = .addrsize(SCREEN)
 PICK    = .max(FIRST, SECOND)
 
-.zeropage {
-ptr:    .res 2
-}
+.segment ZEROPAGE
+.data ptr:    .word
 
 ; An expression that names an address is an address alias, not a constant.
 NEXT    = ptr + 1

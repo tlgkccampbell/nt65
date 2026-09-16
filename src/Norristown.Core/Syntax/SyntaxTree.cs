@@ -23,8 +23,8 @@ public sealed class SyntaxTree
         var blockErrors = new List<Blocks.Error>();
         Green = Blocks.Build(lines, blockErrors);
 
-        // Blocks come first because a line's syntax depends on the kind of block around it
-        //. Nothing else about the line does, so a line that kept its tokens and its
+        // Blocks come first because a line's syntax depends on the kind of block around it.
+        // Nothing else about the line does, so a line that kept its tokens and its
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;
@@ -172,8 +172,16 @@ public sealed class SyntaxTree
             // A block's opener and closer lines sit inside it, so they are parsed in its own
             // kind: `}` is the one line a block with a grammar of its own still reads the
             // ordinary way.
+            // A conditional or a repetition inside a data body holds values too, so its lines
+            // read the way the body's own do.
             if (node.GetSlot(i) is GreenBlock block)
-                ParseLines(block, block.BlockKind, parsed, ref line);
+            {
+                var kind = context == BlockKind.DataBody
+                    && block.BlockKind is BlockKind.If or BlockKind.Repeat or BlockKind.Each
+                    ? BlockKind.DataBody
+                    : block.BlockKind;
+                ParseLines(block, kind, parsed, ref line);
+            }
             else
                 parsed[line++] = ((GreenLine)node.GetSlot(i)).Parse(context);
         }

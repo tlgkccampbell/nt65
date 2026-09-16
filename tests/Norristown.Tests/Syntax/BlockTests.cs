@@ -24,8 +24,8 @@ public sealed class BlockTests
         "    }",
         "    rts",
         "}",
-        ".rodata {",
-        "table: .byte 1",
+        ".segment RODATA {",
+        ".data table: .byte 1",
         "}",
         ".proc c {",
         "    rts",
@@ -37,9 +37,14 @@ public sealed class BlockTests
     [InlineData(".proc f: a16, i8 -> a8, i8 {   ; comment", 1, BlockKind.Proc)]
     [InlineData(".SCOPE {", 1, BlockKind.Scope)]
     [InlineData(".macro if(c: one(eq, ne), then: block, else: block = {}) {", 1, BlockKind.Macro)]
-    [InlineData(".rodata {", 1, BlockKind.Segment)]
-    [InlineData(".segment \"ZP2\" {", 1, BlockKind.Segment)]
-    [InlineData("hero: .tag Actor {", 1, BlockKind.TagInitializer)]
+    [InlineData(".segment ZP2 {", 1, BlockKind.Segment)]
+    [InlineData(".segment ZP2", 0, BlockKind.Region)]
+    [InlineData(".segment ZP2: zp", 0, BlockKind.None)]
+    [InlineData(".data hero: .type Actor {", 1, BlockKind.RecordInitializer)]
+    [InlineData(".data heroes: .type Actor[] {", 1, BlockKind.DataBody)]
+    [InlineData(".data row_lo: .byte[ROWS] {", 1, BlockKind.DataBody)]
+    [InlineData(".data vectors {", 1, BlockKind.Data)]
+    [InlineData("    .word[] {", 1, BlockKind.DataBody)]
     [InlineData("if!(cs) {", 1, BlockKind.MacroBlock)]
     [InlineData("tune: note!(C4) {", 1, BlockKind.MacroBlock)]
     [InlineData("m!({buf,x}) {", 1, BlockKind.MacroBlock)]
@@ -51,7 +56,7 @@ public sealed class BlockTests
     [InlineData("} else {", 0, BlockKind.MacroBlock)]
     [InlineData("m!({", 0, BlockKind.None)] // the brace is inside an open parenthesis
     [InlineData("m!((x), {", 0, BlockKind.None)]
-    [InlineData("boss: .tag Actor { x = 100, y = 40 }", 0, BlockKind.None)]
+    [InlineData(".data boss: .type Actor { x = 100, y = 40 }", 0, BlockKind.None)]
     [InlineData("lda #1 ; {", 0, BlockKind.None)]
     [InlineData(".byte '{'", 0, BlockKind.None)]
     public void BraceValueAndKind(string line, int value, BlockKind kind)

@@ -76,9 +76,10 @@ public sealed class MacroCallTests
                 .byte pitch, frames
             }
 
-            .rodata {
-            tune:   note!(C4, frames = 8)
-                    note!(C4)
+            .segment RODATA
+            .data tune {
+                note!(C4, frames = 8)
+                note!(C4)
             }
             """);
 
@@ -100,7 +101,7 @@ public sealed class MacroCallTests
                 .byte pitch, frames
             }
 
-            .rodata {
+            .segment RODATA
             """ + "\n" + call + "\n}\n");
 
         Assert.Equal([$"8: {message}"], model.Problems());
@@ -292,6 +293,7 @@ public sealed class MacroCallTests
                 ping!()
             }
 
+            .segment CODE
             .proc main {
                 ping!()
                 rts

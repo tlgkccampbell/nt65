@@ -11,30 +11,27 @@ MIN_Y        = 50
 MAX_Y        = 229
 SPEED        = 2
 
-.rodata {
-.scope ship_shape {
-bytes:
-    .byte %00000000, %00011000, %00000000
-    .byte %00000000, %00111100, %00000000
-    .byte %00000000, %01111110, %00000000
-    .byte %00000000, %11111111, %00000000
-    .byte %00000001, %11111111, %10000000
-    .byte %00000011, %11111111, %11000000
-    .byte %00000111, %11100111, %11100000
-    .byte %00001111, %11000011, %11110000
+.segment RODATA
+.data ship_shape: .byte[64] {
+    %00000000, %00011000, %00000000
+    %00000000, %00111100, %00000000
+    %00000000, %01111110, %00000000
+    %00000000, %11111111, %00000000
+    %00000001, %11111111, %10000000
+    %00000011, %11111111, %11000000
+    %00000111, %11100111, %11100000
+    %00001111, %11000011, %11110000
     .repeat 13 {
-    .byte 0, 0, 0
+        0, 0, 0
     }
-    .byte 0                     ; multicolour/unused byte
-}
+    0                           ; multicolour/unused byte
 }
 
-.assert .spanof(ship_shape) == 64, error, "sprite shape must be 64 bytes"
-
+.segment CODE
 .proc sprite_init {
     ldx #63
 @copy:
-    lda ship_shape::bytes,x
+    lda ship_shape,x
     sta SPRITE_ADDR,x
     dex
     bpl @copy

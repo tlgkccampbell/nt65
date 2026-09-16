@@ -15,7 +15,9 @@ public sealed class GreenLine : GreenNode
         Tokens = tokens;
         LineKind = Lines.Classify(tokens);
         (Opens, Closes) = Lines.Braces(tokens);
-        OpensBlockKind = Opens ? Lines.BlockKindOf(tokens, LineKind) : BlockKind.None;
+        OpensBlockKind = Opens ? Lines.BlockKindOf(tokens, LineKind)
+            : Lines.IsRegion(tokens) ? BlockKind.Region
+            : BlockKind.None;
     }
 
     /// <summary>The line's tokens, always ending with an <see cref="SyntaxKind.EndOfLine"/> token.</summary>
@@ -30,7 +32,11 @@ public sealed class GreenLine : GreenNode
     /// <summary>The line's first token is <c>}</c>.</summary>
     public bool Closes { get; }
 
-    /// <summary>For a line that opens a block, the kind of block; otherwise <see cref="BlockKind.None"/>.</summary>
+    /// <summary>
+    /// For a line that opens a block, the kind of block; <see cref="BlockKind.Region"/> for a
+    /// <c>.segment NAME</c> region line, which opens one with no brace; otherwise
+    /// <see cref="BlockKind.None"/>.
+    /// </summary>
     public BlockKind OpensBlockKind { get; }
 
     /// <summary>+1, −1 or 0: the line's contribution to the block depth.</summary>

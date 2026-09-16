@@ -1,19 +1,16 @@
 ; A segment's address size is declared exactly once per program, and a block may only
 ; name a segment that something declares.
-.segment "ZP2": zp
-.segment "WRAM": abs, bank = $7e
+.segment ZP2: zp
+.segment WRAM: abs, bank = $7e
 
-.segment "ZP2" {
-scratch:    .res 2
-}
+.segment ZP2
+.data scratch:    .word
 
-.segment "WRAM" {
-buffer:     .res 256
-}
+.segment WRAM
+.data buffer:     .byte[256]
 
-.segment "NOWHERE" {        ;! error: segment "NOWHERE" is not declared
-lost:       .res 1
-}
+.segment NOWHERE  ;! error: segment "NOWHERE" is not declared
+.data lost:       .byte
 
-.segment "ZP2": zp          ;! error: segment "ZP2" is already declared
-.segment "ZEROPAGE": zp     ;! error: segment "ZEROPAGE" is already declared
+.segment ZP2: zp          ;! error: segment "ZP2" is already declared
+.segment ZEROPAGE: zp     ;! error: segment "ZEROPAGE" is already declared

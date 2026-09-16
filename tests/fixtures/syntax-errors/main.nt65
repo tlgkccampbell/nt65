@@ -1,4 +1,5 @@
 ; Lexical and block-structure errors reach the compiler's diagnostics.
+.segment CODE
 .proc main {
     .byte 'ab'            ;! error: a character literal holds exactly one character
     lda #$1G            ;! error: invalid hexadecimal number `$1G`

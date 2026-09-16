@@ -213,11 +213,11 @@ public sealed class CycleTests
     public void LayoutKeepsTheCountForTheModeItChose()
     {
         var analysis = Analysis.Program(("main.nt65", """
-            .zeropage {
-            near:   .res 1
-            }
+            .segment ZEROPAGE
+            .data near:   .byte
 
-            far:    .byte 0
+            .segment CODE
+            .data far:    .byte 0
 
             .proc p {
                 lda near

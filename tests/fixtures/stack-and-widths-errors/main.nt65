@@ -8,6 +8,7 @@
 }
 
 ; A 16-bit width needs native mode, and `.ensure` takes widths only.
+.segment CODE
 .proc pinned: emu -> emu {
     .ensure a16             ;! error: `.ensure a16` needs native mode, and the processor is in emulation mode here, where both widths are 8 bits
     .ensure native          ;! error: `.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: `native` is not one of them

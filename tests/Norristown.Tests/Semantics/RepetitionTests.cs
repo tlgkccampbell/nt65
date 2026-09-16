@@ -10,7 +10,7 @@ public sealed class RepetitionTests
     [Fact]
     public void RepeatCountsFromZero()
     {
-        var main = Output("bits:\n.repeat 8, i {\n    .byte 1 << i\n}\n");
+        var main = Output(".data bits: .byte[] {\n.repeat 8, i {\n    1 << i\n}\n}\n");
 
         Assert.Equal(8, Lines(main, ".byte").Count);
         Assert.Contains(".byte 1 << $00", main);
@@ -21,7 +21,7 @@ public sealed class RepetitionTests
     [Fact]
     public void RepetitionsNest()
     {
-        var main = Output("grid:\n.repeat 2, row {\n.repeat 3, col {\n    .byte row * 3 + col\n}\n}\n");
+        var main = Output(".data grid: .byte[] {\n.repeat 2, row {\n.repeat 3, col {\n    row * 3 + col\n}\n}\n}\n");
 
         Assert.Equal(6, Lines(main, ".byte").Count);
         Assert.Contains(".byte ($00 * 3) + $00", main);
@@ -47,9 +47,10 @@ public sealed class RepetitionTests
                 rts
             }
 
-            table:
-            .each handlers, h {
-                .addr h - 1
+            .data table: .addr[] {
+                .each handlers, h {
+                    h - 1
+                }
             }
             """);
 
@@ -66,10 +67,10 @@ public sealed class RepetitionTests
                 ptr
             }
 
-            .zeropage {
-            ptr:    .res 2
-            }
+            .segment ZEROPAGE
+            .data ptr:    .word
 
+            .segment CODE
             .proc main {
             .each pointers, p {
                 lda p
@@ -84,7 +85,7 @@ public sealed class RepetitionTests
     [Fact]
     public void EachWalksAnEnum()
     {
-        var main = Output(".enum Cmd {\nmove\nfire\nwait\n}\n\nvalues:\n.each Cmd, c {\n    .byte c\n}\n");
+        var main = Output(".enum Cmd {\nmove\nfire\nwait\n}\n\n.data values: .byte[] {\n.each Cmd, c {\n    c\n}\n}\n");
 
         Assert.Equal([".byte $00", ".byte $01", ".byte $02"],
             Lines(main, ".byte").Select(line => line.Split(';')[0].Trim()));
@@ -97,7 +98,7 @@ public sealed class RepetitionTests
     [Fact]
     public void ATurnDecidesHowMuchRoomALineTakes()
     {
-        var main = Output("room:\n.repeat 3, n {\n    .res n + 1\n}\n");
+        var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
         Assert.Equal(3, Lines(main, ".res").Count);
         Assert.Equal(["$00 + 1", "$01 + 1", "$02 + 1"],
@@ -106,12 +107,12 @@ public sealed class RepetitionTests
 
     /// <summary>A count nt65 cannot work out, and a walk over something that is neither.</summary>
     [Theory]
-    [InlineData("here:\n.repeat here, i {\n    .byte i\n}\n", "a `.repeat` count is a constant, and this is not one")]
-    [InlineData("SIZE = -1\n.repeat SIZE, i {\n    .byte i\n}\n", "a `.repeat` count cannot be negative, and this one is -1")]
-    [InlineData("SIZE = 4\n.each SIZE, h {\n    .byte h\n}\n", "`.each` walks a list or an enum, and this is neither")]
+    [InlineData(".data here: .byte 0\n.data t: .byte[] {\n.repeat here, i {\n    i\n}\n}\n", "a `.repeat` count is a constant, and this is not one")]
+    [InlineData("SIZE = -1\n.data t: .byte[] {\n.repeat SIZE, i {\n    i\n}\n}\n", "a `.repeat` count cannot be negative, and this one is -1")]
+    [InlineData("SIZE = 4\n.data t: .byte[] {\n.each SIZE, h {\n    h\n}\n}\n", "`.each` walks a list or an enum, and this is neither")]
     public void WhatIsWrongWithARepetitionIsReported(string text, string message)
     {
-        Assert.Contains(message, Analysis.Program(("main.nt65", text)).Problems().Single());
+        Assert.Contains(message, Analysis.Program(("main.nt65", ".segment RODATA\n" + text)).Problems().Single());
     }
 
     /// <summary>
@@ -133,13 +134,14 @@ public sealed class RepetitionTests
     [Fact]
     public void NothingOfARepetitionReachesTheOutput()
     {
-        var main = Output("bits:\n.repeat 4, i {\n    .byte i\n}\n");
+        var main = Output(".data bits: .byte[] {\n.repeat 4, i {\n    i\n}\n}\n");
 
         Assert.DoesNotContain(".repeat", main);
         Assert.DoesNotContain(".endrep", main);
     }
 
-    private static string Output(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
+    /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
+    private static string Output(string text) => Analysis.Outputs(("main.nt65", ".segment CODE\n" + text))["main.s"];
 
     private static IReadOnlyList<string> Lines(string output, string directive) =>
         [.. output.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith(directive, StringComparison.Ordinal))];

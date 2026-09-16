@@ -5,19 +5,23 @@
 
 SCREEN = $0400
 
-.rodata {
-table:      .byte 1, 2, $ff, 'A', "text"
-words:      .word $1234, table
-wide:       .dword $12345678
-here:       .addr table
-there:      .faraddr table
-greeting:   .asciiz "hello"
-padding:    .res 16, $ff
-escaped:    .byte "a\nb", '\x7f'
-bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
-sums:       .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
+.segment RODATA
+.data table:      .byte 1, 2, $ff, 'A', "text"
+.data words:      .word $1234, table
+.data wide:       .dword $12345678
+.data here:       .addr table
+.data there:      .faraddr table
+.data greeting:   .asciiz "hello"
+.data padding:    .byte[16] {
+    .repeat 16 {
+        $ff
+    }
 }
+.data escaped:    .byte "a\nb", '\x7f'
+.data bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
+.data sums:       .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
 
+.segment CODE
 .proc use {
     lda #' '
     lda table+1

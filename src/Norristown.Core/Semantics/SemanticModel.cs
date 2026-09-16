@@ -127,7 +127,7 @@ public sealed class SemanticModel
     /// of the repetition it was written in, whose bindings it may name.
     /// </summary>
     /// <summary>
-    /// <paramref name="spans"/> answers how many bytes a routine, a scope or a data
+    /// <paramref name="spans"/> answers how many bytes a routine or a data
     /// declaration takes, for a caller that has laid the file out; without it a span is
     /// simply unknown, as an address is. The model stays read-only either way: what only
     /// layout knows is supplied by whoever asks rather than kept here.
@@ -147,7 +147,14 @@ public sealed class SemanticModel
     /// they are. Null where nt65 cannot say, such as for an <c>.align</c>.
     /// </summary>
     public DataSize? RoomFor(SyntaxNode directive, Expansion? on = null) =>
-        Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength, BindingsOf(on));
+        Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength, BindingsOf(on), Configuration);
+
+    /// <summary>
+    /// How many elements an element type's count declares, and how many its values come to.
+    /// Either may be unknown, and where both are known they have to agree.
+    /// </summary>
+    public (long? Declared, long? Given) ElementsOf(SyntaxNode directive, Expansion? on = null) =>
+        Evaluator.ElementsOf(directive, Segments, resolved, BindingsOf(on), Configuration);
 
     /// <summary>
     /// Evaluates an expression and reports what is wrong with it into
@@ -168,11 +175,10 @@ public sealed class SemanticModel
 
     /// <summary>
     /// The address size of an expression. <c>*</c> takes the size of
-    /// <paramref name="segment"/>, or of the default segment when none is named.
+    /// <paramref name="segment"/>, and has none outside every segment.
     /// </summary>
     public AddressSize? AddressSizeOf(SyntaxNode expression, string? segment = null, Expansion? on = null) =>
-        Evaluator.AddressSizeOf(
-            expression, segment ?? SegmentTable.DefaultSegment, Segments, resolved, BindingsOf(on));
+        Evaluator.AddressSizeOf(expression, segment, Segments, resolved, BindingsOf(on));
 
     /// <summary>
     /// What every name bound at <paramref name="on"/> and at the levels around it stands

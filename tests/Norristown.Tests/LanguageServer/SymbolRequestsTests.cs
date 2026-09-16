@@ -15,16 +15,16 @@ public sealed class SymbolRequestsTests
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>
-    /// A file with a zero-page label, a constant, a scope and two procs, so that every
-    /// request has something of each kind to find.
+    /// A file with zero-page data, a constant, a scope and two procs, so that every request has
+    /// something of each kind to find.
     /// </summary>
     private const string Source = """
-        .zeropage {
-        ptr:    .res 2
+        .segment ZEROPAGE {
+        .data ptr:    .word
         }
 
         SCREEN = $0400
-
+        .segment CODE
         .scope gfx {
             .proc init {
                 lda #0
@@ -64,9 +64,9 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var label = await client.HoverAsync(Uri, new Position(1, 0), timeout);
+        var label = await client.HoverAsync(Uri, new Position(1, 6), timeout);
         Assert.NotNull(label);
-        Assert.Contains("**label** `ptr`", label.Contents.Value);
+        Assert.Contains("**data declaration** `ptr`", label.Contents.Value);
         Assert.Contains("address size: `zp` (1 byte)", label.Contents.Value);
         Assert.Contains("segment: `ZEROPAGE`", label.Contents.Value);
 
@@ -106,11 +106,11 @@ public sealed class SymbolRequestsTests
             }
 
             .struct Player {
-            pos:    .tag Point
+            pos:    .type Point
             hp:     .byte
             }
 
-            here:   .tag Player, 4
+            .data here:   .type Player[4]
             """);
         await client.NextDiagnosticsAsync(timeout);
 
@@ -125,9 +125,9 @@ public sealed class SymbolRequestsTests
         Assert.Contains("type: `Point`", nested.Contents.Value);
         Assert.Contains("size: `4` bytes", nested.Contents.Value);
 
-        var array = await client.HoverAsync(Uri, new Position(10, 0), timeout);
+        var array = await client.HoverAsync(Uri, new Position(10, 6), timeout);
         Assert.NotNull(array);
-        Assert.Contains("**instance** `here`", array.Contents.Value);
+        Assert.Contains("**data declaration** `here`", array.Contents.Value);
         Assert.Contains("size: `20` bytes", array.Contents.Value);
         Assert.Contains("count: `4`", array.Contents.Value);
     }
@@ -195,10 +195,10 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".cpu 65816\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".cpu 65816\n.segment CODE\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(Uri, new Position(3, 5), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(4, 5), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**3 cycles**", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("state here: `a16, i8, native`, 1 pushed", hover.Contents.Value, StringComparison.Ordinal);
@@ -210,10 +210,10 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".cpu 65816\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".cpu 65816\n.segment CODE\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(Uri, new Position(2, 5), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(3, 5), timeout);
         Assert.NotNull(hover);
         Assert.Contains("writes `rep #$20`", hover.Contents.Value, StringComparison.Ordinal);
     }
@@ -228,7 +228,7 @@ public sealed class SymbolRequestsTests
         var definition = await client.DefinitionAsync(Uri, new Position(18, 8), timeout);
         Assert.NotNull(definition);
         Assert.Equal(Uri, definition.Uri);
-        Assert.Equal(new Range(new Position(1, 0), new Position(1, 3)), definition.Range);
+        Assert.Equal(new Range(new Position(1, 6), new Position(1, 9)), definition.Range);
     }
 
     /// <summary>Each part of a path finds its own declaration.</summary>
@@ -251,10 +251,10 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var all = await client.ReferencesAsync(Uri, new Position(1, 0), includeDeclaration: true, timeout);
+        var all = await client.ReferencesAsync(Uri, new Position(1, 6), includeDeclaration: true, timeout);
         Assert.Equal([1, 9, 18], all.Select(location => location.Range.Start.Line));
 
-        var uses = await client.ReferencesAsync(Uri, new Position(1, 0), includeDeclaration: false, timeout);
+        var uses = await client.ReferencesAsync(Uri, new Position(1, 6), includeDeclaration: false, timeout);
         Assert.Equal([9, 18], uses.Select(location => location.Range.Start.Line));
     }
 
@@ -325,7 +325,7 @@ public sealed class SymbolRequestsTests
         await using var client = await OpenAsync(timeout);
 
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
-            client.RenameAsync(Uri, new Position(1, 0), newName, timeout));
+            client.RenameAsync(Uri, new Position(1, 6), newName, timeout));
         Assert.Contains(reason, refused.Message);
     }
 
@@ -335,7 +335,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, "COUNT = 1\n.proc main {\n    lda #COUNT\n}\n");
+        await client.OpenAsync(Uri, "COUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         // Rename the declaration alone, and the use no longer resolves.
@@ -345,7 +345,7 @@ public sealed class SymbolRequestsTests
         var published = await client.NextDiagnosticsAsync(timeout);
         var diagnostic = Assert.Single(published.Diagnostics);
         Assert.Equal("`COUNT` is not declared", diagnostic.Message);
-        Assert.Equal(2, diagnostic.Range.Start.Line);
+        Assert.Equal(3, diagnostic.Range.Start.Line);
 
         var hover = await client.HoverAsync(Uri, new Position(0, 0), timeout);
         Assert.Contains("`TOTAL`", hover?.Contents.Value);

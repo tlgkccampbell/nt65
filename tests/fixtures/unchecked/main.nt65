@@ -8,15 +8,15 @@
 .export dispatch, nmi, restore, set, table_jump, relative, far_relative, first, second
 .export patching, enter, jumper
 
-.bss {
-cmd:        .res 1
-value:      .res 1
-nmi_flag:   .res 1
-saved_p:    .res 1
-}
+.segment BSS
+.data cmd:        .byte
+.data value:      .byte
+.data nmi_flag:   .byte
+.data saved_p:    .byte
 
 ; A jump table inside a proc: the targets need no declarations, because the `.next` edges
 ; carry the state at the jump.
+.segment CODE
 .proc dispatch: a8, i16 {
     lda cmd
     asl a
@@ -77,12 +77,12 @@ saved_p:    .res 1
     and #$00ff
     asl a
     tax
-    lda @targets,x
+    lda targets,x
     pha
     rts
-    .next @targets
+    .next targets
 
-@targets: .addr @one - 1, @two - 1
+.data targets: .addr @one - 1, @two - 1
 
 @one:
     rts

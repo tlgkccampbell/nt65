@@ -1,12 +1,11 @@
 ; A segment is declared once for the whole program, and any file may name it. A
 ; program is a set of files, so which file declares it cannot depend on the order they
 ; arrive in.
-.segment "SHARED": zp
-.segment "DUP": abs
+.segment SHARED: zp
+.segment DUP: abs
 
-.segment "SHARED" {
-scratch:    .res 2
-}
+.segment SHARED
+.data scratch:    .word
 
 ; Exported, so that what the file only declares counts as used.
 .export scratch

@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1358, 0
+.dbg file, "main.nt65", 1394, 0
 
 .import far_routine: far
 
@@ -16,106 +16,106 @@
 ptr:        .res 3
 
 .segment "FARDATA": far
-.dbg line, "main.nt65", 13
+.dbg line, "main.nt65", 12
 far_table:  .res 16
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 15
 vector:     .addr forms
 
 .segment "CODE": absolute
 forms:
-.dbg line, "main.nt65", 23
+.dbg line, "main.nt65", 21
     lda f:far_table
-.dbg line, "main.nt65", 24
+.dbg line, "main.nt65", 22
     sta f:far_table,x
-.dbg line, "main.nt65", 25
+.dbg line, "main.nt65", 23
     lda f:vector
-.dbg line, "main.nt65", 26
+.dbg line, "main.nt65", 24
     lda [ptr]
-.dbg line, "main.nt65", 27
+.dbg line, "main.nt65", 25
     lda [ptr],y
-.dbg line, "main.nt65", 28
+.dbg line, "main.nt65", 26
     lda 3,s
-.dbg line, "main.nt65", 29
+.dbg line, "main.nt65", 27
     sta (1,s),y
     .a16
-.dbg line, "main.nt65", 30
+.dbg line, "main.nt65", 28
     lda #$1234
     .i8
-.dbg line, "main.nt65", 31
+.dbg line, "main.nt65", 29
     ldx #$12
-.dbg line, "main.nt65", 32
+.dbg line, "main.nt65", 30
     rep #$10
     .i16
-.dbg line, "main.nt65", 33
+.dbg line, "main.nt65", 31
     ldy #$1234
-.dbg line, "main.nt65", 34
+.dbg line, "main.nt65", 32
     cpx #0
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 33
     sep #$20
     .a8
-.dbg line, "main.nt65", 36
+.dbg line, "main.nt65", 34
     cmp #$12
-.dbg line, "main.nt65", 37
+.dbg line, "main.nt65", 35
     bit #$80
-.dbg line, "main.nt65", 38
+.dbg line, "main.nt65", 36
     mvn #^far_table, #0
-.dbg line, "main.nt65", 39
+.dbg line, "main.nt65", 37
     mvp #0, #^far_table
-.dbg line, "main.nt65", 40
+.dbg line, "main.nt65", 38
     pea vector
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 39
     pei (ptr)
-.dbg line, "main.nt65", 42
+.dbg line, "main.nt65", 40
     per forms__here
 forms__here:
-.dbg line, "main.nt65", 45
+.dbg line, "main.nt65", 43
     .byte $42, 1
-.dbg line, "main.nt65", 46
+.dbg line, "main.nt65", 44
     cop #2
-.dbg line, "main.nt65", 47
+.dbg line, "main.nt65", 45
     brk #3
-.dbg line, "main.nt65", 48
+.dbg line, "main.nt65", 46
     phb
-.dbg line, "main.nt65", 49
+.dbg line, "main.nt65", 47
     phd
-.dbg line, "main.nt65", 50
+.dbg line, "main.nt65", 48
     phk
-.dbg line, "main.nt65", 51
+.dbg line, "main.nt65", 49
     plb
-.dbg line, "main.nt65", 52
+.dbg line, "main.nt65", 50
     pld
-.dbg line, "main.nt65", 53
+.dbg line, "main.nt65", 51
     plp
-.dbg line, "main.nt65", 54
+.dbg line, "main.nt65", 52
     rep #$20
-.dbg line, "main.nt65", 55
+.dbg line, "main.nt65", 53
     tcd
-.dbg line, "main.nt65", 56
+.dbg line, "main.nt65", 54
     tdc
-.dbg line, "main.nt65", 57
+.dbg line, "main.nt65", 55
     tcs
-.dbg line, "main.nt65", 58
+.dbg line, "main.nt65", 56
     tsc
-.dbg line, "main.nt65", 59
+.dbg line, "main.nt65", 57
     txy
-.dbg line, "main.nt65", 60
+.dbg line, "main.nt65", 58
     tyx
-.dbg line, "main.nt65", 61
+.dbg line, "main.nt65", 59
     xba
-.dbg line, "main.nt65", 62
+.dbg line, "main.nt65", 60
     jsl far_routine
-.dbg line, "main.nt65", 63
+.dbg line, "main.nt65", 61
     brl forms__out
 forms__out:
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 63
     jsr (vector,x)
 
 long_jumps:
-.dbg line, "main.nt65", 70
+.dbg line, "main.nt65", 68
     jml [vector]
 
 tail:
-.dbg line, "main.nt65", 75
+.dbg line, "main.nt65", 73
     jml far_routine

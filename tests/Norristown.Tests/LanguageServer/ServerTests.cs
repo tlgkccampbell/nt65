@@ -10,10 +10,10 @@ public sealed class ServerTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
-    /// <summary>A file with one syntax error on line 3 (0-based line 2).</summary>
-    private const string Broken = ".proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
+    /// <summary>A file with one syntax error on line 4 (0-based line 3).</summary>
+    private const string Broken = ".segment CODE\n.proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
 
-    private const string Fixed = ".proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
+    private const string Fixed = ".segment CODE\n.proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
 
     [Fact]
     public async Task InitializesLogsTheConnectionAndExits()
@@ -55,8 +55,8 @@ public sealed class ServerTests
         var diagnostic = Assert.Single(published.Diagnostics);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal("nt65", diagnostic.Source);
-        Assert.Equal(2, diagnostic.Range.Start.Line);
-        Assert.Equal(2, diagnostic.Range.End.Line);
+        Assert.Equal(3, diagnostic.Range.Start.Line);
+        Assert.Equal(3, diagnostic.Range.End.Line);
         Assert.Null(diagnostic.RelatedInformation);
     }
 
@@ -69,9 +69,9 @@ public sealed class ServerTests
         await client.OpenAsync(Uri, Broken);
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        // Insert `1` at the end of line 3, which is where the operand is missing.
+        // Insert `1` at the end of line 4, which is where the operand is missing.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(2, 9), new Position(2, 9)), "1"));
+            new Range(new Position(3, 9), new Position(3, 9)), "1"));
 
         var published = await client.NextDiagnosticsAsync(timeout);
         Assert.Equal(2, published.Version);
@@ -132,13 +132,16 @@ public sealed class ServerTests
         await client.OpenAsync(Uri, Fixed);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
+        // The second edit is past the end of what the first one wrote, so it is only where it
+        // is meant to be once the first has been applied.
         await client.ChangeAsync(Uri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(3, 4), new Position(3, 7)), "jsr reset"),
-            new TextDocumentContentChangeEvent(new Range(new Position(4, 1), new Position(4, 1)), "\nrts\n"));
+            new TextDocumentContentChangeEvent(new Range(new Position(4, 4), new Position(4, 7)), "jsr reset"),
+            new TextDocumentContentChangeEvent(new Range(new Position(4, 13), new Position(4, 13)), "\n    rts"));
 
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
-        var proc = Assert.Single(await client.SymbolsAsync(Uri, timeout));
+        var segment = Assert.Single(await client.SymbolsAsync(Uri, timeout));
+        var proc = Assert.Single(segment.Children!);
         Assert.Equal("reset", proc.Name);
-        Assert.Equal(new FoldingRange(0, 4), Assert.Single(await client.FoldingRangesAsync(Uri, timeout)));
+        Assert.Equal([new FoldingRange(0, 6), new FoldingRange(1, 6)], await client.FoldingRangesAsync(Uri, timeout));
     }
 }

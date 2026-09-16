@@ -3,11 +3,10 @@
 
 .export main
 
-.segment "RODATA0" {
-state_table: .addr state_title, state_play, state_pause
-}
+.segment RODATA0
+.data state_table: .addr state_title, state_play, state_pause
 
-.segment "CODE0" {
+.segment CODE0
 
 .proc main: a8, i16, dp = 0, dbr = CODE_BANK {
 @frame:
@@ -172,4 +171,3 @@ state_table: .addr state_title, state_play, state_pause
     rts
 }
 
-}

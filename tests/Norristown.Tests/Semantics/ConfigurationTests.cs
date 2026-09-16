@@ -93,6 +93,7 @@ public sealed class ConfigurationTests
     {
         var project = ProjectSettings.None with { Cpu = Cpu.Wdc65C02 };
         var program = Analysis.Program(project, ("main.nt65", """
+            .segment CODE
             .proc main {
             .if .target(65c02) {
                 phx
@@ -141,6 +142,7 @@ public sealed class ConfigurationTests
     public void ABranchDeclaresIntoTheScopeAroundIt()
     {
         var program = Built("""
+            .segment CODE
             .proc main {
             .if 1 {
             @loop:
@@ -196,6 +198,7 @@ public sealed class ConfigurationTests
     public void OneFileBuiltTwoWaysGivesTwoOutputs()
     {
         const string Source = """
+            .segment CODE
             .proc main {
             .if DEBUG {
                 jsr trace

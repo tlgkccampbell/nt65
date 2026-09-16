@@ -75,28 +75,25 @@ JOY_B      = $8000
 
 
 
-.segment "DIRECT" {
-frame_count:    .res 2
-nmi_ready:      .res 1
-inidisp_shadow: .res 1
-pad_held:       .res 2
-pad_pressed:    .res 2
-pad_last:       .res 2
-game_state:     .res 1
-dma_src:        .res 3
-dma_len:        .res 2
-dma_dst:        .res 2
-scratch:        .res 2
-}
+.segment DIRECT
+.data frame_count:    .word
+.data nmi_ready:      .byte
+.data inidisp_shadow: .byte
+.data pad_held:       .word
+.data pad_pressed:    .word
+.data pad_last:       .word
+.data game_state:     .byte
+.data dma_src:        .faraddr
+.data dma_len:        .word
+.data dma_dst:        .word
+.data scratch:        .word
 
-.segment "LORAM" {
-player_x:       .res 2
-player_y:       .res 2
-}
+.segment LORAM
+.data player_x:       .word
+.data player_y:       .word
 
-.segment "WRAM" {
-oam_shadow:     .tag Sprite, 128
-}
+.segment WRAM
+.data oam_shadow:     .type Sprite[128]
 
 ; Screen off: force blank at full brightness 0.
 .macro ppu_off(): a8 {

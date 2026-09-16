@@ -319,6 +319,7 @@ internal static class Lsp
         OutlineKind.Segment => Protocol.SymbolKind.Module,
         OutlineKind.Macro => Protocol.SymbolKind.Function,
         OutlineKind.Constant => Protocol.SymbolKind.Constant,
+        OutlineKind.Data => Protocol.SymbolKind.Variable,
         _ => Protocol.SymbolKind.Field,
     };
 

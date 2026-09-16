@@ -7,9 +7,8 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// What every line of a file assembles to: the addressing mode each instruction gets
-///, how long each instruction and data directive is, and everything the CPU
-/// makes wrong about them.
+/// What every line of a file assembles to: the addressing mode each instruction gets, how
+/// long each instruction and data directive is, and everything the CPU makes wrong about them.
 /// <para>
 /// Syntax does not depend on the CPU, so every operand form parses everywhere; this is the
 /// layer that says whether the target has it.
@@ -42,7 +41,7 @@ public sealed class CodeLayout
     // lengthening one moves everything after it, so the file is laid out again.
     private readonly HashSet<(int Position, Expansion? On)> lengthened;
 
-    // How many bytes each measured routine, scope or data declaration takes. A `.spanof` may
+    // How many bytes each measured routine or data declaration takes. A `.spanof` may
     // be written before the thing it measures, so what one walk works out is what the next
     // one answers with; only what the file actually measures is tracked.
     private readonly IReadOnlySet<Symbol> measured;
@@ -53,10 +52,15 @@ public sealed class CodeLayout
     // the stream around it resumes where it left off.
     private readonly List<int> streams = [0];
     private int nextStream = 1;
-    private string segment = SegmentTable.DefaultSegment;
+
+    // The segment the walk is placing bytes in, or null before any region or block names one.
+    private string? segment;
 
     // The routine the walk is inside, which every statement of it belongs to.
     private Symbol? routine;
+
+    // How many data declarations the walk is inside, whose contents are the declaration's.
+    private int inData;
 
     // Which turn of which repetitions, and which expansion of which macros, the walk is
     // inside. A body is laid out once per writing, and the same line can be a different
@@ -287,8 +291,9 @@ public sealed class CodeLayout
     private void WalkBlock(SyntaxNode block, BlockKind kind)
     {
         // A macro body generates nothing where it is written: it is laid out at every call
-        // that expands it, and in the segment that call is in.
-        if (kind == BlockKind.Macro)
+        // that expands it, and in the segment that call is in. A type's members are room in
+        // whatever is declared with the type, and generate nothing where they are written.
+        if (kind is BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum)
             return;
 
         // A block argument is the call's: the line that opens it is the call, which is laid
@@ -332,14 +337,15 @@ public sealed class CodeLayout
             routine = NameOf(declaration);
         }
 
-        // What a routine or a scope takes is the bytes between the two ends of its block, in
-        // its own stream: a nested segment block is somewhere else and does not count.
-        var spanning = kind is BlockKind.Proc or BlockKind.Scope && lines.Length > 0
-            && lines[0].Statement is { } header && NameOf(header) is { } named && measured.Contains(named)
+        // What a routine or data takes is the bytes between the two ends of its block, in its
+        // own stream: a nested segment block is somewhere else and does not count.
+        var spanning = kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer
+            && lines.Length > 0 && lines[0].Statement is { } header && NameOf(header) is { } named && measured.Contains(named)
             ? named
             : null;
         var opened = (Stream, Offset: filled.GetValueOrDefault(Stream));
-        if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
+        var placing = kind is BlockKind.Segment or BlockKind.Region;
+        if (placing && lines.Length > 0 && lines[0].Statement is { } opener)
         {
             // A detour to the segment the bytes are already in goes nowhere: its contents stay
             // inline, where fall-through runs into them.
@@ -357,11 +363,16 @@ public sealed class CodeLayout
             Statement(other);
         }
 
+        var declaresData = kind is BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer;
+        if (declaresData)
+            inData++;
         Walk(lines, from: 1);
+        if (declaresData)
+            inData--;
         if (spanning is not null && Stream == opened.Stream)
             extents[spanning] = filled.GetValueOrDefault(Stream) - opened.Offset;
         routine = outerRoutine;
-        if (kind == BlockKind.Segment)
+        if (placing)
             streams.RemoveAt(streams.Count - 1);
         segment = outer;
     }
@@ -443,7 +454,23 @@ public sealed class CodeLayout
                 Instruction(statement);
                 break;
             case SyntaxKind.DataDirective:
+            case SyntaxKind.DataValues:
                 Data(statement);
+                break;
+
+            // A data declaration's name stands where its first byte does. What it holds is
+            // laid out on its own line, or in the body it opens.
+            case SyntaxKind.DataDeclaration:
+                Mark(statement);
+                if (DataSyntax.ElementOf(statement) is { } element)
+                {
+                    Data(element);
+                    if (DataSyntax.BodyOf(element) is null && NameOf(statement) is { } declared && measured.Contains(declared)
+                        && placements.GetValueOrDefault((element.Position, expansion)) is { Length: >= 0 } placed)
+                    {
+                        extents[declared] = placed.Length;
+                    }
+                }
                 break;
             case SyntaxKind.AssertDirective:
                 Assertion(statement);
@@ -458,21 +485,12 @@ public sealed class CodeLayout
                 Refuse(statement);
                 break;
             case SyntaxKind.LabeledLine:
-                Symbol? labelled = null;
                 foreach (var child in statement.ChildNodes)
                 {
                     if (child.Kind == SyntaxKind.Label)
-                    {
                         Mark(child);
-                        labelled = NameOf(child);
-                        continue;
-                    }
-                    Statement(child);
-                    if (labelled is not null && measured.Contains(labelled)
-                        && placements.GetValueOrDefault((child.Position, expansion)) is { Length: >= 0 } placed)
-                    {
-                        extents[labelled] = placed.Length;
-                    }
+                    else
+                        Statement(child);
                 }
                 break;
 
@@ -515,6 +533,15 @@ public sealed class CodeLayout
         if (SyntaxFacts.LongBranches.Contains(mnemonic.Text))
         {
             LongBranch(statement, mnemonic);
+            return;
+        }
+
+        // An instruction outside a routine is code nothing runs, and is not laid out. Binding has
+        // said so where it was written; what a macro expands there, binding could not see.
+        if (routine is null)
+        {
+            if (expansion?.NearestCall is not null)
+                Report(mnemonic, "an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow");
             return;
         }
 
@@ -944,7 +971,7 @@ public sealed class CodeLayout
         }
         foreach (var symbol in AddressSymbols.In(model, expression, expansion))
         {
-            if (model.Segments.Find(symbol.Segment ?? SegmentTable.DefaultSegment) is not { DirectPage: { } page and not 0 } segment)
+            if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: { } page and not 0 } segment)
                 continue;
             Report(expression, $"`{symbol.DisplayName}` is in \"{segment.Name}\", reached through the direct page at "
                 + $"{StateValue.Hex(page, 4)}, and is only a direct operand: as {(mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")} "
@@ -1000,6 +1027,15 @@ public sealed class CodeLayout
     {
         if (DataLengths.Of(directive, model, diagnostics, expansion) is not { } length)
             return;
+        if (routine is null && inData == 0 && directive is { Kind: SyntaxKind.DataDirective, Parent.Kind: not SyntaxKind.DataDeclaration })
+        {
+            // Bytes a macro expands outside a routine belong to a declaration as much as bytes
+            // written there do, which binding could not see where the body was written.
+            if (expansion?.NearestCall is not null && DataSyntax.NameOf(directive) is not (".res" or ".align"))
+                Report(directive, $"`{directive.ChildTokens[0].Text}` outside a `.proc` belongs to a `.data` declaration");
+            else if (segment is null && length != 0)
+                Report(directive, "this is outside every segment: a `.segment NAME` region or block places it");
+        }
         Laid(directive, new LineLayout(length, null, null));
         Place(directive, length);
         steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
@@ -1044,6 +1080,23 @@ public sealed class CodeLayout
     {
         if (NameOf(declaration) is not { } symbol)
             return;
+
+        // What has an address needs a segment to have one in. A routine or data outside every
+        // segment is reported where it is declared, and what is inside them is not reported again.
+        if (segment is null && inData == 0
+            && (declaration.Kind == SyntaxKind.ProcDeclaration || (routine is null && declaration.Kind == SyntaxKind.DataDeclaration)))
+        {
+            Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is outside every segment: "
+                + "a `.segment NAME` region or block places it");
+        }
+
+        // A label a macro expands outside a routine is a position in no code, which binding
+        // could not see where the body was written.
+        if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
+        {
+            Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is a label outside a `.proc`: "
+                + "a label is only a position in code");
+        }
         labels[(symbol, Expansion.Owning(expansion, symbol))] =
             new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
         steps.Add(new Step(declaration, expansion, routine, Stream, segment, symbol));

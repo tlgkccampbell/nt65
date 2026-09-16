@@ -3,22 +3,20 @@
 ; width is the register's.
 .cpu 65816
 
-.segment "FARDATA": far
+.segment FARDATA: far
 
-.zeropage {
-ptr:        .res 3
-}
+.segment ZEROPAGE
+.data ptr:        .faraddr
 
-.segment "FARDATA" {
-far_table:  .res 16
-}
+.segment FARDATA
+.data far_table:  .byte[16]
 
-.rodata {
-vector:     .addr forms
-}
+.segment RODATA
+.data vector:     .addr forms
 
 .import far_routine: proc(a*, i*, far)
 
+.segment CODE
 .proc forms: a16, i8 {
     lda far_table           ; a far symbol takes the long form
     sta far_table,x

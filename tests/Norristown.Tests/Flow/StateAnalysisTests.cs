@@ -111,9 +111,9 @@ public sealed class StateAnalysisTests
     public void APlpOfAStatusSavedElsewhereNeedsAState()
     {
         const string Text = """
-            .bss {
-            saved_p: .res 1
-            }
+            .segment BSS
+            .data saved_p: .byte
+            .segment CODE
 
             .proc p {
                 lda saved_p
@@ -165,9 +165,9 @@ public sealed class StateAnalysisTests
                 rts
             }
 
-            .rodata {
-            table: .addr wide, narrow
-            }
+            .segment RODATA
+            .data table: .addr wide, narrow
+            .segment CODE
 
             .proc p {
                 jsr (table,x)
@@ -235,13 +235,13 @@ public sealed class StateAnalysisTests
                 rts
             }
             """;
-        var analysis = Analysis.Program(("main.nt65", ".cpu 65816\n" + Text));
+        var analysis = Analysis.Program(("main.nt65", ".cpu 65816\n.segment CODE\n" + Text));
 
         var problem = Assert.Single(analysis.Diagnostics);
-        Assert.Equal(7, problem.Span.Line);
+        Assert.Equal(8, problem.Span.Line);
         Assert.Equal("`lda #` needs the width of A, and it is not known here, because `p` says `a?` at entry: "
             + "an `.ensure` sets it", problem.Message);
-        Assert.Equal(3, Assert.Single(problem.Related).Span.Line);
+        Assert.Equal(4, Assert.Single(problem.Related).Span.Line);
     }
 
     /// <summary>
@@ -394,24 +394,24 @@ public sealed class StateAnalysisTests
 
     private static int MostWalks(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", ".cpu 65816\n" + text));
+        var analysis = Analysis.Program(("main.nt65", ".cpu 65816\n.segment CODE\n" + text));
         return Assert.Single(analysis.States).MostWalks;
     }
 
     private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(("main.nt65", ".cpu 65816\n" + text)).Problems()
+        Analysis.Program(("main.nt65", ".cpu 65816\n.segment CODE\n" + text)).Problems()
             .Select(problem => Renumbered(problem))
             .ToList();
 
-    /// <summary>A problem's line as the test wrote it, without the <c>.cpu</c> line every test is given.</summary>
+    /// <summary>A problem's line as the test wrote it, without the <c>.cpu</c> and <c>.segment</c> lines every test is given.</summary>
     private static string Renumbered(string problem)
     {
         var parts = problem.Split(':', 3);
-        return $"{parts[0]}:{int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) - 1}:{parts[2]}";
+        return $"{parts[0]}:{int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) - 2}:{parts[2]}";
     }
 
     private static FlowState StateAt(string text, string line) =>
-        StateAt(Analysis.Program(("main.nt65", ".cpu 65816\n" + text)), line);
+        StateAt(Analysis.Program(("main.nt65", ".cpu 65816\n.segment CODE\n" + text)), line);
 
     /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)

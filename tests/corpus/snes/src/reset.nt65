@@ -4,7 +4,7 @@
 .export reset_stub, nmi_stub, irq_stub, cop_stub, brk_stub
 
 ; The vectors point into bank $00. Each stub jumps into the FastROM mirror at $80.
-.segment "STUBS" {
+.segment STUBS
 .proc reset_stub: emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK {
     sei
     jml reset_long
@@ -25,9 +25,8 @@
 .proc brk_stub: e?, a?, i?, dp?, dbr? {
     stp
 }
-}
 
-.segment "CODE0" {
+.segment CODE0
 
 ; The stubs run in bank $00 and jump long into these, at $80. A jump from one bank into a
 ; near routine in another has no checked spelling yet, so these name the addresses rather
@@ -160,4 +159,3 @@
     rts
 }
 
-}

@@ -5,11 +5,11 @@
 
 .export render, fill, reset, save, keep, tail
 
-.bss {
-value:  .res 2
-}
+.segment BSS
+.data value:  .word
 
 ; The signature's example: 16-bit A at entry, 8-bit at the `rts`.
+.segment CODE
 .proc render: a16, i8 -> a8, i8 {
     lda #$1234          ; 16-bit immediate
     sep #$20            ; A is now 8-bit

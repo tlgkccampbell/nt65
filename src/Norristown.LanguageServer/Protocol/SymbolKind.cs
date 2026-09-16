@@ -18,6 +18,9 @@ internal enum SymbolKind
     /// <summary>A routine.</summary>
     Function = 12,
 
+    /// <summary>A data declaration.</summary>
+    Variable = 13,
+
     /// <summary>A constant or address alias.</summary>
     Constant = 14,
 }

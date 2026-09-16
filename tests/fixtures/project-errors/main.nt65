@@ -1,4 +1,5 @@
 ; The program itself is fine; everything wrong with it is in the project file beside it.
+.segment CODE
 .proc start {
     rts
 }

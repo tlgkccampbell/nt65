@@ -3,18 +3,19 @@
 ; derived from the source and made unique.
 .cpu 6502
 
-.zeropage {
+.segment ZEROPAGE
 ; ca65 reads `z:` and `f:` at the start of a line as address-size prefixes, so a label
 ; named `z` or `f` is written as an assignment instead.
-z:          .res 1
-f:          .res 1
-ptr:        .res 2
-}
+.data z:          .byte
+.data f:          .byte
+.data ptr:        .word
 
 .export z, top
 
-top:
+.segment CODE
+.proc top {
     rts
+}
 
 .scope outer {
     .proc inner {

@@ -48,10 +48,13 @@ public sealed class Symbol
     /// <summary>The expression after <c>=</c>, or null for a label, proc body or scope.</summary>
     public SyntaxNode? ValueExpression { get; internal init; }
 
-    /// <summary>The scope a <c>.proc</c> or <c>.scope</c> opens; null for everything else.</summary>
+    /// <summary>The scope a <c>.proc</c>, a <c>.scope</c> or mixed data opens; null for everything else.</summary>
     public Scope? Body { get; internal set; }
 
-    /// <summary>The block a <c>.macro</c> body is written in, which every call expands.</summary>
+    /// <summary>
+    /// The block a <c>.macro</c> body is written in, which every call expands, or the block of
+    /// a <c>.data name { }</c>, which holds its members.
+    /// </summary>
     public SyntaxNode? Definition { get; internal set; }
 
     /// <summary>The value, where nt65 knows it. For a struct member, its offset.</summary>
@@ -64,12 +67,12 @@ public sealed class Symbol
     public long? Count { get; internal set; }
 
     /// <summary>
-    /// The <c>T</c> of a <c>.tag T</c>, before it is resolved. A member or an instance takes
-    /// its size and its fields from the type it names.
+    /// The <c>T</c> of a <c>.type T</c>, before it is resolved. A member or a data declaration
+    /// takes its size and its fields from the type it names.
     /// </summary>
     public SyntaxNode? TypeExpression { get; internal init; }
 
-    /// <summary>The type a <c>.tag</c> names, once resolved.</summary>
+    /// <summary>The type a <c>.type</c> names, once resolved.</summary>
     public Symbol? Type { get; internal set; }
 
     /// <summary>A function's parameters, in order, as the symbols its body names.</summary>
@@ -100,7 +103,10 @@ public sealed class Symbol
     /// <summary>A charmap's entry lines, read into a mapping when it is first applied.</summary>
     public IReadOnlyList<SyntaxNode> Entries { get; internal init; } = [];
 
-    /// <summary>The data directive a label sits on, which is what gives it a size and a count.</summary>
+    /// <summary>
+    /// The element directive of a data declaration or a struct member, which is what gives it a
+    /// size and a count; null for mixed data, whose block is its <see cref="Definition"/>.
+    /// </summary>
     public SyntaxNode? Data { get; internal init; }
 
     /// <summary>
@@ -157,7 +163,7 @@ public sealed class Symbol
 
     /// <summary>Whether the symbol names an address rather than a value.</summary>
     public bool IsAddress => Kind is SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Proc
-        or SymbolKind.ExternProc or SymbolKind.ImportedAddress or SymbolKind.Instance;
+        or SymbolKind.ExternProc or SymbolKind.ImportedAddress or SymbolKind.Data;
 
     /// <summary>Whether the symbol is a layout whose members are offsets.</summary>
     public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;
@@ -228,7 +234,7 @@ public sealed class Symbol
         SymbolKind.Struct => "structure",
         SymbolKind.Union => "union",
         SymbolKind.Member => "member",
-        SymbolKind.Instance => "instance",
+        SymbolKind.Data => "data declaration",
         SymbolKind.Charmap => "character mapping",
         SymbolKind.List => "list",
         SymbolKind.Binding => "repetition binding",

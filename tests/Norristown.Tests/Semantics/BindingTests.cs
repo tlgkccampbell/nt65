@@ -55,7 +55,7 @@ public sealed class BindingTests
     {
         var model = Analysis.Model("""
             .proc draw {
-                .rodata {
+                .segment RODATA {
                 table:  .byte 1, 2
                 }
                 rts
@@ -166,7 +166,7 @@ public sealed class BindingTests
     [Fact]
     public void ReservedWordsCannotBeNames()
     {
-        var model = Analysis.Model("lda = 5\nX: .byte 0\njeq = 1\n");
+        var model = Analysis.Model("lda = 5\n.data X: .byte 0\njeq = 1\n");
 
         Assert.Equal(
             [
@@ -225,7 +225,7 @@ public sealed class BindingTests
     {
         var model = Analysis.Model("""
             .proc draw {
-                .rodata {
+                .segment RODATA {
             @table: .byte 1, 2
                 }
                 lda @table

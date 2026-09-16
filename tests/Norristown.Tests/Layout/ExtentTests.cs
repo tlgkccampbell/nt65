@@ -18,8 +18,10 @@ public sealed class ExtentTests
                 rts
             }
 
-            header: .word .spanof(reloc)
-                    .addr .endof(reloc)
+            .data header {
+                .word .spanof(reloc)
+                .addr .endof(reloc)
+            }
             """);
 
         Assert.Contains("reloc__end:", written, StringComparison.Ordinal);
@@ -31,16 +33,16 @@ public sealed class ExtentTests
     [Fact]
     public void TheEndLabelComesAfterTheLastByte()
     {
-        var written = Written(".proc f {\n    nop\n}\n\n.proc g {\n    rts\n}\n\nn: .word .spanof(f)\n");
+        var written = Written(".proc f {\n    nop\n}\n\n.proc g {\n    rts\n}\n\n.data n: .word .spanof(f)\n");
 
         Assert.Contains("    nop\nf__end:\n\ng:\n", written, StringComparison.Ordinal);
     }
 
-    /// <summary>A scope and a data declaration are measured the same way.</summary>
+    /// <summary>Data is measured the same way, whether it holds elements or is mixed.</summary>
     [Theory]
-    [InlineData(".scope gfx {\n.proc init {\n    rts\n}\n}\n\nn: .word .spanof(gfx)\n", "gfx__end", 1)]
-    [InlineData("table: .byte 1, 2, 4, 8\n\nn: .word .spanof(table)\n", "table__end", 4)]
-    public void AScopeAndADataDeclarationAreMeasuredToo(string text, string end, int span)
+    [InlineData(".data table: .byte 1, 2, 4, 8\n\n.data n: .word .spanof(table)\n", "table__end", 4)]
+    [InlineData(".data blob {\n    .byte 1\n    .data inner: .word 2\n}\n\n.data n: .word .spanof(blob)\n", "blob__end", 3)]
+    public void DataIsMeasuredToo(string text, string end, int span)
     {
         var written = Written(text);
 
@@ -57,6 +59,7 @@ public sealed class ExtentTests
     public void AnAssertionAboutASpanIsAnsweredAtEditTime()
     {
         var program = Analysis.Program(("main.nt65", """
+            .segment CODE
             .proc irq {
                 nop
                 nop
@@ -66,7 +69,7 @@ public sealed class ExtentTests
             .assert .spanof(irq) <= 2, error, "irq handler too big"
             """));
 
-        Assert.Equal(["main.nt65:7: irq handler too big"], program.Problems());
+        Assert.Equal(["main.nt65:8: irq handler too big"], program.Problems());
     }
 
     /// <summary>A span may be written before the thing it measures, as any constant may.</summary>
@@ -76,6 +79,7 @@ public sealed class ExtentTests
         var program = Analysis.Program(("main.nt65", """
             .assert .spanof(irq) == 3, error, "irq is not three bytes"
 
+            .segment CODE
             .proc irq {
                 nop
                 nop
@@ -107,18 +111,28 @@ public sealed class ExtentTests
     }
 
     /// <summary>
-    /// A routine has no shape, only a place in the output, so <c>.sizeof</c> of one is an
-    /// error that points at the built-in that does measure it.
+    /// A routine's size is the bytes in its body, so <c>.sizeof</c> of one is its span; it has
+    /// no elements, so <c>.countof</c> of one is an error.
     /// </summary>
     [Fact]
-    public void SizeofOfARoutineIsAnErrorThatPointsAtSpanof()
+    public void SizeofOfARoutineIsItsSpan()
     {
-        var program = Analysis.Program(("main.nt65", ".proc f {\n    rts\n}\n\nN = .sizeof(f)\n"));
+        var program = Analysis.Program(("main.nt65",
+            ".segment CODE\n.proc f {\n    nop\n    rts\n}\n\n.assert .sizeof(f) == 2, error, \"f is not two bytes\"\n"
+            + ".data n: .byte .countof(f)\n"));
 
         Assert.Equal(
-            ["main.nt65:5: `f` is a routine, and `.sizeof` describes a shape. "
-                + "`.spanof` is how many bytes it takes in the output"],
+            ["main.nt65:8: `f` is a routine, which has bytes and no elements: `.sizeof(f)` is how many bytes it takes"],
             program.Problems());
+    }
+
+    /// <summary>A label is only a position, and a scope only a namespace: neither has an extent.</summary>
+    [Theory]
+    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1, error\n}\n", "main.nt65:5: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
+    [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:4: `s` is a scope, which is only a namespace: `.endof` measures a `.data` declaration, a routine or a type")]
+    public void ALabelAndAScopeHaveNoExtent(string text, string problem)
+    {
+        Assert.Contains(problem, Analysis.Program(("main.nt65", ".segment CODE\n" + text)).Problems());
     }
 
     /// <summary>A constant has no bytes of its own, so there is nothing to measure.</summary>
@@ -131,12 +145,13 @@ public sealed class ExtentTests
             "main.nt65:3: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
     }
 
-    private static string Written(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
+    /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
+    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".segment CODE\n" + text))["main.s"];
 
     /// <summary>How many bytes layout worked out for the one thing the file measures.</summary>
     private static long? SpanOf(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", text));
+        var analysis = Analysis.Program(("main.nt65", ".segment CODE\n" + text));
         var model = analysis.File("main.nt65");
         var measured = Norristown.Semantics.Extents.MeasuredIn(model).Single();
         return analysis.Layouts.Single().SpanOf(measured);

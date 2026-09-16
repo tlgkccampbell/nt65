@@ -50,6 +50,7 @@ public sealed class AssertionTests
     public void WhatNt65CannotAnswerIsPassedOn()
     {
         var main = Analysis.Outputs(("main.nt65", """
+            .segment CODE
                 .assert 4 == 4, error, "checked here"
             .proc irq {
                 rts

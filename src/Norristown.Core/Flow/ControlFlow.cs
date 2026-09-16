@@ -344,10 +344,12 @@ public sealed class ControlFlow
     /// <summary>The labels a table or a list stands for, empty when it stands only for itself.</summary>
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)
     {
-        var items = target.Kind == SymbolKind.List ? target.Items : ItemsOfTable(target);
-        foreach (var item in items)
+        var items = target.Kind == SymbolKind.List
+            ? target.Items.Select(item => (Item: item, On: on))
+            : ItemsOfTable(target);
+        foreach (var (item, at) in items)
         {
-            if (Targets.Of(model, Stripped(item), on) is { } named
+            if (Targets.Of(model, Stripped(item), at) is { } named
                 && (named.Symbol.Kind is SymbolKind.Label || named.Symbol.Signature is not null))
             {
                 yield return named;
@@ -358,44 +360,36 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The values of the data a label stands on, or none when it stands on no data. Only a
-    /// table of addresses can name labels, so anything else spreads to nothing.
+    /// The values of a table: data declared as addresses, `.addr` or `.faraddr`, and each value
+    /// with the writing it is on. Values in a body are read from the writings layout made of
+    /// them, since a repetition there may write each one differently. Anything else spreads to
+    /// nothing.
     /// </summary>
-    private static IReadOnlyList<SyntaxNode> ItemsOfTable(Symbol target) =>
-        target is { Kind: SymbolKind.Label, Data: { Kind: SyntaxKind.DataDirective } data }
-            && data.ChildTokens.Length > 0
-            && data.ChildTokens[0].Text.Equals(".addr", StringComparison.OrdinalIgnoreCase)
-            ? data.ChildNodes
-            : [];
-
-    /// <summary>
-    /// Whether <paramref name="label"/> is a place in data that does not spread to code
-    /// labels: a label on data of another kind, or a label on a line of its own with data
-    /// below it. A table is read only from the <c>.addr</c> on the label's own line, so the
-    /// second is what a table written the ca65 way, one line per entry, comes to.
-    /// </summary>
-    private bool IsDataWithoutCodeLabels(Symbol label, Expansion? on)
+    private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
     {
-        if (label.Kind != SymbolKind.Label || Spread(label, on).Any())
-            return false;
-        if (label.Data is not null)
-            return true;
-
-        var tree = label.Tree;
-        for (var line = tree.GetLineIndex(label.NameSpan.Start) + 1; line < tree.Lines.Length; line++)
+        if (!IsAddressData(target) || target.Data is not { } element)
+            yield break;
+        foreach (var value in DataLengths.ElementsOf(element))
+            yield return (value, null);
+        if (DataSyntax.BodyOf(element) is null)
+            yield break;
+        foreach (var step in layout.Steps)
         {
-            switch (tree.Statement(line).Kind)
+            if (step.Statement.Kind == SyntaxKind.DataValues && DataSyntax.DirectiveOfValues(step.Statement) == element)
             {
-                case SyntaxKind.BlankLine:
-                    continue;
-                case SyntaxKind.DataDirective:
-                    return true;
-                default:
-                    return false;
+                foreach (var value in step.Statement.ChildNodes)
+                    yield return (value, step.On);
             }
         }
-        return false;
     }
+
+    /// <summary>Whether a symbol is data declared as addresses, which is what a table of targets is.</summary>
+    private static bool IsAddressData(Symbol symbol) =>
+        symbol is { Kind: SymbolKind.Data, Data: { } element } && DataSyntax.NameOf(element) is ".addr" or ".faraddr";
+
+    /// <summary>Whether a name is data that does not spread to code labels, which names nowhere code goes.</summary>
+    private bool IsDataWithoutCodeLabels(Symbol symbol, Expansion? on) =>
+        symbol.Kind == SymbolKind.Data && !Spread(symbol, on).Any();
 
     /// <summary>
     /// A table item with the <c>- 1</c> of an RTS dispatch table taken off it, which is the
@@ -423,8 +417,10 @@ public sealed class ControlFlow
                 if (IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
                     diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
-                        $"`{target.Symbol.DisplayName}` holds no code labels: `.next` reads a table from the "
-                        + "`.addr` values written on the label's own line"));
+                        IsAddressData(target.Symbol)
+                            ? $"`{target.Symbol.DisplayName}` holds no code labels, and `.next` reads the labels a table holds"
+                            : $"`{target.Symbol.DisplayName}` is not a table of addresses: `.next` reads the labels a table "
+                                + "declared as `.addr` or `.faraddr` holds"));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
@@ -460,8 +456,8 @@ public sealed class ControlFlow
                     + "there starts at a label a `.next` names or a `.state` declares"));
                 continue;
             }
-            if (block.Index == 0 || block.Label is not { } label || block.Predecessors.Count > 0
-                || block.IsDeclared || block.Steps is [{ Statement.Kind: SyntaxKind.DataDirective }, ..])
+            if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
+                || block.IsDeclared || block.Steps is [{ Statement.Kind: SyntaxKind.DataDirective or SyntaxKind.DataValues }, ..])
             {
                 continue;
             }
@@ -494,7 +490,7 @@ public sealed class ControlFlow
             }
             if (unit.Step.Label is not null || unit.Step.IsMarker)
                 continue;
-            var data = unit.Step.Statement.Kind == SyntaxKind.DataDirective;
+            var data = unit.Step.Statement.Kind is SyntaxKind.DataDirective or SyntaxKind.DataValues;
 
             // The data a routine returns past is skipped, and flow carries on after it.
             if (inline.Contains(unit))
@@ -559,7 +555,7 @@ public sealed class ControlFlow
             for (var j = i + 1; j < units.Count && taken < bytes; j++)
             {
                 if (units[j].Step.Label is not null || units[j].Step.Stream != units[i].Step.Stream
-                    || units[j].Step.Statement.Kind != SyntaxKind.DataDirective)
+                    || units[j].Step.Statement.Kind is not (SyntaxKind.DataDirective or SyntaxKind.DataValues))
                     break;
                 taken += layout.Of(units[j].Step.Statement, units[j].Step.On)?.Length ?? 0;
                 skipped.Add(units[j]);

@@ -15,24 +15,25 @@
 ROW_COUNT = 25
 COLS = 40
 
-.rodata {
+.segment RODATA
 ; Row start offsets into screen RAM
-row_lo:
-.repeat ROW_COUNT, r {
-    .byte <(SCREEN_RAM + r * COLS)
+.data row_lo: .byte[ROW_COUNT] {
+    .repeat ROW_COUNT, r {
+        <(SCREEN_RAM + r * COLS)
+    }
 }
-row_hi:
-.repeat ROW_COUNT, r {
-    .byte >(SCREEN_RAM + r * COLS)
+.data row_hi: .byte[ROW_COUNT] {
+    .repeat ROW_COUNT, r {
+        >(SCREEN_RAM + r * COLS)
+    }
 }
-hex_digits: .byte screen("0123456789ABCDEF")
-}
+.data hex_digits: .byte screen("0123456789ABCDEF")
 
-.bss {
-cursor_col: .res 1
-}
+.segment BSS
+.data cursor_col: .byte
 
 ; X = row, Y = column. Points ptr1 at the start of the row and remembers the column.
+.segment CODE
 .proc set_cursor {
     lda row_lo,x
     sta ptr1

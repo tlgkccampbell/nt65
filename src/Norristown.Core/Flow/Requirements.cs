@@ -196,7 +196,7 @@ internal sealed class Requirements
     private static Step? DataAt(Labelled labelled)
     {
         var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement.Kind != SyntaxKind.StateDirective);
-        return first.Statement?.Kind == SyntaxKind.DataDirective ? first : null;
+        return first.Statement?.Kind is SyntaxKind.DataDirective or SyntaxKind.DataValues ? first : null;
     }
 
     /// <summary>
@@ -284,7 +284,8 @@ internal sealed class Requirements
         foreach (var step in layout.Steps)
         {
             var statement = step.Statement;
-            if (step.Label is not null || statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.DataDirective))
+            if (step.Label is not null
+                || statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.DataDirective or SyntaxKind.DataValues))
                 continue;
             if (flow.IsReturnAddress(step))
                 continue;

@@ -90,7 +90,7 @@ one structurally.
 | `.define` | textual substitution anywhere in the token stream | removed; constants and functions (§9) |
 | `.feature` | changes the lexer and parser mid-file | removed; one fixed grammar |
 | `.setcpu` | changes the mnemonic set mid-file | one CPU per program (§5.1); all mnemonics always lex |
-| `.segment`, `.org`, `.pushseg`/`.popseg` | modal | segment *blocks* (§5.2) |
+| `.segment`, `.org`, `.pushseg`/`.popseg` | modal | segment regions and blocks, found from lines alone (§5.2) |
 | `.a8` `.a16` `.i8` `.i16` `.smart` | modal register width | declared on `.proc`, flow-analyzed inside it, asserted with `.state` (§7.3) |
 | zero page vs absolute guessed at the point of reference | depends on what has been *seen so far* | derived from declarations; always explicit in the output (§7.2) |
 | `.set` (re-assignable symbols) | value depends on position | removed; symbols are single-assignment |
@@ -190,39 +190,51 @@ bare-identifier lines, the kind of block that encloses it:
 |---|---|
 | `.word` (any directive) | directive / block opener |
 | `ident :`, `@name :` | label, optionally followed by a statement |
-| `ident =`, `@name =` | constant; inside `.enum`, a member with an explicit value; inside a `.tag` initializer, a member's value (§6.3) |
+| `ident =`, `@name =` | constant; inside `.enum`, a member with an explicit value; inside a record initializer, a member's value (§6.3) |
 | `ident !` | macro invocation |
 | `ident` alone | bare identifier: an enum member inside `.enum`, a list item inside `.list` (§6.4), a `block` parameter splice inside a macro body (§11.4), an error elsewhere |
 | mnemonic | instruction |
-| any other expression | list items inside `.list` (§6.4), an error elsewhere |
+| any other expression | list items inside `.list` (§6.4), values inside a data body (§8), an error elsewhere |
 | `}` | block close, optionally continuing with `.else {`, `.elseif expr {` or a macro's next block, `name {` |
 
 **Block structure is a layer over lines, not part of parsing them.** A line whose last
 token is `{` opens a block, unless that `{` is inside a parenthesis still open on the
 line, so a half-typed `m!({` does not swallow the rest of the file; a line whose first
 token is `}` closes one; a `} .else {` or `} name {` line does both and counts as 0; any
-other brace (the `{operand}` grouping in macro arguments, §11, and a one-line `.tag`
-initializer, §6.3) must be balanced within its own line. The block layer is therefore a
-per-line value of +1, −1 or 0, and the tree is recovered from a prefix sum without
+other brace (the `{operand}` grouping in macro arguments, §11, and values or a record
+written in braces on one line, §8) must be balanced within its own line. The block layer is
+therefore a per-line value of +1, −1 or 0, and the tree is recovered from a prefix sum without
 looking inside any line. Every block opener is a keyword line, a macro call or a
 continuation line, which gives error recovery an anchor when braces are unbalanced
 mid-edit; there are no bare `{` blocks, `.scope {` serves that purpose.
+
+A `.segment NAME` line with no brace and no size is a **region** line (§5.2). At file level
+it opens a block with no brace, which holds every line up to the next region line or the end
+of the file. It is found from its own tokens, as a brace is, so an edit to one moves only the
+lines up to the next; anywhere else it is an ordinary line, which is an error.
 
 Recovery uses that anchor only when it must. While the braces balance, the tree is exactly
 the prefix sum, so a construct written where it may not appear, such as a `.proc` inside a
 `.proc`, keeps the structure it was written with and is reported by the parser rather than
 guessed at by the block layer. Where they do not balance, a `}` with no open block is
-reported and treated as an ordinary line, and a `.proc` or `.macro` opener inside a proc or
-a macro closes the blocks back to outside it, so the items after a missing `}` are still
-found.
+reported and treated as an ordinary line, a `.proc` or `.macro` opener inside a proc or
+a macro closes the blocks back to outside it, and a region line closes every block, so the
+items after a missing `}` are still found.
 
 ## 5. Program structure
 
 A program is the set of `.nt65` files handed to the transpiler. Each file is a sequence
-of **items**: labels, constants, data, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`,
-`.union`, `.charmap`, `.list`, `.func`, `.export`, `.import`, `.if`, `.repeat` and
-`.each` at item level, segment
-declarations and segment blocks.
+of **items**: constants, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`,
+`.struct`, `.union`, `.charmap`, `.list`, `.func`, `.export`, `.import`, `.if`, `.repeat`
+and `.each` at item level, unnamed `.res` and `.align` padding, segment declarations,
+segment regions and segment blocks.
+
+Outside a proc there are no instructions and no labels. Code lives in a `.proc`, and every
+byte outside one belongs to a `.data` declaration (§8), except unnamed `.res` and `.align`,
+which pad between declarations. An instruction or a label outside a proc is an error, at file
+level and inside `.scope`, `.if`, `.repeat`, `.each` and segment blocks alike. Inside a proc,
+a label is a position in code: a branch target, inline data after a call, an interior entry
+point. A label is only ever a location, and never has a size (§8).
 
 ### 5.1 CPU
 
@@ -239,26 +251,39 @@ diagnostic ("`stz` is not available on the 6502"). Code that differs between CPU
 ### 5.2 Segments
 
 ```nt65
-.segment "ZP2": zp              ; declaration: this segment is zero page
+.segment ZP2: zp                ; declaration: this segment is zero page
 
-.segment "ZP2" {
-ptr:    .res 2
-tmp:    .res 1
-}
+.segment ZP2                    ; a region: what follows is in ZP2
+.data ptr: .word
+.data tmp: .byte
 
-.segment "CODE" {
-...
+.segment CODE
+.proc main {
+    ...
 }
 ```
 
-A segment block places its items in the named segment. `.zeropage`, `.code`, `.bss`,
-`.data` and `.rodata` are shortcuts for the standard names. Items outside any segment
-block go to `CODE`.
+A **region** line, `.segment NAME` with no brace, places every item after it in the named
+segment, up to the next region line or the end of the file: it is C#'s file-scoped namespace,
+applied to segments. A region is structure, not a mode. It is found from lines alone, as a
+brace is, so an edit to a region line affects only the lines up to the next one, and it may
+be written only at file level: inside any block (`.scope`, `.if`, `.repeat`, `.each`, a proc)
+it is an error, and there is no push or pop. Items that emit nothing, such as constants,
+types, macros and imports, may stand anywhere, before the first region included. Anything
+with an address outside every region and block is an error: there is no implicit `CODE`.
+
+A segment **block**, `.segment NAME { }`, places what it holds and nothing after it. It may
+appear anywhere an item may, as a one-off within a region or as a detour inside a proc.
+
+A segment name is an identifier. ca65 quotes its segment names because they share a
+namespace with symbols; nt65 declares segments in a table of their own, so a segment and a
+symbol may share a name. The output still quotes them for ca65.
 
 A segment's address size (`zp`, `abs`, `far`) is declared **exactly once** per program,
-by a `.segment "NAME": size` declaration item (no braces) in any one file or in the
-project configuration. Blocks only name the segment. The standard names are
-predeclared (`ZEROPAGE` as `zp`, the rest as `abs`). A segment block that names a
+by a `.segment NAME: size` declaration item in any one file or in the project
+configuration; a size after `:` is what makes the line a declaration rather than a region.
+Regions and blocks only name the segment. The standard names are predeclared (`ZEROPAGE` as
+`zp`, and `CODE`, `DATA`, `BSS` and `RODATA` as `abs`). A region or block that names a
 segment declared nowhere is an error, so a misspelled name is caught before ld65 runs.
 The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
@@ -282,9 +307,8 @@ must place it where its symbols are direct-page offsets (`$00`–`$FF`, relative
 address, and on the 65816 an absolute operand on it is an error when its segment's `dp`
 is not 0 (§7.2). Getting `dp =` and the linker config to agree is the programmer's job.
 
-A segment block may appear anywhere an item may appear, including inside a `.proc`.
-It changes the segment of its contents, not their scope, which is the structured form
-of the `.pushseg` / `.popseg` idiom:
+Inside a `.proc`, a segment block changes the segment of its contents, not their scope,
+which is the structured form of the `.pushseg` / `.popseg` idiom:
 
 ```nt65
 .proc draw {
@@ -292,8 +316,8 @@ of the `.pushseg` / `.popseg` idiom:
 @loop:
     lda table,x
     ...
-    .rodata {
-    table: .byte 1, 2, 4, 8       ; this is draw::table
+    .segment RODATA {
+        .data table: .byte 1, 2, 4, 8       ; this is draw::table
     }
 }
 ```
@@ -304,8 +328,6 @@ code, its first statement needs a `.next` edge or a declaration like any other e
 point, so it starts at a label: code at its start with no label is reached by nothing, and
 is warned about as a label nothing reaches is. A nested segment block that names the segment it is already in is an error: its
 contents would stay inline in the byte stream, where fall-through does reach them.
-
-By convention the contents of a top-level segment block are not indented.
 
 ### 5.3 Project file
 
@@ -355,15 +377,15 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 
 | form | declares |
 |---|---|
-| `name:` | an address (label). May be followed by an instruction, data directive or macro call on the same line. |
+| `name:` | a position in code, inside a proc: an address and nothing else. It may be followed by an instruction, data directive or macro call on the same line, and has no size whatever follows it. |
 | `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. A constant holding text is used through `.strlen` and `.strat`, and cannot be written as data. |
-| `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope (§6.2). |
+| `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
 | `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. An alias that writes a signature must write the routine's, and one that writes none takes it. |
 | `.scope [name] { ... }` | a scope. It is a namespace with no address of its own: its name is not an operand. |
 | `.enum [name] { ... }` | constants (§6.3). |
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
-| `name: .tag T [, n]`, `name: .tag T { ... }` | an instance, an array of instances or an initialized instance: a label that is also a scope of its fields (§6.3). |
+| `.data name: element`, `.data name { ... }` | data: an address with a size in bytes, a count of elements for an element type, and a scope of its members or of its type's fields (§8). |
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
@@ -371,7 +393,7 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 
 Every symbol carries what analysis needs: whether it is a constant or an address, its
 address size (from its value, or from its segment), and for data its size in bytes
-(`.sizeof(name)`).
+(`.sizeof(name)`) and its count of elements (`.countof(name)`).
 
 ### 6.2 Scoping rules
 
@@ -380,8 +402,9 @@ address size (from its value, or from its segment), and for data its size in byt
   named scope.
 - **Cheap locals** `@name` are labels or constants private to the innermost enclosing
   `.proc` or `.scope`. A macro expansion and each `.repeat` or `.each` iteration also have their
-  own. `.if` bodies and segment blocks do not start a new set, so an `@table` in a
-  nested `.rodata { }` block is visible to the proc's code.
+  own, and so does a `.data name { }` block, whose `@` positions are private to it. `.if`
+  bodies and segment blocks do not start a new set, so an `@loop` in a nested
+  `.segment RODATA { }` block is visible to the proc's code.
   - A reference looks outward through enclosing scopes, so a nested `.scope` can branch
     to its proc's `@done`. Procs do not nest (§6.1), so this never reaches into another
     routine.
@@ -389,8 +412,8 @@ address size (from its value, or from its segment), and for data its size in byt
     so `@loop` never collides with a regular `loop`.
   - A name may be declared once in its scope. To reuse one, open an anonymous
     `.scope { }`, which is inline code, not a separate routine.
-  - A cheap local outside any proc, scope, macro body, `.repeat` body or `.each` body is
-  an error.
+  - A cheap local outside any proc, scope, `.data` block, macro body, `.repeat` body or
+  `.each` body is an error.
 
   Because nothing outside a proc can name the cheap locals declared inside it, every
   edge into such a label is visible to the proc's flow analysis (§7.3). The output gives
@@ -435,9 +458,10 @@ declare constants and sizes and never generate code.
 }
 
 .struct Player {
-    pos:    .tag Point
+    pos:    .type Point
     hp:     .byte
-    name:   .res 16
+    name:   .res 16, ' '
+    colors: .word[4]
 }
 
 .union Value {
@@ -451,34 +475,39 @@ declare constants and sizes and never generate code.
 explicit values must be constant. An anonymous `.enum { }` declares its members into
 the enclosing scope.
 
-**Structures.** Members are written like data declarations, but the directive reserves
-space instead of emitting it: `.byte`, `.word`, `.dword`, `.addr` and `.faraddr`
-reserve one element, `.res n` reserves n bytes, `.tag T` reserves `.sizeof(T)` bytes
-and `.tag T, n` reserves n of them, and no operand values are allowed. Each member is a
-constant offset in the scope `Point` (`Point::x` is 0, `Point::y` is 2) with a byte
-size (`.sizeof(Point::y)` is 2), and `.sizeof(Point)` is the total. Members of a `.tag`
-member are reachable through it: `Player::pos::y` is 2. An anonymous `.struct { }`
-inside a struct groups members without introducing a scope. A **union** is a struct in
-which every member is at offset 0 and the size is that of the largest member. Member
-names may be register names or mnemonics (§4).
+**Structures.** Members use the element types of data declarations (§8), but reserve
+space instead of emitting it: `x: .byte` reserves one element, `colors: .word[16]` sixteen,
+`pos: .type Point` one record and `pos: .type Point[4]` four. A member holds no value, so
+`colors: .word 16` is an error, and a member's count is a number. A string member declares
+its pad, `title: .res 21, ' '`: an initializer's text is padded with it, data of the type with
+no values is filled with it, and `.res n` alone pads with zero. Each member is a constant
+offset in the scope `Point` (`Point::x` is 0, `Point::y` is 2) with a byte size
+(`.sizeof(Point::y)` is 2) and a count (`.countof(Player::colors)` is 4), and
+`.sizeof(Point)` is the total. Members of a record member are reachable through it:
+`Player::pos::y` is 2. An anonymous `.struct { }` inside a struct groups members without
+introducing a scope. A **union** is a struct in which every member is at offset 0 and the
+size is that of the largest member. Member names may be register names or mnemonics (§4).
 
-**Instances.** In data, `.tag T` allocates one instance and `.tag T, n` an array of n:
+**Data of a type.** `.data name: .type T` declares one record and `.type T[n]` an array of
+n (§8):
 
 ```nt65
-player: .tag Player
-actors: .tag Player, MAX_ACTORS
+.data player: .type Player
+.data actors: .type Player[MAX_ACTORS]
 ```
 
-A label declared with `.tag` is also a scope whose members are the fields of its first
-element, each an address symbol in the label's segment with the member's size:
-`player::hp` is `player + Player::hp`, and `player::pos::y` is `player + 2`. For an
-array, `.countof(actors)` is `MAX_ACTORS`, `.sizeof(actors)` is
-`MAX_ACTORS * .sizeof(Player)`, and `.sizeof(Player)` is the stride, so with X holding
-an element's offset `lda actors::hp,x` reads that element's `hp`. Nothing else changes:
-these are ordinary indexed operands that nt65 sizes from the segment of the label.
+Data of a type is also a scope whose members are the fields of its first element, each an
+address symbol in the declaration's segment with the member's size: `player::hp` is
+`player + Player::hp`, and `player::pos::y` is `player + 2`. For an array,
+`.countof(actors)` is `MAX_ACTORS`, `.sizeof(actors)` is `MAX_ACTORS * .sizeof(Player)`,
+and `.sizeof(Player)` is the stride, so with X holding an element's offset
+`lda actors::hp,x` reads that element's `hp`. Nothing else changes: these are ordinary
+indexed operands that nt65 sizes from the segment of the declaration. `.type` is dotted
+like the built-in element types, because a bare type name inside a proc would read like an
+instruction.
 
-**Initialized instances.** `.tag T { ... }` emits one instance with values, which is what
-record macros are written for in ca65:
+**Initialized records.** `.type T { ... }` emits one record with values, which is what
+record macros are written for in ca65, and `.type T[] { ... }` an array of them:
 
 ```nt65
 .struct Actor {
@@ -488,12 +517,17 @@ record macros are written for in ca65:
     ai: .addr
 }
 
-boss:   .tag Actor { x = 100, y = 40, hp = 99, ai = chase }
+.data boss: .type Actor { x = 100, y = 40, hp = 99, ai = chase }
 
-hero:   .tag Actor {
+.data hero: .type Actor {
     x = 16
     hp = 3
     ai = player_input
+}
+
+.data wave: .type Actor[] {
+    { x = 32, ai = chase }
+    { x = 64, ai = chase }
 }
 ```
 
@@ -501,16 +535,18 @@ Each value names its member, so the struct decides the layout and reordering its
 cannot misplace a value. A member is named at most once, and a member not named is
 zero. A value must fit its member as it would fit the matching data directive, and a
 member of one element takes one value, so text longer than a byte is not one; a `.res n`
-member takes a string of at most n bytes, padded with zeros; a `.tag` member takes a
-nested one-line initializer, `pos = { x = 1, y = 2 }`; a union takes at most one member.
-The one-line form balances its braces on its line, and the multi-line form is a block
-with one `member = value` per line. The label is an instance like any other: `boss::hp`
-and `.sizeof(boss)` need nothing more.
+member takes a string of at most n bytes, padded with its pad; a record member takes a
+nested one-line initializer, `pos = { x = 1, y = 2 }`; an array member always takes a
+braced list of exactly its count, `colors = { $7fff, $001f, 0, 0 }`, in both forms; and a
+union takes at most one member. The one-line form balances its braces on its line, and the
+multi-line form is a block with one `member = value` per line. In an array of records, each
+element is a braced initializer. The declaration is data like any other: `boss::hp` and
+`.sizeof(boss)` need nothing more.
 
 The output does not use ca65's `.enum`, `.struct`, `.union` or `.tag` (§13). Enum
 members are emitted as constants, member offsets and type sizes as numbers with a
-comment naming the path, an instance as `.res` of its size, and an initialized instance
-as one data directive per member.
+comment naming the path, a record with no values as `.res` of its size, and an
+initialized record as one data directive per member.
 
 ### 6.4 Lists
 
@@ -525,10 +561,9 @@ split pointer table:
     cmd_quit
 }
 
-.rodata {
-lo:     .lobytes handlers
-hi:     .hibytes handlers
-}
+.segment RODATA
+.data lo: .lobytes handlers
+.data hi: .hibytes handlers
 ```
 
 A line holds one or more comma-separated items, constants or addresses, whose names
@@ -841,9 +876,12 @@ label:
   statement. Each named target gets an edge carrying the current state; on a call, the
   targets are routines and the state after the call is the merge of their exits.
   Targets may be cheap locals, scoped paths (`gfx::init`) and, inside a macro body,
-  `ident` parameters. A target naming a list (§6.4), or a data label whose items are all
-  code labels, each optionally minus 1 as in an RTS dispatch table, stands for every one
-  of those labels. `.next ?` ends the path with nothing checked.
+  `ident` parameters. A target naming a list (§6.4), or data declared as addresses
+  (`.addr` or `.faraddr`, or such a member of a `.data` block) whose items are all code
+  labels, each optionally minus 1 as in an RTS dispatch table, stands for every one of those
+  labels, whether the items are written on the declaration's line or in its body. A target
+  naming data of any other type is an error that asks for the address type. `.next ?` ends
+  the path with nothing checked.
 - `.patch @op` acknowledges that the store above it writes into the instruction at
   `@op`.
 
@@ -855,7 +893,7 @@ label:
 | a routine that returns past inline data: `jsr print` then `.asciiz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.asciiz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
-| label nothing names | no fall-through, branch, or address-taken use; a label on data is exempt | reported as unreachable; a declaration acknowledges it |
+| label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from this file is checked against for the parts it gives. Such a label may be a jump target, never a call target |
@@ -873,10 +911,10 @@ Examples. A jump table inside a proc: the targets need no declarations because t
     lda cmd
     asl a
     tax
-    jmp (@table,x)
+    jmp (table,x)
     .next @move, @fire
 
-@table: .addr @move, @fire
+.data table: .addr @move, @fire
 
 @move:
     lda #1
@@ -887,7 +925,9 @@ Examples. A jump table inside a proc: the targets need no declarations because t
 }
 ```
 
-Every item of `@table` is a code label, so `.next @table` says the same.
+Every item of `table` is a code label, so `.next table` says the same. A table is read only
+from data declared as addresses: a label on a line of `.addr` directives is a position, and
+names no targets.
 
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:
@@ -942,8 +982,8 @@ program that never leaves bank 0 with D at 0 need not say anything.
 through and which bank it lives in, in the segment table (§5.2, §5.3):
 
 ```nt65
-.segment "ZP2": zp, dp = $2100
-.segment "WRAM": abs, bank = $7e
+.segment ZP2: zp, dp = $2100
+.segment WRAM: abs, bank = $7e
 ```
 
 A routine's signature may carry the D and B values it assumes at entry and, after
@@ -1017,28 +1057,43 @@ addresses, and sizes come in two kinds with different names:
 
 - `.sizeof(x)` and `.countof(x)` describe a **shape**: a struct, a union or a data
   declaration (§6.3, §8). They are nt65 constants and may appear wherever a constant
-  may, including `.res` and `.repeat` counts.
-- `.endof(x)` is the address just past a proc, a scope or a data declaration, and
+  may, including `.res` and `.repeat` counts. `.sizeof` of a proc is the one exception: a
+  routine has no shape, so its size is its span, below, with what that allows.
+- `.endof(x)` is the address just past a proc or a data declaration, and
   `.spanof(x)` is `(.endof(x) - x)`. They describe **layout** and are address
   expressions like any label difference: usable in operands, data and `.assert`, never
   where a constant is required (`.res`, `.repeat`, choosing an address size), and
-  resolved by ca65 and ld65. The end of a proc or scope is the end of its own bytes in
-  its segment; nested segment blocks do not count.
+  resolved by ca65 and ld65. The end of a proc is the end of its own bytes in its segment;
+  nested segment blocks do not count.
+
+All four work only on a named extent, and a label has none: it is only a position. `.sizeof`,
+`.countof`, `.endof` and `.spanof` of a label are errors, and so are they of a scope, which
+is only a namespace.
+
+| declared as | `.sizeof` | `.countof` |
+|---|---|---|
+| an element type, any form | elements × element size | elements |
+| `.incbin`, `.asciiz`, `.lobytes`, `.hibytes` | bytes | bytes |
+| `.data name { }`, mixed | bytes | error |
+| `.proc` | bytes in its body, its span | error |
+| a struct or union | bytes, which is an array's stride | members |
+| an enum | error | members |
+| a label | error | error |
+| `.scope` | error | error |
 
 ```nt65
     ldx #.spanof(reloc)             ; bytes to copy
-    .word .spanof(module)           ; length in a header
+.data header: .word .spanof(module) ; length in a header
 .assert .spanof(irq) <= 64, error, "irq handler too big"
 ```
 
 No nt65 constant is derived from code, so no size can depend on itself, and an edit
-inside a proc never changes a constant another file uses. `.sizeof` of a proc or scope
-is an error that points to `.spanof`. nt65 reports an `.assert` at edit time when it can
-evaluate it; one it cannot, such as a span that contains `.align`, is passed to ca65 as
-a link-time assertion.
+inside a proc never changes a constant another file uses. nt65 reports an `.assert` at edit
+time when it can evaluate it; one it cannot, such as a span that contains `.align`, is passed
+to ca65 as a link-time assertion.
 
 **Branch range.** The distance from a relative branch to its target is known when both
-sit in the same segment block with no `.align` between them; a nested segment block
+sit in the same region or segment block with no `.align` between them; a nested segment block
 contributes no bytes to the stream that encloses it. nt65 reports an out-of-range
 8-bit branch (beyond −128..+127 from the following instruction) at edit time; `brl`
 and `per` have 16-bit range. When the distance is unknown, ca65's own check stands.
@@ -1067,6 +1122,67 @@ true bound.
 
 ## 8. Data
 
+Every data declaration starts with `.data`, as every routine starts with `.proc`. A label
+is only a location, and a size can come only from a declaration, so a line break never
+changes what a name means.
+
+```nt65
+.data player_x: .word                            ; one element, no value
+.data buffer: .byte[64]                          ; 64 elements, no values
+.data gradient: .byte 40, $e0, 0                 ; values on one line: three elements
+.data row_lo: .byte[] {                          ; values in a body, which counts them
+    .repeat 25, r {
+        <(SCREEN + r * 40)
+    }
+}
+.data handlers: .addr[4] { move, fire, jump, quit }   ; a body must hold exactly its count
+.data header: .type RomHeader { title = "NT65" }       ; one record (§6.3)
+.data sprites: .type Sprite[] {                        ; an array of records
+    { x = 10, y = 20 }
+    { x = 30, y = 40 }
+}
+.data tiles: .incbin "tiles.bin"                 ; bytes
+.data msg: .asciiz "hi"
+.data lo: .lobytes handlers
+.data basic_stub {                               ; mixed data
+    .word @next, 10
+    .byte $9e, "2061", 0
+@next:
+    .word 0
+}
+```
+
+The element types are `.byte`, `.word`, `.dword`, `.addr` and `.faraddr`, and `.type T` for
+a struct or union `T`, which is dotted as they are. An element type may take a count: `[n]`,
+or `[]` for as many elements as its values come to. `.word[16]` is sixteen words and
+`.word 16` one word holding 16, and a value never starts with `[`, so the two cannot be
+confused; a record is `.type T { … }` and an array of records `.type T[] { … }`.
+
+- **Values.** Without a count, the values are written on the declaration's line, and an
+  element type with no values is one element. With a count, they are written in braces, on
+  the line (`.data lut: .byte[4] { 1, 2, 4, 8 }`) or in the body the line opens.
+  `.data name: .byte 1, 2` and `.data name: .byte[] { 1, 2 }` are the same data; the second
+  is for a count to check or values that span lines.
+- **Bodies.** A body line is values separated by commas, one element each; for `.byte`, a
+  string is one element per character, and for an array of records each element is a braced
+  initializer. A body may hold `.repeat`, `.each` and `.if` blocks whose lines are values too.
+- **Counts.** `[n]` with values checks the count exactly. A body shorter or longer than its
+  count is an error that names both, rather than padding with zeros, because a short jump
+  table is exactly the mistake a count is there to catch; padding is written with a
+  `.repeat` in the body. `[]` with no values at all is an error.
+- **Mixed data.** `.data name { }` holds unnamed data directives of any kind, nested `.data`
+  declarations, `@` positions, unnamed `.align` and `.res`, `.repeat`, `.each` and `.if`, and
+  macro calls that expand to those. It holds no instructions. A nested declaration is a
+  member, reached as `name::sub` and emitted as `name__sub`, to any depth. An `@` position is
+  private to the block: it may be named inside it, has no size and cannot be exported. A
+  plain label is an error there that suggests a member or a position.
+- **Padding.** `.res n [, fill]` is only padding: unnamed between declarations, in a mixed
+  body, or as a struct's string member (§6.3). `.data ptr: .res 2` is an error that asks for
+  `.byte[2]`, since storage is declared with its type.
+
+Unnamed data directives are written as they are in ca65, inside a proc (inline data after a
+call, the `.byte $2c` skip) or in mixed data:
+
 ```nt65
     .byte 1, 2, $ff, 'A', "text"
     .word $1234, label
@@ -1081,9 +1197,8 @@ true bound.
     .incbin "sprites.bin", 64, 32   ; from offset 64, 32 bytes
     .lobytes first, second, third
     .hibytes first, second, third
-    .tag Player                     ; .sizeof(Player) bytes, fields as sub-symbols (§6.3)
-    .tag Player, 8                  ; an array of 8 (§6.3)
-    .tag Player { hp = 5 }          ; an initialized instance (§6.3)
+    .type Player                    ; .sizeof(Player) bytes (§6.3)
+    .type Player { hp = 5 }         ; a record with values (§6.3)
     .addr handlers                  ; a list's items (§6.4)
 ```
 
@@ -1094,12 +1209,12 @@ is meant. In the same way an absolute or far address in a `.byte` or a one-byte 
 and a far one in a two-byte immediate, is an error that ca65 would otherwise report as a
 range error: `<x` and `.loword(x)` say which part is meant.
 
-A label on a data directive gets a `.sizeof` in bytes and a `.countof` in elements from
-it: `.res 16` gives 16 and 16, `.word a, b` gives 4 and 2, `.tag Player, 8` gives
-`8 * .sizeof(Player)` and 8, `.tag Player { ... }` gives `.sizeof(Player)` and 1, a list
-counts one element per item, and a string one element per byte. `.align` has no
-size, so `.sizeof` and `.countof` of it are errors; `.endof` and `.spanof` (§7.6) work on
-any data label.
+A data declaration's `.sizeof` is its bytes and its `.countof` its elements (§7.6):
+`.byte[16]` gives 16 and 16, `.word a, b` gives 4 and 2, `.type Player[8]` gives
+`8 * .sizeof(Player)` and 8, `.type Player { ... }` gives `.sizeof(Player)` and 1, a list
+counts one element per item, and a string one element per byte. Mixed data has a size and
+no count, and one holding an `.align` has no size nt65 knows, so its `.spanof` measures it.
+`.endof` and `.spanof` work on every data declaration.
 
 **Binary files.** An `.incbin` path is relative to the `.nt65` file that names it. nt65
 reads the file for its length (offset and length must be constants), treats it as a
@@ -1118,8 +1233,8 @@ a declaration, not a mode, and is applied explicitly where text is emitted:
     ' '      = $20
 }
 
-    .byte screen("HELLO WORLD")
-    .byte screen('A')
+.data greeting: .byte screen("HELLO WORLD")
+.data letter: .byte screen('A')
 ```
 
 A mapping may name any character, ASCII or not, and a character with no mapping is an
@@ -1128,9 +1243,8 @@ exported and used across files like a constant. `.strlen(s)` and `.strat(s, i)` 
 for the cases a `.repeat` needs.
 
 A value in a `.byte`, a `.word`, a `.res` fill or an immediate is not negative: ca65
-refuses one, so nt65 reports it with its two's complement. A label with no data on its own
-line measures nothing, and `.sizeof` or `.countof` of one is an error. `.countof` of an
-enum is how many members it has.
+refuses one, so nt65 reports it with its two's complement. `.countof` of an enum is how many
+members it has.
 
 All character and string data, mapped or not, reaches the output as byte values (§13),
 so a ca65 target (`-t`) cannot translate it.
@@ -1189,7 +1303,7 @@ conditions never test the program (§10). Macro bodies add `.mode`, `.byteof` an
 ```nt65
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 
-    .word rgb15(31, 0, 0)
+.data red: .word rgb15(31, 0, 0)
 ```
 
 A call is written like a charmap application, `name(args)`. The body is one expression
@@ -1218,15 +1332,18 @@ symbolically for ca65 and ld65 to resolve.
     ...
 }
 
-.repeat 8, i {
-    .byte 1 << i
+.data bits: .byte[] {
+    .repeat 8, i {
+        1 << i
+    }
 }
 
 .assert .sizeof(table) == 32, error, "table must be 32 bytes"
 .error "unsupported configuration"
 ```
 
-`.if` and `.repeat` are allowed both at item level and inside procs.
+`.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
+their lines are values (§8).
 
 **Conditions test the configuration, not the program.** An `.if` condition may use
 literals, operators, built-in functions and defines (§5.3). Inside a macro body it may
@@ -1272,12 +1389,16 @@ with none is undefined. Both are reported for the configuration being built, as 
 once per member of a named enum, in order:
 
 ```nt65
-.each handlers, h {
-    .addr h - 1                     ; an RTS dispatch table
+.data dispatch: .addr[] {
+    .each handlers, h {
+        h - 1                       ; an RTS dispatch table
+    }
 }
 
-.each Cmd, c {
-    .addr actions::c                ; one entry per member of Cmd
+.data actions_table: .addr[] {
+    .each Cmd, c {
+        actions::c                  ; one entry per member of Cmd
+    }
 }
 ```
 
@@ -1300,7 +1421,7 @@ segment declaration, `.proc`, `.macro` or `.func`.
 
 Most of what ca65 code uses macros for is a language feature in nt65: constants and
 functions instead of `.define` (§9), charmaps instead of screen-code macros (§8),
-initialized instances instead of record macros (§6.3), lists and `.each` instead of
+initialized records instead of record macros (§6.3), lists and `.each` instead of
 variadic and name-building macros (§6.4, §10), long branches instead of `longbranch`
 (§7.6), and flow-analyzed widths with `.ensure` instead of width macros (§7.3).
 Appendix B lists the common patterns and what replaces each. What remains for macros is
@@ -1320,12 +1441,16 @@ analyze.
     .byte pitch, frames
 }
 
+.proc clear {
     set16!(ptr, SCREEN)
     set16!({buf,x}, $1234)
+    rts
+}
 
-.rodata {
-tune:   note!(C4, frames = 8)
-        note!(E4)
+.segment RODATA
+.data tune {
+    note!(C4, frames = 8)
+    note!(E4)
 }
 ```
 
@@ -1343,13 +1468,14 @@ expansion.
   exported macro uses without receiving it as a parameter must itself be exported, which
   nt65 checks. Names in a `block` argument resolve in the caller, including the caller's
   `@labels`. A macro cannot declare names in its caller: labels, constants and types in
-  a body are local to each expansion, and to name what a macro emits, the label goes on
-  the call line, `player_sprite: sprite!(...)`. Go to definition, rename and find
-  references therefore work in and through macros without expanding them.
+  a body are local to each expansion, and to name what a macro emits, a `.data` block holds
+  the call, `.data player_sprite { sprite!(...) }`, or inside a proc a label goes on the
+  call line. Go to definition, rename and find references therefore work in and through
+  macros without expanding them.
 - **Constants and shapes.** No macro call appears in a constant, an enum, a struct or a
-  union, and `.sizeof` and `.countof` of a label on a macro call are errors. `.endof`
-  and `.spanof` work on it, because they are layout (§7.6). A typed record is an
-  initialized `.tag` (§6.3).
+  union. What a call emits is measured by the `.data` block that holds it (§8), and a
+  label, which is only a position, measures nothing. A typed record is an initialized
+  `.type T { }` (§6.3).
 
 A macro may not call itself, directly or through other macros. nt65 checks this from
 the resolved names in the bodies, without expanding anything, so every expansion is
@@ -1469,7 +1595,7 @@ never gives the caller a shape.
 |---|---|
 | a label or constant named by an `ident` parameter | it would declare a name in the caller |
 | `.export` | other files resolve names through the export map, and a file's interface (§14) would depend on expansion |
-| a segment declaration, `.segment "X": zp` | the segment table is program-wide and declared exactly once; it would depend on how many times the macro is called |
+| a segment declaration, `.segment X: zp` | the segment table is program-wide and declared exactly once; it would depend on how many times the macro is called |
 | `.cpu` | the CPU is program-wide |
 | `.proc` | inside a proc it would nest (§6.1); at item level it would need a name from the caller, and its signature is part of the file's interface. A wrapper is a block macro called inside a proc the caller declares |
 | `.import` | redundant: a body resolves names where the macro is declared, and the output imports what an expansion uses (§12) |
@@ -1724,8 +1850,8 @@ macros, and a comment naming the call precedes the expansion.
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off, then `.dbg file` |
 | each generated line that produces bytes, and each `.assert` ca65 evaluates | preceded by `.dbg line` naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the debug line says, so those get none |
 | `a == b`, `a != b`, `a ^^ b` | `a = b`, `a <> b`, `a .xor b`; nt65's other operators are ca65's |
-| `.segment "X": zp` declaration | nothing by itself |
-| `.segment "X" { }` | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
+| `.segment X: zp` declaration | nothing by itself |
+| `.segment X` region, `.segment X { }` at file level | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
 | nested segment block | `.pushseg` / `.segment` ... `.popseg` |
 | `.proc f: a16, i8 -> a8, i8 { }` | `f:` and the body; the signature emits nothing by itself |
 | `.proc CHROUT = $FFD2: ...` | `CHROUT = $FFD2` |
@@ -1747,8 +1873,10 @@ macros, and a comment naming the call precedes the expansion.
 | `m!(...)` | expanded inline, preceded by `; m!(...)  file:line`; its lines map to the call's line (debug information) |
 | `.enum Color { }` | a constant per member, `Color__red = 0` |
 | `.struct`, `.union` | nothing by themselves |
-| `.tag T, n` in data | `.res` of the total size |
-| `.tag T { ... }` | a data directive per member, each with a comment naming it |
+| `.data name: .word[16]`, `.type T[n]`, any element type with no values | `name:` and `.res` of the total size; a record whose type pads with something other than zero is written a member at a time |
+| `.data name: .byte 1, 2`, `.byte[] { … }` | `name:` and the element type's directive, a body a line at a time with its repetitions unrolled |
+| `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
+| `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
 | a `.func` call | its body, with each parameter replaced by its parenthesized argument |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
@@ -1771,16 +1899,16 @@ macros, and a comment naming the call precedes the expansion.
 ; Fill four pages of screen memory with spaces, forever.
 .cpu 6502
 
-.zeropage {
-ptr:        .res 2          ; destination pointer
-frame:      .res 1
-}
-
 SCREEN       = $0400
 SCREEN_PAGES = 4
 
 .export fill_page
 
+.segment ZEROPAGE
+.data ptr:    .word             ; destination pointer
+.data frame:  .byte
+
+.segment CODE
 ; Fill 256 bytes at (ptr) with A.
 .proc fill_page {
     ldy #0
@@ -1825,17 +1953,13 @@ here):
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 591, 0
-
+.dbg file, "main.nt65", 614, 0
 .export fill_page
-
-.segment "ZEROPAGE": zeropage
-ptr:        .res 2
-frame:      .res 1
-
 SCREEN       = $0400
 SCREEN_PAGES = 4
-
+.segment "ZEROPAGE": zeropage
+ptr:    .res 2
+frame:  .res 1
 .segment "CODE": absolute
 fill_page:
     ldy #0
@@ -1844,7 +1968,6 @@ fill_page__loop:
     iny
     bne fill_page__loop
     rts
-
 main:
     ; set16!(ptr, SCREEN)  main.nt65:32
     lda #<SCREEN
@@ -1879,11 +2002,13 @@ alone and without an assembler:
 - report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6);
 - run incrementally: editing one file re-parses one file; only resolution is global.
 
-**Unused symbols** are warnings: a label, constant, macro, struct, union or enum that
-nothing names and the file does not export, since an export is what another file uses. A
-member of a named enum is one of a set and is not reported on its own, a label a `.state`
-declares an entry point is reached from outside, and a label flow analysis reports as never
-reached is not reported twice. A name written in a branch the configuration leaves out
+**Unused symbols** are warnings: a label, constant, macro, struct, union, enum or data
+declaration that nothing names and the file does not export, since an export is what another
+file uses. A member of a named enum is one of a set and is not reported on its own, a label a
+`.state` declares an entry point is reached from outside, and a label flow analysis reports as
+never reached is not reported twice. Data that holds values may be there for where it lands,
+as a header, the vectors or a load address are, so only a declaration that reserves storage
+and holds no values is reported. A name written in a branch the configuration leaves out
 counts as used, because the other build uses it, and a file with errors gets none.
 
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
@@ -1891,7 +2016,7 @@ lines in a branch that is not taken still parse, but are not resolved or analyze
 
 **The incremental boundary is the file's interface**: its exported declarations, each
 carrying everything a user of it needs (a constant's value, a label's address size, a
-data label's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
+data declaration's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
 body, a macro's kind and body and the exported symbols it uses). It also holds the names
 of the declarations it does not export that a path can reach, because another file naming
 one is told that it exists and is not exported, and what any of them means that another
@@ -1933,8 +2058,33 @@ Recorded so the reasoning survives. None is open.
   the Rust spelling is the familiar one.
 - **Explicit `.export`.** A file's interface is deliberate, which is what gives
   unused-symbol analysis and the incremental boundary of §14 their meaning.
-- **Segment blocks, not per-item attributes.** One placement mechanism, nestable, and
-  the structured replacement for `.pushseg`/`.popseg`.
+- **Segment regions and blocks, not per-item attributes.** One placement mechanism, and
+  the structured replacement for `.segment` and `.pushseg`/`.popseg`. A region, `.segment
+  NAME` at file level, is C#'s file-scoped namespace applied to segments: it places what
+  follows without indenting it, and it is structure rather than a mode, found from lines
+  alone like a brace and allowed only at file level, with no push or pop. The braced block
+  stays for a detour inside a proc or a one-off within a region. There is no default
+  segment: a program that forgets to say where its bytes go is told so.
+- **Segment names are identifiers.** ca65 quotes them because its segment names share a
+  namespace with symbols; nt65's segments are a table of their own. The shortcuts
+  `.zeropage`, `.code`, `.bss`, `.data` and `.rodata` are gone, which frees `.data` for
+  declarations; `.segment RODATA` says the same in one more word.
+- **A label is only a location.** Where a label also measured the data written on its line,
+  a line break changed what a name meant: `tbl: .byte 1, 2` then `.byte 3` measured two
+  bytes, and ca65's usual label over many data lines measured nothing. Formats built for
+  analysis (HLA, WebAssembly text, LLVM IR) have no free-standing labels outside a routine:
+  every name for data is a declaration with an extent. nt65 adopts that. Code lives in
+  `.proc`, data in `.data`, and outside a proc there are no instructions and no labels.
+- **Data declarations say their type.** `.data name: .word[16]` rather than `.res 32`, so a
+  size, a count and an element type come from one place, `.next` can read targets from data
+  declared as addresses, and `.res` is left as padding. `.type T` replaces ca65's `.tag T`
+  and is dotted like the built-in element types, because a bare type name inside a proc
+  would read like an instruction. `[n]` distinguishes an array of records from one record
+  with values, and a value never starts with `[`, so `.word[16]` and `.word 16` cannot be
+  confused.
+- **A count is checked exactly.** A body shorter than its count is an error rather than
+  padded with zeros, because a short jump table is exactly the mistake a count exists to
+  catch; padding is written with a `.repeat` in the body.
 - **JSON for the project file.**
 - **Whitespace binds nothing.** `lda # 1` is `lda #1`, as it is in ca65, which assembles
   it without complaint. Maximal munch (§4) stays the one place spacing changes what a line
@@ -1985,7 +2135,8 @@ Recorded so the reasoning survives. None is open.
 - **Shapes are constants; layout is not.** `.sizeof` and `.countof` describe types and
   data and are nt65 constants. `.endof` and `.spanof` describe layout and are resolved by
   the linker. Keeping code sizes out of constants rules out sizes that depend on
-  themselves and keeps proc bodies out of a file's interface.
+  themselves and keeps proc bodies out of a file's interface. `.sizeof` of a proc is its
+  span, with a span's limits, because a routine has no shape to measure instead.
 - **Segments are declared.** A misspelled segment name is an error, not a new segment.
 - **The output does not depend on ca65's command line.** A project passes one set of
   ca65 options to every `.s` file, so nt65 output resets or avoids everything those
@@ -2008,7 +2159,7 @@ Recorded so the reasoning survives. None is open.
   macro change meaning with operator precedence and split an operand at its comma.
 - **Macros do not type the labels on their calls.** A type returned by a macro would give
   the caller constants that exist only after expansion. Typed records are initialized
-  `.tag`s. If a computed typed record is ever needed, the extension that fits is a result
+  `.type T { }` data. If a computed typed record is ever needed, the extension that fits is a result
   type in the macro's header, `-> T`, which limits the body to data so that each
   expansion can be checked against `.sizeof(T)` as soon as it exists.
 - **One kind of macro.** Whether an expansion is code or data is visible in the
@@ -2021,7 +2172,7 @@ Recorded so the reasoning survives. None is open.
   graph without cycles, checked from names, does.
 - **Long branches are built in.** Choosing between a short and a long branch needs
   distances, which are layout, so it cannot be a macro in nt65. nt65 knows distances
-  within a segment block and can shorten forward branches, which ca65's `longbranch`
+  within a region or segment block and can shorten forward branches, which ca65's `longbranch`
   cannot.
 - **`.ensure`, not a width stack.** A macro-time stack follows the text; the flow analysis
   follows control flow, and `.ensure` emits from its result.
@@ -2031,19 +2182,34 @@ Recorded so the reasoning survives. None is open.
 ## Appendix A. Grammar sketch
 
 ```text
-file        := item*
-item        := label-line | const | data | proc | extern-proc | scope | macro
+file        := item* (region item*)*
+region      := '.segment' ident NL                    ; at file level only
+item        := const | data-decl | padding | proc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | export | import | cpu
              | segment-decl | segment | if-block | repeat-block | each-block | assert
-segment-decl := '.segment' string ':' size (',' seg-attr)*
+segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr
-label-line  := (ident | '@' ident) ':' (instr | data | macro-call)?
+padding     := '.res' expr (',' expr)? | '.align' expr
+label-line  := (ident | '@' ident) ':' (instr | data | macro-call)?   ; inside a proc
 const       := (ident | '@' ident) '=' expr
-data        := directive (expr (',' expr)*)?          ; the directives of §8
-             | '.tag' path (',' expr)?
-             | '.tag' path '{' (init (',' init)*)? '}'
-             | '.tag' path '{' NL (init NL)* '}'
-init        := member-name '=' (expr | '{' (init (',' init)*)? '}')
+data-decl   := '.data' ident ':' data
+             | '.data' ident '{' NL mixed* '}'
+mixed       := data | data-decl | '@' ident ':' data? | macro-call
+             | if-block | repeat-block | each-block  ; their contents mixed too
+data        := element count? values?
+             | element count? '{' values-list? '}'
+             | element count '{' NL value-line* '}'
+             | '.type' path '{' NL (init NL)* '}'
+             | directive (expr (',' expr)*)?          ; `.res`, `.align`, `.incbin`, `.asciiz`,
+                                                      ; `.lobytes`, `.hibytes`
+element     := '.byte' | '.word' | '.dword' | '.addr' | '.faraddr' | '.type' path
+count       := '[' expr? ']'
+values      := expr (',' expr)*                       ; with no count only
+values-list := value (',' value)*
+value       := expr | '{' (init (',' init)*)? '}' | '{' values-list '}'
+value-line  := values-list NL
+             | if-block | repeat-block | each-block  ; their contents value lines too
+init        := member-name '=' value
 proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
@@ -2054,18 +2220,16 @@ point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e
 enum        := '.enum' ident? '{' NL (ident ('=' expr)? NL)* '}'
 struct      := '.struct' ident? '{' NL member* '}'
 union       := '.union' ident '{' NL member* '}'
-member      := member-name ':' ('.byte' | '.word' | '.dword' | '.addr' | '.faraddr'
-             | '.res' expr | '.tag' ident (',' expr)?) NL
+member      := member-name ':' (element ('[' expr ']')? | '.res' expr (',' expr)?) NL
              | struct
 member-name := ident | register | mnemonic
 charmap     := '.charmap' ident '{' NL (char ('..' char)? '=' expr NL)* '}'
 list        := '.list' ident '{' NL (expr (',' expr)* NL)* '}'
 func        := '.func' ident '(' (ident (',' ident)*)? ')' '=' expr
 scope       := '.scope' ident? '{' NL body '}'
-segment     := ('.segment' string | '.zeropage' | '.code' | '.bss'
-             | '.data' | '.rodata') '{' NL item* '}'
-body        := (item | instr | macro-call | assertion | ensure | frame | annotation
-             | splice)*                               ; no proc inside a proc
+segment     := '.segment' ident '{' NL (item* | body) '}'
+body        := (item | label-line | instr | data | macro-call | assertion | ensure | frame
+             | annotation | splice)*                  ; no proc inside a proc
 splice      := ident                                  ; block parameter, in macros only
 assertion   := '.state' point-item (',' point-item)*
 ensure      := '.ensure' width (',' width)*
@@ -2074,7 +2238,8 @@ frame       := '.frame' ident ':' path
 annotation  := '.next' (target (',' target)* | '?')
              | '.patch' target (',' target)*
 target      := path | '@' ident                       ; or an ident parameter, in macros;
-                                                      ; a list or table stands for its labels
+                                                      ; a list, or data declared as addresses,
+                                                      ; stands for its labels
 path        := '::'? ident ('::' member-name)*
 instr       := mnemonic operand?                      ; mnemonics include jeq ... jvc (§7.6)
 operand     := '#' expr
@@ -2101,6 +2266,7 @@ repeat-block := '.repeat' expr (',' ident)? '{' NL contents '}'
 each-block  := '.each' path ',' ident '{' NL contents '}'
 contents    := item*                                  ; at item level
              | body                                   ; inside a proc
+             | value-line* | mixed*                   ; in a data body
 export      := '.export' ident (',' ident)*
 import      := '.import' import-item (',' import-item)*
 import-item := ident (':' (size | 'proc' '(' state? ('->' state)? ')'))?
@@ -2147,7 +2313,7 @@ has been seen so far, or on `.set`), **layout** (depends on addresses or distanc
 | an offset from the current direct page, such as libSFX's `dpo()` | order | `d:` (§7.5) |
 | stack frames with `tsc` and `tcs` and `.struct` offsets on `,s` | flow | `.frame` (§7.3) |
 | screen codes, `scrcode` (cbm, apple2, atari), recursing over nine parameters | text | `.charmap` (§8) |
-| records: metasprites, actors, level objects | none, but the label has no fields | initialized `.tag` (§6.3), or a macro when computed |
+| records: metasprites, actors, level objects | none, but the label has no fields | initialized `.type T { }` data (§6.3), or a macro when computed |
 | terminated lists, computed tables, register-init pairs | none | macros, `.repeat`, `.each` and `.func` |
 | file and cartridge headers: iNES, the C64 BASIC stub, Atari XEX | layout | `.endof` and `.spanof` (§7.6) with macros |
 | `zp_var name, 2` through `.pushseg` | names, modal segment | a nested segment block (§5.2) |

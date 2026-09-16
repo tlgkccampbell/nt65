@@ -1,30 +1,28 @@
 ; What is wrong with the direct page and the data bank, each where it can be fixed.
 .cpu 65816
 
-.segment "ZP2" {
-ptr:    .res 2
-}
+.segment ZP2
+.data ptr:    .word
 
-.segment "WRAM" {
-score:  .res 2
-}
+.segment WRAM
+.data score:  .word
 
 .struct Pair {
 lo:     .byte
 hi:     .byte
 }
 
-.segment "BANK1" {
-pair:   .tag Pair
-}
+.segment BANK1
+.data pair:   .type Pair
 
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
-.segment "SLOW": abs, dp = $2100        ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
-.segment "WIDE": abs, bank = $100       ;! error: a bank is one byte
-.segment "TWICE": zp, dp = 0, dp = 1    ;! error: segment "TWICE" already gives its `dp`
-.segment "NAMED": abs, bank = score     ;! error: `bank` needs a constant
+.segment SLOW: abs, dp = $2100        ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
+.segment WIDE: abs, bank = $100       ;! error: a bank is one byte
+.segment TWICE: zp, dp = 0, dp = 1    ;! error: segment "TWICE" already gives its `dp`
+.segment NAMED: abs, bank = score     ;! error: `bank` needs a constant
 
 ; Signature values are constants in range too.
+.segment CODE
 .proc odd: a8, i8, dp = $12345 {        ;! error: `dp = $12345` is out of range: the direct page is a 16-bit address
     rts
 }
@@ -92,18 +90,14 @@ pair:   .tag Pair
 }
 
 ; A near transfer stays in its bank.
-.segment "BANK1" {
+.segment BANK1
 .proc low: a8, i8 {
     rts
 }
-}
 
-.segment "BANK2" {
+.segment BANK2
 .proc high: a8, i8 {
     jsr low                 ;! error: `jsr` stays in bank $02, and `low` is in "BANK1", in bank $01: `jsl` reaches it
     rts
 }
-}
 
-; Outside a routine there is no D to reach through.
-    lda d:$2105             ;! error: `d:` is reached through the direct page, which only a `.proc` knows: outside one there is nothing to follow D through

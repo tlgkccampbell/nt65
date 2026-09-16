@@ -7,27 +7,27 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "../main.nt65", 464, 0
+.dbg file, "../main.nt65", 479, 0
 
 .segment "FAST": zeropage
 .dbg line, "../main.nt65", 5
 scratch:    .res 2
 
 .segment "VRAM": absolute
-.dbg line, "../main.nt65", 9
+.dbg line, "../main.nt65", 8
 tiles:      .res 64
 
 .segment "CODE": absolute
 start:
-.dbg line, "../main.nt65", 13
+.dbg line, "../main.nt65", 12
     stz z:scratch
-.dbg line, "../main.nt65", 14
+.dbg line, "../main.nt65", 13
     lda #$01                        ; DEBUG
-.dbg line, "../main.nt65", 15
+.dbg line, "../main.nt65", 14
     ldx #<$0102                     ; VERSION
-.dbg line, "../main.nt65", 16
+.dbg line, "../main.nt65", 15
     ldy #>$0102                     ; VERSION
-.dbg line, "../main.nt65", 17
+.dbg line, "../main.nt65", 16
     lda a:tiles
-.dbg line, "../main.nt65", 18
+.dbg line, "../main.nt65", 17
     rts

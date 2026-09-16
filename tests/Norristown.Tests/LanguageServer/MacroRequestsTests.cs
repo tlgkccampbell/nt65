@@ -32,7 +32,7 @@ public sealed class MacroRequestsTests
             dex
             bne @loop
         }
-
+        .segment CODE
         .proc main {
         @target:
             set16!(ptr, SCREEN)

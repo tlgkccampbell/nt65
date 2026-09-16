@@ -2,7 +2,7 @@
 .cpu 65816
 
 .struct RomHeader {
-    title:     .res 21
+    title:     .res 21, ' '
     map_mode:  .byte
     cart_type: .byte
     rom_size:  .byte
@@ -14,8 +14,8 @@
     checksum:  .word
 }
 
-.segment "HEADER" {
-header: .tag RomHeader {
+.segment HEADER
+.data header: .type RomHeader {
     title = "NT65 SNES DEMO"
     map_mode = $30              ; LoROM, FastROM
     cart_type = $00             ; ROM only
@@ -28,23 +28,15 @@ header: .tag RomHeader {
     checksum = $0000
 }
 .assert .sizeof(RomHeader) == 32, error, "header must be 32 bytes"
-}
 
-.segment "VECTORS" {
-    ; native mode
-    .res 4                      ; unused
-    .addr cop_stub              ; COP
-    .addr brk_stub              ; BRK
-    .addr brk_stub              ; ABORT
-    .addr nmi_stub              ; NMI
-    .res 2                      ; unused
-    .addr irq_stub              ; IRQ
-    ; emulation mode
-    .res 4
-    .addr brk_stub              ; COP
-    .res 2
-    .addr brk_stub              ; ABORT
-    .addr brk_stub              ; NMI
-    .addr reset_stub            ; RESET
-    .addr brk_stub              ; IRQ/BRK
+.segment VECTORS
+.data vectors {
+    ; unused, unused, COP, BRK, ABORT, NMI, unused, IRQ
+    .data native: .addr[8] {
+        0, 0, cop_stub, brk_stub, brk_stub, nmi_stub, 0, irq_stub
+    }
+    ; unused, unused, COP, unused, ABORT, NMI, RESET, IRQ/BRK
+    .data emulation: .addr[8] {
+        0, 0, brk_stub, 0, brk_stub, brk_stub, reset_stub, brk_stub
+    }
 }

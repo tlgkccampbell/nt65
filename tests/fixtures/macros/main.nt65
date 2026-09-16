@@ -8,11 +8,10 @@ lo:         .byte
 hi:         .byte
 }
 
-.zeropage {
-ptr:        .res 2
-other:      .res 2
-pair:       .tag Pair
-}
+.segment ZEROPAGE
+.data ptr:        .word
+.data other:      .word
+.data pair:       .type Pair
 
 SCREEN = $0400
 C4     = 60
@@ -95,6 +94,7 @@ E4     = 64
 @done:
 }
 
+.segment CODE
 .proc main {
     set16!(ptr, SCREEN)
     set16!({buf,x}, $1234)
@@ -141,15 +141,17 @@ E4     = 64
     rts
 }
 
-.bss {
-buf:    .res 256
-count:  .res 1
-}
+.segment BSS
+.data buf:    .byte[256]
+.data count:  .byte
 
-.rodata {
-tune:   note!(C4, frames = 8)
-        note!(E4)
-greeting: message!("HI")
+.segment RODATA
+.data tune {
+    note!(C4, frames = 8)
+    note!(E4)
+}
+.data greeting {
+    message!("HI")
 }
 
 ; Exported, so that what the file only declares counts as used.

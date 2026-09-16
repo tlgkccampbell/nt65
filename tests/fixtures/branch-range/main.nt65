@@ -3,6 +3,7 @@
 ; leaving it to ca65. Where the distance is unknown, ca65's own check stands.
 .cpu 6502
 
+.segment CODE
 .proc reaching {
     lda count
     beq @out                ;! error: `beq` would branch 129 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
@@ -26,7 +27,7 @@
 ; branch across one is a distance like any other.
 .proc around_a_detour {
     beq @out
-    .rodata {
+    .segment RODATA {
     table:  .res 200
     }
 @out:
@@ -34,6 +35,5 @@
     rts
 }
 
-.bss {
-count:  .res 1
-}
+.segment BSS
+.data count:  .byte

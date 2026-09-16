@@ -5,20 +5,19 @@
 
 SPLITS = 3
 
-.rodata {
+.segment RODATA
 ; raster line, border colour, background colour for each split
-split_line:   .byte 0, 100, 200
-split_border: .byte Color::light_blue, Color::red, Color::black
-split_bg:     .byte Color::blue, Color::black, Color::dark_grey
-}
+.data split_line:   .byte 0, 100, 200
+.data split_border: .byte Color::light_blue, Color::red, Color::black
+.data split_bg:     .byte Color::blue, Color::black, Color::dark_grey
 
 .assert .countof(split_line) == SPLITS, error, "split tables out of step"
 .assert .countof(split_border) == SPLITS, error, "split tables out of step"
 
-.bss {
-old_irq: .res 2
-}
+.segment BSS
+.data old_irq: .word
 
+.segment CODE
 .proc irq_install {
     sei
     lda #%01111111              ; disable CIA timer interrupts

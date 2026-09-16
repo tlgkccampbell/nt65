@@ -35,30 +35,22 @@ public static class SyntaxFacts
         [".charmap"] = BlockKind.Charmap,
         [".list"] = BlockKind.List,
         [".segment"] = BlockKind.Segment,
-        [".zeropage"] = BlockKind.Segment,
-        [".code"] = BlockKind.Segment,
-        [".bss"] = BlockKind.Segment,
-        [".data"] = BlockKind.Segment,
-        [".rodata"] = BlockKind.Segment,
+        [".data"] = BlockKind.Data,
         [".if"] = BlockKind.If,
         [".elseif"] = BlockKind.If,
         [".else"] = BlockKind.If,
         [".repeat"] = BlockKind.Repeat,
         [".each"] = BlockKind.Each,
-        [".tag"] = BlockKind.TagInitializer,
+        [".type"] = BlockKind.RecordInitializer,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    // Every directive that may begin a line, and the node it parses to. `.segment` and
-    // `.proc` each parse to one of two kinds, decided by the rest of the line.
+    // Every directive that may begin a line, and the node it parses to. `.segment` parses to
+    // one of three kinds and `.proc` to one of two, decided by the rest of the line.
     private static readonly FrozenDictionary<string, SyntaxKind> lineDirectives = new Dictionary<string, SyntaxKind>
     {
         [".cpu"] = SyntaxKind.CpuDirective,
         [".segment"] = SyntaxKind.SegmentDeclaration,
-        [".zeropage"] = SyntaxKind.SegmentBlock,
-        [".code"] = SyntaxKind.SegmentBlock,
-        [".bss"] = SyntaxKind.SegmentBlock,
-        [".data"] = SyntaxKind.SegmentBlock,
-        [".rodata"] = SyntaxKind.SegmentBlock,
+        [".data"] = SyntaxKind.DataDeclaration,
         [".proc"] = SyntaxKind.ProcDeclaration,
         [".scope"] = SyntaxKind.ScopeDeclaration,
         [".export"] = SyntaxKind.ExportDirective,
@@ -70,7 +62,7 @@ public static class SyntaxFacts
         [".faraddr"] = SyntaxKind.DataDirective,
         [".res"] = SyntaxKind.DataDirective,
         [".asciiz"] = SyntaxKind.DataDirective,
-        [".tag"] = SyntaxKind.DataDirective,
+        [".type"] = SyntaxKind.DataDirective,
         [".align"] = SyntaxKind.DataDirective,
         [".incbin"] = SyntaxKind.DataDirective,
         [".lobytes"] = SyntaxKind.DataDirective,
@@ -94,7 +86,17 @@ public static class SyntaxFacts
         [".state"] = SyntaxKind.StateDirective,
         [".ensure"] = SyntaxKind.EnsureDirective,
         [".frame"] = SyntaxKind.FrameDirective,
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+    // The element types a data declaration or a struct member is an array of, by the size of
+    // one element. `.type T` is the other, whose size is its type's.
+    private static readonly FrozenDictionary<string, int> elementTypes = new Dictionary<string, int>
+    {
+        [".byte"] = 1,
+        [".word"] = 2,
+        [".addr"] = 2,
+        [".faraddr"] = 3,
+        [".dword"] = 4,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The built-in functions, and the three a macro body adds.</summary>
@@ -144,6 +146,13 @@ public static class SyntaxFacts
     /// <summary>The kind of node a directive at the start of a line parses to, or <see cref="SyntaxKind.None"/>.</summary>
     public static SyntaxKind LineDirectiveKind(string directive) =>
         lineDirectives.GetValueOrDefault(directive, SyntaxKind.None);
+
+    /// <summary>
+    /// The size of one element of <paramref name="directive"/>, when it is an element type:
+    /// <c>.byte</c>, <c>.word</c>, <c>.addr</c>, <c>.faraddr</c> or <c>.dword</c>.
+    /// </summary>
+    public static int? ElementSize(string directive) =>
+        elementTypes.TryGetValue(directive, out var size) ? size : null;
 
     /// <summary>Whether <paramref name="directive"/> names a built-in function.</summary>
     public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);

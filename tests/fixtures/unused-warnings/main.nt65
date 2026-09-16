@@ -27,6 +27,7 @@ second: .byte
     busy
 }
 
+.segment CODE
 .proc main {
     lda #Mode::busy
 @unnamed:                       ;! warning: `@unnamed` is never used: nothing names it, and it is not exported
@@ -41,14 +42,14 @@ second: .byte
     rts
 }
 
-.rodata {
-table:  .byte 1, 2, 3           ;! warning: `table` is never used: nothing names it, and it is not exported
-}
+.segment RODATA
+.data table:  .byte[3]                ;! warning: `table` is never used: nothing names it, and it is not exported
 
 ; Fall-through never enters a nested segment block, so code at its start with no label is
 ; somewhere nothing goes.
+.segment CODE
 .proc detour: a8, i8 {
-    .rodata {
+    .segment RODATA {
         nop                     ;! warning: this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
         rts
     }

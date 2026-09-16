@@ -35,7 +35,7 @@ internal sealed class Evaluator
     private readonly Dictionary<Symbol, MacroArgument> given = [];
     private readonly Func<string, long?>? binaryLength;
 
-    // How many bytes a routine, a scope or a data declaration takes. Only layout knows, so
+    // How many bytes a routine or a data declaration takes. Only layout knows, so
     // only a caller that has laid the file out can answer it.
     private readonly Func<Symbol, long?>? spans;
 
@@ -48,6 +48,10 @@ internal sealed class Evaluator
     // What a symbol's evaluation finds belongs to its file even when it is found in another
     // file's function body, so a file that is not evaluated again keeps saying it.
     private readonly List<string>? owners;
+
+    // Which branches the build takes, for the conditionals in a data body; without it every
+    // condition is worked out as one inside an expansion would be.
+    private readonly Configuration? configuration;
     private Symbol? owner;
 
     private Evaluator(
@@ -58,8 +62,10 @@ internal sealed class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
         Func<Symbol, bool>? settled = null,
-        List<string>? owners = null)
+        List<string>? owners = null,
+        Configuration? configuration = null)
     {
+        this.configuration = configuration;
         this.settled = settled;
         this.owners = owners;
         this.segments = segments;
@@ -92,9 +98,10 @@ internal sealed class Evaluator
         IReadOnlyList<Symbol> symbols,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics,
-        Func<string, long?>? binaryLength = null)
+        Func<string, long?>? binaryLength = null,
+        Configuration? configuration = null)
     {
-        var evaluator = new Evaluator(segments, resolved, diagnostics, binaryLength);
+        var evaluator = new Evaluator(segments, resolved, diagnostics, binaryLength, configuration: configuration);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
     }
@@ -111,9 +118,11 @@ internal sealed class Evaluator
         List<Diagnostic> diagnostics,
         List<string> owners,
         Func<Symbol, bool>? settled,
-        Func<string, long?>? binaryLength)
+        Func<string, long?>? binaryLength,
+        Configuration? configuration = null)
     {
-        var evaluator = new Evaluator(segments, resolved, diagnostics, binaryLength, settled: settled, owners: owners);
+        var evaluator = new Evaluator(
+            segments, resolved, diagnostics, binaryLength, settled: settled, owners: owners, configuration: configuration);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
         return evaluator.settledReads;
@@ -147,7 +156,7 @@ internal sealed class Evaluator
         {
             if (name.Kind == SyntaxKind.NameExpression && !InsideCall(name, operand)
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.ChildTokens[^1].Text == scope.Name)
-                Report(name, $"`{scope.Name}` is a scope, which has no address: a label or a routine inside it does");
+                Report(name, $"`{scope.Name}` is a scope, which has no address: a routine or data inside it does");
         }
 
         // A constant holding text has no spelling in the output: text is written where it is
@@ -175,8 +184,24 @@ internal sealed class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         Func<string, long?>? binaryLength,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        new Evaluator(segments, resolved, null, binaryLength, bound).RoomFor(directive);
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Configuration? configuration = null) =>
+        new Evaluator(segments, resolved, null, binaryLength, bound, configuration: configuration).RoomFor(directive);
+
+    /// <summary>
+    /// How many elements an element type declares with its count, and how many its values
+    /// come to, either of which may be unknown. The two have to agree.
+    /// </summary>
+    public static (long? Declared, long? Given) ElementsOf(
+        SyntaxNode directive,
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Configuration? configuration = null)
+    {
+        var evaluator = new Evaluator(segments, resolved, null, null, bound, configuration: configuration);
+        return (evaluator.DeclaredCount(directive), evaluator.GivenCount(directive));
+    }
 
     /// <summary>The bytes a literal or a mapped string becomes, or null for anything else.</summary>
     public static IReadOnlyList<long>? BytesOf(
@@ -220,7 +245,7 @@ internal sealed class Evaluator
     /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
         SyntaxNode expression,
-        string segment,
+        string? segment,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
@@ -290,22 +315,31 @@ internal sealed class Evaluator
                 break;
         }
 
-        // A label or an instance takes its size and its element count from the directive it
-        // was written on, which is what `.sizeof` and `.countof` answer for it.
-        symbol.Type ??= Constructs.TagTypeOf(symbol.Data) is { } tagged ? SymbolOf(tagged) : null;
-        if (symbol.Data is not null && RoomFor(symbol.Data) is { } room)
+        // A data declaration takes its size and its element count from what it declares, which
+        // is what `.sizeof` and `.countof` answer for it. Mixed data has bytes and no elements.
+        if (symbol.Kind == SymbolKind.Data)
         {
-            symbol.Size = room.Bytes;
-            symbol.Count = room.Elements;
+            evaluating.Add(symbol);
+            symbol.Type ??= DataSyntax.TypeOf(symbol.Data) is { } typed ? SymbolOf(typed) : null;
+            if (symbol.Data is { } element && RoomFor(element) is { } room)
+            {
+                symbol.Size = room.Bytes;
+                symbol.Count = room.Elements;
+            }
+            else if (symbol.Definition is { } block)
+            {
+                symbol.Size = RoomForMixed(block);
+            }
+            evaluating.RemoveAt(evaluating.Count - 1);
         }
 
         if (symbol.ValueExpression is not { } expression)
         {
-            // A label, a routine or a scope: its address is where it lands, which only the
-            // linker knows, and its size comes from the segment it sits in.
+            // A label, a routine or a data declaration: its address is where it lands, which
+            // only the linker knows, and its size comes from the segment it sits in.
             symbol.AddressSize = symbol.Kind switch
             {
-                SymbolKind.Label or SymbolKind.Proc or SymbolKind.Instance => SegmentSize(symbol.Segment),
+                SymbolKind.Label or SymbolKind.Proc or SymbolKind.Data => SegmentSize(symbol.Segment),
                 _ => symbol.AddressSize,
             };
             return;
@@ -330,7 +364,7 @@ internal sealed class Evaluator
             symbol.Kind = SymbolKind.AddressAlias;
         }
         if (symbol.Kind != SymbolKind.ImportedAddress)
-            symbol.AddressSize = SizeOf(expression, symbol.Segment ?? SegmentTable.DefaultSegment, symbol.Value);
+            symbol.AddressSize = SizeOf(expression, symbol.Segment, symbol.Value);
     }
 
     /// <summary>
@@ -562,6 +596,8 @@ internal sealed class Evaluator
         {
             if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } laid)
                 return Value.Unknown;
+            if (NotAnExtent(laid, name, arguments[0]))
+                return Value.Unknown;
             if (!HasBytesOfItsOwn(laid))
             {
                 Report(arguments[0], $"`{laid.Name}` is a {laid.KindText} and takes no bytes of its own, "
@@ -576,40 +612,42 @@ internal sealed class Evaluator
             if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } measured)
                 return Value.Unknown;
 
-            // A routine and a scope have no shape: what they take is layout, which is
-            // resolved by ca65 and ld65 rather than being an nt65 constant.
-            if (measured.Kind is SymbolKind.Proc or SymbolKind.Scope)
-            {
-                Report(arguments[0], $"`{measured.Name}` is a {measured.KindText}, and `{name}` describes a shape. "
-                    + "`.spanof` is how many bytes it takes in the output");
-                return Value.Unknown;
-            }
-
             // `.countof(p)` of a `list` parameter is how many arguments the call gave it.
             if (name == ".countof" && Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
                 return Value.Of(listed.Items.Count);
+            if (NotAnExtent(measured, name, arguments[0]))
+                return Value.Unknown;
 
             // An enum counts its members.
             if (name == ".countof" && measured.Kind == SymbolKind.Enum)
                 return Value.Of(measured.Body?.Symbols.Count(member => member.Kind == SymbolKind.Constant) ?? 0);
 
-            // A label measures the data written on its own line, and one with none there has
-            // nothing to measure: the data lines under it are not its own.
-            if (measured is { Kind: SymbolKind.Label, Data: null })
+            // A routine and mixed data are bytes, not elements, and how many bytes a routine
+            // takes is layout, which only a caller that has laid the file out knows.
+            var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
+            if (name == ".countof" && bytesOnly)
             {
-                Report(arguments[0], $"`{measured.Name}` labels no data on its own line, so `{name}` has nothing "
-                    + "to measure: a label measures the data written on the same line");
+                Report(arguments[0], $"`{measured.Name}` is {(measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data")}, "
+                    + $"which has bytes and no elements: `.sizeof({measured.Name})` is how many bytes it takes");
                 return Value.Unknown;
             }
+            if (measured.Kind == SymbolKind.Proc)
+                return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
+
             EvaluateSymbol(measured);
             var room = name == ".sizeof" ? measured.Size : measured.Count;
+            if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
+            {
+                Report(arguments[0], $"nt65 cannot say how many bytes `{measured.Name}` takes: an `.align` in it "
+                    + $"depends on where it lands, and `.spanof({measured.Name})` measures it in the output");
+            }
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }
 
         // `.addrsize` asks about the shape of its argument rather than its value.
         if (name == ".addrsize")
         {
-            return arguments.Length == 1 && SizeOf(arguments[0], SegmentTable.DefaultSegment) is { } size
+            return arguments.Length == 1 && SizeOf(arguments[0], null) is { } size
                 ? Value.Of((long)size)
                 : Value.Unknown;
         }
@@ -640,10 +678,25 @@ internal sealed class Evaluator
     /// Whether a symbol has bytes of its own in the output, which is what an end and a span
     /// are the end and the span of.
     /// </summary>
-    private static bool HasBytesOfItsOwn(Symbol symbol) =>
-        symbol.Kind is SymbolKind.Proc or SymbolKind.Scope
-        || (symbol.Kind == SymbolKind.Label && symbol.Data is not null)
-        || symbol.Kind == SymbolKind.Instance;
+    private static bool HasBytesOfItsOwn(Symbol symbol) => symbol.Kind is SymbolKind.Proc or SymbolKind.Data;
+
+    /// <summary>
+    /// A label and a scope are the two names that look as if they had an extent and have none:
+    /// a label is only a position, and a scope only a namespace. Says so, and whether it did.
+    /// </summary>
+    private bool NotAnExtent(Symbol symbol, string function, SyntaxNode at)
+    {
+        var what = symbol.Kind switch
+        {
+            SymbolKind.Label => "a label, which is only a position",
+            SymbolKind.Scope => "a scope, which is only a namespace",
+            _ => null,
+        };
+        if (what is null)
+            return false;
+        Report(at, $"`{symbol.DisplayName}` is {what}: `{function}` measures a `.data` declaration, a routine or a type");
+        return true;
+    }
 
     /// <summary>What a name's macro parameter was given, or null when it names no parameter.</summary>
     private MacroArgument? Argument(SyntaxNode name) =>
@@ -746,7 +799,7 @@ internal sealed class Evaluator
     /// The expression's value where the caller has it, so that sizing an expression does not
     /// evaluate it a second time and report what it found twice.
     /// </param>
-    private AddressSize? SizeOf(SyntaxNode expression, string segment, Value? known = null)
+    private AddressSize? SizeOf(SyntaxNode expression, string? segment, Value? known = null)
     {
         AddressSize? widest = null;
         var named = false;
@@ -806,24 +859,25 @@ internal sealed class Evaluator
     /// </summary>
     private DataSize? RoomFor(SyntaxNode directive)
     {
+        // A line of a body is its values, each one element of the type the body is of.
+        if (directive.Kind == SyntaxKind.DataValues)
+        {
+            return DataSyntax.DirectiveOfValues(directive) is { } of && ElementWidth(of) is { } each
+                ? Spread(directive.ChildNodes, each)
+                : null;
+        }
         if (directive.ChildTokens.Length == 0)
             return null;
-        var name = directive.ChildTokens[0].Text.ToLowerInvariant();
+        if (DataSyntax.IsElementType(directive))
+            return RoomForElements(directive);
+        var name = DataSyntax.NameOf(directive);
         var operands = directive.ChildNodes;
 
         switch (name)
         {
-            case ".byte":
             case ".lobytes":
             case ".hibytes":
                 return Spread(operands, width: 1);
-            case ".word":
-            case ".addr":
-                return Spread(operands, width: 2);
-            case ".faraddr":
-                return Spread(operands, width: 3);
-            case ".dword":
-                return Spread(operands, width: 4);
 
             // `.asciiz` is the text and the zero byte that ends it.
             case ".asciiz":
@@ -836,9 +890,6 @@ internal sealed class Evaluator
                     ? new DataSize(reserved, reserved)
                     : null;
 
-            case ".tag":
-                return RoomForTag(operands);
-
             case ".incbin":
                 return RoomForBinary(directive, operands);
 
@@ -850,58 +901,245 @@ internal sealed class Evaluator
     }
 
     /// <summary>
-    /// How much room a struct or union member takes. A member reserves one element rather
-    /// than emitting values, so a bare `.word` is two bytes where in data it would be none.
+    /// An element type: as many elements as its count says, or as its values come to, or one
+    /// when it has neither, each as big as the element type — a record's being its type's size,
+    /// which is also the stride of an array of them.
     /// </summary>
-    private DataSize? RoomForMember(SyntaxNode? directive)
+    private DataSize? RoomForElements(SyntaxNode directive)
     {
-        if (directive is not { ChildTokens.Length: > 0 })
+        if (ElementWidth(directive) is not { } width)
             return null;
-        return directive.ChildTokens[0].Text.ToLowerInvariant() switch
+        var counted = DataSyntax.CountOf(directive) is not null;
+        var count = counted
+            ? DataSyntax.CountExpressionOf(directive) is null ? GivenCount(directive) ?? 0 : DeclaredCount(directive)
+            : GivenCount(directive) ?? 1;
+        return count is { } many and >= 0 ? new DataSize(width * many, many) : null;
+    }
+
+    /// <summary>How many bytes one element of an element type takes: a record's is its type's size.</summary>
+    private long? ElementWidth(SyntaxNode directive)
+    {
+        if (DataSyntax.TypeOf(directive) is not { } named)
+            return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
+        if (SymbolOf(named) is not { } type)
+            return null;
+        EvaluateSymbol(type);
+        return type.IsLayout ? type.Size : null;
+    }
+
+    /// <summary>The <c>n</c> of <c>[n]</c>, or null when there is none or it is no constant.</summary>
+    private long? DeclaredCount(SyntaxNode directive) =>
+        DataSyntax.CountExpressionOf(directive) is { } count ? Evaluate(count).AsNumber() : null;
+
+    /// <summary>
+    /// How many elements an element type's values come to, wherever they are written: after it
+    /// on the line, in braces, or in the body its line opens. Null when it has none, or when
+    /// nt65 cannot count them.
+    /// </summary>
+    private long? GivenCount(SyntaxNode directive)
+    {
+        if (DataSyntax.BracedOf(directive) is { } braced)
+            return braced.Kind == SyntaxKind.RecordValues ? 1 : Spread(braced.ChildNodes, 1).Elements;
+        if (DataSyntax.BodyOf(directive) is { } body)
         {
-            ".byte" => new DataSize(1, 1),
-            ".word" or ".addr" => new DataSize(2, 1),
-            ".faraddr" => new DataSize(3, 1),
-            ".dword" => new DataSize(4, 1),
-            ".res" or ".tag" => RoomFor(directive),
+            return ((GreenBlock)body.Green).BlockKind == BlockKind.RecordInitializer
+                ? 1
+                : Total(body.ChildNodes, 1, statement =>
+                    statement.Kind == SyntaxKind.DataValues ? Spread(statement.ChildNodes, 1).Elements : 0, _ => null);
+        }
+        var values = DataSyntax.ValuesOf(directive);
+        return values.Count > 0 ? Spread(values, 1).Elements : null;
+    }
+
+    /// <summary>
+    /// How many bytes mixed data takes: its lines, and the data declared in it, with its
+    /// conditionals decided and its repetitions unrolled. Null when an `.align` in it makes
+    /// that depend on where it lands.
+    /// </summary>
+    private long? RoomForMixed(SyntaxNode block) => Total(block.ChildNodes, 1, BytesOnLine, nested =>
+        ((GreenBlock)nested.Green).BlockKind switch
+        {
+            BlockKind.Data => RoomForMixed(nested),
+            BlockKind.DataBody or BlockKind.RecordInitializer when nested.ChildNodes[0].Statement is { } opener =>
+                BytesOnLine(opener),
+            _ => null,
+        });
+
+    /// <summary>The bytes one line of mixed data takes, or null when nt65 cannot say.</summary>
+    private long? BytesOnLine(SyntaxNode statement)
+    {
+        var directive = statement.Kind switch
+        {
+            SyntaxKind.DataDirective => statement,
+            SyntaxKind.DataDeclaration => DataSyntax.ElementOf(statement),
+            SyntaxKind.LabeledLine => statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.DataDirective),
             _ => null,
         };
+        return directive is null ? 0 : RoomFor(directive)?.Bytes;
+    }
+
+    /// <summary>
+    /// What the lines of a body come to, one number per line from <paramref name="line"/> and
+    /// per block from <paramref name="block"/>, with the conditionals decided as the build
+    /// decides them and the repetitions unrolled a turn at a time. Null as soon as any part of
+    /// it is unknown.
+    /// </summary>
+    private long? Total(
+        IReadOnlyList<SyntaxNode> children, int from, Func<SyntaxNode, long?> line, Func<SyntaxNode, long?> block)
+    {
+        long total = 0;
+        var chaining = false;
+        var taken = false;
+        for (var i = from; i < children.Count; i++)
+        {
+            var child = children[i];
+            long? part;
+            if (child.Green is not GreenBlock green)
+            {
+                chaining = false;
+                part = child.Statement is { } statement ? line(statement) : 0;
+            }
+            else
+            {
+                var opener = child.ChildNodes[0].Statement;
+                switch (green.BlockKind)
+                {
+                    case BlockKind.If:
+                        var continues = opener?.Kind is SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective;
+                        var take = (!continues || chaining) && Holds(child, opener, continues && taken);
+                        chaining = true;
+                        taken = (continues && taken) || take;
+                        part = take ? Total(child.ChildNodes, 1, line, block) : 0;
+                        break;
+                    case BlockKind.Repeat or BlockKind.Each when opener is not null:
+                        chaining = false;
+                        part = Turns(child, opener, () => Total(child.ChildNodes, 1, line, block));
+                        break;
+                    default:
+                        chaining = false;
+                        part = block(child);
+                        break;
+                }
+            }
+            if (part is not { } known)
+                return null;
+            total += known;
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// Whether a branch of a conditional is taken: as the build answered it where it could, and
+    /// otherwise by its condition, as one inside an expansion is.
+    /// </summary>
+    private bool Holds(SyntaxNode block, SyntaxNode? opener, bool already)
+    {
+        if (configuration?.Answered(block) == true)
+            return configuration.Includes(block);
+        if (already || opener is null)
+            return false;
+        if (opener.Kind == SyntaxKind.ElseDirective)
+            return true;
+        return opener.ChildNodes.FirstOrDefault() is { } condition && Evaluate(condition).AsNumber() is { } value and not 0;
+    }
+
+    /// <summary>
+    /// The sum of <paramref name="body"/> over every turn of a repetition, with the name it
+    /// binds standing for that turn's index, item or member. Null when the turns are unknown.
+    /// </summary>
+    private long? Turns(SyntaxNode block, SyntaxNode opener, Func<long?> body)
+    {
+        if (opener.ChildNodes.FirstOrDefault() is not { } counted)
+            return null;
+        var binding = BindingIn(block, opener);
+        List<Action> turns = [];
+        if (opener.Kind == SyntaxKind.RepeatDirective)
+        {
+            if (Evaluate(counted).AsNumber() is not { } count || count < 0)
+                return null;
+            if (binding is null)
+                return body() * count;
+            for (long i = 0; i < count; i++)
+            {
+                var turn = i;
+                turns.Add(() => arguments[binding] = Value.Of(turn));
+            }
+        }
+        else if (SymbolOf(counted) is { Kind: SymbolKind.List } list)
+        {
+            turns.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) items[binding] = item; })));
+        }
+        else if (SymbolOf(counted) is { Kind: SymbolKind.Enum, Body: { } walked })
+        {
+            turns.AddRange(walked.Symbols.Select(member => (Action)(() =>
+            {
+                if (binding is null)
+                    return;
+                arguments[binding] = member.Value;
+                members[binding] = member;
+            })));
+        }
+        else
+        {
+            return null;
+        }
+
+        long total = 0;
+        foreach (var turn in turns)
+        {
+            turn();
+            if (body() is not { } part)
+                return null;
+            total += part;
+        }
+        if (binding is not null)
+        {
+            arguments.Remove(binding);
+            items.Remove(binding);
+            members.Remove(binding);
+        }
+        return total;
+    }
+
+    /// <summary>The name a repetition binds, found where its body names it; null when nothing does.</summary>
+    private Symbol? BindingIn(SyntaxNode block, SyntaxNode opener)
+    {
+        var declared = opener.ChildTokens.LastOrDefault(token =>
+            token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
+        if (declared.Parent is null)
+            return null;
+        foreach (var name in block.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        {
+            foreach (var token in name.ChildTokens)
+            {
+                if (resolved.TryGetValue((name.Tree, token.Span.Start), out var symbol)
+                    && symbol.Kind == SymbolKind.Binding && symbol.Tree == block.Tree
+                    && symbol.NameSpan.Start == declared.Span.Start)
+                {
+                    return symbol;
+                }
+            }
+        }
+        return null;
     }
 
     /// <summary>
     /// One element per operand, except that text is one element per byte and a list stands
     /// for its own items.
     /// </summary>
-    private DataSize Spread(IReadOnlyList<SyntaxNode> operands, int width)
+    private DataSize Spread(IReadOnlyList<SyntaxNode> operands, long width)
     {
         long elements = 0;
         foreach (var operand in operands)
         {
             if (BytesIn(operand) is { } bytes)
                 elements += bytes.Count;
-            else if (SymbolOf(operand) is { Kind: SymbolKind.List } list)
+            else if (operand.Kind == SyntaxKind.NameExpression && SymbolOf(operand) is { Kind: SymbolKind.List } list)
                 elements += list.Items.Count;
             else
                 elements++;
         }
         return new DataSize(elements * width, elements);
-    }
-
-    /// <summary>An instance of a type, or an array of them, or one written out with values.</summary>
-    private DataSize? RoomForTag(IReadOnlyList<SyntaxNode> operands)
-    {
-        if (operands.Count == 0 || SymbolOf(operands[0]) is not { } type)
-            return null;
-        EvaluateSymbol(type);
-        if (!type.IsLayout || type.Size is not { } stride)
-            return null;
-
-        // `.tag T { ... }` is one instance whose values are written out; `.tag T, n` is n of
-        // them; `.tag T` on its own is one.
-        var count = operands.Count > 1 && operands[1].Kind != SyntaxKind.TagValues
-            ? Evaluate(operands[1]).AsNumber()
-            : 1;
-        return count is { } many and >= 0 ? new DataSize(stride * many, many) : null;
     }
 
     /// <summary>
@@ -998,18 +1236,27 @@ internal sealed class Evaluator
                 continue;
             // The type a member names is worth keeping on it: emission walks into it, and
             // nothing else would have resolved it unless a path happened to reach through.
-            member.Type ??= Constructs.TagTypeOf(member.Data) is { } named ? SymbolOf(named) : null;
-            // A member reserves one element and holds no value, so an operand would be silently
-            // ignored, and `colors: .word 16` read as sixteen words would be two bytes.
-            if (member.Data is { ChildTokens.Length: > 0, ChildNodes.Length: > 0 } valued
-                && valued.ChildTokens[0].Text.ToLowerInvariant() is var element
-                && element is ".byte" or ".word" or ".addr" or ".faraddr" or ".dword")
-            {
-                Report(valued.ChildNodes[0],
-                    $"`{member.Name}` is a member, which reserves one `{element}` and holds no value: room for several is `.res`");
-            }
+            member.Type ??= DataSyntax.TypeOf(member.Data) is { } named ? SymbolOf(named) : null;
 
-            var room = RoomForMember(member.Data);
+            // A member reserves room and holds no value, so an operand would be silently
+            // ignored, and `colors: .word 16` read as sixteen words would be two bytes.
+            var room = member.Data is { } data && (data.Kind != SyntaxKind.DataDirective || DataSyntax.IsElementType(data)
+                || DataSyntax.NameOf(data) == ".res")
+                ? RoomFor(data)
+                : null;
+            if (member.Data is { } element && DataSyntax.IsElementType(element))
+            {
+                var spelled = element.ChildTokens[0].Text;
+                if ((DataSyntax.ValuesOf(element).FirstOrDefault() ?? DataSyntax.BracedOf(element)) is { } valued)
+                {
+                    Report(valued, $"`{member.Name}` is a member, which reserves room and holds no value: "
+                        + $"several are `{spelled}[n]`");
+                }
+                else if (DataSyntax.CountOf(element) is { } count && DataSyntax.CountExpressionOf(element) is null)
+                {
+                    Report(count, $"`{member.Name}` is a member, whose count is a number: `{spelled}[n]`");
+                }
+            }
             if (room is null)
             {
                 Report(member.DeclarationSpan, $"`{member.Name}` reserves no room a member may take", []);

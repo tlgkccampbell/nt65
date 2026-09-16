@@ -7,126 +7,126 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 923, 0
+.dbg file, "main.nt65", 946, 0
 
 .segment "CODE": absolute
 close_by:
-.dbg line, "main.nt65", 10
-    lda a:count
 .dbg line, "main.nt65", 11
-    beq close_by__out
+    lda a:count
 .dbg line, "main.nt65", 12
+    beq close_by__out
+.dbg line, "main.nt65", 13
     inc a:count
 close_by__out:
-.dbg line, "main.nt65", 14
+.dbg line, "main.nt65", 15
     rts
 
 way_off:
-.dbg line, "main.nt65", 19
-    lda a:count
 .dbg line, "main.nt65", 20
+    lda a:count
+.dbg line, "main.nt65", 21
     bne way_off__over
     jmp way_off__out
 way_off__over:
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 23
         sta a:count
 way_off__out:
-.dbg line, "main.nt65", 25
+.dbg line, "main.nt65", 26
     rts
 
 looping:
 looping__top:
-.dbg line, "main.nt65", 32
-    dec a:count
 .dbg line, "main.nt65", 33
-    bne looping__top
+    dec a:count
 .dbg line, "main.nt65", 34
+    bne looping__top
+.dbg line, "main.nt65", 35
     rts
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 38
+.dbg line, "main.nt65", 39
 count:  .res 1

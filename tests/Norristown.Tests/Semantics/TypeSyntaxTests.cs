@@ -85,14 +85,13 @@ public sealed class TypeSyntaxTests
         Assert.Equal(2, model.Symbol("screen").Entries.Count);
     }
 
-    /// <summary>A label written on a <c>.tag</c> is an instance of that type, not a plain label.</summary>
+    /// <summary>Data declared with <c>.type</c> is data of that type, whose fields it reaches.</summary>
     [Fact]
-    public void ATagLabelIsAnInstance()
+    public void DataOfATypeHasItsFields()
     {
-        var model = Analysis.Model(".struct Point {\nx:      .word\n}\n\nhere:   .tag Point\nthere:  .res 2\n");
+        var model = Analysis.Model(".struct Point {\nx:      .word\n}\n\n.data here: .type Point\n");
 
-        Assert.Equal(SymbolKind.Instance, model.Symbol("here").Kind);
-        Assert.Equal(SymbolKind.Label, model.Symbol("there").Kind);
+        Assert.Equal(SymbolKind.Data, model.Symbol("here").Kind);
         Assert.NotNull(model.Symbol("here").TypeExpression);
     }
 
@@ -103,7 +102,7 @@ public sealed class TypeSyntaxTests
     [Fact]
     public void ATypeWritesNothingAndAnEnumWritesItsMembers()
     {
-        var output = Compiled(Source + "\n.export Color, Point, Value\n.proc main {\n    rts\n}\n");
+        var output = Compiled(Source + "\n.export Color, Point, Value\n.segment CODE\n.proc main {\n    rts\n}\n");
 
         Assert.Contains("Color__red = $00", output);
         Assert.Contains("Color__green = $05", output);

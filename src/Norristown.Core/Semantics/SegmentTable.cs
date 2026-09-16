@@ -6,15 +6,12 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// The program's segments. The standard names are predeclared; every other segment
-/// is declared exactly once, by a <c>.segment "NAME": size</c> item in one file or in
+/// is declared exactly once, by a <c>.segment NAME: size</c> item in one file or in
 /// <c>nt65.json</c>. A segment block naming a segment declared nowhere is an
 /// error, so a misspelled name is caught before ld65 runs.
 /// </summary>
 public sealed class SegmentTable
 {
-    /// <summary>Where items outside any segment block go.</summary>
-    public const string DefaultSegment = "CODE";
-
     // A file's segment declarations, read once per tree: after an edit, only one file of the
     // program is a tree nothing has read yet.
     private static readonly ConditionalWeakTable<SyntaxTree, List<Declaration>> written = new();
@@ -165,14 +162,8 @@ public sealed class SegmentTable
         {
             if (node.Kind != SyntaxKind.SegmentDeclaration)
                 continue;
-            foreach (var token in node.ChildTokens)
-            {
-                if (token.Kind == SyntaxKind.StringLiteral)
-                {
-                    yield return new Declaration(node, SegmentNames.Unquote(token.Text), token.Span);
-                    break;
-                }
-            }
+            if (node.ChildTokens.Length > 1 && SegmentNames.Of(node.ChildTokens[1]) is { } name)
+                yield return new Declaration(node, name, node.ChildTokens[1].Span);
         }
     }
 
@@ -190,6 +181,6 @@ public sealed class SegmentTable
         return AddressSize.Absolute;
     }
 
-    /// <summary>One <c>.segment "NAME": size</c> item, before it reaches the table.</summary>
+    /// <summary>One <c>.segment NAME: size</c> item, before it reaches the table.</summary>
     private readonly record struct Declaration(SyntaxNode Node, string Name, TextSpan Span);
 }

@@ -7,6 +7,7 @@
 
 ; uint8 read_key(void): returns the key with the strobe bit clear, 0 if none waiting.
 .export _read_key
+.segment CODE
 .proc _read_key {
     ldx #0
     lda KBD

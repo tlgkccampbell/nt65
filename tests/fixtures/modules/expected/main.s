@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1650, 0
+.dbg file, "main.nt65", 1680, 0
 
 .export main
 .export shape
@@ -26,42 +26,41 @@ Color__white = $01
 
 .segment "CODE": absolute
 main:
-.dbg line, "main.nt65", 16
-    lda #<SCREEN
 .dbg line, "main.nt65", 17
-    sta z:ptr
+    lda #<SCREEN
 .dbg line, "main.nt65", 18
-    lda #>SCREEN
+    sta z:ptr
 .dbg line, "main.nt65", 19
-    sta z:ptr+1
+    lda #>SCREEN
 .dbg line, "main.nt65", 20
-    lda z:host_tick
+    sta z:ptr+1
 .dbg line, "main.nt65", 21
-    jsr clear
+    lda z:host_tick
 .dbg line, "main.nt65", 22
-    jsr clear__again
+    jsr clear
 .dbg line, "main.nt65", 23
-    jsr host_print
+    jsr clear__again
 .dbg line, "main.nt65", 24
-    lda #<$0102                     ; HOST_VERSION
+    jsr host_print
 .dbg line, "main.nt65", 25
-    lda #Color__white
+    lda #<$0102                     ; HOST_VERSION
 .dbg line, "main.nt65", 26
-    ldx #$01                        ; Sprite::y
+    lda #Color__white
 .dbg line, "main.nt65", 27
-    lda #$01                        ; screen('A')
+    ldx #$01                        ; Sprite::y
 .dbg line, "main.nt65", 28
-    ldy #$0f                        ; centred(10)
+    lda #$01                        ; screen('A')
 .dbg line, "main.nt65", 29
+    ldy #$0f                        ; centred(10)
+.dbg line, "main.nt65", 30
     rts
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 33
+.dbg line, "main.nt65", 34
 shape:  .byte $3c, $42, $3c         ; glyphs
 
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 36
 clear_extent: .addr clear__end, (clear__end - clear)
 
-.segment "CODE": absolute
 .dbg line, "main.nt65", 43
 .assert ((main = main) && (main <> clear)) && (!(main .xor main)), lderror, "an operator reached ld65 misspelled"

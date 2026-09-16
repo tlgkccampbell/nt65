@@ -39,8 +39,11 @@ public enum SymbolKind
     /// <summary>One member of a struct or union: a constant offset with a size of its own.</summary>
     Member,
 
-    /// <summary>A label declared with <c>.tag</c>: an address, and a scope of its fields.</summary>
-    Instance,
+    /// <summary>
+    /// <c>.data name: ...</c> or <c>.data name { }</c>: an address with a size, and a scope of
+    /// its members or of its type's fields.
+    /// </summary>
+    Data,
 
     /// <summary><c>.charmap Name { }</c>: a mapping from characters to bytes.</summary>
     Charmap,
@@ -62,5 +65,4 @@ public enum SymbolKind
 
     /// <summary><c>.frame name: T</c>: the top bytes of the stack, laid out as a struct.</summary>
     Frame,
-
 }

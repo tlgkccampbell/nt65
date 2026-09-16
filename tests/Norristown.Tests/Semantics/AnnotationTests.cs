@@ -21,7 +21,7 @@ public sealed class AnnotationTests
             @fire:  rts
             }
 
-            cmd: .byte 0
+            .data cmd: .byte 0
             """);
 
         Assert.Empty(model.Problems());
@@ -45,7 +45,7 @@ public sealed class AnnotationTests
                 .next gfx::init
             }
 
-            vector: .addr gfx::init
+            .data vector: .addr gfx::init
             """);
 
         Assert.Empty(model.Problems());
@@ -56,7 +56,7 @@ public sealed class AnnotationTests
     [Fact]
     public void NextQuestionNamesNothing()
     {
-        var model = Analysis.Model(".proc jump {\n    jmp (ptr)\n    .next ?\n}\n\nptr: .addr 0\n");
+        var model = Analysis.Model(".proc jump {\n    jmp (ptr)\n    .next ?\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Empty(model.Problems());
     }
@@ -64,7 +64,7 @@ public sealed class AnnotationTests
     [Fact]
     public void ATargetThatNamesNothingIsReported()
     {
-        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n    .next @gone\n}\n\nptr: .addr 0\n");
+        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n    .next @gone\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Equal(["3: `@gone` is not declared"], model.Problems());
     }
@@ -106,7 +106,7 @@ public sealed class AnnotationTests
     [Fact]
     public void ABlankLineDoesNotSeparateAnAnnotationFromItsStatement()
     {
-        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n\n    .next ?\n}\n\nptr: .addr 0\n");
+        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n\n    .next ?\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Empty(model.Problems());
     }
@@ -127,7 +127,7 @@ public sealed class AnnotationTests
                 rts
             }
 
-            ptr: .addr 0
+            .data ptr: .addr 0
             """);
 
         Assert.Empty(model.Problems());
@@ -139,6 +139,7 @@ public sealed class AnnotationTests
     public void NeitherAnnotationIsWritten()
     {
         var written = Analysis.Outputs(("main.nt65", """
+            .segment CODE
             .proc p {
             @op:
                 sta $0400
@@ -148,7 +149,7 @@ public sealed class AnnotationTests
                 .next ?
             }
 
-            ptr: .addr 0
+            .data ptr: .addr 0
             """))["main.s"];
 
         Assert.DoesNotContain(".next", written, StringComparison.Ordinal);

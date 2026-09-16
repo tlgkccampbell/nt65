@@ -12,6 +12,7 @@
 .import host_print: proc()
 .import HOST_VERSION = $0102
 
+.segment CODE
 .proc main {
     lda #<SCREEN            ; a constant from gfx.nt65
     sta ptr                 ; a zero-page label from gfx.nt65
@@ -29,11 +30,10 @@
     rts
 }
 
-.rodata {
-shape:  .byte glyphs
+.segment RODATA
+.data shape:  .byte glyphs
 ; Where another file's routine ends, and how long it is: gfx.nt65 exports the end with it.
-clear_extent: .addr .endof(clear), .spanof(clear)
-}
+.data clear_extent: .addr .endof(clear), .spanof(clear)
 
 ; Exported, so that what the file only declares counts as used.
 .export shape, clear_extent

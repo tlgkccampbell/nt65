@@ -82,19 +82,18 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
             BASE = 3
             MAIN_PRIVATE = 9
 
-            .bss {
-            cursor: .res 2
-            track:  .tag Line
-            }
+            .segment BSS
+            .data cursor: .word
+            .data track:  .type Line
 
-            .rodata {
-            route:  .tag Line { from = { x = 1 } }
-            }
+            .segment RODATA
+            .data route:  .type Line { from = { x = 1 } }
 
             .if DEBUG {
             TRACE = 1
             }
 
+            .segment CODE
             .proc main: a8, i8 {
                 ldx #WIDTH
             @loop:
@@ -119,11 +118,11 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
             COLORS = rgb(31, 0, 0)
             STEP   = scaled(2)
 
-            .rodata {
-            sprites:    .incbin "sprites.bin"
-            palette:    .word COLORS, rgb(0, 31, 0)
-            }
+            .segment RODATA
+            .data sprites:    .incbin "sprites.bin"
+            .data palette:    .word COLORS, rgb(0, 31, 0)
 
+            .segment CODE
             .proc draw: a8, i8 {
                 ldy #STEP
             @next:
@@ -158,14 +157,14 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
 
             ; A type laid out from another file's type, and used by a third file.
             .struct Line {
-            from:   .tag Point
-            to:     .tag Point
+            from:   .type Point
+            to:     .type Point
             }
 
-            .bss {
-            origin: .tag Point
-            }
+            .segment BSS
+            .data origin: .type Point
 
+            .segment CODE
             .proc home: a8, i8 {
                 lda origin + Point::y
                 rts
@@ -175,6 +174,7 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
         ["errors.nt65"] = """
             .cpu 65816
 
+            .segment CODE
             .proc broken: a8, i8 {
                 lda #MAIN_PRIVATE
                 lda #PRIVATE_K
@@ -189,12 +189,12 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
 
             .export hud_value
 
-            .segment "HUD": zp
+            .segment HUD: zp
 
-            .segment "HUD" {
-            hud_value:  .res 1
-            }
+            .segment HUD
+            .data hud_value:  .byte
 
+            .segment CODE
             .proc hud: a8, i8 {
                 lda hud_value
                 rts

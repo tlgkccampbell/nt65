@@ -4,9 +4,8 @@
 
 .export clear, SCREEN, ptr, Color, Sprite, screen, centred, glyphs
 
-.zeropage {
-ptr:        .res 2
-}
+.segment ZEROPAGE
+.data ptr:        .word
 
 SCREEN = $0400
 rows   = 25
@@ -35,6 +34,7 @@ y:      .byte
     $3c, $42, $3c
 }
 
+.segment CODE
 .scope palette {
     .export border
     border = $0f

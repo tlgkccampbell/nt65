@@ -36,6 +36,11 @@ public enum ScopeKind
     Repetition,
 
     /// <summary>
+    /// A <c>.data name { }</c> block: its named members, and the <c>@</c> positions private to it.
+    /// </summary>
+    Data,
+
+    /// <summary>
     /// The body of an <c>.enum</c>, <c>.struct</c> or <c>.union</c>: a scope of constants
     /// and offsets rather than of code.
     /// </summary>

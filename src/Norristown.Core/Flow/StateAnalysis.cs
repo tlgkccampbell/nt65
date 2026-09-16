@@ -789,8 +789,8 @@ public sealed class StateAnalysis
             : StateValue.Unknown;
 
     /// <summary>The bank a segment declares it lives in, which is the program bank for code in it.</summary>
-    private StateValue BankOf(string segment) =>
-        model.Segments.Find(segment)?.Bank is { } bank ? StateValue.Of(bank) : StateValue.Unknown;
+    private StateValue BankOf(string? segment) =>
+        segment is not null && model.Segments.Find(segment)?.Bank is { } bank ? StateValue.Of(bank) : StateValue.Unknown;
 
     /// <summary>
     /// What memory an operand reaches through the direct page or the data bank, checked
@@ -901,7 +901,7 @@ public sealed class StateAnalysis
     }
 
     /// <summary>The segment a placed symbol is in, as the program's table declares it.</summary>
-    private Segment? SegmentOf(Symbol symbol) => model.Segments.Find(symbol.Segment ?? SegmentTable.DefaultSegment);
+    private Segment? SegmentOf(Symbol symbol) => symbol.Segment is { } name ? model.Segments.Find(name) : null;
 
     /// <summary>
     /// A <c>.state</c>: each item asserts and sets. Where that part is known and differs it is
@@ -1139,8 +1139,9 @@ public sealed class StateAnalysis
     }
 
     /// <summary>
-    /// Outside any routine there is no processor state: code that changes or depends on it
-    /// belongs in a proc, where the analysis can follow it.
+    /// Outside any routine there is no processor state, so a directive that describes a point
+    /// in one describes nothing. An instruction there has been reported already: code belongs
+    /// in a proc.
     /// </summary>
     private void CheckOutsideRoutines()
     {
@@ -1153,27 +1154,6 @@ public sealed class StateAnalysis
             {
                 Report(step, $"`{statement.ChildTokens[0].Text.ToLowerInvariant()}` describes a point in a routine, "
                     + "and this is outside any `.proc`");
-                continue;
-            }
-
-            if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
-                continue;
-
-            var mnemonic = statement.ChildTokens[0].Text.ToLowerInvariant();
-            if (OperandOf(step) is { } operand && CodeLayout.ThroughDirectPage(operand))
-            {
-                Report(step, "`d:` is reached through the direct page, which only a `.proc` knows: outside one there "
-                    + "is nothing to follow D through");
-            }
-            else if (mnemonic is "rep" or "sep" or "xce" or "plp")
-            {
-                Report(step, $"`{mnemonic}` changes the processor state, which only a `.proc` has: outside one "
-                    + "there is nothing to follow it through");
-            }
-            else if (layout.Of(statement, step.On)?.Mode == AddressingMode.Immediate
-                && Instructions.SizedBy(mnemonic) is { } register)
-            {
-                Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, which only a `.proc` has");
             }
         }
     }

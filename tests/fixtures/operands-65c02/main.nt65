@@ -2,15 +2,14 @@
 ; forms of `inc` and `dec`, and the Rockwell bit instructions.
 .cpu 65c02
 
-.zeropage {
-ptr:        .res 2
-flags:      .res 1
-}
+.segment ZEROPAGE
+.data ptr:        .word
+.data flags:      .byte
 
-.rodata {
-table:      .byte 1, 2, 4, 8
-}
+.segment RODATA
+.data table:      .byte 1, 2, 4, 8
 
+.segment CODE
 .proc forms {
     lda (ptr)               ; 65C02: through a direct-page pointer
     sta (ptr)

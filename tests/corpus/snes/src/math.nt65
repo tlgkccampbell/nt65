@@ -20,7 +20,7 @@
     dividend:  .word
 }
 
-.segment "CODE0" {
+.segment CODE0
 
 ; Unsigned 16x16: A * X, product in A (low word) and X (high word).
 .proc mul16: a16, i16 {
@@ -118,4 +118,3 @@
     rts
 }
 
-}

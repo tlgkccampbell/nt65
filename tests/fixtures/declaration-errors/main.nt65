@@ -1,0 +1,58 @@
+; What a data declaration refuses, and what belongs in a declaration or a routine instead.
+.cpu 6502
+
+.struct Point {
+    x: .byte
+    y: .byte
+}
+
+.struct Palette {
+    colors: .word[3]
+    tiles:  .byte[]             ;! error: `tiles` is a member, whose count is a number: `.byte[n]`
+}
+
+.segment RODATA
+; A count is exactly what the values come to, one way or the other.
+.data short: .byte[4] { 1, 2, 3 }       ;! error: this array holds 4 elements, and its values come to 3
+.data long: .addr[2] {                  ;! error: this array holds 2 elements, and its values come to 3
+    0, 0, 0
+}
+.data none: .word[]                     ;! error: `[]` counts the values given, and there are none: `.word[n]` holds n
+.data padding: .res 4                   ;! error: `.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values
+
+; An element is a value, or a record for an array of records.
+.data records: .type Point[] {
+    { x = 1 }, 5                        ;! error: each element of a `Point` array is a record, written `{ member = value }`
+}
+.data bytes: .byte[] {
+    1, { x = 1 }                        ;! error: a `.byte` element is one value, and braces hold a record or a list
+}
+.data short_list: .type Palette { colors = { 1, 2 } }  ;! error: `colors` holds 3 elements, and this list gives 2
+.data not_a_list: .type Palette { colors = 1 }         ;! error: `colors` is an array, which takes a braced list: `colors = { … }`
+
+; Mixed data holds data, and names its members with `.data`.
+.data mixed {
+    .byte 1
+    stray: .byte 2                      ;! error: `stray` is a label in `.data`: a named member is `.data stray: ...`, and a position is `@stray:`
+    lda #1                              ;! error: an instruction belongs in a `.proc`, and `.data` holds only data
+}
+
+; Outside a routine, bytes belong to a declaration and code to a routine.
+    .byte 3                             ;! error: `.byte` outside a `.proc` belongs to a `.data` declaration: `.data name: .byte ...`
+label: .word 4                          ;! error: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
+    rts                                 ;! error: an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow
+    .res 2                              ; padding is fine
+
+.segment CODE
+.proc main {
+@here:
+    lda #.sizeof(@here)                 ;! error: `@here` is a label, which is only a position: `.sizeof` measures a `.data` declaration, a routine or a type
+    lda #.countof(mixed)                ;! error: `mixed` is mixed data, which has bytes and no elements: `.sizeof(mixed)` is how many bytes it takes
+    jmp (bytes)
+    .next bytes                         ;! error: `bytes` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
+}
+
+; A region is the file's own structure, and inside a block a segment is braced.
+.scope place {
+    .segment BSS                        ;! error: a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME { }` places what it holds
+}

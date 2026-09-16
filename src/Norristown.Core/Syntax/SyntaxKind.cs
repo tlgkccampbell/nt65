@@ -180,8 +180,23 @@ public enum SyntaxKind : byte
     /// <summary>A mnemonic and its operand.</summary>
     InstructionStatement,
 
-    /// <summary><c>.byte</c>, <c>.res</c> and the rest of the data directives, with their operands.</summary>
+    /// <summary>
+    /// <c>.byte</c>, <c>.res</c> and the rest of the data directives, with their operands: an
+    /// element type with its count and values, or a directive that is only bytes.
+    /// </summary>
     DataDirective,
+
+    /// <summary><c>.data name: .word[16]</c>, <c>.data name: .byte 1, 2</c> or <c>.data name {</c>.</summary>
+    DataDeclaration,
+
+    /// <summary><c>[16]</c> or <c>[]</c> after an element type: how many elements there are.</summary>
+    ElementCount,
+
+    /// <summary>One line of a data body: values separated by commas, one element each.</summary>
+    DataValues,
+
+    /// <summary><c>{ 1, 2, 4 }</c>: values in braces, one element each.</summary>
+    ValueList,
 
     /// <summary><c>.cpu 6502</c>.</summary>
     CpuDirective,
@@ -198,14 +213,17 @@ public enum SyntaxKind : byte
     /// <summary><c>proc(a8, i16 -&gt; a8)</c> in an <c>.import</c>.</summary>
     ImportSignature,
 
-    /// <summary><c>.segment "NAME": size</c>, with its attributes.</summary>
+    /// <summary><c>.segment NAME: size</c>, with its attributes.</summary>
     SegmentDeclaration,
 
     /// <summary><c>dp = expr</c> or <c>bank = expr</c> in a segment declaration.</summary>
     SegmentAttribute,
 
-    /// <summary>The line opening a segment block, named or shortcut.</summary>
+    /// <summary><c>.segment NAME {</c>: the line opening a segment block.</summary>
     SegmentBlock,
+
+    /// <summary><c>.segment NAME</c>: places every item after it, up to the next one, in that segment.</summary>
+    SegmentRegion,
 
     /// <summary>The line opening a <c>.proc</c>.</summary>
     ProcDeclaration,
@@ -246,11 +264,11 @@ public enum SyntaxKind : byte
     /// <summary>One line of a <c>.list</c>: comma-separated items.</summary>
     ListItems,
 
-    /// <summary>The braced values of an initialized <c>.tag</c> instance.</summary>
-    TagValues,
+    /// <summary>The braced <c>member = value</c>s of an initialized record.</summary>
+    RecordValues,
 
-    /// <summary>One <c>member = value</c> of an initialized <c>.tag</c> instance.</summary>
-    TagValue,
+    /// <summary>One <c>member = value</c> of an initialized record.</summary>
+    MemberValue,
 
     /// <summary>The line opening an <c>.if</c>, with the condition it tests.</summary>
     IfDirective,

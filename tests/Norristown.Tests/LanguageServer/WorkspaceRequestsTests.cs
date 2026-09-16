@@ -21,13 +21,14 @@ public sealed class WorkspaceRequestsTests
 
         SCREEN = $0400
         rows   = 25
-
+        .segment CODE
         .proc clear {
             rts
         }
         """;
 
     private const string Main = """
+        .segment CODE
         .proc main {
             jsr clear
             lda #<SCREEN
@@ -42,7 +43,7 @@ public sealed class WorkspaceRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `clear` on `jsr clear`, declared by gfx.nt65.
-        var definition = await client.DefinitionAsync(MainUri, new Position(1, 8), timeout);
+        var definition = await client.DefinitionAsync(MainUri, new Position(2, 8), timeout);
 
         Assert.NotNull(definition);
         Assert.Equal(GfxUri, definition.Uri);
@@ -56,7 +57,7 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(MainUri, new Position(1, 8), timeout);
+        var hover = await client.HoverAsync(MainUri, new Position(2, 8), timeout);
 
         Assert.NotNull(hover);
         Assert.Contains("**routine** `clear`", hover.Contents.Value);
@@ -81,7 +82,7 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var edit = await client.RenameAsync(MainUri, new Position(1, 8), "wipe", timeout);
+        var edit = await client.RenameAsync(MainUri, new Position(2, 8), "wipe", timeout);
 
         Assert.NotNull(edit);
         Assert.Equal([GfxUri, MainUri], edit.Changes.Keys.Order(StringComparer.Ordinal));
@@ -139,7 +140,7 @@ public sealed class WorkspaceRequestsTests
             new TextDocumentContentChangeEvent(new Range(new Position(5, 0), new Position(5, 0)), "; wipes the screen\n"));
         await NextForAsync(client, MainUri, timeout);
 
-        var definition = await client.DefinitionAsync(MainUri, new Position(1, 8), timeout);
+        var definition = await client.DefinitionAsync(MainUri, new Position(2, 8), timeout);
         Assert.NotNull(definition);
         Assert.Equal(new Range(new Position(6, 6), new Position(6, 11)), definition.Range);
 

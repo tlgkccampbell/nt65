@@ -11,9 +11,8 @@ public sealed class MacroModuleTests
 
         SCREEN = $0400
 
-        .rodata {
-        table:  .byte 1, 2
-        }
+        .segment RODATA
+        .data table:  .byte 1, 2
 
         .macro set16(dest: operand, value) {
             lda #<value
@@ -32,6 +31,7 @@ public sealed class MacroModuleTests
             ("main.nt65", """
             ptr = $10
 
+            .segment CODE
             .proc main {
                 set16!(ptr, SCREEN)
                 rts
@@ -111,6 +111,7 @@ public sealed class MacroModuleTests
             }
             """),
             ("main.nt65", """
+            .segment CODE
             .proc delay__loop {
                 rts
             }

@@ -4,23 +4,26 @@
 ; data and `.assert`, never where a constant is required — and ca65 and ld65 resolve them.
 .cpu 6502
 
+.segment CODE
 .proc reloc {
     lda source
     sta dest
     rts
 }
 
-.rodata {
+.segment RODATA
 ; A header that says where the block is and how long it is. nt65 works the span out
 ; itself, so an assertion about one is answered before ca65 runs.
-header: .addr reloc
-        .word .spanof(reloc)
-        .addr .endof(reloc)
-
-table:  .byte 1, 2, 4, 8
-count:  .byte .spanof(table)
+.data header {
+    .addr reloc
+    .word .spanof(reloc)
+    .addr .endof(reloc)
 }
 
+.data table:  .byte 1, 2, 4, 8
+.data count:  .byte .spanof(table)
+
+.segment CODE
 .proc copy {
     ldx #.spanof(reloc)
 @loop:
@@ -34,10 +37,9 @@ count:  .byte .spanof(table)
 .assert .spanof(reloc) == 7, error, "reloc is seven bytes"
 .assert .spanof(table) == 4, error, "the table is four bytes"
 
-.bss {
-source: .res 1
-dest:   .res 1
-}
+.segment BSS
+.data source: .byte
+.data dest:   .byte
 
 ; Exported, so that what the file only declares counts as used.
 .export header, count

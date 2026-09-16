@@ -33,8 +33,20 @@ public enum BlockKind
     /// <summary><c>.list</c>.</summary>
     List,
 
-    /// <summary><c>.segment</c>, or one of the shortcuts such as <c>.rodata</c>.</summary>
+    /// <summary><c>.segment NAME {</c>.</summary>
     Segment,
+
+    /// <summary>
+    /// <c>.segment NAME</c> at file level, with no brace: the region runs to the next such line
+    /// or to the end of the file.
+    /// </summary>
+    Region,
+
+    /// <summary><c>.data name {</c>: mixed data, with members and positions of its own.</summary>
+    Data,
+
+    /// <summary><c>.data name: .byte[] {</c>: the values of an array, one line of them at a time.</summary>
+    DataBody,
 
     /// <summary><c>.if</c>, <c>.elseif</c> or <c>.else</c>.</summary>
     If,
@@ -45,8 +57,8 @@ public enum BlockKind
     /// <summary><c>.each</c>.</summary>
     Each,
 
-    /// <summary>A multi-line <c>.tag T {</c> initializer.</summary>
-    TagInitializer,
+    /// <summary>A multi-line <c>.type T {</c> initializer, one <c>member = value</c> per line.</summary>
+    RecordInitializer,
 
     /// <summary>A block argument of a macro call, first or continuation.</summary>
     MacroBlock,

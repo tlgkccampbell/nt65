@@ -3,8 +3,8 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What <c>.endof</c> and <c>.spanof</c> ask about: where a routine, a scope or a data
-/// declaration ends. They describe layout rather than shape, so what they are worth is
+/// What <c>.endof</c> and <c>.spanof</c> ask about: where a routine or a data declaration
+/// ends. They describe layout rather than shape, so what they are worth is
 /// settled by whoever has laid the file out, and in the output they become a label just
 /// past the last byte and a difference from it.
 /// </summary>
@@ -12,9 +12,10 @@ public static class Extents
 {
     /// <summary>
     /// Whether a call is <c>.endof</c> or <c>.spanof</c>, with <paramref name="span"/> true
-    /// for the second, which is the difference rather than the address.
+    /// for the second, which is the difference rather than the address. <c>.sizeof</c> of a
+    /// routine is its span too: how many bytes a routine takes is layout, not shape.
     /// </summary>
-    public static bool Is(SyntaxNode call, out bool span)
+    public static bool Is(SyntaxNode call, SemanticModel model, out bool span)
     {
         span = false;
         if (call.Kind != SyntaxKind.CallExpression || call.ChildTokens.Length == 0
@@ -23,7 +24,9 @@ public static class Extents
             return false;
         }
         var name = call.ChildTokens[0].Text;
-        span = name.Equals(".spanof", StringComparison.OrdinalIgnoreCase);
+        span = name.Equals(".spanof", StringComparison.OrdinalIgnoreCase)
+            || (name.Equals(".sizeof", StringComparison.OrdinalIgnoreCase)
+                && MeasuredBy(call) is { } named && model.SymbolOf(named) is { Kind: SymbolKind.Proc });
         return span || name.Equals(".endof", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -41,7 +44,7 @@ public static class Extents
         var measured = new HashSet<Symbol>();
         foreach (var node in model.Tree.Root.DescendantNodes())
         {
-            if (Is(node, out _) && MeasuredBy(node) is { } named && model.SymbolOf(named) is { } symbol)
+            if (Is(node, model, out _) && MeasuredBy(node) is { } named && model.SymbolOf(named) is { } symbol)
                 measured.Add(symbol);
         }
         return measured;

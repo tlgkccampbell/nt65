@@ -13,10 +13,10 @@
 q:      .byte
 }
 
-.rodata {
-one:    .tag S { q = 1 }
-}
+.segment RODATA
+.data one:    .type S { q = 1 }
 
+.segment CODE
 .proc near_one: a8, i16 {
     rts
 }

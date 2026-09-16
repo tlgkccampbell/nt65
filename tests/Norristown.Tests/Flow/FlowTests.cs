@@ -27,7 +27,7 @@ public sealed class FlowTests
                 rts
             }
 
-            flag: .byte 0
+            .data flag: .byte 0
             """);
 
         Assert.True(region.IsEntered);
@@ -72,7 +72,7 @@ public sealed class FlowTests
                 rts
             }
 
-            cmd: .byte 0
+            .data cmd: .byte 0
             """);
 
         Assert.True(IsDeclared(region, "@move"));
@@ -80,7 +80,7 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// Every item of the table is a code label, so <c>.next @table</c> says what listing
+    /// Every item of the table is a code label, so <c>.next table</c> says what listing
     /// them one by one says.
     /// </summary>
     [Fact]
@@ -88,10 +88,10 @@ public sealed class FlowTests
     {
         var region = Region("""
             .proc dispatch {
-                jmp (@table)
-                .next @table
+                jmp (table)
+                .next table
 
-            @table: .addr @move, @fire
+            .data table: .addr @move, @fire
 
             @move:  rts
             @fire:  rts
@@ -119,7 +119,7 @@ public sealed class FlowTests
                 dispatch::move, dispatch::fire
             }
 
-            ptr: .addr 0
+            .data ptr: .addr 0
             """);
 
         Assert.True(IsDeclared(region, "move"));
@@ -169,7 +169,7 @@ public sealed class FlowTests
                 rts
             }
 
-            ptr: .addr 0
+            .data ptr: .addr 0
             """);
 
         Assert.True(IsDeclared(region, "@out"));
@@ -179,7 +179,7 @@ public sealed class FlowTests
     [Fact]
     public void NextQuestionEndsThePath()
     {
-        var region = Region(".proc p {\n    jmp (ptr)\n    .next ?\n@after:\n    rts\n}\n\nptr: .addr 0\n");
+        var region = Region(".proc p {\n    jmp (ptr)\n    .next ?\n@after:\n    rts\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Empty(region.Blocks[0].Successors);
     }
@@ -194,7 +194,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    rts\n@gone:\n    nop\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:3: `@gone` is never reached: nothing runs into it and nothing names it"],
+            ["main.nt65:4: `@gone` is never reached: nothing runs into it and nothing names it"],
             problems);
     }
 
@@ -204,8 +204,8 @@ public sealed class FlowTests
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    beq @here\n    rts\n@here:\n    rts\n}\n")]
-    [InlineData(".proc p {\n    jmp (ptr)\n    .next @here\n@here:\n    rts\n}\n\nptr: .addr 0\n")]
-    [InlineData(".proc p {\n    rts\nhere:\n    rts\n}\n\ntable: .addr p::here\n.export table\n")]
+    [InlineData(".proc p {\n    jmp (ptr)\n    .next @here\n@here:\n    rts\n}\n\n.data ptr: .addr 0\n")]
+    [InlineData(".proc p {\n    rts\nhere:\n    rts\n}\n\n.data table: .addr p::here\n.export table\n")]
     public void ALabelSomethingNamesIsNotReported(string text)
     {
         Assert.Empty(Problems(text));
@@ -213,7 +213,7 @@ public sealed class FlowTests
 
     /// <summary>An annotation names somewhere code is, so a constant is no target for one.</summary>
     [Theory]
-    [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\nN = 5\n\nptr: .addr 0\n", ".next")]
+    [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\nN = 5\n\n.data ptr: .addr 0\n", ".next")]
     [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\nN = 5\n", ".patch")]
     public void AnAnnotationThatNamesSomethingThatIsNotCodeIsReported(string text, string directive)
     {
@@ -227,7 +227,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    lda #1\n    .byte $2c\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:3: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:4: the instruction above runs into this data. `.next` on it says where flow goes instead"],
             problems);
     }
 
@@ -252,7 +252,7 @@ public sealed class FlowTests
                 rts
             }
 
-            value: .byte 0
+            .data value: .byte 0
             """);
 
         // The `.next` is what redirects the path: `@store` follows the data, and nothing
@@ -269,7 +269,7 @@ public sealed class FlowTests
             ".proc set {\n    beq @two\n    lda #1\n    .byte $2c\n@two:\n    lda #2\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:4: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:5: the instruction above runs into this data. `.next` on it says where flow goes instead"],
             problems);
     }
 
@@ -280,13 +280,14 @@ public sealed class FlowTests
         Assert.Empty(Problems(".proc p {\n    lda @table\n    rts\n@table: .byte 1\n    .byte 2\n}\n"));
     }
 
+    /// <summary>What is wrong with <paramref name="text"/>, placed in the code segment on a line before it.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(("main.nt65", text)).Problems();
+        Analysis.Program(("main.nt65", ".segment CODE\n" + text)).Problems();
 
     /// <summary>The one region of the one routine in <paramref name="text"/>.</summary>
     private static FlowRegion Region(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", text));
+        var analysis = Analysis.Program(("main.nt65", ".segment CODE\n" + text));
         Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
         return Assert.Single(analysis.Flows.Single().Regions);
     }

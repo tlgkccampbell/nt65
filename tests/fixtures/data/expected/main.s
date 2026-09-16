@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 783, 0
+.dbg file, "main.nt65", 897, 0
 
 .export words
 .export wide
@@ -34,20 +34,51 @@ here:       .addr table
 there:      .faraddr table
 .dbg line, "main.nt65", 14
 greeting:   .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
-.dbg line, "main.nt65", 15
-padding:    .res 16, $ff
-.dbg line, "main.nt65", 16
-escaped:    .byte $61, $0a, $62, $7f  ; "a\nb", '\x7f'
+padding:
 .dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 17
+        .byte $ff
+.dbg line, "main.nt65", 20
+escaped:    .byte $61, $0a, $62, $7f  ; "a\nb", '\x7f'
+.dbg line, "main.nt65", 21
 bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
-.dbg line, "main.nt65", 18
+.dbg line, "main.nt65", 22
 sums:       .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
 
 .segment "CODE": absolute
 use:
-.dbg line, "main.nt65", 22
+.dbg line, "main.nt65", 26
     lda #$20                        ; ' '
-.dbg line, "main.nt65", 23
+.dbg line, "main.nt65", 27
     lda a:table+1
-.dbg line, "main.nt65", 24
+.dbg line, "main.nt65", 28
     rts

@@ -22,38 +22,30 @@ name:   .addr
     ' '..'_' = $A0          ; Apple II normal text: high bit set
 }
 
-.rodata {
-_sprites:
-        .tag Sprite { x = 10, y = 20, tile = $0100, name = name_hero }
-        .tag Sprite { x = 30, y = 40, tile = $0200, name = name_boss }
-        .tag Sprite { x = 50, y = 60, tile = $0300, name = name_boss }
-sprites_end:
-_sprite_count:
-        .byte (sprites_end - _sprites) / .sizeof(Sprite)
+.segment RODATA
+.data _sprites: .type Sprite[] {
+    { x = 10, y = 20, tile = $0100, name = name_hero }
+    { x = 30, y = 40, tile = $0200, name = name_boss }
+    { x = 50, y = 60, tile = $0300, name = name_boss }
+}
+.data _sprite_count: .byte .countof(_sprites)
 
-name_hero: .asciiz "HERO"
-name_boss: .asciiz "BOSS"
+.data name_hero: .asciiz "HERO"
+.data name_boss: .asciiz "BOSS"
 
-_message:  .byte apple("HELLO, WORLD"), 0
+.data _message:  .byte apple("HELLO, WORLD"), 0
 
-_glyphs:   .incbin "../data/glyphs.bin"
-_glyphs_size:
-           .word .sizeof(_glyphs)
+.data _glyphs:   .incbin "../data/glyphs.bin"
+.data _glyphs_size: .word .sizeof(_glyphs)
 
-; One handler address per command, in enum order.
-_cmd_table:
-.addr cmd_handlers
-
+; One handler address per command, in enum order: each is the routine named after it.
+.data _cmd_table: .addr[] {
+    .each Cmd, c {
+        actions::c
+    }
 }
 
-.list cmd_handlers {
-    actions::move
-    actions::fire
-    actions::jump
-    actions::quit
-}
-.assert .countof(cmd_handlers) == Cmd::quit + 1, error, "one handler per command"
-
+.segment CODE
 .scope actions {
     .proc move {
         rts
@@ -69,14 +61,13 @@ _cmd_table:
     }
 }
 
-.bss {
-_buffer: .res BUF_SIZE
-}
+.segment BSS
+.data _buffer: .byte[BUF_SIZE]
 _buffer_size = BUF_SIZE
 
 ; Run once at start-up (registered as a constructor by asm/ctor.s).
 .export init_lib
-.segment "ONCE" {
+.segment ONCE
 .proc init_lib {
     lda #<_buffer
     sta ptr1
@@ -89,5 +80,4 @@ _buffer_size = BUF_SIZE
     lda #$EE
     sta tmp1
     jmp _memfill::fill      ; the interior entry of mem.nt65
-}
 }

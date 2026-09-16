@@ -63,14 +63,15 @@ public static class Outline
                 return new OutlineItem(OutlineKind.Macro, macro.Text, TextAfter(opener, macro)?.TrimEnd('{').TrimEnd(),
                     block.Span, macro.Span, children);
 
-            case SyntaxKind.SegmentBlock:
-                var directive = opener.ChildTokens[0];
-                var quoted = FirstToken(opener, SyntaxKind.StringLiteral);
+            case SyntaxKind.SegmentBlock or SyntaxKind.SegmentRegion:
+                // A name written in quotes is an error that still names the segment, and holds no
+                // escapes, so the quotes come off by hand.
+                var segment = opener.ChildTokens.Length > 1 ? opener.ChildTokens[1] : opener.ChildTokens[0];
+                return new OutlineItem(OutlineKind.Segment, segment.Text.Trim('"'), null, block.Span, segment.Span, children);
 
-                // Segment names hold no escapes, so the quotes come off by hand rather than
-                // through string evaluation, which an outline does not run.
-                return new OutlineItem(OutlineKind.Segment, quoted?.Text.Trim('"') ?? directive.Text,
-                    quoted is null ? null : directive.Text, block.Span, (quoted ?? directive).Span, children);
+            case SyntaxKind.DataDeclaration when NameToken(opener) is { } data:
+                return new OutlineItem(OutlineKind.Data, data.Text, TextAfter(opener, data)?.TrimStart(':').Trim().TrimEnd('{').TrimEnd() is { Length: > 0 } detail ? detail : null,
+                    block.Span, data.Span, children);
 
             default:
                 return null;
@@ -97,6 +98,11 @@ public static class Outline
                 var value = statement.ChildNodes.FirstOrDefault();
                 items.Add(new OutlineItem(OutlineKind.Constant, statement.ChildTokens[0].Text, value?.GetText(),
                     line.Span, statement.ChildTokens[0].Span, []));
+                break;
+
+            case SyntaxKind.DataDeclaration when NameToken(statement) is { } data:
+                items.Add(new OutlineItem(OutlineKind.Data, data.Text, TextAfter(statement, data)?.TrimStart(':').Trim(),
+                    line.Span, data.Span, []));
                 break;
 
             case SyntaxKind.ExternProcDeclaration when NameToken(statement) is { } name:

@@ -2,11 +2,11 @@
 ; cheap locals belong to the nearest `.proc` or `.scope`.
 .cpu 65c02
 
-.zeropage {
-palette:    .res 32
-frames:     .res 1
-}
+.segment ZEROPAGE
+.data palette:    .byte[32]
+.data frames:     .byte
 
+.segment CODE
 .scope gfx {
     COUNT = 32
 
@@ -51,7 +51,7 @@ frames:     .res 1
     }
 @done:
     lda table,x
-    .rodata {
+    .segment RODATA {
     table:  .byte 1, 2, 4, 8    ; a nested segment block changes the segment, not the scope
     }
     rts

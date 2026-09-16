@@ -3,15 +3,14 @@
 ; below is built for the 6502 and reaches for what the 6502 has not got.
 .cpu 6502
 
-.zeropage {
-ptr:        .res 2
-}
+.segment ZEROPAGE
+.data ptr:        .word
 
-.segment "FAR": far    ;! error: segment "FAR": a `far` address needs the 65816
-.segment "FAR" {
-away:       .res 1
-}
+.segment FAR: far    ;! error: segment "FAR": a `far` address needs the 65816
+.segment FAR
+.data away:       .byte
 
+.segment CODE
 .proc reaching {
     lda (ptr)               ;! error: `lda` does not take this operand on the 6502
     lda [ptr]               ;! error: `lda` does not take this operand on the 6502

@@ -149,18 +149,17 @@ public sealed partial class OracleTests
             }
 
             .struct Actor {
-            pos:    .tag Point
+            pos:    .type Point
             hp:     .byte
             name:   .res 4
             }
 
-            .rodata {
-            boss:   .tag Actor { pos = { x = 100, y = 40 }, hp = 99, name = "ZIP" }
+            .segment RODATA
+            .data boss:   .type Actor { pos = { x = 100, y = 40 }, hp = 99, name = "ZIP" }
 
-            hero:   .tag Actor {
+            .data hero:   .type Actor {
                 hp = 3
                 pos = { y = 7 }
-            }
             }
             """;
 

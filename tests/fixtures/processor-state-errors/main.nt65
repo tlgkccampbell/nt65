@@ -6,11 +6,11 @@
 .import far_away: proc(far)
 .import plain
 
-.bss {
-value:  .res 2
-}
+.segment BSS
+.data value:  .word
 
 ; An immediate needs a known width.
+.segment CODE
 .proc unknown_width: a? {
     lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `unknown_width` says `a?` at entry: an `.ensure` sets it
     rts
@@ -97,8 +97,6 @@ value:  .res 2
 }
 
 ; Outside a routine there is no processor state.
-    rep #$20                ;! error: `rep` changes the processor state, which only a `.proc` has: outside one there is nothing to follow it through
-    lda #1                  ;! error: `lda #` needs the width of A, which only a `.proc` has
     .state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.

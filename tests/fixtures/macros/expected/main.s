@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 3472, 0
+.dbg file, "main.nt65", 3548, 0
 
 .export tune
 .export greeting
@@ -17,9 +17,8 @@
 ptr:        .res 2
 .dbg line, "main.nt65", 13
 other:      .res 2
-pair:
 .dbg line, "main.nt65", 14
-    .res 2                          ; Pair
+pair:       .res 2                  ; Pair
 
 SCREEN = $0400
 C4     = 60
@@ -119,7 +118,7 @@ times_x__loop_2:
 .dbg line, "main.nt65", 119
     cmp #10
     ; if!(cs)  main.nt65:120
-    ; branch_unless!(c, @skip)  main.nt65:88
+    ; branch_unless!(c, @skip)  main.nt65:87
 .dbg line, "main.nt65", 120
         bcc if__skip
 .dbg line, "main.nt65", 121
@@ -132,7 +131,7 @@ if__skip:
 if__done:
 
     ; if!(eq)  main.nt65:126
-    ; branch_unless!(c, @skip)  main.nt65:88
+    ; branch_unless!(c, @skip)  main.nt65:87
 .dbg line, "main.nt65", 126
         bne if__skip_2
 .dbg line, "main.nt65", 127
@@ -141,11 +140,11 @@ if__skip_2:
 if__done_2:
 
     ; if!(ne)  main.nt65:132
-    ; branch_unless!(c, @skip)  main.nt65:88
+    ; branch_unless!(c, @skip)  main.nt65:87
 .dbg line, "main.nt65", 132
         beq if__skip_3
         ; if!(cc)  main.nt65:133
-    ; branch_unless!(c, @skip)  main.nt65:88
+    ; branch_unless!(c, @skip)  main.nt65:87
 .dbg line, "main.nt65", 133
         bcs if__skip_4
 .dbg line, "main.nt65", 134
@@ -154,7 +153,7 @@ if__done_2:
         jmp if__done_3
 if__skip_4:
             ; if!(eq)  main.nt65:136
-    ; branch_unless!(c, @skip)  main.nt65:88
+    ; branch_unless!(c, @skip)  main.nt65:87
 .dbg line, "main.nt65", 136
         bne if__skip_5
 .dbg line, "main.nt65", 137
@@ -178,10 +177,10 @@ tune:
     ; note!(C4, frames = 8)  main.nt65:150
 .dbg line, "main.nt65", 150
     .byte C4, 8
-        ; note!(E4)  main.nt65:151
+    ; note!(E4)  main.nt65:151
 .dbg line, "main.nt65", 151
     .byte E4, 1
 greeting:
-    ; message!("HI")  main.nt65:152
-.dbg line, "main.nt65", 152
+    ; message!("HI")  main.nt65:154
+.dbg line, "main.nt65", 154
     .byte $48, $49, $00             ; "HI"

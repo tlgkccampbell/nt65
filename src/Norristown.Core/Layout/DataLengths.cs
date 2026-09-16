@@ -7,8 +7,8 @@ namespace Norristown.Layout;
 /// What a data directive must satisfy for ca65 to accept it, and how many bytes it comes
 /// to. How much room a directive takes is a question about what the program means, so it is
 /// answered once, by the semantic model; what is left here is what the assembler will
-/// refuse: a value too wide for the directive holding it, text that is not bytes, and a
-/// reservation whose count nt65 cannot work out.
+/// refuse: a value too wide for the directive holding it, text that is not bytes, a
+/// reservation whose count nt65 cannot work out, and a count its values do not come to.
 /// </summary>
 public static class DataLengths
 {
@@ -20,24 +20,27 @@ public static class DataLengths
     public const int Unpredictable = -1;
 
     /// <summary>
-    /// The length of <paramref name="directive"/>, <see cref="Unpredictable"/> for one whose
-    /// length only the assembler settles, or null for one nt65 cannot write at all. Anything
-    /// wrong with its values goes to <paramref name="diagnostics"/>, which callers that have
-    /// already reported pass as null.
+    /// The length of <paramref name="directive"/>, a data directive or a line of a data body,
+    /// <see cref="Unpredictable"/> for one whose length only the assembler settles, or null for
+    /// one nt65 cannot write at all. An array whose values are in the body it opens takes no
+    /// bytes on its own line: the lines of the body do. Anything wrong with its values goes to
+    /// <paramref name="diagnostics"/>, which callers that have already reported pass as null.
     /// </summary>
     public static int? Of(
         SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on = null)
     {
-        if (directive.ChildTokens.Length == 0)
+        if (directive.Kind != SyntaxKind.DataValues && directive.ChildTokens.Length == 0)
             return null;
         if (diagnostics is not null)
         {
-            foreach (var operand in directive.ChildNodes)
+            foreach (var operand in ElementsOf(directive))
                 model.Check(operand, diagnostics, on);
         }
         Check(directive, model, diagnostics, on);
-        if (directive.ChildTokens[0].Text.Equals(".align", StringComparison.OrdinalIgnoreCase))
+        if (DataSyntax.NameOf(directive) == ".align")
             return Unpredictable;
+        if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.DataBody } })
+            return 0;
         return model.RoomFor(directive, on) is { } room && room.Bytes is >= 0 and <= int.MaxValue
             ? (int)room.Bytes
             : null;
@@ -47,12 +50,49 @@ public static class DataLengths
     public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model, Expansion? on = null) =>
         model.BytesOf(argument, on);
 
+    /// <summary>
+    /// The values a directive or a line of a body gives, one element each: its operands, the
+    /// values of a braced list, or a line's values. A record is one element.
+    /// </summary>
+    public static IReadOnlyList<SyntaxNode> ElementsOf(SyntaxNode directive) =>
+        directive.Kind == SyntaxKind.DataValues
+            ? directive.ChildNodes
+            : DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.ValueList } list
+                ? list.ChildNodes
+                : DataSyntax.ValuesOf(directive);
+
     /// <summary>What the assembler would refuse about a directive's values.</summary>
     private static void Check(
         SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
-        var name = directive.ChildTokens[0].Text.ToLowerInvariant();
-        var operands = directive.ChildNodes;
+        var element = directive.Kind == SyntaxKind.DataValues ? DataSyntax.DirectiveOfValues(directive) : directive;
+        if (element is null)
+            return;
+        var name = DataSyntax.NameOf(element);
+        var operands = ElementsOf(directive);
+
+        // Storage is declared with its type, and padding has no name to declare.
+        if (directive.Parent is { Kind: SyntaxKind.DataDeclaration } && name is ".res" or ".align")
+        {
+            Report(directive, model, diagnostics, on, name == ".res"
+                ? "`.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values"
+                : "`.align` is only padding, and has no name: it goes between declarations");
+            return;
+        }
+        if (directive.Kind == SyntaxKind.DataDirective && DataSyntax.IsElementType(directive))
+            CheckCount(directive, model, diagnostics, on);
+
+        if (DataSyntax.IsRecord(element))
+        {
+            if (DataSyntax.TypeOf(element) is { } named && model.SymbolOf(named) is { IsLayout: true } type)
+                Records(type, directive, operands, model, diagnostics, on);
+            return;
+        }
+        foreach (var operand in operands)
+        {
+            if (operand.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+                Report(operand, model, diagnostics, on, $"a `{name}` element is one value, and braces hold a record or a list");
+        }
 
         switch (name)
         {
@@ -97,12 +137,68 @@ public static class DataLengths
                 Alignment(operands, model, diagnostics, on);
                 break;
 
-            case ".tag" when operands.Length > 0 && model.SymbolOf(operands[0]) is { IsLayout: true } type:
-                Initialized(type, InitializerValues(directive), model, diagnostics, on);
-                break;
-
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// An array's count: a constant, and the number its values come to when it has values. A
+    /// short table is exactly the mistake a count is there to catch, so values are never padded
+    /// out to it.
+    /// </summary>
+    private static void CheckCount(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+    {
+        if (DataSyntax.CountOf(directive) is not { } count)
+            return;
+        var (declared, given) = model.ElementsOf(directive, on);
+        if (DataSyntax.CountExpressionOf(directive) is not { } written)
+        {
+            if (given is null && DataSyntax.BracedOf(directive) is null && DataSyntax.BodyOf(directive) is null)
+            {
+                Report(count, model, diagnostics, on,
+                    $"`[]` counts the values given, and there are none: `{directive.ChildTokens[0].Text}[n]` holds n");
+            }
+            return;
+        }
+        if (declared is null)
+            Report(written, model, diagnostics, on, "an array's count is a constant");
+        else if (declared < 0)
+            Report(written, model, diagnostics, on, $"an array's count cannot be negative, and this one is {declared}");
+        else if (given is { } values && values != declared)
+            Report(count, model, diagnostics, on, $"this array holds {declared} {Elements(declared.Value)}, and its values come to {values}");
+    }
+
+    private static string Elements(long count) => count == 1 ? "element" : "elements";
+
+    /// <summary>
+    /// The records an element type of <c>.type T</c> gives: each value is one braced record,
+    /// and one record written over several lines is the block the directive's line opens.
+    /// </summary>
+    private static void Records(
+        Symbol type, SyntaxNode directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model,
+        List<Diagnostic>? diagnostics, Expansion? on)
+    {
+        if (directive.Kind == SyntaxKind.DataDirective)
+        {
+            if (DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.RecordValues } one)
+            {
+                Initialized(type, one.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                return;
+            }
+            if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.RecordInitializer } } lines)
+            {
+                Initialized(type, lines.ChildNodes.Skip(1).Select(line => line.Statement).OfType<SyntaxNode>()
+                    .Where(statement => statement.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                return;
+            }
+        }
+        foreach (var operand in operands)
+        {
+            if (operand.Kind == SyntaxKind.RecordValues)
+                Initialized(type, operand.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+            else
+                Report(operand, model, diagnostics, on, $"each element of a `{type.Name}` array is a record, written `{{ member = value }}`");
         }
     }
 
@@ -128,33 +224,11 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// The <c>member = value</c>s of an initialized instance: braced on the directive's line,
-    /// or the lines of the block the line opens.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> InitializerValues(SyntaxNode directive)
-    {
-        if (directive.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.TagValues) is { } braced)
-            return braced.ChildNodes.Where(c => c.Kind == SyntaxKind.TagValue);
-
-        var line = directive.Parent;
-        while (line is not null && line.Green is not GreenLine)
-            line = line.Parent;
-        if (line?.Parent is { Green: GreenBlock { BlockKind: BlockKind.TagInitializer } } block
-            && block.ChildNodes.Length > 0 && block.ChildNodes[0] == line)
-        {
-            return block.ChildNodes.Skip(1)
-                .Select(child => child.Statement)
-                .OfType<SyntaxNode>()
-                .Where(statement => statement.Kind == SyntaxKind.TagValue);
-        }
-        return [];
-    }
-
-    /// <summary>
-    /// The values an initialized instance gives its members, each of which must fit the room
-    /// the member has: a one-element member takes one value, and text a member reserved with
-    /// <c>.res</c>, no longer than the room. Anything else would be written past the member,
-    /// or cut short, with nothing said.
+    /// The values a record gives its members, each of which must fit the room the member has:
+    /// a one-element member takes one value, an array member a braced list of as many, a
+    /// record member a braced record, and a member reserved with <c>.res</c> text no longer
+    /// than its room. Anything else would be written past the member, or cut short, with
+    /// nothing said.
     /// </summary>
     private static void Initialized(
         Symbol type, IEnumerable<SyntaxNode> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -184,53 +258,91 @@ public static class DataLengths
                 continue;
             }
 
+            var element = member.Data is { Kind: SyntaxKind.DataDirective } data ? data : null;
+            if (element is not null && DataSyntax.CountOf(element) is not null)
+            {
+                ArrayMember(member, element, given, model, diagnostics, on);
+                continue;
+            }
             if (member.Type is { IsLayout: true } inner)
             {
-                if (given.Kind == SyntaxKind.TagValues)
-                    Initialized(inner, given.ChildNodes.Where(c => c.Kind == SyntaxKind.TagValue), model, diagnostics, on);
+                if (given.Kind == SyntaxKind.RecordValues)
+                    Initialized(inner, given.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
                 else
                     Report(given, model, diagnostics, on, $"`{name}` is a `{inner.Name}`, which takes a braced list of its members");
                 continue;
             }
-            if (given.Kind == SyntaxKind.TagValues)
+            if (given.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
             {
-                Report(given, model, diagnostics, on, $"`{name}` is not a record, and takes one value");
+                Report(given, model, diagnostics, on, $"`{name}` is not a record or an array, and takes one value");
                 continue;
             }
-
-            var element = member.Data is { ChildTokens.Length: > 0 } data ? data.ChildTokens[0].Text.ToLowerInvariant() : ".res";
-            var bytes = Bytes(given, model, on);
-            if (element == ".res")
-            {
-                if (bytes is not null && bytes.Count > member.Size)
-                    Report(given, model, diagnostics, on, $"`{name}` has room for {member.Size} bytes, and this is {bytes.Count}");
-                continue;
-            }
-            if (bytes is { Count: > 1 })
-            {
-                Report(given, model, diagnostics, on,
-                    $"`{name}` is one `{element}`, and this text is {bytes.Count} bytes: text takes a member reserved with `.res`");
-                continue;
-            }
-            if (bytes is null && element switch
-            {
-                ".byte" => (-128L, 255L),
-                ".word" => (-32768L, 65535L),
-                ".dword" => (-2147483648L, 4294967295L),
-                _ => ((long, long)?)null,
-            } is { } range)
-            {
-                CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{element}`");
-            }
+            Scalar(member, element is null ? ".res" : DataSyntax.NameOf(element), given, name, model, diagnostics, on);
         }
     }
 
-    /// <summary>
-    /// A far address in a 16-bit slot. ca65 keeps the low 16 bits of one in an <c>.addr</c>
-    /// and refuses one in a <c>.word</c>, so either way what was written is not what is meant.
-    /// An address, or an address plus or minus a constant, is what is looked at: anything
-    /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
-    /// </summary>
+    /// <summary>An array member's value: a braced list, of exactly as many elements as the member holds.</summary>
+    private static void ArrayMember(
+        Symbol member, SyntaxNode element, SyntaxNode given, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+    {
+        var spelled = element.ChildTokens[0].Text;
+        if (given.Kind != SyntaxKind.ValueList)
+        {
+            Report(given, model, diagnostics, on, $"`{member.Name}` is an array, which takes a braced list: `{member.Name} = {{ … }}`");
+            return;
+        }
+        var items = given.ChildNodes;
+        if (member.Count is { } count && items.Length != count)
+            Report(given, model, diagnostics, on, $"`{member.Name}` holds {count} {Elements(count)}, and this list gives {items.Length}");
+        foreach (var item in items)
+        {
+            if (member.Type is { IsLayout: true } inner)
+            {
+                if (item.Kind == SyntaxKind.RecordValues)
+                    Initialized(inner, item.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                else
+                    Report(item, model, diagnostics, on, $"each element of `{member.Name}` is a `{inner.Name}`, written `{{ member = value }}`");
+                continue;
+            }
+            if (item.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            {
+                Report(item, model, diagnostics, on, $"each element of `{member.Name}` is one `{spelled}`");
+                continue;
+            }
+            Scalar(member, DataSyntax.NameOf(element), item, member.Name, model, diagnostics, on);
+        }
+    }
+
+    /// <summary>One value for a one-element member, or for one element of an array member.</summary>
+    private static void Scalar(
+        Symbol member, string element, SyntaxNode given, string name, SemanticModel model, List<Diagnostic>? diagnostics,
+        Expansion? on)
+    {
+        var bytes = Bytes(given, model, on);
+        if (element == ".res")
+        {
+            if (bytes is not null && bytes.Count > member.Size)
+                Report(given, model, diagnostics, on, $"`{name}` has room for {member.Size} bytes, and this is {bytes.Count}");
+            return;
+        }
+        if (bytes is { Count: > 1 })
+        {
+            Report(given, model, diagnostics, on,
+                $"`{name}` is one `{element}`, and this text is {bytes.Count} bytes: text takes a member reserved with `.res`");
+            return;
+        }
+        if (bytes is null && element switch
+        {
+            ".byte" => (-128L, 255L),
+            ".word" => (-32768L, 65535L),
+            ".dword" => (-2147483648L, 4294967295L),
+            _ => ((long, long)?)null,
+        } is { } range)
+        {
+            CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{element}`");
+        }
+    }
+
     /// <summary>
     /// Why an operand that is an address, or an address plus or minus a constant, does not fit
     /// a slot of <paramref name="bytes"/> bytes, or null when it does or is no such address.
@@ -262,6 +374,12 @@ public static class DataLengths
         return address.Kind == SyntaxKind.NameExpression ? address : null;
     }
 
+    /// <summary>
+    /// A far address in a 16-bit slot. ca65 keeps the low 16 bits of one in an <c>.addr</c>
+    /// and refuses one in a <c>.word</c>, so either way what was written is not what is meant.
+    /// An address, or an address plus or minus a constant, is what is looked at: anything
+    /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
+    /// </summary>
     private static void NoFarAddresses(
         string directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)

@@ -4,9 +4,8 @@
 
 SCREEN = $0400
 
-.rodata {
-tiles:  .byte 0, 1, 2, 3
-}
+.segment RODATA
+.data tiles:  .byte 0, 1, 2, 3
 
 .macro set16(dest: operand, value) {
     lda #<value

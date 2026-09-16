@@ -1,9 +1,9 @@
 ; Every item the parser reads, in one file, built for the 65816.
 .cpu 65816
 
-.segment "ZP2": zp
-.segment "WRAM": abs, bank = $7e
-.segment "HWREG": zp, dp = $2100
+.segment ZP2: zp
+.segment WRAM: abs, bank = $7e
+.segment HWREG: zp, dp = $2100
 
 .export fill_page, SCREEN
 .import zp_scratch: zp, far_table: far
@@ -19,21 +19,24 @@
 SCREEN       = $0400
 SCREEN_PAGES = 4
 
-.zeropage {
-ptr:        .res 2
-frame:      .res 1
+.segment ZEROPAGE
+.data ptr:        .word
+.data frame:      .byte
+
+.segment RODATA
+.data table:      .byte 1, 2, $ff, 'A', "text"
+.data words:      .word $1234, table
+.data wide:       .dword $12345678
+.data here:       .addr table
+.data there:      .faraddr table
+.data greeting:   .asciiz "hello"
+.data padding:    .byte[16] {
+    .repeat 16 {
+        $ff
+    }
 }
 
-.rodata {
-table:      .byte 1, 2, $ff, 'A', "text"
-words:      .word $1234, table
-wide:       .dword $12345678
-here:       .addr table
-there:      .faraddr table
-greeting:   .asciiz "hello"
-padding:    .res 16, $ff
-}
-
+.segment CODE
 .proc fill_page: a8, i16 -> a8, i16 {
     ldy #0
 @loop:
@@ -52,7 +55,7 @@ padding:    .res 16, $ff
         inx
         bne @loop
     }
-    .rodata {
+    .segment RODATA {
     @shifts: .byte 1, 2, 4, 8
     }
     ldx @shifts

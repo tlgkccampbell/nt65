@@ -1,14 +1,16 @@
 ; A line the parser cannot read is one line's problem: it is reported once, and the line
 ; after it parses as if nothing had happened.
+.segment RODATA
 .frobnicate 1           ;! error: unknown directive `.frobnicate`
-.word .frobnicate(1)    ;! error: `.frobnicate` is not a function
-.word (1 + 2            ;! error: expected `)`
+.data one: .word .frobnicate(1) ;! error: `.frobnicate` is not a function
+.data two: .word (1 + 2         ;! error: expected `)`
 .cpu 6510               ;! error: expected `6502`, `65c02` or `65816`
-.segment "X"            ;! error: expected `:` and an address size, or `{`
-.segment "Y": word      ;! error: expected `zp`, `abs` or `far`
+.segment "X": zp      ;! error: a segment name is written without quotes: `.segment X`
+.segment Y: word      ;! error: expected `zp`, `abs` or `far`
 .import thing: quad     ;! error: expected `zp`, `abs`, `far` or `proc(...)`
 gfx::init               ;! error: expected a label, a constant, an instruction or a directive
 
+.segment CODE
 .proc {                 ;! error: expected a routine name
     rts
 }
@@ -18,6 +20,6 @@ gfx::init               ;! error: expected a label, a constant, an instruction o
     rts
 }
 
-label: .proc q {        ;! error: `.proc` may not follow a label
+label: .proc q {        ;! error: `.proc` may not follow a label ;! error: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
     rts
 }

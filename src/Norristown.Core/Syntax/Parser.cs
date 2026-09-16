@@ -118,8 +118,10 @@ internal sealed class Parser
                 return ParseCharmapEntry();
             case BlockKind.List:
                 return Finish(SyntaxKind.ListItems, ParseListItems());
-            case BlockKind.TagInitializer:
-                return ParseTagValueLine();
+            case BlockKind.RecordInitializer:
+                return ParseMemberValueLine();
+            case BlockKind.DataBody:
+                return ParseDataValuesLine();
             default:
                 break;
         }
@@ -239,9 +241,9 @@ internal sealed class Parser
         return kind switch
         {
             SyntaxKind.DataDirective => Finish(ParseDataDirective()),
+            SyntaxKind.DataDeclaration => Finish(ParseDataDeclaration()),
             SyntaxKind.CpuDirective => Finish(ParseCpuDirective()),
             SyntaxKind.SegmentDeclaration => Finish(ParseSegment()),
-            SyntaxKind.SegmentBlock => Finish(ParseSegmentShortcut()),
             SyntaxKind.ProcDeclaration => Finish(ParseProc()),
             SyntaxKind.ScopeDeclaration => Finish(ParseScope()),
             SyntaxKind.ExportDirective => Finish(ParseExport()),
@@ -265,62 +267,177 @@ internal sealed class Parser
             SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
-            _ => ErrorLine($"unknown directive `{Current.Text}`"),
+            _ => ErrorLine(Replaced(Current.Text) ?? $"unknown directive `{Current.Text}`"),
         };
     }
 
+    /// <summary>How a directive nt65 no longer has is written now, or null for one it never had.</summary>
+    private static string? Replaced(string directive) => directive.ToLowerInvariant() switch
+    {
+        ".zeropage" or ".code" or ".bss" or ".rodata" =>
+            $"`{directive}` is written `.segment {directive[1..].ToUpperInvariant()}`",
+        ".tag" => "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A data directive. An element type — <c>.byte</c>, <c>.word</c>, <c>.addr</c>,
+    /// <c>.faraddr</c>, <c>.dword</c> or <c>.type T</c> — may take a count, <c>[16]</c> or
+    /// <c>[]</c>, and then values: after it on the line, in braces on the line, or in the body
+    /// the line opens. Any other directive takes its operands as ca65's does.
+    /// </summary>
     private GreenSyntax ParseDataDirective()
     {
-        if (Current.Text.Equals(".tag", StringComparison.OrdinalIgnoreCase))
-            return ParseTag();
-
         var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!AtEnd)
+        var directive = Advance();
+        children.Add(directive);
+        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
+        if (!record && SyntaxFacts.ElementSize(directive.Text) is null)
+        {
+            if (!AtEnd)
+                ParseCommaSeparated(children, ParseExpression);
+            return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
+        }
+
+        if (record)
+        {
+            if (AtName || Kind == SyntaxKind.ColonColon)
+                children.Add(ParseName());
+            else
+                Report("expected the type: `.type T`");
+        }
+        var counted = Kind == SyntaxKind.OpenBracket;
+        if (counted)
+            children.Add(ParseElementCount());
+
+        if (Kind == SyntaxKind.OpenBrace)
+        {
+            // A body holds an array's values, or one record's `member = value` lines.
+            if (Next == SyntaxKind.EndOfLine)
+            {
+                if (!counted && !record)
+                    ReportOnce($"values in a body need a count: `{directive.Text}[] {{` counts them");
+                children.Add(Advance());
+            }
+            else
+            {
+                children.Add(ParseBracedValue());
+            }
+        }
+        else if (!AtEnd)
+        {
+            if (counted || record)
+            {
+                ReportOnce(counted
+                    ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
+                    : "a record's values go in braces: `.type T { member = value }`");
+            }
             ParseCommaSeparated(children, ParseExpression);
+        }
         return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
     }
 
-    /// <summary>
-    /// <c>.tag T</c>, <c>.tag T, n</c> and an initialized instance, whose values are either
-    /// braced on the line or, when the line ends at the <c>{</c>, the block it opens.
-    /// </summary>
-    private GreenSyntax ParseTag()
+    /// <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
+    private GreenNode ParseElementCount()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.Comma)
+        if (Kind != SyntaxKind.CloseBracket && !AtEnd)
+            children.Add(ParseExpression());
+        if (Kind == SyntaxKind.CloseBracket)
+            children.Add(Advance());
+        else
+            ReportOnce("expected `]`");
+        return new GreenSyntax(SyntaxKind.ElementCount, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.data name: element</c>, or <c>.data name {</c> for mixed data. The name is
+    /// required: data is declared to be named, and the segment of the same name is written
+    /// <c>.segment DATA</c>.
+    /// </summary>
+    private GreenSyntax ParseDataDeclaration()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (AtName)
         {
             children.Add(Advance());
-            children.Add(ParseExpression());
+        }
+        else
+        {
+            Report(Kind == SyntaxKind.OpenBrace
+                ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
+                : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
+        }
+
+        if (Kind == SyntaxKind.Colon)
+        {
+            children.Add(Advance());
+            if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
+            {
+                children.Add(ParseDataDirective());
+            }
+            else
+            {
+                ReportOnce("expected what the data is: `.byte`, `.word`, `.addr`, `.faraddr`, `.dword`, "
+                    + "`.type T`, or bytes such as `.incbin`");
+            }
         }
         else if (Kind == SyntaxKind.OpenBrace)
         {
-            children.Add(Next == SyntaxKind.EndOfLine ? Advance() : ParseTagValues());
+            children.Add(Advance());
         }
-        return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
+        else
+        {
+            ReportOnce("expected `:` and what the data is, or `{` for mixed data");
+        }
+        return new GreenSyntax(SyntaxKind.DataDeclaration, children.ToImmutable());
     }
 
-    /// <summary>The braced <c>member = value</c> list of an initialized instance.</summary>
-    private GreenNode ParseTagValues()
+    /// <summary>One line of a data body: values separated by commas, one element each.</summary>
+    private GreenNode ParseDataValuesLine()
     {
+        if (Kind == SyntaxKind.Directive && !SyntaxFacts.IsBuiltinFunction(Current.Text))
+        {
+            return ErrorLine($"a data body holds values, and `{Current.Text}` is a directive: "
+                + "what the values are is the declaration's to say");
+        }
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        ParseCommaSeparated(children, ParseDataValue);
+        return Finish(SyntaxKind.DataValues, children.ToImmutable());
+    }
+
+    /// <summary>A value: an expression, or a braced record or list.</summary>
+    private GreenNode ParseDataValue() => Kind == SyntaxKind.OpenBrace ? ParseBracedValue() : ParseExpression();
+
+    /// <summary>
+    /// <c>{ member = value, … }</c>, a record, or <c>{ value, … }</c>, a list of elements.
+    /// <c>=</c> is in no expression, so the first item says which, and <c>{}</c> is a record
+    /// that names no member.
+    /// </summary>
+    private GreenNode ParseBracedValue()
+    {
+        var record = Next == SyntaxKind.CloseBrace
+            || (index + 2 < tokens.Length
+                && tokens[index + 1].Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
+                && tokens[index + 2].Kind == SyntaxKind.Equals);
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         if (Kind != SyntaxKind.CloseBrace && !AtEnd)
-            ParseCommaSeparated(children, ParseTagValue);
+            ParseCommaSeparated(children, record ? ParseMemberValue : ParseDataValue);
         if (Kind == SyntaxKind.CloseBrace)
             children.Add(Advance());
         else
-            Report("expected `}`");
-        return new GreenSyntax(SyntaxKind.TagValues, children.ToImmutable());
+            ReportOnce("expected `}`");
+        return new GreenSyntax(record ? SyntaxKind.RecordValues : SyntaxKind.ValueList, children.ToImmutable());
     }
 
     /// <summary>
-    /// One <c>member = value</c>. A member that is itself a <c>.tag</c> takes a nested
-    /// braced list, which is always written on one line.
+    /// One <c>member = value</c>. A member that is a record or an array takes a braced value,
+    /// which is written on one line.
     /// </summary>
-    private GreenNode? ParseTagValue()
+    private GreenNode? ParseMemberValue()
     {
         if (!AtName)
         {
@@ -333,13 +450,13 @@ internal sealed class Parser
             children.Add(Advance());
         else
             Report("expected `=`");
-        children.Add(Kind == SyntaxKind.OpenBrace ? ParseTagValues() : ParseExpression());
-        return new GreenSyntax(SyntaxKind.TagValue, children.ToImmutable());
+        children.Add(ParseDataValue());
+        return new GreenSyntax(SyntaxKind.MemberValue, children.ToImmutable());
     }
 
     /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>
-    private GreenNode ParseTagValueLine() =>
-        ParseTagValue() is GreenSyntax value
+    private GreenNode ParseMemberValueLine() =>
+        ParseMemberValue() is GreenSyntax value
             ? Finish(value)
             : ErrorLine("expected `member = value`");
 
@@ -731,34 +848,43 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// A segment declaration, <c>.segment "NAME": size</c> with its attributes, or the line
-    /// opening a named segment block. The brace decides which.
+    /// A segment declaration, <c>.segment NAME: size</c> with its attributes; the line opening
+    /// a segment block, <c>.segment NAME {</c>; or a region line, <c>.segment NAME</c>. The
+    /// brace and the size decide which. A segment name is an identifier: segments are a table
+    /// of their own, and share no namespace with symbols.
     /// </summary>
     private GreenSyntax ParseSegment()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
-        if (Kind == SyntaxKind.StringLiteral)
+        var kind = opensBlock ? SyntaxKind.SegmentBlock
+            : tokens.Any(token => token.Kind == SyntaxKind.Colon) ? SyntaxKind.SegmentDeclaration
+            : SyntaxKind.SegmentRegion;
+        if (AtName)
         {
+            children.Add(Advance());
+        }
+        else if (Kind == SyntaxKind.StringLiteral)
+        {
+            Report($"a segment name is written without quotes: `.segment {Current.Text.Trim('"')}`");
             children.Add(Advance());
         }
         else
         {
-            Report("expected a segment name in quotes");
-            return new GreenSyntax(opensBlock ? SyntaxKind.SegmentBlock : SyntaxKind.SegmentDeclaration,
-                children.ToImmutable());
+            Report("expected a segment name");
+            return new GreenSyntax(kind, children.ToImmutable());
         }
 
-        if (opensBlock)
+        if (kind != SyntaxKind.SegmentDeclaration)
         {
             if (Kind == SyntaxKind.OpenBrace)
                 children.Add(Advance());
-            return new GreenSyntax(SyntaxKind.SegmentBlock, children.ToImmutable());
+            return new GreenSyntax(kind, children.ToImmutable());
         }
 
         if (Kind != SyntaxKind.Colon)
         {
-            Report("expected `:` and an address size, or `{`");
+            Report("expected `:` and an address size");
             return new GreenSyntax(SyntaxKind.SegmentDeclaration, children.ToImmutable());
         }
         children.Add(Advance());
@@ -796,17 +922,6 @@ internal sealed class Parser
         children.Add(Advance());
         children.Add(ParseExpression());
         return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
-    }
-
-    private GreenSyntax ParseSegmentShortcut()
-    {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            Report($"expected `{{` after `{tokens[index - 1].Text}`");
-        return new GreenSyntax(SyntaxKind.SegmentBlock, children.ToImmutable());
     }
 
     private GreenSyntax ParseProc()

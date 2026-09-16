@@ -9,8 +9,14 @@ namespace Norristown.Syntax;
 /// <list type="bullet">
 /// <item>a <c>}</c> with no open block is reported and treated as an ordinary line;</item>
 /// <item>a <c>.proc</c> or <c>.macro</c> opener inside a proc or a macro closes the blocks
-/// back to outside it, since neither may appear there.</item>
+/// back to outside it, since neither may appear there, and a <c>.segment NAME</c> region line
+/// closes every block, since it may appear only at file level.</item>
 /// </list>
+/// <para>
+/// A region line at file level opens a block with no brace, which holds every line up to the
+/// next region line or the end of the file. A region line anywhere else is an ordinary line,
+/// and binding says it is misplaced.
+/// </para>
 /// </summary>
 internal static class Blocks
 {
@@ -19,8 +25,16 @@ internal static class Blocks
         var balanced = IsBalanced(lines);
         var root = ImmutableArray.CreateBuilder<GreenNode>();
         var stack = new List<Frame>();
+        ImmutableArray<GreenNode>.Builder? region = null;
 
-        ImmutableArray<GreenNode>.Builder Current() => stack.Count == 0 ? root : stack[^1].Children;
+        ImmutableArray<GreenNode>.Builder Current() => stack.Count > 0 ? stack[^1].Children : region ?? root;
+
+        void CloseRegion()
+        {
+            if (region is not null)
+                root.Add(new GreenBlock(region.ToImmutable(), hasCloser: false));
+            region = null;
+        }
 
         void Pop(bool hasCloser)
         {
@@ -39,6 +53,15 @@ internal static class Blocks
         for (var i = 0; i < lines.Length; i++)
         {
             var line = lines[i];
+            if (line.OpensBlockKind == BlockKind.Region && (stack.Count == 0 || !balanced))
+            {
+                while (stack.Count > 0)
+                    PopUnclosed();
+                CloseRegion();
+                region = ImmutableArray.CreateBuilder<GreenNode>();
+                region.Add(line);
+                continue;
+            }
             var consumed = false;
             if (line.Closes)
             {
@@ -78,6 +101,7 @@ internal static class Blocks
         }
         while (stack.Count > 0)
             PopUnclosed();
+        CloseRegion();
         return new GreenFile(root.ToImmutable());
     }
 

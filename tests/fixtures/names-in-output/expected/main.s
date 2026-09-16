@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1011, 0
+.dbg file, "main.nt65", 1053, 0
 
 .exportzp z
 .export top
@@ -16,10 +16,10 @@
 .segment "ZEROPAGE": zeropage
 z := *
 .dbg line, "main.nt65", 9
-.res 1
+    .res 1
 f := *
 .dbg line, "main.nt65", 10
-.res 1
+    .res 1
 .dbg line, "main.nt65", 11
 ptr:        .res 2
 
@@ -29,28 +29,28 @@ top:
     rts
 
     outer__inner:
-.dbg line, "main.nt65", 21
-        lda z:z
 .dbg line, "main.nt65", 22
-        lda z:f
+        lda z:z
 .dbg line, "main.nt65", 23
+        lda z:f
+.dbg line, "main.nt65", 24
         rts
 
 draw:
-.dbg line, "main.nt65", 28
+.dbg line, "main.nt65", 29
     ldx #0
     draw__loop:
-.dbg line, "main.nt65", 31
-        dex
 .dbg line, "main.nt65", 32
+        dex
+.dbg line, "main.nt65", 33
         bne draw__loop
     draw__loop_2:
-.dbg line, "main.nt65", 36
-        dex
 .dbg line, "main.nt65", 37
+        dex
+.dbg line, "main.nt65", 38
         bne draw__loop_2
     draw__reused:
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 42
         jmp draw__reused
-.dbg line, "main.nt65", 43
+.dbg line, "main.nt65", 44
     jmp outer__inner

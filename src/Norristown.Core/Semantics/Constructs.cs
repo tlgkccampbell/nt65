@@ -32,15 +32,6 @@ public static class Constructs
         return new Assertion(directive.ChildNodes.FirstOrDefault(), level, message);
     }
 
-    /// <summary>Whether a data directive is a <c>.tag</c>, which declares an instance of a type.</summary>
-    public static bool IsTag(SyntaxNode? statement) =>
-        statement is { Kind: SyntaxKind.DataDirective, ChildTokens.Length: > 0 }
-        && statement.ChildTokens[0].Text.Equals(".tag", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>The type expression of a <c>.tag</c>, which is its first operand.</summary>
-    public static SyntaxNode? TagTypeOf(SyntaxNode? statement) =>
-        IsTag(statement) ? statement!.ChildNodes.FirstOrDefault() : null;
-
     /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
     /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
     /// <param name="Level">How much a failure matters.</param>
@@ -48,20 +39,12 @@ public static class Constructs
     public readonly record struct Assertion(SyntaxNode? Condition, Severity Level, string? Message);
 
     /// <summary>
-    /// The segment a block opener names: a standard name for a shortcut directive, or
-    /// the name in quotes. Null when the line does not open a segment block or does not say.
+    /// The segment a segment block or a region line names, or null when the line is neither or
+    /// names none. A name written in quotes has been reported, and still names its segment.
     /// </summary>
-    public static string? SegmentOf(SyntaxNode opener)
-    {
-        if (opener.Kind != SyntaxKind.SegmentBlock)
-            return null;
-        if (opener.ChildTokens.Length > 0 && SegmentNames.Shortcut(opener.ChildTokens[0].Text) is { } standard)
-            return standard;
-        foreach (var token in opener.ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.StringLiteral)
-                return SegmentNames.Unquote(token.Text);
-        }
-        return null;
-    }
+    public static string? SegmentOf(SyntaxNode opener) =>
+        opener.Kind is SyntaxKind.SegmentBlock or SyntaxKind.SegmentRegion or SyntaxKind.SegmentDeclaration
+            && opener.ChildTokens.Length > 1
+            ? SegmentNames.Of(opener.ChildTokens[1])
+            : null;
 }

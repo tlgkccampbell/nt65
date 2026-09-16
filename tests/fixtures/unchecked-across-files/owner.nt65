@@ -2,6 +2,7 @@
 ; its `.state` is what a jump from anywhere is checked against.
 .cpu 65816
 
+.segment CODE
 .proc owner: a16 -> a8 {
     lda #$1234
     sep #$20

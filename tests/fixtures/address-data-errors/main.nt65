@@ -2,12 +2,12 @@
 ; bits of what does not fit, so nt65 says so instead.
 .cpu 65816
 
-.segment "FARDATA" {
-sprite: .byte 1, 2, 3
-}
+.segment FARDATA
+.data sprite: .byte 1, 2, 3
 
-.rodata {
-table:  .byte 0
+.segment RODATA
+.data table {
+    .byte 0
     .addr sprite            ;! error: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
     .addr sprite + 2        ;! error: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
     .word sprite            ;! error: `sprite` is a far address, and `.word` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
@@ -24,6 +24,7 @@ table:  .byte 0
     .faraddr $ffffff
 }
 
+.segment CODE
 .proc main: a8, i8 {
     lda #table              ;! error: `table` is an absolute address, and an immediate is one byte: `<table` is its low byte
     lda #<table

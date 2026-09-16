@@ -69,12 +69,17 @@ public static class UnusedSymbols
 
     /// <summary>
     /// Whether an unused one is worth saying so. A member of a named enum is one of a set,
-    /// and a routine that nothing names is reported by flow analysis as never reached.
+    /// and a routine that nothing names is reported by flow analysis as never reached. Data
+    /// that holds values may be there for where it lands — a header, the vectors, a load
+    /// address — so only storage that holds nothing is reported.
     /// </summary>
     private static bool IsChecked(Symbol symbol) => !symbol.IsDefine && symbol.Kind switch
     {
         SymbolKind.Label or SymbolKind.Macro or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union => true,
         SymbolKind.Constant => symbol.Scope.Kind != ScopeKind.Type,
+        SymbolKind.Data => symbol.Data is { } element && DataSyntax.IsElementType(element)
+            && DataSyntax.ValuesOf(element).Count == 0 && DataSyntax.BracedOf(element) is null
+            && DataSyntax.BodyOf(element) is null,
         _ => false,
     };
 }

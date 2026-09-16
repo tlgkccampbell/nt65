@@ -51,7 +51,8 @@ internal sealed class Binder
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
     private Scope scope;
-    private string segment = SegmentTable.DefaultSegment;
+    // The segment the walk is placing things in, or null before any region or block names one.
+    private string? segment;
     private Symbol? previousEnumMember;
 
     // A label written on a line of its own, while nothing but blank lines has followed it: a
@@ -163,16 +164,6 @@ internal sealed class Binder
         return null;
     }
 
-    private static SyntaxToken? FirstToken(SyntaxNode statement, SyntaxKind kind)
-    {
-        foreach (var token in statement.ChildTokens)
-        {
-            if (token.Kind == kind)
-                return token;
-        }
-        return null;
-    }
-
     private void WalkContainer(SyntaxNode container)
     {
         foreach (var child in container.ChildNodes)
@@ -229,7 +220,11 @@ internal sealed class Binder
                 scope = OpenScope(ScopeKind.Scope, opener, SymbolKind.Scope);
                 break;
             case BlockKind.Segment:
+            case BlockKind.Region:
                 segment = SegmentOf(opener) ?? segment;
+                break;
+            case BlockKind.Data:
+                scope = OpenData(opener, block);
                 break;
             case BlockKind.Enum:
                 scope = OpenType(opener, SymbolKind.Enum);
@@ -247,7 +242,7 @@ internal sealed class Binder
             case BlockKind.List:
                 DeclareCollected(opener, SymbolKind.List, lines);
                 return;
-            case BlockKind.TagInitializer:
+            case BlockKind.RecordInitializer:
                 BindInitializer(opener, lines);
                 return;
             case BlockKind.If:
@@ -330,6 +325,25 @@ internal sealed class Binder
         var written = declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature);
         CollectUses(written);
         return Signature.Read(written, (span, message) => Report(span, message));
+    }
+
+    /// <summary>
+    /// The scope mixed data opens: its named members, reached as <c>name::member</c>, and the
+    /// <c>@</c> positions private to it. A block whose opener is broken still opens one, so
+    /// what is inside it has an owner.
+    /// </summary>
+    private Scope OpenData(SyntaxNode? opener, SyntaxNode block)
+    {
+        if (opener is not { Kind: SyntaxKind.DataDeclaration } || NameToken(opener) is not { } name)
+            return new Scope(ScopeKind.Data, null, scope, null);
+        var symbol = Declare(name, SymbolKind.Data);
+        var body = new Scope(ScopeKind.Data, symbol?.Name ?? name.Text, scope, symbol);
+        if (symbol is not null)
+        {
+            symbol.Body = body;
+            symbol.Definition = block;
+        }
+        return body;
     }
 
     /// <summary>
@@ -596,9 +610,9 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// An initialized instance. The label is an instance of the type; the member names its
-    /// values give are checked against that type once it is known, so only the values
-    /// themselves are names to resolve here.
+    /// A record written over several lines. What the opener declares is data of the type; the
+    /// member names its values give are checked against that type once it is known, so only the
+    /// values themselves are names to resolve here.
     /// </summary>
     private void BindInitializer(SyntaxNode? opener, ImmutableArray<SyntaxNode> lines)
     {
@@ -611,20 +625,20 @@ internal sealed class Binder
         }
     }
 
-    /// <summary>The segment a block puts its contents in, or null when its opener does not say.</summary>
+    /// <summary>The segment a block or a region puts its contents in, or null when its opener does not say.</summary>
     private string? SegmentOf(SyntaxNode? opener)
     {
-        if (opener is null || opener.Kind != SyntaxKind.SegmentBlock)
+        if (opener is null || opener.Kind is not (SyntaxKind.SegmentBlock or SyntaxKind.SegmentRegion))
             return null;
 
         if (Constructs.SegmentOf(opener) is not { } name)
             return null;
 
-        // A block that names a segment declared nowhere is an error, so a misspelled name is
-        // caught before ld65 runs. Its contents still go there, which keeps the
-        // mistake to one diagnostic.
-        if (segments.Find(name) is null && FirstToken(opener, SyntaxKind.StringLiteral) is { } quoted)
-            Report(quoted.Span, $"segment \"{name}\" is not declared");
+        // A region or block that names a segment declared nowhere is an error, so a misspelled
+        // name is caught before ld65 runs. Its contents still go there, which keeps the mistake
+        // to one diagnostic.
+        if (segments.Find(name) is null)
+            Report(opener.ChildTokens[1].Span, $"segment \"{name}\" is not declared");
         return name;
     }
 
@@ -708,8 +722,28 @@ internal sealed class Binder
                 BindCall(statement);
                 break;
 
+            case SyntaxKind.DataDeclaration:
+                BindData(statement);
+                break;
+
             case SyntaxKind.InstructionStatement:
+                CheckCodePlacement(statement);
+                CollectUses(statement);
+                break;
+
             case SyntaxKind.DataDirective:
+                CheckDataPlacement(statement);
+                CollectUses(statement);
+                break;
+
+            // A region line reached as a line is inside a block: one at file level opens the
+            // region it names, and is walked as that block's opener.
+            case SyntaxKind.SegmentRegion when statement.ChildTokens.Length > 0:
+                Report(statement.ChildTokens[0].Span, "a `.segment NAME` region belongs at file level, outside "
+                    + "every block: inside one, `.segment NAME { }` places what it holds");
+                break;
+
+            case SyntaxKind.DataValues:
             case SyntaxKind.AssertDirective:
 
             // An annotation names labels and nothing else, so its names resolve as any
@@ -731,7 +765,7 @@ internal sealed class Binder
                 }
                 break;
 
-            // A frame is named like a `.tag` instance, so its members are reached through it.
+            // A frame is named like data of a type, so its members are reached through it.
             case SyntaxKind.FrameDirective:
                 var type = statement.ChildNodes.FirstOrDefault();
                 if (NameToken(statement) is { } frame)
@@ -777,26 +811,119 @@ internal sealed class Binder
 
     /// <summary>
     /// A label and whatever follows it. Inside a type body the label is a member and the
-    /// directive says how much room it takes; elsewhere it is a label, and one written on a
-    /// <c>.tag</c> is an instance of that type.
+    /// directive says how much room it takes; elsewhere it is a label, which is only a
+    /// position, whatever follows it on the line.
     /// </summary>
     private void BindLabeledLine(SyntaxNode statement)
     {
         var label = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.Label);
         var rest = statement.ChildNodes.FirstOrDefault(child => child.Kind != SyntaxKind.Label);
+        var member = scope.Kind == ScopeKind.Type;
         if (label is { ChildTokens.Length: > 0 })
         {
-            var kind = scope.Kind == ScopeKind.Type ? SymbolKind.Member
-                : Constructs.IsTag(rest) ? SymbolKind.Instance
-                : SymbolKind.Label;
-            var declared = Declare(label.ChildTokens[0], kind, data: rest, type: Constructs.TagTypeOf(rest));
-            if (rest is null && kind == SymbolKind.Label)
+            if (!member)
+                CheckLabelPlacement(label.ChildTokens[0]);
+            var declared = member
+                ? Declare(label.ChildTokens[0], SymbolKind.Member, data: rest, type: DataSyntax.TypeOf(rest))
+                : Declare(label.ChildTokens[0], SymbolKind.Label);
+            if (rest is null && !member)
                 bareLabel = declared;
         }
         if (rest is { Kind: SyntaxKind.MacroCall })
+        {
             BindCall(rest);
-        else
-            CollectUses(rest);
+            return;
+        }
+        if (rest is { Kind: SyntaxKind.InstructionStatement })
+            CheckCodePlacement(rest);
+        CollectUses(rest);
+    }
+
+    /// <summary>
+    /// <c>.data name: ...</c>: an address with a size, and the fields of its type when it is a
+    /// record. Mixed data, <c>.data name {</c>, opens a scope of its own where its block is walked.
+    /// </summary>
+    private void BindData(SyntaxNode statement)
+    {
+        var element = DataSyntax.ElementOf(statement);
+        if (NameToken(statement) is { } name && element is not null)
+        {
+            Declare(name, SymbolKind.Data, data: element, type: DataSyntax.TypeOf(element));
+        }
+        CollectUses(element);
+    }
+
+    /// <summary>
+    /// What the walk is inside, for what may be written there: a routine, which holds code;
+    /// a macro body or a block argument, which land wherever they are expanded and are checked
+    /// there; mixed data; a type; or none of those, at item level.
+    /// </summary>
+    private ScopeKind Placement
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument
+                    or ScopeKind.Data or ScopeKind.Type)
+                {
+                    return around.Kind;
+                }
+            }
+            return ScopeKind.File;
+        }
+    }
+
+    /// <summary>An instruction belongs in a routine: outside one, nothing calls it or runs into it.</summary>
+    private void CheckCodePlacement(SyntaxNode instruction)
+    {
+        if (Placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument || instruction.ChildTokens.Length == 0)
+            return;
+        Report(instruction.ChildTokens[0].Span, Placement == ScopeKind.Data
+            ? "an instruction belongs in a `.proc`, and `.data` holds only data"
+            : "an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow");
+    }
+
+    /// <summary>
+    /// A label is a position in code, so it belongs in a routine. Data is named by a declaration
+    /// with a size, and a position inside mixed data is a cheap local private to it.
+    /// </summary>
+    private void CheckLabelPlacement(SyntaxToken name)
+    {
+        // A cheap local at file level is reported for having no owner, which says it already.
+        var placement = Placement;
+        if (placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument
+            || (name.Kind == SyntaxKind.CheapLocal && scope.Kind == ScopeKind.File))
+        {
+            return;
+        }
+        if (placement == ScopeKind.Data)
+        {
+            if (name.Kind != SyntaxKind.CheapLocal)
+            {
+                Report(name.Span, $"`{name.Text}` is a label in `.data`: a named member is `.data {name.Text}: ...`, "
+                    + $"and a position is `@{name.Text}:`");
+            }
+            return;
+        }
+        Report(name.Span, $"`{name.Text}` is a label outside a `.proc`: a label is only a position in code, "
+            + $"and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`");
+    }
+
+    /// <summary>
+    /// Every byte outside a routine belongs to a <c>.data</c> declaration, except unnamed
+    /// <c>.res</c> and <c>.align</c>, which pad between declarations.
+    /// </summary>
+    private void CheckDataPlacement(SyntaxNode statement)
+    {
+        if (Placement != ScopeKind.File || statement.ChildTokens.Length == 0)
+            return;
+        if (statement.Kind == SyntaxKind.DataDirective && DataSyntax.NameOf(statement) is not (".res" or ".align"))
+        {
+            var directive = statement.ChildTokens[0].Text;
+            Report(statement.ChildTokens[0].Span, $"`{directive}` outside a `.proc` belongs to a `.data` declaration: "
+                + $"`.data name: {directive} ...`");
+        }
     }
 
     /// <summary>
@@ -1222,8 +1349,8 @@ internal sealed class Binder
 
     /// <summary>
     /// What a name may reach into. A routine or a scope opens its own; a member or an
-    /// instance opens the one belonging to the type it names, which is what makes the fields
-    /// of a `.tag` reachable through it.
+    /// data declaration opens the one belonging to the type it names, which is what makes the
+    /// fields of `.type T` data reachable through it.
     /// </summary>
     private Scope? BodyOf(Symbol symbol)
     {
@@ -1249,7 +1376,7 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// The type a <c>.tag</c> names, resolved from where it was written. This runs on demand
+    /// The type a <c>.type</c> names, resolved from where it was written. This runs on demand
     /// rather than in order, because a name may reach into a type the file declares later.
     /// </summary>
     private Symbol? TypeOf(Symbol symbol)

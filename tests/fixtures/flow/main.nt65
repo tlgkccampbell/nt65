@@ -10,6 +10,7 @@
 ; A jump table inside a proc. Every item of `@table` is a code label, so `.next @table`
 ; says what listing them one by one says, and the targets need no declarations because
 ; the edges carry the state at the jump.
+.segment CODE
 .proc dispatch {
     lda cmd
     asl a
@@ -52,7 +53,6 @@
     rts
 }
 
-.bss {
-cmd:    .res 1
-value:  .res 1
-}
+.segment BSS
+.data cmd:    .byte
+.data value:  .byte

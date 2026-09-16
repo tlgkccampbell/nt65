@@ -132,7 +132,8 @@ public sealed class ProgramModel
         var evaluation = new List<Diagnostic>();
         var owners = new List<string>();
         Evaluator.EvaluateSymbols(
-            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, owners, null, binaryLength);
+            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, owners, null, binaryLength,
+            configuration);
         for (var i = 0; i < evaluation.Count; i++)
             byFile[owners[i]].Add(evaluation[i]);
 
@@ -225,7 +226,7 @@ public sealed class ProgramModel
         var owners = new List<string>();
         var reads = Evaluator.EvaluateSymbols(
             Segments, [.. dirty.Order(StringComparer.Ordinal).SelectMany(path => bound[path].Symbols)], resolved, evaluation, owners,
-            symbol => !dirty.Contains(symbol.Tree.Path), binaryLength);
+            symbol => !dirty.Contains(symbol.Tree.Path), binaryLength, configuration);
         for (var i = 0; i < evaluation.Count; i++)
             found[owners[i]].Add(evaluation[i]);
         foreach (var read in reads)

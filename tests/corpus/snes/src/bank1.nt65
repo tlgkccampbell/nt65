@@ -1,29 +1,28 @@
 ; Code and data that live in bank $81 and are reached with jsl.
 .cpu 65816
 
+.segment BANK1
 .scope bank1 {
 .export load_palette, spawn_player, level_speed
 
-.segment "BANK1" {
+.data palette: .word[] {
+    rgb15(0, 0, 0)
+    rgb15(31, 31, 31)
+    rgb15(31, 0, 0)
+    rgb15(0, 31, 0)
+    rgb15(0, 0, 31)
+    rgb15(31, 31, 0)
+    rgb15(0, 31, 31)
+    rgb15(31, 0, 31)
+}
 
-palette:
-    .word rgb15(0, 0, 0)
-    .word rgb15(31, 31, 31)
-    .word rgb15(31, 0, 0)
-    .word rgb15(0, 31, 0)
-    .word rgb15(0, 0, 31)
-    .word rgb15(31, 31, 0)
-    .word rgb15(0, 31, 31)
-    .word rgb15(31, 0, 31)
-palette_end:
+.data spawn_points: .word[] {
+    32, 48
+    120, 96
+    200, 160
+}
 
-spawn_points:
-    .word 32, 48
-    .word 120, 96
-    .word 200, 160
-
-speeds:
-    .byte 1, 2, 3, 4
+.data speeds: .byte 1, 2, 3, 4
 
 ; Called far from bank $80: upload the palette that sits beside it in bank $81.
 .proc load_palette: far, a8, i16, dp = 0 {
@@ -34,7 +33,7 @@ speeds:
     stx dma_src
     lda #^palette
     sta dma_src+2
-    ldx #palette_end - palette
+    ldx #.sizeof(palette)
     stx dma_len
     jsl cgram_copy_far
     plb
@@ -70,5 +69,4 @@ speeds:
     rtl
 }
 
-}
 }

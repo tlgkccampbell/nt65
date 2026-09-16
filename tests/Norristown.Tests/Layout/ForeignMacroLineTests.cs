@@ -26,6 +26,7 @@ public sealed class ForeignMacroLineTests
                 }
                 """),
             ("main.nt65", """
+                .segment CODE
                 .proc main {
                     peek!()
                     rts
@@ -33,7 +34,7 @@ public sealed class ForeignMacroLineTests
                 """));
 
         var problem = Assert.Single(analysis.Diagnostics);
-        Assert.Equal(new Span("main.nt65", 2, 5, 12), problem.Span);
+        Assert.Equal(new Span("main.nt65", 3, 5, 12), problem.Span);
         Assert.Equal(new Span("defs.nt65", 4, 9, 14), Assert.Single(problem.Related).Span);
     }
 
@@ -45,8 +46,8 @@ public sealed class ForeignMacroLineTests
     public void AnInstructionIsTimedAsItselfNotAsAnotherFilesLineAtTheSamePosition()
     {
         var analysis = Analysis.Program(
-            ("defs.nt65", ".export one\n.macro one() {\n    lda #1\n}\n"),
-            ("main.nt65", ".proc mainxxx {\n    one!()\n    sta $10\n    rts\n}\n"));
+            ("defs.nt65", ".segment CODE\n.export one\n.macro one() {\n    lda #1\n}\n"),
+            ("main.nt65", ".segment CODE\n.proc mainxxx {\n    one!()\n    sta $10\n    rts\n}\n"));
         var main = analysis.File("main.nt65");
         var sta = main.Offset("sta");
         Assert.Equal(sta, analysis.File("defs.nt65").Offset("lda"));

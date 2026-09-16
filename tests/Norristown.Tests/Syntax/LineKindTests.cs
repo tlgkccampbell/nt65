@@ -13,7 +13,7 @@ public sealed class LineKindTests
     [InlineData("@loop:", LineKind.Label)]
     [InlineData("z:", LineKind.Label)]
     [InlineData("x: .word", LineKind.Label)] // a struct member may be named like a register
-    [InlineData("boss:   .tag Actor { x = 100 }", LineKind.Label)]
+    [InlineData("boss:   .type Actor { x = 100 }", LineKind.Label)]
     [InlineData("SCREEN = $0400", LineKind.Constant)]
     [InlineData("@n = 1", LineKind.Constant)]
     [InlineData("x = 16", LineKind.Constant)] // an initializer value for a member named x

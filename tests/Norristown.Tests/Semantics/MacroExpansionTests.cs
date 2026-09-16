@@ -6,9 +6,14 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 public sealed class MacroExpansionTests
 {
-    /// <summary>The ca65 a one-file program becomes, without the header or the imports.</summary>
+    /// <summary>
+    /// The ca65 a one-file program becomes, without the header or the imports. A program that
+    /// names no segment is placed in the code segment, on a line of its own before the rest.
+    /// </summary>
     private static string Body(string text)
     {
+        if (!text.Contains(".segment", StringComparison.Ordinal))
+            text = ".segment CODE\n" + text;
         var outputs = Analysis.Outputs(("main.nt65", text));
         Assert.True(outputs.ContainsKey("main.s"),
             "the program did not transpile:\n" + string.Join(
@@ -29,7 +34,7 @@ public sealed class MacroExpansionTests
 
             .segment "CODE": absolute
             main:
-                ; set16!(ptr, SCREEN)  main.nt65:12
+                ; set16!(ptr, SCREEN)  main.nt65:13
                 lda #<SCREEN
                 sta z:ptr
                 lda #>SCREEN
@@ -83,7 +88,8 @@ public sealed class MacroExpansionTests
                 .byte value * 2
             }
 
-            .rodata {
+            .segment RODATA
+            .data doubled {
                 twice!(1 + 2)
             }
             """));
@@ -124,7 +130,7 @@ public sealed class MacroExpansionTests
             .segment "CODE": absolute
             main:
                 ldy #0
-                ; times_x!(8)  main.nt65:13
+                ; times_x!(8)  main.nt65:14
                 ldx #8
             times_x__loop:
                     sta (ptr),y
@@ -193,7 +199,7 @@ public sealed class MacroExpansionTests
         Assert.Equal("""
             .segment "CODE": absolute
             main:
-                ; push!(a, x, y)  main.nt65:16
+                ; push!(a, x, y)  main.nt65:17
                         pha
                         phx
                         phy
@@ -261,7 +267,8 @@ public sealed class MacroExpansionTests
                 .byte pitch, frames
             }
 
-            .rodata {
+            .segment RODATA
+            .data tune {
                 note!(C4)
             }
             """));
@@ -276,8 +283,9 @@ public sealed class MacroExpansionTests
                 .byte a1, b1
             }
 
-            .rodata {
-            tune:   pair!(1, 2)
+            .segment RODATA
+            .data tune {
+                pair!(1, 2)
             }
             """);
 

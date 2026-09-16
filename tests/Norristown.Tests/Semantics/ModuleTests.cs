@@ -9,13 +9,13 @@ public sealed class ModuleTests
     private const string Gfx = """
         .export clear, SCREEN, ptr
 
-        .zeropage {
-        ptr:    .res 2
-        }
+        .segment ZEROPAGE
+        .data ptr:    .word
 
         SCREEN = $0400
         rows   = 25
 
+        .segment CODE
         .proc clear {
             .export again
             ldy #rows
@@ -29,7 +29,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".proc main {\n    jsr clear\n    rts\n}\n"));
+            ("main.nt65", ".segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n"));
 
         Assert.Empty(program.Problems());
         var symbol = program.File("main.nt65").SymbolAt("clear");
@@ -57,7 +57,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".proc main {\n    jmp clear::again\n}\n"));
+            ("main.nt65", ".segment CODE\n.proc main {\n    jmp clear::again\n}\n"));
 
         Assert.Empty(program.Problems());
         var symbol = program.File("main.nt65").SymbolAt("again");
@@ -74,7 +74,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n}\n"));
+            ("main.nt65", ".segment CODE\n.proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n}\n"));
 
         var main = outputs["main.s"];
         Assert.Contains(".importzp ptr\n", main);
@@ -95,7 +95,7 @@ public sealed class ModuleTests
             Defines = [new Define("DEBUG", 2, new Span("nt65.json", 1, 1, 2))],
         };
         var outputs = Analysis.Outputs(project,
-            ("one.nt65", ".proc first {\n    lda #DEBUG\n}\n"),
+            ("one.nt65", ".segment CODE\n.proc first {\n    lda #DEBUG\n}\n"),
             ("two.nt65", "SIZE = DEBUG * 8\n"));
 
         Assert.Contains("lda #$02", outputs["one.s"]);
@@ -125,7 +125,7 @@ public sealed class ModuleTests
     public void ACheckedImportIsUsedByValueAndAsserted()
     {
         var main = Analysis.Outputs(
-            ("main.nt65", ".import VIC_BORDER = $d020\n.proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
+            ("main.nt65", ".import VIC_BORDER = $d020\n.segment CODE\n.proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
 
         Assert.Contains(".import VIC_BORDER\n", main);
         Assert.Contains(".assert VIC_BORDER = $d020, lderror,", main);
@@ -166,18 +166,20 @@ public sealed class ModuleTests
 
     /// <summary>
     /// An import keeps the spelling it was exported under, because that is the name in the
-    /// object file, so a local name that would collide with it is the one that gives way
-    ///. Only a generated name can: a fixed spelling that collides is an error.
+    /// object file, so a local name that would collide with it is the one that gives way.
+    /// Only a generated name can: a fixed spelling that collides is an error.
     /// </summary>
     [Fact]
     public void AGeneratedNameGivesWayToAnImportedOne()
     {
         var outputs = Analysis.Outputs(
-            ("gfx.nt65", ".export clear\n.proc clear {\n    rts\n}\n"),
+            ("gfx.nt65", ".export clear\n.segment CODE\n.proc clear {\n    rts\n}\n"),
             ("main.nt65", """
+                .segment CODE
                 .scope {
-                clear:
+                .proc clear {
                     rts
+                }
                 }
 
                 .proc main {

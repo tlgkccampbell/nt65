@@ -6,6 +6,7 @@
 
 .export _memfill, _memsum
 
+.segment CODE
 .proc _memfill {
     ; An entry for ca65 callers that have set ptr1 (dest), tmp1 (value), ptr2 (count).
     .export fill

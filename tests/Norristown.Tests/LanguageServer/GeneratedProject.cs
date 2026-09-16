@@ -28,14 +28,12 @@ internal static class GeneratedProject
             M{{i}}_SIZE = {{16 + index % 32}}
             M{{i}}_LIMIT = M{{before}}_SIZE * 2
 
-            .bss {
-            m{{i}}_state:   .res M{{i}}_SIZE
-            m{{i}}_count:   .res 2
-            }
+            .segment BSS
+            .data m{{i}}_state:   .byte[M{{i}}_SIZE]
+            .data m{{i}}_count:   .word
 
-            .rodata {
-            m{{i}}_table:   .byte 1, 2, 3, 4, 5, 6, 7, 8
-            }
+            .segment RODATA
+            .data m{{i}}_table:   .byte 1, 2, 3, 4, 5, 6, 7, 8
 
             .macro m{{i}}_put(dest: operand, value) {
                 lda #<value
@@ -44,6 +42,7 @@ internal static class GeneratedProject
                 sta dest+1
             }
 
+            .segment CODE
             .proc m{{i}}_init: a8, i8 {
                 ldx #0
             @loop:

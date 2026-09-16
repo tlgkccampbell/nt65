@@ -29,6 +29,7 @@ TRACE = 0
     .assert LINES > 200, error, "a platform has more than 200 lines"
     .assert TRACE <= 2, error, "the trace level is 0, 1 or 2"
 
+.segment CODE
 .proc main {
     ; A branch belongs to the scope around it: `@again` is `main`'s cheap local.
 .if DEBUG {
@@ -71,35 +72,39 @@ fire
 wait
 }
 
-.rodata {
-bits:
-.repeat 8, i {
-    .byte 1 << i
+.segment RODATA
+.data bits: .byte[] {
+    .repeat 8, i {
+        1 << i
+    }
 }
 
-dispatch:
-.each handlers, h {
-    .addr h - 1                 ; an RTS dispatch table
+.data dispatch: .addr[] {
+    .each handlers, h {
+        h - 1                   ; an RTS dispatch table
+    }
 }
 
-commands:
-.each Cmd, c {
-    .byte c
+.data commands: .byte[] {
+    .each Cmd, c {
+        c
+    }
 }
 
 ; Over an enum, a path that ends in the binding names the member with the same name, so the
 ; table stays in step with the enum: `actions::move`, then `actions::fire`, then `actions::wait`.
-actions_table:
-.each Cmd, c {
-    .addr actions::c
+.data actions_table: .addr[] {
+    .each Cmd, c {
+        actions::c
+    }
 }
 
-grid:
-.repeat 2, row {
-.repeat 3, col {
-    .byte row * 3 + col
-}
-}
+.data grid: .byte[] {
+    .repeat 2, row {
+        .repeat 3, col {
+            row * 3 + col
+        }
+    }
 }
 
 ; Indentation means nothing: an indented chain is answered exactly as one at the margin,
@@ -110,6 +115,7 @@ grid:
     COLUMNS = 80
     }
 
+.segment CODE
 .proc indented {
     .if DEBUG {
         lda #COLUMNS
@@ -122,12 +128,15 @@ grid:
 }
 
 .scope actions {
-move:
+.proc move {
     rts
-fire:
+}
+.proc fire {
     jmp move
-wait:
+}
+.proc wait {
     rts
+}
 }
 
 ; What a repetition declares is its own on every turn, as a macro expansion's is: each turn

@@ -19,17 +19,15 @@
 
 .assert .countof(state_handlers) == State::game_over + 1, error, "one handler per state"
 
-.rodata {
-handler_lo: .lobytes state_handlers
-handler_hi: .hibytes state_handlers
-}
+.segment RODATA
+.data handler_lo: .lobytes state_handlers
+.data handler_hi: .hibytes state_handlers
 
-.bss {
-timer: .res 1
-}
+.segment BSS
+.data timer: .byte
 
 ; Straight after the BASIC stub, whose SYS names this address.
-.segment "STARTUP" {
+.segment STARTUP
 .proc start {
     jsr CLRSCR
     poke!(VIC_BORDER, Color::black)
@@ -43,8 +41,8 @@ timer: .res 1
     sta game_state
     jmp main_loop
 }
-}
 
+.segment CODE
 .proc main_loop {
 @wait:
     lda frame_flag
@@ -74,7 +72,7 @@ timer: .res 1
     jmp (@vector)
     .next state_handlers
 
-    .bss {
+    .segment BSS {
     @vector: .res 2
     }
 }

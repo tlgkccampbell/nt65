@@ -9,12 +9,12 @@
     src:   .addr
 }
 
-.bss {
-total:  .res 2
-}
+.segment BSS
+.data total:  .word
 
 ; A frame over two pushed words: each slot is counted from the stack pointer where it is
 ; used, so the `pha` between two reads is counted.
+.segment CODE
 .proc copy: a16, i16 {
     pea 0                   ; src
     pea 0                   ; count

@@ -1,27 +1,20 @@
-using System.Collections.Frozen;
+using Norristown.Syntax;
 
 namespace Norristown.Semantics;
 
-/// <summary>How a segment is written: the shortcut directives, the quoted name and the size.</summary>
+/// <summary>How a segment is written: its name and its size.</summary>
 public static class SegmentNames
 {
-    private static readonly FrozenDictionary<string, string> shortcuts = new Dictionary<string, string>
-    {
-        [".zeropage"] = "ZEROPAGE",
-        [".code"] = "CODE",
-        [".bss"] = "BSS",
-        [".data"] = "DATA",
-        [".rodata"] = "RODATA",
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>The standard segment a shortcut directive names, or null for <c>.segment</c>.</summary>
-    public static string? Shortcut(string directive) => shortcuts.GetValueOrDefault(directive);
-
     /// <summary>
-    /// The text of a quoted segment name. Segment names hold no escapes, so the quotes come
-    /// off by hand rather than through string evaluation.
+    /// The segment a token names: an identifier, or a name in quotes, which is an error that
+    /// still names the segment. Segment names hold no escapes, so the quotes come off by hand.
     /// </summary>
-    public static string Unquote(string literal) => literal.Trim('"');
+    public static string? Of(SyntaxToken token) => token.Kind switch
+    {
+        SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic => token.Text,
+        SyntaxKind.StringLiteral => token.Text.Trim('"'),
+        _ => null,
+    };
 
     /// <summary>The address size <c>zp</c>, <c>abs</c> or <c>far</c> names, or null.</summary>
     public static AddressSize? ParseSize(string text) => text.ToLowerInvariant() switch

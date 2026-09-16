@@ -6,6 +6,7 @@
 
 BEEP_CYCLES = 32
 
+.segment CODE
 .proc _beep {
     ldy #BEEP_CYCLES
 @loop:

@@ -6,6 +6,7 @@
 .cpu 6502
 
 ; Forward, and near enough: the short branch, exactly as `beq` would have been written.
+.segment CODE
 .proc close_by {
     lda count
     jeq @out
@@ -34,6 +35,5 @@
     rts
 }
 
-.bss {
-count:  .res 1
-}
+.segment BSS
+.data count:  .byte

@@ -8,9 +8,9 @@ public sealed class OutlineTests
     private const string Sample = """
         PPU_CTRL = $2000
 
-        .segment "ZEROPAGE": zp
-        .zeropage {
-        ptr: .res 2
+        .segment ZP2: zp
+        .segment ZEROPAGE {
+        .data ptr: .word
         }
 
         .proc reset: a8, i16 {
@@ -24,8 +24,8 @@ public sealed class OutlineTests
             rts
         }
 
-        .segment "RODATA" {
-        table: .byte 1, 2, 3
+        .segment RODATA {
+        .data table: .byte 1, 2, 3
         }
 
         .scope gfx {
@@ -35,6 +35,8 @@ public sealed class OutlineTests
         }
 
         .proc chrout = $ffd2: a8
+        .segment BSS
+        .data buffer: .byte[4]
         """;
 
     [Fact]
@@ -65,17 +67,19 @@ public sealed class OutlineTests
         var tree = SyntaxTree.Parse("main.nt65", Sample);
         Assert.Equal("""
             Constant PPU_CTRL 1-1 [$2000]
-            Segment .zeropage 4-6
-              Label ptr 5-5 [.res 2]
+            Segment ZEROPAGE 4-6
+              Data ptr 5-5 [.word]
             Proc reset 8-17 [: a8, i16]
               Label @loop 10-10
               Scope .scope 12-15
                 Label @loop 13-13
-            Segment RODATA 19-21 [.segment]
-              Label table 20-20 [.byte 1, 2, 3]
+            Segment RODATA 19-21
+              Data table 20-20 [.byte 1, 2, 3]
             Scope gfx 23-27
               Proc init 24-26
             Proc chrout 29-29 [= $ffd2: a8]
+            Segment BSS 30-31
+              Data buffer 31-31 [.byte[4]]
 
             """.ReplaceLineEndings("\n"), SyntaxDump.Symbols(tree));
     }
@@ -91,6 +95,7 @@ public sealed class OutlineTests
             19-21
             23-27
             24-26
+            30-31
 
             """.ReplaceLineEndings("\n"), SyntaxDump.FoldingRanges(tree));
     }
@@ -135,9 +140,6 @@ public sealed class OutlineTests
             }
         }
 
-        // A segment block's name is the text inside the quotes, so it is checked on its own.
-        var items = Outline.Build(tree);
-        Check([.. items.Where(i => i.Kind != OutlineKind.Segment)]);
-        Assert.Equal("\"RODATA\"", tree.Text.Substring(items[3].NameSpan.Start, items[3].NameSpan.Length));
+        Check(Outline.Build(tree));
     }
 }
