@@ -191,11 +191,23 @@ public sealed class SyntaxTree
         Diagnostic At(int line, int token, string message)
         {
             var green = Lines[line];
-            var column = green.TextOffset(token) + 1;
+            var tokens = green.Tokens;
 
-            // The end-of-line token's text is the line break, which is no part of the line:
-            // a diagnostic reported there is a caret at the end of the line.
-            var width = green.Tokens[token].Kind == SyntaxKind.EndOfLine ? 0 : green.Tokens[token].Text.Length;
+            // A diagnostic on the end-of-line token is about something the line does not
+            // have, so it belongs where that something would have been written: just past
+            // the last real token, ahead of the whitespace and comment that follow it. The
+            // line break itself is the wrong place — the caret would drift to the right as
+            // trailing spaces were typed, and sit past the end of a trailing comment.
+            if (tokens[token].Kind == SyntaxKind.EndOfLine && token > 0)
+            {
+                var caret = green.TextOffset(token - 1) + tokens[token - 1].Text.Length + 1;
+                return new Diagnostic(new Span(Path, line + 1, caret, caret), Severity.Error, message);
+            }
+
+            // Otherwise the token is the problem, and the diagnostic covers it. A line with
+            // no tokens at all leaves a caret where its text would start.
+            var column = green.TextOffset(token) + 1;
+            var width = tokens[token].Kind == SyntaxKind.EndOfLine ? 0 : tokens[token].Text.Length;
             return new Diagnostic(new Span(Path, line + 1, column, column + width), Severity.Error, message);
         }
 

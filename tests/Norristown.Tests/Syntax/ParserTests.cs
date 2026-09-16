@@ -198,6 +198,35 @@ public sealed class ParserTests
     }
 
     /// <summary>
+    /// A diagnostic about something the line does not have stands where that something
+    /// would go, just past the last real token. Trailing whitespace and a trailing comment
+    /// are no part of the line's meaning, so neither moves the caret: it stays put as
+    /// spaces are typed, rather than sliding right or landing past a comment.
+    /// </summary>
+    [Theory]
+    [InlineData("lda #")]
+    [InlineData("lda #    ")]
+    [InlineData("lda #\t")]
+    [InlineData("lda #   ; note")]
+    public void AMissingPieceIsReportedWhereItWouldHaveBeenWritten(string line)
+    {
+        var diagnostic = Assert.Single(SyntaxTree.Parse("test.nt65", line + "\n").Diagnostics);
+        Assert.Equal("expected an expression", diagnostic.Message);
+
+        // Column 6 is just past the `#`, whatever follows it.
+        Assert.Equal(6, diagnostic.Span.StartColumn);
+        Assert.Equal(6, diagnostic.Span.EndColumn);
+    }
+
+    /// <summary>Whitespace between tokens is trivia (§4), so an operand written apart is still read.</summary>
+    [Fact]
+    public void SpaceBetweenTokensDoesNotChangeWhatALineMeans()
+    {
+        Assert.Empty(Parse("lda #      1").Diagnostics);
+        Assert.Equal(SyntaxDump.Shape(Statement("lda #1")), SyntaxDump.Shape(Statement("lda #      1")));
+    }
+
+    /// <summary>
     /// One line's tree. A line that opens a block is given the <c>}</c> it wants, so what
     /// comes back is the parser's alone and not the block layer's.
     /// </summary>
