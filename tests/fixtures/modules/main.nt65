@@ -1,4 +1,4 @@
-; What another nt65 file exports is named as if it were declared here (§12). The output
+; What another nt65 file exports is named as if it were declared here. The output
 ; imports an address and writes a constant out by value, because ca65 cannot use an imported
 ; symbol where it needs a value.
 .cpu 6502

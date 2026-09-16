@@ -10,13 +10,13 @@ namespace Norristown;
 /// lines assemble to, and what is wrong with it. The compiler emits from this, and the
 /// language server answers the editor from it, so the two never disagree about a program.
 /// </summary>
-/// <param name="Program">Every file's model, and what they can see of one another (§12).</param>
-/// <param name="Cpu">The processor the program is built for (§5.1).</param>
+/// <param name="Program">Every file's model, and what they can see of one another.</param>
+/// <param name="Cpu">The processor the program is built for.</param>
 /// <param name="Layouts">
 /// One layout per file of <see cref="Program"/>, in the same order, or empty for a CPU whose
 /// instructions nt65 cannot size yet.
 /// </param>
-/// <param name="Defines">The file the build configuration was read as, or null (§5.3).</param>
+/// <param name="Defines">The file the build configuration was read as, or null.</param>
 /// <param name="Diagnostics">Everything wrong with the program, ordered by file, line and column.</param>
 public sealed record ProgramAnalysis(
     ProgramModel Program,

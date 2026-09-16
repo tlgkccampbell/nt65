@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Works out what the expressions of §9 are worth, and with them each symbol's kind, value
+/// Works out what expressions are worth, and with them each symbol's kind, value
 /// and address size.
 /// <para>
 /// A constant may be written before the names it uses, so evaluation follows references
@@ -106,7 +106,7 @@ internal sealed class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
         new Evaluator(segments, resolved, null).Evaluate(expression);
 
-    /// <summary>The address size of an expression (§7.2), with <paramref name="segment"/> giving <c>*</c> its size.</summary>
+    /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
         SyntaxNode expression,
         string segment,
@@ -168,7 +168,7 @@ internal sealed class Evaluator
         if (symbol.ValueExpression is not { } expression)
         {
             // A label, a routine or a scope: its address is where it lands, which only the
-            // linker knows, and its size comes from the segment it sits in (§7.2).
+            // linker knows, and its size comes from the segment it sits in.
             symbol.AddressSize = symbol.Kind switch
             {
                 SymbolKind.Label or SymbolKind.Proc or SymbolKind.Instance => SegmentSize(symbol.Segment),
@@ -182,7 +182,7 @@ internal sealed class Evaluator
         evaluating.RemoveAt(evaluating.Count - 1);
 
         // `NAME = expr` is a constant if the expression names no address, and an address
-        // alias if it does (§6.1). Imports and extern procs are already classified.
+        // alias if it does. Imports and extern procs are already classified.
         if (symbol.Kind == SymbolKind.Constant && NamesAnAddress(expression))
             symbol.Kind = SymbolKind.AddressAlias;
         if (symbol.Kind != SymbolKind.ImportedAddress)
@@ -359,7 +359,7 @@ internal sealed class Evaluator
     private static Value Shift(long value, long places, bool left) =>
         places is < 0 or > 63 ? Value.Unknown : Value.Of(left ? value << (int)places : value >> (int)places);
 
-    /// <summary>An operand that is a string where a number belongs (§9 has no string arithmetic).</summary>
+    /// <summary>An operand that is a string where a number belongs; there is no string arithmetic.</summary>
     private Value Reject(SyntaxToken op, Value operand)
     {
         if (operand.IsString)
@@ -392,7 +392,7 @@ internal sealed class Evaluator
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }
 
-        // `.addrsize` asks about the shape of its argument rather than its value (§7.2).
+        // `.addrsize` asks about the shape of its argument rather than its value.
         if (name == ".addrsize")
         {
             return arguments.Length == 1 && SizeOf(arguments[0], SegmentTable.DefaultSegment) is { } size
@@ -510,7 +510,7 @@ internal sealed class Evaluator
             : Value.Unknown;
 
     /// <summary>
-    /// The address size of an expression (§7.2): a constant's value decides, and otherwise
+    /// The address size of an expression: a constant's value decides, and otherwise
     /// the widest of the address symbols it names.
     /// </summary>
     /// <param name="expression">The expression to size.</param>
@@ -786,7 +786,7 @@ internal sealed class Evaluator
     /// <summary>
     /// What a name resolved to: the last part of the path, which is what it stands for. The
     /// file is part of the key, because following a name into another file lands on offsets
-    /// that mean something else there (§12).
+    /// that mean something else there.
     /// </summary>
     private Symbol? SymbolOf(SyntaxNode name)
     {

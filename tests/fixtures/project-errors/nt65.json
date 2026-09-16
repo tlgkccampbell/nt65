@@ -1,11 +1,11 @@
 {
   // The project file is read as data: a key it does not know, or a value of the wrong shape,
-  // is reported and the rest of the file is still read (§5.3). Comments are for these notes.
+  // is reported and the rest of the file is still read. Comments are for these notes.
   "cpu": "6809",          // ;! error: `6809` is not a processor nt65 knows: 6502, 65c02 or 65816
   "files": "*.nt65",      // ;! error: `files` is a list of strings
   "outputs": "build",     // ;! error: `outputs` is not a nt65.json key
   "defines": {
-    "SIZE": "twelve"      // ;! error: `SIZE` is not a number, and a define is a number (§5.3)
+    "SIZE": "twelve"      // ;! error: `SIZE` is not a number, and a define is a number
   },
   "segments": {
     "VRAM": { "size": "word" }  // ;! error: segment "VRAM" needs a `size` of "zp", "abs" or "far"

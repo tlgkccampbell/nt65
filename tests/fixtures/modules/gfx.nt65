@@ -1,4 +1,4 @@
-; A module (§12). Its symbols are private unless exported: `rows` and `palette` below are
+; A module. Its symbols are private unless exported: `rows` and `palette` below are
 ; named nowhere else in this program, and naming them from `main.nt65` is an error.
 .cpu 6502
 

@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One declared name (§6.1), with what analysis needs of it: whether it is a constant or an
+/// One declared name, with what analysis needs of it: whether it is a constant or an
 /// address, its value where nt65 knows it, its address size, and the segment it sits in.
 /// </summary>
 public sealed class Symbol
@@ -32,11 +32,11 @@ public sealed class Symbol
     /// <summary>Where the name is written, which is what an editor selects and renames.</summary>
     public TextSpan NameSpan { get; }
 
-    /// <summary>Whether it is a cheap local, <c>@name</c>, private to its proc or scope (§6.2).</summary>
+    /// <summary>Whether it is a cheap local, <c>@name</c>, private to its proc or scope.</summary>
     public bool IsCheapLocal { get; internal init; }
 
     /// <summary>
-    /// Whether it is a build-configuration define (§5.3) rather than something a source file
+    /// Whether it is a build-configuration define rather than something a source file
     /// declared. A define is an ordinary constant everywhere but in the output, which always
     /// writes one as its value so that a <c>-D</c> given to ca65 cannot collide with it.
     /// </summary>
@@ -51,7 +51,7 @@ public sealed class Symbol
     /// <summary>The scope a <c>.proc</c> or <c>.scope</c> opens; null for everything else.</summary>
     public Scope? Body { get; internal set; }
 
-    /// <summary>The value, where nt65 knows it (§9). For a struct member, its offset.</summary>
+    /// <summary>The value, where nt65 knows it. For a struct member, its offset.</summary>
     public Value Value { get; internal set; }
 
     /// <summary>How many bytes the symbol stands for, where that is a question with an answer.</summary>
@@ -93,7 +93,7 @@ public sealed class Symbol
     /// </summary>
     public bool FollowsPrevious { get; internal init; }
 
-    /// <summary>The address size of §7.2, or null where nt65 cannot tell yet.</summary>
+    /// <summary>The address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
 
     /// <summary>Whether the symbol names an address rather than a value.</summary>
@@ -104,7 +104,7 @@ public sealed class Symbol
     public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;
 
     /// <summary>
-    /// Whether the symbol can be reached from outside its scope with <c>::</c> (§6.2): a
+    /// Whether the symbol can be reached from outside its scope with <c>::</c>: a
     /// cheap local never can, and neither can anything inside an anonymous <c>.scope</c>.
     /// </summary>
     public bool IsReachableByPath => !IsCheapLocal && Scope.IsReachableByPath;
@@ -113,7 +113,7 @@ public sealed class Symbol
     public string DisplayName => IsCheapLocal ? "@" + Name : Name;
 
     /// <summary>
-    /// The name qualified by the scopes around it, as another file would write it (§12); the
+    /// The name qualified by the scopes around it, as another file would write it; the
     /// file's own top level contributes nothing. A name no path can reach is just itself.
     /// </summary>
     public string QualifiedName
@@ -130,7 +130,7 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// The name the output gives it (§13): the scopes that can name it, joined with
+    /// The name the output gives it: the scopes that can name it, joined with
     /// <c>__</c>, so <c>outer::inner</c> becomes <c>outer__inner</c>. For a symbol a path
     /// cannot reach — a cheap local, or a name inside an anonymous scope — this is only the
     /// name it starts from, and the file it is emitted into makes it unique.

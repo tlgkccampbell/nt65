@@ -3,7 +3,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Modules (§12): what one file may name in another, and what the output does about it.</summary>
+/// <summary>Modules: what one file may name in another, and what the output does about it.</summary>
 public sealed class ModuleTests
 {
     private const string Gfx = """
@@ -85,7 +85,7 @@ public sealed class ModuleTests
         Assert.Contains("lda z:ptr", main);
     }
 
-    /// <summary>A define is visible everywhere and is never written by name (§5.3).</summary>
+    /// <summary>A define is visible everywhere and is never written by name.</summary>
     [Fact]
     public void ADefineIsAConstantInEveryFileAndAValueInTheOutput()
     {
@@ -101,7 +101,7 @@ public sealed class ModuleTests
         Assert.Contains("SIZE = $02 * 8", outputs["two.s"]);
     }
 
-    /// <summary>A file may not declare a name the build configuration already gives it (§5.3).</summary>
+    /// <summary>A file may not declare a name the build configuration already gives it.</summary>
     [Fact]
     public void AFileMayNotDeclareADefine()
     {
@@ -112,13 +112,13 @@ public sealed class ModuleTests
         var program = Analysis.Program(project, ("main.nt65", "DEBUG = 2\n"));
 
         Assert.Equal(
-            ["main.nt65:1: `DEBUG` is a define, and a file may not declare one (§5.3)"],
+            ["main.nt65:1: `DEBUG` is a define, and a file may not declare one"],
             program.Problems());
     }
 
     /// <summary>
     /// A checked import is the value nt65 uses and an assertion that what it is linked
-    /// against agrees (§12).
+    /// against agrees.
     /// </summary>
     [Fact]
     public void ACheckedImportIsUsedByValueAndAsserted()
@@ -166,7 +166,7 @@ public sealed class ModuleTests
     /// <summary>
     /// An import keeps the spelling it was exported under, because that is the name in the
     /// object file, so a local name that would collide with it is the one that gives way
-    /// (§13). Only a generated name can: a fixed spelling that collides is an error.
+    ///. Only a generated name can: a fixed spelling that collides is an error.
     /// </summary>
     [Fact]
     public void AGeneratedNameGivesWayToAnImportedOne()

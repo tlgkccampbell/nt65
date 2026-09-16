@@ -2,7 +2,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Where a symbol's address size comes from (§7.2): its segment, or its value.</summary>
+/// <summary>Where a symbol's address size comes from: its segment, or its value.</summary>
 public sealed class AddressSizeTests
 {
     [Theory]
@@ -39,7 +39,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Far, model.Symbol("away").AddressSize);
     }
 
-    /// <summary>Items outside any segment block go to CODE (§5.2).</summary>
+    /// <summary>Items outside any segment block go to CODE.</summary>
     [Fact]
     public void TheDefaultSegmentIsCode()
     {
@@ -51,7 +51,7 @@ public sealed class AddressSizeTests
 
     /// <summary>
     /// An expression naming addresses takes the widest of them, whatever its own value
-    /// would say (§7.2).
+    /// would say.
     /// </summary>
     [Fact]
     public void AnAliasTakesTheWidestAddressItNames()
@@ -74,7 +74,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Far, model.Symbol("MIXED").AddressSize);
     }
 
-    /// <summary><c>.addrsize</c> is that size in bytes (§9).</summary>
+    /// <summary><c>.addrsize</c> is that size in bytes.</summary>
     [Fact]
     public void AddrsizeIsTheSizeInBytes()
     {
@@ -92,7 +92,7 @@ public sealed class AddressSizeTests
         Assert.Equal(2, model.Symbol("WIDE").Value.Number);
     }
 
-    /// <summary>A block naming a segment nothing declares is an error, and sizes nothing (§5.2).</summary>
+    /// <summary>A block naming a segment nothing declares is an error, and sizes nothing.</summary>
     [Fact]
     public void AnUndeclaredSegmentIsReported()
     {

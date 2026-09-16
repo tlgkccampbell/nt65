@@ -26,7 +26,7 @@ internal static class FixtureRunner
                 Fail($"{file.Path}: {problem}");
         }
 
-        // Output is deterministic: the same sources give byte-identical output (§13), and a
+        // Output is deterministic: the same sources give byte-identical output, and a
         // program is a set of files, so other orders must give identical results too.
         if (!Same(compilation, compile(fixture.Sources)))
             Fail("output or diagnostics change between two runs over the same files");

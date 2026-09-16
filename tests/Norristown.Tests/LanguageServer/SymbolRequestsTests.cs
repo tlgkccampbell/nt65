@@ -57,7 +57,7 @@ public sealed class SymbolRequestsTests
         Assert.True(capabilities.RenameProvider?.PrepareProvider);
     }
 
-    /// <summary>Hover says what a symbol is, what it is worth and how wide an address it is (§7.2).</summary>
+    /// <summary>Hover says what a symbol is, what it is worth and how wide an address it is.</summary>
     [Fact]
     public async Task HoverDescribesALabelAndAConstant()
     {
@@ -77,7 +77,7 @@ public sealed class SymbolRequestsTests
         Assert.Contains("address size: `abs` (2 bytes)", constant.Contents.Value);
     }
 
-    /// <summary>A name inside a scope hovers under the path another file would write (§12).</summary>
+    /// <summary>A name inside a scope hovers under the path another file would write.</summary>
     [Fact]
     public async Task HoverQualifiesAScopedName()
     {
@@ -132,7 +132,7 @@ public sealed class SymbolRequestsTests
         Assert.Contains("count: `4`", array.Contents.Value);
     }
 
-    /// <summary>A cheap local has no path, so hover names the routine it is private to (§6.2).</summary>
+    /// <summary>A cheap local has no path, so hover names the routine it is private to.</summary>
     [Fact]
     public async Task HoverOnACheapLocalSaysWhereItLives()
     {
@@ -194,7 +194,7 @@ public sealed class SymbolRequestsTests
         Assert.Equal([9, 18], uses.Select(location => location.Range.Start.Line));
     }
 
-    /// <summary>A cheap local is private to its proc, so its uses are the ones inside it (§6.2).</summary>
+    /// <summary>A cheap local is private to its proc, so its uses are the ones inside it.</summary>
     [Fact]
     public async Task ReferencesToACheapLocalStayInItsProc()
     {
@@ -235,7 +235,7 @@ public sealed class SymbolRequestsTests
         Assert.All(edits, e => Assert.Equal("pointer", e.NewText));
     }
 
-    /// <summary>Renaming a cheap local touches its proc and keeps it a cheap local (§6.2).</summary>
+    /// <summary>Renaming a cheap local touches its proc and keeps it a cheap local.</summary>
     [Fact]
     public async Task ACheapLocalIsRenamedWithItsAt()
     {

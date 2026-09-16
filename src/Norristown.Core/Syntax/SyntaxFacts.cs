@@ -101,7 +101,7 @@ public static class SyntaxFacts
         [".frame"] = SyntaxKind.UnsupportedLine,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The built-in functions of §9, and the three §11 adds inside a macro body.</summary>
+    /// <summary>The built-in functions, and the three a macro body adds.</summary>
     private static readonly FrozenSet<string> builtinFunctions = new[]
     {
         ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
@@ -109,7 +109,7 @@ public static class SyntaxFacts
         ".defined", ".mode", ".byteof", ".empty",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    // The state items of §7.3, by the suffix that follows the name: a point item stands
+    // The processor-state items, by the suffix that follows the name: a point item stands
     // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
     private static readonly FrozenSet<string> pointStateItems =
         new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline" }
@@ -157,14 +157,14 @@ public static class SyntaxFacts
     /// <summary>
     /// Whether <paramref name="text"/> names an address-size prefix, which is written before
     /// a <c>:</c> in operand position. <c>z</c>, <c>f</c> and <c>d</c> are also ordinary
-    /// identifiers (§4); nothing else can be written there, so the case does not matter.
+    /// identifiers; nothing else can be written there, so the case does not matter.
     /// </summary>
     public static bool IsAddressPrefix(string text) =>
         text.Length == 1 && char.ToLowerInvariant(text[0]) is 'z' or 'a' or 'f' or 'd';
 
     /// <summary>
     /// Whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item
-    /// of §7.3. <paramref name="suffix"/> is <see cref="SyntaxKind.Star"/>,
+    /// <paramref name="suffix"/> is <see cref="SyntaxKind.Star"/>,
     /// <see cref="SyntaxKind.Question"/>, <see cref="SyntaxKind.Equals"/>, or
     /// <see cref="SyntaxKind.None"/> when the name stands alone.
     /// </summary>
@@ -175,12 +175,12 @@ public static class SyntaxFacts
         _ => pointStateItems.Contains(name),
     };
 
-    /// <summary>Whether a token of this kind may begin an expression as a prefix operator (§9 level 2).</summary>
+    /// <summary>Whether a token of this kind may begin an expression as a prefix operator.</summary>
     public static bool IsUnaryOperator(SyntaxKind kind) => kind is SyntaxKind.Plus or SyntaxKind.Minus
         or SyntaxKind.Tilde or SyntaxKind.Bang or SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 
     /// <summary>
-    /// The precedence level of a binary operator (§9), 3 to 13 with 3 binding tightest, or 0
+    /// The precedence level of a binary operator, 3 to 13 with 3 binding tightest, or 0
     /// when the token is not one. <c>.mod</c> is a directive rather than a punctuation token,
     /// because <c>%</c> begins a binary number.
     /// </summary>
@@ -201,15 +201,15 @@ public static class SyntaxFacts
         _ => 0,
     };
 
-    /// <summary>The shifts and the bitwise operators, whose operands §9 requires parentheses around.</summary>
+    /// <summary>The shifts and the bitwise operators, whose operands require parentheses around them.</summary>
     public static bool IsBitwiseOperator(SyntaxKind kind) => kind is SyntaxKind.LessLess
         or SyntaxKind.GreaterGreater or SyntaxKind.Ampersand or SyntaxKind.Caret or SyntaxKind.Bar;
 
-    /// <summary>The logical operators, which §9 does not allow to be mixed without parentheses.</summary>
+    /// <summary>The logical operators, which may not be mixed without parentheses.</summary>
     public static bool IsLogicalOperator(SyntaxKind kind) =>
         kind is SyntaxKind.AmpersandAmpersand or SyntaxKind.CaretCaret or SyntaxKind.BarBar;
 
-    /// <summary>The unary operators that take a byte out of an address, which §9 keeps clear of binary operators.</summary>
+    /// <summary>The unary operators that take a byte out of an address, which are kept clear of binary operators.</summary>
     public static bool IsByteOperator(SyntaxKind kind) =>
         kind is SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 

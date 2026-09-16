@@ -18,12 +18,12 @@ internal static class Analysis
 
     /// <summary>
     /// The whole program for several files, the way the compiler reads it: every file sees
-    /// what the others export (§12).
+    /// what the others export.
     /// </summary>
     public static ProgramAnalysis Program(params (string Path, string Text)[] files) =>
         Program(ProjectSettings.None, files);
 
-    /// <summary>The same, for a program the project file says something about (§5.3).</summary>
+    /// <summary>The same, for a program the project file says something about.</summary>
     public static ProgramAnalysis Program(ProjectSettings project, params (string Path, string Text)[] files) =>
         Compiler.Analyze([.. files.Select(file => new SourceFile(file.Path, file.Text))], project);
 
@@ -43,7 +43,7 @@ internal static class Analysis
     public static Dictionary<string, string> Outputs(params (string Path, string Text)[] files) =>
         Outputs(ProjectSettings.None, files);
 
-    /// <summary>The same, for a program the project file says something about (§5.3).</summary>
+    /// <summary>The same, for a program the project file says something about.</summary>
     public static Dictionary<string, string> Outputs(
         ProjectSettings project, params (string Path, string Text)[] files) =>
         Compiler.Compile([.. files.Select(file => new SourceFile(file.Path, file.Text))], project)

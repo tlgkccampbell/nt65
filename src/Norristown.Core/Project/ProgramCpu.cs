@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Project;
 
 /// <summary>
-/// Which CPU a program is built for (§5.1). One per program: it may be given on the command
+/// Which CPU a program is built for. One per program: it may be given on the command
 /// line or by a <c>.cpu</c> item, and every file that states it must agree.
 /// </summary>
 public static class ProgramCpu

@@ -42,7 +42,7 @@ internal sealed class Server
         log.Write($"connected: {client}");
 
         // The project is read once, at the folder the client opened: its files are the program
-        // a name is resolved against (§5.3, §12).
+        // a name is resolved against.
         workspace.Load(request.RootUri);
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
@@ -78,7 +78,7 @@ internal sealed class Server
             return Task.CompletedTask;
         }
 
-        // An edit in one file can change what is wrong with another (§12), so every open
+        // An edit in one file can change what is wrong with another, so every open
         // document is republished rather than just the one that changed.
         return PublishDiagnosticsAsync();
     }
@@ -182,7 +182,7 @@ internal sealed class Server
     }
 
     /// <summary>One request, resolved to what it is about.</summary>
-    /// <param name="Program">Every file, for a name that crosses one (§12).</param>
+    /// <param name="Program">Every file, for a name that crosses one.</param>
     /// <param name="Model">The file the caret is in.</param>
     /// <param name="Position">Where in that file's text.</param>
     private sealed record Asked(ProgramModel Program, SemanticModel Model, int Position);

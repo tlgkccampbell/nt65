@@ -4,14 +4,14 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The program's segments (§5.2). The standard names are predeclared; every other segment
+/// The program's segments. The standard names are predeclared; every other segment
 /// is declared exactly once, by a <c>.segment "NAME": size</c> item in one file or (from
 /// Stage 6) in <c>nt65.json</c>. A segment block naming a segment declared nowhere is an
 /// error, so a misspelled name is caught before ld65 runs.
 /// </summary>
 public sealed class SegmentTable
 {
-    /// <summary>Where items outside any segment block go (§5.2).</summary>
+    /// <summary>Where items outside any segment block go.</summary>
     public const string DefaultSegment = "CODE";
 
     private static readonly FrozenDictionary<string, AddressSize> standard = new Dictionary<string, AddressSize>(
@@ -43,7 +43,7 @@ public sealed class SegmentTable
         Build(trees, [], diagnostics);
 
     /// <summary>
-    /// The table for a program whose project file declares some of its segments (§5.3). Those
+    /// The table for a program whose project file declares some of its segments. Those
     /// are read first, so a file declaring one of them is the declaration that is reported.
     /// </summary>
     public static SegmentTable Build(

@@ -180,7 +180,7 @@ public enum SyntaxKind : byte
     /// <summary>A mnemonic and its operand.</summary>
     InstructionStatement,
 
-    /// <summary><c>.byte</c>, <c>.res</c> and the rest of §8, with their operands.</summary>
+    /// <summary><c>.byte</c>, <c>.res</c> and the rest of the data directives, with their operands.</summary>
     DataDirective,
 
     /// <summary><c>.cpu 6502</c>.</summary>
@@ -261,7 +261,7 @@ public enum SyntaxKind : byte
     /// <summary>Tokens left over at the end of a line, which the statement does not explain.</summary>
     SkippedTokens,
 
-    // Processor-state signatures (§7.3). Parsed and kept from Stage 2; used from Stage 11.
+    // Processor-state signatures. Parsed and kept from Stage 2; used from Stage 11.
 
     /// <summary><c>: state (-&gt; state)?</c> after a proc's name.</summary>
     ProcSignature,
@@ -272,7 +272,7 @@ public enum SyntaxKind : byte
     /// <summary>One state item, such as <c>a16</c>, <c>i*</c> or <c>dp = $2100</c>.</summary>
     StateItem,
 
-    // Expressions (§9).
+    // Expressions.
 
     /// <summary>Two operands and the operator between them.</summary>
     BinaryExpression,
@@ -310,7 +310,7 @@ public enum SyntaxKind : byte
     /// <summary>An expression the parser could not read; empty where nothing was written at all.</summary>
     ErrorExpression,
 
-    // Operands (§7.1). Which ones an instruction and a CPU allow is decided in Stage 5.
+    // Operands. Which ones an instruction and a CPU allow is decided in Stage 5.
 
     /// <summary><c>#expr</c>, or the two bank bytes of <c>mvn</c> and <c>mvp</c>.</summary>
     ImmediateOperand,

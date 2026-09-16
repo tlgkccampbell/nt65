@@ -1,7 +1,7 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One level of naming (§6.2): a file, a <c>.proc</c> body or a <c>.scope</c> body. Lookup
+/// One level of naming: a file, a <c>.proc</c> body or a <c>.scope</c> body. Lookup
 /// runs from the innermost scope outward, and a <c>.proc</c> or <c>.scope</c> also owns the
 /// cheap locals written inside it, which live in a namespace of their own.
 /// </summary>
@@ -37,7 +37,7 @@ public sealed class Scope
     /// <summary>
     /// Whether every scope from here out to the file has a name, so what is declared here
     /// can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is inline code, and
-    /// nothing outside it can name what it declares (§6.2).
+    /// nothing outside it can name what it declares.
     /// </summary>
     public bool IsReachableByPath
     {
@@ -65,7 +65,7 @@ public sealed class Scope
 
     /// <summary>
     /// Adds <paramref name="symbol"/>, or returns the declaration already using that name.
-    /// A name may be declared once in its scope (§6.2), and cheap locals count separately.
+    /// A name may be declared once in its scope, and cheap locals count separately.
     /// </summary>
     internal Symbol? Declare(Symbol symbol)
     {
@@ -84,7 +84,7 @@ public sealed class Scope
     public Symbol? FindCheapLocal(string name) => cheapLocals.GetValueOrDefault(name);
 
     /// <summary>
-    /// What <paramref name="name"/> means, from here outward to the file (§6.2). A nested
+    /// What <paramref name="name"/> means, from here outward to the file. A nested
     /// scope can therefore name what its proc declares, and a proc what its file declares.
     /// </summary>
     public Symbol? Lookup(string name)
@@ -99,7 +99,7 @@ public sealed class Scope
 
     /// <summary>
     /// The cheap local <paramref name="name"/>, looked up from here outward, so a nested
-    /// <c>.scope</c> can branch to its proc's <c>@done</c> (§6.2).
+    /// <c>.scope</c> can branch to its proc's <c>@done</c>.
     /// </summary>
     public Symbol? LookupCheapLocal(string name)
     {

@@ -14,7 +14,7 @@ public static class SegmentNames
         [".rodata"] = "RODATA",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The standard segment a shortcut directive names (§5.2), or null for <c>.segment</c>.</summary>
+    /// <summary>The standard segment a shortcut directive names, or null for <c>.segment</c>.</summary>
     public static string? Shortcut(string directive) => shortcuts.GetValueOrDefault(directive);
 
     /// <summary>

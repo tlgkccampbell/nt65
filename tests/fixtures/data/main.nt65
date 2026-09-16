@@ -1,6 +1,6 @@
-; §8 and §13: every data directive Stage 5 sizes, text written out as byte values with the
+; Every data directive Stage 5 sizes, text written out as byte values with the
 ; source spelling kept in a comment, and expressions parenthesized so that nothing in the
-; output depends on ca65's precedence table (§9).
+; output depends on ca65's precedence table.
 .cpu 6502
 
 SCREEN = $0400

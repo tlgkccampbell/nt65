@@ -2,7 +2,7 @@ namespace Norristown.Syntax;
 
 /// <summary>
 /// The ranges of lines an editor can fold: one per block, from its opener line to its last
-/// line. The block layer already recovers from unbalanced braces (§4), so a half-typed file
+/// line. The block layer already recovers from unbalanced braces, so a half-typed file
 /// still folds — a block left open by a missing <c>}</c> simply runs to where it was closed
 /// for it.
 /// </summary>

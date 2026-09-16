@@ -3,7 +3,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Project;
 
-/// <summary>Reading <c>nt65.json</c> and the command line that adds to it (§5.3).</summary>
+/// <summary>Reading <c>nt65.json</c> and the command line that adds to it.</summary>
 public sealed class ProjectFileTests
 {
     [Fact]
@@ -50,7 +50,7 @@ public sealed class ProjectFileTests
     [InlineData("""{ "cpu": "z80" }""", "`z80` is not a processor nt65 knows: 6502, 65c02 or 65816")]
     [InlineData("""{ "files": "main.nt65" }""", "`files` is a list of strings")]
     [InlineData("""{ "defines": [] }""", "`defines` is an object")]
-    [InlineData("""{ "defines": { "N": true } }""", "`N` is not a number, and a define is a number (§5.3)")]
+    [InlineData("""{ "defines": { "N": true } }""", "`N` is not a number, and a define is a number")]
     [InlineData("""{ "defines": { "2N": 1 } }""", "`2N` is not a name")]
     [InlineData("""{ "segments": { "X": "zp" } }""", "segment \"X\" is an object with a `size`")]
     [InlineData("""{ "segments": { "X": {} } }""", "segment \"X\" needs a `size` of \"zp\", \"abs\" or \"far\"")]
@@ -108,7 +108,7 @@ public sealed class ProjectFileTests
     }
 
     [Theory]
-    [InlineData("DEBUG=yes", "`yes` is not a number, and a define is a number (§5.3)")]
+    [InlineData("DEBUG=yes", "`yes` is not a number, and a define is a number")]
     [InlineData("2DEBUG=1", "`2DEBUG` is not a name")]
     public void ADefinitionThatIsNotOneIsReported(string argument, string message)
     {
@@ -118,7 +118,7 @@ public sealed class ProjectFileTests
         Assert.Equal(message, Assert.Single(problems).Message);
     }
 
-    /// <summary><c>-D</c> adds a define or overrides one the file gives (§5.3).</summary>
+    /// <summary><c>-D</c> adds a define or overrides one the file gives.</summary>
     [Fact]
     public void TheCommandLineOverridesTheFile()
     {

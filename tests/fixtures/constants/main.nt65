@@ -1,4 +1,4 @@
-; §6.1, §7.2 and §9: what a name is worth, which names are addresses rather than constants,
+; What a name is worth, which names are addresses rather than constants,
 ; and what a name that needs itself does.
 
 FIRST   = SECOND + 1        ; a name may be used before the line that declares it
@@ -14,7 +14,7 @@ PICK    = .max(FIRST, SECOND)
 ptr:    .res 2
 }
 
-; An expression that names an address is an address alias, not a constant (§6.1).
+; An expression that names an address is an address alias, not a constant.
 NEXT    = ptr + 1
 HERE    = *
 

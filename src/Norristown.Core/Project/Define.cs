@@ -1,8 +1,8 @@
 namespace Norristown.Project;
 
 /// <summary>
-/// One build-configuration define (§5.3): a constant visible in every file, as if declared
-/// and exported once. Defines are the only symbols an <c>.if</c> condition may test (§10),
+/// One build-configuration define: a constant visible in every file, as if declared
+/// and exported once. Defines are the only symbols an <c>.if</c> condition may test,
 /// and the output always writes one as its value rather than by name, so a <c>-D</c> given
 /// to ca65 cannot collide with it.
 /// </summary>

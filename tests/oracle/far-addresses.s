@@ -1,4 +1,4 @@
-; The spellings §12 and §13 need for a far symbol, and what the linker assertion of a checked
+; The spellings nt65 needs for a far symbol, and what the linker assertion of a checked
 ; import looks like. ca65 accepts a far address size only on the 65816: `far` on a 6502 or a
 ; 65C02 is "Invalid address size specification for current CPU", which is why nt65 refuses a
 ; far segment or import for those processors rather than writing this out for them.

@@ -1,7 +1,7 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// How wide an address is (§7.2). The values are the width in bytes, which is what
+/// How wide an address is. The values are the width in bytes, which is what
 /// <c>.addrsize</c> yields.
 /// </summary>
 public enum AddressSize

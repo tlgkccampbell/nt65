@@ -1,4 +1,4 @@
-; §6.2: lookup runs from the innermost scope outward, `::` walks into a named scope, and
+; Lookup runs from the innermost scope outward, `::` walks into a named scope, and
 ; cheap locals belong to the nearest `.proc` or `.scope`.
 .cpu 65c02
 
@@ -21,7 +21,7 @@ frames:     .res 1
     }
 }
 
-; The same cheap local twice in one proc, each in an anonymous scope of its own (§6.2).
+; The same cheap local twice in one proc, each in an anonymous scope of its own.
 .proc reset {
     .scope {                ; clear RAM
         ldx #0
@@ -43,7 +43,7 @@ frames:     .res 1
 }
 
 ; A reference looks outward through enclosing scopes, and procs do not nest, so this never
-; reaches into another routine (§6.2).
+; reaches into another routine.
 .proc draw {
     ldx #0
     .scope {

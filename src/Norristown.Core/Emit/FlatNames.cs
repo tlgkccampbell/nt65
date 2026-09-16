@@ -3,7 +3,7 @@ using Norristown.Semantics;
 namespace Norristown.Emit;
 
 /// <summary>
-/// The name every symbol gets in the output (§13). Names in the output are flat: the
+/// The name every symbol gets in the output. Names in the output are flat: the
 /// output contains no ca65 <c>.proc</c>, <c>.scope</c> or cheap local labels, so it never
 /// depends on how ca65 resolves names.
 /// <para>
@@ -27,7 +27,7 @@ public sealed class FlatNames
         var taken = new Dictionary<string, Symbol>(StringComparer.Ordinal);
 
         // What another file exports keeps the spelling it was exported under, because that is
-        // the name in the object file (§12, §13); a local name claims its spelling after them.
+        // the name in the object file; a local name claims its spelling after them.
         foreach (var symbol in model.ExternalSymbols)
             taken[symbol.FlatName] = symbol;
 

@@ -1,4 +1,4 @@
-; Every operand form the 6502 has (§7.1), and the addressing mode §7.2 picks for each. The
+; Every operand form the 6502 has, and the addressing mode nt65 picks for each. The
 ; output makes each choice explicit with a `z:` or `a:` prefix wherever the instruction
 ; offers more than one width.
 .cpu 6502
@@ -15,7 +15,7 @@ buf:        .res 256
 hi = $12
 lo = $34
 
-; A routine at a fixed address, which the output writes as the constant it is (§12, §13).
+; A routine at a fixed address, which the output writes as the constant it is.
 .proc CHROUT = $ffd2
 
 .proc forms {
@@ -23,7 +23,7 @@ lo = $34
     asl                     ; accumulator, bare
     asl a                   ; accumulator, written out
     lda #$10                ; immediate
-    lda ptr                 ; direct, because ptr is in a zero-page segment (§7.2)
+    lda ptr                 ; direct, because ptr is in a zero-page segment
     lda buf                 ; absolute, because buf is not
     lda z:ptr               ; the same choice, written out in the source
     lda a:ptr               ; forced wider than it needs to be

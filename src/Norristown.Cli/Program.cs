@@ -10,8 +10,8 @@ if (args is not ["build", .. var rest])
 }
 
 // `--cpu` is what the program is built for when no `.cpu` item and no project file says; one
-// that does must agree with it (§5.1). `-D` adds a define or overrides one the project gives
-// (§5.3). Named files replace the project's own globs, so one file can be built on its own.
+// that does must agree with it. `-D` adds a define or overrides one the project gives
+//. Named files replace the project's own globs, so one file can be built on its own.
 var arguments = new List<Diagnostic>();
 Cpu? cpu = null;
 var defined = new List<Define>();
@@ -104,7 +104,7 @@ return wrong ? 1 : 0;
 static string Logical(string path) =>
     Path.GetRelativePath(Environment.CurrentDirectory, path).Replace(Path.DirectorySeparatorChar, '/');
 
-// The files one `files` glob names (§5.3). `**` matches any number of directories and has to
+// The files one `files` glob names. `**` matches any number of directories and has to
 // be a whole segment; anything else is a plain pattern for the directory it sits in.
 static IEnumerable<string> Matching(string glob)
 {

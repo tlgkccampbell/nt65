@@ -1,7 +1,7 @@
 namespace Norristown.Project;
 
 /// <summary>
-/// The build configuration as a file of constants (§5.3). Defines are visible everywhere,
+/// The build configuration as a file of constants. Defines are visible everywhere,
 /// as if declared and exported once, so nt65 gives them a source file of their own: they
 /// are then ordinary constants to scoping, evaluation and the editor, and only emission
 /// treats them differently by writing each use as its value.

@@ -18,12 +18,12 @@ public static class Compiler
 
     /// <summary>
     /// Compiles <paramref name="files"/> for <paramref name="cpu"/>, which is what the
-    /// command line says if it says anything; a <c>.cpu</c> item must agree with it (§5.1).
+    /// command line says if it says anything; a <c>.cpu</c> item must agree with it.
     /// </summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files, Cpu? cpu) =>
         Compile(files, ProjectSettings.None with { Cpu = cpu });
 
-    /// <summary>Compiles <paramref name="files"/> as the program <paramref name="project"/> describes (§5.3).</summary>
+    /// <summary>Compiles <paramref name="files"/> as the program <paramref name="project"/> describes.</summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files, ProjectSettings project) =>
         Compile(files, project, BinaryLengthOnDisk);
 
@@ -45,7 +45,7 @@ public static class Compiler
         {
             var model = analysis.Program.Files[i];
 
-            // The defines are not a file anyone wrote, and nothing is written for them (§5.3).
+            // The defines are not a file anyone wrote, and nothing is written for them.
             if (model.Tree == analysis.Defines)
                 continue;
             outputs.Add(Emitter.Emit(
@@ -83,24 +83,24 @@ public static class Compiler
         var trees = files.OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
 
         // The build configuration is read as a file of constants, so that defines are ordinary
-        // symbols to scoping and evaluation; only emission treats them differently (§5.3).
+        // symbols to scoping and evaluation; only emission treats them differently.
         var defines = Defines.Source(project.Defines) is { } source ? SyntaxTree.Parse(source) : null;
         if (defines is not null)
             trees.Add(defines);
 
         // The segment table and the CPU are the program's: a segment is declared exactly once
-        // across it (§5.2), and it is built for one processor (§5.1).
+        // across it, and it is built for one processor.
         var diagnostics = new List<Diagnostic>(project.Diagnostics);
         var segments = SegmentTable.Build(trees, project.Segments, diagnostics);
         var target = ProgramCpu.Resolve(trees, project.Cpu, diagnostics);
 
         // Every file is read before any is resolved, because a name one file uses may be one
-        // another file exports (§12).
+        // another file exports.
         var program = ProgramModel.Create(trees, segments, defines, binaryLength);
         diagnostics.AddRange(trees.SelectMany(tree => tree.Diagnostics));
         diagnostics.AddRange(program.Diagnostics);
 
-        // The 65816 needs the processor-state analysis of §7.3 before its instructions can be
+        // The 65816 needs the processor-state analysis before its instructions can be
         // sized, which is Stage 11's; until then it is refused rather than sized as if its
         // widths were known.
         var layouts = new List<CodeLayout>();
@@ -137,7 +137,7 @@ public static class Compiler
     /// <summary>
     /// A far address is a bank and an offset, which only the 65816 has: ca65 refuses
     /// <c>far</c> on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug
-    /// (§3.2). A segment or an import declared far on a 6502 or 65C02 is therefore reported
+    ///. A segment or an import declared far on a 6502 or 65C02 is therefore reported
     /// where it is written, rather than written out for ca65 to reject.
     /// </summary>
     private static IEnumerable<Diagnostic> FarNeedsA65816(SegmentTable segments, ProgramModel program)

@@ -8,7 +8,7 @@ namespace Norristown.Tests.Fixtures;
 /// <list type="bullet">
 /// <item><c>**/*.nt65</c>, the program, with expected diagnostics written inline as trailing
 /// comments: <c>;! error: message</c> on the line the diagnostic is reported on;</item>
-/// <item><c>nt65.json</c>, optional (§5.3). Its own expected diagnostics are written in
+/// <item><c>nt65.json</c>, optional. Its own expected diagnostics are written in
 /// <c>//</c> comments, which the reader skips;</item>
 /// <item><c>expected/**/*.s</c>, the output snapshot, one file per generated file, at the
 /// output's path.</item>

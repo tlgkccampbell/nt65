@@ -1,6 +1,6 @@
 namespace Norristown.Project;
 
-/// <summary>How a CPU is written: in nt65 source (§5.1), and in the ca65 output (§13).</summary>
+/// <summary>How a CPU is written: in nt65 source, and in the ca65 output.</summary>
 public static class CpuNames
 {
     /// <summary>The CPU a name stands for, or null when it names none.</summary>

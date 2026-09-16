@@ -8,7 +8,7 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>
 /// What Stage 6 gives an editor: a name that crosses files is one name, so definition,
 /// references and rename cross with it, and an edit in one file changes what is wrong with
-/// another (§12).
+/// another.
 /// </summary>
 public sealed class WorkspaceRequestsTests
 {
@@ -49,7 +49,7 @@ public sealed class WorkspaceRequestsTests
         Assert.Equal(new Range(new Position(5, 6), new Position(5, 11)), definition.Range);
     }
 
-    /// <summary>Hover on a name from another module says which module it came from (§12).</summary>
+    /// <summary>Hover on a name from another module says which module it came from.</summary>
     [Fact]
     public async Task HoverNamesTheModuleANameComesFrom()
     {
@@ -89,7 +89,7 @@ public sealed class WorkspaceRequestsTests
         Assert.Equal("wipe", Assert.Single(edit.Changes[MainUri]).NewText);
     }
 
-    /// <summary>A name another file keeps to itself is reported as private, not as missing (§12).</summary>
+    /// <summary>A name another file keeps to itself is reported as private, not as missing.</summary>
     [Fact]
     public async Task NamingSomethingUnexportedIsReported()
     {

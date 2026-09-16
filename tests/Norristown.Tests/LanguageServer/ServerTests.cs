@@ -60,7 +60,7 @@ public sealed class ServerTests
         Assert.Null(diagnostic.RelatedInformation);
     }
 
-    /// <summary>Typing the missing operand clears the error, which is the editor loop of §14.</summary>
+    /// <summary>Typing the missing operand clears the error, which is the editor loop.</summary>
     [Fact]
     public async Task EditingAwayAnErrorClearsIt()
     {

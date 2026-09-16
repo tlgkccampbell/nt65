@@ -3,11 +3,11 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What one file means: its scopes and declarations (§6), what every name in it refers to,
-/// and what its expressions are worth (§9).
+/// What one file means: its scopes and declarations, what every name in it refers to,
+/// and what its expressions are worth.
 /// <para>
 /// A model is built once and is then read-only, so an editor may ask it anything from any
-/// thread. A file is part of a program (§12): a name it does not declare may be one another
+/// thread. A file is part of a program: a name it does not declare may be one another
 /// file exports, so models are built together by <see cref="ProgramModel"/>.
 /// </para>
 /// </summary>
@@ -49,7 +49,7 @@ public sealed class SemanticModel
     /// <summary>The file this model is of.</summary>
     public SyntaxTree Tree { get; }
 
-    /// <summary>The program's segments, which is what address sizes come from (§5.2, §7.2).</summary>
+    /// <summary>The program's segments, which is what address sizes come from.</summary>
     public SegmentTable Segments { get; }
 
     /// <summary>The file's top-level scope.</summary>
@@ -66,8 +66,8 @@ public sealed class SemanticModel
 
     /// <summary>
     /// The symbols this file names but another file declares, in the order it first names
-    /// them (§12). These are what its output imports; a define is not among them, because a
-    /// define is written as its value and is no symbol to the linker (§5.3).
+    /// them. These are what its output imports; a define is not among them, because a
+    /// define is written as its value and is no symbol to the linker.
     /// </summary>
     public IReadOnlyList<Symbol> ExternalSymbols { get; }
 
@@ -99,7 +99,7 @@ public sealed class SemanticModel
     /// <summary>Every place <paramref name="symbol"/> is written, its declaration included.</summary>
     public IReadOnlyList<SymbolReference> ReferencesTo(Symbol symbol) => [.. bySymbol[symbol]];
 
-    /// <summary>What an expression is worth, for an editor to show (§9).</summary>
+    /// <summary>What an expression is worth, for an editor to show.</summary>
     public Value ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, Segments, resolved);
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed class SemanticModel
     public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) => Evaluator.ItemsOf(operand, resolved);
 
     /// <summary>
-    /// The address size of an expression (§7.2). <c>*</c> takes the size of
+    /// The address size of an expression. <c>*</c> takes the size of
     /// <paramref name="segment"/>, or of the default segment when none is named.
     /// </summary>
     public AddressSize? AddressSizeOf(SyntaxNode expression, string? segment = null) =>

@@ -4,7 +4,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What a whole program means: every file's model, and the table of what they can see of
-/// one another (§12).
+/// one another.
 /// <para>
 /// Files are read in two passes, because a name may be used before the file that declares
 /// it has been read, and in another file besides. The first pass collects declarations only;
@@ -28,7 +28,7 @@ public sealed class ProgramModel
     /// <summary>One model per file, in the order the files were given.</summary>
     public IReadOnlyList<SemanticModel> Files { get; }
 
-    /// <summary>The program's segments (§5.2).</summary>
+    /// <summary>The program's segments.</summary>
     public SegmentTable Segments { get; }
 
     /// <summary>What each file may name in the others.</summary>
@@ -39,7 +39,7 @@ public sealed class ProgramModel
 
     /// <summary>
     /// Builds the program from <paramref name="trees"/>. <paramref name="defines"/>, where
-    /// there is one, is the file the build configuration was read as (§5.3): everything it
+    /// there is one, is the file the build configuration was read as: everything it
     /// declares is a define, visible everywhere.
     /// </summary>
     public static ProgramModel Create(
@@ -56,7 +56,7 @@ public sealed class ProgramModel
         var modules = new List<ProgramSymbols.Module>();
         foreach (var binder in binders)
         {
-            // A define is exported by being one: §5.3 makes it visible in every file, as if
+            // A define is exported by being one: it is visible in every file, as if
             // declared and exported once.
             var exported = binder.Tree == defines ? binder.FileScope.Symbols : binder.Exported();
             if (binder.Tree == defines)
@@ -97,7 +97,7 @@ public sealed class ProgramModel
             bound.SelectMany(result => result.Diagnostics).Concat(program)));
     }
 
-    /// <summary>A file may not declare a name the build configuration already gives it (§5.3).</summary>
+    /// <summary>A file may not declare a name the build configuration already gives it.</summary>
     private static void CheckDefineNames(
         IReadOnlyList<ProgramSymbols.Module> modules, SyntaxTree? defines, List<Diagnostic> diagnostics)
     {
@@ -115,7 +115,7 @@ public sealed class ProgramModel
                 if (!symbol.IsCheapLocal && configured.ContainsKey(symbol.Name))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                        $"`{symbol.Name}` is a define, and a file may not declare one (§5.3)"));
+                        $"`{symbol.Name}` is a define, and a file may not declare one"));
                 }
             }
         }

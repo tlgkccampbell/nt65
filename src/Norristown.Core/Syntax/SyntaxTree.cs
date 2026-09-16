@@ -24,7 +24,7 @@ public sealed class SyntaxTree
         Green = Blocks.Build(lines, blockErrors);
 
         // Blocks come first because a line's syntax depends on the kind of block around it
-        // (§3.1). Nothing else about the line does, so a line that kept its tokens and its
+        //. Nothing else about the line does, so a line that kept its tokens and its
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;

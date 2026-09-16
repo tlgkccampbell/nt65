@@ -33,7 +33,7 @@ public sealed class IncrementalTests
 
     /// <summary>
     /// A line whose enclosing block changes kind is parsed again, because that is the one
-    /// thing outside a line that its syntax depends on (§3.1).
+    /// thing outside a line that its syntax depends on.
     /// </summary>
     [Fact]
     public void ALineIsParsedAgainWhenItsBlockChangesKind()

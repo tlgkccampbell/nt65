@@ -1,5 +1,5 @@
 ; Every item the parser reads at Stage 2, in one file. Its target is the 65816, whose
-; processor-state analysis (§7.3) is Stage 11's, so nothing is written for it yet.
+; processor-state analysis is Stage 11's, so nothing is written for it yet.
 .cpu 65816                  ;! error: the 65816 is not transpiled yet
 
 .segment "ZP2": zp
@@ -44,7 +44,7 @@ padding:    .res 16, $ff
     rts
 }
 
-; A nested segment block changes the segment of its contents, not their scope (§5.2).
+; A nested segment block changes the segment of its contents, not their scope.
 .proc render: a16, i8 -> a8, i8 {
     .scope {
         ldx #0

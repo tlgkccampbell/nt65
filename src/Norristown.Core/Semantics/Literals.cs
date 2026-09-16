@@ -4,7 +4,7 @@ using System.Text;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a literal token means (§4). The lexer has already said whether a literal is
+/// What a literal token means. The lexer has already said whether a literal is
 /// well formed, so these read a token the lexer accepted and give up quietly on one it
 /// did not.
 /// </summary>
@@ -23,9 +23,9 @@ public static class Literals
     };
 
     /// <summary>
-    /// The text of a string or character literal, with the escapes of §4 applied. Outside a
+    /// The text of a string or character literal, with its escapes applied. Outside a
     /// charmap the text is ASCII, and <c>\xHH</c> writes any byte; a byte above <c>$7f</c>
-    /// is kept as the character of that code, which is what a charmap (§8) will map.
+    /// is kept as the character of that code, which is what a charmap will map.
     /// </summary>
     public static string? Text(string literal)
     {

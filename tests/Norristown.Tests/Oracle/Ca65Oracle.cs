@@ -134,7 +134,7 @@ internal sealed partial class Ca65Oracle
     /// <summary>
     /// Assembles each file and links them with ld65 against <paramref name="config"/>. This
     /// is the check that nt65 output is an object file like any other: it links against a
-    /// module written by hand, and a linker assertion in it is a link error (§12).
+    /// module written by hand, and a linker assertion in it is a link error.
     /// </summary>
     public LinkResult Link(string config, IReadOnlyList<(string Name, string Source)> files)
     {

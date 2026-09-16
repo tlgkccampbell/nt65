@@ -34,7 +34,7 @@ public static class Constructs
         IsTag(statement) ? statement!.ChildNodes.FirstOrDefault() : null;
 
     /// <summary>
-    /// The segment a block opener names (§5.2): a standard name for a shortcut directive, or
+    /// The segment a block opener names: a standard name for a shortcut directive, or
     /// the name in quotes. Null when the line does not open a segment block or does not say.
     /// </summary>
     public static string? SegmentOf(SyntaxNode opener)

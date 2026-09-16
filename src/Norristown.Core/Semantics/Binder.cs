@@ -4,14 +4,13 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Builds one file's scopes and declarations (§6.1, §6.2) and resolves the names it uses.
+/// Builds one file's scopes and declarations and resolves the names it uses.
 /// <para>
 /// Declarations are collected first and resolved afterwards, so a name may be used before
 /// the line that declares it. Blocks belonging to a later stage — macros, <c>.if</c>,
-/// <c>.repeat</c>, <c>.each</c> and the type and text blocks of §6.3, §6.4 and §8 — are not
-/// bound at all: their contents mean something this stage does not implement (a macro's
-/// names are the expansion's, and §10 lets the same name be declared under two <c>.if</c>
-/// branches), and half a rule would be worse than none.
+/// <c>.repeat</c> and <c>.each</c> — are not bound at all: their contents mean something
+/// this stage does not implement (a macro's names are the expansion's, and the same name
+/// may be declared under two <c>.if</c> branches), and half a rule would be worse than none.
 /// </para>
 /// </summary>
 internal sealed class Binder
@@ -41,7 +40,7 @@ internal sealed class Binder
     /// <summary>The file being bound.</summary>
     public SyntaxTree Tree => tree;
 
-    /// <summary>The file's top-level scope, which is what another file can reach into (§12).</summary>
+    /// <summary>The file's top-level scope, which is what another file can reach into.</summary>
     public Scope FileScope => fileScope;
 
     /// <summary>Binds <paramref name="tree"/> on its own, seeing no other file.</summary>
@@ -60,7 +59,7 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// What this file's <c>.export</c> items name (§12). Nothing is reported from here:
+    /// What this file's <c>.export</c> items name. Nothing is reported from here:
     /// this answers what the program may see, before the program is known, and
     /// <see cref="Resolve(ProgramSymbols)"/> reports on the same names afterwards.
     /// </summary>
@@ -113,7 +112,7 @@ internal sealed class Binder
     /// <summary>
     /// A block: what its opener declares, and its contents in whatever scope and segment the
     /// opener puts them. A segment block changes the segment of its contents, not their
-    /// scope (§5.2).
+    /// scope.
     /// </summary>
     private void WalkBlock(SyntaxNode block, BlockKind kind)
     {
@@ -271,7 +270,7 @@ internal sealed class Binder
             return null;
 
         // A block that names a segment declared nowhere is an error, so a misspelled name is
-        // caught before ld65 runs (§5.2). Its contents still go there, which keeps the
+        // caught before ld65 runs. Its contents still go there, which keeps the
         // mistake to one diagnostic.
         if (segments.Find(name) is null && FirstToken(opener, SyntaxKind.StringLiteral) is { } quoted)
             Report(quoted.Span, $"segment \"{name}\" is not declared");
@@ -319,7 +318,7 @@ internal sealed class Binder
             case SyntaxKind.ExportDirective:
                 // The names are written as bare tokens rather than as expressions, so they
                 // are collected here rather than by looking for name expressions.
-                // A cheap local can neither be reached with `::` nor exported (§6.2), and
+                // A cheap local can neither be reached with `::` nor exported, and
                 // the parser has already refused one here.
                 foreach (var token in statement.ChildTokens)
                 {
@@ -348,7 +347,7 @@ internal sealed class Binder
         }
     }
 
-    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c> (§12).</summary>
+    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
     private void BindImportItem(SyntaxNode item)
     {
         if (item.Kind != SyntaxKind.ImportItem || NameToken(item) is not { } name)
@@ -359,7 +358,7 @@ internal sealed class Binder
         if (Declare(name, kind, checkedValue) is { } symbol && kind == SymbolKind.ImportedAddress)
         {
             // An import states its own address size. An unqualified import and a routine are
-            // both absolute (§12); a routine declared `far` is Stage 11's to read.
+            // both absolute; a routine declared `far` is Stage 11's to read.
             symbol.AddressSize = AddressSize.Absolute;
             foreach (var token in item.ChildTokens)
             {
@@ -518,7 +517,7 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// The <c>.proc</c> or <c>.scope</c> a cheap local belongs to (§6.2). One written outside
+    /// The <c>.proc</c> or <c>.scope</c> a cheap local belongs to. One written outside
     /// any of them is an error, and is kept at file scope so that uses of it still resolve.
     /// </summary>
     private Scope CheapLocalOwner(SyntaxToken name)
@@ -533,7 +532,7 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// The reserved words of §4: a symbol may not be named after a mnemonic or a register.
+    /// The reserved words: a symbol may not be named after a mnemonic or a register.
     /// Members of a named struct, union or enum are exempt, and arrive with Stage 7.
     /// </summary>
     private bool CheckReservedWord(SyntaxToken name)
@@ -601,7 +600,7 @@ internal sealed class Binder
             if (at.Lookup(token.Text) is { } symbol)
                 return symbol;
 
-            // A name the file does not declare may belong to another file of the program (§12).
+            // A name the file does not declare may belong to another file of the program.
             if (program.Lookup(token.Text, tree) is { } external)
                 return CheckExported(token, external, last);
             Report(token.Span, $"`{token.Text}` is not declared");
@@ -629,7 +628,7 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// A symbol another file declares may only be named if that file exports it (§12). The
+    /// A symbol another file declares may only be named if that file exports it. The
     /// check is on the last part of a name: <c>outer::inner</c> needs <c>inner</c> exported,
     /// and <c>outer</c> is only the way in. The symbol is returned either way, so an editor
     /// can still go to a declaration that is private rather than missing.

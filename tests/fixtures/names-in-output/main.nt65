@@ -1,4 +1,4 @@
-; §13: names in the output are flat. A top-level name keeps its spelling, `outer::inner`
+; Names in the output are flat. A top-level name keeps its spelling, `outer::inner`
 ; becomes `outer__inner`, and cheap locals and names inside an anonymous scope get a name
 ; derived from the source and made unique.
 .cpu 6502

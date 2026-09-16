@@ -5,7 +5,7 @@ using Norristown.Semantics;
 namespace Norristown.Project;
 
 /// <summary>
-/// Reads <c>nt65.json</c> (§5.3). The file is read as data, not executed: an unknown key or
+/// Reads <c>nt65.json</c>. The file is read as data, not executed: an unknown key or
 /// a value of the wrong shape is reported and the rest of the file is still read, so one
 /// typo does not hide the next.
 /// <para>
@@ -52,7 +52,7 @@ public static class ProjectFile
             var reader = new Reader(path, text, diagnostics);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                reader.Report("", $"{Name} holds one object, with the keys of §5.3");
+                reader.Report("", $"{Name} holds one object");
                 return ProjectSettings.None with { Diagnostics = diagnostics };
             }
 
@@ -73,7 +73,7 @@ public static class ProjectFile
     }
 
     /// <summary>
-    /// Reads one <c>-D NAME=value</c> from the command line (§5.3), or reports what is wrong
+    /// Reads one <c>-D NAME=value</c> from the command line, or reports what is wrong
     /// with it. <c>-D NAME</c> with no value defines it as 1, as a flag.
     /// </summary>
     public static Define? Definition(string argument, List<Diagnostic> diagnostics)
@@ -91,13 +91,13 @@ public static class ProjectFile
         if (Number(argument[(at + 1)..]) is not { } value)
         {
             diagnostics.Add(new Diagnostic(span, Severity.Error,
-                $"`{argument[(at + 1)..]}` is not a number, and a define is a number (§5.3)"));
+                $"`{argument[(at + 1)..]}` is not a number, and a define is a number"));
             return null;
         }
         return new Define(name, value, span);
     }
 
-    /// <summary>A JSON number, or a string in nt65's number syntax (§5.3).</summary>
+    /// <summary>A JSON number, or a string in nt65's number syntax.</summary>
     private static long? Number(string text) =>
         long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number)
             ? number
@@ -141,7 +141,7 @@ public static class ProjectFile
                 };
                 if (written is null || Number(written) is not { } value)
                 {
-                    Report(property.Name, $"`{property.Name}` is not a number, and a define is a number (§5.3)");
+                    Report(property.Name, $"`{property.Name}` is not a number, and a define is a number");
                     continue;
                 }
                 read.Add(new Define(property.Name, value, At(property.Name)));
@@ -163,7 +163,7 @@ public static class ProjectFile
                     continue;
                 }
 
-                // `dp` and `bank` belong to the 65816's direct page and data bank (§7.5), which
+                // `dp` and `bank` belong to the 65816's direct page and data bank, which
                 // is a later stage's to read; they are accepted here and ignored.
                 var size = property.Value.TryGetProperty("size", out var written) && written.ValueKind == JsonValueKind.String
                     ? SegmentNames.ParseSize(written.GetString() ?? "")

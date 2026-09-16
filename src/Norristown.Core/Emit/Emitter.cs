@@ -8,7 +8,7 @@ using Norristown.Syntax;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Writes one file's ca65 (§13). The output is readable, with the source's own spacing kept
+/// Writes one file's ca65. The output is readable, with the source's own spacing kept
 /// and its comments dropped, and it is deterministic: the same source always gives the same
 /// bytes.
 /// <para>
@@ -48,7 +48,7 @@ public sealed class Emitter
 
     /// <summary>
     /// The ca65 for <paramref name="model"/>'s file. <paramref name="outRoot"/> is the
-    /// project's output tree, or null to write beside the source (§5.3).
+    /// project's output tree, or null to write beside the source.
     /// </summary>
     public static OutputFile Emit(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
@@ -64,8 +64,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// One <c>foo.nt65</c> produces one <c>foo.s</c> (§13), beside it or under the project's
-    /// output tree, which mirrors the source tree (§5.3).
+    /// One <c>foo.nt65</c> produces one <c>foo.s</c>, beside it or under the project's
+    /// output tree, which mirrors the source tree.
     /// </summary>
     public static string OutputPath(string source, string? outRoot = null)
     {
@@ -84,7 +84,7 @@ public sealed class Emitter
 
     /// <summary>
     /// <paramref name="path"/> as it is reached from <paramref name="directory"/>. Debug
-    /// information names the source relative to the output file (§13), so that a debugger
+    /// information names the source relative to the output file, so that a debugger
     /// finds the <c>.nt65</c> wherever the tree is checked out.
     /// </summary>
     private static string Relative(string directory, string path)
@@ -133,7 +133,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The header of §13: the CPU, smart mode off, case-sensitive symbols, and every
+    /// The header: the CPU, smart mode off, case-sensitive symbols, and every
     /// <c>.feature</c> that changes syntax switched off, so that no ca65 command line can
     /// change what the file means.
     /// </summary>
@@ -155,8 +155,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Every export, with the address size nt65 gives it (§12), hoisted to the top of the
-    /// file as §13's example writes them.
+    /// Every export, with the address size nt65 gives it, hoisted to the top of the
+    /// file.
     /// </summary>
     private void Exports()
     {
@@ -205,7 +205,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Everything the file gets from outside it (§12): what another nt65 file exports and
+    /// Everything the file gets from outside it: what another nt65 file exports and
     /// this one names, and what an <c>.import</c> item declares. Each carries the address
     /// size nt65 gives it, so ca65 sizes an operand the way nt65 did.
     /// <para>
@@ -252,7 +252,7 @@ public sealed class Emitter
             };
         }
 
-        // A constant another file declares, written out by value (§12). One whose value nt65
+        // A constant another file declares, written out by value. One whose value nt65
         // does not know has already been reported, and a string is only ever used through
         // `.strlen` and `.strat`, which are numbers before anything is written.
         return symbol.Value.AsNumber() is { } value ? $"{name} = {Constant(value)}" : null;
@@ -310,7 +310,7 @@ public sealed class Emitter
         }
 
         // A segment block anywhere but the file's own top level is a detour from the stream
-        // around it, which is what `.pushseg` and `.popseg` say (§5.2, §13).
+        // around it, which is what `.pushseg` and `.popseg` say.
         var nested = depth > 0;
         var pushed = false;
         if (kind == BlockKind.Segment && opener is not null)
@@ -421,7 +421,7 @@ public sealed class Emitter
         }
     }
 
-    /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65 (§13).</summary>
+    /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
     private void ProcLabel(SyntaxNode line, SyntaxNode opener)
     {
         foreach (var token in opener.ChildTokens)
@@ -468,7 +468,7 @@ public sealed class Emitter
         }
 
         // `z := *` and `f := *`: ca65 reads `z:` at the start of a line as an address-size
-        // prefix, so such a label is written as an assignment instead (§13). An assignment
+        // prefix, so such a label is written as an assignment instead. An assignment
         // takes the whole line, so whatever followed the label goes on the next one.
         var text = LabelText(names.Of(reference.Symbol));
         if (rest is not null && !text.EndsWith(':'))
@@ -690,7 +690,7 @@ public sealed class Emitter
         return Render(node, edits).Trim();
     }
 
-    /// <summary>A label, or the assignment that stands in for one ca65 would misread (§13).</summary>
+    /// <summary>A label, or the assignment that stands in for one ca65 would misread.</summary>
     private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
 
     private void Constant(SyntaxNode line, SyntaxNode statement)
@@ -710,7 +710,7 @@ public sealed class Emitter
         }
     }
 
-    /// <summary>An extern proc is a routine at a constant address, which is a constant (§13).</summary>
+    /// <summary>An extern proc is a routine at a constant address, which is a constant.</summary>
     private void ExternProc(SyntaxNode line, SyntaxNode statement)
     {
         var name = statement.ChildTokens.FirstOrDefault(token =>
@@ -750,7 +750,7 @@ public sealed class Emitter
 
     /// <summary>
     /// Writes one line that came from the source, with the debug line that maps it back
-    /// (§13). Only a line that generates bytes gets one: ld65 attaches a span of bytes to
+    ///. Only a line that generates bytes gets one: ld65 attaches a span of bytes to
     /// the line in effect while they were generated, so a directive before a label or a
     /// constant records a line covering nothing, which no debugger can step to or break on.
     /// </summary>
@@ -911,7 +911,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Text reaches the output as bytes (§8, §13), so <c>.asciiz</c> becomes the bytes and
+    /// Text reaches the output as bytes, so <c>.asciiz</c> becomes the bytes and
     /// the zero that ends them: ca65's own directive takes a string, and there is none left.
     /// </summary>
     private static void Terminated(SyntaxNode directive, Edits edits)
@@ -980,8 +980,7 @@ public sealed class Emitter
             return;
         }
 
-        // A define and a checked import are written as their value, never by name (§5.3,
-        // §12): a `-D` given to ca65 then cannot collide with a define, and a checked import
+        // A define and a checked import are written as their value, never by name: a `-D` given to ca65 then cannot collide with a define, and a checked import
         // is a value nt65 has already used in its own arithmetic.
         var symbol = reference.Symbol;
         var byValue = (symbol.IsDefine || symbol.Kind == SymbolKind.ImportedConstant)
@@ -1066,7 +1065,7 @@ public sealed class Emitter
         edits.Comments.Add(call.GetText().Trim());
     }
 
-    /// <summary>Text becomes byte values, with the source spelling kept in a comment (§8, §13).</summary>
+    /// <summary>Text becomes byte values, with the source spelling kept in a comment.</summary>
     private void Text(SyntaxNode literal, Edits edits)
     {
         if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes || literal.ChildTokens.Length == 0)
@@ -1076,7 +1075,7 @@ public sealed class Emitter
         edits.Comments.Add(literal.GetText());
     }
 
-    /// <summary>The <c>z:</c> or <c>a:</c> that says which mode was chosen (§7.2, §13).</summary>
+    /// <summary>The <c>z:</c> or <c>a:</c> that says which mode was chosen.</summary>
     private void Prefix(SyntaxNode operand, Edits edits)
     {
         var instruction = operand.Parent;
@@ -1087,7 +1086,7 @@ public sealed class Emitter
         var tokens = expression is null ? [] : Tokens(expression);
 
         // ca65 reads a `(` straight after a prefix as an indirect operand, so an expression
-        // that starts with one — `lda (hi + lo) * 2`, which §7.1 allows — gets a unary `+`
+        // that starts with one — `lda (hi + lo) * 2`, which the language allows — gets a unary `+`
         // in front of it. It changes nothing and keeps the operand an expression.
         var text = tokens is [{ Kind: SyntaxKind.OpenParen }, ..] ? prefix + "+" : prefix;
 

@@ -5,7 +5,7 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Layout;
 
-/// <summary>Addressing-mode selection (§7.2) and instruction and data lengths (§7.6).</summary>
+/// <summary>Addressing-mode selection and instruction and data lengths.</summary>
 public sealed class LayoutTests
 {
     /// <summary>The narrowest mode at least as wide as the operand, whatever the source wrote.</summary>
@@ -44,7 +44,7 @@ public sealed class LayoutTests
 
     /// <summary>
     /// The choice is written into the output only where the instruction offers more than one
-    /// width for that shape; where there is nothing to choose, nothing is written (§13).
+    /// width for that shape; where there is nothing to choose, nothing is written.
     /// </summary>
     [Theory]
     [InlineData("lda ptr", "z:")]
@@ -103,7 +103,7 @@ public sealed class LayoutTests
         Assert.Equal(message, Assert.Single(layout.Diagnostics).Message);
     }
 
-    /// <summary>What the 65C02 adds is available there and nowhere earlier (§7.1).</summary>
+    /// <summary>What the 65C02 adds is available there and nowhere earlier.</summary>
     [Theory]
     [InlineData("lda (ptr)", AddressingMode.DirectIndirect)]
     [InlineData("jmp (ptr,x)", AddressingMode.AbsoluteIndirectX)]
@@ -120,7 +120,7 @@ public sealed class LayoutTests
         Assert.Equal(mode, layout.Of(statement)?.Mode);
     }
 
-    /// <summary>A far target is an error on a CPU whose control transfers are all near (§7.2).</summary>
+    /// <summary>A far target is an error on a CPU whose control transfers are all near.</summary>
     [Fact]
     public void AFarTargetIsNotNear()
     {

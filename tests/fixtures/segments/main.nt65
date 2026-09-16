@@ -1,4 +1,4 @@
-; §5.2: a segment's address size is declared exactly once per program, and a block may only
+; A segment's address size is declared exactly once per program, and a block may only
 ; name a segment that something declares.
 .segment "ZP2": zp
 .segment "WRAM": abs, bank = $7e

@@ -3,7 +3,7 @@ using Norristown.Semantics;
 namespace Norristown.Project;
 
 /// <summary>
-/// What <c>nt65.json</c> says about a program (§5.3). A single file built without one uses
+/// What <c>nt65.json</c> says about a program. A single file built without one uses
 /// <see cref="None"/>, so nothing downstream has to ask whether there is a project.
 /// </summary>
 /// <param name="Cpu">The processor the program is built for; a <c>.cpu</c> item must agree.</param>
@@ -27,7 +27,7 @@ public sealed record ProjectSettings(
     /// <summary>No project: what <c>nt65 build main.nt65</c> works from.</summary>
     public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
 
-    /// <summary>The same settings with <paramref name="defines"/> added, overriding by name (§5.3).</summary>
+    /// <summary>The same settings with <paramref name="defines"/> added, overriding by name.</summary>
     public ProjectSettings With(IReadOnlyList<Define> defines)
     {
         if (defines.Count == 0)

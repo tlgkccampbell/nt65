@@ -1,4 +1,4 @@
-; The DESIGN.md §13 output header, pasted by hand, with a few lines after it. It must
+; The output header nt65 writes, pasted by hand, with a few lines after it. It must
 ; assemble with no errors and no warnings on the pinned ca65. ";= N" is the byte count.
 .setcpu "6502"
 .smart -

@@ -1,5 +1,5 @@
 ; A hand-written ca65 module, to show that the object files nt65 produces link against one
-; written by hand: it calls into nt65 and nt65 calls into it (§12).
+; written by hand: it calls into nt65 and nt65 calls into it.
 .setcpu "6502"
 .export host_tick, host_print, HOST_VERSION
 .import main, clear, clear__again

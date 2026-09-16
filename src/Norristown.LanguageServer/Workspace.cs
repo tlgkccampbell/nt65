@@ -11,7 +11,7 @@ namespace Norristown.LanguageServer;
 /// the green nodes they already had.
 /// <para>
 /// A file is not analyzed on its own, because a name it uses may be one another file exports
-/// (§12). The whole program is analyzed together, once, the first time anything asks; an
+///. The whole program is analyzed together, once, the first time anything asks; an
 /// edit to any file throws that away, so a change in one file shows up in another. Whole-
 /// program re-analysis on each keystroke is what Stage 14 revisits.
 /// </para>
@@ -34,7 +34,7 @@ internal sealed class Workspace
             : uri;
 
     /// <summary>
-    /// Reads the project the client opened, if there is one (§5.3). Its files are read from
+    /// Reads the project the client opened, if there is one. Its files are read from
     /// disk; open documents replace them as the client sends them.
     /// </summary>
     public void Load(string? rootUri)
@@ -156,7 +156,7 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>The files one <c>files</c> glob names (§5.3), as logical paths.</summary>
+    /// <summary>The files one <c>files</c> glob names, as logical paths.</summary>
     private static IEnumerable<string> Matching(string root, string glob)
     {
         var normalized = glob.Replace('\\', '/');

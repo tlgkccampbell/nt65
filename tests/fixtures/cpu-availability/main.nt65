@@ -1,5 +1,5 @@
-; Syntax does not depend on the CPU, so every operand form of §7.1 parses on every target;
-; this is where nt65 says which of them the target actually has (§5.1, §7.2). The program
+; Syntax does not depend on the CPU, so every operand form parses on every target;
+; this is where nt65 says which of them the target actually has. The program
 ; below is built for the 6502 and reaches for what the 6502 has not got.
 .cpu 6502
 

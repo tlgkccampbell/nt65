@@ -6,7 +6,7 @@ namespace Norristown.Semantics;
 /// What an expression evaluates to: a number, a string, or nothing when the expression
 /// names an address or needs a layer that is not online yet.
 /// <para>
-/// Arithmetic is 64-bit and signed. The design does not fix a width (§9), and ca65's own is
+/// Arithmetic is 64-bit and signed. The design does not fix a width, and ca65's own is
 /// 32 bits; whether a value fits where it is written is a question about that use, so the
 /// range check belongs to the stage that writes it out rather than here.
 /// </para>
@@ -34,14 +34,14 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     /// <summary>A string.</summary>
     public static Value Of(string text) => new(ValueKind.String, 0, text);
 
-    /// <summary>A condition, as the 1 or 0 that §9's comparisons and logical operators yield.</summary>
+    /// <summary>A condition, as the 1 or 0 that a comparison or a logical operator yields.</summary>
     public static Value Of(bool condition) => Of(condition ? 1L : 0L);
 
     /// <summary>The number, or null when the value is not one.</summary>
     public long? AsNumber() => IsNumber ? Number : null;
 
     /// <summary>
-    /// The address size a constant value implies (§7.2): below <c>$100</c> zero page, below
+    /// The address size a constant value implies: below <c>$100</c> zero page, below
     /// <c>$10000</c> absolute, otherwise far. A negative number is written to fill the width
     /// it is used at, so it says nothing about a size.
     /// </summary>

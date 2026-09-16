@@ -4,8 +4,7 @@ using Norristown.Project;
 namespace Norristown.Layout;
 
 /// <summary>
-/// Which addressing modes each mnemonic has, on each CPU, and how long each one is (§7.1,
-/// §7.6). Syntax does not depend on the CPU, so every form parses everywhere and this table
+/// Which addressing modes each mnemonic has, on each CPU, and how long each one is. Syntax does not depend on the CPU, so every form parses everywhere and this table
 /// is what says whether the target actually has it.
 /// <para>
 /// The 65816 arrives with Stage 11; until then this table covers the 6502 and the 65C02.
@@ -43,7 +42,7 @@ public static class Instructions
 
     /// <summary>
     /// How wide the address in an operand of this mode is, or null where the mode carries no
-    /// address to size: one byte for the direct page, two for absolute (§7.2).
+    /// address to size: one byte for the direct page, two for absolute.
     /// </summary>
     public static Semantics.AddressSize? Width(AddressingMode mode) => mode switch
     {
@@ -55,7 +54,7 @@ public static class Instructions
         _ => null,
     };
 
-    /// <summary>The <c>z:</c>, <c>a:</c> or <c>f:</c> that makes a mode's width explicit (§7.2, §13).</summary>
+    /// <summary>The <c>z:</c>, <c>a:</c> or <c>f:</c> that makes a mode's width explicit.</summary>
     public static string? Prefix(AddressingMode mode) => Width(mode) switch
     {
         Semantics.AddressSize.ZeroPage => "z:",
@@ -63,7 +62,7 @@ public static class Instructions
         _ => null,
     };
 
-    /// <summary>Whether a mnemonic transfers control, so its target is near or far rather than sized (§7.2).</summary>
+    /// <summary>Whether a mnemonic transfers control, so its target is near or far rather than sized.</summary>
     public static bool IsControlTransfer(string mnemonic) =>
         Modes(Cpu.Wdc65C02, mnemonic).Any(mode => mode is AddressingMode.Relative or AddressingMode.DirectRelative)
         || mnemonic.Equals("jmp", StringComparison.OrdinalIgnoreCase)
@@ -98,7 +97,7 @@ public static class Instructions
         Add(table, "jsr", AddressingMode.Absolute);
         Add(table, "bcc bcs beq bmi bne bpl bvc bvs", AddressingMode.Relative);
 
-        // `brk` takes a signature byte on every CPU, and is two bytes wide (§7.1).
+        // `brk` takes a signature byte on every CPU, and is two bytes wide.
         Add(table, "brk", AddressingMode.Immediate);
         Add(table,
             "clc cld cli clv dex dey inx iny nop pha php pla plp rti rts sec sed sei tax tay tsx txa txs tya",

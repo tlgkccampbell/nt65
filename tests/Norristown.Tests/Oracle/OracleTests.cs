@@ -44,8 +44,8 @@ public sealed partial class OracleTests
 
     /// <summary>
     /// Everything nt65 generates must assemble with no errors and no warnings — a ca65
-    /// diagnostic on nt65 output is an nt65 bug (§3.2) — and ca65 must generate exactly as
-    /// many bytes for each line as nt65 worked out for it (§7.6). Those lengths are what
+    /// diagnostic on nt65 output is an nt65 bug — and ca65 must generate exactly as
+    /// many bytes for each line as nt65 worked out for it. Those lengths are what
     /// branch range, cycle counts and assertions will be built on, so agreeing with the
     /// assembler about them is the check that matters.
     /// </summary>
@@ -107,7 +107,7 @@ public sealed partial class OracleTests
     /// <summary>
     /// A fixture with a <c>link/</c> directory holds a hand-written ca65 module and a linker
     /// configuration. nt65's output must link against it: the object file is the only
-    /// boundary between the two (§12), so what nt65 exports has to be what ca65 imports and
+    /// boundary between the two, so what nt65 exports has to be what ca65 imports and
     /// the other way round.
     /// </summary>
     [Fact]
@@ -135,7 +135,7 @@ public sealed partial class OracleTests
     /// <summary>
     /// A checked import is a promise nt65 made about a value it has already used in its own
     /// arithmetic, and the linker is what keeps it: link the same program against a module
-    /// that defines the symbol differently and ld65 must refuse it (§12).
+    /// that defines the symbol differently and ld65 must refuse it.
     /// </summary>
     [Fact]
     public void ACheckedImportWithTheWrongValueFailsTheLink()

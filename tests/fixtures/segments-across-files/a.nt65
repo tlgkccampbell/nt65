@@ -1,4 +1,4 @@
-; A segment is declared once for the whole program (§5.2), and any file may name it. A
+; A segment is declared once for the whole program, and any file may name it. A
 ; program is a set of files, so which file declares it cannot depend on the order they
 ; arrive in.
 .segment "SHARED": zp

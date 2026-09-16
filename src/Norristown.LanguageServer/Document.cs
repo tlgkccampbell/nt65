@@ -5,7 +5,7 @@ namespace Norristown.LanguageServer;
 /// <summary>
 /// One document the client has open, at the revision the client last sent. What it means is
 /// the <see cref="Workspace"/>'s to say, because a name it uses may be one another file
-/// exports (§12).
+/// exports.
 /// </summary>
 internal sealed class Document(string uri, int version, SyntaxTree tree)
 {

@@ -4,7 +4,7 @@ namespace Norristown.Syntax;
 
 /// <summary>
 /// Parses one line's tokens into a statement. A line's syntax depends only on its own tokens
-/// and the kind of block around it (§3.1), so a line parses without looking at any other
+/// and the kind of block around it, so a line parses without looking at any other
 /// line and its statement survives an edit anywhere else in the file.
 /// <para>
 /// The parser never aborts a line: whatever it cannot read becomes a
@@ -16,10 +16,10 @@ namespace Norristown.Syntax;
 /// </summary>
 internal sealed class Parser
 {
-    /// <summary>The loosest binding level of §9, which <see cref="ParseExpression"/> starts at.</summary>
+    /// <summary>The loosest binding level, which <see cref="ParseExpression"/> starts at.</summary>
     private const int LowestPrecedence = 13;
 
-    /// <summary>The tightest binding level of §9 that is still a binary operator.</summary>
+    /// <summary>The tightest binding level that is still a binary operator.</summary>
     private const int TightestPrecedence = 3;
 
     private readonly ImmutableArray<GreenToken> tokens;
@@ -45,7 +45,7 @@ internal sealed class Parser
 
     /// <summary>
     /// Whether a declaration could write its name here. Register names and mnemonics are
-    /// reserved (§4), but that rule belongs to name binding rather than to reading a line:
+    /// reserved, but that rule belongs to name binding rather than to reading a line:
     /// <c>.proc a</c> parses, and is reported where every other reserved-word use is.
     /// </summary>
     private bool AtName => Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic;
@@ -184,7 +184,7 @@ internal sealed class Parser
         if (AtEnd)
             return Finish(SyntaxKind.LabeledLine, [label]);
 
-        // §6.1: a label may be followed by an instruction, a data directive or a macro call.
+        // A label may be followed by an instruction, a data directive or a macro call.
         if (Kind == SyntaxKind.Mnemonic)
             return Finish(SyntaxKind.LabeledLine, [label, ParseInstruction()]);
         if (Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang)
@@ -432,7 +432,7 @@ internal sealed class Parser
 
     /// <summary>
     /// A segment declaration, <c>.segment "NAME": size</c> with its attributes, or the line
-    /// opening a named segment block. The brace decides which (§5.2).
+    /// opening a named segment block. The brace decides which.
     /// </summary>
     private GreenSyntax ParseSegment()
     {
@@ -478,7 +478,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.SegmentDeclaration, children.ToImmutable());
     }
 
-    /// <summary><c>dp = expr</c> or <c>bank = expr</c> (§5.2, §7.5).</summary>
+    /// <summary><c>dp = expr</c> or <c>bank = expr</c>.</summary>
     private GreenNode ParseSegmentAttribute()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -520,7 +520,7 @@ internal sealed class Parser
         }
         children.Add(Advance());
 
-        // `.proc name = expr` is an extern proc: a signature and an address, with no body (§12).
+        // `.proc name = expr` is an extern proc: a signature and an address, with no body.
         if (Kind == SyntaxKind.Equals)
         {
             children.Add(Advance());
@@ -574,7 +574,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ImportDirective, children.ToImmutable());
     }
 
-    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c> (§12).</summary>
+    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
     private GreenNode? ParseImportItem()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -630,7 +630,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ImportSignature, children.ToImmutable());
     }
 
-    /// <summary>The <c>: entry -&gt; exit</c> of a proc (§7.3). Kept from Stage 2; used from Stage 11.</summary>
+    /// <summary>The <c>: entry -&gt; exit</c> of a proc. Kept from Stage 2; used from Stage 11.</summary>
     private GreenNode ParseSignature()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -683,7 +683,7 @@ internal sealed class Parser
         }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
-            // `inline n` or `inline .asciiz`: how much data follows each call (§7.4).
+            // `inline n` or `inline .asciiz`: how much data follows each call.
             if (Kind == SyntaxKind.Directive
                 && Current.Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
                 children.Add(Advance());
@@ -719,7 +719,7 @@ internal sealed class Parser
             : new GreenSyntax(SyntaxKind.InstructionStatement, [mnemonic, ParseOperand()]);
     }
 
-    /// <summary>The operand forms of §7.1. Which ones each CPU and mnemonic allow is Stage 5's.</summary>
+    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is Stage 5's.</summary>
     private GreenNode ParseOperand()
     {
         if (Kind == SyntaxKind.Hash)
@@ -745,7 +745,7 @@ internal sealed class Parser
         children.Add(Advance());
         children.Add(ParseExpression());
 
-        // `mvn #src, #dst` and `mvp` take two bank bytes, written as immediates (§7.1).
+        // `mvn #src, #dst` and `mvp` take two bank bytes, written as immediates.
         if (Kind == SyntaxKind.Comma && Next == SyntaxKind.Hash)
         {
             children.Add(Advance());
@@ -819,7 +819,7 @@ internal sealed class Parser
         {
             children.Add(Advance());
 
-            // `,x`, `,y` and `,s` index; a second expression is what `bbr`/`bbs` take (§7.1).
+            // `,x`, `,y` and `,s` index; a second expression is what `bbr`/`bbs` take.
             children.Add(Kind == SyntaxKind.Register ? Advance() : ParseExpression());
         }
         return new GreenSyntax(SyntaxKind.AbsoluteOperand, children.ToImmutable());
@@ -827,7 +827,7 @@ internal sealed class Parser
 
     /// <summary>
     /// <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c>. The lexer emits a name and a <c>:</c>
-    /// and the parser decides by position (§4); here, in operand position, nothing else can
+    /// and the parser decides by position; here, in operand position, nothing else can
     /// be written, so a name followed by <c>:</c> is a prefix.
     /// </summary>
     private GreenNode? TryAddressPrefix()
@@ -939,7 +939,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ArgumentList, children.ToImmutable());
     }
 
-    /// <summary><c>::</c>-separated, as in <c>gfx::init</c>, <c>::top_level</c> and <c>Point::x</c> (§4, §6.3).</summary>
+    /// <summary><c>::</c>-separated, as in <c>gfx::init</c>, <c>::top_level</c> and <c>Point::x</c>.</summary>
     private GreenNode ParseName()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -960,7 +960,7 @@ internal sealed class Parser
             children.Add(Advance());
 
             // A member of a named struct, union or enum may be spelled like a register or a
-            // mnemonic: after `::` there is nothing else it could be (§4).
+            // mnemonic: after `::` there is nothing else it could be.
             if (Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
             {
                 children.Add(Advance());
@@ -975,7 +975,7 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// The three places §9 requires parentheses, which are the cases a reader misjudges:
+    /// The three places the language requires parentheses, which are the cases a reader misjudges:
     /// a shift or bitwise operator next to a different operator, logical operators mixed,
     /// and a byte operator that looks as if it applied to a whole expression.
     /// </summary>
@@ -989,7 +989,7 @@ internal sealed class Parser
                     continue;
 
                 // Only the logical operators among themselves: `a && (b | c)` reads clearly
-                // enough that §9 leaves `a && b | c` alone.
+                // enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
                 Report(operatorIndex, $"`{op.Text}` and `{inner.Text}` need parentheses to show which applies first");

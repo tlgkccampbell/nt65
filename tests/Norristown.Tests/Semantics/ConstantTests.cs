@@ -2,7 +2,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Constant evaluation (§9) and the classification of §6.1.</summary>
+/// <summary>Constant evaluation and the classification of a name as a constant or an address.</summary>
 public sealed class ConstantTests
 {
     [Theory]
@@ -53,7 +53,7 @@ public sealed class ConstantTests
         Assert.Equal("hi\n", model.Symbol("GREETING").Value.Text);
     }
 
-    /// <summary>A constant may be written before the names it uses (§6.1).</summary>
+    /// <summary>A constant may be written before the names it uses.</summary>
     [Fact]
     public void ForwardReferencesResolve()
     {
@@ -102,7 +102,7 @@ public sealed class ConstantTests
 
     /// <summary>
     /// A <c>NAME = expr</c> is a constant when the expression names no address, and an
-    /// address alias when it does (§6.1).
+    /// address alias when it does.
     /// </summary>
     [Fact]
     public void AnExpressionNamingAnAddressIsAnAlias()
@@ -135,7 +135,7 @@ public sealed class ConstantTests
         Assert.Equal(SymbolKind.Proc, model.Symbol("main").Kind);
     }
 
-    /// <summary>An extern proc is a routine at a constant address, which nt65 knows (§12).</summary>
+    /// <summary>An extern proc is a routine at a constant address, which nt65 knows.</summary>
     [Fact]
     public void AnExternProcKeepsItsAddress()
     {
@@ -146,7 +146,7 @@ public sealed class ConstantTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("CHROUT").AddressSize);
     }
 
-    /// <summary>A checked import gives nt65 the value it uses everywhere (§12).</summary>
+    /// <summary>A checked import gives nt65 the value it uses everywhere.</summary>
     [Fact]
     public void ImportsCarryTheirValueOrTheirSize()
     {
@@ -160,7 +160,7 @@ public sealed class ConstantTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("raw").AddressSize);
     }
 
-    /// <summary>A file may export only what it declares; the rest of §12 arrives with Stage 6.</summary>
+    /// <summary>A file may export only what it declares; the rest of what modules do arrives with Stage 6.</summary>
     [Fact]
     public void AnExportNamesADeclaration()
     {

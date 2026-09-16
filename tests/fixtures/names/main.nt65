@@ -1,4 +1,4 @@
-; What goes wrong with a name (§4, §6.2): one that is not declared, one declared twice, a
+; What goes wrong with a name: one that is not declared, one declared twice, a
 ; reserved word, and a cheap local written or reached where it may not be.
 
 SIZE = 1

@@ -6,7 +6,7 @@ namespace Norristown.Layout;
 
 /// <summary>
 /// What every line of a file assembles to: the addressing mode each instruction gets
-/// (§7.2), how long each instruction and data directive is (§7.6), and everything the CPU
+///, how long each instruction and data directive is, and everything the CPU
 /// makes wrong about them.
 /// <para>
 /// Syntax does not depend on the CPU, so every operand form parses everywhere; this is the
@@ -78,7 +78,7 @@ public sealed class CodeLayout
                     return [];
 
                 // A second expression rather than an index register: the branch target of
-                // `bbr0 flags, @skip` (§7.1).
+                // `bbr0 flags, @skip`.
                 return operand.ChildNodes.Count(c => c.Kind != SyntaxKind.AddressPrefix) > 1
                     ? [AddressingMode.DirectRelative]
                     : [AddressingMode.Direct, AddressingMode.Absolute, AddressingMode.Relative];
@@ -98,7 +98,7 @@ public sealed class CodeLayout
         return false;
     }
 
-    /// <summary>The address-size prefix written in the operand, which wins over everything (§7.2).</summary>
+    /// <summary>The address-size prefix written in the operand, which wins over everything.</summary>
     private static AddressSize? WrittenPrefix(SyntaxNode operand)
     {
         var prefix = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
@@ -113,7 +113,7 @@ public sealed class CodeLayout
         };
     }
 
-    /// <summary>The expression an operand addresses, which is what §7.2 sizes.</summary>
+    /// <summary>The expression an operand addresses, which is what an address size is worked out from.</summary>
     private static SyntaxNode? Expression(SyntaxNode operand) =>
         operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
 
@@ -173,7 +173,7 @@ public sealed class CodeLayout
     }
 
     /// <summary>
-    /// The addressing mode of §7.2: the narrowest the instruction offers that is at least as
+    /// The addressing mode: the narrowest the instruction offers that is at least as
     /// wide as the operand, with the choice written into the output as a prefix when the
     /// instruction offers more than one width for that shape.
     /// </summary>
@@ -237,7 +237,7 @@ public sealed class CodeLayout
 
     /// <summary>
     /// What the operand itself must satisfy: a control transfer takes a near target and is
-    /// not sized by a prefix (§7.2), and an immediate on these CPUs is one byte.
+    /// not sized by a prefix, and an immediate on these CPUs is one byte.
     /// </summary>
     private void CheckOperand(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode)
     {

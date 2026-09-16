@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What the files of a program can see of one another (§12). Every file is a module, and
+/// What the files of a program can see of one another. Every file is a module, and
 /// its symbols are private unless exported; a name a file does not declare is looked for
 /// here before it is called undeclared.
 /// <para>

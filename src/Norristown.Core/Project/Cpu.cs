@@ -1,6 +1,6 @@
 namespace Norristown.Project;
 
-/// <summary>The processor a program is built for (§5.1). One per program.</summary>
+/// <summary>The processor a program is built for. One per program.</summary>
 public enum Cpu
 {
     /// <summary>The MOS 6502.</summary>

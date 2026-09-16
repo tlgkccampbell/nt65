@@ -42,7 +42,7 @@ internal static class Lsp
 
     /// <summary>
     /// Where the name at <paramref name="position"/> is declared, or null. The declaration
-    /// may be in another file of the program (§12), so the location carries its own URI.
+    /// may be in another file of the program, so the location carries its own URI.
     /// </summary>
     public static Protocol.Location? ToDefinition(SemanticModel model, int position) =>
         model.ReferenceAt(position)?.Symbol is { } symbol
@@ -79,7 +79,7 @@ internal static class Lsp
         if (CheckNewName(reference.Symbol, newName) is { } problem)
             return (null, problem);
 
-        // An exported name is written in every file that uses it (§12), so the edit spans the
+        // An exported name is written in every file that uses it, so the edit spans the
         // program rather than the file the caret is in.
         var edits = new Dictionary<string, IReadOnlyList<Protocol.TextEdit>>(StringComparer.Ordinal);
         foreach (var byFile in Everywhere(program, model, position).GroupBy(found => found.File))
@@ -92,7 +92,7 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// Why <paramref name="newName"/> will not do (§4, §6.2), or null when it will: a rename
+    /// Why <paramref name="newName"/> will not do, or null when it will: a rename
     /// that leaves the file not compiling is not a rename.
     /// </summary>
     private static string? CheckNewName(Symbol symbol, string newName)
@@ -135,19 +135,19 @@ internal static class Lsp
 
     /// <summary>
     /// What an editor shows about a symbol: what kind it is, what it is worth, how wide an
-    /// address it is (§7.2) and, for an address, the segment it sits in.
+    /// address it is and, for an address, the segment it sits in.
     /// </summary>
     private static string Describe(Symbol symbol, SyntaxTree asked)
     {
         var text = new StringBuilder($"**{symbol.KindText}** `{symbol.QualifiedName}`\n");
 
         // A name from another module is worth naming that module for: it is the file the
-        // declaration is in, and the file whose `.export` makes it nameable here (§12).
+        // declaration is in, and the file whose `.export` makes it nameable here.
         if (symbol.Tree != asked)
             text.Append($"\n- from: `{symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..]}`");
 
         // A name no path can reach is shown as it is written, so the routine or scope it is
-        // private to is worth saying instead (§6.2).
+        // private to is worth saying instead.
         if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
             text.Append($"\n- private to: `{owner}`");
         if (symbol.Kind == SymbolKind.Member)
@@ -167,7 +167,7 @@ internal static class Lsp
         return text.ToString();
     }
 
-    /// <summary>An address size as the language writes it (§5.2).</summary>
+    /// <summary>An address size as the language writes it.</summary>
     private static string Spell(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",

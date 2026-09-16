@@ -1,9 +1,9 @@
 namespace Norristown.Layout;
 
 /// <summary>
-/// An addressing mode, as ca65 spells it in an operand (§7.1). The modes that differ only
+/// An addressing mode, as ca65 spells it in an operand. The modes that differ only
 /// by how wide the address is — direct, absolute and long — are separate modes, because
-/// choosing between them is what §7.2 is about.
+/// choosing between them is the whole of the address-size rule.
 /// </summary>
 public enum AddressingMode
 {

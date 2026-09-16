@@ -2,7 +2,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>The scoping rules of §6.2, one test per rule.</summary>
+/// <summary>The scoping rules, one test per rule.</summary>
 public sealed class BindingTests
 {
     [Fact]
@@ -49,7 +49,7 @@ public sealed class BindingTests
         Assert.Equal(ScopeKind.File, model.SymbolAt("init", occurrence: 4).Scope.Kind);
     }
 
-    /// <summary>A proc is a scope as well as a label, so its interior labels have a path (§6.2).</summary>
+    /// <summary>A proc is a scope as well as a label, so its interior labels have a path.</summary>
     [Fact]
     public void AProcIsAScope()
     {
@@ -99,7 +99,7 @@ public sealed class BindingTests
         Assert.Equal(ScopeKind.Proc, model.Symbol("@done").Scope.Kind);
     }
 
-    /// <summary>A nested scope can branch to its proc's cheap local, which is what §6.2 asks for.</summary>
+    /// <summary>A nested scope can branch to its proc's cheap local, which is what the language asks for.</summary>
     [Fact]
     public void ACheapLocalIsFoundOutwardThroughScopes()
     {
@@ -240,7 +240,7 @@ public sealed class BindingTests
         Assert.Empty(model.Symbols);
     }
 
-    /// <summary>A segment block changes the segment of its contents, not their scope (§5.2).</summary>
+    /// <summary>A segment block changes the segment of its contents, not their scope.</summary>
     [Fact]
     public void ASegmentBlockDoesNotStartAScope()
     {
@@ -261,7 +261,7 @@ public sealed class BindingTests
 
     /// <summary>
     /// A path reaches only what every scope on the way out has a name for, so a cheap local
-    /// and anything inside an anonymous <c>.scope</c> are named by themselves alone (§6.2).
+    /// and anything inside an anonymous <c>.scope</c> are named by themselves alone.
     /// </summary>
     [Fact]
     public void OnlyNamesWithAWayInAreQualified()

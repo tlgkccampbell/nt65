@@ -5,7 +5,7 @@ namespace Norristown.Tests.Syntax;
 public sealed class ParserTests
 {
     [Theory]
-    // C's order, so a tighter operator ends up deeper (§9).
+    // C's order, so a tighter operator ends up deeper.
     [InlineData("1 + 2 * 3", "(1 + (2 * 3))")]
     [InlineData("1 * 2 + 3", "((1 * 2) + 3)")]
     [InlineData("1 - 2 - 3", "((1 - 2) - 3)")]
@@ -34,15 +34,15 @@ public sealed class ParserTests
         Assert.Equal(shape, SyntaxDump.Infix(Expression(expression)));
 
     [Theory]
-    // §9: an operand of a shift or a bitwise operator may not be a different binary operator.
+    // An operand of a shift or a bitwise operator may not be a different binary operator.
     [InlineData("1 << i + 1", "`<<` and `+` need parentheses to show which applies first")]
     [InlineData("flags & $0f == 0", "`&` and `==` need parentheses to show which applies first")]
     [InlineData("p ^ q + 1", "`^` and `+` need parentheses to show which applies first")]
     [InlineData("p | q & r", "`|` and `&` need parentheses to show which applies first")]
-    // §9: the logical operators may not be mixed.
+    // The logical operators may not be mixed.
     [InlineData("p || q && r", "`||` and `&&` need parentheses to show which applies first")]
     [InlineData("p && q ^^ r", "`^^` and `&&` need parentheses to show which applies first")]
-    // §9: a byte operator that reads as if it applied to the whole expression.
+    // A byte operator that reads as if it applied to the whole expression.
     [InlineData("<label + 1", "unary `<` before `+` needs parentheses to show what `<` applies to")]
     [InlineData(">label * 2", "unary `>` before `*` needs parentheses to show what `>` applies to")]
     [InlineData("1 + <label + 2", "unary `<` before `+` needs parentheses to show what `<` applies to")]
@@ -51,7 +51,7 @@ public sealed class ParserTests
 
     [Theory]
     // The same operator repeated needs nothing, and neither does a tighter operator that is
-    // not one of the two sets §9 names.
+    // not one of the two sets the language names.
     [InlineData("p | q | r")]
     [InlineData("1 << 2 << 3")]
     [InlineData("p && q | r")]
@@ -229,7 +229,7 @@ public sealed class ParserTests
         Assert.Equal(6, diagnostic.Span.EndColumn);
     }
 
-    /// <summary>Whitespace between tokens is trivia (§4), so an operand written apart is still read.</summary>
+    /// <summary>Whitespace between tokens is trivia, so an operand written apart is still read.</summary>
     [Fact]
     public void SpaceBetweenTokensDoesNotChangeWhatALineMeans()
     {
