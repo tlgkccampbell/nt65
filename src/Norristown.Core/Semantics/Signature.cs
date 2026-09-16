@@ -16,6 +16,11 @@ namespace Norristown.Semantics;
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
+    // What the signature was read from, and whether as a macro's, so the values of its
+    // `dp = e` and `dbr = e` items can be read again once the program's constants are known.
+    private SyntaxNode? syntax;
+    private bool forMacro;
+
     /// <summary>What a routine that writes no signature declares: <c>a8, i8, native, near</c>.</summary>
     public static Signature Default { get; } = new(ProcessorState.Default, ProcessorState.Default, false);
 
@@ -48,7 +53,18 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public static Signature ReadMacro(SyntaxNode? syntax, Action<TextSpan, string> report) =>
         Read(syntax, report, forMacro: true);
 
-    private static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report, bool forMacro)
+    /// <summary>
+    /// The signature with the values of its <c>dp = e</c> and <c>dbr = e</c> items, which
+    /// are expressions and so can be worked out only once the program's constants are.
+    /// Until then those parts read as unknown. What is wrong with a value is reported to
+    /// <paramref name="report"/>; everything else was reported when the signature was first read.
+    /// </summary>
+    public Signature Valued(Func<SyntaxNode, long?> valueOf, Action<TextSpan, string> report) =>
+        syntax is null ? this : Read(syntax, (_, _) => { }, forMacro, valueOf, report);
+
+    private static Signature Read(
+        SyntaxNode? syntax, Action<TextSpan, string> report, bool forMacro,
+        Func<SyntaxNode, long?>? valueOf = null, Action<TextSpan, string>? reportValue = null)
     {
         var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
         if (syntax is null)
@@ -65,9 +81,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var exit = Take(exitList);
 
         var entryState = new ProcessorState(
-            entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E);
+            entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
+            ValueOf(entry.D, 0xffff) ?? defaults.D, ValueOf(entry.B, 0xff) ?? defaults.B);
         var exitState = new ProcessorState(
-            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exit.E?.Mode ?? entryState.E);
+            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exit.E?.Mode ?? entryState.E,
+            ValueOf(exit.D, 0xffff) ?? entryState.D, ValueOf(exit.B, 0xff) ?? entryState.B);
 
         // An exit that cannot be what it says is reported once, and read as the entry's, so
         // what uses the signature does not report the same mistake again.
@@ -77,9 +95,37 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exitState = exitState with { Index = entryState.Index };
         if (!Kept(exit.E, entryState.E == ProcessorMode.Unchanged))
             exitState = exitState with { E = entryState.E };
+        if (!Kept(exit.D, entryState.D.Kind == StateValueKind.Unchanged))
+            exitState = exitState with { D = entryState.D };
+        if (!Kept(exit.B, entryState.B.Kind == StateValueKind.Unchanged))
+            exitState = exitState with { B = entryState.B };
         CheckEmulation(entry, entryState);
         CheckEmulation(exit, exitState);
-        return new Signature(entryState, exitState, far ?? false, inline);
+        return new Signature(entryState, exitState, far ?? false, inline) { syntax = syntax, forMacro = forMacro };
+
+        // `dp = e` is worth e once the constants are known, and unknown before; `dp?` is
+        // unknown and `dp*` unchanged.
+        StateValue? ValueOf(StateItem? item, long largest)
+        {
+            if (item is not { } given)
+                return null;
+            if (given.IsUnchanged)
+                return StateValue.Unchanged;
+            if (given.Expression is not { } expression || valueOf is null)
+                return StateValue.Unknown;
+            if (valueOf(expression) is not { } value)
+            {
+                reportValue?.Invoke(expression.Span, $"`{given.Text}` needs a constant: the analysis follows D and B by value");
+                return StateValue.Unknown;
+            }
+            if (value < 0 || value > largest)
+            {
+                reportValue?.Invoke(expression.Span, $"`{given.Text}` is out of range: "
+                    + (largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
+                return StateValue.Unknown;
+            }
+            return StateValue.Of(value);
+        }
 
         Parts Take(SyntaxNode? list)
         {
@@ -116,7 +162,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                         far = item.IsFar;
                         break;
 
-                    // The direct page and the data bank belong to the analysis that checks them.
+                    case StatePart.DirectPage:
+                        parts.D = Once(parts.D, item);
+                        break;
+                    case StatePart.DataBank:
+                        parts.B = Once(parts.B, item);
+                        break;
                     default:
                         break;
                 }
@@ -159,5 +210,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? A;
         public StateItem? Index;
         public StateItem? E;
+        public StateItem? D;
+        public StateItem? B;
     }
 }

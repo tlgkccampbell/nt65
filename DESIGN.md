@@ -271,7 +271,9 @@ for those processors that declares a far segment, or imports a far symbol, is an
 where it is written rather than output ca65 refuses (§3.2).
 
 On the 65816 a segment declaration may also carry `dp = expr` and `bank = expr`, which
-§7.5 uses to check direct-page and data-bank assumptions.
+§7.5 uses to check direct-page and data-bank assumptions. Both are constants, each given
+at most once; `dp` is for a `zp` segment, the only kind reached through the direct page.
+On the other processors they are accepted and nothing reads them.
 
 These declarations restate facts that live in the ld65 configuration, which nt65 does
 not read or check. In particular a `zp` segment is emitted with `z:` operands, so ld65
@@ -340,7 +342,9 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
   be declared in a file.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
-  from (§7.5), for hardware registers that are mirrored in some banks only.
+  from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
+  range of addresses or a single address, each item a range of banks or a single bank,
+  and no two keys may overlap.
 
 Numbers are JSON numbers or strings in nt65 number syntax.
 
@@ -935,6 +939,9 @@ A routine's signature may carry the D and B values it assumes at entry and, afte
 unknown. A routine that does not state them is `dp*, dbr*`: it assumes nothing about D
 and B and returns them as it found them. `.state dp = expr` and `.state dbr = expr`
 assert and set them like any other item (§7.3), and are the only way back from unknown.
+A label a `.state` declares starts from D and B unknown, except that in a routine that is
+`dp*` or `dbr*` it starts from them unchanged, so only a routine that declares D or B needs
+its declared labels to say what they are.
 
 **Transfer functions.** nt65 does not track register values, so it recognizes the
 idioms that load D and B from constants and treats everything else as unknown:
@@ -946,8 +953,14 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
 | `phk` then `plb` | B = the declared bank of the enclosing segment |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
+| `mvn #s, #d`, `mvp #s, #d` | B = d |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
 | any other `tcd`, `pld`, `plb` | unknown |
+
+The pushes in these idioms are values on the analysis stack, so a pull finds them wherever
+the stack is known, not only directly after the push: `pea $2100`, `phx`, `plx`, `pld` sets
+D, and so does `lda #$2100`, `pha`, `pld` with A 16-bit. Where two paths pushed different
+values, the merged stack keeps its depth and forgets the values.
 
 **Checks.** When the state is known and the other side is declared:
 
@@ -961,18 +974,23 @@ idioms that load D and B from constants and treats everything else as unknown:
 - operands that do not use B are exempt: long operands (`f:`), `jmp` and `jsr` (the
   program bank K), `jmp (abs)` and `jml [abs]` (a pointer in bank 0), `jmp (abs,x)` and
   `jsr (abs,x)` (K), and `pea` and `per` (no memory access);
-- `jsr`, `jmp` and branches to a routine whose segment declares a bank different from
-  the caller's segment bank are an error, with `jsl`/`jml` as the fix;
+- `jsr`, `jmp` and branches to a routine or a label whose segment declares a bank
+  different from the caller's segment bank are an error, with `jsl`/`jml` as the fix;
 - immediates such as `#<sym` are never checked.
 
-When either side is undeclared or unknown, nothing is reported.
+When either side is undeclared or unknown, nothing is reported. Signatures are the
+exception, as they are for widths: a call, a tail call or a jump to a declared label is
+checked against the D and B its target declares, and a return against the ones its
+routine declares, and there an unknown value, `*` included, is an error.
 
 **Constant addresses through the direct page.** `d:` on a constant address reaches it
 through the direct page: with D known to be `$2100`, `lda d:$2105` is emitted as
 `lda z:$05`. D must be known at that point and the address must lie from D to D + `$FF`;
 anything else is an error. This is the checked form of subtracting the current direct
 page by hand (libSFX's `dpo()`), which silently goes wrong when D changes. `d:` is for
-constants; symbols reach the direct page through `zp` segments (§5.2).
+constants; symbols reach the direct page through `zp` segments (§5.2). Like every prefix it
+stands before the whole operand, so it applies to the direct and direct-indexed forms; an
+indirect operand has no place for it.
 
 ### 7.6 Sizes, branch range and cycle counts
 

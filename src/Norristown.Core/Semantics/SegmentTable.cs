@@ -26,6 +26,10 @@ public sealed class SegmentTable
 
     private readonly Dictionary<string, Segment> segments;
 
+    // The `dp = e` and `bank = e` a file's declarations write, by segment. They are expressions,
+    // worth something only once the program's constants are, which is after the table is needed.
+    private readonly Dictionary<string, List<SyntaxNode>> attributes = new(StringComparer.Ordinal);
+
     private SegmentTable(Dictionary<string, Segment> segments) => this.segments = segments;
 
     /// <summary>Just the predeclared names: what a file compiled on its own starts from.</summary>
@@ -51,6 +55,7 @@ public sealed class SegmentTable
         List<Diagnostic> diagnostics)
     {
         var segments = Predeclared();
+        var table = new SegmentTable(segments);
         foreach (var segment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
         {
             if (segments.TryGetValue(segment.Name, out var predeclared))
@@ -84,8 +89,57 @@ public sealed class SegmentTable
                 continue;
             }
             segments[name] = new Segment(name, SizeOf(node), declared);
+            table.attributes[name] = [.. node.ChildNodes.Where(child => child.Kind == SyntaxKind.SegmentAttribute)];
         }
-        return new SegmentTable(segments);
+        return table;
+    }
+
+    /// <summary>
+    /// The value of a segment's <c>dp</c> or <c>bank</c>, or null with the reason reported: it
+    /// is a constant in range, given once, and a <c>dp</c> is for a <c>zp</c> segment, the only
+    /// kind whose symbols are reached through the direct page.
+    /// </summary>
+    public static long? Check(
+        string segment, AddressSize size, string word, long? value, Span at, (long? DirectPage, long? Bank) already,
+        List<Diagnostic> diagnostics)
+    {
+        string? problem = null;
+        if ((word == "dp" ? already.DirectPage : already.Bank) is not null)
+            problem = $"segment \"{segment}\" already gives its `{word}`";
+        else if (word == "dp" && size != AddressSize.ZeroPage)
+            problem = $"`dp` says which direct page a `zp` segment is reached through, and \"{segment}\" is not `zp`";
+        else if (value is null)
+            problem = $"`{word}` needs a constant";
+        else if (value < 0 || value > (word == "dp" ? 0xffff : 0xff))
+            problem = word == "dp" ? "the direct page is a 16-bit address" : "a bank is one byte";
+        if (problem is null)
+            return value;
+        diagnostics.Add(new Diagnostic(at, Severity.Error, problem));
+        return null;
+    }
+
+    /// <summary>
+    /// Works out the <c>dp = e</c> and <c>bank = e</c> the files' declarations write, now that
+    /// <paramref name="valueOf"/> can answer what an expression is worth.
+    /// </summary>
+    public void Evaluate(Func<SyntaxNode, long?> valueOf, List<Diagnostic> diagnostics)
+    {
+        foreach (var (name, written) in attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var segment = segments[name];
+            foreach (var attribute in written)
+            {
+                if (attribute.ChildTokens.Length == 0 || attribute.ChildNodes.FirstOrDefault() is not { } expression)
+                    continue;
+                var word = attribute.ChildTokens[0].Text.ToLowerInvariant();
+                var at = attribute.Tree.GetSpan(attribute.Span);
+                var value = valueOf(expression);
+                if (Check(name, segment.Size, word, value, at, (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
+                    continue;
+                segment = word == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
+            }
+            segments[name] = segment;
+        }
     }
 
     /// <summary>The segment <paramref name="name"/>, or null when nothing declares it.</summary>

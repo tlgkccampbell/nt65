@@ -181,6 +181,24 @@ public sealed class CycleTests
     }
 
     /// <summary>
+    /// A direct operand costs one more cycle when the low byte of D is not zero, and may
+    /// where D is not known.
+    /// </summary>
+    [Theory]
+    [InlineData("unchanged", "3-4")]
+    [InlineData("$2100", "3")]
+    [InlineData("$2180", "4")]
+    public void ADirectOperandCostsMoreWhereTheLowByteOfDIsNotZero(string page, string cycles)
+    {
+        var d = page == "unchanged"
+            ? StateValue.Unchanged
+            : StateValue.Of(Convert.ToInt64(page[1..], 16));
+        var processor = ProcessorState.Default with { D = d };
+
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.ToString());
+    }
+
+    /// <summary>
     /// A block move takes seven cycles for every byte it moves, and how many that is is in A
     /// when it runs, so nt65 gives it no count.
     /// </summary>

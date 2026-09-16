@@ -24,6 +24,9 @@ public sealed record ProjectSettings(
     IReadOnlyList<Segment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
+    /// <summary>The banks an absolute constant address in each range may be reached from, ordered by address.</summary>
+    public IReadOnlyList<AccessRange> Ranges { get; init; } = [];
+
     /// <summary>No project: what <c>nt65 build main.nt65</c> works from.</summary>
     public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
 

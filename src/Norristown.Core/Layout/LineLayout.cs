@@ -22,7 +22,11 @@ namespace Norristown.Layout;
 /// The <c>n</c> of <c>n,s</c> a stack-relative operand naming a frame's member comes to; null
 /// for every other line.
 /// </param>
+/// <param name="Direct">
+/// The offset into the direct page a <c>d:</c> operand is written as, from the D the analysis
+/// found; null for every other line, and where D is not known.
+/// </param>
 public sealed record LineLayout(
     int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null,
-    int? Bits = null, Ensured? Ensured = null, int? Slot = null);
+    int? Bits = null, Ensured? Ensured = null, int? Slot = null, long? Direct = null);
 

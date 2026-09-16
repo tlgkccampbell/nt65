@@ -358,6 +358,37 @@ public sealed class StateAnalysisTests
             """));
     }
 
+    [Theory]
+    // The idioms that load D and B from constants.
+    [InlineData(".proc p: a16 {\n    lda #$2100\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp = $2100")]
+    [InlineData(".proc p {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
+    [InlineData(".proc p {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
+
+    // `lda #c`, `tcd` with A 8 bits transfers a high byte nobody knows.
+    [InlineData(".proc p {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+
+    // Anything between the load and the transfer loses it.
+    [InlineData(".proc p: a16 {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
+
+    // A pull of something other than a pushed value loads what nobody knows.
+    [InlineData(".proc p {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
+
+    // Two paths that pushed different constants agree on the depth, not on the value.
+    [InlineData(".proc p {\n    beq @a\n    pea 1\n    bra @b\n@a:\n    pea 2\n@b:\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+    public void DAndBAreLoadedOnlyByTheIdiomsThatLoadThemFromConstants(string text, string state)
+    {
+        Assert.Equal(state, StateAt(text, "nop").Processor.ToString());
+    }
+
+    /// <summary>A label a `.state` declares starts from what its routine says of D and B, so only a routine that declares them needs its labels to.</summary>
+    [Fact]
+    public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
+    {
+        Assert.Empty(Problems(".proc p {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
+        Assert.Contains("main.nt65:5: `rts`: `p` returns with `dp = $2100`, and D is not known here",
+            Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
+    }
+
     private static int MostWalks(string text)
     {
         var analysis = Analysis.Program(("main.nt65", ".cpu 65816\n" + text));

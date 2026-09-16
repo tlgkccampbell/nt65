@@ -39,6 +39,64 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
+    /// The stack with a value <paramref name="size"/> bytes wide pushed, high byte first as the
+    /// processor pushes it. A value the analysis does not know is pushed as bytes it knows nothing about.
+    /// </summary>
+    public AnalysisStack PushValue(StateValue held, int size)
+    {
+        if (held.Kind == StateValueKind.Unknown)
+            return Push(StackEntry.Opaque, size);
+        var builder = entries.ToBuilder();
+        for (var i = size - 1; i >= 0; i--)
+            builder.Add(new StackEntry(false, Width.Unknown, Width.Unknown, Held: held, Size: size, Byte: i));
+        return new AnalysisStack(builder.ToImmutable());
+    }
+
+    /// <summary>
+    /// What a pull of <paramref name="size"/> bytes gets back: the value a push of the same size
+    /// left on top, or unknown when the top bytes are anything else.
+    /// </summary>
+    public StateValue PulledValue(int size)
+    {
+        if (size > entries.Length)
+            return StateValue.Unknown;
+        var top = entries[^1];
+        if (top.Size != size)
+            return StateValue.Unknown;
+        for (var i = 0; i < size; i++)
+        {
+            var entry = entries[entries.Length - 1 - i];
+            if (entry.Size != size || entry.Byte != i || entry.Held != top.Held)
+                return StateValue.Unknown;
+        }
+        return top.Held;
+    }
+
+    /// <summary>
+    /// What two paths arriving at one place agree the stack holds, or null when they do not
+    /// agree on its shape. A byte whose value differs between them is a byte nothing is known
+    /// about, which leaves the depth, the saved status registers and the frames known.
+    /// </summary>
+    public static AnalysisStack? Merge(AnalysisStack? a, AnalysisStack? b)
+    {
+        if (a is null || b is null || a.entries.Length != b.entries.Length)
+            return null;
+        if (a.Equals(b))
+            return a;
+        var builder = a.entries.ToBuilder();
+        for (var i = 0; i < builder.Count; i++)
+        {
+            var (x, y) = (a.entries[i], b.entries[i]);
+            if (x == y)
+                continue;
+            if (x.IsStatus || y.IsStatus || x.Frame != y.Frame)
+                return null;
+            builder[i] = StackEntry.Opaque with { Frame = x.Frame };
+        }
+        return new AnalysisStack(builder.ToImmutable());
+    }
+
+    /// <summary>
     /// The stack with its top <paramref name="size"/> bytes named as <paramref name="frame"/>,
     /// or null when fewer than that are on it. A frame named again moves to where it is named now.
     /// </summary>

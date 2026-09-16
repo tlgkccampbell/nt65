@@ -91,6 +91,18 @@ public sealed class ProgramModel
 
         Evaluator.EvaluateSymbols(
             segments, [.. bound.SelectMany(result => result.Symbols)], resolved, program, binaryLength);
+
+        // A segment's `dp` and `bank`, and a signature's `dp = e` and `dbr = e`, are expressions
+        // that nothing before the analysis reads, so they are worked out once the constants are.
+        long? ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, segments, resolved).AsNumber();
+        segments.Evaluate(ValueOf, program);
+        foreach (var symbol in bound.SelectMany(result => result.Symbols))
+        {
+            void Report(TextSpan span, string message) =>
+                program.Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
+            symbol.Signature = symbol.Signature?.Valued(ValueOf, Report);
+            symbol.MacroSignature = symbol.MacroSignature?.Valued(ValueOf, Report);
+        }
         CheckDefineNames(modules, defines, program);
 
         var files = new List<SemanticModel>();

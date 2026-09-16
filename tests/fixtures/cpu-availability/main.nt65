@@ -29,6 +29,8 @@ away:       .res 1
     cop #1                  ;! error: `cop` is not available on the 6502
     mvn #$7e, #$00          ;! error: `mvn` is not available on the 6502
     jeq a:@out              ;! error: `jeq` transfers control, and a control transfer is not sized by a prefix
+    lda z:(ptr),y           ;! error: `lda` has no direct-page form of this operand on the 6502
+    lda d:$05               ;! error: `d:` reaches an address through the 65816's direct page, and this program is built for the 6502
 @out:
     rts
 }

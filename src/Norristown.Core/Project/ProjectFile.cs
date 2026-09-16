@@ -68,7 +68,10 @@ public static class ProjectFile
                 reader.String(document.RootElement, "out"),
                 reader.Defines(document.RootElement),
                 reader.Segments(document.RootElement),
-                diagnostics);
+                diagnostics)
+            {
+                Ranges = reader.Ranges(document.RootElement),
+            };
         }
     }
 
@@ -103,6 +106,14 @@ public static class ProjectFile
             ? number
             : Literals.Number(text);
 
+    /// <summary>A JSON number, or a string in nt65's number syntax, as a JSON value.</summary>
+    private static long? Number(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Number => Number(element.GetRawText()),
+        JsonValueKind.String => Number(element.GetString() ?? ""),
+        _ => null,
+    };
+
     private static bool IsName(string text) =>
         text.Length > 0 && (char.IsAsciiLetter(text[0]) || text[0] == '_')
         && text.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
@@ -133,13 +144,7 @@ public static class ProjectFile
                     Report(property.Name, $"`{property.Name}` is not a name");
                     continue;
                 }
-                var written = property.Value.ValueKind switch
-                {
-                    JsonValueKind.Number => property.Value.GetRawText(),
-                    JsonValueKind.String => property.Value.GetString() ?? "",
-                    _ => null,
-                };
-                if (written is null || Number(written) is not { } value)
+                if (Number(property.Value) is not { } value)
                 {
                     Report(property.Name, $"`{property.Name}` is not a number, and a define is a number");
                     continue;
@@ -163,8 +168,6 @@ public static class ProjectFile
                     continue;
                 }
 
-                // `dp` and `bank` belong to the 65816's direct page and data bank, which
-                // is a later stage's to read; they are accepted here and ignored.
                 var size = property.Value.TryGetProperty("size", out var written) && written.ValueKind == JsonValueKind.String
                     ? SegmentNames.ParseSize(written.GetString() ?? "")
                     : null;
@@ -173,9 +176,74 @@ public static class ProjectFile
                     Report(property.Name, $"segment \"{property.Name}\" needs a `size` of \"zp\", \"abs\" or \"far\"");
                     continue;
                 }
-                read.Add(new Segment(property.Name, address, At(property.Name)));
+                var segment = new Segment(property.Name, address, At(property.Name));
+                foreach (var attribute in property.Value.EnumerateObject())
+                {
+                    if (attribute.Name == "size")
+                        continue;
+                    if (attribute.Name is not ("dp" or "bank"))
+                    {
+                        Report(property.Name, $"segment \"{property.Name}\": `{attribute.Name}` is not a segment key: "
+                            + "a segment has a `size`, a `dp` and a `bank`");
+                        continue;
+                    }
+                    var value = Number(attribute.Value);
+                    if (Semantics.SegmentTable.Check(property.Name, address, attribute.Name, value, At(property.Name),
+                        (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
+                    {
+                        continue;
+                    }
+                    segment = attribute.Name == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
+                }
+                read.Add(segment);
             }
             return [.. read.OrderBy(segment => segment.Name, StringComparer.Ordinal)];
+        }
+
+        /// <summary>
+        /// <c>"$2100-$21ff": ["$00-$3f", "$80-$bf"]</c>: the banks an absolute constant address
+        /// in each range may be reached from. A range is written <c>first-last</c> or as one
+        /// address, and two ranges may not overlap, so an address has one answer.
+        /// </summary>
+        public IReadOnlyList<AccessRange> Ranges(JsonElement root)
+        {
+            if (!Object(root, "ranges", out var ranges))
+                return [];
+
+            var read = new List<AccessRange>();
+            foreach (var property in ranges.EnumerateObject())
+            {
+                if (Interval(property.Name, 0xffff) is not { } addresses)
+                {
+                    Report(property.Name, $"`{property.Name}` is not a range of absolute addresses, such as \"$2100-$21ff\"");
+                    continue;
+                }
+                if (property.Value.ValueKind != JsonValueKind.Array)
+                {
+                    Report(property.Name, $"`{property.Name}` is a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]");
+                    continue;
+                }
+                var banks = new List<(long First, long Last)>();
+                foreach (var item in property.Value.EnumerateArray())
+                {
+                    var bank = item.ValueKind == JsonValueKind.String ? Interval(item.GetString() ?? "", 0xff)
+                        : Number(item) is { } one and >= 0 and <= 0xff ? (one, one)
+                        : null;
+                    if (bank is { } valid)
+                        banks.Add(valid);
+                    else
+                        Report(property.Name, $"`{property.Name}`: {item.GetRawText()} is not a bank or a range of banks");
+                }
+                var range = new AccessRange(addresses.First, addresses.Last, banks);
+                if (read.FirstOrDefault(other => other.First <= range.Last && range.First <= other.Last) is { } overlapping)
+                {
+                    Report(property.Name, $"`{property.Name}` overlaps `{StateValue.Hex(overlapping.First, 4)}-"
+                        + $"{StateValue.Hex(overlapping.Last, 4)}`: an address is in one range at most");
+                    continue;
+                }
+                read.Add(range);
+            }
+            return [.. read.OrderBy(range => range.First)];
         }
 
         public IReadOnlyList<string> Strings(JsonElement root, string key)
@@ -211,6 +279,18 @@ public static class ProjectFile
 
         public void Report(string key, string message) =>
             diagnostics.Add(new Diagnostic(At(key), Severity.Error, message));
+
+        /// <summary><c>first-last</c> or a single number, each no more than <paramref name="largest"/>.</summary>
+        private static (long First, long Last)? Interval(string text, long largest)
+        {
+            var parts = text.Split('-');
+            if (parts.Length > 2 || Number(parts[0].Trim()) is not { } first
+                || Number(parts[^1].Trim()) is not { } last)
+            {
+                return null;
+            }
+            return first >= 0 && first <= last && last <= largest ? (first, last) : null;
+        }
 
         private bool Object(JsonElement root, string key, out JsonElement value)
         {

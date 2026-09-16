@@ -122,7 +122,7 @@ public static class Compiler
             // over the first layout, and the file is laid out again with what it found.
             if (target == Cpu.Wdc65816)
             {
-                var state = Flow.StateAnalysis.Of(model, layout, flow);
+                var state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges);
                 states.Add(state);
                 diagnostics.AddRange(state.Diagnostics);
                 layout = CodeLayout.Create(model, target, state);

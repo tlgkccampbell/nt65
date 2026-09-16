@@ -224,7 +224,10 @@ public sealed class CodeLayout
         return false;
     }
 
-    /// <summary>The address-size prefix written in the operand, which wins over everything.</summary>
+    /// <summary>
+    /// The address-size prefix written in the operand, which wins over everything. <c>d:</c>
+    /// makes a direct operand of a constant address, reached through the direct page.
+    /// </summary>
     private static AddressSize? WrittenPrefix(SyntaxNode operand)
     {
         var prefix = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
@@ -232,12 +235,17 @@ public sealed class CodeLayout
             return null;
         return char.ToLowerInvariant(prefix.ChildTokens[0].Text[0]) switch
         {
-            'z' => AddressSize.ZeroPage,
+            'z' or 'd' => AddressSize.ZeroPage,
             'a' => AddressSize.Absolute,
             'f' => AddressSize.Far,
             _ => null,
         };
     }
+
+    /// <summary>Whether an operand is written <c>d:</c>, reaching a constant address through the direct page.</summary>
+    public static bool ThroughDirectPage(SyntaxNode operand) =>
+        operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix) is { ChildTokens: [var prefix, ..] }
+        && char.ToLowerInvariant(prefix.Text[0]) == 'd';
 
     /// <summary>The expression an operand addresses, which is what an address size is worked out from.</summary>
     private static SyntaxNode? Expression(SyntaxNode operand) =>
@@ -361,12 +369,12 @@ public sealed class CodeLayout
         var outer = expansion;
         var marked = cpu == Cpu.Wdc65816 && model.MacroAt(call) is { MacroSignature: not null };
         if (marked)
-            steps.Add(new Step(call, outer, routine, Stream, null));
+            steps.Add(new Step(call, outer, routine, Stream, segment, null));
         expansion = Expansion.Of(outer, call, definition);
         Walk(definition.ChildNodes, from: 1);
         expansion = outer;
         if (marked)
-            steps.Add(new Step(call, outer, routine, Stream, null, Closes: true));
+            steps.Add(new Step(call, outer, routine, Stream, segment, null, Closes: true));
     }
 
     /// <summary>
@@ -389,12 +397,12 @@ public sealed class CodeLayout
         var outer = expansion;
         var marked = cpu == Cpu.Wdc65816 && outer?.NearestCall is { } call && model.MacroAt(call) is { MacroSignature: not null };
         if (marked)
-            steps.Add(new Step(statement, outer, routine, Stream, null));
+            steps.Add(new Step(statement, outer, routine, Stream, segment, null));
         expansion = Expansion.Spliced(outer, statement, block);
         Walk(Macros.LinesOf(block), 0);
         expansion = outer;
         if (marked)
-            steps.Add(new Step(statement, outer, routine, Stream, null, Closes: true));
+            steps.Add(new Step(statement, outer, routine, Stream, segment, null, Closes: true));
     }
 
     private void Statement(SyntaxNode statement)
@@ -451,7 +459,7 @@ public sealed class CodeLayout
             case SyntaxKind.PatchDirective:
             case SyntaxKind.StateDirective:
             case SyntaxKind.FrameDirective:
-                steps.Add(new Step(statement, expansion, routine, Stream, null));
+                steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
                 break;
             case SyntaxKind.EnsureDirective:
                 Ensure(statement);
@@ -517,11 +525,14 @@ public sealed class CodeLayout
         if (mode != AddressingMode.Immediate)
             bits = null;
         var length = Instructions.Length(mode) + (bits == 16 ? 1 : 0);
+        var direct = operand is not null && ThroughDirectPage(operand) ? DirectOffset(mnemonic, operand, mode, state) : null;
+        if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
+            CheckDirectPageSymbols(mnemonic, operand, mode);
         Laid(statement, new LineLayout(
             length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode, state), bits,
-            Slot: states?.SlotAt(statement, expansion)));
+            Slot: states?.SlotAt(statement, expansion), Direct: direct));
         Place(statement, length);
-        steps.Add(new Step(statement, expansion, routine, Stream, null));
+        steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
 
         // `bbr0 flags, @skip` branches to the second of its two expressions; every other
         // relative form branches to its only one.
@@ -571,7 +582,7 @@ public sealed class CodeLayout
         Laid(statement, new LineLayout(
             length, AddressingMode.Relative, null, over, Cycles.OfLongBranch(over)));
         Place(statement, length);
-        steps.Add(new Step(statement, expansion, routine, Stream, null));
+        steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
     }
 
     /// <summary>
@@ -717,6 +728,15 @@ public sealed class CodeLayout
             return widths[0];
         if (candidates.Length == 1)
         {
+            // A prefix wins, so one the only form cannot honour is an error rather than a
+            // prefix quietly dropped: `lda z:($10),y` has no direct form, and ca65 would read
+            // the text as `(dp),y`. `d:` says what is wrong with it where its offset is worked out.
+            if (WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
+                && Instructions.Width(candidates[0]) is { } width && width != written
+                && !Instructions.IsControlTransfer(mnemonic.Text))
+            {
+                Report(operand.Span, $"`{mnemonic.Text}` has no {Spell(written)} form of this operand on the {CpuNames.Spell(cpu)}");
+            }
             CheckOperand(mnemonic, operand, candidates[0], substituted, bits);
             return candidates[0];
         }
@@ -805,6 +825,58 @@ public sealed class CodeLayout
             + $"`{near}` reaches it");
     }
 
+    /// <summary>
+    /// <c>d:</c> on a constant address: the offset into the direct page it is written as, once
+    /// the analysis knows D here. What is wrong with D is the analysis's to report; what is
+    /// wrong with the operand itself is reported here.
+    /// </summary>
+    private long? DirectOffset(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, ProcessorState? state)
+    {
+        if (Expression(operand) is not { } expression)
+            return null;
+        if (cpu != Cpu.Wdc65816)
+        {
+            Report(operand.Span, $"`d:` reaches an address through the 65816's direct page, and this program is built for the {CpuNames.Spell(cpu)}");
+            return null;
+        }
+        if (model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } address)
+        {
+            Report(operand.Span, "`d:` is for a constant address: a symbol reaches the direct page through a `zp` segment");
+            return null;
+        }
+        if (Instructions.Width(mode) != AddressSize.ZeroPage)
+        {
+            Report(operand.Span, $"`d:` makes a direct operand, and `{mnemonic.Text}` has no direct form of this operand");
+            return null;
+        }
+        return state?.D is { IsKnown: true } page && address >= page.Value && address <= page.Value + 0xff
+            ? address - page.Value
+            : null;
+    }
+
+    /// <summary>
+    /// On the 65816 a symbol in a segment reached through a direct page other than 0 means
+    /// something only as a direct operand, D plus its offset. As an absolute or long operand it
+    /// reaches the offset in bank B instead, whatever made the operand that wide. <c>pea</c> and
+    /// <c>per</c> reach no memory, so the offset is all they push.
+    /// </summary>
+    private void CheckDirectPageSymbols(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode)
+    {
+        if (Instructions.Width(mode) is not (AddressSize.Absolute or AddressSize.Far)
+            || mnemonic.Text.ToLowerInvariant() is "pea" or "per" || Expression(operand) is not { } expression)
+        {
+            return;
+        }
+        foreach (var symbol in AddressSymbols.In(model, expression, expansion))
+        {
+            if (model.Segments.Find(symbol.Segment ?? SegmentTable.DefaultSegment) is not { DirectPage: { } page and not 0 } segment)
+                continue;
+            Report(expression.Span, $"`{symbol.DisplayName}` is in \"{segment.Name}\", reached through the direct page at "
+                + $"{StateValue.Hex(page, 4)}, and is only a direct operand: as {(mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")} "
+                + "operand it would reach its offset in the data bank");
+        }
+    }
+
     /// <summary>Whether an expression names a routine, which carries a signature.</summary>
     private bool NamesRoutine(SyntaxNode expression) =>
         Targets.Of(model, expression, expansion) is { Symbol.Signature: not null };
@@ -841,7 +913,7 @@ public sealed class CodeLayout
             cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state) ?? new CycleCount(3);
         Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
         Place(directive, ensured.Length);
-        steps.Add(new Step(directive, expansion, routine, Stream, null));
+        steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
     }
 
     /// <summary>An <c>.error</c> the build reached: a configuration the file refuses to be built in.</summary>
@@ -855,7 +927,7 @@ public sealed class CodeLayout
             return;
         Laid(directive, new LineLayout(length, null, null));
         Place(directive, length);
-        steps.Add(new Step(directive, expansion, routine, Stream, null));
+        steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
     }
 
     /// <summary>
@@ -899,7 +971,7 @@ public sealed class CodeLayout
             return;
         labels[(symbol, Expansion.Owning(expansion, symbol))] =
             new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
-        steps.Add(new Step(declaration, expansion, routine, Stream, symbol));
+        steps.Add(new Step(declaration, expansion, routine, Stream, segment, symbol));
     }
 
     /// <summary>What a label or a routine declaration names.</summary>

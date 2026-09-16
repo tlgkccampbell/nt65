@@ -1,26 +1,36 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The widths and the mode of the 65816 at one point: the part of its state that decides how
-/// an immediate is sized. The direct page and the data bank join it with the stage that
-/// checks them.
+/// What the analysis knows of the 65816 at one point: the widths and the mode, which decide
+/// how an immediate is sized, and the direct page and the data bank, which decide what memory
+/// a direct or an absolute operand reaches.
 /// </summary>
 /// <param name="A">How wide the accumulator is.</param>
 /// <param name="Index">How wide X and Y are.</param>
 /// <param name="E">Whether the processor is in emulation mode.</param>
-public readonly record struct ProcessorState(Width A, Width Index, ProcessorMode E)
+/// <param name="D">The direct page.</param>
+/// <param name="B">The data bank.</param>
+public readonly record struct ProcessorState(
+    Width A, Width Index, ProcessorMode E, StateValue D = default, StateValue B = default)
 {
-    /// <summary>What a signature that says nothing declares: <c>a8, i8, native</c>.</summary>
+    /// <summary>What a signature that says nothing declares: <c>a8, i8, native, dp*, dbr*</c>.</summary>
     public static ProcessorState Default => new(Width.Eight, Width.Eight, ProcessorMode.Native);
 
     /// <summary>Nothing known about any part.</summary>
-    public static ProcessorState Unknown => new(Width.Unknown, Width.Unknown, ProcessorMode.Unknown);
+    public static ProcessorState Unknown => new(
+        Width.Unknown, Width.Unknown, ProcessorMode.Unknown, StateValue.Unknown, StateValue.Unknown);
 
     /// <summary>The width of <paramref name="register"/>.</summary>
     public Width Of(Layout.WidthRegister register) => register == Layout.WidthRegister.A ? A : Index;
 
-    /// <summary>The state as a signature writes it: <c>a16, i8, native</c>.</summary>
-    public override string ToString() => $"{Spell("a", A)}, {Spell("i", Index)}, {Spell(E)}";
+    /// <summary>
+    /// The state as a signature writes it: <c>a16, i8, native</c>, with the direct page and the
+    /// data bank where they are anything other than unchanged.
+    /// </summary>
+    public override string ToString() =>
+        $"{Spell("a", A)}, {Spell("i", Index)}, {Spell(E)}"
+        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Spell("dp"))
+        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Spell("dbr"));
 
     /// <summary>One width as an item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.</summary>
     public static string Spell(string register, Width width) => width switch

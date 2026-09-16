@@ -5,11 +5,11 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// The 65816's register widths and emulation flag, tracked through each routine. 65816 code
-/// cannot be written without them, because they decide how wide an immediate is, and the
-/// analysis stays small because the language keeps it inside one routine: every routine
-/// declares its state at entry and exit, and control either stays in the routine or goes
-/// to another routine's entry.
+/// The 65816's register widths, emulation flag, direct page and data bank, tracked through
+/// each routine. 65816 code cannot be written without them: the widths decide how wide an
+/// immediate is, and D and B what memory an operand reaches. The analysis stays small because
+/// the language keeps it inside one routine: every routine declares its state at entry and
+/// exit, and control either stays in the routine or goes to another routine's entry.
 /// <para>
 /// Each region's blocks are run to a fixed point over a lattice of known values and
 /// unknown, starting from the routine's signature and from every label a <c>.state</c>
@@ -30,15 +30,19 @@ public sealed class StateAnalysis
     private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
     private readonly List<Diagnostic> diagnostics = [];
 
+    // The banks an absolute constant address in each range may be reached from.
+    private readonly IReadOnlyList<Project.AccessRange> ranges;
+
     // Whether the walk is the last one, over converged states, which is the only one that
     // reports and records.
     private bool final;
 
-    private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow)
+    private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
         this.model = model;
         this.layout = layout;
         this.flow = flow;
+        this.ranges = ranges;
     }
 
     /// <summary>What is wrong with the widths, the mode and the calls in this file.</summary>
@@ -51,10 +55,15 @@ public sealed class StateAnalysis
     /// </summary>
     public int MostWalks { get; private set; }
 
-    /// <summary>Works out the processor state through every routine of <paramref name="flow"/>'s file.</summary>
-    public static StateAnalysis Of(SemanticModel model, CodeLayout layout, ControlFlow flow)
+    /// <summary>
+    /// Works out the processor state through every routine of <paramref name="flow"/>'s file.
+    /// <paramref name="ranges"/> is the project's table of which banks each range of absolute
+    /// addresses may be reached from.
+    /// </summary>
+    public static StateAnalysis Of(
+        SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange>? ranges = null)
     {
-        var analysis = new StateAnalysis(model, layout, flow);
+        var analysis = new StateAnalysis(model, layout, flow, ranges ?? []);
         foreach (var region in flow.Regions)
             analysis.Analyze(region);
         analysis.final = true;
@@ -117,7 +126,15 @@ public sealed class StateAnalysis
     private static ProcessorState Exited(Signature callee, ProcessorState state) => new(
         callee.Exit.A == Width.Unchanged ? state.A : callee.Exit.A,
         callee.Exit.Index == Width.Unchanged ? state.Index : callee.Exit.Index,
-        callee.Exit.E == ProcessorMode.Unchanged ? state.E : callee.Exit.E);
+        callee.Exit.E == ProcessorMode.Unchanged ? state.E : callee.Exit.E,
+        callee.Exit.D.Kind == StateValueKind.Unchanged ? state.D : callee.Exit.D,
+        callee.Exit.B.Kind == StateValueKind.Unchanged ? state.B : callee.Exit.B);
+
+    /// <summary>What a <c>dp = e</c> or <c>dbr = e</c> item says, or unknown for <c>dp?</c> and for a value nt65 cannot work out.</summary>
+    private static StateValue ValueOf(StateItem item, SemanticModel model) =>
+        item.Expression is { } expression && model.ValueOf(expression).AsNumber() is { } value
+            ? StateValue.Of(value)
+            : StateValue.Unknown;
 
     private static string Mode(ProcessorMode mode) => mode == ProcessorMode.Native ? "native" : "emulation";
 
@@ -149,12 +166,19 @@ public sealed class StateAnalysis
 
         // A label a `.state` declares is an entry point in its own right. One that some path
         // already reaches is checked against that path; one nothing reaches starts from what
-        // the directive says, over a state otherwise unknown.
+        // the directive says, over a state otherwise unknown. A routine that promises to hand
+        // back D or B unchanged is taken to have left them alone on the way to the label too,
+        // so only a routine that declares them needs its labels to.
         foreach (var block in blocks)
         {
             if (block.IsDeclared && reached[block.Index] is null)
             {
-                reached[block.Index] = new FlowState(ProcessorState.Unknown, null);
+                var unknown = ProcessorState.Unknown;
+                if (signature.Entry.D.Kind == StateValueKind.Unchanged)
+                    unknown = unknown with { D = StateValue.Unchanged };
+                if (signature.Entry.B.Kind == StateValueKind.Unchanged)
+                    unknown = unknown with { B = StateValue.Unchanged };
+                reached[block.Index] = new FlowState(unknown, null);
                 pending.Add(block.Index);
                 Settle();
             }
@@ -217,7 +241,7 @@ public sealed class StateAnalysis
             var step = block.Steps[i];
             if (final && !step.Closes)
                 reaching[(step.Statement.Position, step.On)] = state;
-            var previous = i > 0 ? block.Steps[i - 1].Statement : null;
+            Step? previous = i > 0 ? block.Steps[i - 1] : null;
             var next = i == block.Steps.Count - 1 ? block.Next : null;
             state = Through(step, previous, next, state, routine);
         }
@@ -225,7 +249,7 @@ public sealed class StateAnalysis
     }
 
     /// <summary>What one statement does to the state.</summary>
-    private FlowState Through(Step step, SyntaxNode? previous, SyntaxNode? next, FlowState state, Symbol routine)
+    private FlowState Through(Step step, Step? previous, SyntaxNode? next, FlowState state, Symbol routine)
     {
         var statement = step.Statement;
         if (statement.Kind == SyntaxKind.StateDirective)
@@ -246,6 +270,7 @@ public sealed class StateAnalysis
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
             CheckImmediate(step, mnemonic, register, processor, routine);
         Slot(step, mode, stack);
+        CheckMemory(step, mnemonic, mode, processor, routine);
 
         switch (mnemonic)
         {
@@ -255,38 +280,70 @@ public sealed class StateAnalysis
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
             // other `xce` swaps in a carry nobody knows.
+            // D and B are left alone.
             case "xce":
-                if (previous is not null && Is(previous, "clc"))
+                if (previous is { } clc && Is(clc.Statement, "clc"))
                 {
                     return state with
                     {
                         Processor = processor.E switch
                         {
-                            ProcessorMode.Emulation => new ProcessorState(Width.Eight, Width.Eight, ProcessorMode.Native),
+                            ProcessorMode.Emulation => processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Native },
                             ProcessorMode.Native => processor,
-                            _ => new ProcessorState(Width.Unknown, Width.Unknown, ProcessorMode.Native),
+                            _ => processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Native },
                         },
                     };
                 }
                 return state with
                 {
-                    Processor = previous is not null && Is(previous, "sec")
-                        ? new ProcessorState(Width.Eight, Width.Eight, ProcessorMode.Emulation)
-                        : ProcessorState.Unknown,
+                    Processor = previous is { } sec && Is(sec.Statement, "sec")
+                        ? processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Emulation }
+                        : processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Unknown },
                 };
+
+            // The direct page is loaded from a constant by `lda #c` then `tcd` with A 16 bits;
+            // any other `tcd` loads what nobody knows.
+            case "tcd":
+                return state with
+                {
+                    Processor = processor with
+                    {
+                        D = processor.A == Width.Sixteen && previous is { } load && Loaded(load) is { } page
+                            ? StateValue.Of(page & 0xffff)
+                            : StateValue.Unknown,
+                    },
+                };
+
+            // A block move leaves the data bank at its destination.
+            case "mvn":
+            case "mvp":
+                return state with { Processor = processor with { B = MovedTo(step) } };
 
             case "php":
                 return state with { Stack = stack?.Push(new StackEntry(true, processor.A, processor.Index)) };
+            // A constant loaded into A just before it is pushed is a value a pull can get back:
+            // `lda #c`, `pha`, `plb` loads the data bank.
             case "pha":
-                return state with { Stack = Push(stack, Bytes(processor.A)) };
+                return state with
+                {
+                    Stack = Bytes(processor.A) is { } bytes && previous is { } loader && Loaded(loader) is { } loaded
+                        ? stack?.PushValue(StateValue.Of(loaded & (bytes == 1 ? 0xff : 0xffff)), bytes)
+                        : Push(stack, Bytes(processor.A)),
+                };
             case "phx":
             case "phy":
                 return state with { Stack = Push(stack, Bytes(processor.Index)) };
             case "phb":
+                return state with { Stack = stack?.PushValue(processor.B, 1) };
             case "phk":
-                return state with { Stack = Push(stack, 1) };
+                return state with { Stack = stack?.PushValue(BankOf(step.Segment), 1) };
             case "phd":
+                return state with { Stack = stack?.PushValue(processor.D, 2) };
             case "pea":
+                return state with
+                {
+                    Stack = stack?.PushValue(Constant(step) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
+                };
             case "pei":
             case "per":
                 return state with { Stack = Push(stack, 2) };
@@ -295,10 +352,12 @@ public sealed class StateAnalysis
             case "plx":
             case "ply":
                 return state with { Stack = Pull(stack, Bytes(processor.Index)) };
+            // A pull that finds a value the routine pushed gets it back: a saved D or B, a
+            // constant, or the program bank. Any other loads what nobody knows.
             case "plb":
-                return state with { Stack = Pull(stack, 1) };
+                return new FlowState(processor with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, Pull(stack, 1));
             case "pld":
-                return state with { Stack = Pull(stack, 2) };
+                return new FlowState(processor with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it; any other leaves them unknown. The emulation flag is not in it.
@@ -430,7 +489,7 @@ public sealed class StateAnalysis
     /// the parts it gives are checked. The declaration is read off the label, so the routine
     /// may be in another file.
     /// </summary>
-    private static ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
+    private ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
     {
         if (label is not { Kind: SymbolKind.Label, StateDeclaration: { } declared, Routine: { } owner }
             || owner == routine)
@@ -445,6 +504,8 @@ public sealed class StateAnalysis
                 StatePart.A => state with { A = item.Width },
                 StatePart.Index => state with { Index = item.Width },
                 StatePart.E => state with { E = item.Mode },
+                StatePart.DirectPage => state with { D = ValueOf(item, model) },
+                StatePart.DataBank => state with { B = ValueOf(item, model) },
                 _ => state,
             };
         }
@@ -488,6 +549,16 @@ public sealed class StateAnalysis
             Report(step, $"{what} needs `{ProcessorState.Spell(callee.Entry.E)}`, and "
                 + (IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : "the mode is not known here"));
         }
+        Value("dp", "D", callee.Entry.D, state.D);
+        Value("dbr", "B", callee.Entry.B, state.B);
+
+        void Value(string item, string register, StateValue needed, StateValue here)
+        {
+            if (!needed.IsKnown || needed == here)
+                return;
+            Report(step, $"{what} needs `{needed.Spell(item)}`, and "
+                + (here.IsKnown ? $"{register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} here" : $"{register} is not known here"));
+        }
 
         void Width(string item, string register, Width needed, Width here)
         {
@@ -518,6 +589,23 @@ public sealed class StateAnalysis
                 + (IsKnown(state.E)
                     ? $"the processor is in {Mode(state.E)} mode {where}"
                     : $"the mode is not known {where}"));
+        }
+
+        Value("dp", "D", exit.D, state.D);
+        Value("dbr", "B", exit.B, state.B);
+
+        void Value(string item, string register, StateValue declared, StateValue here)
+        {
+            if (declared.Kind == StateValueKind.Unchanged && here.Kind != StateValueKind.Unchanged)
+            {
+                Report(step, $"{lead}`{name}` says `{item}*`, so {register} must be what it was on entry, "
+                    + $"and {where} it may not be");
+            }
+            else if (declared.IsKnown && declared != here)
+            {
+                Report(step, $"{lead}`{name}` returns with `{declared.Spell(item)}`, and "
+                    + (here.IsKnown ? $"{register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} {where}" : $"{register} is not known {where}"));
+            }
         }
 
         void Part(string item, string register, Width declared, Width here)
@@ -581,6 +669,13 @@ public sealed class StateAnalysis
         foreach (var step in block.Steps)
         {
             var statement = step.Statement;
+            if (statement.Kind == SyntaxKind.InstructionStatement && OperandOf(step) is { } operand
+                && CodeLayout.ThroughDirectPage(operand))
+            {
+                Report(step, $"`d:` is reached through the direct page, and no path from `{region.Routine.DisplayName}`'s "
+                    + "entry reaches it. A `.state` after its label declares what the state is there");
+                continue;
+            }
             if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0
                 || layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
                 || Instructions.SizedBy(statement.ChildTokens[0].Text) is not { } register)
@@ -600,10 +695,7 @@ public sealed class StateAnalysis
     /// </summary>
     private ProcessorState Flags(Step step, bool reset, ProcessorState state)
     {
-        var written = step.Statement.ChildNodes.FirstOrDefault();
-        var operand = Operands.Substituted(model, written, step.On)?.Operand ?? written;
-        var expression = operand?.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
-        if (expression is null || model.ValueOf(expression, step.On).AsNumber() is not { } flags)
+        if (Constant(step) is not { } flags)
             return state with { A = Width.Unknown, Index = Width.Unknown };
         if (state.E == ProcessorMode.Emulation)
             return state;
@@ -617,6 +709,147 @@ public sealed class StateAnalysis
             Index = (flags & 0x10) != 0 ? width : state.Index,
         };
     }
+
+    /// <summary>The operand an instruction has on this writing of it: what a call gave, where the body names an <c>operand</c> parameter.</summary>
+    private SyntaxNode? OperandOf(Step step)
+    {
+        var written = step.Statement.ChildNodes.FirstOrDefault();
+        return Operands.Substituted(model, written, step.On)?.Operand ?? written;
+    }
+
+    /// <summary>The value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the <c>c</c> of <c>pea c</c>, or null when it is not a constant.</summary>
+    private long? Constant(Step step) =>
+        OperandOf(step)?.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix) is { } expression
+            ? model.ValueOf(expression, step.On).AsNumber()
+            : null;
+
+    /// <summary>The constant <paramref name="step"/> loads into A, for an <c>lda #c</c>; null for anything else.</summary>
+    private long? Loaded(Step step) =>
+        Is(step.Statement, "lda") && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
+            ? Constant(step)
+            : null;
+
+    /// <summary>The destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data bank.</summary>
+    private StateValue MovedTo(Step step) =>
+        OperandOf(step) is { Kind: SyntaxKind.ImmediateOperand, ChildNodes: [_, var destination, ..] }
+        && model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff
+            ? StateValue.Of(bank)
+            : StateValue.Unknown;
+
+    /// <summary>The bank a segment declares it lives in, which is the program bank for code in it.</summary>
+    private StateValue BankOf(string segment) =>
+        model.Segments.Find(segment)?.Bank is { } bank ? StateValue.Of(bank) : StateValue.Unknown;
+
+    /// <summary>
+    /// What memory an operand reaches through the direct page or the data bank, checked
+    /// against what the segments and the project's <c>ranges</c> declare. Where either side is
+    /// not declared or not known, nothing is reported: the checks are opt-in by declaration.
+    /// </summary>
+    private void CheckMemory(Step step, string mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
+    {
+        if (mode is not { } chosen || OperandOf(step) is not { } operand
+            || operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix) is not { } expression)
+        {
+            return;
+        }
+
+        if (Instructions.Width(chosen) == AddressSize.ZeroPage)
+        {
+            if (CodeLayout.ThroughDirectPage(operand))
+            {
+                CheckThroughDirectPage(step, expression, state, routine);
+                return;
+            }
+            if (!state.D.IsKnown)
+                return;
+            foreach (var symbol in AddressSymbols.In(model, expression, step.On))
+            {
+                if (SegmentOf(symbol) is { DirectPage: { } page } segment && page != state.D.Value)
+                {
+                    Report(step, $"`{symbol.DisplayName}` is in \"{segment.Name}\", which is reached through the direct "
+                        + $"page at {StateValue.Hex(page, 4)}, and D is {StateValue.Hex(state.D.Value, 4)} here");
+                }
+            }
+            return;
+        }
+
+        // A near transfer stays in the program bank, so a target in a segment in another bank
+        // is out of its reach.
+        if (mnemonic != "per" && (chosen is AddressingMode.Relative or AddressingMode.RelativeLong
+            || (chosen == AddressingMode.Absolute && mnemonic is "jmp" or "jsr")))
+        {
+            CheckNearBank(step, mnemonic, chosen);
+            return;
+        }
+
+        // Only an absolute operand of an instruction that reads or writes data uses B: a long
+        // operand names its bank, `jmp` and `jsr` use the program bank, and `pea` and `per`
+        // reach no memory at all.
+        if (chosen is not (AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
+            || mnemonic is "jmp" or "jsr" or "pea" or "per" || !state.B.IsKnown)
+        {
+            return;
+        }
+        var bank = state.B.Value;
+        foreach (var symbol in AddressSymbols.In(model, expression, step.On))
+        {
+            if (SegmentOf(symbol) is { Bank: { } declared } segment && declared != bank)
+            {
+                Report(step, $"`{symbol.DisplayName}` is in \"{segment.Name}\", which is in bank {StateValue.Hex(declared, 2)}, "
+                    + $"and B is {StateValue.Hex(bank, 2)} here");
+            }
+        }
+        if (model.ValueOf(expression, step.On).AsNumber() is { } address
+            && ranges.FirstOrDefault(range => range.Covers(address)) is { } covering && !covering.Permits(bank))
+        {
+            Report(step, $"{StateValue.Hex(address, 4)} is reached only from banks {covering.SpellBanks()}, and B is "
+                + $"{StateValue.Hex(bank, 2)} here");
+        }
+    }
+
+    /// <summary>
+    /// <c>jsr</c>, <c>jmp</c> or a branch to a label or a routine whose segment declares a bank
+    /// other than the one the code around it declares. Both sides have to declare a bank.
+    /// </summary>
+    private void CheckNearBank(Step step, string mnemonic, AddressingMode mode)
+    {
+        if (BankOf(step.Segment) is not { IsKnown: true } here
+            || Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target
+            || SegmentOf(target) is not { Bank: { } there } segment || there == here.Value)
+        {
+            return;
+        }
+        var fix = mnemonic == "jsr" ? "jsl" : "jml";
+        Report(step, $"`{mnemonic}` stays in bank {StateValue.Hex(here.Value, 2)}, and `{target.DisplayName}` is in "
+            + $"\"{segment.Name}\", in bank {StateValue.Hex(there, 2)}: `{fix}` reaches it");
+    }
+
+    /// <summary>
+    /// <c>d:</c> on a constant address, which reaches it through the direct page: D has to be
+    /// known here, and the address in the page it starts.
+    /// </summary>
+    private void CheckThroughDirectPage(Step step, SyntaxNode expression, ProcessorState state, Symbol routine)
+    {
+        if (model.ValueOf(expression, step.On).AsNumber() is not { } address)
+            return;
+        var what = $"`d:{StateValue.Hex(address, 4)}` is reached through the direct page";
+        if (state.D.Kind == StateValueKind.Unchanged)
+        {
+            Report(step, $"{what}, and `{Owner(step, routine)}` says `dp*`, which assumes nothing about D");
+        }
+        else if (!state.D.IsKnown)
+        {
+            Report(step, $"{what}, and D is not known here: a `.state dp = ...` says what it is");
+        }
+        else if (address < state.D.Value || address > state.D.Value + 0xff)
+        {
+            Report(step, $"{what} at {StateValue.Hex(state.D.Value, 4)}, which reaches only "
+                + $"{StateValue.Hex(state.D.Value, 4)} to {StateValue.Hex(state.D.Value + 0xff, 4)}");
+        }
+    }
+
+    /// <summary>The segment a placed symbol is in, as the program's table declares it.</summary>
+    private Segment? SegmentOf(Symbol symbol) => model.Segments.Find(symbol.Segment ?? SegmentTable.DefaultSegment);
 
     /// <summary>
     /// A <c>.state</c>: each item asserts and sets. Where that part is known and differs it is
@@ -650,7 +883,12 @@ public sealed class StateAnalysis
                     processor = processor with { E = item.Mode };
                     break;
 
-                // The direct page and the data bank are checked by the analysis that tracks them.
+                case StatePart.DirectPage:
+                    processor = processor with { D = SetValue("D", processor.D, item) };
+                    break;
+                case StatePart.DataBank:
+                    processor = processor with { B = SetValue("B", processor.B, item) };
+                    break;
                 default:
                     break;
             }
@@ -664,6 +902,26 @@ public sealed class StateAnalysis
             processor = processor with { A = Width.Eight, Index = Width.Eight };
         }
         return state with { Processor = processor };
+
+        StateValue SetValue(string register, StateValue here, StateItem item)
+        {
+            if (item.Expression is not { } expression)
+                return StateValue.Unknown;
+            if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
+            {
+                ReportAt(expression, step, $"`.state {item.Text}` needs a constant: the analysis follows {register} by value");
+                return StateValue.Unknown;
+            }
+            if (value < 0 || value > (register == "D" ? 0xffff : 0xff))
+            {
+                ReportAt(expression, step, $"`.state {item.Text}` is out of range: "
+                    + (register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
+                return StateValue.Unknown;
+            }
+            if (here.IsKnown && here.Value != value)
+                ReportAt(item.Node, step, $"`.state {item.Text}`, and {register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} here");
+            return StateValue.Of(value);
+        }
 
         Width Set(string register, Width here, StateItem item)
         {
@@ -850,7 +1108,12 @@ public sealed class StateAnalysis
                 continue;
 
             var mnemonic = statement.ChildTokens[0].Text.ToLowerInvariant();
-            if (mnemonic is "rep" or "sep" or "xce" or "plp")
+            if (OperandOf(step) is { } operand && CodeLayout.ThroughDirectPage(operand))
+            {
+                Report(step, "`d:` is reached through the direct page, which only a `.proc` knows: outside one there "
+                    + "is nothing to follow D through");
+            }
+            else if (mnemonic is "rep" or "sep" or "xce" or "plp")
             {
                 Report(step, $"`{mnemonic}` changes the processor state, which only a `.proc` has: outside one "
                     + "there is nothing to follow it through");

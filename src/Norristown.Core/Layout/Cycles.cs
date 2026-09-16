@@ -56,13 +56,16 @@ public static class Cycles
     /// A 65816 instruction. The table counts the 8-bit form; a 16-bit register adds a cycle
     /// for each extra byte read or written, two for a read-modify-write, and a 16-bit index
     /// always pays the page-crossing cycle an 8-bit one pays only sometimes. A direct operand
-    /// costs one more when the low byte of D is not zero, which nothing here knows yet.
+    /// costs one more when the low byte of D is not zero, which is known where D is.
     /// </summary>
     private static CycleCount? Of65816(string mnemonic, AddressingMode mode, ProcessorState state)
     {
         var a = state.A;
         var index = state.Index;
-        var direct = Instructions.Width(mode) == AddressSize.ZeroPage ? new CycleCount(0, 1) : new CycleCount(0);
+        var direct = Instructions.Width(mode) != AddressSize.ZeroPage ? new CycleCount(0)
+            : !state.D.IsKnown ? new CycleCount(0, 1)
+            : (state.D.Value & 0xff) != 0 ? new CycleCount(1)
+            : new CycleCount(0);
 
         if (Reads.Split(' ').Contains(mnemonic) || Writes.Split(' ').Contains(mnemonic)
             || mnemonic is "tsb" or "trb" || Modifies.Split(' ').Contains(mnemonic))

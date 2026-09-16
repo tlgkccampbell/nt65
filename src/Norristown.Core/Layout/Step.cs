@@ -16,6 +16,7 @@ namespace Norristown.Layout;
 /// <param name="On">Which writing of it, or null outside every expansion.</param>
 /// <param name="Routine">The routine it is inside, or null at file level.</param>
 /// <param name="Stream">Which stream of bytes it lands in.</param>
+/// <param name="Segment">The segment its bytes land in.</param>
 /// <param name="Label">The label it declares, for a step that is one; null for every other.</param>
 /// <param name="Closes">
 /// Whether the step is where an expansion or a splice written as <paramref name="Statement"/>
@@ -23,7 +24,7 @@ namespace Norristown.Layout;
 /// a block spliced into one, are steps of their own, because the analysis checks both.
 /// </param>
 public readonly record struct Step(
-    SyntaxNode Statement, Expansion? On, Symbol? Routine, int Stream, Symbol? Label, bool Closes = false)
+    SyntaxNode Statement, Expansion? On, Symbol? Routine, int Stream, string Segment, Symbol? Label, bool Closes = false)
 {
     /// <summary>Whether the step marks where an expansion or a splice starts or ends, rather than a statement.</summary>
     public bool IsMarker => Statement.Kind is SyntaxKind.MacroCall or SyntaxKind.BlockSplice;

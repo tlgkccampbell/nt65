@@ -664,6 +664,17 @@ internal sealed class Binder
                 CollectUses(statement);
                 break;
 
+            // The `dp = e` and `bank = e` of a segment declaration, and the `dp = e` and
+            // `dbr = e` of a `.state`, may name constants.
+            case SyntaxKind.SegmentDeclaration:
+            case SyntaxKind.StateDirective:
+                foreach (var item in statement.DescendantNodes())
+                {
+                    if (item.Kind is SyntaxKind.SegmentAttribute or SyntaxKind.StateItem)
+                        CollectUses(item.ChildNodes.FirstOrDefault());
+                }
+                break;
+
             // A frame is named like a `.tag` instance, so its members are reached through it.
             case SyntaxKind.FrameDirective:
                 var type = statement.ChildNodes.FirstOrDefault();
@@ -672,8 +683,8 @@ internal sealed class Binder
                 CollectUses(type);
                 break;
 
-            // Everything else either declares nothing and names nothing — `.cpu`, a segment
-            // declaration, a blank or closing line — or belongs to a later stage.
+            // Everything else either declares nothing and names nothing — `.cpu`, a blank or
+            // closing line — or belongs to a later stage.
             default:
                 break;
         }

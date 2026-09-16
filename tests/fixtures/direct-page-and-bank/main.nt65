@@ -1,0 +1,128 @@
+; The direct page and the data bank, tracked through each routine and checked against what
+; the segments and the project's ranges declare. None of it changes the output except `d:`.
+.cpu 65816
+
+.export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail
+
+; A segment declared in a file may give its direct page by a constant.
+HUD_PAGE = $0300
+.segment "HUD": zp, dp = HUD_PAGE
+
+.segment "ZP2" {
+ptr:    .res 2
+}
+
+.segment "HUD" {
+lives:  .res 1
+}
+
+.segment "WRAM" {
+score:  .res 2
+}
+
+; The signature's example: D and B at entry, and so at exit.
+.proc hud: a8, i16, dp = $2100, dbr = $7e {
+    lda ptr                 ; ZP2 is reached through the direct page at $2100
+    sta score               ; WRAM is in bank $7e
+    ldy score,x             ; an absolute operand reaches bank B
+    lda f:score             ; a long operand names its bank, so B does not matter
+    rts
+}
+
+; The idioms that load D and B from constants.
+.proc setup: a16, i8 -> a16, i8, dp = $2100, dbr = $7e {
+    lda #$2100
+    tcd
+    sep #$20
+    lda #$7e
+    pha
+    plb
+    rep #$20
+    lda ptr
+    rts
+}
+
+; `pea` then `pld`.
+.proc pushed: a8, i8 -> a8, i8, dp = $0300 {
+    pea HUD_PAGE
+    pld
+    lda lives
+    rts
+}
+
+; A routine that says nothing about D and B hands them back as it found them: what it
+; saves with `phd` and `phb` it restores with `pld` and `plb`.
+.proc keep: a8, i8 {
+    phd
+    phb
+    pea $2100
+    pld
+    lda #$7e
+    pha
+    plb
+    lda ptr
+    sta score
+    plb
+    pld
+    rts
+}
+
+; A constant address through the direct page: with D at $2100, `d:$2105` is offset $05.
+.proc registers: a8, i8, dp = $2100 {
+    lda d:$2105
+    sta d:$2100,x
+    rts
+}
+
+; A hardware register mirrored in banks $00-$3f and $80-$bf.
+.proc ppu: a8, i8, dbr = $80 {
+    sta $2100
+    stz $4200
+    sta f:$7e2100           ; a long operand is exempt
+    pea $2100               ; and so is a push of the address
+    rts
+}
+
+; `phk` then `plb` makes B the bank the code's own segment declares.
+.segment "BANK1" {
+.proc from_k: a8, i8 -> a8, i8, dbr = $01 {
+    phk
+    plb
+    rts
+}
+}
+
+; A call hands back what the routine returns with, so D and B are known after it.
+.proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e {
+    jsr setup
+    lda ptr
+    sta score
+    rts
+}
+
+; A block move leaves the data bank at its destination.
+.proc move: a16, i16 -> a16, i16, dbr = $7e {
+    mvn #$00, #$7e
+    sta score
+    rts
+}
+
+; A merge where both paths agree keeps what they agree on.
+.proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100 {
+    beq @skip
+    lda #1
+@skip:
+    lda ptr
+    rts
+}
+
+; A direct operand costs a cycle more where the low byte of D is not zero.
+.proc fast: a8, i8, dp = $2180 {
+    lda d:$2181
+    rts
+}
+
+; A tail call is checked against the routine it jumps to, D and B included.
+.proc tail: a8, i16, dp = $2100, dbr = $7e {
+    jmp hud
+}

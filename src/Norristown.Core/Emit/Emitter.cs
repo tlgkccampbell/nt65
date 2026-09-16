@@ -729,6 +729,7 @@ public sealed class Emitter
         {
             Substitute(rest, edits, nested: false);
             Slot(rest, edits);
+            Direct(rest, edits);
         }
 
         if (label is not { ChildTokens.Length: > 0 }
@@ -1027,6 +1028,7 @@ public sealed class Emitter
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
         Slot(statement, edits);
+        Direct(statement, edits);
         Code(line, Render(statement, edits), bytes);
     }
 
@@ -1065,6 +1067,31 @@ public sealed class Emitter
             for (var i = 1; i < tokens.Length; i++)
                 edits.Replace[tokens[i].Position] = "";
         }
+    }
+
+    /// <summary>
+    /// A <c>d:</c> operand, written as the offset into the direct page the analysis found D
+    /// makes it: with D at <c>$2100</c>, <c>lda d:$2105</c> is <c>lda z:$05</c>. ca65 has no
+    /// <c>d:</c>, and knows nothing of D.
+    /// </summary>
+    private void Direct(SyntaxNode statement, Edits edits)
+    {
+        if (layout.Of(statement, expansion) is not { Direct: { } offset } laid
+            || statement.ChildNodes.FirstOrDefault() is not { } operand)
+        {
+            return;
+        }
+        var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
+        var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
+        if (written is null || expression is null)
+            return;
+        foreach (var token in written.ChildTokens)
+            edits.Replace[token.Position] = "";
+        var tokens = Tokens(expression);
+        edits.Before.Remove(tokens[0].Position);
+        edits.Replace[tokens[0].Position] = (laid.Prefix ?? "") + Hex(offset, 2);
+        for (var i = 1; i < tokens.Count; i++)
+            edits.Replace[tokens[i].Position] = "";
     }
 
     /// <summary>
