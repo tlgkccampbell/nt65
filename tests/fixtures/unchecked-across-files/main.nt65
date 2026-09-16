@@ -1,0 +1,15 @@
+; Jumps into a routine another file declares: checked against the declaration there, as a
+; jump within one file is.
+.cpu 65816
+
+.proc right {
+    jmp owner::entry
+}
+
+.proc wrong: a16 {
+    jmp owner::entry            ;! error: `jmp entry` needs `a8`, and A is 16-bit here
+}
+
+.proc undeclared {
+    jmp owner::plain            ;! error: `plain` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
+}

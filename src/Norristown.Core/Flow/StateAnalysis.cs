@@ -427,30 +427,28 @@ public sealed class StateAnalysis
     /// <summary>
     /// What a <c>.state</c> declares at a label inside another routine, which a jump into that
     /// routine has to meet; null when the label is in this routine or declares nothing. Only
-    /// the parts it gives are checked.
+    /// the parts it gives are checked. The declaration is read off the label, so the routine
+    /// may be in another file.
     /// </summary>
-    private ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
+    private static ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
     {
-        foreach (var region in flow.Regions)
+        if (label is not { Kind: SymbolKind.Label, StateDeclaration: { } declared, Routine: { } owner }
+            || owner == routine)
         {
-            if (region.Routine == routine)
-                continue;
-            if (region.Blocks.FirstOrDefault(block => block.Label == label && block.IsDeclared) is not { } declared)
-                continue;
-            var state = ProcessorState.Unknown;
-            foreach (var item in StateItem.Read(declared.Steps[0].Statement))
-            {
-                state = item.Part switch
-                {
-                    StatePart.A => state with { A = item.Width },
-                    StatePart.Index => state with { Index = item.Width },
-                    StatePart.E => state with { E = item.Mode },
-                    _ => state,
-                };
-            }
-            return state;
+            return null;
         }
-        return null;
+        var state = ProcessorState.Unknown;
+        foreach (var item in StateItem.Read(declared))
+        {
+            state = item.Part switch
+            {
+                StatePart.A => state with { A = item.Width },
+                StatePart.Index => state with { Index = item.Width },
+                StatePart.E => state with { E = item.Mode },
+                _ => state,
+            };
+        }
+        return state;
     }
 
     /// <summary>

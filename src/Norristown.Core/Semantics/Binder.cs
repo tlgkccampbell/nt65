@@ -47,6 +47,10 @@ internal sealed class Binder
     private Symbol? previousEnumMember;
     private SyntaxToken? repetition;
 
+    // A label written on a line of its own, while nothing but blank lines has followed it: a
+    // `.state` here is that label's declaration.
+    private Symbol? bareLabel;
+
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
         this.tree = tree;
@@ -137,9 +141,14 @@ internal sealed class Binder
         foreach (var child in container.ChildNodes)
         {
             if (child.Green is GreenBlock block)
+            {
+                bareLabel = null;
                 WalkBlock(child, block.BlockKind);
+            }
             else
+            {
                 WalkLine(child);
+            }
         }
     }
 
@@ -569,7 +578,15 @@ internal sealed class Binder
             return;
         CheckAllowedHere(statement);
         CheckAnnotation(line, statement);
+        var label = bareLabel;
+        if (statement.Kind != SyntaxKind.BlankLine)
+            bareLabel = null;
         BindStatement(statement);
+
+        // Recorded on the label rather than found in the flow, so a jump from another file
+        // can be checked against it too.
+        if (statement.Kind == SyntaxKind.StateDirective && label is not null)
+            label.StateDeclaration = statement;
     }
 
     private void BindStatement(SyntaxNode statement)
@@ -705,7 +722,9 @@ internal sealed class Binder
             var kind = scope.Kind == ScopeKind.Type ? SymbolKind.Member
                 : Constructs.IsTag(rest) ? SymbolKind.Instance
                 : SymbolKind.Label;
-            Declare(label.ChildTokens[0], kind, data: rest, type: Constructs.TagTypeOf(rest));
+            var declared = Declare(label.ChildTokens[0], kind, data: rest, type: Constructs.TagTypeOf(rest));
+            if (rest is null && kind == SymbolKind.Label)
+                bareLabel = declared;
         }
         if (rest is { Kind: SyntaxKind.MacroCall })
             BindCall(rest);

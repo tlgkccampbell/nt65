@@ -1,0 +1,16 @@
+; A routine whose interior other files jump into. Each label they reach is exported, and
+; its `.state` is what a jump from anywhere is checked against.
+.cpu 65816
+
+.proc owner: a16 -> a8 {
+    lda #$1234
+    sep #$20
+.export entry
+entry:
+    .state a8, i8, native
+    lda #$12
+    rts
+.export plain                   ;! error: `plain` is inside `owner`, and exporting it lets other files jump into the routine: a `.state` after the label says what the state is there
+plain:
+    rts
+}

@@ -129,6 +129,26 @@ public sealed class Symbol
     /// </summary>
     public Signature? MacroSignature { get; internal set; }
 
+    /// <summary>
+    /// The <c>.state</c> written directly after a label, which declares the label an entry
+    /// point with that state; null for a label with none and for every other symbol.
+    /// </summary>
+    public SyntaxNode? StateDeclaration { get; internal set; }
+
+    /// <summary>The routine a label is written inside, or null for one at file level or in no routine.</summary>
+    public Symbol? Routine
+    {
+        get
+        {
+            for (var scope = Scope; scope is not null; scope = scope.Parent)
+            {
+                if (scope.Kind == ScopeKind.Proc)
+                    return scope.Owner;
+            }
+            return null;
+        }
+    }
+
     /// <summary>The address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
 

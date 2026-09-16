@@ -169,14 +169,18 @@ internal sealed class Requirements
             }
             return;
         }
-        if (calls || !labels.TryGetValue(symbol, out var labelled))
+        if (calls)
             return;
 
-        if (labelled.Region.Routine != region.Routine && !labelled.Block.IsDeclared)
+        // The label may be in another file, so what routine it is in and whether it is
+        // declared are read off the label itself.
+        if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null } && owner != region.Routine)
         {
-            Report(statement, $"`{symbol.DisplayName}` is inside `{labelled.Region.Routine.DisplayName}`, and a jump "
+            Report(statement, $"`{symbol.DisplayName}` is inside `{owner.DisplayName}`, and a jump "
                 + "into another routine needs the label declared: a `.state` after it says what the state is there");
         }
+        if (!labels.TryGetValue(symbol, out var labelled))
+            return;
         if (!labelled.IsCode && DataAt(labelled) is { } data
             && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a.Kind != SyntaxKind.NextDirective)))
         {
