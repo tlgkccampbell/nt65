@@ -38,6 +38,21 @@ public sealed class SyntaxNode
     /// <summary>The node's range in the file's text, trivia included.</summary>
     public TextSpan FullSpan => new(Position, Green.FullWidth);
 
+    /// <summary>
+    /// The node's range without the trivia around it and without the line break that ends
+    /// it: what an editor selects or reveals for the node. A node holding nothing but a line
+    /// break is empty, positioned where the break is.
+    /// </summary>
+    public TextSpan Span
+    {
+        get
+        {
+            int start = -1, end = -1;
+            Measure(Green, Position, ref start, ref end);
+            return start < 0 ? new TextSpan(Position, 0) : new TextSpan(start, end > start ? end - start : 0);
+        }
+    }
+
     /// <summary>The 0-based line this node starts on.</summary>
     public int LineIndex => Tree.GetLineIndex(Position);
 
@@ -117,6 +132,29 @@ public sealed class SyntaxNode
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
+    /// <summary>The node's text over <see cref="Span"/>: no surrounding trivia, no line break.</summary>
+    public string GetText() => Tree.Text.Substring(Span.Start, Span.Length);
+
     /// <summary>The node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
+
+    /// <summary>The first token's text start and the last non-line-break token's text end.</summary>
+    private static void Measure(GreenNode node, int position, ref int start, ref int end)
+    {
+        if (node is GreenToken token)
+        {
+            var text = position + token.LeadingWidth;
+            if (start < 0)
+                start = text;
+            if (token.Kind != SyntaxKind.EndOfLine)
+                end = text + token.Text.Length;
+            return;
+        }
+        for (var i = 0; i < node.SlotCount; i++)
+        {
+            var slot = node.GetSlot(i);
+            Measure(slot, position, ref start, ref end);
+            position += slot.FullWidth;
+        }
+    }
 }

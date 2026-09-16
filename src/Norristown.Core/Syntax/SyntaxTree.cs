@@ -122,6 +122,21 @@ public sealed class SyntaxTree
         return index >= 0 ? index : ~index - 1;
     }
 
+    /// <summary>
+    /// The offset of a 0-based line and character, clamped to the text. An editor may name a
+    /// position past the end of a line or of the file, and that is not an error here.
+    /// </summary>
+    public int GetPosition(int line, int character)
+    {
+        if (line < 0)
+            return 0;
+        if (line >= LineStarts.Length)
+            return Text.Length;
+        var start = LineStarts[line];
+        var end = line + 1 < LineStarts.Length ? LineStarts[line + 1] : Text.Length;
+        return character <= 0 ? start : Math.Min(start + character, end);
+    }
+
     /// <summary>A diagnostic span for a range on one line.</summary>
     public Span GetSpan(TextSpan span)
     {

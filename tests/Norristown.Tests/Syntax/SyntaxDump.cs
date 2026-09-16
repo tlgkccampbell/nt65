@@ -89,6 +89,34 @@ internal static class SyntaxDump
         _ => "",
     };
 
+    /// <summary>
+    /// The outline, one item per row, indented by depth: the kind, the name, the 1-based
+    /// first and last line it covers, and its detail in brackets.
+    /// </summary>
+    public static string Symbols(SyntaxTree tree)
+    {
+        var builder = new StringBuilder();
+        void Walk(IReadOnlyList<OutlineItem> items, int depth)
+        {
+            foreach (var item in items)
+            {
+                var first = tree.GetLineIndex(item.Span.Start) + 1;
+                var last = tree.GetLineIndex(Math.Max(item.Span.Start, item.Span.End - 1)) + 1;
+                builder.Append(' ', depth * 2).Append($"{item.Kind} {item.Name} {first}-{last}");
+                if (item.Detail is { } detail)
+                    builder.Append($" [{detail}]");
+                builder.Append('\n');
+                Walk(item.Children, depth + 1);
+            }
+        }
+        Walk(Outline.Build(tree), 0);
+        return builder.ToString();
+    }
+
+    /// <summary>The foldable ranges, one per row, as 1-based line numbers.</summary>
+    public static string FoldingRanges(SyntaxTree tree) =>
+        string.Concat(Folding.Build(tree).Select(r => $"{r.StartLine + 1}-{r.EndLine + 1}\n"));
+
     /// <summary>Everything: every token with its trivia and error, line kinds, blocks, statements and diagnostics.</summary>
     public static string Full(SyntaxTree tree)
     {
