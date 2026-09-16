@@ -19,7 +19,10 @@
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "${workspaceFolder}"
       ],
-      "preLaunchTask": "build"
+      "preLaunchTask": "build",
+      // The client starts the language server, which is a .NET process and not something
+      // the JavaScript debugger should follow into.
+      "autoAttachChildProcesses": false
     },
     {
       // The server runs as a child of the Extension Development Host, so it is attached

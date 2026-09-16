@@ -12,6 +12,21 @@
       "group": { "kind": "build", "isDefault": true }
     },
     {
+      // The same development host without a debugger attached, for when you want to look
+      // at the editor rather than step through the client.
+      "label": "run extension",
+      "type": "process",
+      "command": "code",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "${workspaceFolder}"
+      ],
+      "windows": { "command": "code.cmd" },
+      "dependsOn": "build",
+      "problemMatcher": []
+    },
+    {
       "label": "test",
       "type": "process",
       "command": "pwsh",
