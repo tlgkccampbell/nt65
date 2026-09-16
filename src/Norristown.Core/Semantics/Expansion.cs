@@ -90,6 +90,46 @@ public sealed class Expansion : IEquatable<Expansion>
         return null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="definition"/> is already being expanded at <paramref name="at"/>
+    /// or around it: a macro that reaches itself, which is reported where it is declared and is
+    /// never written out again inside itself.
+    /// </summary>
+    public static bool Expanding(Expansion? at, SyntaxNode definition)
+    {
+        for (var level = at; level is not null; level = level.Outer)
+        {
+            if (level.Call is not null && level.Body == definition)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A problem with the text at <paramref name="span"/> of <paramref name="tree"/>, found
+    /// laying out or writing <paramref name="file"/> on the writing <paramref name="at"/>. The
+    /// file's own text is reported where it stands. The text of another file's macro body is
+    /// reported at the nearest call in this file that expanded it, the side that can change,
+    /// with the body's text named beside it: where it stands is the other file's, and a line of
+    /// this file's diagnostics does not move when that file is edited.
+    /// </summary>
+    public static Diagnostic Problem(
+        SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity severity, string message)
+    {
+        if (tree != file)
+        {
+            for (var level = at; level is not null; level = level.Outer)
+            {
+                if (level.Call is { } call && call.Tree == file)
+                {
+                    return new Diagnostic(file.GetSpan(call.Span), severity, message,
+                        [new RelatedSpan(tree.GetSpan(span), "in the macro body")]);
+                }
+            }
+        }
+        return new Diagnostic(tree.GetSpan(span), severity, message);
+    }
+
     /// <summary>How deep the expansions go, which is what bounds a runaway one.</summary>
     public int Depth
     {

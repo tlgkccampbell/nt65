@@ -95,13 +95,13 @@ public static class DataLengths
     {
         foreach (var operand in operands)
         {
-            CheckAscii(operand, model, diagnostics);
+            CheckAscii(operand, model, diagnostics, on);
             if (Bytes(operand, model, on) is { } bytes)
             {
                 foreach (var value in bytes)
                 {
                     if (value is < 0 or > 255)
-                        Report(operand, model, diagnostics, $"`{(char)value}` is not a byte; a charmap maps text to bytes");
+                        Report(operand, model, diagnostics, on, $"`{(char)value}` is not a byte; a charmap maps text to bytes");
                 }
                 continue;
             }
@@ -121,9 +121,9 @@ public static class DataLengths
 
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
-            Report(operands[0], model, diagnostics, "a `.res` count must be a constant");
+            Report(operands[0], model, diagnostics, on, "a `.res` count must be a constant");
         else if (count is < 0 or > 0xffffff)
-            Report(operands[0], model, diagnostics, $"a `.res` count must be between 0 and $ffffff, not {count}");
+            Report(operands[0], model, diagnostics, on, $"a `.res` count must be between 0 and $ffffff, not {count}");
     }
 
     /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
@@ -134,16 +134,16 @@ public static class DataLengths
             return;
         var boundary = model.ValueOf(operands[0], on).AsNumber();
         if (boundary is null)
-            Report(operands[0], model, diagnostics, "an `.align` boundary must be a constant");
+            Report(operands[0], model, diagnostics, on, "an `.align` boundary must be a constant");
         else if (boundary is < 1 or > 0x10000 || (boundary & (boundary - 1)) != 0)
-            Report(operands[0], model, diagnostics, $"an `.align` boundary must be a power of two, not {boundary}");
+            Report(operands[0], model, diagnostics, on, $"an `.align` boundary must be a power of two, not {boundary}");
     }
 
     /// <summary>
     /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character
     /// typed directly above <c>$7f</c> is an error rather than a byte of some encoding.
     /// </summary>
-    private static void CheckAscii(SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics)
+    private static void CheckAscii(SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (argument.Kind is not (SyntaxKind.StringExpression or SyntaxKind.CharacterExpression))
             return;
@@ -151,7 +151,7 @@ public static class DataLengths
         {
             if (token.Text.Any(c => c > 127))
             {
-                Report(argument, model, diagnostics,
+                Report(argument, model, diagnostics, on,
                     "text is ASCII outside a charmap; write `\\xHH` for a byte above $7f");
                 return;
             }
@@ -163,9 +163,10 @@ public static class DataLengths
         Expansion? on)
     {
         if (model.ValueOf(argument, on).AsNumber() is { } value && (value < limit.Low || value > limit.High))
-            Report(argument, model, diagnostics, $"{Value.Of(value)} does not fit in this directive");
+            Report(argument, model, diagnostics, on, $"{Value.Of(value)} does not fit in this directive");
     }
 
-    private static void Report(SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, string message) =>
-        diagnostics?.Add(new Diagnostic(model.Tree.GetSpan(node.Span), Severity.Error, message));
+    private static void Report(
+        SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on, string message) =>
+        diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, on, Severity.Error, message));
 }

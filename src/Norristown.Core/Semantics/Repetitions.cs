@@ -52,12 +52,12 @@ public static class Repetitions
     {
         if (model.ValueOf(counted, outer).AsNumber() is not { } count)
         {
-            Report(model, diagnostics, counted, "a `.repeat` count is a constant, and this is not one");
+            Report(model, diagnostics, counted, outer, "a `.repeat` count is a constant, and this is not one");
             return [];
         }
         if (count < 0)
         {
-            Report(model, diagnostics, counted, $"a `.repeat` count cannot be negative, and this one is {count}");
+            Report(model, diagnostics, counted, outer, $"a `.repeat` count cannot be negative, and this one is {count}");
             return [];
         }
 
@@ -96,7 +96,7 @@ public static class Repetitions
             return [.. members.Symbols.Select(
                 (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i))];
 
-        Report(model, diagnostics, walked, "`.each` walks a list or an enum, and this is neither");
+        Report(model, diagnostics, walked, outer, "`.each` walks a list or an enum, and this is neither");
         return [];
     }
 
@@ -105,6 +105,6 @@ public static class Repetitions
         item.ChildTokens.Length > 0 ? item.ChildTokens[0].Text : item.GetText().Trim();
 
     private static void Report(
-        SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, string message) =>
-        diagnostics?.Add(new Diagnostic(model.Tree.GetSpan(node.Span), Severity.Error, message));
+        SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, string message) =>
+        diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, outer, Severity.Error, message));
 }

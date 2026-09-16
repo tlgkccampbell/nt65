@@ -594,6 +594,10 @@ public sealed class Emitter
             return;
         }
 
+        // A macro that reaches itself is an error already, and has nothing to write.
+        if (Expansion.Expanding(expansion, definition))
+            return;
+
         Segment();
         Flush();
 
@@ -1127,7 +1131,7 @@ public sealed class Emitter
         var first = tokens.FirstOrDefault(token => token.Kind != SyntaxKind.EndOfLine);
         if (first.Parent is null)
             return;
-        diagnostics.Add(new Diagnostic(model.Tree.GetSpan(first.Span), Severity.Error,
+        diagnostics.Add(Expansion.Problem(model.Tree, first.Parent.Tree, first.Span, expansion, Severity.Error,
             $"`{first.Text}` is not transpiled yet"));
     }
 

@@ -88,10 +88,13 @@ internal sealed class Requirements
         {
             if (i > index && !blocks[i].IsFallenInto)
                 return false;
-            if (blocks[i].Steps.FirstOrDefault(step => step.Statement.Kind != SyntaxKind.StateDirective)
-                is { } first)
+            // A step is a value, so the first one is asked for as its statement: a block of
+            // nothing but `.state` lines has none.
+            if (blocks[i].Steps
+                    .Select(step => step.Statement)
+                    .FirstOrDefault(statement => statement.Kind != SyntaxKind.StateDirective) is { } first)
             {
-                return first.Statement.Kind == SyntaxKind.InstructionStatement;
+                return first.Kind == SyntaxKind.InstructionStatement;
             }
         }
         return false;

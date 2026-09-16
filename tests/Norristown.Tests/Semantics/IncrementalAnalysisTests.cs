@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Norristown.Emit;
 using Norristown.LanguageServer;
 using Norristown.Project;
 using Norristown.Syntax;
@@ -32,7 +33,7 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
         ["defs.nt65"] = """
             .cpu 65816
 
-            .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL
+            .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL, ping
 
             SCREEN = $2000
             WIDTH  = 32
@@ -58,6 +59,13 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
                 sta SCREEN,x
             }
 
+            ; Calls a macro of gfx.nt65, which an edit there makes call this one back, and uses a
+            ; constant of it.
+            .macro ping() {
+                relay!(1)
+                lda #COLORS
+            }
+
             .macro set16(dest: operand, value) {
                 lda #<value
                 sta dest
@@ -76,6 +84,11 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
 
             .bss {
             cursor: .res 2
+            track:  .tag Line
+            }
+
+            .rodata {
+            route:  .tag Line { from = { x = 1 } }
             }
 
             .if DEBUG {
@@ -92,6 +105,8 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
                 jsr draw
                 set16!(cursor, SCREEN)
                 fill_screen!(4)
+                ping!()
+                lda #COLORS
                 rts
             }
 
@@ -99,7 +114,7 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
         ["gfx.nt65"] = """
             .cpu 65816
 
-            .export draw, clear, COLORS
+            .export draw, clear, COLORS, relay
 
             COLORS = rgb(31, 0, 0)
             STEP   = scaled(2)
@@ -121,6 +136,10 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
                 rts
             }
 
+            .macro relay(n) {
+                nop
+            }
+
             .proc clear: a8, i8 {
                 lda #0
                 ldx #WIDTH - 1
@@ -134,6 +153,14 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
             """,
         ["types.nt65"] = """
             .cpu 65816
+
+            .export Line
+
+            ; A type laid out from another file's type, and used by a third file.
+            .struct Line {
+            from:   .tag Point
+            to:     .tag Point
+            }
 
             .bss {
             origin: .tag Point
@@ -183,32 +210,40 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
     [Fact]
     public void ScriptedEditsMatchAnalyzingFromScratch()
     {
-        const string NL = "\n";
         (string Path, string Find, string Replace, WholeProgramReason? Reason, int Files)[] edits =
         [
-            ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", null, 1),            // a routine body
-            ("main.nt65", ".proc main", "" + NL + NL + ".proc main", null, 1),                // lines move below the edit
-            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null, 1),     // errors.nt65 names it, and it is still 9
-            ("main.nt65", "BASE = 3", "BASE = 4", null, 4),                      // app and defs look it up, and types holds `Point`
-            ("gfx.nt65", "    iny" + NL, "    iny" + NL + "    iny" + NL, null, 1),
-            ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", null, 1),             // a new value, which nobody looks up
+            ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", null, 1),                                // a routine body
+            ("main.nt65", ".proc main", "\n\n.proc main", null, 1),                                  // lines move below the edit
+            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null, 1),                         // errors.nt65 names it, and it is still 9
+            ("main.nt65", "BASE = 3", "BASE = 4", null, 3),                                          // app and defs look it up
+            ("gfx.nt65", "    iny\n", "    iny\n    iny\n", null, 3),                                // `relay` moves down: defs calls it, main calls defs' `ping`
+            ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", null, 3),                                 // main and defs look it up
             ("errors.nt65", "lda undeclared", "lda #1", null, 1),
             ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared, 8), // the file declares a segment
-            ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", null, 4),                // main and gfx look it up
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 2),    // `origin` holds `Point` itself
+            ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", null, 3),                                    // main and gfx look it up
+            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 1),                        // `origin` holds `Point`, which is the same
             ("types.nt65", "Point::y", "Point::x", null, 1),
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", null, 3),            // errors.nt65 looks it up
-            ("main.nt65", "    rts" + NL + "}", "extra:" + NL + "    rts" + NL + "}", null, 1), // a new name, which nobody looks up
-            ("main.nt65", "BASE = 4", "BASE = LIMIT", null, 4),                  // a cycle through two files
-            ("main.nt65", "sta cursor", "sta cursor+1", null, 3),                // still in it, and app.nt65 sees no change
-            ("main.nt65", "BASE = LIMIT", "BASE = 4", null, 4),
-            ("main.nt65", "dex", "dex" + NL + "    dex", null, 1),
-            ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", null, 2),    // errors.nt65 looks it up
+            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", null, 2),                                // errors.nt65 looks it up
+            ("main.nt65", "    rts\n}", "extra:\n    rts\n}", null, 1),                              // a new name, which nobody looks up
+            ("main.nt65", "BASE = 4", "BASE = LIMIT", null, 3),                                      // a cycle through two files
+            ("main.nt65", "sta cursor", "sta cursor+1", null, 2),                                    // still in it, and app.nt65 sees no change
+            ("main.nt65", "BASE = LIMIT", "BASE = 4", null, 3),
+            ("main.nt65", "dex", "dex\n    dex", null, 1),
+            ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", null, 2),                        // errors.nt65 looks it up
             ("errors.nt65", "jsr draw", "jsr clear", null, 1),
-            ("main.nt65", ".if DEBUG {", ".if !DEBUG {", null, 1),               // `TRACE` is gone, and nobody looked it up
-            ("main.nt65", "BASE = 4", "BASE = 4 ; four", null, 1),               // what it means is the same
-            ("defs.nt65", "SCALE  = 3", "SCALE  = 4", null, 3),                  // gfx calls `scaled`, whose body names it
-            ("defs.nt65", "FILL   = $20", "FILL   = $2e", null, 3),              // main expands `fill_screen`, whose body names it
+            ("main.nt65", ".if DEBUG {", ".if !DEBUG {", null, 1),                                   // `TRACE` is gone, and nobody looked it up
+            ("main.nt65", "BASE = 4", "BASE = 4 ; four", null, 1),                                   // what it means is the same
+            ("defs.nt65", "SCALE  = 3", "SCALE  = 4", null, 2),                                      // gfx calls `scaled`, whose body names it
+            ("defs.nt65", "FILL   = $20", "FILL   = $2e", null, 2),                                  // main expands `fill_screen`, whose body names it
+            ("gfx.nt65", "    lda #0\n", "    lda #0 ; clear\n", null, 1),                           // defs' `ping` goes on holding the old `COLORS`
+            ("main.nt65", "sta cursor+1", "sta cursor", null, 1),                                    // which main's expansion of `ping` reaches
+            ("defs.nt65", "y:      .word\n", "y:      .word\nz:      .word\n", null, 3),             // types lays `Line` out from it, main uses `Line`
+            ("defs.nt65", "z:      .word", "w:      .word", null, 3),                                // the same size, and main writes the names out
+            ("gfx.nt65", "    nop\n", "    ping!()\n", null, 3),                                     // two macros in two files now call each other
+            ("defs.nt65", "relay!(1)", "relay!(2)", null, 3),                                        // still
+            ("defs.nt65", "; Calls a macro", "; It calls a macro", null, 1),                         // gfx's `relay` goes on holding the old `ping`
+            ("defs.nt65", "; It calls", "; Here.\n; It calls", null, 3),                             // `ping` moves, and callers write its calls' lines
+            ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
         ];
 
         var replay = new Replay();
@@ -271,10 +306,19 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
         foreach (var d in analysis.Diagnostics)
             text.Append($"{Spell(d)}\n");
 
-        var compilation = Compiler.Emit(analysis, Project);
-        foreach (var output in compilation.Outputs)
-            text.Append($"== {output.Path}\n{output.Text}");
-        foreach (var d in compilation.Diagnostics)
+        // Every file is written out, whatever is wrong with the program: the program has
+        // mistakes in it on purpose, and a compilation of a wrong program writes nothing.
+        var emitted = new List<Diagnostic>();
+        for (var i = 0; i < analysis.Layouts.Count; i++)
+        {
+            var model = analysis.Program.Files[i];
+            if (model.Tree != analysis.Defines)
+            {
+                var output = Emitter.Emit(model, analysis.Layouts[i], FlatNames.Create(model, emitted), emitted, Project.Out);
+                text.Append($"== {output.Path}\n{output.Text}");
+            }
+        }
+        foreach (var d in Diagnostics.Ordered(emitted))
             text.Append($"emit {Spell(d)}\n");
 
         foreach (var model in analysis.Program.Files.OrderBy(file => file.Tree.Path, StringComparer.Ordinal))
@@ -284,6 +328,7 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
             var layout = analysis.LayoutFor(tree.Path);
             var flow = analysis.FlowFor(tree.Path);
             var states = analysis.StatesFor(tree.Path);
+            text.Append($"imports {string.Join(", ", model.ExternalSymbols.Select(symbol => $"{symbol.Tree.Path} {symbol.QualifiedName}"))}\n");
             foreach (var start in tree.LineStarts)
                 text.Append($"{start}: {Json(Lsp.ToHover(model, layout, flow, states, start))}\n");
             foreach (var reference in model.References)
@@ -336,7 +381,8 @@ public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
             if (expected != actual)
             {
                 var line = expected.Split('\n').Zip(actual.Split('\n')).FirstOrDefault(pair => pair.First != pair.Second);
-                Assert.Fail($"after editing {path} at {at}, {analysis.Reanalyzed} file(s) analyzed ({analysis.WholeProgram}):\n"
+                Assert.Fail($"after replacing {length} character(s) of {path} at {at} with {JsonSerializer.Serialize(text)}, "
+                    + $"{analysis.Reanalyzed} file(s) analyzed ({analysis.WholeProgram}):\n"
                     + $"from scratch: {line.First}\nincremental:  {line.Second}");
             }
             return analysis;

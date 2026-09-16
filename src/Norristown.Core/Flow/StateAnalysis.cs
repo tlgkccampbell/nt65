@@ -90,10 +90,13 @@ public sealed class StateAnalysis
 
     /// <summary>
     /// The state reaching a statement, whichever writing of it is asked about. An editor asks
-    /// about a line, and is shown the state that reaches its first writing.
+    /// about a line, and is shown the state that reaches its first writing. A writing's line is
+    /// in the file of the block it writes out, which is another file's for a macro declared
+    /// there, so the same position in two files is two lines.
     /// </summary>
     public FlowState? AnyBefore(SyntaxNode statement) =>
-        reaching.Where(pair => pair.Key.Position == statement.Position)
+        reaching.Where(pair => pair.Key.Position == statement.Position
+                && (pair.Key.On?.Body?.Tree ?? model.Tree) == statement.Tree)
             .Select(pair => pair.Value)
             .FirstOrDefault();
 

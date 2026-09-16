@@ -124,7 +124,8 @@ internal static class Lsp
     private static BasicBlock? Around(ControlFlow? flow, SyntaxNode statement) =>
         flow?.Regions
             .SelectMany(region => region.Blocks)
-            .FirstOrDefault(block => block.Steps.Any(step => step.Statement.Position == statement.Position));
+            .FirstOrDefault(block => block.Steps.Any(step =>
+                step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
 
     /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
     private static string Spell(CycleCount cycles) =>

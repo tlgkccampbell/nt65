@@ -35,8 +35,8 @@ internal sealed class SymbolMap : IReadOnlyDictionary<(SyntaxTree Tree, int Posi
     public Symbol this[(SyntaxTree Tree, int Position) key] =>
         TryGetValue(key, out var symbol) ? symbol : throw new KeyNotFoundException();
 
-    /// <summary>The names written in <paramref name="tree"/>, by position, for a map built from this one.</summary>
-    public Dictionary<int, Symbol>? For(SyntaxTree tree) => files.GetValueOrDefault(tree);
+    /// <summary>What <paramref name="symbol"/>, which a symbol may hold on to rather than name, stands for now.</summary>
+    public Symbol Current(Symbol symbol) => current(symbol);
 
     /// <summary>The same map with each file's names replaced by those of the version of it that was read again.</summary>
     public Dictionary<SyntaxTree, Dictionary<int, Symbol>> Replacing(

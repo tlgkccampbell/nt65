@@ -10,14 +10,19 @@ namespace Norristown.Semantics;
 /// <para>
 /// Every name a path can reach is in it, exported or not, because another file resolving a
 /// name finds a private one too, to say that it is not exported. Each entry says what the
-/// symbol means — its value, its sizes, its signature, a macro's body — and nothing is a
-/// position: a line added above a declaration moves it without changing what it is.
+/// symbol means — its value, its sizes, its signature, a macro's body — and almost nothing is
+/// a position: a line added above a declaration moves it without changing what it is. The one
+/// exception is where a macro's body is: an expansion names each call it writes out by file
+/// and line, and a problem with a body line is reported at the call with the line beside it,
+/// so where the body is is part of what every caller writes and says.
 /// </para>
 /// <para>
 /// A body is read where it is used rather than where it is written: a macro expands, and a
 /// function or a list is evaluated, in the file that names it. So an entry with a body also
 /// says what every name in the body means, since a change to one of those is a change to what
-/// the body does wherever it lands, even when the file using it never wrote the name.
+/// the body does wherever it lands, even when the file using it never wrote the name. A type
+/// is laid out where it is used in the same way, and written out member by member, so its
+/// entry says what each of its members is.
 /// </para>
 /// </summary>
 internal static class FileInterface
@@ -67,6 +72,16 @@ internal static class FileInterface
         text.Append($"{indent}= {symbol.Value} {symbol.AddressSize} {symbol.Segment} {symbol.Size} {symbol.Count} {symbol.IsDefine}\n");
         if (symbol.Type is { } type)
             text.Append($"{indent}type {type.Tree.Path} {type.QualifiedName}\n");
+        if (symbol.IsLayout || symbol.Kind == SymbolKind.Enum)
+        {
+            foreach (var member in symbol.Body?.Symbols ?? [])
+            {
+                text.Append($"{indent}member {member.Name}\n");
+                Describe(member, resolved, text, described, indent + "  ");
+            }
+        }
+        if (symbol is { Kind: SymbolKind.Macro, Definition: { } body })
+            text.Append($"{indent}at line {body.LineIndex + 1}\n");
         if (symbol.Signature is { } signature)
             text.Append($"{indent}signature {Spell(signature)}\n");
         if (symbol.MacroSignature is { } macroSignature)

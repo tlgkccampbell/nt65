@@ -276,6 +276,32 @@ public sealed class MacroCallTests
             model.Problems());
     }
 
+    /// <summary>
+    /// Calling a macro that reaches itself reports the cycle once and writes it out no deeper
+    /// than itself, rather than expanding until the stack runs out.
+    /// </summary>
+    [Fact]
+    public void CallingAMacroThatReachesItselfIsReportedOnce()
+    {
+        var analysis = Analysis.Program(("main.nt65", """
+            .macro ping() {
+                pong!()
+            }
+
+            .macro pong() {
+                ping!()
+            }
+
+            .proc main {
+                ping!()
+                rts
+            }
+            """));
+
+        Assert.Equal(["main.nt65:6: `ping` calls itself through `pong`, and every expansion has to be bounded"],
+            analysis.Problems());
+    }
+
     /// <summary>Two calls to the same macro are not a cycle, however many there are.</summary>
     [Fact]
     public void CallingTheSameMacroTwiceIsNotRecursion()

@@ -117,43 +117,83 @@ public static class Macros
     /// Reports any macro that can reach itself, directly or through others. nt65 checks this
     /// from the names its bodies resolved to, without expanding anything, which is what makes
     /// every expansion bounded.
+    /// <para>
+    /// Macros that reach one another are one problem, reported once, at the one of them that
+    /// comes first in the program by file and position, on the first call on the way back to
+    /// it. Which macro the check starts from does not change what is said or where, so a
+    /// program checked a few files at a time says what it says checked whole.
+    /// </para>
+    /// <para>
+    /// <paramref name="current"/> is what a callee stands for now: a macro of a file that was
+    /// not read again may still name an earlier version of another file's macro.
+    /// <paramref name="report"/> is given the macro each problem is reported for.
+    /// </para>
     /// </summary>
-    public static void CheckRecursion(IEnumerable<Symbol> macros, List<Diagnostic> diagnostics)
+    public static void CheckRecursion(
+        IEnumerable<Symbol> macros, Func<Symbol, Symbol> current, Action<Symbol, Diagnostic> report)
     {
-        var done = new HashSet<Symbol>();
-        var path = new List<Symbol>();
-        var reported = new HashSet<Symbol>();
+        var reaches = new Dictionary<Symbol, HashSet<Symbol>>();
 
-        void Visit(Symbol macro)
+        HashSet<Symbol> Reaches(Symbol macro)
         {
-            if (!done.Add(macro))
-                return;
-            path.Add(macro);
-            foreach (var (callee, at) in macro.Calls)
+            if (reaches.TryGetValue(macro, out var known))
+                return known;
+            var found = new HashSet<Symbol>();
+            var pending = new Stack<Symbol>([macro]);
+            while (pending.TryPop(out var next))
             {
-                var start = path.IndexOf(callee);
-                if (start < 0)
+                foreach (var (callee, _) in next.Calls)
                 {
-                    Visit(callee);
-                    continue;
+                    if (found.Add(current(callee)))
+                        pending.Push(current(callee));
                 }
-                if (!reported.Add(callee))
-                    continue;
-
-                // The cycle is named by what it goes through, so a reader can see which
-                // call to break rather than only that something is circular.
-                var through = path.Skip(start + 1).Select(step => $"`{step.Name}`").ToList();
-                diagnostics.Add(new Diagnostic(at, Severity.Error,
-                    through.Count == 0
-                        ? $"`{callee.Name}` calls itself, and every expansion has to be bounded"
-                        : $"`{callee.Name}` calls itself through {string.Join(", ", through)}, "
-                            + "and every expansion has to be bounded"));
             }
-            path.RemoveAt(path.Count - 1);
+            return reaches[macro] = found;
         }
 
-        foreach (var macro in macros)
-            Visit(macro);
+        foreach (var macro in macros.Distinct())
+        {
+            if (!Reaches(macro).Contains(macro))
+                continue;
+            var cycle = Reaches(macro).Where(other => Reaches(other).Contains(macro)).ToHashSet();
+            if (cycle.Any(other => First(other, macro)))
+                continue;
+
+            // The cycle is named by what it goes through, so a reader can see which call to
+            // break rather than only that something is circular.
+            var path = new List<Symbol>();
+            var visited = new HashSet<Symbol>();
+            if (Back(macro) is { } at)
+            {
+                var through = path.Skip(1).Select(step => $"`{step.Name}`").ToList();
+                report(macro, new Diagnostic(at, Severity.Error,
+                    through.Count == 0
+                        ? $"`{macro.Name}` calls itself, and every expansion has to be bounded"
+                        : $"`{macro.Name}` calls itself through {string.Join(", ", through)}, "
+                            + "and every expansion has to be bounded"));
+            }
+
+            // The first call, in the order the bodies are written, that leads back to the macro.
+            Span? Back(Symbol from)
+            {
+                visited.Add(from);
+                path.Add(from);
+                foreach (var (named, at) in from.Calls)
+                {
+                    var callee = current(named);
+                    if (callee == macro)
+                        return at;
+                    if (cycle.Contains(callee) && !visited.Contains(callee) && Back(callee) is { } found)
+                        return found;
+                }
+                path.RemoveAt(path.Count - 1);
+                return null;
+            }
+        }
+
+        static bool First(Symbol other, Symbol than) =>
+            string.CompareOrdinal(other.Tree.Path, than.Tree.Path) is var byPath
+            && (byPath < 0 || byPath == 0 && other.NameSpan.Start < than.NameSpan.Start);
     }
 
     /// <summary>

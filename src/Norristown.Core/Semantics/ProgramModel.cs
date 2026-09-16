@@ -15,9 +15,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// A program in which some files changed can be built from the one before it by reading only
 /// those files again, together with every file the change can reach: a file that looked up a
-/// name whose meaning changed, a file holding one of the changed files' symbols, a file whose
-/// constants the changed files' constants are worth something through. Nothing any other file
-/// resolved or evaluated can have changed.
+/// name whose meaning changed, and a file whose constants the changed files' constants are
+/// worth something through. Nothing any other file resolved or evaluated can have changed.
 /// </para>
 /// </summary>
 public sealed class ProgramModel
@@ -112,10 +111,11 @@ public sealed class ProgramModel
 
         // Whether a macro can reach itself is a question about the program: a body in one
         // file may call a macro in another, and a cycle between the two is still one cycle.
-        // What is found belongs to the file the call that closes the cycle is written in.
+        // What is found belongs to the file of the macro it is reported for.
+        var declaredMacros = binders.SelectMany(binder => binder.DeclaredMacros()).ToList();
+        Macros.CheckRecursion(declaredMacros, symbol => symbol, (macro, found) => byFile[macro.Tree.Path].Add(found));
         var macros = new List<Diagnostic>();
-        Macros.CheckRecursion(binders.SelectMany(binder => binder.DeclaredMacros()), macros);
-        Macros.CheckExportedUses(binders.SelectMany(binder => binder.DeclaredMacros()), symbols.IsExported, macros);
+        Macros.CheckExportedUses(declaredMacros, symbols.IsExported, macros);
         foreach (var diagnostic in macros)
             byFile[diagnostic.Span.File].Add(diagnostic);
 
@@ -150,7 +150,7 @@ public sealed class ProgramModel
         {
             var path = trees[i].Path;
             files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved, declared,
-                Expanded(binders[i]), all.Where(d => d.Span.File == path), binaryLength));
+                Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), binaryLength));
         }
         var lookedUp = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
         foreach (var binder in binders)
@@ -192,21 +192,6 @@ public sealed class ProgramModel
             byPath.TryAdd(file.Tree.Path, file);
         var others = Files.Where(file => !dirty.Contains(file.Tree.Path)).ToList();
 
-        // Another file's symbol that holds on to one of these files' symbols itself, rather
-        // than naming it where it is written, would go on holding the old one: a type, a macro
-        // called or used.
-        foreach (var other in others)
-        {
-            if (other.Symbols.Any(symbol => symbol.Type is { } type && dirty.Contains(type.Tree.Path)
-                || symbol.Calls.Any(call => dirty.Contains(call.Callee.Tree.Path))
-                || symbol.Uses.Any(use => dirty.Contains(use.Used.Tree.Path))))
-            {
-                affected.Add(other.Tree.Path);
-            }
-        }
-        if (affected.Count > 0)
-            return null;
-
         var binders = dirty.ToDictionary(path => path, path => Binder.Collect(trees[path], Segments, configuration), StringComparer.Ordinal);
         List<ProgramSymbols.Module> replaced = [.. modules.Select(module =>
             binders.TryGetValue(module.Tree.Path, out var binder)
@@ -216,6 +201,10 @@ public sealed class ProgramModel
         var symbols = ProgramSymbols.Build(replaced, tables);
         var bound = binders.ToDictionary(pair => pair.Key, pair => pair.Value.Resolve(symbols), StringComparer.Ordinal);
 
+        // Another file's symbol may hold on to one of these files' symbols itself, rather than
+        // naming it where it is written: a type, a macro called or used. It goes on holding the
+        // old one, and where that matters — a macro's expansion, the recursion check, whether a
+        // cycle closes — the forwarding answers the new one for it, by name.
         var forwarding = new Forwarding(path =>
             bound.TryGetValue(path, out var result) ? result.Symbols : byPath.GetValueOrDefault(path)?.Symbols);
         var names = bound.ToDictionary(pair => pair.Key, pair => Names(pair.Value), StringComparer.Ordinal);
@@ -226,9 +215,9 @@ public sealed class ProgramModel
             this.declared.Replacing(dirty.Select(path => (byPath[path].Tree, trees[path], names[path].Declared))),
             forwarding.Current);
 
-        // Every other file's symbols keep the values they have. One of them that is worth what
-        // it is only through these files could have a different value now, or close a cycle an
-        // edit made, and its file is read again with them.
+        // Every other file's symbols keep the values they have: one whose value changed because
+        // of these files is in a file that looked up a name whose meaning changed, which is read
+        // again below. One that could close a cycle with these files is read again with them now.
         var found = dirty.ToDictionary(path => path, path => new List<Diagnostic>(bound[path].Diagnostics), StringComparer.Ordinal);
         var evaluation = new List<Diagnostic>();
         var owners = new List<string>();
@@ -239,17 +228,17 @@ public sealed class ProgramModel
             found[owners[i]].Add(evaluation[i]);
         foreach (var read in reads)
         {
-            if (Reaches(read, dirty, resolved, []))
+            if (MayCloseACycle(read, dirty, resolved))
                 affected.Add(read.Tree.Path);
         }
         if (affected.Count > 0)
             return null;
 
         var declaredMacros = binders.Values.SelectMany(binder => binder.DeclaredMacros()).ToList();
+        Macros.CheckRecursion(declaredMacros, forwarding.Current, (macro, diagnostic) => found[macro.Tree.Path].Add(diagnostic));
         var macros = new List<Diagnostic>();
-        Macros.CheckRecursion(declaredMacros, macros);
         Macros.CheckExportedUses(declaredMacros, symbols.IsExported, macros);
-        foreach (var diagnostic in macros.Where(diagnostic => dirty.Contains(diagnostic.Span.File)))
+        foreach (var diagnostic in macros)
             found[diagnostic.Span.File].Add(diagnostic);
         foreach (var result in bound.Values)
             Value(result.Symbols, Segments, resolved, found);
@@ -296,7 +285,7 @@ public sealed class ProgramModel
         var files = Files
             .Select(file => dirty.Contains(file.Tree.Path)
                 ? new SemanticModel(trees[file.Tree.Path], Segments, configuration, bound[file.Tree.Path], resolved,
-                    declared, Expanded(binders[file.Tree.Path]), all.Where(d => d.Span.File == file.Tree.Path), binaryLength)
+                    declared, Expanded(binders[file.Tree.Path], forwarding.Current), all.Where(d => d.Span.File == file.Tree.Path), binaryLength)
                 : file)
             .ToList();
         var lookups = new Dictionary<string, IReadOnlySet<string>>(lookedUp, StringComparer.Ordinal);
@@ -311,8 +300,8 @@ public sealed class ProgramModel
     /// expansion lands in the calling file, so this file's output is what has to bring those
     /// names in.
     /// </summary>
-    private static List<Symbol> Expanded(Binder binder) =>
-        [.. Macros.Reachable(binder.CalledMacros()).SelectMany(macro => macro.Uses.Select(use => use.Used))];
+    private static List<Symbol> Expanded(Binder binder, Func<Symbol, Symbol> current) =>
+        [.. Macros.Reachable(binder.CalledMacros()).SelectMany(macro => macro.Uses.Select(use => current(use.Used)))];
 
     /// <summary>Where one file's names resolve to and where it declares them, by position.</summary>
     private static (Dictionary<int, Symbol> Resolved, Dictionary<int, Symbol> Declared) Names(Binder.Result bound)
@@ -339,17 +328,59 @@ public sealed class ProgramModel
     }
 
     /// <summary>
-    /// Whether what <paramref name="symbol"/> is worth could depend on a symbol of one of
-    /// <paramref name="paths"/>: whether a name in anything it is evaluated from, followed as
-    /// far as it goes, reaches one of those files.
+    /// Whether <paramref name="read"/>, a symbol of a file that is not read again, could be on
+    /// a cycle with the files that are: whether something it is evaluated from reaches one of
+    /// their symbols that is itself evaluated, however indirectly, from it. Its value was worked
+    /// out before, and a cycle an edit closed through it would never be seen from its value.
     /// </summary>
-    private static bool Reaches(Symbol symbol, IReadOnlySet<string> paths, SymbolMap resolved, HashSet<Symbol> visited)
+    private static bool MayCloseACycle(Symbol read, IReadOnlySet<string> dirty, SymbolMap resolved)
     {
-        if (paths.Contains(symbol.Tree.Path))
-            return true;
-        if (!visited.Add(symbol))
-            return false;
+        var reached = new HashSet<Symbol>();
+        var pending = new Stack<Symbol>([read]);
+        while (pending.TryPop(out var next))
+        {
+            foreach (var named in Named(next, resolved))
+            {
+                if (!reached.Add(named))
+                    continue;
+                if (dirty.Contains(named.Tree.Path))
+                {
+                    if (Reaches(named, read, resolved))
+                        return true;
+                }
+                else
+                {
+                    pending.Push(named);
+                }
+            }
+        }
+        return false;
+    }
 
+    /// <summary>Whether evaluating <paramref name="from"/> can come to <paramref name="to"/>, through any file.</summary>
+    private static bool Reaches(Symbol from, Symbol to, SymbolMap resolved)
+    {
+        var reached = new HashSet<Symbol> { from };
+        var pending = new Stack<Symbol>([from]);
+        while (pending.TryPop(out var next))
+        {
+            foreach (var named in Named(next, resolved))
+            {
+                if (named == to)
+                    return true;
+                if (reached.Add(named))
+                    pending.Push(named);
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The symbols evaluating <paramref name="symbol"/> reads directly: every name in anything it
+    /// is evaluated from, its type, the enum member before it, and what holds or makes it up.
+    /// </summary>
+    private static IEnumerable<Symbol> Named(Symbol symbol, SymbolMap resolved)
+    {
         var written = new[] { symbol.ValueExpression, symbol.Data, symbol.TypeExpression }
             .Concat(symbol.Items)
             .Concat(symbol.Entries)
@@ -358,17 +389,15 @@ public sealed class ProgramModel
         {
             foreach (var token in node.ChildTokens)
             {
-                if (resolved.TryGetValue((node.Tree, token.Span.Start), out var named)
-                    && Reaches(named, paths, resolved, visited))
-                {
-                    return true;
-                }
+                if (resolved.TryGetValue((node.Tree, token.Span.Start), out var named))
+                    yield return named;
             }
         }
         var linked = new[] { symbol.Type, symbol.PreviousMember, symbol.Scope.Owner }
             .Concat(symbol.Body?.Symbols ?? [])
             .OfType<Symbol>();
-        return linked.Any(other => Reaches(other, paths, resolved, visited));
+        foreach (var other in linked)
+            yield return resolved.Current(other);
     }
 
     /// <summary>A file may not declare a name the build configuration already gives it.</summary>
