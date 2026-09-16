@@ -104,27 +104,34 @@ public sealed class SemanticModel
     /// <summary>Every place <paramref name="symbol"/> is written, its declaration included.</summary>
     public IReadOnlyList<SymbolReference> ReferencesTo(Symbol symbol) => [.. bySymbol[symbol]];
 
-    /// <summary>What an expression is worth, for an editor to show.</summary>
-    public Value ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, Segments, resolved);
+    /// <summary>
+    /// What an expression is worth, for an editor to show. <paramref name="on"/> is the turn
+    /// of the repetition it was written in, whose bindings it may name.
+    /// </summary>
+    public Value ValueOf(SyntaxNode expression, Iteration? on = null) =>
+        Evaluator.ValueOf(expression, Segments, resolved, Iteration.BindingsOf(on));
+
+    /// <summary>The symbol a written name stands for, or null when it names none.</summary>
+    public Symbol? SymbolOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
 
     /// <summary>
     /// How much room a data directive takes: the bytes it generates and how many elements
     /// they are. Null where nt65 cannot say, such as for an <c>.align</c>.
     /// </summary>
-    public DataSize? RoomFor(SyntaxNode directive) =>
-        Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength);
+    public DataSize? RoomFor(SyntaxNode directive, Iteration? on = null) =>
+        Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength, Iteration.BindingsOf(on));
 
     /// <summary>
     /// Evaluates an expression and reports what is wrong with it into
     /// <paramref name="diagnostics"/>. Used for the operands of a data directive, which no
     /// symbol holds and which nothing else would ever evaluate with anything to say.
     /// </summary>
-    public void Check(SyntaxNode expression, List<Diagnostic> diagnostics) =>
-        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength);
+    public void Check(SyntaxNode expression, List<Diagnostic> diagnostics, Iteration? on = null) =>
+        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength, Iteration.BindingsOf(on));
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
-    public IReadOnlyList<long>? BytesOf(SyntaxNode operand) =>
-        Evaluator.BytesOf(operand, Segments, resolved);
+    public IReadOnlyList<long>? BytesOf(SyntaxNode operand, Iteration? on = null) =>
+        Evaluator.BytesOf(operand, Segments, resolved, Iteration.BindingsOf(on));
 
     /// <summary>The items an operand stands for when it names a list, or null when it does not.</summary>
     public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) => Evaluator.ItemsOf(operand, resolved);
@@ -133,6 +140,7 @@ public sealed class SemanticModel
     /// The address size of an expression. <c>*</c> takes the size of
     /// <paramref name="segment"/>, or of the default segment when none is named.
     /// </summary>
-    public AddressSize? AddressSizeOf(SyntaxNode expression, string? segment = null) =>
-        Evaluator.AddressSizeOf(expression, segment ?? SegmentTable.DefaultSegment, Segments, resolved);
+    public AddressSize? AddressSizeOf(SyntaxNode expression, string? segment = null, Iteration? on = null) =>
+        Evaluator.AddressSizeOf(
+            expression, segment ?? SegmentTable.DefaultSegment, Segments, resolved, Iteration.BindingsOf(on));
 }

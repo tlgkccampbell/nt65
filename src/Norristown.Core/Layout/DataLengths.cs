@@ -25,28 +25,31 @@ public static class DataLengths
     /// wrong with its values goes to <paramref name="diagnostics"/>, which callers that have
     /// already reported pass as null.
     /// </summary>
-    public static int? Of(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics)
+    public static int? Of(
+        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on = null)
     {
         if (directive.ChildTokens.Length == 0)
             return null;
         if (diagnostics is not null)
         {
             foreach (var operand in directive.ChildNodes)
-                model.Check(operand, diagnostics);
+                model.Check(operand, diagnostics, on);
         }
-        Check(directive, model, diagnostics);
+        Check(directive, model, diagnostics, on);
         if (directive.ChildTokens[0].Text.Equals(".align", StringComparison.OrdinalIgnoreCase))
             return Unpredictable;
-        return model.RoomFor(directive) is { } room && room.Bytes is >= 0 and <= int.MaxValue
+        return model.RoomFor(directive, on) is { } room && room.Bytes is >= 0 and <= int.MaxValue
             ? (int)room.Bytes
             : null;
     }
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
-    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model) => model.BytesOf(argument);
+    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model, Iteration? on = null) =>
+        model.BytesOf(argument, on);
 
     /// <summary>What the assembler would refuse about a directive's values.</summary>
-    private static void Check(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics)
+    private static void Check(
+        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
     {
         var name = directive.ChildTokens[0].Text.ToLowerInvariant();
         var operands = directive.ChildNodes;
@@ -55,13 +58,13 @@ public static class DataLengths
         {
             case ".byte":
             case ".asciiz":
-                Values(operands, model, diagnostics, (-128, 255));
+                Values(operands, model, diagnostics, (-128, 255), on);
                 break;
             case ".word":
-                Values(operands, model, diagnostics, (-32768, 65535));
+                Values(operands, model, diagnostics, (-32768, 65535), on);
                 break;
             case ".dword":
-                Values(operands, model, diagnostics, (-2147483648, 4294967295));
+                Values(operands, model, diagnostics, (-2147483648, 4294967295), on);
                 break;
 
             // An address directive takes whatever fits its own width, and the byte
@@ -70,15 +73,15 @@ public static class DataLengths
             case ".faraddr":
             case ".lobytes":
             case ".hibytes":
-                Values(operands, model, diagnostics, null);
+                Values(operands, model, diagnostics, null, on);
                 break;
 
             case ".res":
-                Reserved(operands, model, diagnostics);
+                Reserved(operands, model, diagnostics, on);
                 break;
 
             case ".align":
-                Alignment(operands, model, diagnostics);
+                Alignment(operands, model, diagnostics, on);
                 break;
 
             default:
@@ -88,12 +91,12 @@ public static class DataLengths
 
     private static void Values(
         IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
-        (long Low, long High)? limit)
+        (long Low, long High)? limit, Iteration? on)
     {
         foreach (var operand in operands)
         {
             CheckAscii(operand, model, diagnostics);
-            if (Bytes(operand, model) is { } bytes)
+            if (Bytes(operand, model, on) is { } bytes)
             {
                 foreach (var value in bytes)
                 {
@@ -103,20 +106,20 @@ public static class DataLengths
                 continue;
             }
             if (limit is { } range)
-                CheckRange(operand, model, diagnostics, range);
+                CheckRange(operand, model, diagnostics, range, on);
         }
     }
 
     /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant.</summary>
     private static void Reserved(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics)
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
     {
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, (-128, 255));
+            CheckRange(operands[1], model, diagnostics, (-128, 255), on);
 
-        var count = model.ValueOf(operands[0]).AsNumber();
+        var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
             Report(operands[0], model, diagnostics, "a `.res` count must be a constant");
         else if (count is < 0 or > 0xffffff)
@@ -125,11 +128,11 @@ public static class DataLengths
 
     /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
     private static void Alignment(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics)
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
     {
         if (operands.Count == 0)
             return;
-        var boundary = model.ValueOf(operands[0]).AsNumber();
+        var boundary = model.ValueOf(operands[0], on).AsNumber();
         if (boundary is null)
             Report(operands[0], model, diagnostics, "an `.align` boundary must be a constant");
         else if (boundary is < 1 or > 0x10000 || (boundary & (boundary - 1)) != 0)
@@ -156,9 +159,10 @@ public static class DataLengths
     }
 
     private static void CheckRange(
-        SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit)
+        SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit,
+        Iteration? on)
     {
-        if (model.ValueOf(argument).AsNumber() is { } value && (value < limit.Low || value > limit.High))
+        if (model.ValueOf(argument, on).AsNumber() is { } value && (value < limit.Low || value > limit.High))
             Report(argument, model, diagnostics, $"{Value.Of(value)} does not fit in this directive");
     }
 

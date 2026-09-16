@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -18,9 +19,13 @@ public sealed class CodeLayout
 {
     private readonly SemanticModel model;
     private readonly Cpu cpu;
-    private readonly Dictionary<int, LineLayout> lines = [];
+    private readonly Dictionary<(int Position, Iteration? On), LineLayout> lines = [];
     private readonly List<Diagnostic> diagnostics = [];
     private string segment = SegmentTable.DefaultSegment;
+
+    // Which turn of which repetitions the walk is inside. A body is laid out once per turn,
+    // and the same line can be a different length on each of them.
+    private Iteration? iteration;
 
     private CodeLayout(SemanticModel model, Cpu cpu)
     {
@@ -43,8 +48,12 @@ public sealed class CodeLayout
         return layout;
     }
 
-    /// <summary>What a statement assembles to, or null when it generates no bytes.</summary>
-    public LineLayout? Of(SyntaxNode statement) => lines.GetValueOrDefault(statement.Position);
+    /// <summary>
+    /// What a statement assembles to on the turn <paramref name="on"/> of the repetitions
+    /// around it, or null when it generates no bytes.
+    /// </summary>
+    public LineLayout? Of(SyntaxNode statement, Iteration? on = null) =>
+        lines.GetValueOrDefault((statement.Position, on));
 
     /// <summary>
     /// The modes an operand's shape could possibly be, before the mnemonic and the CPU have
@@ -136,6 +145,20 @@ public sealed class CodeLayout
         if (kind == BlockKind.If && !model.Configuration.Includes(block))
             return;
 
+        // A repetition's body is laid out once per turn: what `.res n` reserves and how wide
+        // an address `lda n` reaches both follow from the turn.
+        if (Constructs.Repeats(kind))
+        {
+            var outerTurn = iteration;
+            foreach (var turn in Repetitions.Of(model, block, outerTurn, diagnostics))
+            {
+                iteration = turn;
+                Contents(block.ChildNodes);
+            }
+            iteration = outerTurn;
+            return;
+        }
+
         var lines = block.ChildNodes;
         var outer = segment;
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
@@ -143,6 +166,13 @@ public sealed class CodeLayout
         else if (lines.Length > 0 && lines[0].Statement is { } other)
             Statement(other);
 
+        Contents(lines);
+        segment = outer;
+    }
+
+    /// <summary>Every line of a block after the one that opens it.</summary>
+    private void Contents(ImmutableArray<SyntaxNode> lines)
+    {
         for (var i = 1; i < lines.Length; i++)
         {
             if (lines[i].Green is GreenBlock inner)
@@ -150,7 +180,6 @@ public sealed class CodeLayout
             else if (lines[i].Statement is { } statement)
                 Statement(statement);
         }
-        segment = outer;
     }
 
     private void Statement(SyntaxNode statement)
@@ -211,7 +240,7 @@ public sealed class CodeLayout
 
         var mode = Choose(mnemonic, operand, candidates);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
-        lines[statement.Position] = new LineLayout(Instructions.Length(mode), mode, prefix);
+        lines[(statement.Position, iteration)] = new LineLayout(Instructions.Length(mode), mode, prefix);
     }
 
     /// <summary>Which of the candidate modes the operand's own width calls for.</summary>
@@ -227,7 +256,7 @@ public sealed class CodeLayout
         }
 
         var required = WrittenPrefix(operand) ?? (Expression(operand) is { } expression
-            ? model.AddressSizeOf(expression, segment)
+            ? model.AddressSizeOf(expression, segment, iteration)
             : null);
 
         // Where nothing says how wide it is, the reason has already been reported; the widest
@@ -261,7 +290,7 @@ public sealed class CodeLayout
                 Report(operand.Span,
                     $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
             }
-            else if (model.AddressSizeOf(expression, segment) == AddressSize.Far)
+            else if (model.AddressSizeOf(expression, segment, iteration) == AddressSize.Far)
             {
                 Report(expression.Span,
                     $"`{mnemonic.Text}` takes a near target, and this one is far");
@@ -269,7 +298,7 @@ public sealed class CodeLayout
             return;
         }
 
-        if (mode == AddressingMode.Immediate && model.ValueOf(expression).AsNumber() is { } value
+        if (mode == AddressingMode.Immediate && model.ValueOf(expression, iteration).AsNumber() is { } value
             && value is < -128 or > 255)
         {
             Report(expression.Span, $"an immediate is one byte, and {Value.Of(value)} does not fit");
@@ -286,9 +315,9 @@ public sealed class CodeLayout
         var assertion = Constructs.AssertionOf(directive);
         if (assertion.Condition is not { } condition)
             return;
-        if (model.ValueOf(condition).AsNumber() is not { } value)
+        if (model.ValueOf(condition, iteration).AsNumber() is not { } value)
         {
-            model.Check(condition, diagnostics);
+            model.Check(condition, diagnostics, iteration);
             return;
         }
         if (value == 0)
@@ -301,8 +330,8 @@ public sealed class CodeLayout
 
     private void Data(SyntaxNode directive)
     {
-        if (DataLengths.Of(directive, model, diagnostics) is { } length)
-            lines[directive.Position] = new LineLayout(length, null, null);
+        if (DataLengths.Of(directive, model, diagnostics, iteration) is { } length)
+            lines[(directive.Position, iteration)] = new LineLayout(length, null, null);
     }
 
     private static string Spell(AddressSize size) => size switch

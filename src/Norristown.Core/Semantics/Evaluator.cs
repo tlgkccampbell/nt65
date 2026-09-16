@@ -21,18 +21,33 @@ internal sealed class Evaluator
     private readonly HashSet<Symbol> evaluated = [];
     private readonly List<Symbol> evaluating = [];
     private readonly Dictionary<Symbol, Value> arguments = [];
+
+    // Names an `.each` bound to a list item, which stand for the item wherever they are
+    // written rather than only for what it is worth.
+    private readonly Dictionary<Symbol, SyntaxNode> items = [];
     private readonly Func<string, long?>? binaryLength;
 
     private Evaluator(
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic>? diagnostics,
-        Func<string, long?>? binaryLength = null)
+        Func<string, long?>? binaryLength = null,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null)
     {
         this.segments = segments;
         this.resolved = resolved;
         this.diagnostics = diagnostics;
         this.binaryLength = binaryLength;
+
+        // A name a repetition binds stands for its value on this turn, which is what a
+        // function's parameter already does for its argument.
+        foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Iteration.Bound>())
+        {
+            if (value.Item is { } item)
+                items[symbol] = item;
+            else
+                arguments[symbol] = value.Value;
+        }
     }
 
     /// <summary>
@@ -61,8 +76,9 @@ internal sealed class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics,
-        Func<string, long?>? binaryLength) =>
-        new Evaluator(segments, resolved, diagnostics, binaryLength).Bytes(expression);
+        Func<string, long?>? binaryLength,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        new Evaluator(segments, resolved, diagnostics, binaryLength, bound).Bytes(expression);
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
     private void Bytes(SyntaxNode operand)
@@ -76,15 +92,25 @@ internal sealed class Evaluator
         SyntaxNode directive,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        Func<string, long?>? binaryLength) =>
-        new Evaluator(segments, resolved, null, binaryLength).RoomFor(directive);
+        Func<string, long?>? binaryLength,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        new Evaluator(segments, resolved, null, binaryLength, bound).RoomFor(directive);
 
     /// <summary>The bytes a literal or a mapped string becomes, or null for anything else.</summary>
     public static IReadOnlyList<long>? BytesOf(
         SyntaxNode argument,
         SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        new Evaluator(segments, resolved, null, null, bound).BytesIn(argument);
+
+    /// <summary>The symbol a written name stands for, or null when it names none.</summary>
+    public static Symbol? SymbolNamed(
+        SyntaxNode name,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
-        new Evaluator(segments, resolved, null).BytesIn(argument);
+        name.Kind == SyntaxKind.NameExpression
+            ? new Evaluator(SegmentTable.Standard, resolved, null).SymbolOf(name)
+            : null;
 
     /// <summary>The items a name stands for when it names a list, or null when it does not.</summary>
     public static IReadOnlyList<SyntaxNode>? ItemsOf(
@@ -103,16 +129,18 @@ internal sealed class Evaluator
     public static Value ValueOf(
         SyntaxNode expression,
         SegmentTable segments,
-        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
-        new Evaluator(segments, resolved, null).Evaluate(expression);
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        new Evaluator(segments, resolved, null, null, bound).Evaluate(expression);
 
     /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
         SyntaxNode expression,
         string segment,
         SegmentTable segments,
-        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
-        new Evaluator(segments, resolved, null).SizeOf(expression, segment);
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        new Evaluator(segments, resolved, null, null, bound).SizeOf(expression, segment);
 
     /// <summary>The wider of two address sizes, either of which may be unknown.</summary>
     private static AddressSize? Widest(AddressSize? a, AddressSize? b) =>
@@ -255,6 +283,8 @@ internal sealed class Evaluator
     /// </summary>
     private Value ValueOfName(SyntaxNode name)
     {
+        if (BoundItem(name) is { } item)
+            return Evaluate(item);
         if (SymbolOf(name) is not { } symbol)
             return Value.Unknown;
         if (arguments.TryGetValue(symbol, out var argument))
@@ -758,12 +788,28 @@ internal sealed class Evaluator
     /// </summary>
     private Symbol? SymbolOf(SyntaxNode name)
     {
+        // A name bound to a list item is that item: `.each handlers, h` makes `h` the label
+        // it stands for, with that label's address size and everything else about it.
+        if (BoundItem(name) is { Kind: SyntaxKind.NameExpression } item)
+            return SymbolOf(item);
+
         for (var i = name.ChildTokens.Length - 1; i >= 0; i--)
         {
             if (resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out var symbol))
                 return symbol;
         }
         return null;
+    }
+
+    /// <summary>The item a written name is bound to on this turn, or null when it is bound to none.</summary>
+    private SyntaxNode? BoundItem(SyntaxNode name)
+    {
+        if (items.Count == 0 || name.ChildTokens.Length != 1)
+            return null;
+        return resolved.TryGetValue((name.Tree, name.ChildTokens[0].Span.Start), out var symbol)
+            && items.TryGetValue(symbol, out var item)
+            ? item
+            : null;
     }
 
     private static string Text(SyntaxNode node) => node.ChildTokens.Length > 0 ? node.ChildTokens[0].Text : "";

@@ -220,19 +220,16 @@ public sealed class BindingTests
     }
 
     /// <summary>
-    /// Constructs a later stage brings online declare and resolve nothing yet, so a macro
-    /// body's names are not reported as the file's.
+    /// A macro body means what its expansion means, so its names are not the file's and
+    /// nothing in it declares or resolves yet.
     /// </summary>
     [Fact]
-    public void BlocksOfALaterStageAreNotBound()
+    public void AMacroBodyIsNotBound()
     {
         var model = Analysis.Model("""
             .macro set16(dest, value) {
                 lda #<value
                 sta dest
-            }
-            .repeat 4, i {
-                .byte i
             }
             """);
 

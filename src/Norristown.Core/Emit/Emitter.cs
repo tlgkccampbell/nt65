@@ -38,6 +38,10 @@ public sealed class Emitter
     private bool pendingBlank;
     private int depth;
 
+    // Which turn of which repetitions is being written. A body is written once per turn,
+    // with every name the repetitions bind standing for what it is worth on that one.
+    private Iteration? iteration;
+
     private Emitter(SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics, string source)
     {
         this.model = model;
@@ -291,6 +295,21 @@ public sealed class Emitter
             return;
         }
 
+        // A repetition is unrolled here: its body is written once per turn, and the `.repeat`
+        // itself never reaches ca65. Nothing is reported from here, because layout walked the
+        // same turns and has already said what is wrong with the count or the list.
+        if (Constructs.Repeats(kind))
+        {
+            var outerTurn = iteration;
+            foreach (var turn in Repetitions.Of(model, block, outerTurn, null))
+            {
+                iteration = turn;
+                Contents(lines);
+            }
+            iteration = outerTurn;
+            return;
+        }
+
         // A structure, a union, a list and a character mapping say what something means
         // without generating anything. An exported layout is the exception: its members
         // travel as flat constants, so the file that declares them has to define them.
@@ -402,13 +421,13 @@ public sealed class Emitter
                     Reserved(line, statement, statement);
                 break;
 
-            case SyntaxKind.DataDirective when layout.Of(statement) is null:
+            case SyntaxKind.DataDirective when layout.Of(statement, iteration) is null:
                 NotTranspiled(statement);
                 break;
 
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
-                Source(line, statement, layout.Of(statement)?.Length ?? 0);
+                Source(line, statement, layout.Of(statement, iteration)?.Length ?? 0);
                 break;
 
             case SyntaxKind.ExternProcDeclaration:
@@ -420,7 +439,7 @@ public sealed class Emitter
             // `.error` the build reached has already been reported, and never reaches ca65.
             case SyntaxKind.AssertDirective
                 when Constructs.AssertionOf(statement).Condition is { } condition
-                    && model.ValueOf(condition).AsNumber() is null:
+                    && model.ValueOf(condition, iteration).AsNumber() is null:
                 Source(line, statement, 0);
                 break;
 
@@ -480,12 +499,12 @@ public sealed class Emitter
             Reserved(line, statement, rest);
             return;
         }
-        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest) is null)
+        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, iteration) is null)
         {
             NotTranspiled(rest);
             return;
         }
-        var bytes = rest is null ? 0 : layout.Of(rest)?.Length ?? 0;
+        var bytes = rest is null ? 0 : layout.Of(rest, iteration)?.Length ?? 0;
         var edits = new Edits();
         if (rest is not null)
             Substitute(rest, edits, nested: false);
@@ -520,7 +539,7 @@ public sealed class Emitter
     /// </summary>
     private void Reserved(SyntaxNode line, SyntaxNode statement, SyntaxNode directive)
     {
-        if (model.RoomFor(directive) is not { } room)
+        if (model.RoomFor(directive, iteration) is not { } room)
         {
             NotTranspiled(directive);
             return;
@@ -591,7 +610,7 @@ public sealed class Emitter
         var directive = opener.Kind == SyntaxKind.LabeledLine
             ? opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.DataDirective)
             : opener;
-        if (directive is null || model.RoomFor(directive) is not { } room)
+        if (directive is null || model.RoomFor(directive, iteration) is not { } room)
         {
             NotTranspiled(opener);
             return;
@@ -687,7 +706,7 @@ public sealed class Emitter
     /// <summary>The bytes a reserved member takes, from the text it was given and zeros after it.</summary>
     private IEnumerable<string> Padded(SyntaxNode? value, long size)
     {
-        var bytes = value is null ? [] : model.BytesOf(value)?.ToList() ?? [];
+        var bytes = value is null ? [] : model.BytesOf(value, iteration)?.ToList() ?? [];
         for (var i = 0; i < size; i++)
             yield return Hex(i < bytes.Count ? bytes[i] & 0xff : 0, 2);
     }
@@ -713,7 +732,7 @@ public sealed class Emitter
 
         // Anything with a value nt65 knows is written as that value; anything else keeps its
         // own spelling, with names flattened.
-        if (model.ValueOf(node).AsNumber() is { } value)
+        if (model.ValueOf(node, iteration).AsNumber() is { } value)
             return Constant(value);
         var edits = new Edits();
         Substitute(node, edits, nested: false);
@@ -972,7 +991,7 @@ public sealed class Emitter
         }
         if (directive.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.StringExpression } path
             && path.ChildTokens.Length > 0
-            && model.ValueOf(path) is { Kind: ValueKind.String, Text: { } named })
+            && model.ValueOf(path, iteration) is { Kind: ValueKind.String, Text: { } named })
         {
             var at = source.LastIndexOf('/');
             edits.Replace[path.ChildTokens[0].Position] =
@@ -1010,9 +1029,31 @@ public sealed class Emitter
             return;
         }
 
+        // The name a repetition binds is worth something different on every turn, and this is
+        // the turn being written.
+        var symbol = reference.Symbol;
+        if (symbol.Kind == SymbolKind.Binding)
+        {
+            if (iteration?.Bindings().TryGetValue(symbol, out var bound) is not true)
+                return;
+
+            // A list item is written as it stands, with its own names substituted; a number
+            // is written as the number it is on this turn.
+            var written = bound.Item is { } item ? Rendered(item) : null;
+            if (written is null && bound.Value.AsNumber() is { } turn)
+                written = Constant(turn);
+            if (written is null)
+                return;
+
+            edits.Replace[tokens[0].Position] = written;
+            for (var i = 1; i < tokens.Length; i++)
+                edits.Replace[tokens[i].Position] = "";
+            edits.Comments.Add(symbol.Name);
+            return;
+        }
+
         // A define and a checked import are written as their value, never by name: a `-D` given to ca65 then cannot collide with a define, and a checked import
         // is a value nt65 has already used in its own arithmetic.
-        var symbol = reference.Symbol;
         var byValue = (symbol.IsDefine || symbol.Kind == SymbolKind.ImportedConstant)
             && symbol.Value.AsNumber() is not null;
         edits.Replace[tokens[0].Position] = byValue
@@ -1066,7 +1107,7 @@ public sealed class Emitter
         // A built-in the analysis answers keeps the ordinary path.
         if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is null)
         {
-            if (model.ValueOf(call).AsNumber() is { } builtin)
+            if (model.ValueOf(call, iteration).AsNumber() is { } builtin)
             {
                 edits.Replace[tokens[0].Position] = Constant(builtin);
                 for (var i = 1; i < tokens.Count; i++)
@@ -1079,9 +1120,9 @@ public sealed class Emitter
         }
 
         string? text = null;
-        if (model.BytesOf(call) is { Count: > 0 } bytes)
+        if (model.BytesOf(call, iteration) is { Count: > 0 } bytes)
             text = string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
-        else if (model.ValueOf(call).AsNumber() is { } value)
+        else if (model.ValueOf(call, iteration).AsNumber() is { } value)
             text = Constant(value);
 
         if (text is null)
@@ -1109,7 +1150,7 @@ public sealed class Emitter
     private void Prefix(SyntaxNode operand, Edits edits)
     {
         var instruction = operand.Parent;
-        if (instruction is null || layout.Of(instruction) is not { Prefix: { } prefix })
+        if (instruction is null || layout.Of(instruction, iteration) is not { Prefix: { } prefix })
             return;
         var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
         var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);

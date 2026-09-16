@@ -50,4 +50,7 @@ public enum SymbolKind
 
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
     Func,
+
+    /// <summary>The name a <c>.repeat</c> or an <c>.each</c> binds: one value per turn.</summary>
+    Binding,
 }

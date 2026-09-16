@@ -16,6 +16,11 @@ namespace Norristown.Semantics;
 /// branch the build takes is read as if the <c>.if</c> were not written and one it leaves
 /// out is not read at all. That is what lets the same name be declared under two of them.
 /// </para>
+/// <para>
+/// A <c>.repeat</c> or an <c>.each</c> body is read once, however many times it is written
+/// out, with the name the repetition binds in a scope of its own. A name declared inside one
+/// would have to be a different name on every turn, which is macro expansion's to give.
+/// </para>
 /// </summary>
 internal sealed class Binder
 {
@@ -33,6 +38,7 @@ internal sealed class Binder
     private Scope scope;
     private string segment = SegmentTable.DefaultSegment;
     private Symbol? previousEnumMember;
+    private SyntaxToken? repetition;
 
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
@@ -169,6 +175,10 @@ internal sealed class Binder
                 if (opener is not null)
                     CollectUses(opener);
                 break;
+            case BlockKind.Repeat:
+            case BlockKind.Each:
+                scope = OpenRepetition(opener);
+                break;
             default:
                 if (opener is not null)
                     BindStatement(opener);
@@ -187,6 +197,8 @@ internal sealed class Binder
         segment = outerSegment;
         if (kind == BlockKind.Enum)
             previousEnumMember = null;
+        if (Constructs.Repeats(kind))
+            repetition = null;
     }
 
     /// <summary>
@@ -228,6 +240,32 @@ internal sealed class Binder
         var body = new Scope(ScopeKind.Type, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
+        return body;
+    }
+
+    /// <summary>
+    /// The scope a <c>.repeat</c> or an <c>.each</c> opens, which holds the one name it binds
+    /// and nothing else. The body is read in it once: what the name is worth differs from
+    /// turn to turn, but what it refers to does not, so one reading answers for every turn.
+    /// </summary>
+    private Scope OpenRepetition(SyntaxNode? opener)
+    {
+        var body = new Scope(ScopeKind.Scope, null, scope, null);
+        if (opener is null)
+            return body;
+
+        CollectUses(opener);
+        if (NameToken(opener) is not { } name)
+        {
+            repetition = FirstToken(opener, SyntaxKind.Directive);
+            return body;
+        }
+
+        var outer = scope;
+        scope = body;
+        Declare(name, SymbolKind.Binding);
+        scope = outer;
+        repetition = FirstToken(opener, SyntaxKind.Directive);
         return body;
     }
 
@@ -514,6 +552,12 @@ internal sealed class Binder
         // be written there but a member name, so there is nothing for it to shadow.
         if (kind != SymbolKind.Member && !CheckReservedWord(name))
             return null;
+        if (kind != SymbolKind.Binding && repetition is { } repeated)
+        {
+            Report(name.Span, $"`{name.Text}` is declared inside a `{repeated.Text}` body. A name that "
+                + "is distinct on every turn arrives with macro expansion");
+            return null;
+        }
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         var owner = cheap ? CheapLocalOwner(name) : scope;
@@ -647,6 +691,15 @@ internal sealed class Binder
         var member = container.FindMember(token.Text);
         if (member is null)
         {
+            // A repetition's name at the end of a path means the member of that scope with
+            // the same spelling, which is a different member on every turn. That needs the
+            // same per-expansion naming a declaration inside a repetition does.
+            if (at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
+            {
+                Report(token.Span, $"`{binding.Name}` is a repetition binding, and naming a member "
+                    + "through one arrives with macro expansion");
+                return null;
+            }
             Report(token.Span, container.Kind == ScopeKind.File
                 ? $"`{token.Text}` is not declared at file scope"
                 : $"`{token.Text}` is not declared in `{container.Name}`");

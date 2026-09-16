@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1424, 0
+.dbg file, "main.nt65", 1812, 0
 
 .segment "CODE": absolute
 LINES = 312
@@ -37,3 +37,54 @@ trace:
     rts
 
     .assert main >= $0200, lderror, "main must be past the zero page"
+
+Cmd__move = $00
+Cmd__fire = $01
+Cmd__wait = $02
+
+.segment "RODATA": absolute
+bits:
+.dbg line, "main.nt65", 75
+    .byte 1 << $00                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $01                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $02                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $03                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $04                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $05                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $06                  ; i
+.dbg line, "main.nt65", 75
+    .byte 1 << $07                  ; i
+
+dispatch:
+.dbg line, "main.nt65", 80
+    .addr main - 1                  ; h
+.dbg line, "main.nt65", 80
+    .addr trace - 1                 ; h
+
+commands:
+.dbg line, "main.nt65", 85
+    .byte $00                       ; c
+.dbg line, "main.nt65", 85
+    .byte $01                       ; c
+.dbg line, "main.nt65", 85
+    .byte $02                       ; c
+
+grid:
+.dbg line, "main.nt65", 91
+    .byte ($00 * 3) + $00           ; row, col
+.dbg line, "main.nt65", 91
+    .byte ($00 * 3) + $01           ; row, col
+.dbg line, "main.nt65", 91
+    .byte ($00 * 3) + $02           ; row, col
+.dbg line, "main.nt65", 91
+    .byte ($01 * 3) + $00           ; row, col
+.dbg line, "main.nt65", 91
+    .byte ($01 * 3) + $01           ; row, col
+.dbg line, "main.nt65", 91
+    .byte ($01 * 3) + $02           ; row, col

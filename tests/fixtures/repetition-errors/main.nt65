@@ -1,0 +1,40 @@
+; What a repetition refuses, and what it cannot do yet.
+
+here:
+    .byte 0
+
+.repeat here, i {               ;! error: a `.repeat` count is a constant, and this is not one
+    .byte i
+}
+
+SIZE = -1
+.repeat SIZE, i {               ;! error: a `.repeat` count cannot be negative, and this one is -1
+    .byte i
+}
+
+.each SIZE, h {                 ;! error: `.each` walks a list or an enum, and this is neither
+    .byte h
+}
+
+; A name inside a repetition would have to be a different name on every turn, which is what
+; macro expansion gives.
+.repeat 4, i {
+entry:                          ;! error: `entry` is declared inside a `.repeat` body. A name that is distinct on every turn arrives with macro expansion
+    .byte i
+}
+
+.enum Cmd {
+move
+fire
+}
+
+.scope actions {
+move:
+    rts
+fire:
+    rts
+}
+
+.each Cmd, c {
+    .addr actions::c            ;! error: `c` is a repetition binding, and naming a member through one arrives with macro expansion
+}

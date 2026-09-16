@@ -57,3 +57,38 @@ TRACE = 0
 
 ; Where main lands is the linker's to say, so this one is written out for ld65.
     .assert main >= $0200, lderror, "main must be past the zero page"
+
+; A repetition is unrolled by nt65, so none of it reaches ca65 either.
+.list handlers {
+    main, trace
+}
+
+.enum Cmd {
+move
+fire
+wait
+}
+
+.rodata {
+bits:
+.repeat 8, i {
+    .byte 1 << i
+}
+
+dispatch:
+.each handlers, h {
+    .addr h - 1                 ; an RTS dispatch table
+}
+
+commands:
+.each Cmd, c {
+    .byte c
+}
+
+grid:
+.repeat 2, row {
+.repeat 3, col {
+    .byte row * 3 + col
+}
+}
+}

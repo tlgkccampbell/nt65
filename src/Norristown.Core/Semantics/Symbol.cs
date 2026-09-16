@@ -172,6 +172,7 @@ public sealed class Symbol
         SymbolKind.Instance => "instance",
         SymbolKind.Charmap => "character mapping",
         SymbolKind.List => "list",
+        SymbolKind.Binding => "repetition binding",
         _ => "function",
     };
 
