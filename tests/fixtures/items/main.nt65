@@ -1,0 +1,78 @@
+; Every item the parser reads at Stage 2, in one file, with nothing to report.
+.cpu 65816
+
+.segment "ZP2": zp
+.segment "WRAM": abs, bank = $7e
+.segment "HWREG": zp, dp = $2100
+
+.export fill_page, SCREEN
+.import zp_scratch: zp, far_table: far
+.import _printf: proc(a8, i16)
+.import tick: proc(-> a8)
+.import reset: proc()
+.import VIC_BORDER = $D020
+.import raw
+
+.proc CHROUT = $FFD2: a8, i8
+.proc alias = fill_page
+
+SCREEN       = $0400
+SCREEN_PAGES = 4
+
+.zeropage {
+ptr:        .res 2
+frame:      .res 1
+}
+
+.rodata {
+table:      .byte 1, 2, $ff, 'A', "text"
+words:      .word $1234, table
+wide:       .dword $12345678
+here:       .addr table
+there:      .faraddr table
+greeting:   .asciiz "hello"
+padding:    .res 16, $ff
+}
+
+.proc fill_page: a8, i16 -> a8, i16 {
+    ldy #0
+@loop:
+    sta (ptr),y
+    iny
+    bne @loop
+    rts
+}
+
+; A nested segment block changes the segment of its contents, not their scope (§5.2).
+.proc render: a16, i8 -> a8, i8 {
+    .scope {
+        ldx #0
+    @loop:
+        stz $0200,x
+        inx
+        bne @loop
+    }
+    .rodata {
+    @shifts: .byte 1, 2, 4, 8
+    }
+    rtl
+}
+
+.proc hud: a8, i16, dp = $2100, dbr = $7e {
+    rts
+}
+
+.proc show: a*, i*, e*, near, inline .asciiz {
+    rts
+}
+
+.proc skip2: far, inline 2 {
+    rtl
+}
+
+; Procs do not nest, but a `.scope` may hold them.
+.scope gfx {
+    .proc init {
+        rts
+    }
+}

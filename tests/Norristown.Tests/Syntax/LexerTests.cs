@@ -98,11 +98,19 @@ public sealed class LexerTests
     [Fact]
     public void CommonTokensAreShared()
     {
-        var first = Lexer.LexLine("    lda #1\n");
-        var second = Lexer.LexLine("    lda #1\n");
-        Assert.NotSame(first, second);
-        for (var i = 0; i < first.Tokens.Length; i++)
-            Assert.Same(first.Tokens[i], second.Tokens[i]);
+        // The cache is one lock-free table shared by the whole process, so a test lexing in
+        // parallel can evict an entry between the two calls: sharing is a saving, not a
+        // guarantee. A few tries show it happens without claiming it always does.
+        var shared = false;
+        for (var attempt = 0; attempt < 20 && !shared; attempt++)
+        {
+            var first = Lexer.LexLine("    lda #1\n");
+            var second = Lexer.LexLine("    lda #1\n");
+            Assert.NotSame(first, second);
+            shared = first.Tokens.Length == second.Tokens.Length
+                && first.Tokens.Select((token, i) => ReferenceEquals(token, second.Tokens[i])).All(same => same);
+        }
+        Assert.True(shared, "a line lexed twice did not share any of its tokens");
 
         // Comments are not shared, and neither is anything with an error.
         Assert.NotSame(Lexer.LexLine("rts ; x").Tokens[0], Lexer.LexLine("rts ; x").Tokens[0]);

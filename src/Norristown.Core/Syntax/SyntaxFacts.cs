@@ -48,6 +48,80 @@ public static class SyntaxFacts
         [".tag"] = BlockKind.TagInitializer,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+    // Every directive that may begin a line, and the node it parses to. `.segment` and
+    // `.proc` each parse to one of two kinds, decided by the rest of the line. A directive
+    // whose stage has not arrived yet maps to UnsupportedLine: it is recognized, kept whole
+    // and not diagnosed.
+    private static readonly FrozenDictionary<string, SyntaxKind> lineDirectives = new Dictionary<string, SyntaxKind>
+    {
+        [".cpu"] = SyntaxKind.CpuDirective,
+        [".segment"] = SyntaxKind.SegmentDeclaration,
+        [".zeropage"] = SyntaxKind.SegmentBlock,
+        [".code"] = SyntaxKind.SegmentBlock,
+        [".bss"] = SyntaxKind.SegmentBlock,
+        [".data"] = SyntaxKind.SegmentBlock,
+        [".rodata"] = SyntaxKind.SegmentBlock,
+        [".proc"] = SyntaxKind.ProcDeclaration,
+        [".scope"] = SyntaxKind.ScopeDeclaration,
+        [".export"] = SyntaxKind.ExportDirective,
+        [".import"] = SyntaxKind.ImportDirective,
+        [".byte"] = SyntaxKind.DataDirective,
+        [".word"] = SyntaxKind.DataDirective,
+        [".dword"] = SyntaxKind.DataDirective,
+        [".addr"] = SyntaxKind.DataDirective,
+        [".faraddr"] = SyntaxKind.DataDirective,
+        [".res"] = SyntaxKind.DataDirective,
+        [".asciiz"] = SyntaxKind.DataDirective,
+        // Stage 7: types, text and the remaining data directives.
+        [".enum"] = SyntaxKind.UnsupportedLine,
+        [".struct"] = SyntaxKind.UnsupportedLine,
+        [".union"] = SyntaxKind.UnsupportedLine,
+        [".charmap"] = SyntaxKind.UnsupportedLine,
+        [".list"] = SyntaxKind.UnsupportedLine,
+        [".func"] = SyntaxKind.UnsupportedLine,
+        [".tag"] = SyntaxKind.UnsupportedLine,
+        [".align"] = SyntaxKind.UnsupportedLine,
+        [".incbin"] = SyntaxKind.UnsupportedLine,
+        [".lobytes"] = SyntaxKind.UnsupportedLine,
+        [".hibytes"] = SyntaxKind.UnsupportedLine,
+        // Stage 8: conditional assembly, repetition and assertions.
+        [".if"] = SyntaxKind.UnsupportedLine,
+        [".elseif"] = SyntaxKind.UnsupportedLine,
+        [".else"] = SyntaxKind.UnsupportedLine,
+        [".repeat"] = SyntaxKind.UnsupportedLine,
+        [".each"] = SyntaxKind.UnsupportedLine,
+        [".assert"] = SyntaxKind.UnsupportedLine,
+        [".error"] = SyntaxKind.UnsupportedLine,
+        // Stage 9: macros.
+        [".macro"] = SyntaxKind.UnsupportedLine,
+        // Stages 10 to 12: control flow, processor state and the stack.
+        [".next"] = SyntaxKind.UnsupportedLine,
+        [".patch"] = SyntaxKind.UnsupportedLine,
+        [".state"] = SyntaxKind.UnsupportedLine,
+        [".ensure"] = SyntaxKind.UnsupportedLine,
+        [".frame"] = SyntaxKind.UnsupportedLine,
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The built-in functions of §9, and the three §11 adds inside a macro body.</summary>
+    private static readonly FrozenSet<string> builtinFunctions = new[]
+    {
+        ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
+        ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
+        ".defined", ".mode", ".byteof", ".empty",
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    // The state items of §7.3, by the suffix that follows the name: a point item stands
+    // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
+    private static readonly FrozenSet<string> pointStateItems =
+        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline" }
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> trackedStateParts =
+        new[] { "a", "i", "e", "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> valuedStateParts =
+        new[] { "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Whether <paramref name="text"/> is a mnemonic, whatever its case.</summary>
     public static bool IsMnemonic(ReadOnlySpan<char> text) => mnemonicSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
 
@@ -63,6 +137,82 @@ public static class SyntaxFacts
     /// <summary>The kind of block a directive opens when its line ends in <c>{</c>.</summary>
     public static BlockKind BlockKindOfDirective(string directive) =>
         blockDirectives.GetValueOrDefault(directive, BlockKind.Unknown);
+
+    /// <summary>The kind of node a directive at the start of a line parses to, or <see cref="SyntaxKind.None"/>.</summary>
+    public static SyntaxKind LineDirectiveKind(string directive) =>
+        lineDirectives.GetValueOrDefault(directive, SyntaxKind.None);
+
+    /// <summary>Whether <paramref name="directive"/> names a built-in function.</summary>
+    public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);
+
+    /// <summary>Whether <paramref name="text"/> is one of the three CPU names.</summary>
+    public static bool IsCpuName(string text) =>
+        text is "6502" or "65816" || text.Equals("65c02", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether <paramref name="text"/> is an address size: <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
+    public static bool IsAddressSize(string text) =>
+        text.Equals("zp", StringComparison.OrdinalIgnoreCase)
+        || text.Equals("abs", StringComparison.OrdinalIgnoreCase)
+        || text.Equals("far", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether <paramref name="text"/> names an address-size prefix, which is written before
+    /// a <c>:</c> in operand position. <c>z</c>, <c>f</c> and <c>d</c> are also ordinary
+    /// identifiers (§4); nothing else can be written there, so the case does not matter.
+    /// </summary>
+    public static bool IsAddressPrefix(string text) =>
+        text.Length == 1 && char.ToLowerInvariant(text[0]) is 'z' or 'a' or 'f' or 'd';
+
+    /// <summary>
+    /// Whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item
+    /// of §7.3. <paramref name="suffix"/> is <see cref="SyntaxKind.Star"/>,
+    /// <see cref="SyntaxKind.Question"/>, <see cref="SyntaxKind.Equals"/>, or
+    /// <see cref="SyntaxKind.None"/> when the name stands alone.
+    /// </summary>
+    public static bool IsStateItem(string name, SyntaxKind suffix) => suffix switch
+    {
+        SyntaxKind.Star or SyntaxKind.Question => trackedStateParts.Contains(name),
+        SyntaxKind.Equals => valuedStateParts.Contains(name),
+        _ => pointStateItems.Contains(name),
+    };
+
+    /// <summary>Whether a token of this kind may begin an expression as a prefix operator (§9 level 2).</summary>
+    public static bool IsUnaryOperator(SyntaxKind kind) => kind is SyntaxKind.Plus or SyntaxKind.Minus
+        or SyntaxKind.Tilde or SyntaxKind.Bang or SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
+
+    /// <summary>
+    /// The precedence level of a binary operator (§9), 3 to 13 with 3 binding tightest, or 0
+    /// when the token is not one. <c>.mod</c> is a directive rather than a punctuation token,
+    /// because <c>%</c> begins a binary number.
+    /// </summary>
+    public static int BinaryPrecedence(GreenToken token) => token.Kind switch
+    {
+        SyntaxKind.Star or SyntaxKind.Slash => 3,
+        SyntaxKind.Directive when token.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase) => 3,
+        SyntaxKind.Plus or SyntaxKind.Minus => 4,
+        SyntaxKind.LessLess or SyntaxKind.GreaterGreater => 5,
+        SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals => 6,
+        SyntaxKind.EqualsEquals or SyntaxKind.BangEquals => 7,
+        SyntaxKind.Ampersand => 8,
+        SyntaxKind.Caret => 9,
+        SyntaxKind.Bar => 10,
+        SyntaxKind.AmpersandAmpersand => 11,
+        SyntaxKind.CaretCaret => 12,
+        SyntaxKind.BarBar => 13,
+        _ => 0,
+    };
+
+    /// <summary>The shifts and the bitwise operators, whose operands §9 requires parentheses around.</summary>
+    public static bool IsBitwiseOperator(SyntaxKind kind) => kind is SyntaxKind.LessLess
+        or SyntaxKind.GreaterGreater or SyntaxKind.Ampersand or SyntaxKind.Caret or SyntaxKind.Bar;
+
+    /// <summary>The logical operators, which §9 does not allow to be mixed without parentheses.</summary>
+    public static bool IsLogicalOperator(SyntaxKind kind) =>
+        kind is SyntaxKind.AmpersandAmpersand or SyntaxKind.CaretCaret or SyntaxKind.BarBar;
+
+    /// <summary>The unary operators that take a byte out of an address, which §9 keeps clear of binary operators.</summary>
+    public static bool IsByteOperator(SyntaxKind kind) =>
+        kind is SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 
     /// <summary>Fixed token texts, for punctuation and operators.</summary>
     public static string? FixedText(SyntaxKind kind) => kind switch

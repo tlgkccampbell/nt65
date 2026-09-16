@@ -12,7 +12,7 @@ public sealed class DesignCorpusTests
         Assert.True(DesignCorpus.Blocks.Count > 30);
     }
 
-    /// <summary>Every nt65 example lexes without errors, has balanced blocks and round-trips exactly.</summary>
+    /// <summary>Every nt65 example lexes and parses without errors, has balanced blocks and round-trips exactly.</summary>
     [Fact]
     public void EveryNt65CodeBlockLexesAndBalances()
     {
@@ -24,6 +24,7 @@ public sealed class DesignCorpusTests
                 .ToList();
             if (tree.Root.ToFullString() != block.Text)
                 problems.Add($"{block}: the tree does not give back its text");
+            problems.AddRange(Fidelity.Problems(tree).Select(p => $"{block}: {p}"));
             return problems;
         });
         Assert.True(failures.Count == 0, string.Join("\n", failures));

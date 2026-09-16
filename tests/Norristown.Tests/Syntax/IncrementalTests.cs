@@ -17,10 +17,35 @@ public sealed class IncrementalTests
         for (var i = 0; i < tree.Lines.Length; i++)
         {
             if (i == line)
+            {
                 Assert.NotSame(tree.Lines[i], edited.Lines[i]);
+            }
             else
+            {
                 Assert.Same(tree.Lines[i], edited.Lines[i]);
+
+                // A line's syntax depends on its tokens and the kind of block around it, and
+                // neither changed, so the statement is the same object too.
+                Assert.Same(tree.Statement(i), edited.Statement(i));
+            }
         }
+    }
+
+    /// <summary>
+    /// A line whose enclosing block changes kind is parsed again, because that is the one
+    /// thing outside a line that its syntax depends on (§3.1).
+    /// </summary>
+    [Fact]
+    public void ALineIsParsedAgainWhenItsBlockChangesKind()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".scope s {\ngreen = 5\n}\n");
+        Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(1).Kind);
+
+        // `.scope s {` becomes `.enum s {`, whose members are Stage 7's to read.
+        var edited = tree.WithChange(new TextChange(0, 6, ".enum"));
+        Assert.Same(tree.Lines[1], edited.Lines[1]);
+        Assert.Equal(SyntaxKind.UnsupportedLine, edited.Statement(1).Kind);
+        Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
     }
 
     [Theory]

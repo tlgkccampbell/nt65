@@ -1,0 +1,30 @@
+; §9: C's precedence, and the three places where the language asks for parentheses.
+P = 1
+Q = 2
+R = 4
+SCREEN = $0400
+
+SUM     = P + Q * R
+MODULO  = P + Q .mod R
+MASK    = P | Q | R
+SHIFTED = 1 << (P + 1)
+CLEAR   = (P & $0f) == 0
+BOTH    = (P == 1) && (Q == 2)
+EITHER  = P < Q || Q >= R
+LOW     = <(SCREEN + 1)
+HIGH    = >SCREEN
+BANK    = ^SCREEN
+NESTED  = .max(.min(P, Q), R)
+WIDTH   = .addrsize(SCREEN)
+HERE    = *
+SCOPED  = ::SCREEN
+
+; An operand of a shift or a bitwise operator may not be a different binary operator.
+BAD_SHIFT = 1 << P + 1      ;! error: `<<` and `+` need parentheses to show which applies first
+BAD_MASK  = P & $0f == 0    ;! error: `&` and `==` need parentheses to show which applies first
+
+; The logical operators may not be mixed.
+BAD_LOGIC = P || Q && R     ;! error: `||` and `&&` need parentheses to show which applies first
+
+; A byte operator reads as if it applied to the whole expression.
+BAD_BYTE  = <SCREEN + 1     ;! error: unary `<` before `+` needs parentheses to show what `<` applies to

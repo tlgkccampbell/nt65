@@ -8,6 +8,8 @@ namespace Norristown.Syntax;
 /// </summary>
 public sealed class GreenLine : GreenNode
 {
+    private Parser.Result? parsed;
+
     internal GreenLine(ImmutableArray<GreenToken> tokens) : base(SyntaxKind.Line, SumWidths(tokens))
     {
         Tokens = tokens;
@@ -48,4 +50,17 @@ public sealed class GreenLine : GreenNode
 
     /// <inheritdoc/>
     public override GreenNode GetSlot(int index) => Tokens[index];
+
+    /// <summary>
+    /// The line parsed as it stands inside a block of <paramref name="context"/>. The last
+    /// result is kept, which is what lets an edit elsewhere in the file leave this line's
+    /// statement alone: a line almost always keeps its enclosing block kind. The cache only
+    /// saves work — a caller that asks for another context gets a correct answer and evicts
+    /// what was there.
+    /// </summary>
+    internal Parser.Result Parse(BlockKind context)
+    {
+        var cached = parsed;
+        return cached is not null && cached.Context == context ? cached : parsed = Parser.Parse(this, context);
+    }
 }

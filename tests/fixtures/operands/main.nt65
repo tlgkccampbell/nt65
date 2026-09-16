@@ -1,0 +1,37 @@
+; Every operand form of §7.1. Syntax does not depend on the CPU, so all three CPUs' forms
+; parse in one file; which of them the target actually has is Stage 5's to say.
+.proc forms {
+    inx                     ; implied
+    asl                     ; accumulator, bare
+    asl a                   ; accumulator, written out
+    lda #$10                ; immediate
+    lda ptr                 ; zero page, direct or absolute (§7.2)
+    lda z:ptr               ; forced zero page
+    lda a:ptr               ; forced absolute
+    lda f:ptr               ; forced far
+    lda d:$2105             ; a constant address reached through the direct page (§7.5)
+    lda buf,x
+    lda buf,y
+    lda 3,s                 ; stack relative
+    lda (ptr),y
+    lda (ptr,x)
+    lda (3,s),y
+    lda [ptr]
+    lda [ptr],y
+    jmp (vector)
+    jmp (vector,x)
+    jml [vector]
+    bne @loop               ; relative
+    jeq @loop               ; long branch (§7.6)
+    brk #0                  ; signature byte, on every CPU
+    cop #1
+    wdm #2
+    mvn #$7e, #$00          ; bank bytes, written as immediates
+    mvp #$7e, #$00
+    bbr0 $12, @loop
+    smb3 $12
+    lda (hi + lo) * 2       ; parentheses around part of an expression, not an indirection
+    lda z:ptr+1
+@loop:
+    rts
+}

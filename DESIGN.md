@@ -546,7 +546,13 @@ Standard forms, as in ca65:
     brk #0              ; signature byte required, see below
 ```
 
-65C02 adds `(zp)`, `(abs,x)`, and the `bbr`/`bbs`/`rmb`/`smb` forms. 65816 adds
+An operand that begins with `(` is indirect only when the parentheses hold the whole
+operand: `lda (ptr)` and `lda (ptr),y` are indirect, and `lda (hi + lo) * 2` is an
+ordinary expression that happens to start with one, as it is in ca65.
+
+65C02 adds `(zp)`, `(abs,x)`, and the `bbr`/`bbs`/`rmb`/`smb` forms, of which `bbr` and
+`bbs` take two operands, a zero-page address and a branch target: `bbr0 flags, @skip`.
+65816 adds
 `[dp]`, `[dp],y`, `sr,s`, `(sr,s),y`, `[abs]`, long forms, and `mvn #src, #dst` /
 `mvp #src, #dst`, whose operands are bank bytes and are written as immediates (ca65's
 bare form takes full addresses and silently keeps only their bank bytes).
@@ -1023,12 +1029,14 @@ true bound.
     .dword $12345678
     .addr label                     ; 16-bit address
     .faraddr label                  ; 24-bit address (65816)
-    .res 16 [, fill]
+    .res 16                         ; 16 bytes of zero
+    .res 16, $ff                    ; 16 bytes of $ff
     .asciiz "hello"
     .align 256
-    .incbin "sprites.bin" [, offset [, length]]
-    .lobytes a, b, c
-    .hibytes a, b, c
+    .incbin "sprites.bin"
+    .incbin "sprites.bin", 64, 32   ; from offset 64, 32 bytes
+    .lobytes first, second, third
+    .hibytes first, second, third
     .tag Player                     ; .sizeof(Player) bytes, fields as sub-symbols (§6.3)
     .tag Player, 8                  ; an array of 8 (§6.3)
     .tag Player { hp = 5 }          ; an initialized instance (§6.3)
@@ -1976,6 +1984,7 @@ instr       := mnemonic operand?                      ; mnemonics include jeq ..
 operand     := '#' expr
              | 'a'
              | prefix? expr (',' ('x' | 'y' | 's'))?
+             | prefix? expr ',' expr                   ; bbr / bbs: zero page, branch target
              | '(' expr ')' (',' 'y')?
              | '(' expr ',' ('x' | 's') ')' (',' 'y')?
              | '[' expr ']' (',' 'y')?

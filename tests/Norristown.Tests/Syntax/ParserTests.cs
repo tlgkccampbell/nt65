@@ -1,0 +1,214 @@
+using Norristown.Syntax;
+
+namespace Norristown.Tests.Syntax;
+
+public sealed class ParserTests
+{
+    [Theory]
+    // C's order, so a tighter operator ends up deeper (§9).
+    [InlineData("1 + 2 * 3", "(1 + (2 * 3))")]
+    [InlineData("1 * 2 + 3", "((1 * 2) + 3)")]
+    [InlineData("1 - 2 - 3", "((1 - 2) - 3)")]
+    [InlineData("7 .mod 2 + 1", "((7 .mod 2) + 1)")]
+    [InlineData("p == q || r != t", "((p == q) || (r != t))")]
+    [InlineData("p < q && r > t", "((p < q) && (r > t))")]
+    // Parentheses in the source stay visible, and are what makes the traps below legal.
+    [InlineData("(flags & $0f) == 0", "([(flags & $0f)] == 0)")]
+    [InlineData("1 << (i + 1)", "(1 << [(i + 1)])")]
+    [InlineData("(<label) + 1", "([(<label)] + 1)")]
+    [InlineData("<(label + 1)", "(<[(label + 1)])")]
+    // Unary operators, names and calls.
+    [InlineData("-n", "(-n)")]
+    [InlineData("~ ~n", "(~(~n))")]
+    [InlineData("^far_label", "(^far_label)")]
+    [InlineData("*", "*")]
+    [InlineData("* + 2", "(* + 2)")]
+    [InlineData("::top_level", "::top_level")]
+    [InlineData("Player::pos::y", "Player::pos::y")]
+    [InlineData(".sizeof(Point)", ".sizeof(Point)")]
+    [InlineData(".min(1, 2) + 1", "(.min(1,2) + 1)")]
+    [InlineData("rgb15(31, 0, 0)", "rgb15(31,0,0)")]
+    [InlineData("screen(\"HELLO\")", "screen(\"HELLO\")")]
+    [InlineData(".target(65c02)", ".target(65c02)")]
+    public void ExpressionsBindAsCDoes(string expression, string shape) =>
+        Assert.Equal(shape, SyntaxDump.Infix(Expression(expression)));
+
+    [Theory]
+    // §9: an operand of a shift or a bitwise operator may not be a different binary operator.
+    [InlineData("1 << i + 1", "`<<` and `+` need parentheses to show which applies first")]
+    [InlineData("flags & $0f == 0", "`&` and `==` need parentheses to show which applies first")]
+    [InlineData("p ^ q + 1", "`^` and `+` need parentheses to show which applies first")]
+    [InlineData("p | q & r", "`|` and `&` need parentheses to show which applies first")]
+    // §9: the logical operators may not be mixed.
+    [InlineData("p || q && r", "`||` and `&&` need parentheses to show which applies first")]
+    [InlineData("p && q ^^ r", "`^^` and `&&` need parentheses to show which applies first")]
+    // §9: a byte operator that reads as if it applied to the whole expression.
+    [InlineData("<label + 1", "unary `<` before `+` needs parentheses to show what `<` applies to")]
+    [InlineData(">label * 2", "unary `>` before `*` needs parentheses to show what `>` applies to")]
+    [InlineData("1 + <label + 2", "unary `<` before `+` needs parentheses to show what `<` applies to")]
+    public void ParenthesesAreRequiredWhereTheOrderIsEasyToMisread(string expression, string message) =>
+        Assert.Equal([message], Errors(".word " + expression));
+
+    [Theory]
+    // The same operator repeated needs nothing, and neither does a tighter operator that is
+    // not one of the two sets §9 names.
+    [InlineData("p | q | r")]
+    [InlineData("1 << 2 << 3")]
+    [InlineData("p && q | r")]
+    [InlineData("p && q && r")]
+    [InlineData("(flags & $0f) == 0")]
+    [InlineData("1 << (i + 1)")]
+    [InlineData("(<label) + 1")]
+    [InlineData("<(label + 1)")]
+    [InlineData("1 + 2 * 3 - 4 / 5")]
+    public void ClearExpressionsNeedNoParentheses(string expression) => Assert.Empty(Errors(".word " + expression));
+
+    [Theory]
+    [InlineData("inx", "InstructionStatement(inx)")]
+    [InlineData("asl a", "InstructionStatement(asl AccumulatorOperand(a))")]
+    [InlineData("lda #$10", "InstructionStatement(lda ImmediateOperand(# NumberExpression($10)))")]
+    [InlineData("lda ptr", "InstructionStatement(lda AbsoluteOperand(NameExpression(ptr)))")]
+    [InlineData("lda d:$2105",
+        "InstructionStatement(lda AbsoluteOperand(AddressPrefix(d :) NumberExpression($2105)))")]
+    [InlineData("lda z:ptr+1", "InstructionStatement(lda AbsoluteOperand(AddressPrefix(z :) "
+        + "BinaryExpression(NameExpression(ptr) + NumberExpression(1))))")]
+    [InlineData("lda buf,x", "InstructionStatement(lda AbsoluteOperand(NameExpression(buf) , x))")]
+    [InlineData("lda (ptr),y", "InstructionStatement(lda IndirectOperand(( NameExpression(ptr) ) , y))")]
+    [InlineData("lda (ptr,x)", "InstructionStatement(lda IndexedIndirectOperand(( NameExpression(ptr) , x )))")]
+    [InlineData("lda (3,s),y", "InstructionStatement(lda IndexedIndirectOperand(( NumberExpression(3) , s ) , y))")]
+    [InlineData("jmp (vector)", "InstructionStatement(jmp IndirectOperand(( NameExpression(vector) )))")]
+    [InlineData("lda [dp]", "InstructionStatement(lda LongIndirectOperand([ NameExpression(dp) ]))")]
+    [InlineData("lda [dp],y", "InstructionStatement(lda LongIndirectOperand([ NameExpression(dp) ] , y))")]
+    [InlineData("bne @loop", "InstructionStatement(bne AbsoluteOperand(NameExpression(@loop)))")]
+    [InlineData("mvn #1, #2", "InstructionStatement(mvn ImmediateOperand(# NumberExpression(1) , # NumberExpression(2)))")]
+    [InlineData("bbr0 $12, skip",
+        "InstructionStatement(bbr0 AbsoluteOperand(NumberExpression($12) , NameExpression(skip)))")]
+    // Parentheses around a whole operand are indirect; anything else is an expression.
+    [InlineData("lda (hi + lo) * 2", "InstructionStatement(lda AbsoluteOperand(BinaryExpression("
+        + "ParenthesizedExpression(( BinaryExpression(NameExpression(hi) + NameExpression(lo)) )) * NumberExpression(2))))")]
+    public void EveryOperandFormParses(string line, string shape)
+    {
+        Assert.Equal(shape, SyntaxDump.Shape(Statement(line)));
+        Assert.Empty(Errors(line));
+    }
+
+    [Theory]
+    [InlineData("fill_page:", SyntaxKind.LabeledLine)]
+    [InlineData("@loop:   sta (ptr),y", SyntaxKind.LabeledLine)]
+    [InlineData("ptr:     .res 2", SyntaxKind.LabeledLine)]
+    [InlineData("SCREEN = $0400", SyntaxKind.ConstantDeclaration)]
+    [InlineData("@n = 1", SyntaxKind.ConstantDeclaration)]
+    [InlineData(".byte 1, 2, $ff, 'A', \"text\"", SyntaxKind.DataDirective)]
+    [InlineData(".asciiz \"hello\"", SyntaxKind.DataDirective)]
+    [InlineData(".cpu 65816", SyntaxKind.CpuDirective)]
+    [InlineData(".cpu 65c02", SyntaxKind.CpuDirective)]
+    [InlineData(".segment \"ZP2\": zp", SyntaxKind.SegmentDeclaration)]
+    [InlineData(".segment \"ZP2\": zp, dp = $2100", SyntaxKind.SegmentDeclaration)]
+    [InlineData(".segment \"WRAM\": abs, bank = $7e", SyntaxKind.SegmentDeclaration)]
+    [InlineData(".segment \"CODE\" {", SyntaxKind.SegmentBlock)]
+    [InlineData(".rodata {", SyntaxKind.SegmentBlock)]
+    [InlineData(".proc fill_page {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc render: a16, i8 -> a8, i8 {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc nmi: a?, i? {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc hud: a8, i16, dp = $2100, dbr = $7e {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc show: a*, i*, e*, near, inline .asciiz {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc skip: far, inline 2 {", SyntaxKind.ProcDeclaration)]
+    [InlineData(".proc CHROUT = $FFD2: a8, i8", SyntaxKind.ExternProcDeclaration)]
+    [InlineData(".proc alias = other", SyntaxKind.ExternProcDeclaration)]
+    [InlineData(".scope {", SyntaxKind.ScopeDeclaration)]
+    [InlineData(".scope gfx {", SyntaxKind.ScopeDeclaration)]
+    [InlineData(".export fill_page, SCREEN, Player", SyntaxKind.ExportDirective)]
+    [InlineData(".import _printf: proc(a8, i16)", SyntaxKind.ImportDirective)]
+    [InlineData(".import tick: proc(-> a8)", SyntaxKind.ImportDirective)]
+    [InlineData(".import reset: proc()", SyntaxKind.ImportDirective)]
+    [InlineData(".import zp_scratch: zp, far_table: far", SyntaxKind.ImportDirective)]
+    [InlineData(".import VIC_BORDER = $D020", SyntaxKind.ImportDirective)]
+    [InlineData(".import raw", SyntaxKind.ImportDirective)]
+    [InlineData("   ; just a comment", SyntaxKind.BlankLine)]
+    // Everything a later stage brings online is kept whole and diagnosed by nobody yet.
+    [InlineData(".macro set16(dest: operand, value) {", SyntaxKind.UnsupportedLine)]
+    [InlineData("set16!(ptr, SCREEN)", SyntaxKind.UnsupportedLine)]
+    [InlineData(".if .defined(DEBUG) {", SyntaxKind.UnsupportedLine)]
+    [InlineData(".next @move, @fire", SyntaxKind.UnsupportedLine)]
+    [InlineData("boss: .tag Actor { x = 100 }", SyntaxKind.UnsupportedLine)]
+    public void EveryCoreItemParses(string line, SyntaxKind kind)
+    {
+        Assert.Equal(kind, Statement(line).Kind);
+        Assert.Empty(Errors(line));
+    }
+
+    [Theory]
+    [InlineData(".proc {", "expected a routine name")]
+    [InlineData(".proc p", "expected `{`, or `= address` for a routine with no body")]
+    [InlineData(".proc p: bogus {", "`bogus` is not a processor-state item")]
+    [InlineData(".proc p: a9 {", "`a9` is not a processor-state item")]
+    [InlineData(".proc p: near = 1 {", "`near` is not a processor-state item")]
+    [InlineData(".scope gfx", "expected `{`")]
+    [InlineData(".segment \"X\"", "expected `:` and an address size, or `{`")]
+    [InlineData(".segment \"X\": word", "expected `zp`, `abs` or `far`")]
+    [InlineData(".segment ZP2 {", "expected a segment name in quotes")]
+    [InlineData(".segment \"X\": zp, page = 1", "expected `dp` or `bank`")]
+    [InlineData(".cpu 6510", "expected `6502`, `65c02` or `65816`")]
+    [InlineData(".frobnicate 1", "unknown directive `.frobnicate`")]
+    [InlineData(".word .frobnicate(1)", "`.frobnicate` is not a function")]
+    [InlineData(".word .sizeof", "expected `(` after `.sizeof`")]
+    [InlineData(".word (1 + 2", "expected `)`")]
+    [InlineData(".import x: quad", "expected `zp`, `abs`, `far` or `proc(...)`")]
+    [InlineData(".export", "expected a name to export")]
+    [InlineData("lda #1 junk", "unexpected `junk`")]
+    [InlineData("label: .proc p {", "`.proc` may not follow a label")]
+    [InlineData("label: rubbish", "expected an instruction, a data directive or a macro call after a label")]
+    [InlineData("gfx::init", "expected a label, a constant, an instruction or a directive")]
+    public void UnreadableLinesAreReportedOnce(string line, string message) => Assert.Equal([message], Errors(line));
+
+    /// <summary>A <c>}</c> alone, and the continuation lines Stage 8 and Stage 9 bring online.</summary>
+    [Theory]
+    [InlineData("}", SyntaxKind.BlockCloseLine)]
+    [InlineData("} .else {", SyntaxKind.UnsupportedLine)]
+    [InlineData("} .elseif LEVEL > 2 {", SyntaxKind.UnsupportedLine)]
+    public void ALineThatClosesABlockParses(string line, SyntaxKind kind)
+    {
+        // A continuation line opens a block of its own, which needs closing in turn.
+        var tree = SyntaxTree.Parse("test.nt65", ".scope {\n" + line + (line.EndsWith('{') ? "\n}" : ""));
+        Assert.Equal(kind, tree.Statement(1).Kind);
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>A bad line is one line's problem: the next one parses as if nothing happened.</summary>
+    [Fact]
+    public void ABadLineDoesNotDisturbTheNextOne()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".frobnicate\nlda #1\n");
+        Assert.Single(tree.Diagnostics);
+        Assert.Equal(SyntaxKind.ErrorLine, tree.Statement(0).Kind);
+        Assert.Equal("InstructionStatement(lda ImmediateOperand(# NumberExpression(1)))", SyntaxDump.Shape(tree.Statement(1)));
+    }
+
+    /// <summary>
+    /// A line's syntax depends on the kind of block around it (§3.1): inside a block whose
+    /// grammar arrives later, a line that looks like a constant is left alone.
+    /// </summary>
+    [Fact]
+    public void TheEnclosingBlockDecidesHowALineReads()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".enum Color {\ngreen = 5\n}\ngreen = 5\n");
+        Assert.Equal(SyntaxKind.UnsupportedLine, tree.Statement(1).Kind);
+        Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(3).Kind);
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// One line's tree. A line that opens a block is given the <c>}</c> it wants, so what
+    /// comes back is the parser's alone and not the block layer's.
+    /// </summary>
+    private static SyntaxTree Parse(string line) =>
+        SyntaxTree.Parse("test.nt65", line.TrimEnd().EndsWith('{') ? line + "\n}" : line);
+
+    private static GreenNode Statement(string line) => Parse(line).Statement(0);
+
+    /// <summary>The operand of a <c>.word</c>, which is the shortest line an expression fits on.</summary>
+    private static GreenNode Expression(string expression) =>
+        ((GreenSyntax)Statement(".word " + expression)).Children[1];
+
+    private static string[] Errors(string line) => [.. Parse(line).Diagnostics.Select(d => d.Message)];
+}

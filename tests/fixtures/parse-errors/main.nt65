@@ -1,0 +1,23 @@
+; A line the parser cannot read is one line's problem: it is reported once, and the line
+; after it parses as if nothing had happened.
+.frobnicate 1           ;! error: unknown directive `.frobnicate`
+.word .frobnicate(1)    ;! error: `.frobnicate` is not a function
+.word (1 + 2            ;! error: expected `)`
+.cpu 6510               ;! error: expected `6502`, `65c02` or `65816`
+.segment "X"            ;! error: expected `:` and an address size, or `{`
+.segment "Y": word      ;! error: expected `zp`, `abs` or `far`
+.import thing: quad     ;! error: expected `zp`, `abs`, `far` or `proc(...)`
+gfx::init               ;! error: expected a label, a constant, an instruction or a directive
+
+.proc {                 ;! error: expected a routine name
+    rts
+}
+
+.proc p: bogus {        ;! error: `bogus` is not a processor-state item
+    lda #1 junk         ;! error: unexpected `junk`
+    rts
+}
+
+label: .proc q {        ;! error: `.proc` may not follow a label
+    rts
+}

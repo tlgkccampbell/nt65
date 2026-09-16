@@ -10,6 +10,7 @@ public sealed class SyntaxNode
 {
     private ImmutableArray<SyntaxNode> childNodes;
     private ImmutableArray<SyntaxToken> childTokens;
+    private SyntaxNode? statement;
 
     internal SyntaxNode(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
     {
@@ -40,23 +41,41 @@ public sealed class SyntaxNode
     /// <summary>The 0-based line this node starts on.</summary>
     public int LineIndex => Tree.GetLineIndex(Position);
 
-    /// <summary>Child lines and blocks of a file or block.</summary>
+    /// <summary>
+    /// For a line, what its tokens parse to; null for every other node. A line's tokens are
+    /// reachable both directly and through the statement, which holds the same tokens in the
+    /// same order.
+    /// </summary>
+    public SyntaxNode? Statement => Green is GreenLine
+        ? statement ??= new SyntaxNode(Tree, this, Tree.Statement(LineIndex), Position)
+        : null;
+
+    /// <summary>Child lines and blocks of a file or block, or a line's statement.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
     {
         get
         {
             if (childNodes.IsDefault)
             {
-                var builder = ImmutableArray.CreateBuilder<SyntaxNode>();
-                var position = Position;
-                for (var i = 0; i < Green.SlotCount; i++)
+                ImmutableArray<SyntaxNode> children;
+                if (Statement is { } parsed)
                 {
-                    var slot = Green.GetSlot(i);
-                    if (slot is not GreenToken)
-                        builder.Add(new SyntaxNode(Tree, this, slot, position));
-                    position += slot.FullWidth;
+                    children = [parsed];
                 }
-                ImmutableInterlocked.InterlockedInitialize(ref childNodes, builder.ToImmutable());
+                else
+                {
+                    var builder = ImmutableArray.CreateBuilder<SyntaxNode>();
+                    var position = Position;
+                    for (var i = 0; i < Green.SlotCount; i++)
+                    {
+                        var slot = Green.GetSlot(i);
+                        if (slot is not GreenToken)
+                            builder.Add(new SyntaxNode(Tree, this, slot, position));
+                        position += slot.FullWidth;
+                    }
+                    children = builder.ToImmutable();
+                }
+                ImmutableInterlocked.InterlockedInitialize(ref childNodes, children);
             }
             return childNodes;
         }

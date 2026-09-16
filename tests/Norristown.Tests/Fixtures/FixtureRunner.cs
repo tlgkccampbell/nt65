@@ -1,3 +1,5 @@
+using Norristown.Syntax;
+
 namespace Norristown.Tests.Fixtures;
 
 internal static class FixtureRunner
@@ -16,6 +18,13 @@ internal static class FixtureRunner
         void Fail(string message) => failures.Add($"[{fixture.Name}] {message}");
 
         var compilation = compile(fixture.Sources);
+
+        // Full fidelity, on every fixture: the tree and each statement read back as the source.
+        foreach (var file in fixture.Sources)
+        {
+            foreach (var problem in Syntax.Fidelity.Problems(SyntaxTree.Parse(file)))
+                Fail($"{file.Path}: {problem}");
+        }
 
         // A program is a set of files: other orders must give identical results.
         foreach (var (label, order) in OtherOrders(fixture.Sources))

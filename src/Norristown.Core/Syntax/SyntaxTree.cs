@@ -1,15 +1,17 @@
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace Norristown.Syntax;
 
 /// <summary>
-/// One file's syntax: its lines, each lexed on its own, and the block structure over them.
-/// A tree is immutable; <see cref="WithChange"/> gives the tree for an edited text, reusing
-/// the green lines the edit did not touch.
+/// One file's syntax: its lines, each lexed and parsed on its own, and the block structure
+/// over them. A tree is immutable; <see cref="WithChange"/> gives the tree for an edited
+/// text, reusing the green lines and statements the edit did not touch.
 /// </summary>
 public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
+    private readonly ImmutableArray<Parser.Result> statements;
     private SyntaxNode? root;
 
     private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
@@ -20,6 +22,14 @@ public sealed class SyntaxTree
         Lines = lines;
         var blockErrors = new List<Blocks.Error>();
         Green = Blocks.Build(lines, blockErrors);
+
+        // Blocks come first because a line's syntax depends on the kind of block around it
+        // (§3.1). Nothing else about the line does, so a line that kept its tokens and its
+        // surroundings across an edit keeps the statement it already has.
+        var parsed = new Parser.Result[lines.Length];
+        var line = 0;
+        ParseLines(Green, BlockKind.None, parsed, ref line);
+        statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
         diagnostics = new(() => CollectDiagnostics(blockErrors));
     }
 
@@ -41,7 +51,7 @@ public sealed class SyntaxTree
     /// <summary>The root node, created on first use.</summary>
     public SyntaxNode Root => root ??= new SyntaxNode(this, null, Green, 0);
 
-    /// <summary>Lexical and block-structure errors.</summary>
+    /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
 
     /// <summary>Parses a source file.</summary>
@@ -102,6 +112,9 @@ public sealed class SyntaxTree
         return new SyntaxTree(Path, text, starts, lines.MoveToImmutable());
     }
 
+    /// <summary>The statement parsed from line <paramref name="line"/>, 0-based.</summary>
+    public GreenNode Statement(int line) => statements[line].Node;
+
     /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
     public int GetLineIndex(int position)
     {
@@ -136,6 +149,21 @@ public sealed class SyntaxTree
         return starts.ToImmutable();
     }
 
+    /// <summary>Parses every line under <paramref name="node"/>, each in the block kind around it.</summary>
+    private static void ParseLines(GreenNode node, BlockKind context, Parser.Result[] parsed, ref int line)
+    {
+        for (var i = 0; i < node.SlotCount; i++)
+        {
+            // A block's opener and closer lines sit inside it, so they are parsed in its own
+            // kind: `}` is the one line a block with a grammar of its own still reads the
+            // ordinary way.
+            if (node.GetSlot(i) is GreenBlock block)
+                ParseLines(block, block.BlockKind, parsed, ref line);
+            else
+                parsed[line++] = ((GreenLine)node.GetSlot(i)).Parse(context);
+        }
+    }
+
     private static int LineEnd(string text, ImmutableArray<int> starts, int line) =>
         line + 1 < starts.Length ? starts[line + 1] : text.Length;
 
@@ -149,7 +177,11 @@ public sealed class SyntaxTree
         {
             var green = Lines[line];
             var column = green.TextOffset(token) + 1;
-            return new Diagnostic(new Span(Path, line + 1, column, column + green.Tokens[token].Text.Length), Severity.Error, message);
+
+            // The end-of-line token's text is the line break, which is no part of the line:
+            // a diagnostic reported there is a caret at the end of the line.
+            var width = green.Tokens[token].Kind == SyntaxKind.EndOfLine ? 0 : green.Tokens[token].Text.Length;
+            return new Diagnostic(new Span(Path, line + 1, column, column + width), Severity.Error, message);
         }
 
         for (var i = 0; i < Lines.Length; i++)
@@ -160,8 +192,13 @@ public sealed class SyntaxTree
                 if (tokens[t].Error is { } error)
                     result.Add(At(i, t, error));
             }
+            foreach (var error in statements[i].Errors)
+                result.Add(At(i, error.Token, error.Message));
         }
         result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
-        return result;
+        return [.. result
+            .OrderBy(d => d.Span.Line)
+            .ThenBy(d => d.Span.StartColumn)
+            .ThenBy(d => d.Message, StringComparer.Ordinal)];
     }
 }
