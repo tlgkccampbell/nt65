@@ -186,6 +186,24 @@ public sealed class SymbolRequestsTests
         Assert.Contains("**2-4 cycles**", hover.Contents.Value, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// On the 65816 an instruction is also shown the processor state that reaches it, which
+    /// is what its immediate was sized by.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnA65816InstructionShowsTheStateReachingIt()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, ".cpu 65816\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        var hover = await client.HoverAsync(Uri, new Position(3, 5), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("**3 cycles**", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("state here: `a16, i8, native`, 1 pushed", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DefinitionGoesToTheDeclaration()
     {

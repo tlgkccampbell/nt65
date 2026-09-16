@@ -598,7 +598,8 @@ instead.
 Control transfers are not sized by prefix. `jsr`, `jmp` and the branches take a near
 target, `jsl` and `jml` a far one, and a mismatch is an error naming the other mnemonic
 (§7.3). A far target is a routine declared `far` or a symbol in a `far` segment or
-import.
+import. A routine is near or far by its signature alone, wherever its segment is; a
+constant target is taken as written, so `jml $008000` is a long jump into bank 0.
 
 ### 7.3 65816 processor state
 
@@ -621,7 +622,7 @@ that depends on it, runs only on the 65816.
 ```
 
 **Signatures.** A routine declares its state at entry and, after `->`, at exit. Exit
-defaults to entry. The items are:
+defaults to entry, item by item: `a16, i8 -> a8` returns with `i8`. The items are:
 
 | item | meaning | default |
 |---|---|---|
@@ -692,8 +693,8 @@ no annotation.
 the `*` items, which describe a routine rather than a point in it:
 `.state a16, i8, dbr = $7e`. Each item asserts and sets: if that part of the state is
 known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`, `e?`,
-`dp?`) deliberately forgets. Placed directly after a label, a `.state` is that label's
-declaration.
+`dp?`) deliberately forgets. `emu` also makes both widths 8, which is what emulation mode
+pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
 them hold, emitting only what the analysis says is needed: nothing where the widths
@@ -758,12 +759,16 @@ its proc.
   expression.
 
 Outside any `.proc` there is no processor state: on the 65816 `rep`, `sep`, `xce`,
-`plp`, `.ensure`, `.frame` and any width-dependent immediate are errors, since code that touches processor
+`plp`, `.state`, `.ensure`, `.frame` and any width-dependent immediate are errors, since code that touches processor
 state belongs in a proc, and the checks of §7.5 do not apply.
 
 **Implementation.** Split the body into basic blocks at labels and after transfers of
-control; run a worklist over a lattice of `{unreached, known value, unknown}` per item;
-it converges in at most two passes per block.
+control; run a worklist over a lattice of `{unreached, known value, unknown}` per item.
+Each item can change at most twice, so a block is walked at most once more than there are
+items; in practice a routine without loops settles in one walk per block and a loop in
+two. It is not "at most two passes per block": where a merge forgets one item, such as the
+analysis stack, a later round can forget another because of it (a `plp` that no longer
+finds its saved P), and the loop head learns that only on a third walk.
 
 **Widths in the output.** ca65 uses its width setting only to size the immediate of a
 width-dependent instruction (`lda adc and bit cmp eor ora sbc` for A, `ldx ldy cpx cpy`

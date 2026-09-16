@@ -100,3 +100,10 @@ value:  .res 2
     rep #$20                ;! error: `rep` changes the processor state, which only a `.proc` has: outside one there is nothing to follow it through
     lda #1                  ;! error: `lda #` needs the width of A, which only a `.proc` has
     .state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
+
+; A long call or jump reaches a far target; a near label is reached by the near form.
+.proc long_to_near {
+    jml @near               ;! error: `jml` takes a far target, and this one is absolute: `jmp` reaches it
+@near:
+    jml $008000
+}

@@ -1,5 +1,6 @@
 using Norristown.Layout;
 using Norristown.Project;
+using Norristown.Semantics;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Layout;
@@ -101,6 +102,92 @@ public sealed class CycleTests
     public void The65C02TakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65C02, mnemonic, mode)?.ToString());
+    }
+
+    [Theory]
+    // The 8-bit forms, in native mode, match the 65C02's apart from decimal arithmetic,
+    // which costs nothing more on the 65816.
+    [InlineData("lda", AddressingMode.Immediate, "a8, i8, native", "2")]
+    [InlineData("adc", AddressingMode.Immediate, "a8, i8, native", "2")]
+    [InlineData("lda", AddressingMode.Absolute, "a8, i8, native", "4")]
+
+    // A 16-bit register reads and writes a byte more, and a read-modify-write two.
+    [InlineData("lda", AddressingMode.Immediate, "a16, i8, native", "3")]
+    [InlineData("lda", AddressingMode.Absolute, "a16, i8, native", "5")]
+    [InlineData("sta", AddressingMode.Absolute, "a16, i8, native", "5")]
+    [InlineData("asl", AddressingMode.Absolute, "a16, i8, native", "8")]
+    [InlineData("asl", AddressingMode.Accumulator, "a16, i8, native", "2")]
+    [InlineData("ldx", AddressingMode.Immediate, "a16, i8, native", "2")]
+    [InlineData("ldx", AddressingMode.Immediate, "a8, i16, native", "3")]
+
+    // A width nobody knows covers both.
+    [InlineData("lda", AddressingMode.Immediate, "a?, i8, native", "2-3")]
+
+    // An indexed read pays for crossing a page only sometimes, unless the index is 16 bits,
+    // when it always does.
+    [InlineData("lda", AddressingMode.AbsoluteX, "a8, i8, native", "4-5")]
+    [InlineData("lda", AddressingMode.AbsoluteX, "a8, i16, native", "5")]
+    [InlineData("lda", AddressingMode.DirectIndirectY, "a8, i16, native", "6-7")]
+
+    // A direct operand costs one more when D's low byte is not zero, which is not known.
+    [InlineData("lda", AddressingMode.Direct, "a8, i8, native", "3-4")]
+
+    // What only the 65816 has.
+    [InlineData("lda", AddressingMode.Long, "a8, i8, native", "5")]
+    [InlineData("lda", AddressingMode.LongX, "a16, i8, native", "6")]
+    [InlineData("lda", AddressingMode.StackRelative, "a8, i8, native", "4")]
+    [InlineData("lda", AddressingMode.StackRelativeIndirectY, "a8, i8, native", "7")]
+    [InlineData("lda", AddressingMode.DirectIndirectLong, "a8, i8, native", "6-7")]
+    [InlineData("jsl", AddressingMode.Long, "a8, i8, native", "8")]
+    [InlineData("jml", AddressingMode.AbsoluteIndirectLong, "a8, i8, native", "6")]
+    [InlineData("jsr", AddressingMode.AbsoluteIndirectX, "a8, i8, native", "8")]
+    [InlineData("rtl", AddressingMode.Implied, "a8, i8, native", "6")]
+    [InlineData("brl", AddressingMode.RelativeLong, "a8, i8, native", "4")]
+    [InlineData("per", AddressingMode.RelativeLong, "a8, i8, native", "6")]
+    [InlineData("pea", AddressingMode.Absolute, "a8, i8, native", "5")]
+    [InlineData("rep", AddressingMode.Immediate, "a8, i8, native", "3")]
+    [InlineData("xba", AddressingMode.Implied, "a8, i8, native", "3")]
+    [InlineData("pha", AddressingMode.Implied, "a16, i8, native", "4")]
+    [InlineData("phd", AddressingMode.Implied, "a8, i8, native", "4")]
+    [InlineData("pld", AddressingMode.Implied, "a8, i8, native", "5")]
+
+    // Native mode pushes and pulls the program bank as well.
+    [InlineData("brk", AddressingMode.Immediate, "a8, i8, native", "8")]
+    [InlineData("brk", AddressingMode.Immediate, "a8, i8, emu", "7")]
+    [InlineData("rti", AddressingMode.Implied, "a8, i8, native", "7")]
+
+    // Only in emulation mode does a taken branch pay for crossing a page.
+    [InlineData("bne", AddressingMode.Relative, "a8, i8, native", "2-3")]
+    [InlineData("bne", AddressingMode.Relative, "a8, i8, emu", "2-4")]
+    [InlineData("bra", AddressingMode.Relative, "a8, i8, native", "3")]
+    public void The65816TakesAsLongAsItsWidthsSay(string mnemonic, AddressingMode mode, string state, string cycles)
+    {
+        var parts = state.Split(", ");
+        var processor = new ProcessorState(Width(parts[0]), Width(parts[1]), parts[2] switch
+        {
+            "native" => ProcessorMode.Native,
+            "emu" => ProcessorMode.Emulation,
+            _ => ProcessorMode.Unknown,
+        });
+
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, mnemonic, mode, processor)?.ToString());
+
+        static Width Width(string item) => item[1..] switch
+        {
+            "8" => Norristown.Semantics.Width.Eight,
+            "16" => Norristown.Semantics.Width.Sixteen,
+            _ => Norristown.Semantics.Width.Unknown,
+        };
+    }
+
+    /// <summary>
+    /// A block move takes seven cycles for every byte it moves, and how many that is is in A
+    /// when it runs, so nt65 gives it no count.
+    /// </summary>
+    [Fact]
+    public void ABlockMoveHasNoCount()
+    {
+        Assert.Null(Cycles.Of(Cpu.Wdc65816, "mvn", AddressingMode.BlockMove, ProcessorState.Default));
     }
 
     /// <summary>The count layout keeps is the one for the mode it chose.</summary>

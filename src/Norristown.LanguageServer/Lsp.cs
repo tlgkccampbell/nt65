@@ -48,11 +48,11 @@ internal static class Lsp
 
     /// <summary>
     /// What to show at <paramref name="position"/>: the name under the caret, or, where
-    /// there is none, how long the instruction on that line takes and how long the block
-    /// around it takes.
+    /// there is none, how long the instruction on that line takes, how long the block
+    /// around it takes, and on the 65816 the processor state that reaches it.
     /// </summary>
     public static Protocol.Hover? ToHover(
-        SemanticModel model, CodeLayout? layout, ControlFlow? flow, int position)
+        SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states, int position)
     {
         if (model.ReferenceAt(position) is { } reference)
         {
@@ -60,7 +60,7 @@ internal static class Lsp
                 Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree)),
                 ToRange(model.Tree, reference.Span));
         }
-        return ToTiming(model, layout, flow, position);
+        return ToTiming(model, layout, flow, states, position);
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ internal static class Lsp
     /// does not say, such as whether an indexed read crosses a page.
     /// </summary>
     private static Protocol.Hover? ToTiming(
-        SemanticModel model, CodeLayout? layout, ControlFlow? flow, int position)
+        SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states, int position)
     {
         if (layout is null || Statement(model.Tree, position) is not { } statement)
             return null;
@@ -82,6 +82,13 @@ internal static class Lsp
         var text = new StringBuilder($"**{Spell(cycles)}**");
         if (Around(flow, statement)?.Cycles is { } block)
             text.Append($"\n\nthis block: {Spell(block)}");
+
+        // What the analysis found reaching the line, which is what sized its immediate.
+        if (states?.AnyBefore(statement) is { } state)
+        {
+            text.Append($"\n\nstate here: `{state.Processor}`");
+            text.Append(state.Stack is { } stack ? $", {stack.Depth} pushed" : ", stack not known");
+        }
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(text.ToString()), ToRange(model.Tree, statement.Span));
     }

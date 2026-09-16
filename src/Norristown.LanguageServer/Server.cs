@@ -110,6 +110,7 @@ internal sealed class Server
                 asked.Model,
                 asked.Analysis.LayoutFor(asked.Model.Tree.Path),
                 asked.Analysis.FlowFor(asked.Model.Tree.Path),
+                asked.Analysis.StatesFor(asked.Model.Tree.Path),
                 asked.Position)
             : null;
 

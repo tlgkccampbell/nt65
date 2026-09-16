@@ -743,11 +743,9 @@ public sealed class CodeLayout
 
             // On the 65816 whether a routine is called near or far is its signature's to say,
             // and the processor-state analysis checks it where it checks the rest of the call.
-            else if (mode != AddressingMode.Long && !(cpu == Cpu.Wdc65816 && NamesRoutine(expression))
-                && model.AddressSizeOf(expression, segment, expansion) == AddressSize.Far)
+            else if (!(cpu == Cpu.Wdc65816 && NamesRoutine(expression)))
             {
-                Report(expression.Span,
-                    $"`{mnemonic.Text}` takes a near target, and this one is far");
+                CheckDistance(mnemonic, expression, mode);
             }
             return;
         }
@@ -762,6 +760,29 @@ public sealed class CodeLayout
                 ? $"this immediate is two bytes, and {Value.Of(value)} does not fit"
                 : $"an immediate is one byte, and {Value.Of(value)} does not fit");
         }
+    }
+
+    /// <summary>
+    /// That a control transfer reaches as far as its target is: <c>jsr</c>, <c>jmp</c> and
+    /// the branches a near one, <c>jsl</c> and <c>jml</c> a far one.
+    /// </summary>
+    private void CheckDistance(SyntaxToken mnemonic, SyntaxNode expression, AddressingMode mode)
+    {
+        var size = model.AddressSizeOf(expression, segment, expansion);
+        if (mode != AddressingMode.Long)
+        {
+            if (size == AddressSize.Far)
+                Report(expression.Span, $"`{mnemonic.Text}` takes a near target, and this one is far");
+            return;
+        }
+
+        // A constant address is taken as written: `jml $008000` leaves the current bank for
+        // bank 0, which is what a long jump to a small number is for.
+        if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf).AsNumber() is not null)
+            return;
+        var near = mnemonic.Text.Equals("jsl", StringComparison.OrdinalIgnoreCase) ? "jsr" : "jmp";
+        Report(expression.Span, $"`{mnemonic.Text}` takes a far target, and this one is {Spell(size.Value)}: "
+            + $"`{near}` reaches it");
     }
 
     /// <summary>Whether an expression names a routine, which carries a signature.</summary>
