@@ -252,6 +252,27 @@ public enum SyntaxKind : byte
     /// <summary>One <c>member = value</c> of an initialized <c>.tag</c> instance.</summary>
     TagValue,
 
+    /// <summary>The line opening an <c>.if</c>, with the condition it tests.</summary>
+    IfDirective,
+
+    /// <summary><c>} .elseif expr {</c>: the line closing one branch and opening the next.</summary>
+    ElseIfDirective,
+
+    /// <summary><c>} .else {</c>.</summary>
+    ElseDirective,
+
+    /// <summary>The line opening a <c>.repeat</c>: a count and the name bound to each index.</summary>
+    RepeatDirective,
+
+    /// <summary>The line opening an <c>.each</c>: what to walk and the name bound to each item.</summary>
+    EachDirective,
+
+    /// <summary><c>.assert expr, level, "message"</c>.</summary>
+    AssertDirective,
+
+    /// <summary><c>.error "message"</c>.</summary>
+    ErrorDirective,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 

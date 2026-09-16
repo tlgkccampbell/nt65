@@ -597,6 +597,11 @@ internal sealed class Binder
 
         if (!path)
         {
+            // A register or a mnemonic parses as a name so that a macro body may pass it as a
+            // word. Outside one it can only be a mistake, and saying which reserved word it
+            // is beats saying the name is not declared.
+            if (!CheckReservedWord(token))
+                return null;
             if (at.Lookup(token.Text) is { } symbol)
                 return symbol;
 

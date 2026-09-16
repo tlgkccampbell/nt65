@@ -172,10 +172,17 @@ internal sealed class Parser
     private GreenNode ParseBlockClose()
     {
         var brace = Advance();
+        if (AtEnd)
+            return Finish(SyntaxKind.BlockCloseLine, [brace]);
 
-        // `} .else {`, `} .elseif expr {` and a macro call's `} name {` continue a construct
-        // that Stage 8 or Stage 9 brings online.
-        return AtEnd ? Finish(SyntaxKind.BlockCloseLine, [brace]) : Unsupported(brace);
+        // `} .elseif expr {` and `} .else {` close one branch and open the next. A macro
+        // call's `} name {` is Stage 9's.
+        return SyntaxFacts.LineDirectiveKind(Current.Text) switch
+        {
+            SyntaxKind.ElseIfDirective => Finish(ParseIf(SyntaxKind.ElseIfDirective, brace)),
+            SyntaxKind.ElseDirective => Finish(ParseElse(brace)),
+            _ => Unsupported(brace),
+        };
     }
 
     private GreenNode ParseLabeledLine()
@@ -236,6 +243,13 @@ internal sealed class Parser
             SyntaxKind.CharmapDeclaration => Finish(ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true)),
             SyntaxKind.ListDeclaration => Finish(ParseTypeBlock(SyntaxKind.ListDeclaration, named: true)),
             SyntaxKind.FuncDeclaration => Finish(ParseFunc()),
+            SyntaxKind.IfDirective => Finish(ParseIf(SyntaxKind.IfDirective)),
+            SyntaxKind.RepeatDirective => Finish(ParseRepetition(SyntaxKind.RepeatDirective)),
+            SyntaxKind.EachDirective => Finish(ParseRepetition(SyntaxKind.EachDirective)),
+            SyntaxKind.AssertDirective => Finish(ParseAssert()),
+            SyntaxKind.ErrorDirective => Finish(ParseError()),
+            SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
+                ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
             SyntaxKind.UnsupportedLine => Unsupported(),
             _ => ErrorLine($"unknown directive `{Current.Text}`"),
         };
@@ -417,6 +431,99 @@ internal sealed class Parser
         else
             Report("expected `)`");
         return new GreenSyntax(SyntaxKind.ParameterList, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.if expr {</c>, or the <c>.elseif</c> that continues one. The condition tests the
+    /// build configuration, so it is an ordinary expression here and what it may name is
+    /// settled once the configuration is known.
+    /// </summary>
+    private GreenSyntax ParseIf(SyntaxKind kind, params ReadOnlySpan<GreenNode> leading)
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.AddRange(leading);
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        ExpectOpenBrace(children);
+        return new GreenSyntax(kind, children.ToImmutable());
+    }
+
+    /// <summary><c>} .else {</c>, which takes no condition.</summary>
+    private GreenSyntax ParseElse(GreenNode brace)
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(brace);
+        children.Add(Advance());
+        ExpectOpenBrace(children);
+        return new GreenSyntax(SyntaxKind.ElseDirective, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.repeat count, name {</c> or <c>.each what, name {</c>. The name is bound to the
+    /// index or the item, and a body that does not use it may leave the name out.
+    /// </summary>
+    private GreenSyntax ParseRepetition(SyntaxKind kind)
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        if (Kind == SyntaxKind.Comma)
+        {
+            children.Add(Advance());
+            if (AtName)
+                children.Add(Advance());
+            else
+                Report("expected the name to bind");
+        }
+        ExpectOpenBrace(children);
+        return new GreenSyntax(kind, children.ToImmutable());
+    }
+
+    /// <summary><c>.assert expr, level, "message"</c>, whose message may be left out.</summary>
+    private GreenSyntax ParseAssert()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        if (Kind != SyntaxKind.Comma)
+        {
+            Report("expected `,` and the level to report at");
+            return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (AtName)
+            children.Add(Advance());
+        else
+            Report("expected `warning`, `error`, `ldwarning` or `lderror`");
+        if (Kind == SyntaxKind.Comma)
+        {
+            children.Add(Advance());
+            if (Kind == SyntaxKind.StringLiteral)
+                children.Add(Advance());
+            else
+                Report("expected the message, in quotes");
+        }
+        return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
+    }
+
+    /// <summary><c>.error "message"</c>: a configuration this file refuses to be built in.</summary>
+    private GreenSyntax ParseError()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind == SyntaxKind.StringLiteral)
+            children.Add(Advance());
+        else
+            Report("expected the message, in quotes");
+        return new GreenSyntax(SyntaxKind.ErrorDirective, children.ToImmutable());
+    }
+
+    private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
+    {
+        if (Kind == SyntaxKind.OpenBrace)
+            children.Add(Advance());
+        else
+            Report("expected `{`");
     }
 
     private GreenSyntax ParseCpuDirective()
@@ -889,7 +996,8 @@ internal sealed class Parser
                 return ParseParenthesized();
             case SyntaxKind.Directive:
                 return ParseBuiltinCall();
-            case SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.ColonColon:
+            case SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.ColonColon
+                or SyntaxKind.Register or SyntaxKind.Mnemonic:
                 var name = ParseName();
                 return Kind == SyntaxKind.OpenParen
                     ? new GreenSyntax(SyntaxKind.CallExpression, [name, ParseArgumentList()])
@@ -945,7 +1053,11 @@ internal sealed class Parser
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         if (Kind == SyntaxKind.ColonColon)
             children.Add(Advance());
-        if (Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal)
+        // A register or a mnemonic is kept as a name rather than refused here: inside a macro
+        // body it is a word, and everywhere else the binder's reserved-word error says more
+        // than the parser could.
+        if (Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+            or SyntaxKind.Register or SyntaxKind.Mnemonic)
         {
             children.Add(Advance());
         }

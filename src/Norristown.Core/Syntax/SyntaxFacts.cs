@@ -83,14 +83,13 @@ public static class SyntaxFacts
         [".charmap"] = SyntaxKind.CharmapDeclaration,
         [".list"] = SyntaxKind.ListDeclaration,
         [".func"] = SyntaxKind.FuncDeclaration,
-        // Stage 8: conditional assembly, repetition and assertions.
-        [".if"] = SyntaxKind.UnsupportedLine,
-        [".elseif"] = SyntaxKind.UnsupportedLine,
-        [".else"] = SyntaxKind.UnsupportedLine,
-        [".repeat"] = SyntaxKind.UnsupportedLine,
-        [".each"] = SyntaxKind.UnsupportedLine,
-        [".assert"] = SyntaxKind.UnsupportedLine,
-        [".error"] = SyntaxKind.UnsupportedLine,
+        [".if"] = SyntaxKind.IfDirective,
+        [".elseif"] = SyntaxKind.ElseIfDirective,
+        [".else"] = SyntaxKind.ElseDirective,
+        [".repeat"] = SyntaxKind.RepeatDirective,
+        [".each"] = SyntaxKind.EachDirective,
+        [".assert"] = SyntaxKind.AssertDirective,
+        [".error"] = SyntaxKind.ErrorDirective,
         // Stage 9: macros.
         [".macro"] = SyntaxKind.UnsupportedLine,
         // Stages 10 to 12: control flow, processor state and the stack.

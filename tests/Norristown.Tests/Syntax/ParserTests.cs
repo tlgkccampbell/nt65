@@ -128,7 +128,11 @@ public sealed class ParserTests
     // Everything a later stage brings online is kept whole and diagnosed by nobody yet.
     [InlineData(".macro set16(dest: operand, value) {", SyntaxKind.UnsupportedLine)]
     [InlineData("set16!(ptr, SCREEN)", SyntaxKind.UnsupportedLine)]
-    [InlineData(".if .defined(DEBUG) {", SyntaxKind.UnsupportedLine)]
+    [InlineData(".if .defined(DEBUG) {", SyntaxKind.IfDirective)]
+    [InlineData(".repeat 8, i {", SyntaxKind.RepeatDirective)]
+    [InlineData(".each handlers, h {", SyntaxKind.EachDirective)]
+    [InlineData("    .assert .sizeof(table) == 32, error, \"table must be 32 bytes\"", SyntaxKind.AssertDirective)]
+    [InlineData("    .error \"unsupported configuration\"", SyntaxKind.ErrorDirective)]
     [InlineData(".next @move, @fire", SyntaxKind.UnsupportedLine)]
     [InlineData("boss: .tag Actor { x = 100 }", SyntaxKind.LabeledLine)]
     [InlineData(".enum Color {", SyntaxKind.EnumDeclaration)]
@@ -170,13 +174,21 @@ public sealed class ParserTests
     [InlineData("label: .proc p {", "`.proc` may not follow a label")]
     [InlineData("label: rubbish", "expected an instruction, a data directive or a macro call after a label")]
     [InlineData("gfx::init", "expected a label, a constant, an instruction or a directive")]
+    [InlineData(".if {", "expected an expression")]
+    [InlineData(".repeat 8, {", "expected the name to bind")]
+    [InlineData(".each handlers, h", "expected `{`")]
+    [InlineData(".assert 1 == 1", "expected `,` and the level to report at")]
+    [InlineData(".assert 1 == 1, 3", "expected `warning`, `error`, `ldwarning` or `lderror`")]
+    [InlineData(".error nope", "expected the message, in quotes")]
+    [InlineData(".else {", "`.else` continues an `.if`, and belongs after its `}`")]
     public void UnreadableLinesAreReportedOnce(string line, string message) => Assert.Equal([message], Errors(line));
 
-    /// <summary>A <c>}</c> alone, and the continuation lines Stage 8 and Stage 9 bring online.</summary>
+    /// <summary>A <c>}</c> alone, and the lines that continue a construct after it.</summary>
     [Theory]
     [InlineData("}", SyntaxKind.BlockCloseLine)]
-    [InlineData("} .else {", SyntaxKind.UnsupportedLine)]
-    [InlineData("} .elseif LEVEL > 2 {", SyntaxKind.UnsupportedLine)]
+    [InlineData("} .else {", SyntaxKind.ElseDirective)]
+    [InlineData("} .elseif LEVEL > 2 {", SyntaxKind.ElseIfDirective)]
+    [InlineData("} handlers {", SyntaxKind.UnsupportedLine)]
     public void ALineThatClosesABlockParses(string line, SyntaxKind kind)
     {
         // A continuation line opens a block of its own, which needs closing in turn.
