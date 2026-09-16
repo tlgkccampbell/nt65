@@ -10,7 +10,7 @@ namespace Norristown.Semantics;
 /// <para>
 /// Most conditions were answered once for the build, before any declaration was looked up.
 /// The ones inside a macro body, a <c>.repeat</c> or an <c>.each</c> could not be: they may
-/// name what the expansion binds (§10), so they are answered here, once per expansion.
+/// name what the expansion binds, so they are answered here, once per expansion.
 /// </para>
 /// </summary>
 public sealed class ConditionChain

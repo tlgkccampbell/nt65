@@ -502,7 +502,7 @@ public sealed class Emitter
     /// <summary>
     /// A call, written out as the body it expands to, with a comment naming it. nt65 expands
     /// macros itself and emits flat code: ca65's own <c>.macro</c> is never used, so nt65's
-    /// macro semantics never depend on ca65's (§11.7).
+    /// macro semantics never depend on ca65's.
     /// </summary>
     private void Expand(SyntaxNode line, SyntaxNode call)
     {
@@ -1166,7 +1166,7 @@ public sealed class Emitter
         }
 
         // A macro parameter stands for the argument the call gave it, as a parenthesized
-        // whole, so `value * 2` with the argument `1 + 2` is 6 rather than 5 (§11.2).
+        // whole, so `value * 2` with the argument `1 + 2` is 6 rather than 5.
         var symbol = reference;
         if (symbol.Kind == SymbolKind.MacroParameter)
         {

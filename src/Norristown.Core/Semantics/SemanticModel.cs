@@ -206,7 +206,7 @@ public sealed class SemanticModel
     /// <summary>
     /// The word a <c>one</c> parameter stands for. An argument that names another
     /// <c>one</c> parameter passes that one's word on, which is how a macro hands a word it
-    /// was given to the macro it calls (§11.2).
+    /// was given to the macro it calls.
     /// </summary>
     private Value WordFor(MacroArgument argument, Expansion? outer)
     {

@@ -48,7 +48,7 @@ public sealed record OperandSubstitution(
     /// <summary>
     /// Whether the mode the argument gave has a next byte at all. An immediate, the
     /// accumulator, an indirect operand and a stack-relative one have no second byte to
-    /// name, so <c>dest+1</c> means nothing for them (§11.2).
+    /// name, so <c>dest+1</c> means nothing for them.
     /// </summary>
     public bool HasNextByte => IsAddress && !IndexedByStack;
 

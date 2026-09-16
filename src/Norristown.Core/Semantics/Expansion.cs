@@ -66,7 +66,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <summary>
     /// One splice of a block argument, named by the line that spliced it. A block binds no
     /// name, so this level carries none; it is here because the same block may be spliced in
-    /// more than one place, and each splice writes its lines out again (§11.4).
+    /// more than one place, and each splice writes its lines out again.
     /// </summary>
     public static Expansion Spliced(Expansion? outer, SyntaxNode splice, SyntaxNode block) =>
         new(outer, null, Value.Unknown, splice, 0, null, block);

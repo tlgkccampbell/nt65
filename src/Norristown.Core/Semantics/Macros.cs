@@ -116,7 +116,7 @@ public static class Macros
     /// <summary>
     /// Reports any macro that can reach itself, directly or through others. nt65 checks this
     /// from the names its bodies resolved to, without expanding anything, which is what makes
-    /// every expansion bounded (§11.1).
+    /// every expansion bounded.
     /// </summary>
     public static void CheckRecursion(IEnumerable<Symbol> macros, List<Diagnostic> diagnostics)
     {
@@ -181,7 +181,7 @@ public static class Macros
 
     /// <summary>
     /// A symbol an exported macro uses without being given it must itself be exported: the
-    /// expansion lands in another file, where an unexported name means nothing (§11.1).
+    /// expansion lands in another file, where an unexported name means nothing.
     /// </summary>
     public static void CheckExportedUses(
         IEnumerable<Symbol> macros, Func<Symbol, bool> isExported, List<Diagnostic> diagnostics)
@@ -205,7 +205,7 @@ public static class Macros
     /// <summary>
     /// Why a macro body may not hold this statement, or null when it may. Each of these
     /// would either declare a name in the caller or make something program-wide depend on
-    /// how many times the macro is called (§11.3).
+    /// how many times the macro is called.
     /// </summary>
     public static string? Forbidden(SyntaxNode statement) => statement.Kind switch
     {

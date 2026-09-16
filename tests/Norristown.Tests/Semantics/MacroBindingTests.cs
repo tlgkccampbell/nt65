@@ -4,7 +4,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// What a macro definition declares, what its body may say, and what the two scopes around
-/// an expansion — the body's own and the caller's — each hold (§11.1, §11.3).
+/// an expansion — the body's own and the caller's — each hold.
 /// </summary>
 public sealed class MacroBindingTests
 {

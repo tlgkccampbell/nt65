@@ -34,8 +34,9 @@ public sealed class CodeLayout
 
     /// <summary>
     /// How many statements one file's expansions may lay out before nt65 gives up. The
-    /// recursion check bounds each expansion, but a chain of macros over long lists is not
-    /// bounded by it, and neither is a program that simply asks for too much (§11.1).
+    /// recursion check bounds each expansion on its own, but a chain of macros over long
+    /// lists is not bounded by it, and neither is a program that simply asks for too
+    /// much.
     /// </summary>
     private const int MaximumStatements = 65536;
 
@@ -226,10 +227,11 @@ public sealed class CodeLayout
     {
         if (model.MacroAt(call) is not { Definition: { } definition })
             return;
-        if (++expanded > MaximumStatements)
+        expanded += definition.ChildNodes.Length;
+        if (expanded > MaximumStatements)
         {
-            if (expanded == MaximumStatements + 1)
-                Report(call.Span, $"this expansion is more than {MaximumStatements} statements");
+            Report(call.Span, $"the expansions in this file come to more than {MaximumStatements} "
+                + "statements, which is as far as nt65 goes");
             return;
         }
 
@@ -336,7 +338,7 @@ public sealed class CodeLayout
     /// <summary>
     /// Whether the argument's mode has the next byte the body asked for. An immediate, the
     /// accumulator, an indirect operand and a stack-relative one have no second byte to
-    /// name (§11.2), and <c>.byteof</c> shifts an immediate rather than adding to it.
+    /// name, and <c>.byteof</c> shifts an immediate rather than adding to it.
     /// </summary>
     private void CheckSubstitution(OperandSubstitution? substituted)
     {
@@ -348,7 +350,7 @@ public sealed class CodeLayout
             return;
 
         // The pair is what is wrong — this body line with this argument — so it is reported
-        // at the call, which is the side that can change it, and the body line is named (§11.6).
+        // at the call, which is the side that can change it, and the body line is named.
         var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + n`";
         ReportPaired(given.At, $"{what} needs an operand with a next byte, and `{given.Parameter.Name}` "
             + $"is `{given.Mode}` here");
@@ -356,7 +358,7 @@ public sealed class CodeLayout
 
     /// <summary>
     /// Something that is only wrong for these arguments: reported at the call, which is the
-    /// side that can change them, with the body line that wrote it named beside it (§11.6).
+    /// side that can change them, with the body line that wrote it named beside it.
     /// </summary>
     private void ReportPaired(SyntaxNode inTheBody, string message)
     {

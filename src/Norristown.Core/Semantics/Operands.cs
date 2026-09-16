@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 /// <summary>
 /// Reads an operand written in a macro body for the <c>operand</c> parameter it names. An
 /// operand parameter stands as a whole operand, so the addressing mode, the address size
-/// and the text all come from the argument rather than from the body (§11.2), and layout
+/// and the text all come from the argument rather than from the body, and layout
 /// and emission have to agree about which operand a line really has.
 /// </summary>
 public static class Operands
@@ -64,7 +64,7 @@ public static class Operands
     }
 
     /// <summary>
-    /// The mode an operand is in, as <c>.mode(p)</c> spells it (§11.2). An argument written
+    /// The mode an operand is in, as <c>.mode(p)</c> spells it. An argument written
     /// without braces is an expression, and a plain address operand by being one.
     /// </summary>
     public static string ModeOf(SyntaxNode operand) => operand.Kind switch

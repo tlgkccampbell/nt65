@@ -56,7 +56,7 @@ public sealed class Configuration
     /// Whether this pass answered the condition on <paramref name="block"/>. It answers every
     /// one it can reach before a declaration is looked up; the ones it cannot are inside a
     /// macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition may name what the
-    /// expansion binds (§10), and those are answered once per expansion instead.
+    /// expansion binds, and those are answered once per expansion instead.
     /// </summary>
     public bool Answered(SyntaxNode block) => answered.Contains((block.Tree, block.Position));
 

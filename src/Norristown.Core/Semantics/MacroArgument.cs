@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 /// <summary>
 /// What one parameter was given at one call. An argument is a value, not the tokens it was
 /// written as: the body stands it in as a parenthesized whole, so <c>value * 2</c> with the
-/// argument <c>1 + 2</c> is 6 (§11.2).
+/// argument <c>1 + 2</c> is 6.
 /// </summary>
 /// <param name="Parameter">The parameter it was given to.</param>
 /// <param name="Value">The expression or braced operand written, or the default when the call left it out.</param>

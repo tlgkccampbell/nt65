@@ -274,7 +274,7 @@ internal sealed class Evaluator
 
                 // A `one` parameter and a repetition over words compare as words: the side
                 // that is not already one is the bare name written beside it, which is a word
-                // rather than a name and is never looked up (§11.2).
+                // rather than a name and is never looked up.
                 if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
                     && (first.IsWord || second.IsWord)
                     && WordOf(first, children[0]) is { } left && WordOf(second, children[1]) is { } right)

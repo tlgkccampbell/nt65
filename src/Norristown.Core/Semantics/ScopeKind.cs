@@ -22,6 +22,13 @@ public enum ScopeKind
     Macro,
 
     /// <summary>
+    /// A block argument of a macro call. It is the caller's code and reads the caller's
+    /// names, but the same block may be spliced in more than one place, so what it declares
+    /// is private to it and may only be a cheap local.
+    /// </summary>
+    BlockArgument,
+
+    /// <summary>
     /// The body of an <c>.enum</c>, <c>.struct</c> or <c>.union</c>: a scope of constants
     /// and offsets rather than of code.
     /// </summary>

@@ -2,7 +2,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// What a call is checked for: each argument against its parameter's kind, the arguments
-/// against the parameters as a whole, and the macro against reaching itself (§11.2, §11.6).
+/// against the parameters as a whole, and the macro against reaching itself.
 /// </summary>
 public sealed class MacroCallTests
 {
@@ -221,6 +221,34 @@ public sealed class MacroCallTests
             """);
 
         Assert.Equal(["8: `wrap` has no `block` parameter called `otherwise`"], model.Problems());
+    }
+
+    /// <summary>
+    /// A block may be spliced in more than one place, so anything it declared would be
+    /// declared once per splice. A cheap local is private to each of them and is allowed.
+    /// </summary>
+    [Fact]
+    public void ABlockArgumentMayDeclareOnlyCheapLocals()
+    {
+        var model = Analysis.Model("""
+            .macro wrap(body: block) {
+                body
+            }
+
+            .proc main {
+                wrap!() {
+            HERE = 1
+            @spin:
+                    bne @spin
+                }
+                rts
+            }
+            """);
+
+        Assert.Equal(
+            ["7: `HERE` is declared in a block argument, which may declare only cheap locals: "
+                + "the macro it is given to may splice it in more than one place"],
+            model.Problems());
     }
 
     [Fact]

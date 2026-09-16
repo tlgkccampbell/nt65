@@ -7,7 +7,7 @@ namespace Norristown.Semantics;
 /// ask the same question of the same line, so they work this out the same way and the
 /// answer is nobody's to keep.
 /// <para>
-/// A diagnostic lands on the side of the call that can fix it (§11.6): everything here is
+/// A diagnostic lands on the side of the call that can fix it: everything here is
 /// about one call's arguments, so everything here is reported at the call.
 /// </para>
 /// </summary>
@@ -235,7 +235,7 @@ public sealed class MacroInvocation
 
                     // A word may be passed on from a `one` parameter of the macro whose body
                     // writes the call, so long as this list holds everything that one allows
-                    // (§11.2): which word it is is not known until there is an expansion.
+                    // which word it is is not known until there is an expansion.
                     if (word is not null && lookup?.Invoke(word) is
                         { Kind: SymbolKind.MacroParameter, Parameter.Accepts: { Kind: ParameterKind.One } passed })
                     {

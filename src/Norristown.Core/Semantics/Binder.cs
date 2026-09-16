@@ -173,7 +173,7 @@ internal sealed class Binder
                     BindStatement(opener);
                 else if (opener is { Kind: SyntaxKind.BlockContinuation })
                     CheckContinuation(block, opener);
-                scope = new Scope(ScopeKind.Scope, null, scope, null);
+                scope = new Scope(ScopeKind.BlockArgument, null, scope, null);
                 break;
 
             case BlockKind.Proc:
@@ -211,7 +211,7 @@ internal sealed class Binder
                 if (!configuration.Includes(block))
                     return;
                 // A condition may compare a `one` parameter or a repetition binding with a
-                // bare word, which is never looked up (§10, §11.2), so a name here that turns
+                // bare word, which is never looked up, so a name here that turns
                 // out to be no name is a word rather than a mistake.
                 if (opener is not null)
                     CollectUses(opener, uses, words: true);
@@ -361,7 +361,7 @@ internal sealed class Binder
     /// <summary>
     /// <c>.macro</c> at file level or in a <c>.scope</c> outside any routine. One declared in
     /// a proc would see that proc's cheap locals, and an expansion in another proc would
-    /// branch into them, out of sight of the first proc's flow analysis (§11.3).
+    /// branch into them, out of sight of the first proc's flow analysis.
     /// </summary>
     private void CheckMacroPlacement(SyntaxNode opener)
     {
@@ -451,6 +451,25 @@ internal sealed class Binder
             {
                 if (around.Kind == ScopeKind.Macro)
                     return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a declaration here would land in a block argument. A routine or a macro
+    /// written inside one owns what it declares, so the walk stops at the first of those.
+    /// </summary>
+    private bool InABlockArgument
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind == ScopeKind.BlockArgument)
+                    return true;
+                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.Type)
+                    return false;
             }
             return false;
         }
@@ -851,6 +870,12 @@ internal sealed class Binder
         }
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;
+        if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
+        {
+            Report(name.Span, $"`{name.Text}` is declared in a block argument, which may declare only "
+                + "cheap locals: the macro it is given to may splice it in more than one place");
+            return null;
+        }
         var owner = cheap ? CheapLocalOwner(name) : scope;
         var symbol = new Symbol(cheap ? name.Text[1..] : name.Text, kind, owner, tree, name.Span)
         {
@@ -952,7 +977,7 @@ internal sealed class Binder
     /// <summary>
     /// A name a macro body uses that it neither declared nor was given. An expansion needs it
     /// wherever it lands, so the macro remembers it: the file that calls the macro brings it
-    /// in, and an exported macro may only use what is exported too (§11.1, §12).
+    /// in, and an exported macro may only use what is exported too.
     /// </summary>
     private static void RecordBodyUse(Scope at, Symbol used, SyntaxToken token)
     {
@@ -1074,7 +1099,7 @@ internal sealed class Binder
     {
         // A macro has a body scope, but it is not one a path may reach into: what a body
         // declares is local to each expansion, so there is no one symbol to name from
-        // outside (§11.3).
+        // outside.
         if (symbol.Kind == SymbolKind.Macro)
             return null;
         if (symbol.Body is { } own)

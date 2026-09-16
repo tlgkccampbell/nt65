@@ -2,7 +2,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// A macro crosses a file boundary by being expanded in the file that calls it, not by
-/// reaching ca65: nothing of it is in the object file (§12, §13).
+/// reaching ca65: nothing of it is in the object file.
 /// </summary>
 public sealed class MacroModuleTests
 {

@@ -83,14 +83,14 @@ public sealed class Symbol
 
     /// <summary>
     /// The macros this macro's body calls, with the call each was named at. A macro may not
-    /// reach itself through them, which is what makes every expansion bounded (§11.1).
+    /// reach itself through them, which is what makes every expansion bounded.
     /// </summary>
     public List<(Symbol Callee, Span At)> Calls { get; } = [];
 
     /// <summary>
     /// The names a macro's body uses that it did not declare and was not given: what an
     /// expansion of it needs wherever it lands. A file that calls the macro has to be able to
-    /// reach all of them, and its output brings in the ones another file declares (§12).
+    /// reach all of them, and its output brings in the ones another file declares.
     /// </summary>
     public List<(Symbol Used, Span At)> Uses { get; } = [];
 

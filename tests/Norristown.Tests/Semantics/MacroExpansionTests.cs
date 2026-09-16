@@ -2,7 +2,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// What a call becomes: the body written out with each parameter standing for what the call
-/// gave it, the locals renamed per expansion, and a comment naming the call (§11.7, §13).
+/// gave it, the locals renamed per expansion, and a comment naming the call.
 /// </summary>
 public sealed class MacroExpansionTests
 {
