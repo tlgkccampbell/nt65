@@ -53,6 +53,7 @@ public sealed class ControlFlow
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
             var region = new FlowRegion(routine, run.Key.Stream, entered, blocks);
             flow.regions.Add(region);
+            flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
             flow.CheckDataReachedByFallingThrough(units, diagnostics);
         }
@@ -274,6 +275,29 @@ public sealed class ControlFlow
             : item;
 
     /// <summary>
+    /// What an annotation names has to be somewhere code can be: a label, a routine, or a
+    /// list or a table of them. Which kind a name is settles only once every symbol has a
+    /// value, which is why this is checked here rather than where the name was resolved.
+    /// </summary>
+    private void CheckTargets(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    {
+        foreach (var annotation in units.SelectMany(unit => unit.Annotations.Select(a => (unit.Step.On, a))))
+        {
+            foreach (var written in Annotations.TargetsOf(annotation.a))
+            {
+                if (Targets.Of(model, written, annotation.On) is not { } target
+                    || target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
+                {
+                    continue;
+                }
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
+                    $"`{target.Symbol.DisplayName}` is a {target.Symbol.KindText}, and "
+                    + $"`{Annotations.Spell(annotation.a)}` names somewhere code is"));
+            }
+        }
+    }
+
+    /// <summary>
     /// A label nothing runs into and nothing names. Recognition is complete for what is
     /// written, so once the label exists the checks cover it; this is what pushes the
     /// programmer to write it down.
@@ -318,11 +342,15 @@ public sealed class ControlFlow
         }
     }
 
-    /// <summary>Whether a statement is the last of its block, because control leaves after it.</summary>
+    /// <summary>
+    /// Whether a statement is the last of its block, because control leaves after it. A call
+    /// leaves too, even though it comes back: what it reaches is an edge of its own, and an
+    /// edge leaves a block at its end.
+    /// </summary>
     private bool EndsBlock(Unit unit) =>
         unit.Next is not null
         || Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode)
-            is not (Transfer.Through or Transfer.Call);
+            != Transfer.Through;
 
     /// <summary>
     /// Whether control carries on into whatever follows. A call does however it is written,

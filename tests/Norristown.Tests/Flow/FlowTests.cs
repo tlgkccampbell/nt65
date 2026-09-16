@@ -102,6 +102,79 @@ public sealed class FlowTests
         Assert.True(IsDeclared(region, "@fire"));
     }
 
+    /// <summary>A list stands for its items here as it does anywhere else.</summary>
+    [Fact]
+    public void AListStandsForEveryLabelInIt()
+    {
+        var region = Region("""
+            .proc dispatch {
+                jmp (ptr)
+                .next handlers
+
+            move:   rts
+            fire:   rts
+            }
+
+            .list handlers {
+                dispatch::move, dispatch::fire
+            }
+
+            ptr: .addr 0
+            """);
+
+        Assert.True(IsDeclared(region, "move"));
+        Assert.True(IsDeclared(region, "fire"));
+    }
+
+    /// <summary>
+    /// A <c>.next</c> on a call lists the routines it reaches, and the call still returns to
+    /// the statement after it.
+    /// </summary>
+    [Fact]
+    public void ACallWithANextStillReturns()
+    {
+        var region = Region("""
+            .cpu 65c02
+
+            .proc p {
+                jsr (@table,x)
+                .next ?
+            @after:
+                rts
+
+            @table: .addr @after
+            }
+            """);
+
+        Assert.True(Block(region, "@after").IsFallenInto);
+    }
+
+    /// <summary>
+    /// An annotation under a macro call is about the last statement of its expansion, which
+    /// falls out of reading the path in the order the bytes were written.
+    /// </summary>
+    [Fact]
+    public void ANextUnderACallIsAboutTheLastStatementItExpandsTo()
+    {
+        var region = Region("""
+            .macro go() {
+                nop
+                jmp (ptr)
+            }
+
+            .proc p {
+                go!()
+                .next @out
+            @out:
+                rts
+            }
+
+            ptr: .addr 0
+            """);
+
+        Assert.True(IsDeclared(region, "@out"));
+    }
+
     /// <summary><c>.next ?</c> ends the path: nothing is claimed about where flow goes.</summary>
     [Fact]
     public void NextQuestionEndsThePath()
@@ -136,6 +209,16 @@ public sealed class FlowTests
     public void ALabelSomethingNamesIsNotReported(string text)
     {
         Assert.Empty(Problems(text));
+    }
+
+    /// <summary>An annotation names somewhere code is, so a constant is no target for one.</summary>
+    [Theory]
+    [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\nN = 5\n\nptr: .addr 0\n", ".next")]
+    [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\nN = 5\n", ".patch")]
+    public void AnAnnotationThatNamesSomethingThatIsNotCodeIsReported(string text, string directive)
+    {
+        Assert.Contains($"`N` is a constant, and `{directive}` names somewhere code is",
+            string.Join("\n", Problems(text)), StringComparison.Ordinal);
     }
 
     [Fact]
