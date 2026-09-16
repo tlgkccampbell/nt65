@@ -20,6 +20,7 @@ public sealed class CodeLayout
     private readonly SemanticModel model;
     private readonly Cpu cpu;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
+    private readonly Dictionary<int, LineLayout> anyWriting = [];
     private readonly List<Diagnostic> diagnostics = [];
 
     // Where every line's bytes land, and where every label stands among them. A distance is
@@ -460,7 +461,7 @@ public sealed class CodeLayout
         var mode = Choose(mnemonic, operand, candidates, substituted);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
         var length = Instructions.Length(mode);
-        lines[(statement.Position, expansion)] = new LineLayout(length, mode, prefix);
+        Laid(statement, new LineLayout(length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode)));
         Place(statement, length);
         steps.Add(new Step(statement, expansion, routine, Stream, null));
 
@@ -509,7 +510,8 @@ public sealed class CodeLayout
         var length = Instructions.Length(AddressingMode.Relative)
             + (over ? Instructions.Length(AddressingMode.Absolute) : 0);
         branches.Add(new Branch(statement, expansion, target, Long: true));
-        lines[(statement.Position, expansion)] = new LineLayout(length, AddressingMode.Relative, null, over);
+        Laid(statement, new LineLayout(
+            length, AddressingMode.Relative, null, over, Cycles.OfLongBranch(over)));
         Place(statement, length);
         steps.Add(new Step(statement, expansion, routine, Stream, null));
     }
@@ -742,13 +744,26 @@ public sealed class CodeLayout
     {
         if (DataLengths.Of(directive, model, diagnostics, expansion) is not { } length)
             return;
-        lines[(directive.Position, expansion)] = new LineLayout(length, null, null);
+        Laid(directive, new LineLayout(length, null, null));
         Place(directive, length);
         steps.Add(new Step(directive, expansion, routine, Stream, null));
     }
 
+    /// <summary>
+    /// What a statement assembles to, whichever writing of it is asked about. An editor asks
+    /// about a line rather than about one expansion of it, so it is shown the first writing.
+    /// </summary>
+    public LineLayout? AnyOf(SyntaxNode statement) => anyWriting.GetValueOrDefault(statement.Position);
+
     /// <summary>The stream the walk is writing into.</summary>
     private int Stream => streams[^1];
+
+    /// <summary>Records what a line assembles to on this writing of it.</summary>
+    private void Laid(SyntaxNode statement, LineLayout laid)
+    {
+        lines[(statement.Position, expansion)] = laid;
+        anyWriting.TryAdd(statement.Position, laid);
+    }
 
     /// <summary>
     /// Records where a line's bytes land and moves the stream on. An <c>.align</c> ends the

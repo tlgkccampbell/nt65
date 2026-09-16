@@ -119,7 +119,10 @@ public sealed class ControlFlow
         Link(blocks, tails, fallenInto, found);
         Reach(blocks);
         for (var i = 0; i < blocks.Count; i++)
+        {
             blocks[i].IsFallenInto = fallenInto[i];
+            blocks[i].Cycles = Timing(blocks[i]);
+        }
         return blocks;
 
         void Open(Symbol? label, Expansion? on)
@@ -176,6 +179,22 @@ public sealed class ControlFlow
             blocks[from].Reach(to, kind);
             blocks[to].ReachedFrom(from);
         }
+    }
+
+    /// <summary>
+    /// How long the whole block takes. A block runs all of it or none, so the counts add up;
+    /// one statement nt65 has no count for leaves the block without one.
+    /// </summary>
+    private CycleCount? Timing(BasicBlock block)
+    {
+        var total = new CycleCount(0);
+        foreach (var step in block.Steps)
+        {
+            if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
+                return null;
+            total += cycles;
+        }
+        return block.Steps.Count == 0 ? null : total;
     }
 
     /// <summary>Which blocks any path from the region's first one reaches.</summary>

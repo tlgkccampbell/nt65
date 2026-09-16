@@ -12,4 +12,6 @@ namespace Norristown.Layout;
 /// Whether a long branch is written as the inverted short branch over a <c>jmp</c>, which is
 /// the form it takes when nt65 does not know the target to be in range.
 /// </param>
-public sealed record LineLayout(int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false);
+/// <param name="Cycles">How long the instruction takes, or null for data and for one nt65 has no count for.</param>
+public sealed record LineLayout(
+    int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null);

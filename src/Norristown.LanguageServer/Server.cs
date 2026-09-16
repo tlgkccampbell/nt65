@@ -105,7 +105,13 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/hover")]
     public Hover? Hover(TextDocumentPositionParams request) =>
-        At(request) is { } asked ? Lsp.ToHover(asked.Model, asked.Position) : null;
+        At(request) is { } asked
+            ? Lsp.ToHover(
+                asked.Model,
+                asked.Analysis.LayoutFor(asked.Model.Tree.Path),
+                asked.Analysis.FlowFor(asked.Model.Tree.Path),
+                asked.Position)
+            : null;
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request) =>
@@ -177,14 +183,17 @@ internal sealed class Server
         if (analysis.ModelFor(document.Tree.Path) is not { } model)
             return null;
         return new Asked(
+            analysis,
             analysis.Program,
             model,
             document.Tree.GetPosition(request.Position.Line, request.Position.Character));
     }
 
     /// <summary>One request, resolved to what it is about.</summary>
+    /// <param name="Analysis">Everything the program means, for a question about its layout.</param>
     /// <param name="Program">Every file, for a name that crosses one.</param>
     /// <param name="Model">The file the caret is in.</param>
     /// <param name="Position">Where in that file's text.</param>
-    private sealed record Asked(ProgramModel Program, SemanticModel Model, int Position);
+    private sealed record Asked(
+        ProgramAnalysis Analysis, ProgramModel Program, SemanticModel Model, int Position);
 }

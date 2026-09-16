@@ -146,12 +146,44 @@ public sealed class SymbolRequestsTests
     }
 
     [Fact]
-    public async Task HoverOnSomethingThatIsNotANameSaysNothing()
+    public async Task HoverOnSomethingThatIsNeitherANameNorAnInstructionSaysNothing()
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        Assert.Null(await client.HoverAsync(Uri, new Position(8, 8), timeout));
+        Assert.Null(await client.HoverAsync(Uri, new Position(13, 4), timeout));
+    }
+
+    /// <summary>
+    /// Away from a name, an instruction is shown how long it takes and how long the block
+    /// around it takes. The count is an interval wherever it depends on something the
+    /// program does not say.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnAnInstructionShowsWhatItCosts()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(8, 8), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("**2 cycles**", hover.Contents.Value, StringComparison.Ordinal);
+
+        // `lda #0` and `sta z:ptr` come to five, and the block ends at the label after them.
+        Assert.Contains("this block: 5 cycles", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>A branch costs two not taken and three taken, and one more when a taken
+    /// branch crosses a page, so what it costs is an interval.</summary>
+    [Fact]
+    public async Task HoverOnABranchShowsTheWholeInterval()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(11, 8), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("**2-4 cycles**", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -40,4 +40,25 @@ public sealed record ProgramAnalysis(
     /// <summary>The model for <paramref name="path"/>, or null when the program has no such file.</summary>
     public SemanticModel? ModelFor(string path) =>
         Program.Files.FirstOrDefault(file => file.Tree.Path == path);
+
+    /// <summary>What <paramref name="path"/>'s lines assemble to, or null when it was not laid out.</summary>
+    public CodeLayout? LayoutFor(string path) => At(Layouts, path);
+
+    /// <summary>Where control goes in <paramref name="path"/>, or null when it was not laid out.</summary>
+    public ControlFlow? FlowFor(string path) => At(Flows, path);
+
+    /// <summary>
+    /// The entry of <paramref name="alongside"/> for <paramref name="path"/>. Every list
+    /// here runs in the same order as <see cref="ProgramModel.Files"/>, or is empty.
+    /// </summary>
+    private T? At<T>(IReadOnlyList<T> alongside, string path)
+        where T : class
+    {
+        for (var i = 0; i < Program.Files.Count && i < alongside.Count; i++)
+        {
+            if (Program.Files[i].Tree.Path == path)
+                return alongside[i];
+        }
+        return null;
+    }
 }

@@ -45,6 +45,12 @@ public sealed class BasicBlock
     /// <summary>Whether any path from the routine's entry reaches it.</summary>
     public bool IsReached { get; internal set; }
 
+    /// <summary>
+    /// How long running the whole block takes, or null when any statement in it has no
+    /// count. A block runs all of it or none, so the sum is a bound anyone can use.
+    /// </summary>
+    public CycleCount? Cycles { get; internal set; }
+
     internal void Add(Step step) => steps.Add(step);
 
     internal void Reach(int to, EdgeKind kind)

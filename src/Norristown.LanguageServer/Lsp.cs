@@ -1,4 +1,6 @@
 using System.Text;
+using Norristown.Flow;
+using Norristown.Layout;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -44,15 +46,69 @@ internal static class Lsp
     public static IReadOnlyList<Protocol.FoldingRange> ToFoldingRanges(SyntaxTree tree) =>
         [.. Folding.Build(tree).Select(range => new Protocol.FoldingRange(range.StartLine, range.EndLine))];
 
-    /// <summary>What to show about the name at <paramref name="position"/>, or null if there is none.</summary>
-    public static Protocol.Hover? ToHover(SemanticModel model, int position)
+    /// <summary>
+    /// What to show at <paramref name="position"/>: the name under the caret, or, where
+    /// there is none, how long the instruction on that line takes and how long the block
+    /// around it takes.
+    /// </summary>
+    public static Protocol.Hover? ToHover(
+        SemanticModel model, CodeLayout? layout, ControlFlow? flow, int position)
     {
-        if (model.ReferenceAt(position) is not { } reference)
-            return null;
-        return new Protocol.Hover(
-            Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree)),
-            ToRange(model.Tree, reference.Span));
+        if (model.ReferenceAt(position) is { } reference)
+        {
+            return new Protocol.Hover(
+                Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree)),
+                ToRange(model.Tree, reference.Span));
+        }
+        return ToTiming(model, layout, flow, position);
     }
+
+    /// <summary>
+    /// How long the instruction at <paramref name="position"/> takes, and how long the block
+    /// it is in takes. The count is an interval wherever it depends on something the program
+    /// does not say, such as whether an indexed read crosses a page.
+    /// </summary>
+    private static Protocol.Hover? ToTiming(
+        SemanticModel model, CodeLayout? layout, ControlFlow? flow, int position)
+    {
+        if (layout is null || Statement(model.Tree, position) is not { } statement)
+            return null;
+        if (statement.Kind != SyntaxKind.InstructionStatement
+            || layout.AnyOf(statement)?.Cycles is not { } cycles)
+        {
+            return null;
+        }
+
+        var text = new StringBuilder($"**{Spell(cycles)}**");
+        if (Around(flow, statement)?.Cycles is { } block)
+            text.Append($"\n\nthis block: {Spell(block)}");
+        return new Protocol.Hover(
+            Protocol.MarkupContent.Markdown(text.ToString()), ToRange(model.Tree, statement.Span));
+    }
+
+    /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>
+    private static SyntaxNode? Statement(SyntaxTree tree, int position)
+    {
+        foreach (var node in tree.Root.DescendantNodes())
+        {
+            if (node.Green is GreenLine && position >= node.Position
+                && position < node.Position + node.Green.FullWidth)
+            {
+                return node.Statement;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The block a statement is in, wherever in the file it was written.</summary>
+    private static BasicBlock? Around(ControlFlow? flow, SyntaxNode statement) =>
+        flow?.Regions
+            .SelectMany(region => region.Blocks)
+            .FirstOrDefault(block => block.Steps.Any(step => step.Statement.Position == statement.Position));
+
+    /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
+    private static string Spell(CycleCount cycles) =>
+        cycles is { IsExact: true, Least: 1 } ? "1 cycle" : $"{cycles} cycles";
 
     /// <summary>
     /// Where the name at <paramref name="position"/> is declared, or null. The declaration
