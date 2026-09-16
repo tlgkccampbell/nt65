@@ -1,0 +1,126 @@
+; Screen-code text output directly to screen RAM.
+.cpu 6502
+
+.export screen, print_at, print_score, clear_screen, set_cursor, print_hex
+
+.charmap screen {
+    '@'      = $00
+    'A'..'Z' = $01
+    '['      = $1B
+    ']'      = $1D
+    ' '..'?' = $20
+    'a'..'z' = $01
+}
+
+ROW_COUNT = 25
+COLS = 40
+
+.rodata {
+; Row start offsets into screen RAM
+row_lo:
+.repeat ROW_COUNT, r {
+    .byte <(SCREEN_RAM + r * COLS)
+}
+row_hi:
+.repeat ROW_COUNT, r {
+    .byte >(SCREEN_RAM + r * COLS)
+}
+hex_digits: .byte screen("0123456789ABCDEF")
+}
+
+.bss {
+cursor_col: .res 1
+text_color: .res 1
+}
+
+; X = row, Y = column. Points ptr1 at the start of the row and remembers the column.
+.proc set_cursor {
+    lda row_lo,x
+    sta ptr1
+    lda row_hi,x
+    sta ptr1+1
+    sty cursor_col
+    rts
+}
+
+; Print the zero-terminated screen-code string that follows the JSR, at the cursor.
+.proc print_at: inline .asciiz {
+    pla
+    sta ptr2
+    pla
+    sta ptr2+1
+    ldy #0
+@next:
+    inc16!(ptr2)
+    lda (ptr2),y
+    beq @done
+    sty @save_y+1
+    .patch @save_y
+    ldy cursor_col
+    sta (ptr1),y
+    inc cursor_col
+@save_y:
+    ldy #0
+    jmp @next
+@done:
+    lda ptr2+1
+    pha
+    lda ptr2
+    pha
+    rts
+}
+
+; Print A as two hex digits at the cursor.
+.proc print_hex {
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tax
+    lda hex_digits,x
+    ldy cursor_col
+    sta (ptr1),y
+    iny
+    pla
+    and #$0F
+    tax
+    lda hex_digits,x
+    sta (ptr1),y
+    iny
+    sty cursor_col
+    rts
+}
+
+; Print the 6-digit BCD score at row 0, column 30.
+.proc print_score {
+    ldx #0
+    ldy #30
+    jsr set_cursor
+    jsr print_at
+    .asciiz screen("SCORE ")
+    ldx #2
+@byte:
+    lda score,x
+    stx @restore+1
+    .patch @restore
+    jsr print_hex
+@restore:
+    ldx #0
+    dex
+    bpl @byte
+    rts
+}
+
+.proc clear_screen {
+    lda #screen(' ')
+    ldx #0
+@loop:
+    sta SCREEN_RAM,x
+    sta SCREEN_RAM + $100,x
+    sta SCREEN_RAM + $200,x
+    sta SCREEN_RAM + $2E8,x
+    inx
+    bne @loop
+    rts
+}

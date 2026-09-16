@@ -1,0 +1,175 @@
+; The main loop: wait for the frame, read the pads, run the current game state.
+.cpu 65816
+
+.export main
+
+.segment "RODATA0" {
+state_table: .addr state_title, state_play, state_pause
+}
+
+.segment "CODE0" {
+
+.proc main: a8, i16, dp = 0, dbr = CODE_BANK {
+@frame:
+    lda #1
+    sta nmi_ready
+@wait:
+    lda nmi_ready               ; the NMI clears it once it has uploaded
+    bne @wait
+    jsr read_pads
+    rep #$20
+    lda game_state
+    and #$00ff
+    asl a
+    tax
+    sep #$20
+    jsr (state_table,x)
+    .next state_table
+    bra @frame
+}
+
+; Wait for auto-read to finish, then latch held and newly pressed buttons.
+.proc read_pads: a8, i16, dp = 0, dbr = CODE_BANK {
+@busy:
+    lda HVBJOY
+    and #$01
+    bne @busy
+    rep #$20
+    lda pad_held
+    sta pad_last
+    lda JOY1L
+    sta pad_held
+    lda pad_last
+    eor #$ffff
+    and pad_held
+    sta pad_pressed
+    sep #$20
+    rts
+}
+
+.proc state_title: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    lda pad_pressed
+    and #JOY_START
+    sep #$20
+    beq @stay
+    ldx #0
+    jsl bank1::spawn_player
+    jsr clear_oam
+    jsr setup_hdma
+    jsr print_inline
+    .word $0040
+    lda #GameState::play
+    sta game_state
+    ppu_on!()
+@stay:
+    rts
+}
+
+.proc state_play: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    lda pad_pressed
+    bit #JOY_START
+    beq @move
+    sep #$20
+    lda #GameState::pause
+    sta game_state
+    lda pad_pressed+1
+    and #>JOY_SELECT
+    beq @keep
+    jsr reset_player
+@keep:
+    rts
+@move:
+    lda pad_held
+    bit #JOY_RIGHT
+    beq @left
+    jsr step_right
+@left:
+    lda pad_held
+    bit #JOY_LEFT
+    beq @vertical
+    lda player_x
+    dec a
+    ldx #0
+    ldy #224
+    jsr clamp16
+    sta player_x
+@vertical:
+    jsr update_sprite
+    rts
+}
+
+; Move right by the level's speed, scaled by a fixed factor.
+.proc step_right: a16, i16, dp = 0, dbr = CODE_BANK {
+    sep #$20
+    lda #0
+    jsl bank1::level_speed
+    rep #$20
+    and #$00ff
+    ldx #3
+    jsr mul16
+    clc
+    adc player_x
+    ldx #0
+    ldy #224
+    jsr clamp16
+    sta player_x
+    rts
+}
+
+.proc state_pause: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    lda pad_pressed
+    and #JOY_START
+    sep #$20
+    beq @stay
+    lda #GameState::play
+    sta game_state
+@stay:
+    rts
+}
+
+; Put the player back at the left edge, relative-call style.
+.proc reset_player: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    mov16!(player_y, {#96})
+    sep #$20
+    per @back - 1
+    brl respawn
+@back:
+    .if DEBUG {
+        wdm #$01                ; emulator breakpoint
+    }
+    rts
+}
+
+.proc respawn: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    mov16!(player_x, {#16})
+    sep #$20
+    rts
+}
+
+; Copy the player into OAM slot 0 in the WRAM shadow, and centre the camera with div16.
+.proc update_sprite: a16, i16, dp = 0, dbr = CODE_BANK -> a8, i16, dp = 0, dbr = CODE_BANK {
+    lda player_x
+    pha                         ; dividend
+    pea 2                       ; divisor
+    jsr div16
+    ply
+    ply
+    sep #$20
+    critical!() {
+        sta f:oam_shadow::x
+        lda player_y
+        sta f:oam_shadow::y
+        lda #$00
+        sta f:oam_shadow::tile
+        lda #$30
+        sta f:oam_shadow::attr
+    }
+    rts
+}
+
+}

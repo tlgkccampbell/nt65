@@ -1,0 +1,33 @@
+; A position-independent blob copied to $0300 at run time, then called there. . .
+.export _install_blob, _call_blob
+
+BLOB_ADDR = $0300
+
+.proc run_blob = BLOB_ADDR
+
+.rodata {
+.proc blob {
+    lda #$A5
+    sta $0280
+    rts
+}
+}
+
+.assert .spanof(blob) < 256, error, "blob must fit in one page"
+
+; void install_blob(void)
+.proc _install_blob {
+    ldx #0
+@copy:
+    lda blob,x
+    sta BLOB_ADDR,x
+    inx
+    cpx #<.spanof(blob)
+    bne @copy
+    rts
+}
+
+; void call_blob(void)
+.proc _call_blob {
+    jmp run_blob
+}

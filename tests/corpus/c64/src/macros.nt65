@@ -1,0 +1,116 @@
+; Shared instruction idioms.
+.cpu 6502
+
+.export add16, sub16, cmp16, mov16, inc16, if, while_ne, poke, trace, save_regs, restore_regs
+
+; dest += value (16-bit, little-endian), carry out in C.
+.macro add16(dest: operand, value: operand) {
+    clc
+    lda .byteof(dest, 0)
+    adc .byteof(value, 0)
+    sta dest
+    lda .byteof(dest, 1)
+    adc .byteof(value, 1)
+    sta dest+1
+}
+
+; dest -= value
+.macro sub16(dest: operand, value: operand) {
+    sec
+    lda .byteof(dest, 0)
+    sbc .byteof(value, 0)
+    sta dest
+    lda .byteof(dest, 1)
+    sbc .byteof(value, 1)
+    sta dest+1
+}
+
+; Unsigned compare of left with right: C set when left >= right, Z set when equal.
+.macro cmp16(left: operand, right: operand) {
+    lda .byteof(left, 1)
+    cmp .byteof(right, 1)
+    bne @done
+    lda .byteof(left, 0)
+    cmp .byteof(right, 0)
+@done:
+}
+
+.macro mov16(dest: operand, src: operand) {
+    lda .byteof(src, 0)
+    sta dest
+    lda .byteof(src, 1)
+    sta dest+1
+}
+
+.macro inc16(dest: operand) {
+    inc dest
+    bne @done
+    inc dest+1
+@done:
+}
+
+.macro poke(addr, value) {
+    lda #value
+    sta addr
+}
+
+.macro branch_unless(c: one(eq, ne, cs, cc, mi, pl), target: ident) {
+    .if c == eq {
+        bne target
+    } .elseif c == ne {
+        beq target
+    } .elseif c == cs {
+        bcc target
+    } .elseif c == cc {
+        bcs target
+    } .elseif c == mi {
+        bpl target
+    } .else {
+        bmi target
+    }
+}
+
+.macro if(c: one(eq, ne, cs, cc, mi, pl), then: block, else: block = {}) {
+    branch_unless!(c, @skip)
+    then
+    .if !.empty(else) {
+        jmp @done
+    }
+@skip:
+    else
+@done:
+}
+
+; Loop while the condition flags after `cond` say "not equal".
+.macro while_ne(cond: block, body: block) {
+@top:
+    cond
+    beq @done
+    body
+    jmp @top
+@done:
+}
+
+.macro save_regs() {
+    pha
+    txa
+    pha
+    tya
+    pha
+}
+
+.macro restore_regs() {
+    pla
+    tay
+    pla
+    tax
+    pla
+}
+
+; In a DEBUG build, flash the border with the given colour.
+.macro trace(color: const) {
+    .if DEBUG {
+        lda #color
+        sta VIC_BORDER
+    }
+}

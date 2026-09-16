@@ -1,0 +1,23 @@
+; void beep(void) -- clicks the speaker, using the hand-written wait_short.
+.import wait_short: proc()
+.import SPKR = $C030, TXTPAGE1 = $0400
+
+.export _beep
+
+BEEP_CYCLES = 32
+
+.proc _beep {
+    ldy #BEEP_CYCLES
+@loop:
+    lda SPKR            ; toggles the speaker
+    lda #40
+    jsr wait_short
+    dey
+    bne @loop
+    ; (an indented .if is not resolved: both branches were emitted)
+.if DEBUG {
+    lda #'B'
+    sta TXTPAGE1
+}
+    rts
+}

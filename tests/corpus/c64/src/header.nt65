@@ -1,0 +1,21 @@
+; PRG load address and the BASIC stub: 10 SYS2061
+.cpu 6502
+
+.segment "LOADADDR" {
+    .word $0801
+}
+
+.segment "EXEHDR" {
+.scope stub {
+    .word @next_line            ; link to the next BASIC line
+    .word 10                    ; line number
+    .byte $9E                   ; SYS token
+    .byte "2061"                ; must match the address of `start`
+    .byte 0                     ; end of line
+@next_line:
+    .word 0                     ; end of program
+}
+}
+
+; nt65 emits `==` to ca65 here, so this link-time check cannot be written:
+; .assert start == $080D, error, "BASIC stub SYS address is out of date"

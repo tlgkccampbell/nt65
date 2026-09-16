@@ -1,0 +1,131 @@
+; Player sprite: joystick in port 2 moves sprite 0 inside the visible area.
+.cpu 6502
+
+.export sprite_init, player_update, player_reset
+
+SPRITE_BLOCK = 13               ; sprite data at 13 * 64 = $0340 (cassette buffer)
+SPRITE_ADDR  = SPRITE_BLOCK * 64
+MIN_X        = 24
+MAX_X        = 320
+MIN_Y        = 50
+MAX_Y        = 229
+SPEED        = 2
+
+.rodata {
+.scope ship_shape {
+bytes:
+    .byte %00000000, %00011000, %00000000
+    .byte %00000000, %00111100, %00000000
+    .byte %00000000, %01111110, %00000000
+    .byte %00000000, %11111111, %00000000
+    .byte %00000001, %11111111, %10000000
+    .byte %00000011, %11111111, %11000000
+    .byte %00000111, %11100111, %11100000
+    .byte %00001111, %11000011, %11110000
+    .repeat 13 {
+    .byte 0, 0, 0
+    }
+    .byte 0                     ; multicolour/unused byte
+}
+}
+
+.assert .spanof(ship_shape) == 64, error, "sprite shape must be 64 bytes"
+
+.proc sprite_init {
+    ldx #63
+@copy:
+    lda ship_shape::bytes,x
+    sta SPRITE_ADDR,x
+    dex
+    bpl @copy
+
+    poke!(SPRITE_PTRS, SPRITE_BLOCK)
+    poke!(VIC_SPR0_COL, Color::yellow)
+    poke!(VIC_SPR_ENA, %00000001)
+    rts
+}
+
+.proc player_reset {
+    mov16!(player_x, {#160})
+    lda #200
+    sta player_y
+    jmp write_position
+}
+
+; Read the joystick and move. Returns C set when fire was newly pressed.
+.proc player_update {
+    lda CIA1_PRA
+    eor #$FF                    ; active high
+    and #Joy::up | Joy::down | Joy::left | Joy::right | Joy::fire
+    tax                         ; keep for edge detection
+
+    lsr a                       ; up
+    pha
+    if!(cs) {
+        lda player_y
+        cmp #MIN_Y + SPEED
+        bcc @no_up              ; nested if! is lost by nt65
+        sbc #SPEED
+        sta player_y
+    @no_up:
+    }
+    pla
+    lsr a                       ; down
+    pha
+    if!(cs) {
+        lda player_y
+        cmp #MAX_Y - SPEED
+        bcs @no_down
+        adc #SPEED
+        sta player_y
+    @no_down:
+    }
+    pla
+    lsr a                       ; left
+    pha
+    bcc @no_left
+    cmp16!(player_x, {#MIN_X + SPEED})
+    bcc @no_left
+    sub16!(player_x, {#SPEED})
+@no_left:
+    pla
+    lsr a                       ; right
+    bcc @no_right
+    cmp16!(player_x, {#MAX_X - SPEED})
+    bcs @no_right
+    add16!(player_x, {#SPEED})
+@no_right:
+
+    jsr write_position
+
+    ; fire edge: pressed now, not pressed last frame
+    txa
+    and #Joy::fire
+    tay
+    eor joy_prev
+    and #Joy::fire
+    sty joy_prev
+    beq @no_fire
+    tya
+    beq @no_fire
+    sec
+    rts
+@no_fire:
+    clc
+    rts
+}
+
+.proc write_position {
+    lda player_x
+    sta VIC_SPR0_X
+    lda VIC_SPR_MSB
+    and #%11111110
+    ldy player_x+1
+    if!(ne) {
+        ora #%00000001
+    }
+    sta VIC_SPR_MSB
+    lda player_y
+    sta VIC_SPR0_Y
+    rts
+}

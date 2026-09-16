@@ -1,0 +1,170 @@
+; Entry point, state machine and main loop.
+.cpu 6502
+
+.export start
+
+.enum State {
+    title
+    playing
+    dying
+    game_over
+}
+
+.list state_handlers {
+    state_title
+    state_playing
+    state_dying
+    state_game_over
+}
+
+.assert .countof(state_handlers) == State::game_over + 1, error, "one handler per state"
+
+.rodata {
+handler_lo: .lobytes state_handlers
+handler_hi: .hibytes state_handlers
+}
+
+.bss {
+timer: .res 1
+}
+
+.proc start {
+    jsr CLRSCR
+    poke!(VIC_BORDER, Color::black)
+    poke!(VIC_BG0, Color::black)
+    poke!(VIC_MEMSETUP, $15)    ; upper case charset
+    jsr clear_screen
+    jsr sprite_init
+    jsr irq_install
+
+    lda #State::title
+    sta game_state
+    ; fall into the main loop
+    .next main_loop
+}
+
+.proc main_loop {
+@wait:
+    lda frame_flag
+    beq @wait
+    lda #0
+    sta frame_flag
+
+    trace!(Color::white)
+    jsr dispatch
+    trace!(Color::black)
+    jmp @wait
+}
+
+; Jump to the handler for the current state; the handler's RTS returns to main_loop.
+.proc dispatch {
+    ldx game_state
+.if DEBUG {                     ; nt65 bug: an indented .if in a proc ignores its condition
+        cpx #.countof(state_handlers)
+        bcc @ok
+        brk #$01                ; bad state
+    @ok:
+}
+    lda handler_lo,x
+    sta @vector
+    lda handler_hi,x
+    sta @vector+1
+    jmp (@vector)
+    .next state_handlers
+
+    .bss {
+    @vector: .res 2
+    }
+}
+
+.proc state_title {
+    ldx #12
+    ldy #11
+    jsr set_cursor
+    jsr print_at
+    .asciiz screen("PRESS FIRE TO START")
+    jsr player_update
+    if!(cs) {
+        lda #0
+        sta score
+        sta score+1
+        sta score+2
+        lda #3
+        sta lives
+        jsr clear_screen
+        jsr player_reset
+        lda #State::playing
+        sta game_state
+    }
+    rts
+}
+
+.proc state_playing {
+    jsr player_update
+    if!(cs) {
+        ; fire scores 10 points (BCD)
+        sed
+        clc
+        lda score
+        adc #$10
+        sta score
+        lda score+1
+        adc #0
+        sta score+1
+        lda score+2
+        adc #0
+        sta score+2
+        cld
+    }
+    jsr print_score
+
+    ; lose a life every 256 frames, for demonstration
+    lda frame_count
+    if!(eq) {
+        lda #State::dying
+        sta game_state
+        lda #50
+        sta timer
+    }
+    rts
+}
+
+.proc state_dying {
+    lda frame_count
+    and #%00000100
+    if!(eq) {
+        lda #Color::red
+    } else {
+        lda #Color::yellow
+    }
+    sta VIC_SPR0_COL
+    dec timer
+    if!(eq) {
+        lda #Color::yellow
+        sta VIC_SPR0_COL
+        dec lives
+        lda #State::game_over   ; nested if! is lost by nt65
+        ldx lives
+        beq @store
+        jsr player_reset
+        lda #State::playing
+    @store:
+        sta game_state
+    }
+    rts
+}
+
+.proc state_game_over {
+    ldx #12
+    ldy #15
+    jsr set_cursor
+    jsr print_at
+    .asciiz screen("GAME OVER")
+    jsr player_update
+    if!(cs) {
+        jsr clear_screen
+        lda #State::title
+        sta game_state
+    }
+    rts
+}

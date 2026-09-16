@@ -1,0 +1,22 @@
+; Variables. The C64 leaves $FB-$FE free in zero page; everything else goes to BSS.
+.cpu 6502
+
+.export ptr1, ptr2, frame_flag, frame_count, game_state, score, player_x, player_y
+.export joy_prev, lives, split_index
+
+.zeropage {
+ptr1:        .res 2
+ptr2:        .res 2
+}
+
+.bss {
+frame_flag:  .res 1
+frame_count: .res 2
+game_state:  .res 1
+score:       .res 3          ; BCD, least significant byte first
+player_x:    .res 2          ; 9-bit sprite X
+player_y:    .res 1
+joy_prev:    .res 1
+lives:       .res 1
+split_index: .res 1
+}

@@ -1,0 +1,71 @@
+; C64 hardware registers and KERNAL entry points.
+.cpu 6502
+
+.export VIC_SPR0_X, VIC_SPR0_Y, VIC_SPR_MSB, VIC_CTRL1, VIC_RASTER, VIC_SPR_ENA
+.export VIC_MEMSETUP, VIC_IRQ_FLAG, VIC_IRQ_MASK, VIC_BORDER, VIC_BG0, VIC_SPR0_COL
+.export VIC_SPR_SPR_COLL
+.export CIA1_PRA, CIA1_ICR, CIA2_ICR
+.export IRQ_VECTOR, KERNAL_IRQ, KERNAL_IRQ_EXIT
+.export SCREEN_RAM, COLOR_RAM, SPRITE_PTRS
+.export CHROUT, GETIN, SCNKEY, CLRSCR
+.export Color, Joy
+
+VIC             = $D000
+VIC_SPR0_X      = VIC + $00
+VIC_SPR0_Y      = VIC + $01
+VIC_SPR_MSB     = VIC + $10
+VIC_CTRL1       = VIC + $11
+VIC_RASTER      = VIC + $12
+VIC_SPR_ENA     = VIC + $15
+VIC_MEMSETUP    = VIC + $18
+VIC_IRQ_FLAG    = VIC + $19
+VIC_IRQ_MASK    = VIC + $1A
+VIC_SPR_SPR_COLL = VIC + $1E
+VIC_BORDER      = VIC + $20
+VIC_BG0         = VIC + $21
+VIC_SPR0_COL    = VIC + $27
+
+CIA1_PRA        = $DC00         ; joystick port 2
+CIA1_ICR        = $DC0D
+CIA2_ICR        = $DD0D
+
+IRQ_VECTOR      = $0314         ; CINV
+KERNAL_IRQ      = $EA31         ; full KERNAL IRQ (keyboard scan, cursor blink)
+KERNAL_IRQ_EXIT = $EA81         ; restore registers and RTI
+
+SCREEN_RAM      = $0400
+COLOR_RAM       = $D800
+SPRITE_PTRS     = SCREEN_RAM + $03F8
+
+.proc CHROUT = $FFD2
+.proc GETIN  = $FFE4
+.proc SCNKEY = $FF9F
+.proc CLRSCR = $E544
+
+.enum Color {
+    black
+    white
+    red
+    cyan
+    purple
+    green
+    blue
+    yellow
+    orange
+    brown
+    light_red
+    dark_grey
+    grey
+    light_green
+    light_blue
+    light_grey
+}
+
+; Joystick bits in CIA1 port A, active low.
+.enum Joy {
+    up    = %00001
+    down  = %00010
+    left  = %00100
+    right = %01000
+    fire  = %10000
+}

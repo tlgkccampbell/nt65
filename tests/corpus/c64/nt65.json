@@ -1,0 +1,10 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "defines": { "DEBUG": 1 },
+  "segments": {
+    "LOADADDR": { "size": "abs" },
+    "EXEHDR":   { "size": "abs" }
+  }
+}

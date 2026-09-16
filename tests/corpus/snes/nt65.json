@@ -1,0 +1,23 @@
+{
+  "cpu": "65816",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "defines": { "DEBUG": 1 },
+  "segments": {
+    "DIRECT":   { "size": "zp",  "dp": 0 },
+    "LORAM":    { "size": "abs" },
+    "WRAM":     { "size": "abs", "bank": "$7e" },
+    "STUBS":    { "size": "abs", "bank": 0 },
+    "CODE0":    { "size": "abs", "bank": "$80" },
+    "RODATA0":  { "size": "abs", "bank": "$80" },
+    "HEADER":   { "size": "abs", "bank": 0 },
+    "VECTORS":  { "size": "abs", "bank": 0 },
+    "BANK1":    { "size": "abs", "bank": "$81" },
+    "GFXDATA":  { "size": "far" }
+  },
+  "ranges": {
+    "$2100-$21ff": ["$00-$3f", "$80-$bf"],
+    "$4016-$4017": ["$00-$3f", "$80-$bf"],
+    "$4200-$43ff": ["$00-$3f", "$80-$bf"]
+  }
+}

@@ -1,0 +1,27 @@
+; Hardware constants from asm/apple2.inc, checked at link time against asm/hwconst.s.
+; (Re-exporting them from here emits both .import and .export of each name, which ca65
+; rejects, so every user has to repeat its own checked imports.)
+.import KBD = $C000, KBDSTRB = $C010, SPKR = $C030
+.import TXTPAGE1 = $0400
+.import WNDLFT = $20
+
+; uint8 read_key(void): returns the key with the strobe bit clear, 0 if none waiting.
+.export _read_key
+.proc _read_key {
+    ldx #0
+    lda KBD
+    bpl @none
+    bit KBDSTRB
+    and #$7F
+    rts
+@none:
+    lda #0
+    rts
+}
+
+; void set_left_margin(unsigned char col)
+.export _set_left_margin
+.proc _set_left_margin {
+    sta WNDLFT
+    rts
+}

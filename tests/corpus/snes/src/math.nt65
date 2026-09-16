@@ -1,0 +1,121 @@
+; 16-bit arithmetic with stack-frame locals.
+.cpu 65816
+
+.export mul16, div16, clamp16, abs16
+
+; mul16's working frame, top of stack first.
+.struct MulFrame {
+    prod_lo:  .word
+    prod_hi:  .word
+    mult:     .word
+    mcand_hi: .word
+    mcand_lo: .word
+}
+
+; div16's frame: its locals, the return address, then the caller's arguments.
+.struct DivFrame {
+    remainder: .word
+    ret:       .res 2
+    divisor:   .word
+    dividend:  .word
+}
+
+.segment "CODE0" {
+
+; Unsigned 16x16: A * X, product in A (low word) and X (high word).
+.proc mul16: a16, i16 {
+    pha                         ; mcand_lo
+    pea 0                       ; mcand_hi
+    phx                         ; mult
+    pea 0                       ; prod_hi
+    pea 0                       ; prod_lo
+    .frame f: MulFrame
+    ldy #16
+@loop:
+    lda f::mult,s
+    lsr a
+    sta f::mult,s
+    bcc @shift
+    clc
+    lda f::prod_lo,s
+    adc f::mcand_lo,s
+    sta f::prod_lo,s
+    lda f::prod_hi,s
+    adc f::mcand_hi,s
+    sta f::prod_hi,s
+@shift:
+    lda f::mcand_lo,s
+    asl a
+    sta f::mcand_lo,s
+    lda f::mcand_hi,s
+    rol a
+    sta f::mcand_hi,s
+    dey
+    bne @loop
+    pla                         ; prod_lo
+    plx                         ; prod_hi
+    ply
+    ply
+    ply
+    rts
+}
+
+; Unsigned 16/16. The caller pushes the dividend, then the divisor, and pulls both after.
+; Quotient in A, remainder in X.
+.proc div16: a16, i16 {
+    pea 0
+    tsc                         ; forget the stack so the frame may reach past
+    tcs                         ; the return address into the arguments
+    .frame f: DivFrame
+    ldx #16
+@loop:
+    lda f::dividend,s
+    asl a
+    sta f::dividend,s
+    lda f::remainder,s
+    rol a
+    cmp f::divisor,s
+    bcc @next
+    sbc f::divisor,s
+    sta f::remainder,s
+    lda f::dividend,s
+    inc a
+    sta f::dividend,s
+    bra @count
+@next:
+    sta f::remainder,s
+@count:
+    dex
+    bne @loop
+    lda f::dividend,s
+    plx
+    rts
+}
+
+; Clamp signed A into [X, Y].
+.proc clamp16: a16, i16 {
+    stx scratch
+    cmp scratch
+    bpl @above_min
+    txa
+    rts
+@above_min:
+    sty scratch
+    cmp scratch
+    bmi @ok
+    tya
+@ok:
+    rts
+}
+
+; |A| for a signed 16-bit A.
+.proc abs16: a16 {
+    ora #0
+    bpl @done
+    eor #$ffff
+    inc a
+@done:
+    rts
+}
+
+}

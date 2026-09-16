@@ -1,0 +1,161 @@
+; Power-on, interrupt entry and hardware initialisation.
+.cpu 65816
+
+.export reset_stub, nmi_stub, irq_stub, cop_stub, brk_stub
+
+; The vectors point into bank $00. Each stub jumps into the FastROM mirror at $80.
+.segment "STUBS" {
+.proc reset_stub: emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK {
+    sei
+    jml reset_long
+}
+
+.proc nmi_stub: native, a?, i?, dp?, dbr?, far {
+    jml nmi_long
+}
+
+.proc irq_stub: native, a?, i?, dp?, dbr? {
+    rti
+}
+
+.proc cop_stub: native, a?, i?, dp?, dbr? {
+    rti
+}
+
+.proc brk_stub: e?, a?, i?, dp?, dbr? {
+    stp
+}
+}
+
+.segment "CODE0" {
+
+; The stubs run in bank $00 and jump long into these, at $80.
+.proc reset_long = reset: emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK
+.proc nmi_long = nmi: native, a?, i?, dp?, dbr?, far
+
+; Reset: leave emulation mode, set up the stack, D and B, clear memory and the PPU, then
+; run the game.
+.proc reset: emu, dp?, dbr? -> native, a8, i16, dp = 0, dbr = CODE_BANK {
+    clc
+    xce                         ; native, both widths 8
+    rep #$38                    ; a16, i16, binary mode
+    ldx #$1fff
+    txs
+    lda #$0000
+    tcd                         ; D = $0000
+    phk
+    plb                         ; B = $80
+    .state dbr = CODE_BANK      ; the txs above made the stack unknown
+    sep #$20
+    ppu_off!()
+    stz NMITIMEN
+    lda #$01
+    sta MEMSEL                  ; FastROM on
+    jsr clear_ram
+    jsr init_ppu
+    jsl bank1::load_palette
+    jsr upload_graphics
+    lda #GameState::title
+    sta game_state
+    lda #$81
+    sta NMITIMEN                ; NMI and joypad auto-read
+    cli
+    jmp main
+}
+
+; Zero low RAM and all of bank $7e with block moves.
+.proc clear_ram: a8, i16, dp = 0, dbr = CODE_BANK {
+    rep #$20
+    stz $0000
+    ldx #$0000
+    ldy #$0001
+    lda #$1dfe
+    mvn #$00, #$00              ; low RAM $0000-$1dff, below the stack
+    lda #$0000
+    sta f:$7e0000
+    ldx #$0000
+    ldy #$0001
+    lda #$fffe
+    mvn #WRAM_BANK, #WRAM_BANK
+    phk
+    plb
+    sep #$20
+    rts
+}
+
+; Write every PPU register through the direct page at $2100.
+.proc init_ppu: a8, i16, dp = 0, dbr = CODE_BANK {
+    phd
+    pea $2100
+    pld
+    ldx #$0033
+@clear:
+    stz d:$2100,x
+    dex
+    bne @clear
+    lda #$80
+    sta d:INIDISP               ; still forced blank
+    lda #$01
+    sta d:BGMODE                ; mode 1
+    stz d:BG1SC                 ; BG1 map at VRAM $0000
+    lda #$02
+    sta d:BG12NBA               ; BG1 tiles at VRAM $2000
+    lda #$01
+    sta d:TM                    ; BG1 on the main screen
+    lda #$80
+    sta d:VMAIN                 ; increment after the high byte
+    pld
+    rts
+}
+
+; NMI, entered in native mode from anywhere in the program.
+.proc nmi: native, a?, i?, dp?, dbr? {
+    rep #$30
+    pha
+    phx
+    phy
+    phd
+    phb
+    phk
+    plb
+    lda #$0000
+    tcd
+    sep #$20
+    lda RDNMI                   ; acknowledge
+    lda nmi_ready
+    beq @late                   ; main loop is still busy: skip the upload
+    jsr upload_oam
+    lda inidisp_shadow
+    sta INIDISP
+    stz nmi_ready
+@late:
+    rep #$30
+    inc frame_count
+    plb
+    pld
+    ply
+    plx
+    pla
+    rti
+}
+
+.proc upload_oam: a8, i16, dp = 0, dbr = CODE_BANK {
+    phd
+    pea $4300
+    pld
+    dma_channel0!(mode = $00, bbad = $04)
+    ldx #.loword(oam_shadow)
+    stx d:A1T0L
+    lda #^oam_shadow
+    sta d:A1B0
+    ldx #.sizeof(oam_shadow)
+    stx d:DAS0L
+    pld
+    stz $2102
+    stz $2103
+    lda #$01
+    sta MDMAEN
+    rts
+}
+
+}

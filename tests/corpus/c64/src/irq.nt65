@@ -1,0 +1,91 @@
+; Raster interrupt: two colour splits per frame, chained into the KERNAL IRQ.
+.cpu 6502
+
+.export irq_install, irq_remove
+
+SPLITS = 3
+
+.rodata {
+; raster line, border colour, background colour for each split
+split_line:   .byte 0, 100, 200
+split_border: .byte Color::light_blue, Color::red, Color::black
+split_bg:     .byte Color::blue, Color::black, Color::dark_grey
+}
+
+.assert .countof(split_line) == SPLITS, error, "split tables out of step"
+.assert .countof(split_border) == SPLITS, error, "split tables out of step"
+
+.bss {
+old_irq: .res 2
+}
+
+.proc irq_install {
+    sei
+    lda #%01111111              ; disable CIA timer interrupts
+    sta CIA1_ICR
+    sta CIA2_ICR
+    lda CIA1_ICR                ; acknowledge pending
+    lda CIA2_ICR
+
+    mov16!(old_irq, IRQ_VECTOR)
+    mov16!(IRQ_VECTOR, {#raster_irq})
+
+    lda #0
+    sta split_index
+    lda split_line
+    sta VIC_RASTER
+    lda VIC_CTRL1
+    and #%01111111              ; raster bit 8 = 0
+    sta VIC_CTRL1
+
+    lda #%00000001              ; enable raster IRQ
+    sta VIC_IRQ_MASK
+    asl VIC_IRQ_FLAG            ; acknowledge any pending VIC IRQ
+    cli
+    rts
+}
+
+.proc irq_remove {
+    sei
+    lda #0
+    sta VIC_IRQ_MASK
+    mov16!(IRQ_VECTOR, old_irq)
+    lda #%10000001
+    sta CIA1_ICR
+    cli
+    rts
+}
+
+.proc raster_irq {
+    lda VIC_IRQ_FLAG
+    and #1
+    bne @ours
+    jmp (old_irq)               ; not a raster IRQ: let the KERNAL have it
+
+@ours:
+    sta VIC_IRQ_FLAG            ; A = 1: acknowledge
+    ldx split_index
+    lda split_border,x
+    sta VIC_BORDER
+    lda split_bg,x
+    sta VIC_BG0
+
+    inx
+    cpx #SPLITS
+    if!(eq) {
+        ldx #0
+    }
+    stx split_index
+    lda split_line,x
+    sta VIC_RASTER
+
+    ; Only the first split of the frame runs the KERNAL (keyboard, jiffy clock).
+    cpx #1
+    bne @exit
+    lda #1
+    sta frame_flag
+    inc16!(frame_count)
+    jmp KERNAL_IRQ
+@exit:
+    jmp KERNAL_IRQ_EXIT
+}

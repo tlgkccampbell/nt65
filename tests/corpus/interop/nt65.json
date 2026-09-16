@@ -1,0 +1,10 @@
+{
+  "cpu": "65c02",
+  "files": ["nt65/**/*.nt65"],
+  "out": "build/gen",
+  "defines": { "DEBUG": 0, "PLATFORM": 2, "BUF_SIZE": 64 },
+  "segments": {
+    "ONCE":    { "size": "abs" },
+    "LOWCODE": { "size": "abs" }
+  }
+}

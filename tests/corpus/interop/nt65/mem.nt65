@@ -1,0 +1,64 @@
+; extra line
+; void __fastcall__ memfill(void* p, unsigned char v, unsigned n);
+; unsigned __fastcall__ memsum(const unsigned char* p, unsigned char n);
+.import sp: zp, ptr1: zp, ptr2: zp, tmp1: zp
+.import popa: proc(), popax: proc()
+
+.export _memfill, _memsum
+
+.proc _memfill {
+    ; An entry for ca65 callers that have set ptr1 (dest), tmp1 (value), ptr2 (count).
+    .export fill
+    sta ptr2
+    stx ptr2+1
+    jsr popa
+    sta tmp1
+    jsr popax
+    sta ptr1
+    stx ptr1+1
+fill:
+    ldy #0
+    lda tmp1
+    ldx ptr2+1
+    beq @partial
+@pages:
+    sta (ptr1),y
+    iny
+    bne @pages
+    inc ptr1+1
+    dex
+    bne @pages
+@partial:
+    ldx ptr2
+    beq @done
+@tail:
+    sta (ptr1),y
+    iny
+    dex
+    bne @tail
+@done:
+    rts
+}
+
+.proc _memsum {
+    sta tmp1            ; n
+    jsr popax
+    sta ptr1
+    stx ptr1+1
+    lda #0
+    tax                 ; X:A = running sum
+    ldy tmp1
+    beq @done
+    ldy #0
+@loop:
+    clc
+    adc (ptr1),y
+    bcc @nc
+    inx
+@nc:
+    iny
+    cpy tmp1
+    bne @loop
+@done:
+    rts
+}
