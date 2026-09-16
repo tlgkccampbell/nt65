@@ -25,6 +25,10 @@ internal sealed class Evaluator
     // Names an `.each` bound to a list item, which stand for the item wherever they are
     // written rather than only for what it is worth.
     private readonly Dictionary<Symbol, SyntaxNode> items = [];
+
+    // What a macro parameter was given, for the built-ins that ask about the argument rather
+    // than about its value.
+    private readonly Dictionary<Symbol, MacroArgument> given = [];
     private readonly Func<string, long?>? binaryLength;
 
     private Evaluator(
@@ -32,7 +36,7 @@ internal sealed class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic>? diagnostics,
         Func<string, long?>? binaryLength = null,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null)
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null)
     {
         this.segments = segments;
         this.resolved = resolved;
@@ -41,8 +45,10 @@ internal sealed class Evaluator
 
         // A name a repetition binds stands for its value on this turn, which is what a
         // function's parameter already does for its argument.
-        foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Iteration.Bound>())
+        foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Expansion.Bound>())
         {
+            if (value.Argument is { } argument)
+                given[symbol] = argument;
             if (value.Item is { } item)
                 items[symbol] = item;
             else
@@ -77,7 +83,7 @@ internal sealed class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics,
         Func<string, long?>? binaryLength,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, diagnostics, binaryLength, bound).Bytes(expression);
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
@@ -93,7 +99,7 @@ internal sealed class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         Func<string, long?>? binaryLength,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, null, binaryLength, bound).RoomFor(directive);
 
     /// <summary>The bytes a literal or a mapped string becomes, or null for anything else.</summary>
@@ -101,7 +107,7 @@ internal sealed class Evaluator
         SyntaxNode argument,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, null, null, bound).BytesIn(argument);
 
     /// <summary>The symbol a written name stands for, or null when it names none.</summary>
@@ -130,7 +136,7 @@ internal sealed class Evaluator
         SyntaxNode expression,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, null, null, bound).Evaluate(expression);
 
     /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
@@ -139,7 +145,7 @@ internal sealed class Evaluator
         string segment,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Iteration.Bound>? bound = null) =>
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, null, null, bound).SizeOf(expression, segment);
 
     /// <summary>The wider of two address sizes, either of which may be unknown.</summary>
@@ -262,9 +268,21 @@ internal sealed class Evaluator
                 // defined and the name on the right is never looked up.
                 var op = node.ChildTokens[0];
                 var first = Evaluate(children[0]);
-                return first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided)
-                    ? Value.Of(decided != 0)
-                    : Binary(op, first, Evaluate(children[1]));
+                if (first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
+                    return Value.Of(decided != 0);
+                var second = Evaluate(children[1]);
+
+                // A `one` parameter and a repetition over words compare as words: the side
+                // that is not already one is the bare name written beside it, which is a word
+                // rather than a name and is never looked up (§11.2).
+                if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
+                    && (first.IsWord || second.IsWord)
+                    && WordOf(first, children[0]) is { } left && WordOf(second, children[1]) is { } right)
+                {
+                    var same = string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+                    return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
+                }
+                return Binary(op, first, second);
 
             case SyntaxKind.CallExpression:
                 return Call(node);
@@ -345,6 +363,16 @@ internal sealed class Evaluator
         return Operators.Unary(op.Kind, value) is { } result ? Value.Of(result) : Value.Unknown;
     }
 
+    /// <summary>
+    /// The word one side of a comparison stands for: the value when it is already a word, or
+    /// else the bare name written there, which a word is compared against unlooked-up.
+    /// </summary>
+    private static string? WordOf(Value value, SyntaxNode written) => value.IsWord
+        ? value.Text
+        : written is { Kind: SyntaxKind.NameExpression, ChildTokens.Length: 1 }
+            ? written.ChildTokens[0].Text
+            : null;
+
     private Value Binary(SyntaxToken op, Value left, Value right)
     {
         if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
@@ -381,10 +409,25 @@ internal sealed class Evaluator
         var name = call.ChildTokens[0].Text.ToLowerInvariant();
         var arguments = given;
 
+        // What a macro body adds asks about an argument rather than about a value, so each
+        // reads the binding rather than evaluating what is written.
+        if (name is ".mode" or ".empty")
+        {
+            if (arguments.Length != 1 || Argument(arguments[0]) is not { } about)
+                return Value.Unknown;
+            return name == ".mode"
+                ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
+                : Value.Of(about.Block is null || Macros.LinesOf(about.Block).Count == 0);
+        }
+
         if (name is ".sizeof" or ".countof")
         {
             if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } measured)
                 return Value.Unknown;
+
+            // `.countof(p)` of a `list` parameter is how many arguments the call gave it.
+            if (name == ".countof" && Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
+                return Value.Of(listed.Items.Count);
             EvaluateSymbol(measured);
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             return room is { } number ? Value.Of(number) : Value.Unknown;
@@ -419,6 +462,10 @@ internal sealed class Evaluator
             _ => Value.Unknown,
         };
     }
+
+    /// <summary>What a name's macro parameter was given, or null when it names no parameter.</summary>
+    private MacroArgument? Argument(SyntaxNode name) =>
+        SymbolOf(name) is { } symbol ? given.GetValueOrDefault(symbol) : null;
 
     /// <summary>
     /// A charmap or a function called by name. A charmap maps one character to its byte; a

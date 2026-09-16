@@ -9,12 +9,6 @@ namespace Norristown.Semantics;
 /// </summary>
 public static class Constructs
 {
-    /// <summary>
-    /// Whether a block's contents belong to a layer that is not built yet. Their lines parse
-    /// and are kept, but nothing resolves names in them, sizes them or writes them out.
-    /// </summary>
-    public static bool IsDeferred(BlockKind kind) => kind is BlockKind.Macro or BlockKind.MacroBlock;
-
     /// <summary>Whether a block repeats its contents, so that they are read once and written many times.</summary>
     public static bool Repeats(BlockKind kind) => kind is BlockKind.Repeat or BlockKind.Each;
 

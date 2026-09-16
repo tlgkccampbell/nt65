@@ -29,6 +29,7 @@ public sealed class Emitter
     private readonly FlatNames names;
     private readonly List<Diagnostic> diagnostics;
     private readonly string source;
+    private readonly string directory;
     private readonly StringBuilder output = new();
     private readonly List<int> lineBytes = [];
     private readonly List<string> segmentStack = [];
@@ -38,17 +39,26 @@ public sealed class Emitter
     private bool pendingBlank;
     private int depth;
 
-    // Which turn of which repetitions is being written. A body is written once per turn,
-    // with every name the repetitions bind standing for what it is worth on that one.
-    private Iteration? iteration;
+    // Which turn of which repetitions, and which expansion of which macros, is being
+    // written. A body is written once per writing, with every name the level binds standing
+    // for what it is worth there.
+    private Expansion? expansion;
 
-    private Emitter(SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics, string source)
+    // The line an expansion's output maps back to. The lines of an expansion map to the line
+    // of the call, the way a C debugger treats a preprocessor macro, and only a line of this
+    // file can be named: `.dbg file` declares one file, and a body may belong to another.
+    private SyntaxNode? callLine;
+
+    private Emitter(
+        SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
+        string source, string directory)
     {
         this.model = model;
         this.layout = layout;
         this.names = names;
         this.diagnostics = diagnostics;
         this.source = source;
+        this.directory = directory;
     }
 
     /// <summary>
@@ -60,7 +70,8 @@ public sealed class Emitter
         string? outRoot = null)
     {
         var path = OutputPath(model.Tree.Path, outRoot);
-        var emitter = new Emitter(model, layout, names, diagnostics, Relative(Directory(path), model.Tree.Path));
+        var emitter = new Emitter(model, layout, names, diagnostics,
+            Relative(Directory(path), model.Tree.Path), Directory(path));
         emitter.Header();
         emitter.Exports();
         emitter.Imports();
@@ -172,32 +183,29 @@ public sealed class Emitter
                 continue;
             foreach (var token in node.ChildTokens)
             {
-                if (token.Kind != SyntaxKind.Identifier
-                    || model.ReferenceAt(token.Span.Start) is not { } reference)
-                {
+                if (token.Kind != SyntaxKind.Identifier || model.SymbolAt(token) is not { } reference)
                     continue;
-                }
                 if (!any)
                     Blank();
                 any = true;
-                exported.Add(reference.Symbol);
+                exported.Add(reference);
 
                 // A type is not a symbol to the linker: what crosses is each of its members,
                 // as the flat constant it becomes.
-                if (reference.Symbol.Kind is SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union)
+                if (reference.Kind is SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union)
                 {
-                    foreach (var member in reference.Symbol.Body?.Symbols ?? [])
+                    foreach (var member in reference.Body?.Symbols ?? [])
                     {
                         exported.Add(member);
                         Line(member.Value.AsNumber() is >= 0 and < 0x100
-                            ? $".exportzp {names.Of(member)}"
-                            : $".export {names.Of(member)}");
+                            ? $".exportzp {Named(member)}"
+                            : $".export {Named(member)}");
                     }
                     continue;
                 }
 
-                var name = names.Of(reference.Symbol);
-                Line(reference.Symbol.AddressSize switch
+                var name = Named(reference);
+                Line(reference.AddressSize switch
                 {
                     AddressSize.ZeroPage => $".exportzp {name}",
                     AddressSize.Far => $".export {name}: far",
@@ -234,8 +242,8 @@ public sealed class Emitter
             Line(line);
             if (symbol.Kind == SymbolKind.ImportedConstant && symbol.Value.AsNumber() is { } checkedValue)
             {
-                Line($".assert {names.Of(symbol)} = {Constant(checkedValue)}, lderror, "
-                    + $"\"{names.Of(symbol)} is not {Constant(checkedValue)}, which is what "
+                Line($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
+                    + $"\"{Named(symbol)} is not {Constant(checkedValue)}, which is what "
                     + $"{source} was built against\"");
             }
         }
@@ -246,7 +254,7 @@ public sealed class Emitter
     /// <summary>The line that brings one symbol in, or null for one that needs no line at all.</summary>
     private string? Import(Symbol symbol)
     {
-        var name = names.Of(symbol);
+        var name = Named(symbol);
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
         {
             return symbol.AddressSize switch
@@ -263,14 +271,26 @@ public sealed class Emitter
         return symbol.Value.AsNumber() is { } value ? $"{name} = {Constant(value)}" : null;
     }
 
-    private void WalkContainer(SyntaxNode container)
+    private void WalkContainer(SyntaxNode container) => Walk(container.ChildNodes, from: 0);
+
+    /// <summary>
+    /// A run of sibling lines and blocks. The <c>.if</c> chains among them are resolved here,
+    /// because a chain is a run of siblings and only whoever walks them can see it.
+    /// </summary>
+    private void Walk(IReadOnlyList<SyntaxNode> children, int from)
     {
-        foreach (var child in container.ChildNodes)
+        var chain = new ConditionChain();
+        for (var i = from; i < children.Count; i++)
         {
-            if (child.Green is GreenBlock block)
-                WalkBlock(child, block.BlockKind);
-            else
+            var child = children[i];
+            if (child.Green is not GreenBlock block)
+            {
+                chain.Break();
                 WalkLine(child);
+                continue;
+            }
+            if (chain.Includes(model, child, expansion))
+                WalkBlock(child, block.BlockKind);
         }
     }
 
@@ -278,10 +298,19 @@ public sealed class Emitter
     {
         var lines = block.ChildNodes;
         var opener = lines.Length > 0 ? lines[0].Statement : null;
-        if (Constructs.IsDeferred(kind))
+
+        // A macro body is written at every call that expands it, and nothing at all where it
+        // stands.
+        if (kind == BlockKind.Macro)
+            return;
+
+        // A block argument is the call's, not a block of its own: the line that opens it is
+        // the call, which is written out here, and its lines are written wherever the body
+        // splices them.
+        if (kind == BlockKind.MacroBlock)
         {
-            if (opener is not null)
-                NotTranspiled(opener);
+            if (opener is not null && Macros.CallIn(opener) is not null)
+                WalkLine(lines[0]);
             return;
         }
 
@@ -290,8 +319,7 @@ public sealed class Emitter
         // nesting of its own, so a segment block inside it is nested only if the `.if` was.
         if (kind == BlockKind.If)
         {
-            if (model.Configuration.Includes(block))
-                Contents(lines);
+            Walk(lines, from: 1);
             return;
         }
 
@@ -300,13 +328,13 @@ public sealed class Emitter
         // same turns and has already said what is wrong with the count or the list.
         if (Constructs.Repeats(kind))
         {
-            var outerTurn = iteration;
+            var outerTurn = expansion;
             foreach (var turn in Repetitions.Of(model, block, outerTurn, null))
             {
-                iteration = turn;
-                Contents(lines);
+                expansion = turn;
+                Walk(lines, from: 1);
             }
-            iteration = outerTurn;
+            expansion = outerTurn;
             return;
         }
 
@@ -366,7 +394,7 @@ public sealed class Emitter
         }
 
         depth++;
-        Contents(lines);
+        Walk(lines, from: 1);
         depth--;
 
         if (pushed)
@@ -380,18 +408,6 @@ public sealed class Emitter
         else if (kind == BlockKind.Segment)
         {
             segment = SegmentTable.DefaultSegment;
-        }
-    }
-
-    /// <summary>Every line of a block after the one that opens it.</summary>
-    private void Contents(ImmutableArray<SyntaxNode> lines)
-    {
-        for (var i = 1; i < lines.Length; i++)
-        {
-            if (lines[i].Green is GreenBlock inner)
-                WalkBlock(lines[i], inner.BlockKind);
-            else
-                WalkLine(lines[i]);
         }
     }
 
@@ -421,13 +437,13 @@ public sealed class Emitter
                     Reserved(line, statement, statement);
                 break;
 
-            case SyntaxKind.DataDirective when layout.Of(statement, iteration) is null:
+            case SyntaxKind.DataDirective when layout.Of(statement, expansion) is null:
                 NotTranspiled(statement);
                 break;
 
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
-                Source(line, statement, layout.Of(statement, iteration)?.Length ?? 0);
+                Source(line, statement, layout.Of(statement, expansion)?.Length ?? 0);
                 break;
 
             case SyntaxKind.ExternProcDeclaration:
@@ -439,7 +455,7 @@ public sealed class Emitter
             // `.error` the build reached has already been reported, and never reaches ca65.
             case SyntaxKind.AssertDirective
                 when Constructs.AssertionOf(statement).Condition is { } condition
-                    && model.ValueOf(condition, iteration).AsNumber() is null:
+                    && model.ValueOf(condition, expansion).AsNumber() is null:
                 Source(line, statement, 0);
                 break;
 
@@ -458,8 +474,15 @@ public sealed class Emitter
             case SyntaxKind.TagValue:
                 break;
 
-            case SyntaxKind.UnsupportedLine:
             case SyntaxKind.MacroCall:
+                Expand(line, statement);
+                break;
+
+            case SyntaxKind.BlockSplice:
+                Splice(statement);
+                break;
+
+            case SyntaxKind.UnsupportedLine:
                 NotTranspiled(statement);
                 break;
 
@@ -471,15 +494,84 @@ public sealed class Emitter
         }
     }
 
+    /// <summary>
+    /// A call, written out as the body it expands to, with a comment naming it. nt65 expands
+    /// macros itself and emits flat code: ca65's own <c>.macro</c> is never used, so nt65's
+    /// macro semantics never depend on ca65's (§11.7).
+    /// </summary>
+    private void Expand(SyntaxNode line, SyntaxNode call)
+    {
+        if (model.MacroAt(call) is not { Definition: { } definition })
+        {
+            NotTranspiled(call);
+            return;
+        }
+
+        Segment();
+        Flush();
+
+        // The comment sits where the call was written. A call after a label starts at column
+        // zero, where a comment would read as belonging to nothing, so it takes the body's
+        // own indentation instead.
+        var indent = Indent(line.Statement ?? call);
+
+        // The `{` of a trailing block belongs to the block rather than to the call, and the
+        // comment names the call.
+        var written = call.GetText().Trim().TrimEnd('{').TrimEnd();
+        Line($"{(indent.Length == 0 ? "    " : indent)}; {written}  {Where(call)}");
+
+        var outerCall = callLine;
+        var outer = expansion;
+
+        // Every line of the expansion maps to the call, and a call inside a body maps to the
+        // outermost call, which is the line of this file that asked for all of it.
+        callLine ??= line;
+        expansion = Expansion.Of(outer, call, definition);
+        Walk(definition.ChildNodes, from: 1);
+        expansion = outer;
+        callLine = outerCall;
+    }
+
+    /// <summary>
+    /// A line naming a <c>block</c> parameter, which writes out the lines the call gave it.
+    /// Those are the caller's own code, so where they are this file's own lines they map back
+    /// to themselves rather than to the call that spliced them.
+    /// </summary>
+    private void Splice(SyntaxNode statement)
+    {
+        if (statement.ChildTokens.Length == 0
+            || model.SymbolAt(statement.ChildTokens[0]) is not { Parameter: { } parameter }
+            || model.ArgumentFor(parameter.Symbol, expansion) is not { Block: { } block })
+        {
+            return;
+        }
+
+        var outerCall = callLine;
+        var outer = expansion;
+        if (block.Tree == model.Tree)
+            callLine = null;
+        expansion = Expansion.Spliced(outer, statement, block);
+        Walk(Macros.LinesOf(block), from: 0);
+        expansion = outer;
+        callLine = outerCall;
+    }
+
+    /// <summary>Where a call was written, as the comment before its expansion names it.</summary>
+    private string Where(SyntaxNode call)
+    {
+        var file = call.Tree == model.Tree ? source : Relative(directory, call.Tree.Path);
+        return $"{file}:{call.LineIndex + 1}";
+    }
+
     /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
     private void ProcLabel(SyntaxNode line, SyntaxNode opener)
     {
         foreach (var token in opener.ChildTokens)
         {
             if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && model.ReferenceAt(token.Span.Start) is { } reference)
+                && model.SymbolAt(token) is { } reference)
             {
-                Code(line, Indent(opener) + LabelText(names.Of(reference.Symbol)), 0);
+                Code(line, Indent(opener) + LabelText(Named(reference)), 0);
                 return;
             }
         }
@@ -500,19 +592,26 @@ public sealed class Emitter
             Reserved(line, statement, rest);
             return;
         }
-        if (rest is { Kind: SyntaxKind.MacroCall }
-            || (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, iteration) is null))
+        // A label on a call names what the expansion emits, so the label comes first and the
+        // expansion follows it.
+        if (rest is { Kind: SyntaxKind.MacroCall })
+        {
+            LabelOnly(line, statement, label);
+            Expand(line, rest);
+            return;
+        }
+        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, expansion) is null)
         {
             NotTranspiled(rest);
             return;
         }
-        var bytes = rest is null ? 0 : layout.Of(rest, iteration)?.Length ?? 0;
+        var bytes = rest is null ? 0 : layout.Of(rest, expansion)?.Length ?? 0;
         var edits = new Edits();
         if (rest is not null)
             Substitute(rest, edits, nested: false);
 
         if (label is not { ChildTokens.Length: > 0 }
-            || model.ReferenceAt(label.ChildTokens[0].Span.Start) is not { } reference)
+            || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
         {
             Code(line, Render(statement, edits), bytes);
             return;
@@ -521,7 +620,7 @@ public sealed class Emitter
         // `z := *` and `f := *`: ca65 reads `z:` at the start of a line as an address-size
         // prefix, so such a label is written as an assignment instead. An assignment
         // takes the whole line, so whatever followed the label goes on the next one.
-        var text = LabelText(names.Of(reference.Symbol));
+        var text = LabelText(Named(reference));
         if (rest is not null && !text.EndsWith(':'))
         {
             Code(line, Indent(statement) + text, 0);
@@ -541,13 +640,13 @@ public sealed class Emitter
     /// </summary>
     private void Reserved(SyntaxNode line, SyntaxNode statement, SyntaxNode directive)
     {
-        if (model.RoomFor(directive, iteration) is not { } room)
+        if (model.RoomFor(directive, expansion) is not { } room)
         {
             NotTranspiled(directive);
             return;
         }
         var named = directive.ChildNodes.FirstOrDefault();
-        var type = named is null ? null : model.ReferenceAt(named.Span.Start)?.Symbol.QualifiedName;
+        var type = named is null ? null : model.SymbolOf(named)?.QualifiedName;
         var text = $"{Indent(statement)}    .res {room.Bytes}";
         Code(line, type is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + type,
             (int)room.Bytes);
@@ -557,11 +656,11 @@ public sealed class Emitter
     private void LabelOnly(SyntaxNode line, SyntaxNode statement, SyntaxNode? label)
     {
         if (label is not { ChildTokens.Length: > 0 }
-            || model.ReferenceAt(label.ChildTokens[0].Span.Start) is not { } reference)
+            || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
         {
             return;
         }
-        Code(line, Indent(statement) + LabelText(names.Of(reference.Symbol)), 0);
+        Code(line, Indent(statement) + LabelText(Named(reference)), 0);
     }
 
     /// <summary>
@@ -574,13 +673,13 @@ public sealed class Emitter
             return;
         var named = opener.ChildTokens.FirstOrDefault(token =>
             token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
-        if (named.Parent is null || model.ReferenceAt(named.Span.Start) is not { } reference)
+        if (named.Parent is null || model.SymbolAt(named) is not { } reference)
             return;
 
-        foreach (var member in reference.Symbol.Body?.Symbols ?? [])
+        foreach (var member in reference.Body?.Symbols ?? [])
         {
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
-                Code(line, $"{Indent(opener)}{names.Of(member)} = {Constant(offset)}", 0);
+                Code(line, $"{Indent(opener)}{Named(member)} = {Constant(offset)}", 0);
         }
     }
 
@@ -592,12 +691,12 @@ public sealed class Emitter
     private void EnumMember(SyntaxNode line, SyntaxNode statement)
     {
         if (statement.ChildTokens.Length == 0
-            || model.ReferenceAt(statement.ChildTokens[0].Span.Start) is not { } reference
-            || reference.Symbol.Value.AsNumber() is not { } value)
+            || model.SymbolAt(statement.ChildTokens[0]) is not { } reference
+            || reference.Value.AsNumber() is not { } value)
         {
             return;
         }
-        Code(line, $"{Indent(statement)}{names.Of(reference.Symbol)} = {Constant(value)}", 0);
+        Code(line, $"{Indent(statement)}{Named(reference)} = {Constant(value)}", 0);
     }
 
     /// <summary>
@@ -612,7 +711,7 @@ public sealed class Emitter
         var directive = opener.Kind == SyntaxKind.LabeledLine
             ? opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.DataDirective)
             : opener;
-        if (directive is null || model.RoomFor(directive, iteration) is not { } room)
+        if (directive is null || model.RoomFor(directive, expansion) is not { } room)
         {
             NotTranspiled(opener);
             return;
@@ -621,12 +720,12 @@ public sealed class Emitter
         // The label first, then the members, so the instance starts where the label does.
         if (opener.Kind == SyntaxKind.LabeledLine
             && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.Label) is { ChildTokens.Length: > 0 } label
-            && model.ReferenceAt(label.ChildTokens[0].Span.Start) is { } reference)
+            && model.SymbolAt(label.ChildTokens[0]) is { } reference)
         {
-            Code(line, Indent(opener) + LabelText(names.Of(reference.Symbol)), 0);
+            Code(line, Indent(opener) + LabelText(Named(reference)), 0);
         }
 
-        if (directive.ChildNodes.FirstOrDefault() is not { } named || model.ReferenceAt(named.Span.Start) is not { } type)
+        if (directive.ChildNodes.FirstOrDefault() is not { } named || model.SymbolOf(named) is not { } type)
         {
             NotTranspiled(opener);
             return;
@@ -640,7 +739,7 @@ public sealed class Emitter
                 written[value.ChildTokens[0].Text] = value;
         }
 
-        var bytes = Fields(line, Indent(opener), type.Symbol, written, path: "");
+        var bytes = Fields(line, Indent(opener), type, written, path: "");
         if (bytes != room.Bytes)
             NotTranspiled(opener);
     }
@@ -708,7 +807,7 @@ public sealed class Emitter
     /// <summary>The bytes a reserved member takes, from the text it was given and zeros after it.</summary>
     private IEnumerable<string> Padded(SyntaxNode? value, long size)
     {
-        var bytes = value is null ? [] : model.BytesOf(value, iteration)?.ToList() ?? [];
+        var bytes = value is null ? [] : model.BytesOf(value, expansion)?.ToList() ?? [];
         for (var i = 0; i < size; i++)
             yield return Hex(i < bytes.Count ? bytes[i] & 0xff : 0, 2);
     }
@@ -734,11 +833,34 @@ public sealed class Emitter
 
         // Anything with a value nt65 knows is written as that value; anything else keeps its
         // own spelling, with names flattened.
-        if (model.ValueOf(node, iteration).AsNumber() is { } value)
+        if (model.ValueOf(node, expansion).AsNumber() is { } value)
             return Constant(value);
         var edits = new Edits();
         Substitute(node, edits, nested: false);
         return Render(node, edits).Trim();
+    }
+
+    /// <summary>
+    /// What a symbol is called in the output, at the level being written. A name a macro body
+    /// declares is a different name at every expansion.
+    /// </summary>
+    private string Named(Symbol symbol) => names.Of(symbol, expansion);
+
+    /// <summary>
+    /// An argument written where the body named its parameter. It goes in as a parenthesized
+    /// whole, so `value * 2` with the argument `1 + 2` is `(1 + 2) * 2` — six, where ca65's
+    /// textual substitution would give five — and `#&lt;value` with `label+1` is
+    /// `#&lt;(label+1)`. It keeps its own spelling: an argument is an expression, not a number,
+    /// and a name in it is written the way the same name would be written anywhere else.
+    /// </summary>
+    private string Substituted(SyntaxNode argument)
+    {
+        var edits = new Edits();
+        Substitute(argument, edits, nested: false);
+        var text = Render(argument, edits).Trim();
+        return argument.Kind is SyntaxKind.BinaryExpression or SyntaxKind.UnaryExpression
+            ? "(" + text + ")"
+            : text;
     }
 
     /// <summary>A label, or the assignment that stands in for one ca65 would misread.</summary>
@@ -749,12 +871,12 @@ public sealed class Emitter
         // A string has no ca65 spelling as a constant: it is used through `.strlen` and
         // `.strat`, which are numbers by the time anything is written.
         if (statement.ChildTokens.Length > 0
-            && model.ReferenceAt(statement.ChildTokens[0].Span.Start) is { } reference)
+            && model.SymbolAt(statement.ChildTokens[0]) is { } reference)
         {
-            if (reference.Symbol.Value.IsString)
+            if (reference.Value.IsString)
                 return;
             var edits = new Edits();
-            edits.Replace[statement.ChildTokens[0].Position] = names.Of(reference.Symbol);
+            edits.Replace[statement.ChildTokens[0].Position] = Named(reference);
             foreach (var child in statement.ChildNodes)
                 Substitute(child, edits, nested: false);
             Code(line, Render(statement, edits), 0);
@@ -768,14 +890,14 @@ public sealed class Emitter
             token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
         var address = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.ProcSignature);
         if (name.Parent is null || address is null
-            || model.ReferenceAt(name.Span.Start) is not { } reference)
+            || model.SymbolAt(name) is not { } reference)
         {
             return;
         }
 
         var edits = new Edits();
         Substitute(address, edits, nested: false);
-        Code(line, $"{Indent(statement)}{names.Of(reference.Symbol)} = {Render(address, edits).TrimStart()}", 0);
+        Code(line, $"{Indent(statement)}{Named(reference)} = {Render(address, edits).TrimStart()}", 0);
     }
 
     private void Source(SyntaxNode line, SyntaxNode statement, int bytes)
@@ -810,7 +932,7 @@ public sealed class Emitter
         Segment();
         Flush();
         if (bytes != 0)
-            Line($".dbg line, \"{source}\", {line.LineIndex + 1}");
+            Line($".dbg line, \"{source}\", {(callLine ?? line).LineIndex + 1}");
         Line(text, bytes);
     }
 
@@ -929,6 +1051,10 @@ public sealed class Emitter
                 return;
 
             case SyntaxKind.AbsoluteOperand:
+                // In a macro body an `operand` parameter stands as a whole operand, so what
+                // the call gave replaces what the body wrote, prefix, index and all.
+                if (Given(node, edits))
+                    return;
                 Prefix(node, edits);
                 break;
 
@@ -993,7 +1119,7 @@ public sealed class Emitter
         }
         if (directive.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.StringExpression } path
             && path.ChildTokens.Length > 0
-            && model.ValueOf(path, iteration) is { Kind: ValueKind.String, Text: { } named })
+            && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
         {
             var at = source.LastIndexOf('/');
             edits.Replace[path.ChildTokens[0].Position] =
@@ -1008,10 +1134,13 @@ public sealed class Emitter
         if (tokens.Length == 0)
             return;
 
-        // A path names one symbol; the whole of it becomes that symbol's flat name.
+        // A path names one symbol; the whole of it becomes that symbol's flat name. A body is
+        // written out in every file that calls its macro, so what a name means is the
+        // program's answer rather than this one file's.
         var last = tokens.LastOrDefault(token => token.Kind is not SyntaxKind.ColonColon);
-        if (last.Parent is null || model.ReferenceAt(last.Span.Start) is not { } reference)
+        if (last.Parent is null || model.SymbolAt(last) is not { } named)
             return;
+        var reference = named;
 
         // A list stands for its own items wherever data takes them.
         if (model.ItemsOf(name) is { Count: > 0 } items)
@@ -1025,18 +1154,30 @@ public sealed class Emitter
 
         // A member is an offset: the offsets along the path added up, on the address the
         // path starts from when it starts at an instance rather than at a type.
-        if (reference.Symbol.Kind == SymbolKind.Member)
+        if (reference.Kind == SymbolKind.Member)
         {
             MemberPath(name, tokens, edits);
             return;
         }
 
+        // A macro parameter stands for the argument the call gave it, as a parenthesized
+        // whole, so `value * 2` with the argument `1 + 2` is 6 rather than 5 (§11.2).
+        var symbol = reference;
+        if (symbol.Kind == SymbolKind.MacroParameter)
+        {
+            if (Parameter(symbol) is not { } given)
+                return;
+            edits.Replace[tokens[0].Position] = given;
+            for (var i = 1; i < tokens.Length; i++)
+                edits.Replace[tokens[i].Position] = "";
+            return;
+        }
+
         // The name a repetition binds is worth something different on every turn, and this is
         // the turn being written.
-        var symbol = reference.Symbol;
         if (symbol.Kind == SymbolKind.Binding)
         {
-            if (iteration?.Bindings().TryGetValue(symbol, out var bound) is not true)
+            if (model.BindingsOf(expansion)?.TryGetValue(symbol, out var bound) is not true)
                 return;
 
             // A list item is written as it stands, with its own names substituted; a number
@@ -1060,11 +1201,26 @@ public sealed class Emitter
             && symbol.Value.AsNumber() is not null;
         edits.Replace[tokens[0].Position] = byValue
             ? Constant(symbol.Value.Number)
-            : names.Of(symbol);
+            : Named(symbol);
         for (var i = 1; i < tokens.Length; i++)
             edits.Replace[tokens[i].Position] = "";
         if (byValue)
             edits.Comments.Add(symbol.QualifiedName);
+    }
+
+    /// <summary>
+    /// What a macro parameter stands for here: the operand a call gave, the expression it
+    /// gave, or the word or number it stands for.
+    /// </summary>
+    private string? Parameter(Symbol parameter)
+    {
+        if (model.ArgumentFor(parameter, expansion) is not { } argument)
+            return null;
+        if (argument.Parameter.Kind == ParameterKind.Operand)
+            return argument.Operand is { } operand ? Substituted(operand) : null;
+        if (argument.Word is { } word)
+            return word;
+        return argument.Value is { } value ? Substituted(value) : null;
     }
 
     /// <summary>
@@ -1078,17 +1234,17 @@ public sealed class Emitter
         long offset = 0;
         foreach (var token in tokens)
         {
-            if (token.Kind == SyntaxKind.ColonColon || model.ReferenceAt(token.Span.Start) is not { } part)
+            if (token.Kind == SyntaxKind.ColonColon || model.SymbolAt(token) is not { } part)
                 continue;
-            if (part.Symbol.Kind == SymbolKind.Member)
-                offset += part.Symbol.Value.AsNumber() ?? 0;
-            else if (part.Symbol.IsAddress)
-                start ??= part.Symbol;
+            if (part.Kind == SymbolKind.Member)
+                offset += part.Value.AsNumber() ?? 0;
+            else if (part.IsAddress)
+                start ??= part;
         }
 
         var text = start is null
             ? Constant(offset)
-            : offset == 0 ? names.Of(start) : $"{names.Of(start)}+{offset}";
+            : offset == 0 ? Named(start) : $"{Named(start)}+{offset}";
         edits.Replace[tokens[0].Position] = text;
         for (var i = 1; i < tokens.Count; i++)
             edits.Replace[tokens[i].Position] = "";
@@ -1109,7 +1265,7 @@ public sealed class Emitter
         // A built-in the analysis answers keeps the ordinary path.
         if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is null)
         {
-            if (model.ValueOf(call, iteration).AsNumber() is { } builtin)
+            if (model.ValueOf(call, expansion).AsNumber() is { } builtin)
             {
                 edits.Replace[tokens[0].Position] = Constant(builtin);
                 for (var i = 1; i < tokens.Count; i++)
@@ -1122,9 +1278,9 @@ public sealed class Emitter
         }
 
         string? text = null;
-        if (model.BytesOf(call, iteration) is { Count: > 0 } bytes)
+        if (model.BytesOf(call, expansion) is { Count: > 0 } bytes)
             text = string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
-        else if (model.ValueOf(call, iteration).AsNumber() is { } value)
+        else if (model.ValueOf(call, expansion).AsNumber() is { } value)
             text = Constant(value);
 
         if (text is null)
@@ -1148,11 +1304,69 @@ public sealed class Emitter
         edits.Comments.Add(literal.GetText());
     }
 
+    /// <summary>
+    /// An operand that names an <c>operand</c> parameter, written out as the one the call
+    /// gave. Returns whether it was one.
+    /// </summary>
+    private bool Given(SyntaxNode operand, Edits edits)
+    {
+        if (Semantics.Operands.Substituted(model, operand, expansion) is not { } given)
+            return false;
+
+        var text = Argument(given);
+        if (text is null)
+            return false;
+
+        // ca65 reads a `(` at the head of an operand as indirect addressing, so an expression
+        // that starts with one gets a unary `+`, which changes nothing about what it is worth.
+        var prefix = operand.Parent is { } instruction ? layout.Of(instruction, expansion)?.Prefix ?? "" : "";
+        if (text.StartsWith('(') && (prefix.Length > 0 || given.IsAddress))
+            text = "+" + text;
+
+        var tokens = Tokens(operand);
+        edits.Replace[tokens[0].Position] = prefix + text;
+        for (var i = 1; i < tokens.Count; i++)
+            edits.Replace[tokens[i].Position] = "";
+        return true;
+    }
+
+    /// <summary>
+    /// The text of the operand a call gave, with whatever the body asked of it: the operand
+    /// as it stands, the byte after it, or one byte of an immediate value.
+    /// </summary>
+    private string? Argument(OperandSubstitution given)
+    {
+        // `.byteof` on an immediate is a byte of the value, which is a number wherever nt65
+        // knows it and a shift and a mask wherever only the linker will.
+        if (given.ByteOf && given.Operand.Kind == SyntaxKind.ImmediateOperand)
+        {
+            if (given.Expression is not { } value)
+                return null;
+            if (model.ValueOf(value, expansion).AsNumber() is { } known)
+                return "#" + Constant((known >> (int)(8 * given.Offset)) & 0xff);
+            var shifted = Substituted(value);
+            return given.Offset == 0
+                ? $"#({shifted} & $ff)"
+                : $"#(({shifted} >> {8 * given.Offset}) & $ff)";
+        }
+
+        // Anything else is the argument's own operand: as it stands when the body named it
+        // whole, and with `+ n` on its expression when the body asked for a later byte.
+        var offset = given.Offset;
+        if (offset == 0)
+            return Substituted(given.Operand);
+        if (given.Expression is not { } addressed)
+            return null;
+        var index = given.Index is { } register ? "," + register.Text : "";
+        var written = Substituted(addressed);
+        return offset > 0 ? $"{written}+{offset}{index}" : $"{written}{offset}{index}";
+    }
+
     /// <summary>The <c>z:</c> or <c>a:</c> that says which mode was chosen.</summary>
     private void Prefix(SyntaxNode operand, Edits edits)
     {
         var instruction = operand.Parent;
-        if (instruction is null || layout.Of(instruction, iteration) is not { Prefix: { } prefix })
+        if (instruction is null || layout.Of(instruction, expansion) is not { Prefix: { } prefix })
             return;
         var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
         var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);

@@ -154,6 +154,8 @@ internal sealed class Binder
         {
             case BlockKind.Macro:
                 scope = OpenMacro(opener);
+                if (scope.Owner is { Kind: SymbolKind.Macro } macro)
+                    macro.Definition = block;
                 break;
 
             // A block argument is written at the call and belongs to it: its names resolve
@@ -201,8 +203,11 @@ internal sealed class Binder
                 // the configuration that gives it a value.
                 if (!configuration.Includes(block))
                     return;
+                // A condition may compare a `one` parameter or a repetition binding with a
+                // bare word, which is never looked up (§10, §11.2), so a name here that turns
+                // out to be no name is a word rather than a mistake.
                 if (opener is not null)
-                    CollectUses(opener);
+                    CollectUses(opener, uses, words: true);
                 break;
             case BlockKind.Repeat:
             case BlockKind.Each:
@@ -770,7 +775,7 @@ internal sealed class Binder
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
     private void CollectUses(SyntaxNode? node) => CollectUses(node, uses);
 
-    private void CollectUses(SyntaxNode? node, List<Use> into)
+    private void CollectUses(SyntaxNode? node, List<Use> into, bool words = false)
     {
         if (node is null)
             return;
@@ -796,7 +801,7 @@ internal sealed class Binder
                 else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                     or SyntaxKind.Register or SyntaxKind.Mnemonic)
                 {
-                    into.Add(new Use(token, scope, path, first, Last: false));
+                    into.Add(new Use(token, scope, path, first, Last: false, Word: words));
                     path = true;
                     first = false;
                 }
@@ -809,7 +814,7 @@ internal sealed class Binder
             return;
         }
         foreach (var child in node.ChildNodes)
-            CollectUses(child, into);
+            CollectUses(child, into, words);
     }
 
     private Symbol? Declare(
@@ -900,7 +905,7 @@ internal sealed class Binder
     {
         Symbol? previous = null;
         var broken = false;
-        foreach (var (token, at, path, first, last, splice) in list)
+        foreach (var (token, at, path, first, last, splice, word) in list)
         {
             if (first)
             {
@@ -914,7 +919,7 @@ internal sealed class Binder
                 continue;
             }
 
-            previous = Resolve(token, at, path, previous, last);
+            previous = Resolve(token, at, path, previous, last, word);
             if (previous is null)
             {
                 broken = true;
@@ -935,7 +940,7 @@ internal sealed class Binder
     /// What one part of a written name means. <paramref name="previous"/> is what the part
     /// before it resolved to, so a path walks into a scope instead of looking outward again.
     /// </summary>
-    private Symbol? Resolve(SyntaxToken token, Scope at, bool path, Symbol? previous, bool last)
+    private Symbol? Resolve(SyntaxToken token, Scope at, bool path, Symbol? previous, bool last, bool word = false)
     {
         if (token.Kind == SyntaxKind.CheapLocal)
         {
@@ -955,7 +960,7 @@ internal sealed class Binder
             // A register or a mnemonic parses as a name so that a macro body may pass it as a
             // word. Outside one it can only be a mistake, and saying which reserved word it
             // is beats saying the name is not declared.
-            if (!CheckReservedWord(token))
+            if (!word && !CheckReservedWord(token))
                 return null;
             if (at.Lookup(token.Text) is { } symbol)
                 return symbol;
@@ -963,7 +968,11 @@ internal sealed class Binder
             // A name the file does not declare may belong to another file of the program.
             if (program.Lookup(token.Text, tree) is { } external)
                 return CheckExported(token, external, last);
-            Report(token.Span, $"`{token.Text}` is not declared");
+
+            // In a condition a bare name may be a word rather than a name at all, and a word
+            // is compared, never looked up.
+            if (!word)
+                Report(token.Span, $"`{token.Text}` is not declared");
             return null;
         }
 
@@ -1087,8 +1096,10 @@ internal sealed class Binder
     /// <param name="First">Whether it is the first part of the name it belongs to.</param>
     /// <param name="Last">Whether it is the last part, and so the symbol the whole name stands for.</param>
     /// <param name="Splice">Whether the name stands alone on a line, and so splices a block.</param>
+    /// <param name="Word">Whether it is written where a bare word may stand, and so may be one.</param>
     private readonly record struct Use(
-        SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last, bool Splice = false);
+        SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last,
+        bool Splice = false, bool Word = false);
 
     /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
     /// <param name="Call">The call.</param>

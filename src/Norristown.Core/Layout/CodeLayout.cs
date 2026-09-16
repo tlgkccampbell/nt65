@@ -19,13 +19,25 @@ public sealed class CodeLayout
 {
     private readonly SemanticModel model;
     private readonly Cpu cpu;
-    private readonly Dictionary<(int Position, Iteration? On), LineLayout> lines = [];
+    private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly List<Diagnostic> diagnostics = [];
     private string segment = SegmentTable.DefaultSegment;
 
-    // Which turn of which repetitions the walk is inside. A body is laid out once per turn,
-    // and the same line can be a different length on each of them.
-    private Iteration? iteration;
+    // Which turn of which repetitions, and which expansion of which macros, the walk is
+    // inside. A body is laid out once per writing, and the same line can be a different
+    // length on each of them.
+    private Expansion? expansion;
+
+    // How many statements the expansions have laid out. An expansion is bounded by the
+    // recursion check, but a chain of macros over long lists is not, so it is counted too.
+    private int expanded;
+
+    /// <summary>
+    /// How many statements one file's expansions may lay out before nt65 gives up. The
+    /// recursion check bounds each expansion, but a chain of macros over long lists is not
+    /// bounded by it, and neither is a program that simply asks for too much (§11.1).
+    /// </summary>
+    private const int MaximumStatements = 65536;
 
     private CodeLayout(SemanticModel model, Cpu cpu)
     {
@@ -52,7 +64,7 @@ public sealed class CodeLayout
     /// What a statement assembles to on the turn <paramref name="on"/> of the repetitions
     /// around it, or null when it generates no bytes.
     /// </summary>
-    public LineLayout? Of(SyntaxNode statement, Iteration? on = null) =>
+    public LineLayout? Of(SyntaxNode statement, Expansion? on = null) =>
         lines.GetValueOrDefault((statement.Position, on));
 
     /// <summary>
@@ -66,6 +78,13 @@ public sealed class CodeLayout
 
         switch (operand.Kind)
         {
+            // An `operand` argument written without braces is an expression, and a plain
+            // address operand by being one.
+            case not (SyntaxKind.AbsoluteOperand or SyntaxKind.ImmediateOperand
+                or SyntaxKind.AccumulatorOperand or SyntaxKind.IndirectOperand
+                or SyntaxKind.IndexedIndirectOperand or SyntaxKind.LongIndirectOperand):
+                return [AddressingMode.Direct, AddressingMode.Absolute, AddressingMode.Relative];
+
             case SyntaxKind.AccumulatorOperand:
                 return [AddressingMode.Accumulator];
             case SyntaxKind.ImmediateOperand:
@@ -124,38 +143,66 @@ public sealed class CodeLayout
 
     /// <summary>The expression an operand addresses, which is what an address size is worked out from.</summary>
     private static SyntaxNode? Expression(SyntaxNode operand) =>
-        operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
+        operand.Kind is SyntaxKind.AbsoluteOperand or SyntaxKind.ImmediateOperand
+            or SyntaxKind.IndirectOperand or SyntaxKind.IndexedIndirectOperand
+            or SyntaxKind.LongIndirectOperand
+            ? operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix)
+            : operand.Kind == SyntaxKind.AccumulatorOperand ? null : operand;
 
-    private void WalkContainer(SyntaxNode container)
+    private void WalkContainer(SyntaxNode container) => Walk(container.ChildNodes, from: 0);
+
+    /// <summary>
+    /// A run of sibling lines and blocks. The <c>.if</c> chains among them are resolved here,
+    /// because a chain is a run of siblings and only whoever walks them can see it.
+    /// </summary>
+    private void Walk(IReadOnlyList<SyntaxNode> children, int from)
     {
-        foreach (var child in container.ChildNodes)
+        var chain = new ConditionChain();
+        for (var i = from; i < children.Count; i++)
         {
-            if (child.Green is GreenBlock block)
+            var child = children[i];
+            if (child.Green is not GreenBlock block)
+            {
+                chain.Break();
+                if (child.Statement is { } statement)
+                    Statement(statement);
+                continue;
+            }
+            if (chain.Includes(model, child, expansion))
                 WalkBlock(child, block.BlockKind);
-            else if (child.Statement is { } statement)
-                Statement(statement);
         }
     }
 
     private void WalkBlock(SyntaxNode block, BlockKind kind)
     {
-        if (Constructs.IsDeferred(kind))
+        // A macro body generates nothing where it is written: it is laid out at every call
+        // that expands it, and in the segment that call is in.
+        if (kind == BlockKind.Macro)
             return;
 
-        if (kind == BlockKind.If && !model.Configuration.Includes(block))
+        // A block argument is the call's: the line that opens it is the call, which is laid
+        // out here, and its lines are laid out wherever the body splices them.
+        if (kind == BlockKind.MacroBlock)
+        {
+            if (block.ChildNodes.Length > 0 && block.ChildNodes[0].Statement is { } call
+                && Macros.CallIn(call) is not null)
+            {
+                Statement(call);
+            }
             return;
+        }
 
         // A repetition's body is laid out once per turn: what `.res n` reserves and how wide
         // an address `lda n` reaches both follow from the turn.
         if (Constructs.Repeats(kind))
         {
-            var outerTurn = iteration;
+            var outerTurn = expansion;
             foreach (var turn in Repetitions.Of(model, block, outerTurn, diagnostics))
             {
-                iteration = turn;
-                Contents(block.ChildNodes);
+                expansion = turn;
+                Walk(block.ChildNodes, from: 1);
             }
-            iteration = outerTurn;
+            expansion = outerTurn;
             return;
         }
 
@@ -166,20 +213,51 @@ public sealed class CodeLayout
         else if (lines.Length > 0 && lines[0].Statement is { } other)
             Statement(other);
 
-        Contents(lines);
+        Walk(lines, from: 1);
         segment = outer;
     }
 
-    /// <summary>Every line of a block after the one that opens it.</summary>
-    private void Contents(ImmutableArray<SyntaxNode> lines)
+    /// <summary>
+    /// A call, laid out as the body it expands to. The body belongs to whichever file
+    /// declares the macro, and is read there and laid out here, in this call's segment and
+    /// with this call's arguments.
+    /// </summary>
+    private void Expand(SyntaxNode call)
     {
-        for (var i = 1; i < lines.Length; i++)
+        if (model.MacroAt(call) is not { Definition: { } definition })
+            return;
+        if (++expanded > MaximumStatements)
         {
-            if (lines[i].Green is GreenBlock inner)
-                WalkBlock(lines[i], inner.BlockKind);
-            else if (lines[i].Statement is { } statement)
-                Statement(statement);
+            if (expanded == MaximumStatements + 1)
+                Report(call.Span, $"this expansion is more than {MaximumStatements} statements");
+            return;
         }
+
+        var outer = expansion;
+        expansion = Expansion.Of(outer, call, definition);
+        Walk(definition.ChildNodes, from: 1);
+        expansion = outer;
+    }
+
+    /// <summary>
+    /// A line naming a <c>block</c> parameter, which stands for the lines the call wrote.
+    /// Those are the caller's own code, so they are laid out outside the expansion that
+    /// spliced them, at a level of their own: the same block may be spliced more than once,
+    /// and each splice writes the lines out again.
+    /// </summary>
+    private void Splice(SyntaxNode statement)
+    {
+        if (statement.ChildTokens.Length == 0
+            || model.SymbolAt(statement.ChildTokens[0]) is not { Parameter: { } parameter }
+            || model.ArgumentFor(parameter.Symbol, expansion) is not { Block: { } block })
+        {
+            return;
+        }
+
+        var outer = expansion;
+        expansion = Expansion.Spliced(outer, statement, block);
+        Walk(Macros.LinesOf(block), 0);
+        expansion = outer;
     }
 
     private void Statement(SyntaxNode statement)
@@ -194,6 +272,12 @@ public sealed class CodeLayout
                 break;
             case SyntaxKind.AssertDirective:
                 Assertion(statement);
+                break;
+            case SyntaxKind.MacroCall:
+                Expand(statement);
+                break;
+            case SyntaxKind.BlockSplice:
+                Splice(statement);
                 break;
             case SyntaxKind.ErrorDirective:
                 Refuse(statement);
@@ -229,7 +313,13 @@ public sealed class CodeLayout
             return;
         }
 
-        var operand = statement.ChildNodes.FirstOrDefault();
+        // In a macro body an `operand` parameter stands as a whole operand, so the mode and
+        // the address size come from what the call gave rather than from what the body wrote.
+        var written = statement.ChildNodes.FirstOrDefault();
+        var substituted = Operands.Substituted(model, written, expansion);
+        CheckSubstitution(substituted);
+        var operand = substituted?.Operand ?? written;
+
         var candidates = Plausible(operand).Where(available.Contains).ToArray();
         if (candidates.Length == 0)
         {
@@ -238,25 +328,60 @@ public sealed class CodeLayout
             return;
         }
 
-        var mode = Choose(mnemonic, operand, candidates);
+        var mode = Choose(mnemonic, operand, candidates, substituted);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
-        lines[(statement.Position, iteration)] = new LineLayout(Instructions.Length(mode), mode, prefix);
+        lines[(statement.Position, expansion)] = new LineLayout(Instructions.Length(mode), mode, prefix);
+    }
+
+    /// <summary>
+    /// Whether the argument's mode has the next byte the body asked for. An immediate, the
+    /// accumulator, an indirect operand and a stack-relative one have no second byte to
+    /// name (§11.2), and <c>.byteof</c> shifts an immediate rather than adding to it.
+    /// </summary>
+    private void CheckSubstitution(OperandSubstitution? substituted)
+    {
+        if (substituted is not { } given || given.HasNextByte)
+            return;
+        if (given.ByteOf && given.Operand.Kind == SyntaxKind.ImmediateOperand)
+            return;
+        if (!given.ByteOf && given.Offset == 0)
+            return;
+
+        // The pair is what is wrong — this body line with this argument — so it is reported
+        // at the call, which is the side that can change it, and the body line is named (§11.6).
+        var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + n`";
+        ReportPaired(given.At, $"{what} needs an operand with a next byte, and `{given.Parameter.Name}` "
+            + $"is `{given.Mode}` here");
+    }
+
+    /// <summary>
+    /// Something that is only wrong for these arguments: reported at the call, which is the
+    /// side that can change them, with the body line that wrote it named beside it (§11.6).
+    /// </summary>
+    private void ReportPaired(SyntaxNode inTheBody, string message)
+    {
+        if (expansion?.NearestCall is not { } call)
+            return;
+        diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
+            [new RelatedSpan(inTheBody.Tree.GetSpan(inTheBody.Span), "in the macro body")]));
     }
 
     /// <summary>Which of the candidate modes the operand's own width calls for.</summary>
-    private AddressingMode Choose(SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode[] candidates)
+    private AddressingMode Choose(
+        SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode[] candidates,
+        OperandSubstitution? substituted)
     {
         var widths = candidates.OrderBy(Instructions.Length).ToArray();
         if (operand is null)
             return widths[0];
         if (candidates.Length == 1)
         {
-            CheckOperand(mnemonic, operand, candidates[0]);
+            CheckOperand(mnemonic, operand, candidates[0], substituted);
             return candidates[0];
         }
 
         var required = WrittenPrefix(operand) ?? (Expression(operand) is { } expression
-            ? model.AddressSizeOf(expression, segment, iteration)
+            ? model.AddressSizeOf(expression, segment, expansion)
             : null);
 
         // Where nothing says how wide it is, the reason has already been reported; the widest
@@ -269,7 +394,7 @@ public sealed class CodeLayout
             Report(operand.Span,
                 $"`{mnemonic.Text}` cannot reach a {Spell(size)} address on the {CpuNames.Spell(cpu)}");
         }
-        CheckOperand(mnemonic, operand, chosen);
+        CheckOperand(mnemonic, operand, chosen, substituted);
         return chosen;
     }
 
@@ -277,7 +402,8 @@ public sealed class CodeLayout
     /// What the operand itself must satisfy: a control transfer takes a near target and is
     /// not sized by a prefix, and an immediate on these CPUs is one byte.
     /// </summary>
-    private void CheckOperand(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode)
+    private void CheckOperand(
+        SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, OperandSubstitution? substituted)
     {
         if (Expression(operand) is not { } expression)
             return;
@@ -290,7 +416,7 @@ public sealed class CodeLayout
                 Report(operand.Span,
                     $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
             }
-            else if (model.AddressSizeOf(expression, segment, iteration) == AddressSize.Far)
+            else if (model.AddressSizeOf(expression, segment, expansion) == AddressSize.Far)
             {
                 Report(expression.Span,
                     $"`{mnemonic.Text}` takes a near target, and this one is far");
@@ -298,7 +424,10 @@ public sealed class CodeLayout
             return;
         }
 
-        if (mode == AddressingMode.Immediate && model.ValueOf(expression, iteration).AsNumber() is { } value
+        // `.byteof` takes one byte of the value, so the value it is taken from is not the
+        // one that has to fit.
+        if (mode == AddressingMode.Immediate && substituted is not { ByteOf: true }
+            && model.ValueOf(expression, expansion).AsNumber() is { } value
             && value is < -128 or > 255)
         {
             Report(expression.Span, $"an immediate is one byte, and {Value.Of(value)} does not fit");
@@ -315,9 +444,9 @@ public sealed class CodeLayout
         var assertion = Constructs.AssertionOf(directive);
         if (assertion.Condition is not { } condition)
             return;
-        if (model.ValueOf(condition, iteration).AsNumber() is not { } value)
+        if (model.ValueOf(condition, expansion).AsNumber() is not { } value)
         {
-            model.Check(condition, diagnostics, iteration);
+            model.Check(condition, diagnostics, expansion);
             return;
         }
         if (value == 0)
@@ -330,8 +459,8 @@ public sealed class CodeLayout
 
     private void Data(SyntaxNode directive)
     {
-        if (DataLengths.Of(directive, model, diagnostics, iteration) is { } length)
-            lines[(directive.Position, iteration)] = new LineLayout(length, null, null);
+        if (DataLengths.Of(directive, model, diagnostics, expansion) is { } length)
+            lines[(directive.Position, expansion)] = new LineLayout(length, null, null);
     }
 
     private static string Spell(AddressSize size) => size switch

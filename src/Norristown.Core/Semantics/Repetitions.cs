@@ -15,8 +15,8 @@ public static class Repetitions
     /// <paramref name="diagnostics"/>, when a caller wants to hear about it, and stands for
     /// no turns at all.
     /// </summary>
-    public static IReadOnlyList<Iteration> Of(
-        SemanticModel model, SyntaxNode block, Iteration? outer, List<Diagnostic>? diagnostics)
+    public static IReadOnlyList<Expansion> Of(
+        SemanticModel model, SyntaxNode block, Expansion? outer, List<Diagnostic>? diagnostics)
     {
         if (block.ChildNodes.Length == 0 || block.ChildNodes[0].Statement is not { } opener)
             return [];
@@ -27,8 +27,8 @@ public static class Repetitions
             return [];
 
         return opener.Kind == SyntaxKind.RepeatDirective
-            ? Counted(model, counted, binding, outer, diagnostics)
-            : Walked(model, counted, binding, outer, diagnostics);
+            ? Counted(model, block, counted, binding, outer, diagnostics)
+            : Walked(model, block, counted, binding, outer, diagnostics);
     }
 
     /// <summary>The name a repetition binds, or null when it names none.</summary>
@@ -46,8 +46,9 @@ public static class Repetitions
     }
 
     /// <summary><c>.repeat count, i</c>: the name counts from zero, as an index does.</summary>
-    private static IReadOnlyList<Iteration> Counted(
-        SemanticModel model, SyntaxNode counted, Symbol? binding, Iteration? outer, List<Diagnostic>? diagnostics)
+    private static IReadOnlyList<Expansion> Counted(
+        SemanticModel model, SyntaxNode block, SyntaxNode counted, Symbol? binding, Expansion? outer,
+        List<Diagnostic>? diagnostics)
     {
         if (model.ValueOf(counted, outer).AsNumber() is not { } count)
         {
@@ -60,9 +61,9 @@ public static class Repetitions
             return [];
         }
 
-        var turns = new List<Iteration>((int)count);
+        var turns = new List<Expansion>((int)count);
         for (var i = 0; i < count; i++)
-            turns.Add(new Iteration(outer, binding, Value.Of(i), null, i));
+            turns.Add(Expansion.Turn(outer, block, binding, Value.Of(i), null, i));
         return turns;
     }
 
@@ -70,20 +71,38 @@ public static class Repetitions
     /// <c>.each what, h</c>: the name is each item of a list, or each member of an enum, in
     /// the order they are written.
     /// </summary>
-    private static IReadOnlyList<Iteration> Walked(
-        SemanticModel model, SyntaxNode walked, Symbol? binding, Iteration? outer, List<Diagnostic>? diagnostics)
+    private static IReadOnlyList<Expansion> Walked(
+        SemanticModel model, SyntaxNode block, SyntaxNode walked, Symbol? binding, Expansion? outer,
+        List<Diagnostic>? diagnostics)
     {
+        // A `list` parameter walks whatever the call gave it. Where its items are words, the
+        // binding is the word itself, which is all a condition can do with one.
+        if (model.SymbolOf(walked) is { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }
+            && parameter.Kind == ParameterKind.List)
+        {
+            if (model.ArgumentFor(parameter.Symbol, outer) is not { } argument)
+                return [];
+            var words = parameter.Accepts.Element?.Kind == ParameterKind.One;
+            return [.. argument.Items.Select((item, i) => Expansion.Turn(
+                outer, block, binding, words ? Value.Word(Word(item)) : Value.Unknown, words ? null : item, i))];
+        }
+
         // A list item is kept as it was written: the items may be labels, which have no
         // value at all, and a name standing for one has to be that label.
         if (model.ItemsOf(walked) is { } items)
-            return [.. items.Select((item, i) => new Iteration(outer, binding, Value.Unknown, item, i))];
+            return [.. items.Select((item, i) => Expansion.Turn(outer, block, binding, Value.Unknown, item, i))];
 
         if (model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } members })
-            return [.. members.Symbols.Select((member, i) => new Iteration(outer, binding, member.Value, null, i))];
+            return [.. members.Symbols.Select(
+                (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i))];
 
         Report(model, diagnostics, walked, "`.each` walks a list or an enum, and this is neither");
         return [];
     }
+
+    /// <summary>The word an item was written as, for a list of them.</summary>
+    private static string Word(SyntaxNode item) =>
+        item.ChildTokens.Length > 0 ? item.ChildTokens[0].Text : item.GetText().Trim();
 
     private static void Report(
         SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, string message) =>

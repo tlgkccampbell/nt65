@@ -11,4 +11,10 @@ public enum ValueKind
 
     /// <summary>A string, which only <c>.strlen</c>, <c>.strat</c> and data directives accept.</summary>
     String,
+
+    /// <summary>
+    /// A bare word: what a <c>one</c> parameter stands for, and what an <c>.each</c> over a
+    /// list of them binds. A word is never looked up and is only ever compared with another.
+    /// </summary>
+    Word,
 }

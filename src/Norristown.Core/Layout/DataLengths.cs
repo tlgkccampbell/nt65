@@ -26,7 +26,7 @@ public static class DataLengths
     /// already reported pass as null.
     /// </summary>
     public static int? Of(
-        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on = null)
+        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on = null)
     {
         if (directive.ChildTokens.Length == 0)
             return null;
@@ -44,12 +44,12 @@ public static class DataLengths
     }
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
-    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model, Iteration? on = null) =>
+    public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model, Expansion? on = null) =>
         model.BytesOf(argument, on);
 
     /// <summary>What the assembler would refuse about a directive's values.</summary>
     private static void Check(
-        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
+        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         var name = directive.ChildTokens[0].Text.ToLowerInvariant();
         var operands = directive.ChildNodes;
@@ -91,7 +91,7 @@ public static class DataLengths
 
     private static void Values(
         IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
-        (long Low, long High)? limit, Iteration? on)
+        (long Low, long High)? limit, Expansion? on)
     {
         foreach (var operand in operands)
         {
@@ -112,7 +112,7 @@ public static class DataLengths
 
     /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant.</summary>
     private static void Reserved(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (operands.Count == 0)
             return;
@@ -128,7 +128,7 @@ public static class DataLengths
 
     /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
     private static void Alignment(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Iteration? on)
+        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (operands.Count == 0)
             return;
@@ -160,7 +160,7 @@ public static class DataLengths
 
     private static void CheckRange(
         SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit,
-        Iteration? on)
+        Expansion? on)
     {
         if (model.ValueOf(argument, on).AsNumber() is { } value && (value < limit.Low || value > limit.High))
             Report(argument, model, diagnostics, $"{Value.Of(value)} does not fit in this directive");

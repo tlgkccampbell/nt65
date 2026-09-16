@@ -13,10 +13,18 @@ namespace Norristown.Emit;
 /// rename. Everything else — cheap locals, and names inside an anonymous scope — is derived
 /// from the source and made unique, as <c>draw__loop</c> and <c>draw__loop_2</c>.
 /// </para>
+/// <para>
+/// What a macro body declares is local to each expansion, so one symbol there is many names
+/// in the output, one per call. Those are handed out as the expansions are written, which is
+/// as deterministic as the writing itself, and each is made unique against everything
+/// already claimed.
+/// </para>
 /// </summary>
 public sealed class FlatNames
 {
     private readonly Dictionary<Symbol, string> names = [];
+    private readonly Dictionary<(Symbol Symbol, Expansion? At), string> perExpansion = [];
+    private readonly Dictionary<string, Symbol> taken = new(StringComparer.Ordinal);
 
     private FlatNames() { }
 
@@ -24,7 +32,7 @@ public sealed class FlatNames
     public static FlatNames Create(SemanticModel model, List<Diagnostic> diagnostics)
     {
         var flat = new FlatNames();
-        var taken = new Dictionary<string, Symbol>(StringComparer.Ordinal);
+        var taken = flat.taken;
 
         // What another file exports keeps the spelling it was exported under, because that is
         // the name in the object file; a local name claims its spelling after them.
@@ -54,7 +62,10 @@ public sealed class FlatNames
             flat.names[symbol] = name;
         }
 
-        foreach (var symbol in model.Symbols.Where(symbol => !symbol.IsReachableByPath))
+        // What a macro body declares is not one name but one per expansion, so those are
+        // claimed as the expansions are written rather than here.
+        foreach (var symbol in model.Symbols.Where(symbol =>
+            !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
             var basis = symbol.FlatName;
             var name = basis;
@@ -71,4 +82,44 @@ public sealed class FlatNames
     /// declares keeps its own file's spelling, which is what the linker sees.
     /// </summary>
     public string Of(Symbol symbol) => names.GetValueOrDefault(symbol, symbol.FlatName);
+
+    /// <summary>
+    /// The same, for a symbol being written out at <paramref name="on"/>. A name a macro
+    /// body declares is a different name at every expansion, so each gets one of its own,
+    /// derived from the source and made unique: <c>times_x__loop</c>, then
+    /// <c>times_x__loop_2</c>.
+    /// </summary>
+    public string Of(Symbol symbol, Expansion? on)
+    {
+        if (on is null || !IsLocalToAnExpansion(symbol))
+            return Of(symbol);
+
+        var at = (symbol, Expansion.Owning(on, symbol));
+        if (at.Item2 is null)
+            return Of(symbol);
+        if (perExpansion.TryGetValue(at, out var already))
+            return already;
+
+        var basis = symbol.FlatName;
+        var name = basis;
+        for (var n = 2; taken.ContainsKey(name); n++)
+            name = $"{basis}_{n}";
+        taken[name] = symbol;
+        perExpansion[at] = name;
+        return name;
+    }
+
+    /// <summary>
+    /// Whether the symbol is one a macro body declares, and so one name per expansion rather
+    /// than one name. Nothing outside a body can reach it, which is why it can be renamed.
+    /// </summary>
+    private static bool IsLocalToAnExpansion(Symbol symbol)
+    {
+        for (var scope = symbol.Scope; scope is not null; scope = scope.Parent)
+        {
+            if (scope.Kind == ScopeKind.Macro)
+                return true;
+        }
+        return false;
+    }
 }

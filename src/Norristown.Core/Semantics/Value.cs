@@ -28,6 +28,9 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     /// <summary>Whether the value is a string.</summary>
     public bool IsString => Kind == ValueKind.String;
 
+    /// <summary>Whether the value is a bare word, which only <c>==</c> and <c>!=</c> accept.</summary>
+    public bool IsWord => Kind == ValueKind.Word;
+
     /// <summary>A number.</summary>
     public static Value Of(long number) => new(ValueKind.Number, number, null);
 
@@ -36,6 +39,9 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
 
     /// <summary>A condition, as the 1 or 0 that a comparison or a logical operator yields.</summary>
     public static Value Of(bool condition) => Of(condition ? 1L : 0L);
+
+    /// <summary>A bare word, such as the <c>a</c> of <c>push!(a, x, y)</c>.</summary>
+    public static Value Word(string word) => new(ValueKind.Word, 0, word);
 
     /// <summary>The number, or null when the value is not one.</summary>
     public long? AsNumber() => IsNumber ? Number : null;
@@ -54,6 +60,7 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     {
         ValueKind.Number => Format(Number),
         ValueKind.String => $"\"{Text}\"",
+        ValueKind.Word => Text ?? "?",
         _ => "?",
     };
 

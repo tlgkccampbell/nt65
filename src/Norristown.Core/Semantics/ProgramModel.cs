@@ -80,13 +80,11 @@ public sealed class ProgramModel
         // in one file may follow a name into another, where the same offsets mean something
         // else entirely.
         var resolved = new Dictionary<(SyntaxTree Tree, int Position), Symbol>();
+        var declared = new Dictionary<(SyntaxTree Tree, int Position), Symbol>();
         for (var i = 0; i < trees.Count; i++)
         {
             foreach (var reference in bound[i].References)
-            {
-                if (!reference.IsDeclaration)
-                    resolved[(trees[i], reference.Span.Start)] = reference.Symbol;
-            }
+                (reference.IsDeclaration ? declared : resolved)[(trees[i], reference.Span.Start)] = reference.Symbol;
         }
 
         Evaluator.EvaluateSymbols(
@@ -96,7 +94,7 @@ public sealed class ProgramModel
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
-            files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved,
+            files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved, declared,
                 program.Where(d => d.Span.File == trees[i].Path), binaryLength));
         }
         return new ProgramModel(files, segments, symbols, Norristown.Diagnostics.Ordered(

@@ -17,11 +17,17 @@ namespace Norristown.Semantics;
 public sealed class Configuration
 {
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
+    private readonly HashSet<(SyntaxTree Tree, int Position)> answered;
 
-    private Configuration(Dictionary<SyntaxTree, List<TextSpan>> omitted) => this.omitted = omitted;
+    private Configuration(
+        Dictionary<SyntaxTree, List<TextSpan>> omitted, HashSet<(SyntaxTree, int)> answered)
+    {
+        this.omitted = omitted;
+        this.answered = answered;
+    }
 
     /// <summary>A build that leaves nothing out, for a caller with no conditions to resolve.</summary>
-    public static Configuration Everything { get; } = new([]);
+    public static Configuration Everything { get; } = new([], []);
 
     /// <summary>
     /// Works out which branches <paramref name="trees"/> take when built for
@@ -35,15 +41,24 @@ public sealed class Configuration
             values[define.Name] = define.Value;
 
         var omitted = new Dictionary<SyntaxTree, List<TextSpan>>();
+        var answered = new HashSet<(SyntaxTree, int)>();
         foreach (var tree in trees)
         {
             var left = new List<TextSpan>();
-            new Reader(tree, cpu, values, diagnostics, left).Container(tree.Root);
+            new Reader(tree, cpu, values, diagnostics, left, answered).Container(tree.Root);
             if (left.Count > 0)
                 omitted[tree] = left;
         }
-        return new Configuration(omitted);
+        return new Configuration(omitted, answered);
     }
+
+    /// <summary>
+    /// Whether this pass answered the condition on <paramref name="block"/>. It answers every
+    /// one it can reach before a declaration is looked up; the ones it cannot are inside a
+    /// macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition may name what the
+    /// expansion binds (§10), and those are answered once per expansion instead.
+    /// </summary>
+    public bool Answered(SyntaxNode block) => answered.Contains((block.Tree, block.Position));
 
     /// <summary>Whether the build includes what is written at <paramref name="node"/>.</summary>
     public bool Includes(SyntaxNode node)
@@ -76,7 +91,8 @@ public sealed class Configuration
         Cpu cpu,
         Dictionary<string, long> defines,
         List<Diagnostic> diagnostics,
-        List<TextSpan> omitted)
+        List<TextSpan> omitted,
+        HashSet<(SyntaxTree, int)> answered)
     {
         public void Container(SyntaxNode container)
         {
@@ -84,7 +100,15 @@ public sealed class Configuration
             var taken = false;
             foreach (var child in container.ChildNodes)
             {
-                if (child.Green is not GreenBlock)
+                if (child.Green is not GreenBlock block)
+                {
+                    chaining = false;
+                    continue;
+                }
+
+                // A condition inside one of these may name what the expansion binds, so it
+                // has no answer until there is an expansion to answer it for.
+                if (block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each)
                 {
                     chaining = false;
                     continue;
@@ -95,6 +119,7 @@ public sealed class Configuration
                 {
                     case SyntaxKind.IfDirective:
                         chaining = true;
+                        answered.Add((tree, child.Position));
                         taken = Branch(child, opener, already: false);
                         continue;
 
@@ -106,6 +131,7 @@ public sealed class Configuration
                             Leave(child);
                             continue;
                         }
+                        answered.Add((tree, child.Position));
                         taken |= Branch(child, opener, taken);
                         continue;
 

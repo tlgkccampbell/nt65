@@ -51,6 +51,9 @@ public sealed class Symbol
     /// <summary>The scope a <c>.proc</c> or <c>.scope</c> opens; null for everything else.</summary>
     public Scope? Body { get; internal set; }
 
+    /// <summary>The block a <c>.macro</c> body is written in, which every call expands.</summary>
+    public SyntaxNode? Definition { get; internal set; }
+
     /// <summary>The value, where nt65 knows it. For a struct member, its offset.</summary>
     public Value Value { get; internal set; }
 
