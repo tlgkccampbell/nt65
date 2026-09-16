@@ -26,4 +26,28 @@ public enum SymbolKind
 
     /// <summary><c>.import NAME = expr</c>: a checked import, whose value nt65 uses (§12).</summary>
     ImportedConstant,
+
+    /// <summary><c>.enum Name { }</c>: a scope of constants.</summary>
+    Enum,
+
+    /// <summary><c>.struct Name { }</c>: a layout, whose members are offsets.</summary>
+    Struct,
+
+    /// <summary><c>.union Name { }</c>: a layout whose members all sit at offset zero.</summary>
+    Union,
+
+    /// <summary>One member of a struct or union: a constant offset with a size of its own.</summary>
+    Member,
+
+    /// <summary>A label declared with <c>.tag</c>: an address, and a scope of its fields.</summary>
+    Instance,
+
+    /// <summary><c>.charmap Name { }</c>: a mapping from characters to bytes.</summary>
+    Charmap,
+
+    /// <summary><c>.list Name { }</c>: a named sequence of expressions.</summary>
+    List,
+
+    /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
+    Func,
 }

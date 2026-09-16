@@ -216,6 +216,42 @@ public enum SyntaxKind : byte
     /// <summary>The line opening a <c>.scope</c>.</summary>
     ScopeDeclaration,
 
+    /// <summary>The line opening an <c>.enum</c>, named or anonymous.</summary>
+    EnumDeclaration,
+
+    /// <summary>The line opening a <c>.struct</c>, named or anonymous.</summary>
+    StructDeclaration,
+
+    /// <summary>The line opening a <c>.union</c>.</summary>
+    UnionDeclaration,
+
+    /// <summary>The line opening a <c>.charmap</c>.</summary>
+    CharmapDeclaration,
+
+    /// <summary>The line opening a <c>.list</c>.</summary>
+    ListDeclaration,
+
+    /// <summary><c>.func name(a, b) = expr</c>.</summary>
+    FuncDeclaration,
+
+    /// <summary>The parenthesized parameter names of a <c>.func</c>.</summary>
+    ParameterList,
+
+    /// <summary>One member of an <c>.enum</c>: <c>name</c> or <c>name = expr</c>.</summary>
+    EnumMember,
+
+    /// <summary>One entry of a <c>.charmap</c>: <c>'a' = n</c> or <c>'a'..'z' = n</c>.</summary>
+    CharmapEntry,
+
+    /// <summary>One line of a <c>.list</c>: comma-separated items.</summary>
+    ListItems,
+
+    /// <summary>The braced values of an initialized <c>.tag</c> instance.</summary>
+    TagValues,
+
+    /// <summary>One <c>member = value</c> of an initialized <c>.tag</c> instance.</summary>
+    TagValue,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 

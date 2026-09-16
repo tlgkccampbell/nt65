@@ -130,7 +130,18 @@ public sealed class ParserTests
     [InlineData("set16!(ptr, SCREEN)", SyntaxKind.UnsupportedLine)]
     [InlineData(".if .defined(DEBUG) {", SyntaxKind.UnsupportedLine)]
     [InlineData(".next @move, @fire", SyntaxKind.UnsupportedLine)]
-    [InlineData("boss: .tag Actor { x = 100 }", SyntaxKind.UnsupportedLine)]
+    [InlineData("boss: .tag Actor { x = 100 }", SyntaxKind.LabeledLine)]
+    [InlineData(".enum Color {", SyntaxKind.EnumDeclaration)]
+    [InlineData(".struct Point {", SyntaxKind.StructDeclaration)]
+    [InlineData(".union Value {", SyntaxKind.UnionDeclaration)]
+    [InlineData(".charmap screen {", SyntaxKind.CharmapDeclaration)]
+    [InlineData(".list handlers {", SyntaxKind.ListDeclaration)]
+    [InlineData(".func rgb15(r, g, b) = r | (g << 5) | (b << 10)", SyntaxKind.FuncDeclaration)]
+    [InlineData("player: .tag Player", SyntaxKind.LabeledLine)]
+    [InlineData("actors: .tag Player, MAX_ACTORS", SyntaxKind.LabeledLine)]
+    [InlineData("    .align 256", SyntaxKind.DataDirective)]
+    [InlineData("    .incbin \"sprites.bin\", 64, 32", SyntaxKind.DataDirective)]
+    [InlineData("    .lobytes first, second", SyntaxKind.DataDirective)]
     public void EveryCoreItemParses(string line, SyntaxKind kind)
     {
         Assert.Equal(kind, Statement(line).Kind);
@@ -185,14 +196,14 @@ public sealed class ParserTests
     }
 
     /// <summary>
-    /// A line's syntax depends on the kind of block around it (§3.1): inside a block whose
-    /// grammar arrives later, a line that looks like a constant is left alone.
+    /// A line's syntax depends on the kind of block around it: the same `name = expr` is a
+    /// member inside an `.enum` and a constant declaration outside one.
     /// </summary>
     [Fact]
     public void TheEnclosingBlockDecidesHowALineReads()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".enum Color {\ngreen = 5\n}\ngreen = 5\n");
-        Assert.Equal(SyntaxKind.UnsupportedLine, tree.Statement(1).Kind);
+        Assert.Equal(SyntaxKind.EnumMember, tree.Statement(1).Kind);
         Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(3).Kind);
         Assert.Empty(tree.Diagnostics);
     }

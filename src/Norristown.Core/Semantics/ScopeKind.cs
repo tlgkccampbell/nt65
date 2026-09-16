@@ -14,4 +14,10 @@ public enum ScopeKind
 
     /// <summary>A <c>.scope</c> body, named or anonymous.</summary>
     Scope,
+
+    /// <summary>
+    /// The body of an <c>.enum</c>, <c>.struct</c> or <c>.union</c>: a scope of constants
+    /// and offsets rather than of code.
+    /// </summary>
+    Type,
 }

@@ -41,10 +41,10 @@ public sealed class IncrementalTests
         var tree = SyntaxTree.Parse("main.nt65", ".scope s {\ngreen = 5\n}\n");
         Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(1).Kind);
 
-        // `.scope s {` becomes `.enum s {`, whose members are Stage 7's to read.
+        // `.scope s {` becomes `.enum s {`, and the same line is now a member of it.
         var edited = tree.WithChange(new TextChange(0, 6, ".enum"));
         Assert.Same(tree.Lines[1], edited.Lines[1]);
-        Assert.Equal(SyntaxKind.UnsupportedLine, edited.Statement(1).Kind);
+        Assert.Equal(SyntaxKind.EnumMember, edited.Statement(1).Kind);
         Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
     }
 

@@ -51,15 +51,51 @@ public sealed class Symbol
     /// <summary>The scope a <c>.proc</c> or <c>.scope</c> opens; null for everything else.</summary>
     public Scope? Body { get; internal set; }
 
-    /// <summary>The value, where nt65 knows it (§9).</summary>
+    /// <summary>The value, where nt65 knows it (§9). For a struct member, its offset.</summary>
     public Value Value { get; internal set; }
+
+    /// <summary>How many bytes the symbol stands for, where that is a question with an answer.</summary>
+    public long? Size { get; internal set; }
+
+    /// <summary>How many elements those bytes are, for a type, an array or a data label.</summary>
+    public long? Count { get; internal set; }
+
+    /// <summary>
+    /// The <c>T</c> of a <c>.tag T</c>, before it is resolved. A member or an instance takes
+    /// its size and its fields from the type it names.
+    /// </summary>
+    public SyntaxNode? TypeExpression { get; internal init; }
+
+    /// <summary>The type a <c>.tag</c> names, once resolved.</summary>
+    public Symbol? Type { get; internal set; }
+
+    /// <summary>A function's parameter names, in order.</summary>
+    public IReadOnlyList<SyntaxToken> Parameters { get; internal init; } = [];
+
+    /// <summary>A list's items, or a function's body as its single item.</summary>
+    public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
+
+    /// <summary>A charmap's entry lines, read into a mapping when it is first applied.</summary>
+    public IReadOnlyList<SyntaxNode> Entries { get; internal init; } = [];
+
+    /// <summary>The data directive a label sits on, which is what gives it a size and a count.</summary>
+    public SyntaxNode? Data { get; internal init; }
+
+    /// <summary>
+    /// The enum member written before this one. A member with no value of its own is the one
+    /// before it plus one, and the first is zero.
+    /// </summary>
+    public Symbol? PreviousMember { get; internal set; }
 
     /// <summary>The address size of §7.2, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
 
     /// <summary>Whether the symbol names an address rather than a value.</summary>
     public bool IsAddress => Kind is SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Proc
-        or SymbolKind.ExternProc or SymbolKind.ImportedAddress;
+        or SymbolKind.ExternProc or SymbolKind.ImportedAddress or SymbolKind.Instance;
+
+    /// <summary>Whether the symbol is a layout whose members are offsets.</summary>
+    public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;
 
     /// <summary>
     /// Whether the symbol can be reached from outside its scope with <c>::</c> (§6.2): a
@@ -122,7 +158,15 @@ public sealed class Symbol
         SymbolKind.ExternProc => "extern routine",
         SymbolKind.Scope => "scope",
         SymbolKind.ImportedAddress => "imported address",
-        _ => "imported constant",
+        SymbolKind.ImportedConstant => "imported constant",
+        SymbolKind.Enum => "enumeration",
+        SymbolKind.Struct => "structure",
+        SymbolKind.Union => "union",
+        SymbolKind.Member => "member",
+        SymbolKind.Instance => "instance",
+        SymbolKind.Charmap => "character mapping",
+        SymbolKind.List => "list",
+        _ => "function",
     };
 
     /// <summary>The symbol's kind and name, for debugging.</summary>

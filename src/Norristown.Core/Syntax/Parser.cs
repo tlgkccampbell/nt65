@@ -84,19 +84,30 @@ internal sealed class Parser
     {
         if (kind == LineKind.BlockClose)
             return ParseBlockClose();
+        if (kind == LineKind.Blank)
+            return Finish(SyntaxKind.BlankLine, []);
 
-        // Blocks with a line grammar of their own — enum members, struct members, charmap
-        // entries, list items and `.tag` initializers — arrive in Stage 7. Until then their
-        // lines are kept whole rather than read as the items they are not.
-        if (context is BlockKind.Enum or BlockKind.Struct or BlockKind.Union
-            or BlockKind.Charmap or BlockKind.List or BlockKind.TagInitializer)
+        // Blocks with a line grammar of their own. A struct or union member
+        // is written like a labelled data declaration and needs no rule of its own.
+        //
+        // The line that opens a block belongs to that block, so it arrives here in its own
+        // context; it is read as the opener it is, and only the lines after it are members.
+        switch (opensBlock ? BlockKind.None : context)
         {
-            return Unsupported();
+            case BlockKind.Enum:
+                return ParseEnumMember();
+            case BlockKind.Charmap:
+                return ParseCharmapEntry();
+            case BlockKind.List:
+                return Finish(SyntaxKind.ListItems, ParseListItems());
+            case BlockKind.TagInitializer:
+                return ParseTagValueLine();
+            default:
+                break;
         }
 
         return kind switch
         {
-            LineKind.Blank => Finish(SyntaxKind.BlankLine, []),
             LineKind.Label => ParseLabeledLine(),
             LineKind.Constant => ParseConstantDeclaration(),
             LineKind.Instruction => Finish(ParseInstruction()),
@@ -219,6 +230,12 @@ internal sealed class Parser
             SyntaxKind.ScopeDeclaration => Finish(ParseScope()),
             SyntaxKind.ExportDirective => Finish(ParseExport()),
             SyntaxKind.ImportDirective => Finish(ParseImport()),
+            SyntaxKind.EnumDeclaration => Finish(ParseTypeBlock(SyntaxKind.EnumDeclaration, named: false)),
+            SyntaxKind.StructDeclaration => Finish(ParseTypeBlock(SyntaxKind.StructDeclaration, named: false)),
+            SyntaxKind.UnionDeclaration => Finish(ParseTypeBlock(SyntaxKind.UnionDeclaration, named: false)),
+            SyntaxKind.CharmapDeclaration => Finish(ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true)),
+            SyntaxKind.ListDeclaration => Finish(ParseTypeBlock(SyntaxKind.ListDeclaration, named: true)),
+            SyntaxKind.FuncDeclaration => Finish(ParseFunc()),
             SyntaxKind.UnsupportedLine => Unsupported(),
             _ => ErrorLine($"unknown directive `{Current.Text}`"),
         };
@@ -226,11 +243,180 @@ internal sealed class Parser
 
     private GreenSyntax ParseDataDirective()
     {
+        if (Current.Text.Equals(".tag", StringComparison.OrdinalIgnoreCase))
+            return ParseTag();
+
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         if (!AtEnd)
             ParseCommaSeparated(children, ParseExpression);
         return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.tag T</c>, <c>.tag T, n</c> and an initialized instance, whose values are either
+    /// braced on the line or, when the line ends at the <c>{</c>, the block it opens.
+    /// </summary>
+    private GreenSyntax ParseTag()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        if (Kind == SyntaxKind.Comma)
+        {
+            children.Add(Advance());
+            children.Add(ParseExpression());
+        }
+        else if (Kind == SyntaxKind.OpenBrace)
+        {
+            children.Add(Next == SyntaxKind.EndOfLine ? Advance() : ParseTagValues());
+        }
+        return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
+    }
+
+    /// <summary>The braced <c>member = value</c> list of an initialized instance.</summary>
+    private GreenNode ParseTagValues()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseBrace && !AtEnd)
+            ParseCommaSeparated(children, ParseTagValue);
+        if (Kind == SyntaxKind.CloseBrace)
+            children.Add(Advance());
+        else
+            Report("expected `}`");
+        return new GreenSyntax(SyntaxKind.TagValues, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// One <c>member = value</c>. A member that is itself a <c>.tag</c> takes a nested
+    /// braced list, which is always written on one line.
+    /// </summary>
+    private GreenNode? ParseTagValue()
+    {
+        if (!AtName)
+        {
+            Report("expected a member name");
+            return null;
+        }
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind == SyntaxKind.Equals)
+            children.Add(Advance());
+        else
+            Report("expected `=`");
+        children.Add(Kind == SyntaxKind.OpenBrace ? ParseTagValues() : ParseExpression());
+        return new GreenSyntax(SyntaxKind.TagValue, children.ToImmutable());
+    }
+
+    /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>
+    private GreenNode ParseTagValueLine() =>
+        ParseTagValue() is GreenSyntax value
+            ? Finish(value)
+            : ErrorLine("expected `member = value`");
+
+    /// <summary>
+    /// The opener of an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or
+    /// <c>.list</c>. <paramref name="named"/> says whether the name is required: an
+    /// anonymous enum or struct declares into the scope around it, and a charmap or
+    /// a list is only ever used by name.
+    /// </summary>
+    private GreenSyntax ParseTypeBlock(SyntaxKind kind, bool named)
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (AtName)
+            children.Add(Advance());
+        else if (named)
+            Report("expected a name");
+        if (Kind == SyntaxKind.OpenBrace)
+            children.Add(Advance());
+        else
+            Report("expected `{`");
+        return new GreenSyntax(kind, children.ToImmutable());
+    }
+
+    /// <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
+    private GreenNode ParseEnumMember()
+    {
+        if (!AtName)
+            return ErrorLine("expected a member name, or `name = expr`");
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind == SyntaxKind.Equals)
+        {
+            children.Add(Advance());
+            children.Add(ParseExpression());
+        }
+        return Finish(SyntaxKind.EnumMember, children.ToImmutable());
+    }
+
+    /// <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
+    private GreenNode ParseCharmapEntry()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(ParseExpression());
+        if (Kind == SyntaxKind.DotDot)
+        {
+            children.Add(Advance());
+            children.Add(ParseExpression());
+        }
+        if (Kind == SyntaxKind.Equals)
+            children.Add(Advance());
+        else
+            Report("expected `=`");
+        children.Add(ParseExpression());
+        return Finish(SyntaxKind.CharmapEntry, children.ToImmutable());
+    }
+
+    /// <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
+    private ImmutableArray<GreenNode> ParseListItems()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        ParseCommaSeparated(children, ParseExpression);
+        return children.ToImmutable();
+    }
+
+    /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
+    private GreenSyntax ParseFunc()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (AtName)
+            children.Add(Advance());
+        else
+            Report("expected a function name");
+        if (Kind == SyntaxKind.OpenParen)
+            children.Add(ParseParameterList());
+        else
+            Report("expected `(` and the parameter names");
+        if (Kind == SyntaxKind.Equals)
+            children.Add(Advance());
+        else
+            Report("expected `=` and the body");
+        children.Add(ParseExpression());
+        return new GreenSyntax(SyntaxKind.FuncDeclaration, children.ToImmutable());
+    }
+
+    private GreenNode ParseParameterList()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseParen && !AtEnd)
+        {
+            ParseCommaSeparated(children, () =>
+            {
+                if (AtName)
+                    return Advance();
+                Report("expected a parameter name");
+                return null;
+            });
+        }
+        if (Kind == SyntaxKind.CloseParen)
+            children.Add(Advance());
+        else
+            Report("expected `)`");
+        return new GreenSyntax(SyntaxKind.ParameterList, children.ToImmutable());
     }
 
     private GreenSyntax ParseCpuDirective()

@@ -256,7 +256,7 @@ public sealed class Emitter
     {
         var lines = block.ChildNodes;
         var opener = lines.Length > 0 ? lines[0].Statement : null;
-        if (Constructs.IsDeferred(kind))
+        if (Constructs.IsDeferred(kind) || !Constructs.IsEmitted(kind))
         {
             if (opener is not null)
                 NotTranspiled(opener);
@@ -332,6 +332,10 @@ public sealed class Emitter
                 Constant(line, statement);
                 break;
 
+            case SyntaxKind.DataDirective when layout.Of(statement) is null:
+                NotTranspiled(statement);
+                break;
+
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
                 Source(line, statement, layout.Of(statement)?.Length ?? 0);
@@ -341,6 +345,18 @@ public sealed class Emitter
                 ExternProc(line, statement);
                 break;
 
+            // The types, text and data of Stage 7 are read and bound, but nothing is written
+            // for them yet, so a file that uses one is refused rather than written out short.
+            case SyntaxKind.EnumDeclaration:
+            case SyntaxKind.StructDeclaration:
+            case SyntaxKind.UnionDeclaration:
+            case SyntaxKind.CharmapDeclaration:
+            case SyntaxKind.ListDeclaration:
+            case SyntaxKind.FuncDeclaration:
+            case SyntaxKind.EnumMember:
+            case SyntaxKind.CharmapEntry:
+            case SyntaxKind.ListItems:
+            case SyntaxKind.TagValue:
             case SyntaxKind.UnsupportedLine:
                 NotTranspiled(statement);
                 break;
@@ -371,6 +387,11 @@ public sealed class Emitter
     {
         var label = statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.Label);
         var rest = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.Label);
+        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest) is null)
+        {
+            NotTranspiled(rest);
+            return;
+        }
         var bytes = rest is null ? 0 : layout.Of(rest)?.Length ?? 0;
         var edits = new Edits();
         if (rest is not null)

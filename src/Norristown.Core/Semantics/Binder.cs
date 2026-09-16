@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -133,6 +134,24 @@ internal sealed class Binder
             case BlockKind.Segment:
                 segment = SegmentOf(opener) ?? segment;
                 break;
+            case BlockKind.Enum:
+                scope = OpenType(opener, SymbolKind.Enum);
+                break;
+            case BlockKind.Struct:
+                scope = OpenType(opener, SymbolKind.Struct);
+                break;
+            case BlockKind.Union:
+                scope = OpenType(opener, SymbolKind.Union);
+                break;
+            case BlockKind.Charmap:
+                DeclareCollected(opener, SymbolKind.Charmap, lines);
+                return;
+            case BlockKind.List:
+                DeclareCollected(opener, SymbolKind.List, lines);
+                return;
+            case BlockKind.TagInitializer:
+                BindInitializer(opener, lines);
+                return;
             default:
                 if (opener is not null)
                     BindStatement(opener);
@@ -177,6 +196,66 @@ internal sealed class Binder
         return body;
     }
 
+    /// <summary>
+    /// The scope an <c>.enum</c>, <c>.struct</c> or <c>.union</c> opens. An anonymous one
+    /// opens nothing: its members are declared where it is written, which is how an
+    /// anonymous enum names constants and an anonymous struct groups fields.
+    /// </summary>
+    private Scope OpenType(SyntaxNode? opener, SymbolKind kind)
+    {
+        if (opener is null || NameToken(opener) is not { } name)
+            return scope;
+        var symbol = Declare(name, kind);
+        var body = new Scope(ScopeKind.Type, symbol?.Name ?? name.Text, scope, symbol);
+        if (symbol is not null)
+            symbol.Body = body;
+        return body;
+    }
+
+    /// <summary>
+    /// A <c>.charmap</c> or a <c>.list</c>, whose lines are entries rather than declarations:
+    /// the block is one symbol holding them. A list's items name symbols, and those names
+    /// belong to the scope the list is written in.
+    /// </summary>
+    private void DeclareCollected(SyntaxNode? opener, SymbolKind kind, ImmutableArray<SyntaxNode> lines)
+    {
+        var bodies = new List<SyntaxNode>();
+        for (var i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].Statement is { Kind: SyntaxKind.CharmapEntry or SyntaxKind.ListItems } line)
+                bodies.Add(line);
+        }
+
+        if (opener is null || NameToken(opener) is not { } name)
+            return;
+        if (kind == SymbolKind.List)
+        {
+            Declare(name, kind, value: null, items: [.. bodies.SelectMany(line => line.ChildNodes)]);
+            foreach (var line in bodies)
+                CollectUses(line);
+            return;
+        }
+        Declare(name, kind, value: null, entries: bodies);
+        foreach (var line in bodies)
+            CollectUses(line);
+    }
+
+    /// <summary>
+    /// An initialized instance. The label is an instance of the type; the member names its
+    /// values give are checked against that type once it is known, so only the values
+    /// themselves are names to resolve here.
+    /// </summary>
+    private void BindInitializer(SyntaxNode? opener, ImmutableArray<SyntaxNode> lines)
+    {
+        if (opener is not null)
+            BindStatement(opener);
+        for (var i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].Statement is { } line)
+                CollectUses(line);
+        }
+    }
+
     /// <summary>The segment a block puts its contents in, or null when its opener does not say.</summary>
     private string? SegmentOf(SyntaxNode? opener)
     {
@@ -205,12 +284,22 @@ internal sealed class Binder
         switch (statement.Kind)
         {
             case SyntaxKind.LabeledLine:
-                foreach (var child in statement.ChildNodes)
+                BindLabeledLine(statement);
+                break;
+
+            case SyntaxKind.EnumMember:
+                BindEnumMember(statement);
+                break;
+
+            case SyntaxKind.FuncDeclaration:
+                var body = statement.ChildNodes.LastOrDefault(c => c.Kind != SyntaxKind.ParameterList);
+                var parameters = statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ParameterList);
+                if (NameToken(statement) is { } function)
                 {
-                    if (child.Kind != SyntaxKind.Label)
-                        CollectUses(child);
-                    else if (child.ChildTokens.Length > 0)
-                        Declare(child.ChildTokens[0], SymbolKind.Label);
+                    Declare(function, SymbolKind.Func, value: null,
+                        items: body is null ? [] : [body],
+                        parameters: [.. parameters?.ChildTokens.Where(t => t.Kind != SyntaxKind.Comma
+                            && t.Kind != SyntaxKind.OpenParen && t.Kind != SyntaxKind.CloseParen) ?? []]);
                 }
                 break;
 
@@ -284,6 +373,40 @@ internal sealed class Binder
         CollectUses(checkedValue);
     }
 
+    /// <summary>
+    /// A label and whatever follows it. Inside a type body the label is a member and the
+    /// directive says how much room it takes; elsewhere it is a label, and one written on a
+    /// <c>.tag</c> is an instance of that type.
+    /// </summary>
+    private void BindLabeledLine(SyntaxNode statement)
+    {
+        var label = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.Label);
+        var rest = statement.ChildNodes.FirstOrDefault(child => child.Kind != SyntaxKind.Label);
+        if (label is { ChildTokens.Length: > 0 })
+        {
+            var kind = scope.Kind == ScopeKind.Type ? SymbolKind.Member
+                : Constructs.IsTag(rest) ? SymbolKind.Instance
+                : SymbolKind.Label;
+            Declare(label.ChildTokens[0], kind, data: rest, type: Constructs.TagTypeOf(rest));
+        }
+        CollectUses(rest);
+    }
+
+    /// <summary>
+    /// One enum member. A member with no value of its own follows the one before it, so each
+    /// keeps a link to its predecessor rather than a number nothing has worked out yet.
+    /// </summary>
+    private void BindEnumMember(SyntaxNode statement)
+    {
+        if (NameToken(statement) is not { } name)
+            return;
+        var value = statement.ChildNodes.FirstOrDefault();
+        var previous = scope.Symbols.LastOrDefault(symbol => symbol.Kind == SymbolKind.Constant);
+        if (Declare(name, SymbolKind.Constant, value) is { } member)
+            member.PreviousMember = previous;
+        CollectUses(value);
+    }
+
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
     private void CollectUses(SyntaxNode? node)
     {
@@ -320,9 +443,19 @@ internal sealed class Binder
             CollectUses(child);
     }
 
-    private Symbol? Declare(SyntaxToken name, SymbolKind kind, SyntaxNode? value = null)
+    private Symbol? Declare(
+        SyntaxToken name,
+        SymbolKind kind,
+        SyntaxNode? value = null,
+        SyntaxNode? data = null,
+        SyntaxNode? type = null,
+        IReadOnlyList<SyntaxNode>? items = null,
+        IReadOnlyList<SyntaxNode>? entries = null,
+        IReadOnlyList<SyntaxToken>? parameters = null)
     {
-        if (!CheckReservedWord(name))
+        // A member of a named type may be called after a register or a mnemonic: nothing can
+        // be written there but a member name, so there is nothing for it to shadow.
+        if (kind != SymbolKind.Member && !CheckReservedWord(name))
             return null;
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;
@@ -332,6 +465,11 @@ internal sealed class Binder
             IsCheapLocal = cheap,
             ValueExpression = value,
             Segment = segment,
+            Data = data,
+            TypeExpression = type,
+            Items = items ?? [],
+            Entries = entries ?? [],
+            Parameters = parameters ?? [],
         };
 
         if (owner.Declare(symbol) is { } existing)
