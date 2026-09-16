@@ -315,16 +315,13 @@ public enum SyntaxKind : byte
     /// <summary><c>.frame locals: Locals</c>: names the top bytes of the stack as a struct.</summary>
     FrameDirective,
 
-    /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
-    UnsupportedLine,
-
     /// <summary>A line the parser could not read at all.</summary>
     ErrorLine,
 
     /// <summary>Tokens left over at the end of a line, which the statement does not explain.</summary>
     SkippedTokens,
 
-    // Processor-state signatures. Parsed and kept from Stage 2; used from Stage 11.
+    // Processor-state signatures.
 
     /// <summary><c>: state (-&gt; state)?</c> after a proc's name.</summary>
     ProcSignature,
@@ -373,7 +370,7 @@ public enum SyntaxKind : byte
     /// <summary>An expression the parser could not read; empty where nothing was written at all.</summary>
     ErrorExpression,
 
-    // Operands. Which ones an instruction and a CPU allow is decided in Stage 5.
+    // Operands. Which ones an instruction and a CPU allow is decided in layout.
 
     /// <summary><c>#expr</c>, or the two bank bytes of <c>mvn</c> and <c>mvp</c>.</summary>
     ImmediateOperand,

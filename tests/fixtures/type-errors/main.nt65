@@ -5,11 +5,20 @@
 
 .func twice(n) = n * 2
 
+; Functions may call functions, but not in a ring, whether or not anything calls them.
+.func ping(n) = pong(n) + 1     ;! error: `ping` is defined in terms of itself
+.func pong(n) = ping(n) - 1
+
 .struct Point {
 x:      .word
 y:      .word
 bad:    .asciiz "no"    ;! error: `bad` reserves no room a member may take
 colors: .word 16        ;! error: `colors` is a member, which reserves one `.word` and holds no value: room for several is `.res`
+}
+
+.union Value {
+b:      .byte
+w:      .word
 }
 
 ; A layout that holds itself has no size, which is the same ring any constant would be.
@@ -30,9 +39,11 @@ hero:   .tag Named { name = "HERO", count = 300, title = "LONG" }  ;! error: `na
 boss:   .tag Named {
     at = { x = 1, z = 2 }   ;! error: `Point` has no member `z`
     count = 1
-    at = 3                  ;! error: `at` is a `Point`, which takes a braced list of its members
     level = 1               ;! error: `Named` has no member `level`
+    count = 2               ;! error: `count` is given a value twice: a member is named at most once
 }
+flat:   .tag Named { at = 3 }   ;! error: `at` is a `Point`, which takes a braced list of its members
+both:   .tag Value { b = 1, w = 2 } ;! error: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
     .byte screen("hi")  ;! error: `screen` does not map `h`
     .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given
     .align 100          ;! error: an `.align` boundary must be a power of two, not 100

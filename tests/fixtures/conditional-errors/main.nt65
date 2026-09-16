@@ -10,6 +10,10 @@ NOPE = 1
 NOPE = 2
 }
 
+.if .defined(SIZE) {            ;! error: `SIZE` is declared by the program, and `.defined` asks only about defines: a condition tests the build configuration, and a check on the program is an `.assert`
+NOPE = 4
+}
+
 .if "yes" {                     ;! error: a condition is a number, and this is text
 NOPE = 3
 }

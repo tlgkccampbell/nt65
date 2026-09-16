@@ -1,4 +1,4 @@
-; Every item the parser reads at Stage 2, in one file, built for the 65816.
+; Every item the parser reads, in one file, built for the 65816.
 .cpu 65816
 
 .segment "ZP2": zp
@@ -55,6 +55,7 @@ padding:    .res 16, $ff
     .rodata {
     @shifts: .byte 1, 2, 4, 8
     }
+    ldx @shifts
     sep #$20
     rts
 }
@@ -77,3 +78,6 @@ padding:    .res 16, $ff
         rts
     }
 }
+
+; Exported, so that what the file only declares counts as used.
+.export SCREEN_PAGES, frame, words, wide, here, there, greeting, padding

@@ -26,6 +26,10 @@ internal sealed class Evaluator
     // written rather than only for what it is worth.
     private readonly Dictionary<Symbol, SyntaxNode> items = [];
 
+    // The enum member a repetition's name stands for on this turn, which a path ending in
+    // that name reaches the member of the same name through.
+    private readonly Dictionary<Symbol, Symbol> members = [];
+
     // What a macro parameter was given, for the built-ins that ask about the argument rather
     // than about its value.
     private readonly Dictionary<Symbol, MacroArgument> given = [];
@@ -70,6 +74,8 @@ internal sealed class Evaluator
         {
             if (value.Argument is { } argument)
                 given[symbol] = argument;
+            if (value.Member is { } member)
+                members[symbol] = member;
             if (value.Item is { } item)
                 items[symbol] = item;
             else
@@ -183,9 +189,10 @@ internal sealed class Evaluator
     /// <summary>The symbol a written name stands for, or null when it names none.</summary>
     public static Symbol? SymbolNamed(
         SyntaxNode name,
-        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         name.Kind == SyntaxKind.NameExpression
-            ? new Evaluator(SegmentTable.Standard, resolved, null).SymbolOf(name)
+            ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(name)
             : null;
 
     /// <summary>The items a name stands for when it names a list, or null when it does not.</summary>
@@ -267,8 +274,17 @@ internal sealed class Evaluator
             case SymbolKind.List:
                 symbol.Count = symbol.Items.Count;
                 return;
+
+            // A function has no value of its own, but its body is read once with nothing given,
+            // so that functions calling each other in a ring are reported whether or not
+            // anything calls them.
+            case SymbolKind.Func when symbol.Items.Count > 0 && diagnostics is not null:
+                evaluating.Add(symbol);
+                Evaluate(symbol.Items[0]);
+                evaluating.RemoveAt(evaluating.Count - 1);
+                return;
             case SymbolKind.Constant when symbol.FollowsPrevious:
-                symbol.Value = Value.Of(Follows(symbol));
+                symbol.Value = Number(Follows(symbol));
                 return;
             default:
                 break;
@@ -302,7 +318,17 @@ internal sealed class Evaluator
         // `NAME = expr` is a constant if the expression names no address, and an address
         // alias if it does. Imports and extern procs are already classified.
         if (symbol.Kind == SymbolKind.Constant && NamesAnAddress(expression))
+        {
+            // An enum is a set of numbers, and one that stood for an address would give every
+            // member after it a value nothing can work out.
+            if (symbol.IsEnumMember)
+            {
+                Report(expression, $"`{symbol.Name}` is an enum member, whose value is a constant, and this names an address");
+                symbol.Value = Value.Unknown;
+                return;
+            }
             symbol.Kind = SymbolKind.AddressAlias;
+        }
         if (symbol.Kind != SymbolKind.ImportedAddress)
             symbol.AddressSize = SizeOf(expression, symbol.Segment ?? SegmentTable.DefaultSegment, symbol.Value);
     }
@@ -439,13 +465,16 @@ internal sealed class Evaluator
         return null;
     }
 
-    /// <summary>An enum member with no value of its own: the one before it plus one, from zero.</summary>
-    private long Follows(Symbol member)
+    /// <summary>
+    /// An enum member with no value of its own: the one before it plus one, from zero, and
+    /// nothing when the one before has no value.
+    /// </summary>
+    private long? Follows(Symbol member)
     {
         if (member.PreviousMember is not { } previous)
             return 0;
         EvaluateSymbol(previous);
-        return (previous.Value.AsNumber() ?? 0) + 1;
+        return previous.Value.AsNumber() is { } before ? before + 1 : null;
     }
 
     /// <summary>
@@ -1019,8 +1048,36 @@ internal sealed class Evaluator
         for (var i = name.ChildTokens.Length - 1; i >= 0; i--)
         {
             if (resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out var symbol))
-                return symbol;
+                return i > 0 && symbol.Kind == SymbolKind.Binding ? Namesake(name, i, symbol) : symbol;
         }
+        return null;
+    }
+
+    /// <summary>
+    /// What <c>actions::c</c> names, where <c>c</c> walks an enum: the member of <c>actions</c>
+    /// with the same name as the enum member <c>c</c> stands for on this turn. Off any turn,
+    /// as an editor asks, it names nothing.
+    /// </summary>
+    private Symbol? Namesake(SyntaxNode name, int last, Symbol binding)
+    {
+        Symbol? container = null;
+        for (var i = last - 1; i >= 0 && container is null; i--)
+            resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out container);
+        if (container?.Body is not { } body)
+            return null;
+
+        if (!members.TryGetValue(binding, out var member))
+        {
+            if (items.ContainsKey(binding) || arguments.ContainsKey(binding))
+            {
+                Report(name, $"`{binding.Name}` does not walk an enum, so it names no member: a path "
+                    + "ends in a repetition's name only over an enum's members");
+            }
+            return null;
+        }
+        if (body.FindMember(member.Name) is { } namesake)
+            return namesake;
+        Report(name, $"`{container.Name}` has no `{member.Name}`, which `{binding.Name}` stands for on this turn");
         return null;
     }
 

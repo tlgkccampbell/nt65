@@ -21,13 +21,15 @@ SCREEN_PAGES = 4
     rts
 }
 
-; The design writes the first four lines of `main` as the call `set16!(ptr, SCREEN)`. Macros
-; arrive with Stage 9, so until then the lines that call expands to are written out.
+.macro set16(dest: operand, value) {
+    lda #<value
+    sta dest
+    lda #>value
+    sta dest+1
+}
+
 .proc main {
-    lda #<SCREEN
-    sta ptr
-    lda #>SCREEN
-    sta ptr+1
+    set16!(ptr, SCREEN)
     ldx #SCREEN_PAGES
 @page:
     lda #' '

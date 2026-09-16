@@ -160,7 +160,7 @@ public sealed class ConstantTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("raw").AddressSize);
     }
 
-    /// <summary>A file may export only what it declares; the rest of what modules do arrives with Stage 6.</summary>
+    /// <summary>A file may export only what it declares.</summary>
     [Fact]
     public void AnExportNamesADeclaration()
     {

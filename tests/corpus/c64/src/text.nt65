@@ -30,7 +30,6 @@ hex_digits: .byte screen("0123456789ABCDEF")
 
 .bss {
 cursor_col: .res 1
-text_color: .res 1
 }
 
 ; X = row, Y = column. Points ptr1 at the start of the row and remembers the column.

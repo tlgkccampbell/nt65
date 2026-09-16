@@ -48,7 +48,7 @@ handlers:
 ; Inline data that does not match the declaration.
 .proc talk {
     jsr print               ;! error: `print` returns past one `.asciiz` written after each call, and none follows this one
-    jsr beep                ;! error: `beep` returns past 2 bytes of data written after each call, and 1 byte follow this one
+    jsr beep                ;! error: `beep` returns past 2 bytes of data written after each call, and 1 byte follows this one
     .byte 1
     rts
 }

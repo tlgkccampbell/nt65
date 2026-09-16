@@ -29,6 +29,13 @@ public enum ScopeKind
     BlockArgument,
 
     /// <summary>
+    /// A <c>.repeat</c> or <c>.each</c> body, which holds the name the repetition binds. It is
+    /// written out once per turn, so what it declares is a different name on every turn, and
+    /// nothing outside the body can reach any of it.
+    /// </summary>
+    Repetition,
+
+    /// <summary>
     /// The body of an <c>.enum</c>, <c>.struct</c> or <c>.union</c>: a scope of constants
     /// and offsets rather than of code.
     /// </summary>

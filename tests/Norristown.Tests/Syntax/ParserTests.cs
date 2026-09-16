@@ -138,7 +138,7 @@ public sealed class ParserTests
     [InlineData("times_x!(8) {", SyntaxKind.MacroCall)]
     [InlineData("body", SyntaxKind.BlockSplice)]
     [InlineData("tune: note!(C4)", SyntaxKind.LabeledLine)]
-    // Everything a later stage brings online is kept whole and diagnosed by nobody yet.
+    // Conditions, repetitions, annotations and the declarative constructs.
     [InlineData(".if .defined(DEBUG) {", SyntaxKind.IfDirective)]
     [InlineData(".repeat 8, i {", SyntaxKind.RepeatDirective)]
     [InlineData(".each handlers, h {", SyntaxKind.EachDirective)]

@@ -1,4 +1,4 @@
-; Every data directive Stage 5 sizes, text written out as byte values with the
+; Every data directive nt65 sizes, text written out as byte values with the
 ; source spelling kept in a comment, and expressions parenthesized so that nothing in the
 ; output depends on ca65's precedence table.
 .cpu 6502
@@ -23,3 +23,6 @@ sums:       .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
     lda table+1
     rts
 }
+
+; Exported, so that what the file only declares counts as used.
+.export words, wide, here, there, greeting, padding, escaped, bytes, sums

@@ -135,8 +135,12 @@ public sealed class SemanticModel
     public Value ValueOf(SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null) =>
         Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans);
 
-    /// <summary>The symbol a written name stands for, or null when it names none.</summary>
-    public Symbol? SymbolOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
+    /// <summary>
+    /// The symbol a written name stands for, or null when it names none. <paramref name="on"/>
+    /// is the turn it is written on, for a path that ends in a repetition's name.
+    /// </summary>
+    public Symbol? SymbolOf(SyntaxNode name, Expansion? on = null) =>
+        Evaluator.SymbolNamed(name, resolved, BindingsOf(on));
 
     /// <summary>
     /// How much room a data directive takes: the bytes it generates and how many elements
@@ -189,7 +193,7 @@ public sealed class SemanticModel
         {
             if (level.Binding is { } name)
             {
-                bound.TryAdd(name, new Expansion.Bound(level.Value, level.Item));
+                bound.TryAdd(name, new Expansion.Bound(level.Value, level.Item, Member: level.Member));
                 continue;
             }
             if (level.Call is not { } call || InvocationAt(call) is not { } invocation)

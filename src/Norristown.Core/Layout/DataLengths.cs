@@ -59,6 +59,11 @@ public static class DataLengths
             case ".byte":
             case ".asciiz":
                 Values(operands, model, diagnostics, (0, 255), on);
+                foreach (var operand in operands)
+                {
+                    if (TooWide(operand, 1, "`.byte` holds 8 bits", model, on) is { } message)
+                        Report(operand, model, diagnostics, on, message);
+                }
                 break;
             case ".word":
                 Values(operands, model, diagnostics, (0, 65535), on);
@@ -154,6 +159,7 @@ public static class DataLengths
     private static void Initialized(
         Symbol type, IEnumerable<SyntaxNode> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
+        var named = new HashSet<string>(StringComparer.Ordinal);
         foreach (var value in values)
         {
             if (value.ChildTokens.Length == 0 || value.ChildNodes.LastOrDefault() is not { } given)
@@ -162,6 +168,19 @@ public static class DataLengths
             if (type.Body?.FindMember(name) is not { Kind: SymbolKind.Member } member)
             {
                 Report(value, model, diagnostics, on, $"`{type.Name}` has no member `{name}`");
+                continue;
+            }
+
+            // Every member of a union is at offset 0, so a second value would write over the first.
+            if (!named.Add(name))
+            {
+                Report(value, model, diagnostics, on, $"`{name}` is given a value twice: a member is named at most once");
+                continue;
+            }
+            if (type.Kind == SymbolKind.Union && named.Count > 1)
+            {
+                Report(value, model, diagnostics, on,
+                    $"`{type.Name}` is a union, whose members all start at offset 0, so it takes a value for at most one of them");
                 continue;
             }
 
@@ -212,21 +231,44 @@ public static class DataLengths
     /// An address, or an address plus or minus a constant, is what is looked at: anything
     /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
     /// </summary>
+    /// <summary>
+    /// Why an operand that is an address, or an address plus or minus a constant, does not fit
+    /// a slot of <paramref name="bytes"/> bytes, or null when it does or is no such address.
+    /// ca65 refuses the fragment with a range error, so nt65 says so first, with the fix.
+    /// </summary>
+    public static string? TooWide(SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
+    {
+        if (model.ValueOf(operand, on).AsNumber() is not null || AddressIn(operand, model, on) is not { } address
+            || model.AddressSizeOf(address, null, on) is not { } size || (int)size <= bytes)
+        {
+            return null;
+        }
+        var written = address.GetText().Trim();
+        var fix = bytes == 1 ? $"`<{written}` is its low byte" : $"`.loword({written})` is its low 16 bits";
+        return $"`{written}` is {(size == AddressSize.Far ? "a far" : "an absolute")} address, and {slot}: {fix}";
+    }
+
+    /// <summary>The name an operand is, or is a constant away from, or null when it is neither.</summary>
+    private static SyntaxNode? AddressIn(SyntaxNode operand, SemanticModel model, Expansion? on)
+    {
+        var address = operand;
+        if (operand is { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] }
+            && operand.ChildTokens.Any(t => t.Kind is SyntaxKind.Plus or SyntaxKind.Minus))
+        {
+            address = model.ValueOf(right, on).AsNumber() is not null ? left
+                : model.ValueOf(left, on).AsNumber() is not null && operand.ChildTokens.Any(t => t.Kind == SyntaxKind.Plus) ? right
+                : operand;
+        }
+        return address.Kind == SyntaxKind.NameExpression ? address : null;
+    }
+
     private static void NoFarAddresses(
         string directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
     {
         foreach (var operand in operands)
         {
-            var address = operand;
-            if (operand is { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] }
-                && operand.ChildTokens.Any(t => t.Kind is SyntaxKind.Plus or SyntaxKind.Minus))
-            {
-                address = model.ValueOf(right, on).AsNumber() is not null ? left
-                    : model.ValueOf(left, on).AsNumber() is not null && operand.ChildTokens.Any(t => t.Kind == SyntaxKind.Plus) ? right
-                    : operand;
-            }
-            if (address.Kind == SyntaxKind.NameExpression && model.AddressSizeOf(address, null, on) == AddressSize.Far)
+            if (AddressIn(operand, model, on) is { } address && model.AddressSizeOf(address, null, on) == AddressSize.Far)
             {
                 var written = address.GetText().Trim();
                 Report(operand, model, diagnostics, on,

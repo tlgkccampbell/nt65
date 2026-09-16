@@ -7,16 +7,19 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 1059, 0
+.dbg file, "gfx.nt65", 1156, 0
 
 .export clear
+.export clear__end
 .export SCREEN
 .exportzp ptr
 .exportzp Color__black
 .exportzp Color__white
 .exportzp Sprite__x
 .exportzp Sprite__y
+.exportzp palette__border
 .export clear__again
+.exportzp rows
 
 .segment "ZEROPAGE": zeropage
 .dbg line, "gfx.nt65", 8
@@ -36,14 +39,15 @@ Sprite__y = $01
 .segment "CODE": absolute
 clear:
 
-.dbg line, "gfx.nt65", 46
+.dbg line, "gfx.nt65", 47
     ldy #0
 clear__again:
-.dbg line, "gfx.nt65", 48
-    sta (ptr),y
 .dbg line, "gfx.nt65", 49
-    iny
+    sta (ptr),y
 .dbg line, "gfx.nt65", 50
-    bne clear__again
+    iny
 .dbg line, "gfx.nt65", 51
+    bne clear__again
+.dbg line, "gfx.nt65", 52
     rts
+clear__end:

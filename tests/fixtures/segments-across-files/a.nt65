@@ -7,3 +7,6 @@
 .segment "SHARED" {
 scratch:    .res 2
 }
+
+; Exported, so that what the file only declares counts as used.
+.export scratch

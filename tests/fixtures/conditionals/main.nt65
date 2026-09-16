@@ -87,6 +87,13 @@ commands:
     .byte c
 }
 
+; Over an enum, a path that ends in the binding names the member with the same name, so the
+; table stays in step with the enum: `actions::move`, then `actions::fire`, then `actions::wait`.
+actions_table:
+.each Cmd, c {
+    .addr actions::c
+}
+
 grid:
 .repeat 2, row {
 .repeat 3, col {
@@ -113,3 +120,38 @@ grid:
     }
     rts
 }
+
+.scope actions {
+move:
+    rts
+fire:
+    jmp move
+wait:
+    rts
+}
+
+; What a repetition declares is its own on every turn, as a macro expansion's is: each turn
+; has its own `@delay`, and `skip` is a different label each time.
+.proc slow {
+.repeat 3, i {
+    ldx #i + 1
+@delay:
+    dex
+    bne @delay
+    bcc skip
+    nop
+skip:
+}
+    rts
+}
+
+; The same path as an operand, called once for each member in the enum's order.
+.proc run_all {
+.each Cmd, c {
+    jsr actions::c
+}
+    rts
+}
+
+; Exported, so that what the file only declares counts as used.
+.export bits, dispatch, commands, actions_table, grid

@@ -39,6 +39,9 @@ public sealed class Emitter
     // its last byte. A use may come before the thing it measures, so they are found up front.
     private readonly HashSet<Symbol> ends = [];
 
+    // What other files measure, whose ends this file exports and those files import.
+    private readonly IReadOnlySet<Symbol> measuredElsewhere;
+
     // The width the previous 65816 immediate of each register was written at, in output
     // order, which is exactly what ca65's setting is when the next one is reached.
     private readonly Dictionary<WidthRegister, int> widths = [];
@@ -62,8 +65,9 @@ public sealed class Emitter
 
     private Emitter(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
-        string source, string directory)
+        string source, string directory, IReadOnlySet<Symbol> measuredElsewhere)
     {
+        this.measuredElsewhere = measuredElsewhere;
         this.model = model;
         this.layout = layout;
         this.names = names;
@@ -74,15 +78,16 @@ public sealed class Emitter
 
     /// <summary>
     /// The ca65 for <paramref name="model"/>'s file. <paramref name="outRoot"/> is the
-    /// project's output tree, or null to write beside the source.
+    /// project's output tree, or null to write beside the source. <paramref name="measuredElsewhere"/>
+    /// is what the program's other files measure with <c>.endof</c> and <c>.spanof</c>.
     /// </summary>
     public static OutputFile Emit(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
-        string? outRoot = null)
+        string? outRoot = null, IReadOnlySet<Symbol>? measuredElsewhere = null)
     {
         var path = OutputPath(model.Tree.Path, outRoot);
         var emitter = new Emitter(model, layout, names, diagnostics,
-            Relative(Directory(path), model.Tree.Path), Directory(path));
+            Relative(Directory(path), model.Tree.Path), Directory(path), measuredElsewhere ?? new HashSet<Symbol>());
         emitter.Ends();
         emitter.Header();
         emitter.Exports();
@@ -173,15 +178,12 @@ public sealed class Emitter
     /// </summary>
     private void Ends()
     {
-        foreach (var measured in Extents.MeasuredIn(model).OrderBy(s => s.NameSpan.Start))
+        var own = Extents.MeasuredIn(model).Concat(measuredElsewhere)
+            .Where(symbol => symbol.Tree == model.Tree)
+            .Distinct()
+            .OrderBy(s => s.NameSpan.Start);
+        foreach (var measured in own)
         {
-            if (measured.Tree != model.Tree)
-            {
-                diagnostics.Add(new Diagnostic(measured.DeclarationSpan, Severity.Error,
-                    $"`{measured.QualifiedName}` is declared in another file, and nt65 does not measure "
-                    + "across files yet"));
-                continue;
-            }
             ends.Add(measured);
             var end = EndOf(measured);
             if (names.Claimed(end) is { } other)
@@ -279,13 +281,11 @@ public sealed class Emitter
                     continue;
                 }
 
-                var name = Named(reference);
-                Line(reference.AddressSize switch
-                {
-                    AddressSize.ZeroPage => $".exportzp {name}",
-                    AddressSize.Far => $".export {name}: far",
-                    _ => $".export {name}",
-                });
+                Line(Linked(".export", reference, Named(reference)));
+
+                // Another file that measures the declaration names its end, which goes with it.
+                if (measuredElsewhere.Contains(reference))
+                    Line(Linked(".export", reference, EndOf(reference)));
             }
         }
         if (any)
@@ -322,9 +322,31 @@ public sealed class Emitter
                     + $"{source} was built against\"");
             }
         }
+
+        // The end of what this file measures in another file comes from that file, which
+        // exports it beside the declaration.
+        foreach (var measured in Extents.MeasuredIn(model).Where(symbol => symbol.Tree != model.Tree)
+            .OrderBy(symbol => Named(symbol), StringComparer.Ordinal))
+        {
+            if (!any)
+                Blank();
+            any = true;
+            Line(Linked(".import", measured, EndOf(measured)));
+        }
         if (any)
             pendingBlank = true;
     }
+
+    /// <summary>
+    /// An <c>.export</c> or <c>.import</c> of <paramref name="name"/>, with the address size
+    /// of <paramref name="symbol"/>: <c>.exportzp</c>, <c>.export name: far</c> or plain.
+    /// </summary>
+    private static string Linked(string directive, Symbol symbol, string name) => symbol.AddressSize switch
+    {
+        AddressSize.ZeroPage => $"{directive}zp {name}",
+        AddressSize.Far => $"{directive} {name}: far",
+        _ => $"{directive} {name}",
+    };
 
     /// <summary>The line that brings one symbol in, or null for one that needs no line at all.</summary>
     private string? Import(Symbol symbol)
@@ -550,10 +572,8 @@ public sealed class Emitter
             case SyntaxKind.ErrorDirective:
                 break;
 
-            // The types, text and data of Stage 7 are read and bound, but nothing is written
-            // for them yet, so a file that uses one is refused rather than written out short.
-            // A function, and the openers of the blocks above, exist for the analysis: a
-            // call is written as its body, and a type as the constants it names.
+            // A function, and the lines of the blocks above, exist for the analysis: a call is
+            // written as its body, and a type as the constants it names.
             case SyntaxKind.FuncDeclaration:
             case SyntaxKind.EnumMember:
             case SyntaxKind.CharmapEntry:
@@ -571,10 +591,6 @@ public sealed class Emitter
 
             case SyntaxKind.BlockSplice:
                 Splice(statement);
-                break;
-
-            case SyntaxKind.UnsupportedLine:
-                NotTranspiled(statement);
                 break;
 
             // A `.cpu` item, a segment declaration, an `.export` or `.import` (both already
@@ -597,6 +613,11 @@ public sealed class Emitter
             NotTranspiled(call);
             return;
         }
+
+        // Expansions that went past the bound are an error already, and writing them out
+        // would take as long as the laying out was spared.
+        if (layout.ExpansionsExceeded)
+            return;
 
         // A macro that reaches itself is an error already, and has nothing to write.
         if (Expansion.Expanding(expansion, definition))
@@ -883,9 +904,15 @@ public sealed class Emitter
         SyntaxNode line, string indent, Symbol type, IReadOnlyDictionary<string, SyntaxNode> written, string path)
     {
         long bytes = 0;
-        foreach (var member in type.Body?.Symbols ?? [])
+        var members = (type.Body?.Symbols ?? []).Where(member => member.Kind == SymbolKind.Member).ToList();
+
+        // A union is written as the one member it is given, or its first, and zeros to its size.
+        if (type.Kind == SymbolKind.Union && members.Count > 0)
+            members = [members.FirstOrDefault(member => written.ContainsKey(member.Name)) ?? members[0]];
+
+        foreach (var member in members)
         {
-            if (member.Kind != SymbolKind.Member || member.Size is not { } size)
+            if (member.Size is not { } size)
                 continue;
             var given = written.GetValueOrDefault(member.Name);
             var named = path.Length == 0 ? member.Name : $"{path}::{member.Name}";
@@ -900,6 +927,13 @@ public sealed class Emitter
             var text = $"{indent}    {Member(member, given)}";
             Code(line, text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + named, (int)size);
             bytes += size;
+        }
+
+        if (type.Kind == SymbolKind.Union && type.Size is { } whole && whole > bytes)
+        {
+            var text = $"{indent}    .res {whole - bytes}, $00";
+            Code(line, text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + (path.Length == 0 ? type.Name : path), (int)(whole - bytes));
+            bytes = whole;
         }
         return bytes;
     }
@@ -993,6 +1027,9 @@ public sealed class Emitter
     {
         SyntaxKind.EqualsEquals => "=",
         SyntaxKind.BangEquals => "<>",
+
+        // ca65 has no `^^`: it reads `a ^^ b` as `a ^ ^b`, an xor with the bank byte.
+        SyntaxKind.CaretCaret => ".xor",
         _ => op.Text,
     };
 
@@ -1156,8 +1193,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A construct whose stage has not arrived. Its line parses and is kept, but nothing can
-    /// be written for it, so the file is not transpiled rather than transpiled wrongly.
+    /// A line nothing can be written for, which analysis should already have refused. The file
+    /// is not transpiled rather than transpiled wrongly.
     /// </summary>
     private void NotTranspiled(SyntaxNode statement)
     {
@@ -1171,7 +1208,7 @@ public sealed class Emitter
         if (diagnostics.Any(d => d.Severity == Severity.Error && d.Span.File == model.Tree.Path))
             return;
         diagnostics.Add(Expansion.Problem(model.Tree, first.Parent.Tree, first.Span, expansion, Severity.Error,
-            $"`{first.Text}` is not transpiled yet"));
+            $"`{first.Text}` cannot be written out, and nothing said why: this is a bug in nt65"));
     }
 
     /// <summary>
@@ -1428,6 +1465,14 @@ public sealed class Emitter
             return;
         var reference = named;
 
+        // A path that ends in a repetition's name names a different member on every turn.
+        if (named.Kind == SymbolKind.Binding && tokens.Length > 1)
+        {
+            if (model.SymbolOf(name, expansion) is not { } namesake)
+                return;
+            reference = namesake;
+        }
+
         // A list stands for its own items wherever data takes them.
         if (model.ItemsOf(name) is { Count: > 0 } items)
         {
@@ -1551,7 +1596,7 @@ public sealed class Emitter
         // `.endof(f)` and `.spanof(f)` describe layout rather than shape, so they are written
         // as the addresses they are and resolved by ca65 and ld65.
         if (Extents.Is(call, out var span) && Extents.MeasuredBy(call) is { } named
-            && model.SymbolOf(named) is { } measured && ends.Contains(measured))
+            && model.SymbolOf(named) is { } measured && (ends.Contains(measured) || measured.Tree != model.Tree))
         {
             edits.Replace[tokens[0].Position] =
                 span ? $"({EndOf(measured)} - {Named(measured)})" : EndOf(measured);

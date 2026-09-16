@@ -4,7 +4,7 @@ namespace Norristown.Tests.Syntax;
 
 public sealed class OutlineTests
 {
-    /// <summary>Every declaration Stage 3 names, nested three deep and with a broken line in it.</summary>
+    /// <summary>Every declaration the outline names, nested three deep and with a broken line in it.</summary>
     private const string Sample = """
         PPU_CTRL = $2000
 
@@ -96,7 +96,7 @@ public sealed class OutlineTests
     }
 
     /// <summary>
-    /// A block Stage 3 does not name — an `.if`, a macro body — is not a level of the
+    /// A block the outline does not name — an `.if`, a macro body — is not a level of the
     /// outline, so what it declares stands where the block does rather than disappearing.
     /// </summary>
     [Fact]

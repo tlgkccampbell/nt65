@@ -83,8 +83,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var entryState = new ProcessorState(
             entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
             ValueOf(entry.D, 0xffff) ?? defaults.D, ValueOf(entry.B, 0xff) ?? defaults.B);
+        // An exit that names a 16-bit width and not the mode is in native mode, the only one
+        // that width can hold in, whatever the entry's mode.
+        var exitMode = exit.E?.Mode
+            ?? (entryState.E == ProcessorMode.Emulation && (exit.A?.Width == Width.Sixteen || exit.Index?.Width == Width.Sixteen)
+                ? ProcessorMode.Native
+                : entryState.E);
         var exitState = new ProcessorState(
-            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exit.E?.Mode ?? entryState.E,
+            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exitMode,
             ValueOf(exit.D, 0xffff) ?? entryState.D, ValueOf(exit.B, 0xff) ?? entryState.B);
 
         // An exit that cannot be what it says is reported once, and read as the entry's, so
@@ -101,6 +107,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exitState = exitState with { B = entryState.B };
         CheckEmulation(entry, entryState);
         CheckEmulation(exit, exitState);
+        entryState = Pinned(entryState);
+        exitState = Pinned(exitState);
         return new Signature(entryState, exitState, far ?? false, inline) { syntax = syntax, forMacro = forMacro };
 
         // `dp = e` is worth e once the constants are known, and unknown before; `dp?` is
@@ -191,6 +199,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 + "hands back unchanged only what it assumed nothing about");
             return false;
         }
+
+        // Emulation mode pins both widths at 8 bits, so `emu` says that too, as it does in `.state`.
+        static ProcessorState Pinned(ProcessorState state) =>
+            state.E == ProcessorMode.Emulation ? state with { A = Width.Eight, Index = Width.Eight } : state;
 
         void CheckEmulation(Parts parts, ProcessorState state)
         {

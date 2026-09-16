@@ -31,7 +31,7 @@ header: .tag RomHeader {
 }
 
 .segment "VECTORS" {
-native_vectors:
+    ; native mode
     .res 4                      ; unused
     .addr cop_stub              ; COP
     .addr brk_stub              ; BRK
@@ -39,7 +39,7 @@ native_vectors:
     .addr nmi_stub              ; NMI
     .res 2                      ; unused
     .addr irq_stub              ; IRQ
-emulation_vectors:
+    ; emulation mode
     .res 4
     .addr brk_stub              ; COP
     .res 2

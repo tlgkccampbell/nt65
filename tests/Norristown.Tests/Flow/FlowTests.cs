@@ -205,7 +205,7 @@ public sealed class FlowTests
     [Theory]
     [InlineData(".proc p {\n    beq @here\n    rts\n@here:\n    rts\n}\n")]
     [InlineData(".proc p {\n    jmp (ptr)\n    .next @here\n@here:\n    rts\n}\n\nptr: .addr 0\n")]
-    [InlineData(".proc p {\n    rts\nhere:\n    rts\n}\n\ntable: .addr p::here\n")]
+    [InlineData(".proc p {\n    rts\nhere:\n    rts\n}\n\ntable: .addr p::here\n.export table\n")]
     public void ALabelSomethingNamesIsNotReported(string text)
     {
         Assert.Empty(Problems(text));

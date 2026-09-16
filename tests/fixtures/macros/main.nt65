@@ -151,3 +151,6 @@ tune:   note!(C4, frames = 8)
         note!(E4)
 greeting: message!("HI")
 }
+
+; Exported, so that what the file only declares counts as used.
+.export tune, greeting

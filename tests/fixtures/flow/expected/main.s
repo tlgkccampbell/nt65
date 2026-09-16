@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1414, 0
+.dbg file, "main.nt65", 1404, 0
 
 .export dispatch
 
@@ -39,33 +39,32 @@ dispatch__fire:
 set:
 .dbg line, "main.nt65", 33
     beq set__set_two
-set__set_one:
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 34
     lda #1
-.dbg line, "main.nt65", 36
+.dbg line, "main.nt65", 35
     .byte $2c
 set__set_two:
-.dbg line, "main.nt65", 39
+.dbg line, "main.nt65", 38
     lda #2
 set__store:
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 40
     sta a:value
-.dbg line, "main.nt65", 42
+.dbg line, "main.nt65", 41
     rts
 
 patching:
-.dbg line, "main.nt65", 48
+.dbg line, "main.nt65", 47
     lda #$60
 patching__op:
-.dbg line, "main.nt65", 50
+.dbg line, "main.nt65", 49
     sta a:$0400
-.dbg line, "main.nt65", 51
+.dbg line, "main.nt65", 50
     sta a:patching__op+1
-.dbg line, "main.nt65", 53
+.dbg line, "main.nt65", 52
     rts
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 57
+.dbg line, "main.nt65", 56
 cmd:    .res 1
-.dbg line, "main.nt65", 58
+.dbg line, "main.nt65", 57
 value:  .res 1

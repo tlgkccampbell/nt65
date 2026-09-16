@@ -12,8 +12,7 @@ namespace Norristown.Layout;
 /// makes wrong about them.
 /// <para>
 /// Syntax does not depend on the CPU, so every operand form parses everywhere; this is the
-/// layer that says whether the target has it. Blocks belonging to a later stage are left
-/// alone, as they are in binding.
+/// layer that says whether the target has it.
 /// </para>
 /// </summary>
 public sealed class CodeLayout
@@ -97,6 +96,9 @@ public sealed class CodeLayout
 
     /// <summary>What the CPU makes wrong, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
+
+    /// <summary>Whether the file's expansions went past the most nt65 lays out, which is an error.</summary>
+    public bool ExpansionsExceeded => expanded > MaximumStatements;
 
     /// <summary>Every statement of the file, in the order its bytes are written.</summary>
     public IReadOnlyList<Step> Steps => steps;
@@ -306,7 +308,13 @@ public sealed class CodeLayout
         if (Constructs.Repeats(kind))
         {
             var outerTurn = expansion;
-            foreach (var turn in Repetitions.Of(model, block, outerTurn, diagnostics))
+            var turns = Repetitions.Of(model, block, outerTurn, diagnostics);
+
+            // A repetition inside an expansion writes its body out once per turn, and every
+            // turn counts towards the bound, which is checked before any of them is laid out.
+            if (outerTurn?.NearestCall is { } call && Exceeds(turns.Count * (block.ChildNodes.Length - 1), call))
+                return;
+            foreach (var turn in turns)
             {
                 expansion = turn;
                 Walk(block.ChildNodes, from: 1);
@@ -333,6 +341,14 @@ public sealed class CodeLayout
         var opened = (Stream, Offset: filled.GetValueOrDefault(Stream));
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
         {
+            // A detour to the segment the bytes are already in goes nowhere: its contents stay
+            // inline, where fall-through runs into them.
+            if (Constructs.SegmentOf(opener) == segment
+                && (routine is not null || streams.Count > 1) && opener.ChildTokens.Length > 0)
+            {
+                Report(opener.ChildTokens[0], $"this block names \"{segment}\", the segment it is already in, "
+                    + "so its contents would stay inline where fall-through reaches them");
+            }
             segment = Constructs.SegmentOf(opener) ?? segment;
             streams.Add(nextStream++);
         }
@@ -359,13 +375,8 @@ public sealed class CodeLayout
     {
         if (model.MacroAt(call) is not { Definition: { } definition } || Expansion.Expanding(expansion, definition))
             return;
-        expanded += definition.ChildNodes.Length;
-        if (expanded > MaximumStatements)
-        {
-            Report(call, $"the expansions in this file come to more than {MaximumStatements} "
-                + "statements, which is as far as nt65 goes");
+        if (Exceeds(definition.ChildNodes.Length, call))
             return;
-        }
 
         // A macro with a state signature is checked where its expansion starts and where it
         // ends, so both are steps of their own.
@@ -378,6 +389,22 @@ public sealed class CodeLayout
         expansion = outer;
         if (marked)
             steps.Add(new Step(call, outer, routine, Stream, segment, null, Closes: true));
+    }
+
+    /// <summary>
+    /// Counts <paramref name="statements"/> more laid out by expansions, and whether that
+    /// takes the file past the bound. The bound is reported once, at <paramref name="call"/>.
+    /// </summary>
+    private bool Exceeds(int statements, SyntaxNode call)
+    {
+        if (expanded > MaximumStatements)
+            return true;
+        expanded += statements;
+        if (expanded <= MaximumStatements)
+            return false;
+        Report(call, $"the expansions in this file come to more than {MaximumStatements} "
+            + "statements, which is as far as nt65 goes");
+        return true;
     }
 
     /// <summary>
@@ -826,9 +853,15 @@ public sealed class CodeLayout
 
         // `.byteof` takes one byte of the value, so the value it is taken from is not the
         // one that has to fit.
-        if (mode != AddressingMode.Immediate || substituted is { ByteOf: true }
-            || model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } value)
+        if (mode != AddressingMode.Immediate || substituted is { ByteOf: true })
+            return;
+        if (model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } value)
         {
+            if (!sizeUnknown && DataLengths.TooWide(expression, bits == 16 ? 2 : 1,
+                bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", model, expansion) is { } wide)
+            {
+                Report(expression, wide);
+            }
             return;
         }
         var high = bits == 16 ? 0xffff : 0xff;

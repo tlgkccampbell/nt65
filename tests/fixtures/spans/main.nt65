@@ -38,3 +38,6 @@ count:  .byte .spanof(table)
 source: .res 1
 dest:   .res 1
 }
+
+; Exported, so that what the file only declares counts as used.
+.export header, count

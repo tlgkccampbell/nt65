@@ -7,8 +7,8 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What Stage 4 gives an editor: hover, go to definition, find references, highlights and
-/// rename, all within one file.
+/// What an editor gets within one file: hover, go to definition, find references, highlights and
+/// rename.
 /// </summary>
 public sealed class SymbolRequestsTests
 {
@@ -360,7 +360,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".if 0 {\nBROKEN = nowhere\n}\nON = 1\n");
+        await client.OpenAsync(Uri, ".if 0 {\nBROKEN = nowhere\n}\nON = 1\n.export ON\n");
 
         var dimmed = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal(DiagnosticSeverity.Hint, dimmed.Severity);

@@ -18,6 +18,7 @@ public sealed class ModuleTests
 
         .proc clear {
             .export again
+            ldy #rows
         again:
             rts
         }
@@ -151,7 +152,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("a.nt65", ".export WIDTH\nWIDTH = 40\n"),
-            ("b.nt65", "AREA = WIDTH * 25\n"));
+            ("b.nt65", ".export AREA\nAREA = WIDTH * 25\n"));
 
         Assert.Empty(program.Problems());
         Assert.Equal(1000, program.File("b.nt65").Symbol("AREA").Value.Number);

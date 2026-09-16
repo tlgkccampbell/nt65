@@ -31,4 +31,13 @@
 
 .rodata {
 shape:  .byte glyphs
+; Where another file's routine ends, and how long it is: gfx.nt65 exports the end with it.
+clear_extent: .addr .endof(clear), .spanof(clear)
 }
+
+; Exported, so that what the file only declares counts as used.
+.export shape, clear_extent
+
+; The linker evaluates these, so ca65 has to read the operators as nt65 does: it spells `==`
+; and `!=` its own way and has no `^^` at all.
+.assert main == main && main != clear && !(main ^^ main), lderror, "an operator reached ld65 misspelled"

@@ -311,6 +311,18 @@ public sealed class ControlFlow
     {
         foreach (var written in Annotations.TargetsOf(next))
         {
+            // A `list` parameter names every label the call gave it.
+            if (model.SymbolOf(written, on) is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.List } list
+                && model.GivenAt(list, on) is { Argument: var given, Caller: var caller })
+            {
+                foreach (var item in given.Items)
+                {
+                    if (Targets.Of(model, item, caller) is { } each)
+                        yield return each;
+                }
+                continue;
+            }
+
             if (Targets.Of(model, written, on) is not { } target)
                 continue;
             var spread = Spread(target.Symbol, on).ToList();
@@ -437,6 +449,17 @@ public sealed class ControlFlow
             return;
         foreach (var block in region.Blocks)
         {
+            // Code that opens a nested segment block with no label is somewhere fall-through
+            // never goes, and nothing can name it either.
+            if (block.Index > 0 && block.Label is null && block.Predecessors.Count == 0
+                && block.Stream != region.Blocks[block.Index - 1].Stream
+                && block.Steps is [{ Statement.Kind: SyntaxKind.InstructionStatement } first, ..])
+            {
+                diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span), Severity.Warning,
+                    "this code is never reached: fall-through does not enter a nested segment block, so code "
+                    + "there starts at a label a `.next` names or a `.state` declares"));
+                continue;
+            }
             if (block.Index == 0 || block.Label is not { } label || block.Predecessors.Count > 0
                 || block.IsDeclared || block.Steps is [{ Statement.Kind: SyntaxKind.DataDirective }, ..])
             {
@@ -544,7 +567,7 @@ public sealed class ControlFlow
             if (taken != bytes)
             {
                 Report(call, $"`{name}` returns past {Bytes(bytes)} of data written after each call, and "
-                    + (taken == 0 ? "none follows this one" : $"{Bytes(taken)} follow this one"));
+                    + (taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
             }
         }
         return skipped;

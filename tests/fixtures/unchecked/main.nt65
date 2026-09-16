@@ -60,7 +60,6 @@ saved_p:    .res 1
 ; The `bit` skip trick.
 .proc set {
     beq @set_two
-@set_one:
     lda #1
     .byte $2c           ; bit abs: swallows the next instruction
     .next @store

@@ -23,8 +23,8 @@ namespace Norristown.Semantics;
 /// </para>
 /// <para>
 /// A <c>.repeat</c> or an <c>.each</c> body is read once, however many times it is written
-/// out, with the name the repetition binds in a scope of its own. A name declared inside one
-/// would have to be a different name on every turn, which is macro expansion's to give.
+/// out, with the name the repetition binds in a scope of its own. What it declares is local
+/// to each turn, as what a macro body declares is local to each expansion.
 /// </para>
 /// </summary>
 internal sealed class Binder
@@ -37,6 +37,9 @@ internal sealed class Binder
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
     private readonly List<Use> exports = [];
+
+    // Where a condition asks `.defined` about a name, which may only be a define.
+    private readonly List<(SyntaxToken Name, Scope Scope)> definedAsked = [];
     private readonly List<Invocation> calls = [];
     private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
@@ -50,7 +53,6 @@ internal sealed class Binder
     private Scope scope;
     private string segment = SegmentTable.DefaultSegment;
     private Symbol? previousEnumMember;
-    private SyntaxToken? repetition;
 
     // A label written on a line of its own, while nothing but blank lines has followed it: a
     // `.state` here is that label's declaration.
@@ -103,6 +105,17 @@ internal sealed class Binder
         this.program = program;
         ResolveUses(uses);
 
+        // Conditions are answered before the program is read, so `.defined` of a name the
+        // program declares would be false whatever the program says.
+        foreach (var (name, at) in definedAsked)
+        {
+            if (at.Lookup(name.Text) is { IsDefine: false, Kind: not (SymbolKind.MacroParameter or SymbolKind.Binding) })
+            {
+                Report(name.Span, $"`{name.Text}` is declared by the program, and `.defined` asks only about "
+                    + "defines: a condition tests the build configuration, and a check on the program is an `.assert`");
+            }
+        }
+
         // An import is somebody else's symbol: exporting it would declare it in two places at
         // once, which ca65 refuses. Every file that uses it declares its own `.import`.
         foreach (var export in exports)
@@ -130,6 +143,11 @@ internal sealed class Binder
     /// What their bodies use is what the file's own output has to bring in.
     /// </summary>
     public IReadOnlyList<Symbol> CalledMacros() => called;
+
+    /// <summary>Whether <paramref name="node"/> is a call of <c>.defined</c>.</summary>
+    private static bool IsDefinedCall(SyntaxNode node) =>
+        node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
+        && node.ChildTokens[0].Text.Equals(".defined", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(SyntaxNode statement)
@@ -236,6 +254,16 @@ internal sealed class Binder
                 // Whatever an included branch declares belongs to the scope around it. The
                 // condition is read for its names so that an editor can follow a define to
                 // the configuration that gives it a value.
+                // A `.defined` is asked whichever way it was answered, and a false answer
+                // leaves the branch out.
+                foreach (var call in opener?.DescendantNodes().Where(IsDefinedCall) ?? [])
+                {
+                    foreach (var argument in call.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+                    {
+                        if (argument.ChildTokens is [{ Kind: SyntaxKind.Identifier } name])
+                            definedAsked.Add((name, scope));
+                    }
+                }
                 if (!configuration.Includes(block))
                     return;
                 // A condition may compare a `one` parameter or a repetition binding with a
@@ -266,8 +294,6 @@ internal sealed class Binder
         segment = outerSegment;
         if (kind == BlockKind.Enum)
             previousEnumMember = null;
-        if (Constructs.Repeats(kind))
-            repetition = null;
     }
 
     /// <summary>
@@ -329,22 +355,18 @@ internal sealed class Binder
     /// </summary>
     private Scope OpenRepetition(SyntaxNode? opener)
     {
-        var body = new Scope(ScopeKind.Scope, null, scope, null);
+        var body = new Scope(ScopeKind.Repetition, null, scope, null);
         if (opener is null)
             return body;
 
         CollectUses(opener);
         if (NameToken(opener) is not { } name)
-        {
-            repetition = FirstToken(opener, SyntaxKind.Directive);
             return body;
-        }
 
         var outer = scope;
         scope = body;
         Declare(name, SymbolKind.Binding);
         scope = outer;
-        repetition = FirstToken(opener, SyntaxKind.Directive);
         return body;
     }
 
@@ -478,9 +500,10 @@ internal sealed class Binder
     /// </summary>
     private void CheckAllowedHere(SyntaxNode statement)
     {
-        if (!InMacroBody)
-            return;
-        if (Macros.Forbidden(statement) is not { } why)
+        var why = InMacroBody ? Macros.Forbidden(statement) : null;
+        if (why is null && InRepetition)
+            why = Repetitions.Forbidden(statement);
+        if (why is null)
             return;
         Report(statement.ChildTokens.Length > 0 ? statement.ChildTokens[0].Span : statement.Span, why);
     }
@@ -495,6 +518,20 @@ internal sealed class Binder
             return;
         if (Annotations.Misplaced(line, statement) is { } why)
             Report(statement.ChildTokens[0].Span, why);
+    }
+
+    /// <summary>Whether the walk is inside a <c>.repeat</c> or <c>.each</c> body, however many scopes deep.</summary>
+    private bool InRepetition
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind == ScopeKind.Repetition)
+                    return true;
+            }
+            return false;
+        }
     }
 
     /// <summary>Whether the walk is inside a macro body, however many scopes deep.</summary>
@@ -703,7 +740,7 @@ internal sealed class Binder
                 break;
 
             // Everything else either declares nothing and names nothing — `.cpu`, a blank or
-            // closing line — or belongs to a later stage.
+            // closing line — or is read where its block is walked.
             default:
                 break;
         }
@@ -775,6 +812,7 @@ internal sealed class Binder
         if (member is not null)
         {
             member.PreviousMember = previousEnumMember;
+            member.IsEnumMember = true;
             previousEnumMember = member;
         }
         CollectUses(value);
@@ -913,11 +951,8 @@ internal sealed class Binder
             return;
         // `.defined(NAME)` asks whether a name is a define. The name is not a use of
         // anything: one that is not declared is what the question is for.
-        if (node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
-            && node.ChildTokens[0].Text.Equals(".defined", StringComparison.OrdinalIgnoreCase))
-        {
+        if (IsDefinedCall(node))
             return;
-        }
         if (node.Kind == SyntaxKind.NameExpression)
         {
             // A leading `::` starts the path at file scope, which the first name sees by
@@ -959,18 +994,12 @@ internal sealed class Binder
         IReadOnlyList<SyntaxNode>? entries = null,
         bool follows = false)
     {
-        // A member of a named type may be called after a register or a mnemonic: nothing can
-        // be written there but a member name, so there is nothing for it to shadow. Any other
-        // reserved name is reported, and declared all the same, so that what uses it and what
-        // counts it are not wrong a second time.
-        if (kind != SymbolKind.Member)
+        // A member of a named type may be called after a register or a mnemonic: it is only
+        // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. Any
+        // other reserved name is reported, and declared all the same, so that what uses it and
+        // what counts it are not wrong a second time.
+        if (kind != SymbolKind.Member && scope.Kind != ScopeKind.Type)
             CheckReservedWord(name);
-        if (kind != SymbolKind.Binding && repetition is { } repeated)
-        {
-            Report(name.Span, $"`{name.Text}` is declared inside a `{repeated.Text}` body. A name that "
-                + "is distinct on every turn arrives with macro expansion");
-            return null;
-        }
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
@@ -1160,14 +1189,10 @@ internal sealed class Binder
         if (member is null)
         {
             // A repetition's name at the end of a path means the member of that scope with
-            // the same spelling, which is a different member on every turn. That needs the
-            // same per-expansion naming a declaration inside a repetition does.
-            if (at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
-            {
-                Report(token.Span, $"`{binding.Name}` is a repetition binding, and naming a member "
-                    + "through one arrives with macro expansion");
-                return null;
-            }
+            // the same spelling, which is a different member on every turn: each turn works
+            // out which.
+            if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
+                return binding;
             Report(token.Span, container.Kind == ScopeKind.File
                 ? $"`{token.Text}` is not declared at file scope"
                 : $"`{token.Text}` is not declared in `{container.Name}`");

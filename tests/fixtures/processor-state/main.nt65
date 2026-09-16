@@ -42,6 +42,17 @@ value:  .res 2
     rts
 }
 
+; `emu` pins both widths at 8, so `a?` says nothing more at entry. An exit that names a
+; 16-bit width and not the mode is in native mode, the only one where the width can hold.
+.proc hooked: emu, a? -> a8, i16 {
+    lda #1
+    clc
+    xce
+    rep #$10
+    ldx #$1234
+    rts
+}
+
 ; A save and a restore around a call: `plp` finds the status `php` saved, so the widths
 ; after it are the widths before it, and the call in between changes nothing about that.
 .proc save: a8, i8 {
@@ -94,3 +105,24 @@ value:  .res 2
     ldx #$1234
     rti
 }
+
+; A jump table built from a `list` parameter: `.next` names every label the call gave, so
+; the table's entries are where flow goes rather than code used as data.
+.macro dispatch(targets: list(ident)) {
+    jmp (@table,x)
+    .next targets
+@table:
+.each targets, t {
+    .addr t
+}
+}
+
+.proc command: a8, i8 {
+    dispatch!(@load, @save)
+@load:
+    rts
+@save:
+    rts
+}
+
+.export command

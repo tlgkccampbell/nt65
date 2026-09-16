@@ -7,7 +7,17 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 647, 0
+.dbg file, "main.nt65", 783, 0
+
+.export words
+.export wide
+.export here
+.export there
+.export greeting
+.export padding
+.export escaped
+.export bytes
+.export sums
 
 SCREEN = $0400
 

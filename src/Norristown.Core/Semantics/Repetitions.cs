@@ -94,11 +94,34 @@ public static class Repetitions
 
         if (model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } members })
             return [.. members.Symbols.Select(
-                (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i))];
+                (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))];
 
         Report(model, diagnostics, walked, outer, "`.each` walks a list or an enum, and this is neither");
         return [];
     }
+
+    /// <summary>
+    /// Why a <c>.repeat</c> or <c>.each</c> body may not hold this statement, or null when it
+    /// may. What the body declares is a different name on every turn, and each of these is
+    /// one thing for the whole file.
+    /// </summary>
+    public static string? Forbidden(SyntaxNode statement) => statement.Kind switch
+    {
+        SyntaxKind.ExportDirective or SyntaxKind.ImportDirective =>
+            "an export or an import belongs outside a repetition: it names one symbol, and a "
+            + "repetition's body is written out once per turn",
+        SyntaxKind.CpuDirective => "`.cpu` belongs outside a repetition: the CPU is program-wide",
+        SyntaxKind.SegmentDeclaration =>
+            "a segment declaration belongs outside a repetition: a segment is declared exactly "
+            + "once for the program, and this one would be declared once per turn",
+        SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
+            "`.proc` belongs outside a repetition: a routine's name and signature are part of the "
+            + "file's interface, and this one would be a different routine on every turn",
+        SyntaxKind.MacroDeclaration or SyntaxKind.FuncDeclaration =>
+            "a definition belongs outside a repetition: it would be a different one on every turn, "
+            + "and nothing outside the body could name any of them",
+        _ => null,
+    };
 
     /// <summary>The word an item was written as, for a list of them.</summary>
     private static string Word(SyntaxNode item) =>

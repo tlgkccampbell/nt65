@@ -36,3 +36,13 @@ table:
     ldx #.countof(table)    ;! error: `table` labels no data on its own line, so `.countof` has nothing to measure: a label measures the data written on the same line
     rts
 }
+
+; A nested segment block naming the segment it is already in would leave its contents inline.
+.proc hold: a8, i8 {
+    .code {                     ;! error: this block names "CODE", the segment it is already in, so its contents would stay inline where fall-through reaches them
+    @inline:
+        .state native, a8, i8
+        rts
+    }
+    rts
+}

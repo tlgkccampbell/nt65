@@ -81,7 +81,7 @@ public sealed class ConfigurationTests
     [InlineData(".if !.defined(NOWHERE) {", true)]
     public void DefinedAsksWhetherANameIsADefine(string opener, bool taken)
     {
-        var program = Built(opener + "\nON = 1\n}\n", ("DEBUG", 0));
+        var program = Built(opener + "\nON = 1\n.export ON\n}\n", ("DEBUG", 0));
 
         Assert.Empty(program.Problems());
         Assert.Equal(taken, program.File("main.nt65").Symbols.Count == 1);
@@ -114,9 +114,9 @@ public sealed class ConfigurationTests
         + "build configuration, and a check on the program is an `.assert`")]
     public void AConditionThatNamesTheProgramSaysToUseAnAssert(string opener, string message)
     {
-        var program = Built("SIZE = 4\n" + opener + "\nON = 1\n}\n");
+        var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
 
-        Assert.Equal([$"main.nt65:2: {message}"], program.Problems());
+        Assert.Equal([$"main.nt65:3: {message}"], program.Problems());
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public sealed class ConfigurationTests
     [Fact]
     public void ADefineNamedInAConditionResolvesToIt()
     {
-        var program = Built(".if PLATFORM == 2 {\nON = 1\n}\n", ("PLATFORM", 2));
+        var program = Built(".if PLATFORM == 2 {\nON = 1\n.export ON\n}\n", ("PLATFORM", 2));
 
         Assert.Empty(program.Problems());
         var define = program.File("main.nt65").SymbolAt("PLATFORM");

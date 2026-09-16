@@ -28,7 +28,7 @@ public sealed class ServerTests
         Assert.Equal("Norristown language server ready", message.Message);
     }
 
-    /// <summary>Stage 3's capabilities: incremental sync, the outline and folding.</summary>
+    /// <summary>The capabilities the server announces: incremental sync, the outline and folding.</summary>
     [Fact]
     public async Task AnnouncesWhatTheSyntaxLayerCanDo()
     {

@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 705, 0
+.dbg file, "main.nt65", 591, 0
 
 .export fill_page
 
@@ -35,28 +35,29 @@ fill_page__loop:
     rts
 
 main:
-.dbg line, "main.nt65", 27
+    ; set16!(ptr, SCREEN)  main.nt65:32
+.dbg line, "main.nt65", 32
     lda #<SCREEN
-.dbg line, "main.nt65", 28
+.dbg line, "main.nt65", 32
     sta z:ptr
-.dbg line, "main.nt65", 29
+.dbg line, "main.nt65", 32
     lda #>SCREEN
-.dbg line, "main.nt65", 30
+.dbg line, "main.nt65", 32
     sta z:ptr+1
-.dbg line, "main.nt65", 31
+.dbg line, "main.nt65", 33
     ldx #SCREEN_PAGES
 main__page:
-.dbg line, "main.nt65", 33
-    lda #$20                        ; ' '
-.dbg line, "main.nt65", 34
-    jsr fill_page
 .dbg line, "main.nt65", 35
-    inc z:ptr+1
+    lda #$20                        ; ' '
 .dbg line, "main.nt65", 36
-    dex
+    jsr fill_page
 .dbg line, "main.nt65", 37
-    bne main__page
+    inc z:ptr+1
 .dbg line, "main.nt65", 38
-    inc z:frame
+    dex
 .dbg line, "main.nt65", 39
+    bne main__page
+.dbg line, "main.nt65", 40
+    inc z:frame
+.dbg line, "main.nt65", 41
     jmp main

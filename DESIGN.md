@@ -301,7 +301,8 @@ of the `.pushseg` / `.popseg` idiom:
 A nested segment block is a separate flow region (§7.3): fall-through never enters it,
 and the statement after the block follows the statement before it. If it contains
 code, its first statement needs a `.next` edge or a declaration like any other entry
-point. A nested segment block that names the segment it is already in is an error: its
+point, so it starts at a label: code at its start with no label is reached by nothing, and
+is warned about as a label nothing reaches is. A nested segment block that names the segment it is already in is an error: its
 contents would stay inline in the byte stream, where fall-through does reach them.
 
 By convention the contents of a top-level segment block are not indented.
@@ -609,7 +610,9 @@ Control transfers are not sized by prefix. `jsr`, `jmp` and the branches take a 
 target, `jsl` and `jml` a far one, and a mismatch is an error naming the other mnemonic
 (§7.3). A far target is a routine declared `far` or a symbol in a `far` segment or
 import. A routine is near or far by its signature alone, wherever its segment is; a
-constant target is taken as written, so `jml $008000` is a long jump into bank 0.
+constant target is taken as written, so `jml $008000` is a long jump into bank 0. Only a
+routine or a label is somewhere flow analysis can follow, so a constant target needs a
+`.next` saying where it goes (§7.4).
 
 ### 7.3 65816 processor state
 
@@ -632,7 +635,10 @@ that depends on it, runs only on the 65816.
 ```
 
 **Signatures.** A routine declares its state at entry and, after `->`, at exit. Exit
-defaults to entry, item by item: `a16, i8 -> a8` returns with `i8`. The items are:
+defaults to entry, item by item: `a16, i8 -> a8` returns with `i8`. `emu` makes both widths
+8, as it does in `.state`, and an exit that names a 16-bit width without naming the mode is
+in native mode, the only one that width holds in: `emu -> a16, i16` returns native. The
+items are:
 
 | item | meaning | default |
 |---|---|---|
@@ -1084,7 +1090,9 @@ true bound.
 An address slot holds an address of its width: `.addr` takes 0 to $FFFF and `.faraddr` 0
 to $FFFFFF. A far address in an `.addr` or a `.word` is an error rather than its low 16
 bits, which ca65 would keep in an `.addr` without a word; `.loword(x)` says those are what
-is meant.
+is meant. In the same way an absolute or far address in a `.byte` or a one-byte immediate,
+and a far one in a two-byte immediate, is an error that ca65 would otherwise report as a
+range error: `<x` and `.loword(x)` say which part is meant.
 
 A label on a data directive gets a `.sizeof` in bytes and a `.countof` in elements from
 it: `.res 16` gives 16 and 16, `.word a, b` gives 4 and 2, `.tag Player, 8` gives
@@ -1188,8 +1196,10 @@ A call is written like a charmap application, `name(args)`. The body is one expr
 whose names resolve where the function is declared. Arguments are values, not tokens: a
 call means its body with each parameter replaced by its parenthesized argument, so
 `rgb15(1 + 1, 0, 0)` passes 2. A call is constant when its arguments are, and may then
-appear wherever a constant may, including `.res` counts and, when every argument is one
-a condition may use, `.if`. Functions may call functions, but not in a cycle. A function
+appear wherever a constant may, including `.res` counts, but not in an `.if` condition: a
+function is a declaration of the program, and conditions are answered before any declaration
+is read (§10). Functions may call functions, but not in a cycle, which is an error whether or
+not anything calls them. A function
 is exported and used across files like a constant, and the output writes each call as
 its parenthesized body.
 
@@ -1277,9 +1287,14 @@ the member of that scope with the same name, so `actions::c` is `actions::move`,
 `actions::fire`. A table built this way stays in step with the enum it follows, which is
 what ca65 code uses `.ident` for.
 
+Over a list or a count the binding names no member, so a path ending in it is an error, and
+so is a scope with no member of the name the binding stands for on some turn.
+
 None of these reaches the output. nt65 resolves every `.if` and unrolls every `.repeat`
 and `.each` itself; names declared inside a `.repeat` or `.each` body are distinct per
-iteration, as macro expansion labels are.
+iteration, as macro expansion labels are, and nothing outside the body can name them. A
+body holds nothing that is one thing for the whole file: no `.export`, `.import`, `.cpu`,
+segment declaration, `.proc`, `.macro` or `.func`.
 
 ## 11. Macros
 
@@ -1708,7 +1723,7 @@ macros, and a comment naming the call precedes the expansion.
 |---|---|
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off, then `.dbg file` |
 | each generated line that produces bytes, and each `.assert` ca65 evaluates | preceded by `.dbg line` naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the debug line says, so those get none |
-| `a == b`, `a != b` | `a = b`, `a <> b`; nt65's other operators are ca65's |
+| `a == b`, `a != b`, `a ^^ b` | `a = b`, `a <> b`, `a .xor b`; nt65's other operators are ca65's |
 | `.segment "X": zp` declaration | nothing by itself |
 | `.segment "X" { }` | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
 | nested segment block | `.pushseg` / `.segment` ... `.popseg` |
@@ -1818,10 +1833,10 @@ here):
 ptr:        .res 2
 frame:      .res 1
 
-.segment "CODE": absolute
 SCREEN       = $0400
 SCREEN_PAGES = 4
 
+.segment "CODE": absolute
 fill_page:
     ldy #0
 fill_page__loop:
@@ -1831,7 +1846,7 @@ fill_page__loop:
     rts
 
 main:
-    ; set16!(ptr, SCREEN)           main.nt65:29
+    ; set16!(ptr, SCREEN)  main.nt65:32
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
@@ -1863,6 +1878,13 @@ alone and without an assembler:
   direct-page and bank mismatches against declared segments and ranges (§7.5);
 - report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6);
 - run incrementally: editing one file re-parses one file; only resolution is global.
+
+**Unused symbols** are warnings: a label, constant, macro, struct, union or enum that
+nothing names and the file does not export, since an export is what another file uses. A
+member of a named enum is one of a set and is not reported on its own, a label a `.state`
+declares an entry point is reached from outside, and a label flow analysis reports as never
+reached is not reported twice. A name written in a branch the configuration leaves out
+counts as used, because the other build uses it, and a file with errors gets none.
 
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
 lines in a branch that is not taken still parse, but are not resolved or analyzed.

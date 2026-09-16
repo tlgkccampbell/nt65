@@ -7,10 +7,18 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1363, 0
+.dbg file, "main.nt65", 1506, 0
 
 .export fill_page
 .export SCREEN
+.exportzp SCREEN_PAGES
+.exportzp frame
+.export words
+.export wide
+.export here
+.export there
+.export greeting
+.export padding
 
 .importzp zp_scratch
 .import far_table: far
@@ -83,22 +91,24 @@ render:
 .popseg
 
 .dbg line, "main.nt65", 58
-    sep #$20
+    ldx a:render__shifts
 .dbg line, "main.nt65", 59
+    sep #$20
+.dbg line, "main.nt65", 60
     rts
 
 hud:
-.dbg line, "main.nt65", 63
+.dbg line, "main.nt65", 64
     rts
 
 show:
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 68
     rts
 
 skip2:
-.dbg line, "main.nt65", 71
+.dbg line, "main.nt65", 72
     rtl
 
     gfx__init:
-.dbg line, "main.nt65", 77
+.dbg line, "main.nt65", 78
         rts

@@ -6,8 +6,8 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// The program's segments. The standard names are predeclared; every other segment
-/// is declared exactly once, by a <c>.segment "NAME": size</c> item in one file or (from
-/// Stage 6) in <c>nt65.json</c>. A segment block naming a segment declared nowhere is an
+/// is declared exactly once, by a <c>.segment "NAME": size</c> item in one file or in
+/// <c>nt65.json</c>. A segment block naming a segment declared nowhere is an
 /// error, so a misspelled name is caught before ld65 runs.
 /// </summary>
 public sealed class SegmentTable

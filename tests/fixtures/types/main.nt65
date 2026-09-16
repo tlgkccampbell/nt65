@@ -9,6 +9,13 @@
     blue                ; 6
 }
 
+; A member of a named enum is only ever named through it, so it may be called after a register.
+.enum Reg {
+    a
+    x
+    y
+}
+
 .struct Point {
 x:      .word
 y:      .word
@@ -89,6 +96,17 @@ cursor: .tag Player
     lda cursor::hp
     sta cursor::pos::x+1
     lda #Color::green
+    ldx #Reg::x
     lda #.sizeof(Player)
     rts
 }
+
+; A union is written as the one member it is given, and zeros to its size.
+.rodata {
+as_word:    .tag Value { w = $1234 }
+as_byte:    .tag Value { b = 1 }
+as_nothing: .tag Value { }
+}
+
+; Exported, so that what the file only declares counts as used.
+.export as_word, as_byte, as_nothing, sizes, counts, offs, plain, mapped, one, color, table, lo, blob, part

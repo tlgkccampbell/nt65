@@ -14,8 +14,8 @@ namespace Norristown.Emit;
 /// from the source and made unique, as <c>draw__loop</c> and <c>draw__loop_2</c>.
 /// </para>
 /// <para>
-/// What a macro body declares is local to each expansion, so one symbol there is many names
-/// in the output, one per call. Those are handed out as the expansions are written, which is
+/// What a macro body declares is local to each expansion, and what a repetition declares to
+/// each turn, so one symbol there is many names in the output, one per writing. Those are handed out as the expansions are written, which is
 /// as deterministic as the writing itself, and each is made unique against everything
 /// already claimed.
 /// </para>
@@ -62,8 +62,8 @@ public sealed class FlatNames
             flat.names[symbol] = name;
         }
 
-        // What a macro body declares is not one name but one per expansion, so those are
-        // claimed as the expansions are written rather than here.
+        // What a macro body or a repetition declares is not one name but one per writing, so
+        // those are claimed as the expansions and turns are written rather than here.
         foreach (var symbol in model.Symbols.Where(symbol =>
             !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
@@ -133,14 +133,15 @@ public sealed class FlatNames
     }
 
     /// <summary>
-    /// Whether the symbol is one a macro body declares, and so one name per expansion rather
-    /// than one name. Nothing outside a body can reach it, which is why it can be renamed.
+    /// Whether the symbol is one a macro body or a repetition declares, and so one name per
+    /// expansion or turn rather than one name. Nothing outside a body can reach it, which is
+    /// why it can be renamed.
     /// </summary>
     private static bool IsLocalToAnExpansion(Symbol symbol)
     {
         for (var scope = symbol.Scope; scope is not null; scope = scope.Parent)
         {
-            if (scope.Kind == ScopeKind.Macro)
+            if (scope.Kind is ScopeKind.Macro or ScopeKind.Repetition)
                 return true;
         }
         return false;

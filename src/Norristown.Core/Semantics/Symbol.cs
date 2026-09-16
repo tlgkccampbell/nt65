@@ -109,6 +109,9 @@ public sealed class Symbol
     /// </summary>
     public Symbol? PreviousMember { get; internal set; }
 
+    /// <summary>Whether this is a member of an enum, named or anonymous, whose value must be a constant.</summary>
+    public bool IsEnumMember { get; internal set; }
+
     /// <summary>
     /// Whether this is an enum member that was given no value, and so is the member before it
     /// plus one, or zero when it is the first.

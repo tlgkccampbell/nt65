@@ -49,9 +49,7 @@ public static class SyntaxFacts
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // Every directive that may begin a line, and the node it parses to. `.segment` and
-    // `.proc` each parse to one of two kinds, decided by the rest of the line. A directive
-    // whose stage has not arrived yet maps to UnsupportedLine: it is recognized, kept whole
-    // and not diagnosed.
+    // `.proc` each parse to one of two kinds, decided by the rest of the line.
     private static readonly FrozenDictionary<string, SyntaxKind> lineDirectives = new Dictionary<string, SyntaxKind>
     {
         [".cpu"] = SyntaxKind.CpuDirective,

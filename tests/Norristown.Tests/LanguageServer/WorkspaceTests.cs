@@ -32,7 +32,7 @@ public sealed class WorkspaceTests
 
     /// <summary>
     /// An edit re-lexes the lines it touches and no others: the lines above and below keep
-    /// the green nodes they had, which is the reuse Stage 2 built the tree for.
+    /// the green nodes they had, which is the reuse the tree is built for.
     /// </summary>
     [Fact]
     public void AnEditReusesTheGreenNodesItDidNotTouch()

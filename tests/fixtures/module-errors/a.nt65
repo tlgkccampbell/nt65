@@ -5,4 +5,4 @@
 .segment "VRAM": abs    ;! error: segment "VRAM" is already declared
 
 shared = 1
-hidden = 2
+hidden = 2              ;! warning: `hidden` is never used: nothing names it, and it is not exported

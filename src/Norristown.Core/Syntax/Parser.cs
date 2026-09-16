@@ -159,19 +159,6 @@ internal sealed class Parser
 
     private GreenNode Finish(GreenSyntax statement) => Finish(statement.Kind, statement.Children);
 
-    /// <summary>
-    /// A construct a later stage brings online. Its tokens are kept, so the line is part of
-    /// the tree and reads back exactly, and nothing about it is diagnosed yet.
-    /// </summary>
-    private GreenNode Unsupported(params ReadOnlySpan<GreenNode> leading)
-    {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.AddRange(leading);
-        children.AddRange(TakeRest());
-        children.Add(Advance());
-        return new GreenSyntax(SyntaxKind.UnsupportedLine, children.ToImmutable());
-    }
-
     private GreenNode ErrorLine(string message)
     {
         Report(message);
@@ -205,7 +192,7 @@ internal sealed class Parser
         {
             SyntaxKind.ElseIfDirective => Finish(ParseIf(SyntaxKind.ElseIfDirective, brace)),
             SyntaxKind.ElseDirective => Finish(ParseElse(brace)),
-            _ => Unsupported(brace),
+            _ => Finish(SyntaxKind.BlockCloseLine, [brace]),
         };
     }
 
@@ -230,8 +217,6 @@ internal sealed class Parser
         {
             case SyntaxKind.DataDirective:
                 return Finish(SyntaxKind.LabeledLine, [label, ParseDataDirective()]);
-            case SyntaxKind.UnsupportedLine:
-                return Unsupported(label);
             case SyntaxKind.None:
                 Report($"unknown directive `{Current.Text}`");
                 return Finish(SyntaxKind.LabeledLine, [label]);
@@ -280,7 +265,6 @@ internal sealed class Parser
             SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
-            SyntaxKind.UnsupportedLine => Unsupported(),
             _ => ErrorLine($"unknown directive `{Current.Text}`"),
         };
     }
@@ -1026,7 +1010,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ImportSignature, children.ToImmutable());
     }
 
-    /// <summary>The <c>: entry -&gt; exit</c> of a proc. Kept from Stage 2; used from Stage 11.</summary>
+    /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
     private GreenNode ParseSignature()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -1115,7 +1099,7 @@ internal sealed class Parser
             : new GreenSyntax(SyntaxKind.InstructionStatement, [mnemonic, ParseOperand()]);
     }
 
-    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is Stage 5's.</summary>
+    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is layout's to say.</summary>
     private GreenNode ParseOperand()
     {
         if (Kind == SyntaxKind.Hash)

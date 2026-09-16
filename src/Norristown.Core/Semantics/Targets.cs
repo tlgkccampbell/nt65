@@ -16,7 +16,7 @@ public static class Targets
     /// </summary>
     public static (Symbol Symbol, Expansion? At)? Of(SemanticModel model, SyntaxNode? expression, Expansion? on)
     {
-        if (expression is not { Kind: SyntaxKind.NameExpression } || model.SymbolOf(expression) is not { } symbol)
+        if (expression is not { Kind: SyntaxKind.NameExpression } || model.SymbolOf(expression, on) is not { } symbol)
             return null;
         if (symbol.Kind != SymbolKind.MacroParameter)
             return (symbol, Expansion.Owning(on, symbol));

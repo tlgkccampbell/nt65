@@ -42,3 +42,6 @@ top:
     }
     jmp outer::inner
 }
+
+; Exported, so that what the file only declares counts as used.
+.export ptr

@@ -20,9 +20,10 @@ public sealed class Expansion : IEquatable<Expansion>
 
     private Expansion(
         Expansion? outer, Symbol? binding, Value value, SyntaxNode? item, int index,
-        SyntaxNode? call, SyntaxNode? body, bool splice = false)
+        SyntaxNode? call, SyntaxNode? body, bool splice = false, Symbol? member = null)
     {
         this.splice = splice;
+        Member = member;
         Outer = outer;
         Binding = binding;
         Value = value;
@@ -44,6 +45,9 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <summary>The item it stands for, for an <c>.each</c> over a list.</summary>
     public SyntaxNode? Item { get; }
 
+    /// <summary>The member it stands for, for an <c>.each</c> over an enum.</summary>
+    public Symbol? Member { get; }
+
     /// <summary>Which turn it is, from zero; zero for an expansion.</summary>
     public int Index { get; }
 
@@ -59,8 +63,9 @@ public sealed class Expansion : IEquatable<Expansion>
 
     /// <summary>One turn of a repetition, with the name it binds and what that is worth.</summary>
     public static Expansion Turn(
-        Expansion? outer, SyntaxNode block, Symbol? binding, Value value, SyntaxNode? item, int index) =>
-        new(outer, binding, value, item, index, null, block);
+        Expansion? outer, SyntaxNode block, Symbol? binding, Value value, SyntaxNode? item, int index,
+        Symbol? member = null) =>
+        new(outer, binding, value, item, index, null, block, member: member);
 
     /// <summary>One expansion of the macro <paramref name="call"/> names.</summary>
     public static Expansion Of(Expansion? outer, SyntaxNode call, SyntaxNode definition) =>
@@ -195,6 +200,7 @@ public sealed class Expansion : IEquatable<Expansion>
         && Binding == other.Binding
         && Value == other.Value
         && Item == other.Item
+        && Member == other.Member
         && Body == other.Body
         && Equals(Outer, other.Outer);
 
@@ -217,5 +223,6 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <param name="Value">The number or word, where there is one.</param>
     /// <param name="Item">The expression it stands for, or null when it stands for a value.</param>
     /// <param name="Argument">What a macro parameter was given, for the built-ins that ask about it.</param>
-    public readonly record struct Bound(Value Value, SyntaxNode? Item, MacroArgument? Argument = null);
+    /// <param name="Member">The enum member it stands for, which a path ending in the name reaches the namesake of.</param>
+    public readonly record struct Bound(Value Value, SyntaxNode? Item, MacroArgument? Argument = null, Symbol? Member = null);
 }

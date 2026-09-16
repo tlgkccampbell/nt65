@@ -6,7 +6,7 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What Stage 6 gives an editor: a name that crosses files is one name, so definition,
+/// What an editor gets across files: a name that crosses files is one name, so definition,
 /// references and rename cross with it, and an edit in one file changes what is wrong with
 /// another.
 /// </summary>

@@ -45,6 +45,7 @@ public static class Compiler
         // Every file is written even when the program is already wrong, because what emission
         // finds — a construct no stage has reached, two names that meet in the output — is
         // worth reporting alongside the rest rather than only once the rest is fixed.
+        var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
         for (var i = 0; i < analysis.Layouts.Count; i++)
         {
             var model = analysis.Program.Files[i];
@@ -52,8 +53,11 @@ public static class Compiler
             // The defines are not a file anyone wrote, and nothing is written for them.
             if (model.Tree == analysis.Defines)
                 continue;
+            var elsewhere = measured.Where((_, j) => j != i).SelectMany(set => set)
+                .Where(symbol => symbol.Tree == model.Tree)
+                .ToHashSet();
             outputs.Add(Emitter.Emit(
-                model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out));
+                model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out, elsewhere));
         }
 
         // A program that is wrong produces no output: what would be written for it is not a
@@ -304,6 +308,10 @@ public static class Compiler
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
+        var entries = flow.Regions.SelectMany(region => region.Blocks)
+            .Where(block => block.IsDeclared)
+            .Select(block => block.Label!);
+        found.AddRange(UnusedSymbols.Of(model, found, entries).ToList());
         return (layout, flow, state, found);
     }
 

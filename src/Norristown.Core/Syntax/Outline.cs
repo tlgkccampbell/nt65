@@ -3,7 +3,7 @@ namespace Norristown.Syntax;
 /// <summary>
 /// A file's declarations, nested the way its blocks are: what an editor shows as the
 /// document's outline. This is a reading of the syntax and nothing more — a name is
-/// whatever the line writes, and no name is resolved or checked (Stage 4).
+/// whatever the line writes, and no name is resolved or checked.
 /// </summary>
 public static class Outline
 {
@@ -68,7 +68,7 @@ public static class Outline
                 var quoted = FirstToken(opener, SyntaxKind.StringLiteral);
 
                 // Segment names hold no escapes, so the quotes come off by hand rather than
-                // through the string evaluation that Stage 4 brings.
+                // through string evaluation, which an outline does not run.
                 return new OutlineItem(OutlineKind.Segment, quoted?.Text.Trim('"') ?? directive.Text,
                     quoted is null ? null : directive.Text, block.Span, (quoted ?? directive).Span, children);
 

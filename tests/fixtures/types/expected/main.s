@@ -7,92 +7,128 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2171, 0
+.dbg file, "main.nt65", 2674, 0
+
+.export as_word
+.export as_byte
+.export as_nothing
+.export sizes
+.export counts
+.export offs
+.export plain
+.export mapped
+.export one
+.export color
+.export table
+.export lo
+.export blob
+.export part
 
     Color__red = $00
     Color__green = $05
     Color__blue = $06
 
+    Reg__a = $00
+    Reg__x = $01
+    Reg__y = $02
+
 MAX_ACTORS = 3
 
 .segment "BSS": absolute
 player:
-.dbg line, "main.nt65", 44
+.dbg line, "main.nt65", 51
     .res 13                         ; Player
 actors:
-.dbg line, "main.nt65", 45
+.dbg line, "main.nt65", 52
     .res 39                         ; Player
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 50
+.dbg line, "main.nt65", 57
 sizes:  .byte $0d, $04, $02
-.dbg line, "main.nt65", 51
+.dbg line, "main.nt65", 58
 counts: .byte $03, $03
-.dbg line, "main.nt65", 52
+.dbg line, "main.nt65", 59
 offs:   .byte $02, $04, $02         ; Player::pos::y, Player::hp, Point::y
 
-.dbg line, "main.nt65", 55
+.dbg line, "main.nt65", 62
 plain:  .byte $48, $49              ; "HI"
-.dbg line, "main.nt65", 56
+.dbg line, "main.nt65", 63
 mapped: .byte $08, $09, $00         ; screen("HI@")
-.dbg line, "main.nt65", 57
+.dbg line, "main.nt65", 64
 one:    .byte $1a                   ; screen('Z')
 
-.dbg line, "main.nt65", 60
+.dbg line, "main.nt65", 67
 color:  .word $1f                   ; rgb15(31, 0, 0)
-.dbg line, "main.nt65", 61
+.dbg line, "main.nt65", 68
 table:  .byte $00, $05, $06         ; handlers
-.dbg line, "main.nt65", 62
+.dbg line, "main.nt65", 69
 lo:     .lobytes $00, $05, $06      ; handlers
 
 boss:
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 72
     .word $64                       ; pos::x
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 72
     .word $28                       ; pos::y
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 72
     .byte $63                       ; hp
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 72
     .byte $00, $00, $00, $00, $00, $00, $00, $00  ; name
 
 hero:
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 74
     .word $00                       ; pos::x
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 74
     .word $00                       ; pos::y
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 74
     .byte $03                       ; hp
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 74
     .byte $5a, $49, $50, $00, $00, $00, $00, $00  ; name
 
-.dbg line, "main.nt65", 73
+.dbg line, "main.nt65", 80
 blob:   .incbin "sprites.bin"
-.dbg line, "main.nt65", 74
+.dbg line, "main.nt65", 81
 part:   .incbin "sprites.bin", 6, 4
 
-.dbg line, "main.nt65", 77
+.dbg line, "main.nt65", 84
     .align 16
 
 .segment "ZEROPAGE": zeropage
 cursor:
-.dbg line, "main.nt65", 81
+.dbg line, "main.nt65", 88
     .res 13                         ; Player
 
 .segment "CODE": absolute
 main:
 
-.dbg line, "main.nt65", 86
+.dbg line, "main.nt65", 93
     lda a:player+4                  ; player::hp
-.dbg line, "main.nt65", 87
+.dbg line, "main.nt65", 94
     ldx a:actors                    ; actors::pos::x
 
-.dbg line, "main.nt65", 89
+.dbg line, "main.nt65", 96
     lda z:cursor+4                  ; cursor::hp
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 97
     sta z:cursor+1                  ; cursor::pos::x
-.dbg line, "main.nt65", 91
+.dbg line, "main.nt65", 98
     lda #Color__green
-.dbg line, "main.nt65", 92
+.dbg line, "main.nt65", 99
+    ldx #Reg__x
+.dbg line, "main.nt65", 100
     lda #$0d
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 101
     rts
+
+.segment "RODATA": absolute
+as_word:
+.dbg line, "main.nt65", 106
+    .word $1234                     ; w
+as_byte:
+.dbg line, "main.nt65", 107
+    .byte $01                       ; b
+.dbg line, "main.nt65", 107
+    .res 1, $00                     ; Value
+as_nothing:
+.dbg line, "main.nt65", 108
+    .byte $00                       ; b
+.dbg line, "main.nt65", 108
+    .res 1, $00                     ; Value

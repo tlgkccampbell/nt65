@@ -1,0 +1,57 @@
+; Labels, constants, macros and types that nothing names. What a file exports is used by
+; the files that import it, and what a branch this build leaves out names is used by the
+; build that takes it.
+.cpu 65816
+
+LIMIT = 10                      ;! warning: `LIMIT` is never used: nothing names it, and it is not exported
+WIDTH = 40
+.export WIDTH
+
+.if 0 {
+    lda #DEPTH
+}
+DEPTH = 3
+
+.macro twice(value) {           ;! warning: `twice` is never used: nothing names it, and it is not exported
+    lda #value
+}
+
+.struct Pair {                  ;! warning: `Pair` is never used: nothing names it, and it is not exported
+first:  .byte
+second: .byte
+}
+
+; A member of a named enum is one of a set, and is not reported on its own.
+.enum Mode {
+    idle
+    busy
+}
+
+.proc main {
+    lda #Mode::busy
+@unnamed:                       ;! warning: `@unnamed` is never used: nothing names it, and it is not exported
+    ldx #0
+    rts
+; Never reached is said once, and says more.
+@dead:                          ;! warning: `@dead` is never reached: nothing runs into it and nothing names it
+    rts
+; An entry point nt65 cannot see the callers of declares its state, and is not reported.
+@hook:
+    .state native, a8, i8
+    rts
+}
+
+.rodata {
+table:  .byte 1, 2, 3           ;! warning: `table` is never used: nothing names it, and it is not exported
+}
+
+; Fall-through never enters a nested segment block, so code at its start with no label is
+; somewhere nothing goes.
+.proc detour: a8, i8 {
+    .rodata {
+        nop                     ;! warning: this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
+        rts
+    }
+    rts
+}
+.export detour

@@ -7,9 +7,11 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1170, 0
+.dbg file, "main.nt65", 1650, 0
 
 .export main
+.export shape
+.export clear_extent
 
 .importzp host_tick
 .import host_print
@@ -20,6 +22,7 @@ SCREEN = $0400
 .import clear
 .import clear__again
 Color__white = $01
+.import clear__end
 
 .segment "CODE": absolute
 main:
@@ -55,3 +58,10 @@ main:
 .segment "RODATA": absolute
 .dbg line, "main.nt65", 33
 shape:  .byte $3c, $42, $3c         ; glyphs
+
+.dbg line, "main.nt65", 35
+clear_extent: .addr clear__end, (clear__end - clear)
+
+.segment "CODE": absolute
+.dbg line, "main.nt65", 43
+.assert ((main = main) && (main <> clear)) && (!(main .xor main)), lderror, "an operator reached ld65 misspelled"

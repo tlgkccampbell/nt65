@@ -7,7 +7,13 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2359, 0
+.dbg file, "main.nt65", 3205, 0
+
+.export bits
+.export dispatch
+.export commands
+.export actions_table
+.export grid
 
 LINES = 262
 
@@ -79,25 +85,93 @@ commands:
 .dbg line, "main.nt65", 87
     .byte $02                       ; c
 
+actions_table:
+.dbg line, "main.nt65", 94
+    .addr actions__move
+.dbg line, "main.nt65", 94
+    .addr actions__fire
+.dbg line, "main.nt65", 94
+    .addr actions__wait
+
 grid:
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($00 * 3) + $00           ; row, col
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($00 * 3) + $01           ; row, col
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($00 * 3) + $02           ; row, col
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($01 * 3) + $00           ; row, col
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($01 * 3) + $01           ; row, col
-.dbg line, "main.nt65", 93
+.dbg line, "main.nt65", 100
     .byte ($01 * 3) + $02           ; row, col
 
     COLUMNS = 40
 
 .segment "CODE": absolute
 indented:
-.dbg line, "main.nt65", 110
+.dbg line, "main.nt65", 117
         lda #1
-.dbg line, "main.nt65", 114
+.dbg line, "main.nt65", 121
+    rts
+
+actions__move:
+.dbg line, "main.nt65", 126
+    rts
+actions__fire:
+.dbg line, "main.nt65", 128
+    jmp actions__move
+actions__wait:
+.dbg line, "main.nt65", 130
+    rts
+
+slow:
+.dbg line, "main.nt65", 137
+    ldx #$00 + 1                    ; i
+slow__delay:
+.dbg line, "main.nt65", 139
+    dex
+.dbg line, "main.nt65", 140
+    bne slow__delay
+.dbg line, "main.nt65", 141
+    bcc slow__skip
+.dbg line, "main.nt65", 142
+    nop
+slow__skip:
+.dbg line, "main.nt65", 137
+    ldx #$01 + 1                    ; i
+slow__delay_2:
+.dbg line, "main.nt65", 139
+    dex
+.dbg line, "main.nt65", 140
+    bne slow__delay_2
+.dbg line, "main.nt65", 141
+    bcc slow__skip_2
+.dbg line, "main.nt65", 142
+    nop
+slow__skip_2:
+.dbg line, "main.nt65", 137
+    ldx #$02 + 1                    ; i
+slow__delay_3:
+.dbg line, "main.nt65", 139
+    dex
+.dbg line, "main.nt65", 140
+    bne slow__delay_3
+.dbg line, "main.nt65", 141
+    bcc slow__skip_3
+.dbg line, "main.nt65", 142
+    nop
+slow__skip_3:
+.dbg line, "main.nt65", 145
+    rts
+
+run_all:
+.dbg line, "main.nt65", 151
+    jsr actions__move
+.dbg line, "main.nt65", 151
+    jsr actions__fire
+.dbg line, "main.nt65", 151
+    jsr actions__wait
+.dbg line, "main.nt65", 153
     rts

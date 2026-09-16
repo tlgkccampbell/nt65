@@ -115,18 +115,18 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A name declared inside a repetition would have to be a different name on every turn,
-    /// which is what macro expansion gives and this stage does not.
+    /// What a repetition declares is its own on every turn, as a macro expansion's is, so each
+    /// turn's label gets a name of its own in the output.
     /// </summary>
     [Fact]
-    public void ANameDeclaredInsideARepetitionIsRefused()
+    public void ANameDeclaredInsideARepetitionIsOneNamePerTurn()
     {
-        var program = Analysis.Program(("main.nt65", ".repeat 4, i {\nentry:\n    .byte i\n}\n"));
+        var main = Output(".proc p {\n.repeat 2, i {\n@wait:\n    dex\n    bne @wait\n}\n    rts\n}\n");
 
-        Assert.Equal(
-            ["main.nt65:2: `entry` is declared inside a `.repeat` body. A name that is distinct "
-                + "on every turn arrives with macro expansion"],
-            program.Problems());
+        Assert.Contains("p__wait:", main);
+        Assert.Contains("bne p__wait\n", main);
+        Assert.Contains("p__wait_2:", main);
+        Assert.Contains("bne p__wait_2\n", main);
     }
 
     /// <summary>A repetition is unrolled by nt65, so none of it reaches ca65.</summary>

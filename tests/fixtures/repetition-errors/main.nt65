@@ -1,4 +1,4 @@
-; What a repetition refuses, and what it cannot do yet.
+; What a repetition refuses.
 
 here:
     .byte 0
@@ -16,11 +16,10 @@ SIZE = -1
     .byte h
 }
 
-; A name inside a repetition would have to be a different name on every turn, which is what
-; macro expansion gives.
-.repeat 4, i {
-entry:                          ;! error: `entry` is declared inside a `.repeat` body. A name that is distinct on every turn arrives with macro expansion
-    .byte i
+; A repetition's body is written out once per turn, so it holds nothing that is one thing
+; for the whole file.
+.repeat 2, i {
+    .export here                ;! error: an export or an import belongs outside a repetition: it names one symbol, and a repetition's body is written out once per turn
 }
 
 .enum Cmd {
@@ -31,10 +30,28 @@ fire
 .scope actions {
 move:
     rts
-fire:
-    rts
 }
 
+; A path ends in a repetition's name only over an enum, and the scope needs every member.
 .each Cmd, c {
-    .addr actions::c            ;! error: `c` is a repetition binding, and naming a member through one arrives with macro expansion
+    .addr actions::c            ;! error: `actions` has no `fire`, which `c` stands for on this turn
+}
+
+.list handlers {
+    here
+}
+
+.each handlers, h {
+    .addr actions::h            ;! error: `h` does not walk an enum, so it names no member: a path ends in a repetition's name only over an enum's members
+}
+
+; A repetition in a macro body counts every turn towards what an expansion may lay out.
+.macro big(n: const) {
+.repeat n {
+    .byte 0
+}
+}
+
+.rodata {
+    big!(70000)                 ;! error: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
 }

@@ -31,7 +31,6 @@
 ; flow carries on past the instruction they spell rather than through it.
 .proc set {
     beq @set_two
-@set_one:
     lda #1
     .byte $2c           ; bit abs: swallows the next instruction
     .next @store

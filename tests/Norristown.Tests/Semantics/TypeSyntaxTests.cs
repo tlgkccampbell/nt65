@@ -5,8 +5,8 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// The declarative constructs: enumerations, structures, unions, lists, character mappings
-/// and functions. They are read and their names are bound; what the output writes for them
-/// is not built yet, so a file that uses one is refused rather than written out short.
+/// and functions. They are read and their names are bound, and what the output writes for
+/// them is only what they name: constants, offsets and the values of a call.
 /// </summary>
 public sealed class TypeSyntaxTests
 {
@@ -103,7 +103,7 @@ public sealed class TypeSyntaxTests
     [Fact]
     public void ATypeWritesNothingAndAnEnumWritesItsMembers()
     {
-        var output = Compiled(Source + "\n.proc main {\n    rts\n}\n");
+        var output = Compiled(Source + "\n.export Color, Point, Value\n.proc main {\n    rts\n}\n");
 
         Assert.Contains("Color__red = $00", output);
         Assert.Contains("Color__green = $05", output);

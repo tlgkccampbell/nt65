@@ -22,7 +22,7 @@ public sealed class MacroRequestsTests
             lda #<value
             sta dest
         @done:
-            nop
+            bvs @done
         }
 
         .macro times_x(count, body: block) {
