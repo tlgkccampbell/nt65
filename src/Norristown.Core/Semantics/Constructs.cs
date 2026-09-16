@@ -19,14 +19,6 @@ public static class Constructs
     public static bool Repeats(BlockKind kind) => kind is BlockKind.Repeat or BlockKind.Each;
 
     /// <summary>
-    /// Whether a block is one emission can write out. The types, lists and text mappings are
-    /// read and bound before anything is written for them, so they are refused rather than
-    /// walked into and silently dropped.
-    /// </summary>
-    public static bool IsEmitted(BlockKind kind) => kind is not (BlockKind.Enum or BlockKind.Struct
-        or BlockKind.Union or BlockKind.Charmap or BlockKind.List or BlockKind.TagInitializer);
-
-    /// <summary>
     /// What an <c>.assert</c> or an <c>.error</c> says: the expression that has to hold (none,
     /// for an <c>.error</c>), how much it matters, and the message written with it.
     /// </summary>
