@@ -109,6 +109,7 @@ public static class Compiler
         // sized, which is Stage 11's; until then it is refused rather than sized as if its
         // widths were known.
         var layouts = new List<CodeLayout>();
+        var flows = new List<Flow.ControlFlow>();
         if (target == Cpu.Wdc65816)
         {
             diagnostics.AddRange(Ca65816NotYet(trees));
@@ -121,10 +122,17 @@ public static class Compiler
                 var layout = CodeLayout.Create(model, target);
                 layouts.Add(layout);
                 diagnostics.AddRange(layout.Diagnostics);
+
+                // Where control goes is read off the order layout wrote the bytes in, so the
+                // macros are expanded and the repetitions unrolled before anything is asked
+                // about the path.
+                var flow = Flow.ControlFlow.Of(model, layout);
+                flows.Add(flow);
+                diagnostics.AddRange(flow.Diagnostics);
             }
         }
         return new ProgramAnalysis(
-            program, target, layouts, defines, configuration, Diagnostics.Ordered(diagnostics));
+            program, target, layouts, flows, defines, configuration, Diagnostics.Ordered(diagnostics));
     }
 
     /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>

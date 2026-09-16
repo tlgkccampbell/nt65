@@ -29,6 +29,10 @@ public sealed class CodeLayout
     private readonly Dictionary<int, int> filled = [];
     private readonly List<Branch> branches = [];
 
+    // Every statement in the order its bytes are written, which is what the flow analysis
+    // reads: it is this walk that expands the macros and unrolls the repetitions.
+    private readonly List<Step> steps = [];
+
     // The long branches already found out of reach, which is what carries between walks:
     // lengthening one moves everything after it, so the file is laid out again.
     private readonly HashSet<(int Position, Expansion? On)> lengthened;
@@ -38,6 +42,9 @@ public sealed class CodeLayout
     private readonly List<int> streams = [0];
     private int nextStream = 1;
     private string segment = SegmentTable.DefaultSegment;
+
+    // The routine the walk is inside, which every statement of it belongs to.
+    private Symbol? routine;
 
     // Which turn of which repetitions, and which expansion of which macros, the walk is
     // inside. A body is laid out once per writing, and the same line can be a different
@@ -68,6 +75,9 @@ public sealed class CodeLayout
 
     /// <summary>What the CPU makes wrong, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
+
+    /// <summary>Every statement of the file, in the order its bytes are written.</summary>
+    public IReadOnlyList<Step> Steps => steps;
 
     /// <summary>Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>.</summary>
     public static CodeLayout Create(SemanticModel model, Cpu cpu)
@@ -249,6 +259,12 @@ public sealed class CodeLayout
 
         var lines = block.ChildNodes;
         var outer = segment;
+        var outerRoutine = routine;
+        if (kind == BlockKind.Proc && lines.Length > 0
+            && lines[0].Statement is { Kind: SyntaxKind.ProcDeclaration } declaration)
+        {
+            routine = NameOf(declaration);
+        }
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
         {
             segment = Constructs.SegmentOf(opener) ?? segment;
@@ -260,6 +276,7 @@ public sealed class CodeLayout
         }
 
         Walk(lines, from: 1);
+        routine = outerRoutine;
         if (kind == BlockKind.Segment)
             streams.RemoveAt(streams.Count - 1);
         segment = outer;
@@ -346,6 +363,13 @@ public sealed class CodeLayout
             case SyntaxKind.ProcDeclaration:
                 Mark(statement);
                 break;
+
+            // An annotation generates nothing and is here for the flow analysis, which reads
+            // it off the statement above it.
+            case SyntaxKind.NextDirective:
+            case SyntaxKind.PatchDirective:
+                steps.Add(new Step(statement, expansion, routine, Stream, null));
+                break;
             default:
                 break;
         }
@@ -399,6 +423,7 @@ public sealed class CodeLayout
         var length = Instructions.Length(mode);
         lines[(statement.Position, expansion)] = new LineLayout(length, mode, prefix);
         Place(statement, length);
+        steps.Add(new Step(statement, expansion, routine, Stream, null));
 
         // `bbr0 flags, @skip` branches to the second of its two expressions; every other
         // relative form branches to its only one.
@@ -447,6 +472,7 @@ public sealed class CodeLayout
         branches.Add(new Branch(statement, expansion, target, Long: true));
         lines[(statement.Position, expansion)] = new LineLayout(length, AddressingMode.Relative, null, over);
         Place(statement, length);
+        steps.Add(new Step(statement, expansion, routine, Stream, null));
     }
 
     /// <summary>
@@ -656,6 +682,7 @@ public sealed class CodeLayout
             return;
         lines[(directive.Position, expansion)] = new LineLayout(length, null, null);
         Place(directive, length);
+        steps.Add(new Step(directive, expansion, routine, Stream, null));
     }
 
     /// <summary>The stream the walk is writing into.</summary>
@@ -682,17 +709,25 @@ public sealed class CodeLayout
     /// </summary>
     private void Mark(SyntaxNode declaration)
     {
+        if (NameOf(declaration) is not { } symbol)
+            return;
+        labels[(symbol, Expansion.Owning(expansion, symbol))] =
+            new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
+        steps.Add(new Step(declaration, expansion, routine, Stream, symbol));
+    }
+
+    /// <summary>What a label or a routine declaration names.</summary>
+    private Symbol? NameOf(SyntaxNode declaration)
+    {
         foreach (var token in declaration.ChildTokens)
         {
-            if (token.Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
-                or SyntaxKind.Register or SyntaxKind.Mnemonic))
+            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+                or SyntaxKind.Register or SyntaxKind.Mnemonic)
             {
-                continue;
+                return model.SymbolAt(token);
             }
-            if (model.SymbolAt(token) is { } symbol)
-                labels[(symbol, Expansion.Owning(expansion, symbol))] = new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
-            return;
         }
+        return null;
     }
 
     private static string Spell(AddressSize size) => size switch

@@ -1,0 +1,59 @@
+; Assembly's tricks — computed jumps, data in the instruction stream, self-modifying code
+; — are all allowed. Each has a syntactic fingerprint, so nt65 finds it in one pass and
+; takes an annotation that tells the analysis what it cannot see for itself. On the 6502
+; and the 65C02 nothing consumes processor state, so the annotations are accepted and
+; their names checked, and none is required.
+.cpu 65c02
+
+.export dispatch
+
+; A jump table inside a proc. Every item of `@table` is a code label, so `.next @table`
+; says what listing them one by one says, and the targets need no declarations because
+; the edges carry the state at the jump.
+.proc dispatch {
+    lda cmd
+    asl a
+    tax
+    jmp (@table,x)
+    .next @table
+
+@table: .addr @move, @fire
+
+@move:
+    lda #1
+    rts
+@fire:
+    lda #2
+    rts
+}
+
+; The `bit` skip trick: `$2c` is `bit abs`, which swallows the two bytes after it, so
+; flow carries on past the instruction they spell rather than through it.
+.proc set {
+    beq @set_two
+@set_one:
+    lda #1
+    .byte $2c           ; bit abs: swallows the next instruction
+    .next @store
+@set_two:
+    lda #2
+@store:
+    sta value
+    rts
+}
+
+; Self-modifying code: the store writes into the operand of the instruction at `@op`,
+; which is what `.patch` acknowledges.
+.proc patching {
+    lda #$60
+@op:
+    sta $0400
+    sta @op+1
+    .patch @op
+    rts
+}
+
+.bss {
+cmd:    .res 1
+value:  .res 1
+}

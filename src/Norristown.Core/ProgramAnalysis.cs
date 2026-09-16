@@ -1,3 +1,4 @@
+using Norristown.Flow;
 using Norristown.Layout;
 using Norristown.Project;
 using Norristown.Semantics;
@@ -16,6 +17,10 @@ namespace Norristown;
 /// One layout per file of <see cref="Program"/>, in the same order, or empty for a CPU whose
 /// instructions nt65 cannot size yet.
 /// </param>
+/// <param name="Flows">
+/// Where control goes in each file of <see cref="Program"/>, in the same order, or empty
+/// alongside an empty <see cref="Layouts"/>.
+/// </param>
 /// <param name="Defines">The file the build configuration was read as, or null.</param>
 /// <param name="Configuration">Which <c>.if</c> branches this build takes.</param>
 /// <param name="Diagnostics">Everything wrong with the program, ordered by file, line and column.</param>
@@ -23,6 +28,7 @@ public sealed record ProgramAnalysis(
     ProgramModel Program,
     Cpu Cpu,
     IReadOnlyList<CodeLayout> Layouts,
+    IReadOnlyList<ControlFlow> Flows,
     SyntaxTree? Defines,
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
