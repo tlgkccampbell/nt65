@@ -5,10 +5,17 @@
       // Opens this repository in an Extension Development Host with the nt65 client
       // loaded. The client starts the Debug build of the server, which the pre-launch
       // task has just rebuilt.
+      //
+      // --new-window is required, not a preference. This repository is already open in
+      // the window you press F5 in, and asking VS Code to open a folder it already has
+      // open makes it hand the request to that window and kill the one it just started
+      // ("Sent env to running instance. Terminating..."), so the development host closes
+      // the moment it appears.
       "name": "nt65 extension",
       "type": "extensionHost",
       "request": "launch",
       "args": [
+        "--new-window",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "${workspaceFolder}"
       ],
