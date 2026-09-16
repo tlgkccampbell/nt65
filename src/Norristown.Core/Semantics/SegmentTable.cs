@@ -40,14 +40,15 @@ public sealed class SegmentTable
     /// files reports the same thing whatever order they arrive in.
     /// </summary>
     public static SegmentTable Build(IEnumerable<SyntaxTree> trees, List<Diagnostic> diagnostics) =>
-        Build(trees, [], diagnostics);
+        Build(trees, [], Configuration.Everything, diagnostics);
 
     /// <summary>
     /// The table for a program whose project file declares some of its segments. Those
     /// are read first, so a file declaring one of them is the declaration that is reported.
     /// </summary>
     public static SegmentTable Build(
-        IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, List<Diagnostic> diagnostics)
+        IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, Configuration configuration,
+        List<Diagnostic> diagnostics)
     {
         var segments = Predeclared();
         foreach (var segment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
@@ -63,8 +64,11 @@ public sealed class SegmentTable
             segments[segment.Name] = segment;
         }
 
+        // A declaration under an `.if` the build does not take is not a declaration, which
+        // is what lets two branches declare the same segment differently.
         var declarations = trees
             .SelectMany(Declarations)
+            .Where(d => configuration.Includes(d.Node))
             .OrderBy(d => d.Node.Tree.Path, StringComparer.Ordinal)
             .ThenBy(d => d.Span.Start);
         foreach (var (node, name, span) in declarations)

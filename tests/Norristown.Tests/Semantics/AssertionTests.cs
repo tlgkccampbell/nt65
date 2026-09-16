@@ -1,0 +1,87 @@
+namespace Norristown.Tests.Semantics;
+
+/// <summary>
+/// <c>.assert</c> and <c>.error</c>: what nt65 answers itself, and what it leaves for ca65
+/// and ld65 to answer once the addresses are known.
+/// </summary>
+public sealed class AssertionTests
+{
+    /// <summary>An assertion about something nt65 knows is answered by nt65.</summary>
+    [Fact]
+    public void AnAssertionAboutAConstantIsCheckedHere()
+    {
+        var program = Analysis.Program(("main.nt65", """
+            .struct Point {
+            x:  .word
+            y:  .word
+            }
+                .assert .sizeof(Point) == 4, error, "Point must be 4 bytes"
+                .assert .sizeof(Point) == 8, error, "Point must be 8 bytes"
+            """));
+
+        Assert.Equal(["main.nt65:6: Point must be 8 bytes"], program.Problems());
+    }
+
+    /// <summary>The level says how much a failure matters, and a warning still compiles.</summary>
+    [Fact]
+    public void TheLevelDecidesTheSeverity()
+    {
+        var program = Analysis.Program(("main.nt65", "    .assert 0, warning, \"only a warning\"\n"));
+
+        var diagnostic = Assert.Single(program.Diagnostics);
+        Assert.Equal(Severity.Warning, diagnostic.Severity);
+        Assert.Equal("only a warning", diagnostic.Message);
+    }
+
+    /// <summary>An assertion with no message still says which line failed.</summary>
+    [Fact]
+    public void AnAssertionWithNoMessageSaysSomething()
+    {
+        var program = Analysis.Program(("main.nt65", "    .assert 1 == 2, error\n"));
+
+        Assert.Equal(["main.nt65:1: this assertion does not hold"], program.Problems());
+    }
+
+    /// <summary>
+    /// An assertion nt65 answered does not reach ca65; one about an address, which only the
+    /// linker settles, is written out for ld65.
+    /// </summary>
+    [Fact]
+    public void WhatNt65CannotAnswerIsPassedOn()
+    {
+        var main = Analysis.Outputs(("main.nt65", """
+                .assert 4 == 4, error, "checked here"
+            .proc irq {
+                rts
+            }
+                .assert irq >= $8000, lderror, "irq must be in ROM"
+            """))["main.s"];
+
+        Assert.DoesNotContain("checked here", main);
+        Assert.Contains(".assert irq >= $8000, lderror, \"irq must be in ROM\"", main);
+    }
+
+    /// <summary>An <c>.error</c> the build reaches is what it says, and never reaches ca65.</summary>
+    [Fact]
+    public void AnErrorTheBuildReachesIsReported()
+    {
+        var compilation = Compiler.Compile(
+            [new SourceFile("main.nt65", "    .error \"unsupported configuration\"\n")]);
+
+        Assert.Equal(["unsupported configuration"], compilation.Diagnostics.Select(d => d.Message));
+        Assert.Empty(compilation.Outputs);
+    }
+
+    /// <summary>An <c>.error</c> in a branch the build leaves out is not reached.</summary>
+    [Fact]
+    public void AnErrorInABranchThatIsNotTakenSaysNothing()
+    {
+        var program = Analysis.Program(("main.nt65", """
+            .if 0 {
+                .error "unsupported configuration"
+            }
+            """));
+
+        Assert.Empty(program.Problems());
+    }
+}

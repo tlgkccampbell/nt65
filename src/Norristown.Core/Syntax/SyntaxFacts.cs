@@ -143,6 +143,16 @@ public static class SyntaxFacts
     /// <summary>Whether <paramref name="directive"/> names a built-in function.</summary>
     public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);
 
+    /// <summary>
+    /// Whether <paramref name="text"/> is a level an <c>.assert</c> may report at. The two
+    /// <c>ld</c> levels are the linker's, for a check nothing earlier can make.
+    /// </summary>
+    public static bool IsAssertLevel(string text) =>
+        text.Equals("warning", StringComparison.OrdinalIgnoreCase)
+        || text.Equals("error", StringComparison.OrdinalIgnoreCase)
+        || text.Equals("ldwarning", StringComparison.OrdinalIgnoreCase)
+        || text.Equals("lderror", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Whether <paramref name="text"/> is one of the three CPU names.</summary>
     public static bool IsCpuName(string text) =>
         text is "6502" or "65816" || text.Equals("65c02", StringComparison.OrdinalIgnoreCase);

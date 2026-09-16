@@ -1,0 +1,31 @@
+; What a condition may not do, and what an assertion says when it does not hold.
+
+SIZE = 4
+
+.if SIZE > 2 {                  ;! error: `SIZE` is not a define. A condition tests the build configuration, and a check on the program is an `.assert`
+NOPE = 1
+}
+
+.if .sizeof(SIZE) == 1 {        ;! error: `.sizeof` asks about the program. A condition tests the build configuration, and a check on the program is an `.assert`
+NOPE = 2
+}
+
+.if "yes" {                     ;! error: a condition is a number, and this is text
+NOPE = 3
+}
+
+.if 1 {
+.cpu 65c02                      ;! error: `.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`
+}
+
+.scope gfx {
+} .else {                       ;! error: `.else` continues an `.if`, and there is none to continue
+}
+
+    .assert SIZE == 8, error, "SIZE must be 8"      ;! error: SIZE must be 8
+    .assert SIZE == 8, warning, "SIZE is usually 8" ;! warning: SIZE is usually 8
+
+.if 0 {
+    .error "this branch is not taken, so nothing is said"
+}
+    .error "this one is"        ;! error: this one is

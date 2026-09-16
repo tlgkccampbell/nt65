@@ -226,9 +226,17 @@ internal sealed class Evaluator
 
             case SyntaxKind.BinaryExpression:
                 var children = node.ChildNodes;
-                return children.Length == 2 && node.ChildTokens.Length > 0
-                    ? Binary(node.ChildTokens[0], Evaluate(children[0]), Evaluate(children[1]))
-                    : Value.Unknown;
+                if (children.Length != 2 || node.ChildTokens.Length == 0)
+                    return Value.Unknown;
+
+                // `&&` and `||` leave the right operand alone once the left decides the
+                // result, so `.defined(TRACE) && TRACE` is answerable when TRACE is not
+                // defined and the name on the right is never looked up.
+                var op = node.ChildTokens[0];
+                var first = Evaluate(children[0]);
+                return first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided)
+                    ? Value.Of(decided != 0)
+                    : Binary(op, first, Evaluate(children[1]));
 
             case SyntaxKind.CallExpression:
                 return Call(node);
@@ -304,60 +312,20 @@ internal sealed class Evaluator
     {
         if (operand.AsNumber() is not { } value)
             return Reject(op, operand);
-        return op.Kind switch
-        {
-            SyntaxKind.Plus => Value.Of(value),
-            SyntaxKind.Minus => Value.Of(-value),
-            SyntaxKind.Tilde => Value.Of(~value),
-            SyntaxKind.Bang => Value.Of(value == 0),
-            SyntaxKind.Less => Value.Of(value & 0xff),
-            SyntaxKind.Greater => Value.Of((value >> 8) & 0xff),
-            SyntaxKind.Caret => Value.Of((value >> 16) & 0xff),
-            _ => Value.Unknown,
-        };
+        return Operators.Unary(op.Kind, value) is { } result ? Value.Of(result) : Value.Unknown;
     }
 
     private Value Binary(SyntaxToken op, Value left, Value right)
     {
         if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
             return Reject(op, left.IsString ? left : right);
-
-        switch (op.Kind)
+        if (b == 0 && Operators.Divides(op.Green))
         {
-            case SyntaxKind.Slash when b == 0:
-            case SyntaxKind.Directive when b == 0:
-                Report(op, "division by zero");
-                return Value.Unknown;
+            Report(op, "division by zero");
+            return Value.Unknown;
         }
-
-        return op.Kind switch
-        {
-            SyntaxKind.Star => Value.Of(a * b),
-            SyntaxKind.Slash => Value.Of(a / b),
-            SyntaxKind.Directive => Value.Of(a % b),
-            SyntaxKind.Plus => Value.Of(a + b),
-            SyntaxKind.Minus => Value.Of(a - b),
-            SyntaxKind.LessLess => Shift(a, b, left: true),
-            SyntaxKind.GreaterGreater => Shift(a, b, left: false),
-            SyntaxKind.Less => Value.Of(a < b),
-            SyntaxKind.LessEquals => Value.Of(a <= b),
-            SyntaxKind.Greater => Value.Of(a > b),
-            SyntaxKind.GreaterEquals => Value.Of(a >= b),
-            SyntaxKind.EqualsEquals => Value.Of(a == b),
-            SyntaxKind.BangEquals => Value.Of(a != b),
-            SyntaxKind.Ampersand => Value.Of(a & b),
-            SyntaxKind.Caret => Value.Of(a ^ b),
-            SyntaxKind.Bar => Value.Of(a | b),
-            SyntaxKind.AmpersandAmpersand => Value.Of(a != 0 && b != 0),
-            SyntaxKind.CaretCaret => Value.Of((a != 0) ^ (b != 0)),
-            SyntaxKind.BarBar => Value.Of(a != 0 || b != 0),
-            _ => Value.Unknown,
-        };
+        return Operators.Binary(op.Green, a, b) is { } result ? Value.Of(result) : Value.Unknown;
     }
-
-    /// <summary>A shift by more than the width of a value says nothing, so it has no value.</summary>
-    private static Value Shift(long value, long places, bool left) =>
-        places is < 0 or > 63 ? Value.Unknown : Value.Of(left ? value << (int)places : value >> (int)places);
 
     /// <summary>An operand that is a string where a number belongs; there is no string arithmetic.</summary>
     private Value Reject(SyntaxToken op, Value operand)

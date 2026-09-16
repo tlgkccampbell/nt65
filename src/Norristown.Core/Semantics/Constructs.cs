@@ -14,7 +14,7 @@ public static class Constructs
     /// and are kept, but nothing resolves names in them, sizes them or writes them out.
     /// </summary>
     public static bool IsDeferred(BlockKind kind) => kind is BlockKind.Macro or BlockKind.MacroBlock
-        or BlockKind.If or BlockKind.Repeat or BlockKind.Each;
+        or BlockKind.Repeat or BlockKind.Each;
 
     /// <summary>
     /// Whether a block is one emission can write out. The types, lists and text mappings are
@@ -24,6 +24,26 @@ public static class Constructs
     public static bool IsEmitted(BlockKind kind) => kind is not (BlockKind.Enum or BlockKind.Struct
         or BlockKind.Union or BlockKind.Charmap or BlockKind.List or BlockKind.TagInitializer);
 
+    /// <summary>
+    /// What an <c>.assert</c> or an <c>.error</c> says: the expression that has to hold (none,
+    /// for an <c>.error</c>), how much it matters, and the message written with it.
+    /// </summary>
+    public static Assertion AssertionOf(SyntaxNode directive)
+    {
+        var level = Severity.Error;
+        string? message = null;
+        foreach (var token in directive.ChildTokens)
+        {
+            if (token.Kind == SyntaxKind.Identifier && SyntaxFacts.IsAssertLevel(token.Text))
+                level = token.Text.StartsWith('w') || token.Text.StartsWith("ldw", StringComparison.OrdinalIgnoreCase)
+                    ? Severity.Warning
+                    : Severity.Error;
+            else if (token.Kind == SyntaxKind.StringLiteral)
+                message ??= Literals.Text(token.Text);
+        }
+        return new Assertion(directive.ChildNodes.FirstOrDefault(), level, message);
+    }
+
     /// <summary>Whether a data directive is a <c>.tag</c>, which declares an instance of a type.</summary>
     public static bool IsTag(SyntaxNode? statement) =>
         statement is { Kind: SyntaxKind.DataDirective, ChildTokens.Length: > 0 }
@@ -32,6 +52,12 @@ public static class Constructs
     /// <summary>The type expression of a <c>.tag</c>, which is its first operand.</summary>
     public static SyntaxNode? TagTypeOf(SyntaxNode? statement) =>
         IsTag(statement) ? statement!.ChildNodes.FirstOrDefault() : null;
+
+    /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
+    /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
+    /// <param name="Level">How much a failure matters.</param>
+    /// <param name="Message">What to say about it, or null when none was written.</param>
+    public readonly record struct Assertion(SyntaxNode? Condition, Severity Level, string? Message);
 
     /// <summary>
     /// The segment a block opener names: a standard name for a shortcut directive, or

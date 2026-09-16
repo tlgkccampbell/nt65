@@ -20,6 +20,7 @@ public sealed class SemanticModel
     internal SemanticModel(
         SyntaxTree tree,
         SegmentTable segments,
+        Configuration configuration,
         Binder.Result bound,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IEnumerable<Diagnostic> fromTheProgram,
@@ -28,6 +29,7 @@ public sealed class SemanticModel
         this.binaryLength = binaryLength;
         Tree = tree;
         Segments = segments;
+        Configuration = configuration;
         FileScope = bound.FileScope;
         Symbols = bound.Symbols;
         References = bound.References;
@@ -51,6 +53,9 @@ public sealed class SemanticModel
 
     /// <summary>The program's segments, which is what address sizes come from.</summary>
     public SegmentTable Segments { get; }
+
+    /// <summary>Which <c>.if</c> branches this build takes.</summary>
+    public Configuration Configuration { get; }
 
     /// <summary>The file's top-level scope.</summary>
     public Scope FileScope { get; }

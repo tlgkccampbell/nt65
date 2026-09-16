@@ -491,7 +491,7 @@ internal sealed class Parser
             return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
         }
         children.Add(Advance());
-        if (AtName)
+        if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
             children.Add(Advance());
         else
             Report("expected `warning`, `error`, `ldwarning` or `lderror`");

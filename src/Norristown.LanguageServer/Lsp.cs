@@ -18,9 +18,23 @@ internal static class Lsp
     /// <summary>What the client shows as the origin of every diagnostic nt65 reports.</summary>
     private const string SourceName = "nt65";
 
-    /// <summary>Everything wrong with one file.</summary>
-    public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(IEnumerable<Diagnostic> diagnostics) =>
-        [.. diagnostics.Select(ToDiagnostic)];
+    /// <summary>
+    /// Everything wrong with one file, and the branches this build leaves out. An omitted
+    /// branch is not a problem, so it is a hint the client renders faded rather than
+    /// anything that appears in a problem list.
+    /// </summary>
+    public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(
+        IEnumerable<Diagnostic> diagnostics, SyntaxTree tree, Configuration configuration) =>
+        [
+            .. diagnostics.Select(ToDiagnostic),
+            .. configuration.Omitted(tree).Select(span => new Protocol.Diagnostic(
+                ToRange(tree, span),
+                Protocol.DiagnosticSeverity.Hint,
+                SourceName,
+                "the build configuration leaves this branch out",
+                null,
+                [Protocol.DiagnosticTag.Unnecessary])),
+        ];
 
     /// <summary>The file's outline, nested the way its blocks are.</summary>
     public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>

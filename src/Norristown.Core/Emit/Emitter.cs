@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 using Norristown.Layout;
@@ -280,6 +281,16 @@ public sealed class Emitter
             return;
         }
 
+        // A branch the build takes is written out where it stands, with nothing said about
+        // the `.if` around it; one it leaves out is not written at all. The block adds no
+        // nesting of its own, so a segment block inside it is nested only if the `.if` was.
+        if (kind == BlockKind.If)
+        {
+            if (model.Configuration.Includes(block))
+                Contents(lines);
+            return;
+        }
+
         // A structure, a union, a list and a character mapping say what something means
         // without generating anything. An exported layout is the exception: its members
         // travel as flat constants, so the file that declares them has to define them.
@@ -336,13 +347,7 @@ public sealed class Emitter
         }
 
         depth++;
-        for (var i = 1; i < lines.Length; i++)
-        {
-            if (lines[i].Green is GreenBlock inner)
-                WalkBlock(lines[i], inner.BlockKind);
-            else
-                WalkLine(lines[i]);
-        }
+        Contents(lines);
         depth--;
 
         if (pushed)
@@ -356,6 +361,18 @@ public sealed class Emitter
         else if (kind == BlockKind.Segment)
         {
             segment = SegmentTable.DefaultSegment;
+        }
+    }
+
+    /// <summary>Every line of a block after the one that opens it.</summary>
+    private void Contents(ImmutableArray<SyntaxNode> lines)
+    {
+        for (var i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].Green is GreenBlock inner)
+                WalkBlock(lines[i], inner.BlockKind);
+            else
+                WalkLine(lines[i]);
         }
     }
 
@@ -396,6 +413,19 @@ public sealed class Emitter
 
             case SyntaxKind.ExternProcDeclaration:
                 ExternProc(line, statement);
+                break;
+
+            // An assertion nt65 answered has been answered; one it could not is written out
+            // for ca65 and ld65, which is the same directive with the same spelling. An
+            // `.error` the build reached has already been reported, and never reaches ca65.
+            case SyntaxKind.AssertDirective
+                when Constructs.AssertionOf(statement).Condition is { } condition
+                    && model.ValueOf(condition).AsNumber() is null:
+                Source(line, statement, 0);
+                break;
+
+            case SyntaxKind.AssertDirective:
+            case SyntaxKind.ErrorDirective:
                 break;
 
             // The types, text and data of Stage 7 are read and bound, but nothing is written

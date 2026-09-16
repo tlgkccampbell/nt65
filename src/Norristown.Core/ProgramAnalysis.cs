@@ -17,12 +17,14 @@ namespace Norristown;
 /// instructions nt65 cannot size yet.
 /// </param>
 /// <param name="Defines">The file the build configuration was read as, or null.</param>
+/// <param name="Configuration">Which <c>.if</c> branches this build takes.</param>
 /// <param name="Diagnostics">Everything wrong with the program, ordered by file, line and column.</param>
 public sealed record ProgramAnalysis(
     ProgramModel Program,
     Cpu Cpu,
     IReadOnlyList<CodeLayout> Layouts,
     SyntaxTree? Defines,
+    Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
     /// <summary>What is wrong with one file, for an editor that shows a file at a time.</summary>

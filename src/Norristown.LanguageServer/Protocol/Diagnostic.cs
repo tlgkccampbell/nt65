@@ -6,9 +6,11 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Source">Who reported it; always <c>nt65</c>.</param>
 /// <param name="Message">What to tell the programmer.</param>
 /// <param name="RelatedInformation">Other places that explain it, or null.</param>
+/// <param name="Tags">What is special about it, or null.</param>
 internal sealed record Diagnostic(
     Range Range,
     DiagnosticSeverity Severity,
     string Source,
     string Message,
-    IReadOnlyList<DiagnosticRelatedInformation>? RelatedInformation);
+    IReadOnlyList<DiagnosticRelatedInformation>? RelatedInformation,
+    IReadOnlyList<DiagnosticTag>? Tags = null);

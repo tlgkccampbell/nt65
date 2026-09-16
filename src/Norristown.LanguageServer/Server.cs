@@ -160,7 +160,8 @@ internal sealed class Server
         {
             await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
                 new PublishDiagnosticsParams(document.Uri, document.Version,
-                    Lsp.ToDiagnostics(analysis.DiagnosticsFor(document.Tree.Path))));
+                    Lsp.ToDiagnostics(
+                        analysis.DiagnosticsFor(document.Tree.Path), document.Tree, analysis.Configuration)));
         }
     }
 

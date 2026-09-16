@@ -231,8 +231,8 @@ public sealed class BindingTests
                 lda #<value
                 sta dest
             }
-            .if DEBUG {
-            DEBUG_ONLY = 1
+            .repeat 4, i {
+                .byte i
             }
             """);
 

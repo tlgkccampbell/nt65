@@ -287,6 +287,25 @@ public sealed class SymbolRequestsTests
         Assert.Contains("`TOTAL`", hover?.Contents.Value);
     }
 
+    /// <summary>
+    /// A branch the build leaves out is not a problem, so it is published as a hint the
+    /// client renders faded rather than as anything that belongs in a problem list.
+    /// </summary>
+    [Fact]
+    public async Task ABranchTheBuildLeavesOutIsPublishedAsFaded()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, ".if 0 {\nBROKEN = nowhere\n}\nON = 1\n");
+
+        var dimmed = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        Assert.Equal(DiagnosticSeverity.Hint, dimmed.Severity);
+        Assert.Equal([DiagnosticTag.Unnecessary], dimmed.Tags);
+        // The `.if` through its closing brace, and not the line after it.
+        Assert.Equal(0, dimmed.Range.Start.Line);
+        Assert.Equal(2, dimmed.Range.End.Line);
+    }
+
     /// <summary>A duplicate declaration points at the one that got there first.</summary>
     [Fact]
     public async Task ADuplicateCarriesRelatedInformation()

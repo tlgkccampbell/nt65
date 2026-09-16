@@ -133,6 +133,9 @@ public sealed class CodeLayout
         if (Constructs.IsDeferred(kind))
             return;
 
+        if (kind == BlockKind.If && !model.Configuration.Includes(block))
+            return;
+
         var lines = block.ChildNodes;
         var outer = segment;
         if (kind == BlockKind.Segment && lines.Length > 0 && lines[0].Statement is { } opener)
@@ -159,6 +162,12 @@ public sealed class CodeLayout
                 break;
             case SyntaxKind.DataDirective:
                 Data(statement);
+                break;
+            case SyntaxKind.AssertDirective:
+                Assertion(statement);
+                break;
+            case SyntaxKind.ErrorDirective:
+                Refuse(statement);
                 break;
             case SyntaxKind.LabeledLine:
                 foreach (var child in statement.ChildNodes)
@@ -267,6 +276,29 @@ public sealed class CodeLayout
         }
     }
 
+    /// <summary>
+    /// An assertion, checked here because this is the pass that walks every statement of a
+    /// file with the whole program worked out. One nt65 can answer is answered; one it
+    /// cannot is left for ca65 and ld65, which see the addresses nt65 never does.
+    /// </summary>
+    private void Assertion(SyntaxNode directive)
+    {
+        var assertion = Constructs.AssertionOf(directive);
+        if (assertion.Condition is not { } condition)
+            return;
+        if (model.ValueOf(condition).AsNumber() is not { } value)
+        {
+            model.Check(condition, diagnostics);
+            return;
+        }
+        if (value == 0)
+            Report(directive.Span, assertion.Message ?? "this assertion does not hold", assertion.Level);
+    }
+
+    /// <summary>An <c>.error</c> the build reached: a configuration the file refuses to be built in.</summary>
+    private void Refuse(SyntaxNode directive) =>
+        Report(directive.Span, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported");
+
     private void Data(SyntaxNode directive)
     {
         if (DataLengths.Of(directive, model, diagnostics) is { } length)
@@ -280,6 +312,6 @@ public sealed class CodeLayout
         _ => "far",
     };
 
-    private void Report(TextSpan span, string message) =>
-        diagnostics.Add(new Diagnostic(model.Tree.GetSpan(span), Severity.Error, message));
+    private void Report(TextSpan span, string message, Severity severity = Severity.Error) =>
+        diagnostics.Add(new Diagnostic(model.Tree.GetSpan(span), severity, message));
 }

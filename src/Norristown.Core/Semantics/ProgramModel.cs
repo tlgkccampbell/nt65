@@ -45,13 +45,15 @@ public sealed class ProgramModel
     public static ProgramModel Create(
         IReadOnlyList<SyntaxTree> trees,
         SegmentTable segments,
+        Configuration? configuration = null,
         SyntaxTree? defines = null,
         Func<string, long?>? binaryLength = null)
     {
+        configuration ??= Configuration.Everything;
         // What is wrong with the program rather than with one file: a name two files export,
         // a constant defined in terms of itself across files, a file shadowing a define.
         var program = new List<Diagnostic>();
-        var binders = trees.Select(tree => Binder.Collect(tree, segments)).ToList();
+        var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration)).ToList();
 
         var modules = new List<ProgramSymbols.Module>();
         foreach (var binder in binders)
@@ -90,7 +92,7 @@ public sealed class ProgramModel
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
-            files.Add(new SemanticModel(trees[i], segments, bound[i], resolved,
+            files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved,
                 program.Where(d => d.Span.File == trees[i].Path), binaryLength));
         }
         return new ProgramModel(files, segments, symbols, Norristown.Diagnostics.Ordered(

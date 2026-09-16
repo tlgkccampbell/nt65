@@ -7,16 +7,21 @@ namespace Norristown.Semantics;
 /// Builds one file's scopes and declarations and resolves the names it uses.
 /// <para>
 /// Declarations are collected first and resolved afterwards, so a name may be used before
-/// the line that declares it. Blocks belonging to a later stage — macros, <c>.if</c>,
-/// <c>.repeat</c> and <c>.each</c> — are not bound at all: their contents mean something
-/// this stage does not implement (a macro's names are the expansion's, and the same name
-/// may be declared under two <c>.if</c> branches), and half a rule would be worse than none.
+/// the line that declares it. Blocks belonging to a later stage — macros, <c>.repeat</c> and
+/// <c>.each</c> — are not bound at all: their contents mean something this stage does not
+/// implement, and half a rule would be worse than none.
+/// </para>
+/// <para>
+/// An <c>.if</c> is neither: its conditions were answered before any of this ran, so a
+/// branch the build takes is read as if the <c>.if</c> were not written and one it leaves
+/// out is not read at all. That is what lets the same name be declared under two of them.
 /// </para>
 /// </summary>
 internal sealed class Binder
 {
     private readonly SyntaxTree tree;
     private readonly SegmentTable segments;
+    private readonly Configuration configuration;
     private readonly List<Diagnostic> diagnostics = [];
     private readonly List<Symbol> symbols = [];
     private readonly List<SymbolReference> references = [];
@@ -29,10 +34,11 @@ internal sealed class Binder
     private string segment = SegmentTable.DefaultSegment;
     private Symbol? previousEnumMember;
 
-    private Binder(SyntaxTree tree, SegmentTable segments)
+    private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
         this.tree = tree;
         this.segments = segments;
+        this.configuration = configuration;
         fileScope = new Scope(ScopeKind.File, null, null, null);
         scope = fileScope;
     }
@@ -45,15 +51,15 @@ internal sealed class Binder
 
     /// <summary>Binds <paramref name="tree"/> on its own, seeing no other file.</summary>
     public static Result Bind(SyntaxTree tree, SegmentTable segments) =>
-        Collect(tree, segments).Resolve(ProgramSymbols.Empty);
+        Collect(tree, segments, Configuration.Everything).Resolve(ProgramSymbols.Empty);
 
     /// <summary>
     /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
     /// resolved once every file of the program has been read.
     /// </summary>
-    public static Binder Collect(SyntaxTree tree, SegmentTable segments)
+    public static Binder Collect(SyntaxTree tree, SegmentTable segments, Configuration configuration)
     {
-        var binder = new Binder(tree, segments);
+        var binder = new Binder(tree, segments, configuration);
         binder.WalkContainer(tree.Root);
         return binder;
     }
@@ -154,6 +160,15 @@ internal sealed class Binder
             case BlockKind.TagInitializer:
                 BindInitializer(opener, lines);
                 return;
+            case BlockKind.If:
+                // Whatever an included branch declares belongs to the scope around it. The
+                // condition is read for its names so that an editor can follow a define to
+                // the configuration that gives it a value.
+                if (!configuration.Includes(block))
+                    return;
+                if (opener is not null)
+                    CollectUses(opener);
+                break;
             default:
                 if (opener is not null)
                     BindStatement(opener);
@@ -337,6 +352,7 @@ internal sealed class Binder
 
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
+            case SyntaxKind.AssertDirective:
                 CollectUses(statement);
                 break;
 
@@ -446,6 +462,13 @@ internal sealed class Binder
     {
         if (node is null)
             return;
+        // `.defined(NAME)` asks whether a name is a define. The name is not a use of
+        // anything: one that is not declared is what the question is for.
+        if (node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
+            && node.ChildTokens[0].Text.Equals(".defined", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
         if (node.Kind == SyntaxKind.NameExpression)
         {
             // A leading `::` starts the path at file scope, which the first name sees by

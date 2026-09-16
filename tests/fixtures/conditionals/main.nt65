@@ -1,0 +1,59 @@
+; Conditions test the build configuration and never the program, so every one of them is
+; answered before a declaration is read. None of this reaches the output: what is written
+; is the program this configuration asks for.
+
+; The same name under two conditions. Only the branch the build takes declares anything.
+.if PLATFORM == 1 {
+LINES = 262
+}
+.if PLATFORM == 2 {
+LINES = 312
+}
+
+; A chain takes the first branch that holds.
+.if DEBUG {
+TRACE = 1
+} .elseif .defined(VERBOSE) {
+TRACE = 2
+} .else {
+TRACE = 0
+}
+
+; The right operand is neither evaluated nor looked up once the left decides the result,
+; so `VERBOSE` is a question rather than a name that is not declared.
+.if .defined(VERBOSE) && VERBOSE > 3 {
+    .error "this configuration is not supported"
+}
+
+; nt65 knows what these are worth, so neither reaches ca65.
+    .assert LINES == 312, error, "this platform has 312 lines"
+    .assert TRACE == 1, error, "debugging is on"
+
+.proc main {
+    ; A branch belongs to the scope around it: `@again` is `main`'s cheap local.
+.if DEBUG {
+@again:
+    jsr trace
+    bne @again
+}
+    lda #<LINES
+    ldx #>LINES
+    rts
+}
+
+; The CPU is configuration, like a define.
+.proc trace {
+.if .target(65c02) {
+    phx
+    plx
+} .else {
+    txa
+    pha
+    pla
+    tax
+}
+    rts
+}
+
+; Where main lands is the linker's to say, so this one is written out for ld65.
+    .assert main >= $0200, lderror, "main must be past the zero page"

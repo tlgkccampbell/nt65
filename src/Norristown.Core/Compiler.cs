@@ -91,12 +91,17 @@ public static class Compiler
         // The segment table and the CPU are the program's: a segment is declared exactly once
         // across it, and it is built for one processor.
         var diagnostics = new List<Diagnostic>(project.Diagnostics);
-        var segments = SegmentTable.Build(trees, project.Segments, diagnostics);
         var target = ProgramCpu.Resolve(trees, project.Cpu, diagnostics);
+
+        // Which `.if` branches the build takes is settled first: conditions test the
+        // configuration and nothing else, and which segments and declarations a program has
+        // follows from the answers.
+        var configuration = Configuration.Resolve(trees, target, project.Defines, diagnostics);
+        var segments = SegmentTable.Build(trees, project.Segments, configuration, diagnostics);
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.
-        var program = ProgramModel.Create(trees, segments, defines, binaryLength);
+        var program = ProgramModel.Create(trees, segments, configuration, defines, binaryLength);
         diagnostics.AddRange(trees.SelectMany(tree => tree.Diagnostics));
         diagnostics.AddRange(program.Diagnostics);
 
@@ -118,7 +123,8 @@ public static class Compiler
                 diagnostics.AddRange(layout.Diagnostics);
             }
         }
-        return new ProgramAnalysis(program, target, layouts, defines, Diagnostics.Ordered(diagnostics));
+        return new ProgramAnalysis(
+            program, target, layouts, defines, configuration, Diagnostics.Ordered(diagnostics));
     }
 
     /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>
