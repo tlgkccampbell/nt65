@@ -273,6 +273,8 @@ internal sealed class Parser
             SyntaxKind.EachDirective => Finish(ParseRepetition(SyntaxKind.EachDirective)),
             SyntaxKind.AssertDirective => Finish(ParseAssert()),
             SyntaxKind.ErrorDirective => Finish(ParseError()),
+            SyntaxKind.NextDirective => Finish(ParseNext()),
+            SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
             SyntaxKind.UnsupportedLine => Unsupported(),
@@ -861,6 +863,40 @@ internal sealed class Parser
         else
             Report("expected `{`");
         return new GreenSyntax(SyntaxKind.ScopeDeclaration, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.next @a, gfx::init</c>, the labels flow reaches after the statement above, or
+    /// <c>.next ?</c>, which ends the path and checks nothing beyond it.
+    /// </summary>
+    private GreenSyntax ParseNext()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind == SyntaxKind.Question)
+            children.Add(Advance());
+        else
+            ParseCommaSeparated(children, () => ParseTarget("expected a label flow continues at, or `?`"));
+        return new GreenSyntax(SyntaxKind.NextDirective, children.ToImmutable());
+    }
+
+    /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
+    private GreenSyntax ParsePatch()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (ParseTarget("expected the label of the instruction being written to") is { } target)
+            children.Add(target);
+        return new GreenSyntax(SyntaxKind.PatchDirective, children.ToImmutable());
+    }
+
+    /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>
+    private GreenNode? ParseTarget(string expected)
+    {
+        if (AtName || Kind is SyntaxKind.CheapLocal or SyntaxKind.ColonColon)
+            return ParseName();
+        Report(expected);
+        return null;
     }
 
     private GreenSyntax ParseExport()

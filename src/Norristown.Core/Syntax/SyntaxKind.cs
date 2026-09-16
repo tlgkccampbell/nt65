@@ -300,6 +300,12 @@ public enum SyntaxKind : byte
     /// <summary><c>name = arg</c> at a call, which binds the argument to that parameter.</summary>
     NamedArgument,
 
+    /// <summary><c>.next @a, @b</c> or <c>.next ?</c>: where flow goes after the statement above.</summary>
+    NextDirective,
+
+    /// <summary><c>.patch @op</c>: the store above writes into the instruction at that label.</summary>
+    PatchDirective,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 

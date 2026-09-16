@@ -442,6 +442,18 @@ internal sealed class Binder
         Report(statement.ChildTokens.Length > 0 ? statement.ChildTokens[0].Span : statement.Span, why);
     }
 
+    /// <summary>
+    /// An annotation stands between the statement it is about and whatever follows, so one
+    /// with nothing above it is about nothing and is reported where it is written.
+    /// </summary>
+    private void CheckAnnotation(SyntaxNode line, SyntaxNode statement)
+    {
+        if (!Annotations.Is(statement) || statement.ChildTokens.Length == 0)
+            return;
+        if (Annotations.Misplaced(line, statement) is { } why)
+            Report(statement.ChildTokens[0].Span, why);
+    }
+
     /// <summary>Whether the walk is inside a macro body, however many scopes deep.</summary>
     private bool InMacroBody
     {
@@ -541,6 +553,7 @@ internal sealed class Binder
         if (line.Statement is not { } statement)
             return;
         CheckAllowedHere(statement);
+        CheckAnnotation(line, statement);
         BindStatement(statement);
     }
 
@@ -607,6 +620,12 @@ internal sealed class Binder
             case SyntaxKind.InstructionStatement:
             case SyntaxKind.DataDirective:
             case SyntaxKind.AssertDirective:
+
+            // An annotation names labels and nothing else, so its names resolve as any
+            // other use does; that they name labels rather than constants is the flow
+            // analysis's business.
+            case SyntaxKind.NextDirective:
+            case SyntaxKind.PatchDirective:
                 CollectUses(statement);
                 break;
 

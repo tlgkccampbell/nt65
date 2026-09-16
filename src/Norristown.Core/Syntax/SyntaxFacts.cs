@@ -91,9 +91,9 @@ public static class SyntaxFacts
         [".assert"] = SyntaxKind.AssertDirective,
         [".error"] = SyntaxKind.ErrorDirective,
         [".macro"] = SyntaxKind.MacroDeclaration,
-        // Stages 10 to 12: control flow, processor state and the stack.
-        [".next"] = SyntaxKind.UnsupportedLine,
-        [".patch"] = SyntaxKind.UnsupportedLine,
+        [".next"] = SyntaxKind.NextDirective,
+        [".patch"] = SyntaxKind.PatchDirective,
+        // Stages 11 and 12: processor state and the stack.
         [".state"] = SyntaxKind.UnsupportedLine,
         [".ensure"] = SyntaxKind.UnsupportedLine,
         [".frame"] = SyntaxKind.UnsupportedLine,
