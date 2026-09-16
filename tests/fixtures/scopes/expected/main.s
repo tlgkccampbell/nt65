@@ -16,16 +16,13 @@ palette:    .res 32
 frames:     .res 1
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 11
     gfx__COUNT = 32
 
-.dbg line, "main.nt65", 13
     gfx__init:
 .dbg line, "main.nt65", 14
         ldx #gfx__COUNT
 .dbg line, "main.nt65", 15
         dec z:frames
-.dbg line, "main.nt65", 16
     gfx__init__loop:
 .dbg line, "main.nt65", 17
         stz z:palette,x
@@ -36,11 +33,9 @@ frames:     .res 1
 .dbg line, "main.nt65", 20
         rts
 
-.dbg line, "main.nt65", 25
 reset:
 .dbg line, "main.nt65", 27
         ldx #0
-.dbg line, "main.nt65", 28
     reset__loop:
 .dbg line, "main.nt65", 29
         sta a:$0200,x
@@ -50,7 +45,6 @@ reset:
         bne reset__loop
 .dbg line, "main.nt65", 34
         ldx #31
-.dbg line, "main.nt65", 35
     reset__loop_2:
 .dbg line, "main.nt65", 36
         stz z:palette,x
@@ -60,18 +54,15 @@ reset:
         bpl reset__loop_2
 .dbg line, "main.nt65", 40
     jmp reset__done
-.dbg line, "main.nt65", 41
 reset__done:
 .dbg line, "main.nt65", 42
     rts
 
-.dbg line, "main.nt65", 47
 draw:
 .dbg line, "main.nt65", 48
     ldx #0
 .dbg line, "main.nt65", 50
         bne draw__done
-.dbg line, "main.nt65", 52
 draw__done:
 .dbg line, "main.nt65", 53
     lda a:draw__table,x
@@ -85,7 +76,6 @@ draw__done:
 .dbg line, "main.nt65", 57
     rts
 
-.dbg line, "main.nt65", 60
 main:
 .dbg line, "main.nt65", 61
     jsr gfx__init

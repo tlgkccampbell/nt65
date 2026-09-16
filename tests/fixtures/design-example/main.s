@@ -18,12 +18,16 @@ ptr:        .res 2
 frame:      .res 1
 
 .segment "CODE": absolute
+.dbg line, "main.nt65", 9
 SCREEN       = $0400
+.dbg line, "main.nt65", 10
 SCREEN_PAGES = 4
 
+.dbg line, "main.nt65", 15
 fill_page:
 .dbg line, "main.nt65", 16
     ldy #0
+.dbg line, "main.nt65", 17
 fill_page__loop:
 .dbg line, "main.nt65", 18
     sta (ptr),y
@@ -34,6 +38,7 @@ fill_page__loop:
 .dbg line, "main.nt65", 21
     rts
 
+.dbg line, "main.nt65", 26
 main:
 .dbg line, "main.nt65", 27
     lda #<SCREEN
@@ -45,6 +50,7 @@ main:
     sta z:ptr+1
 .dbg line, "main.nt65", 31
     ldx #SCREEN_PAGES
+.dbg line, "main.nt65", 32
 main__page:
 .dbg line, "main.nt65", 33
     lda #$20                        ; ' '

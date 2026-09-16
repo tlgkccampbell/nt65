@@ -20,7 +20,6 @@ flags:      .res 1
 table:      .byte 1, 2, 4, 8
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 14
 forms:
 .dbg line, "main.nt65", 15
     lda (ptr)
@@ -58,7 +57,6 @@ forms:
     bbr0 flags, forms__skip
 .dbg line, "main.nt65", 32
     bbs7 flags, forms__skip
-.dbg line, "main.nt65", 33
 forms__skip:
 .dbg line, "main.nt65", 34
     rts

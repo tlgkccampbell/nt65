@@ -1643,16 +1643,20 @@ worth.
 **Debug information.** After the header, each output file names its source with
 `.dbg file`: the path relative to the output file, the size, and a timestamp of zero,
 so the output does not depend on file timestamps. A `.dbg line` directive precedes every
-generated line, instruction or data. With `ca65 -g` and `ld65 --dbgfile`, ld65's debug
-file maps each span of bytes to its `.nt65` file and line, recorded as external source
-lines, as cc65 does for C; without `-g`, ca65 ignores the directives. The lines of a
+generated line that produces bytes, instruction or data. With `ca65 -g` and
+`ld65 --dbgfile`, ld65's debug file maps each span of bytes to its `.nt65` file and line,
+recorded as external source lines, as cc65 does for C; without `-g`, ca65 ignores the
+directives. A line that produces no bytes gets none: ld65 attaches a span to whichever
+line is in effect while bytes are generated, so a directive before a label or a constant
+records a line covering nothing, which nothing can step to or break on, and a label's
+address is that of the bytes after it either way. The lines of a
 macro expansion map to the line of the call, the way C debuggers treat preprocessor
 macros, and a comment naming the call precedes the expansion.
 
 | nt65 | ca65 |
 |---|---|
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off, then `.dbg file` |
-| each generated line | preceded by `.dbg line` naming its `.nt65` file and line |
+| each generated line that produces bytes | preceded by `.dbg line` naming its `.nt65` file and line |
 | `.segment "X": zp` declaration | nothing by itself |
 | `.segment "X" { }` | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
 | nested segment block | `.pushseg` / `.segment` ... `.popseg` |

@@ -358,12 +358,18 @@ public sealed class Emitter
             $"`{first.Text}` is not transpiled yet"));
     }
 
-    /// <summary>Writes one line that came from the source, with its debug line before it.</summary>
+    /// <summary>
+    /// Writes one line that came from the source, with the debug line that maps it back
+    /// (§13). Only a line that generates bytes gets one: ld65 attaches a span of bytes to
+    /// the line in effect while they were generated, so a directive before a label or a
+    /// constant records a line covering nothing, which no debugger can step to or break on.
+    /// </summary>
     private void Code(SyntaxNode line, string text, int bytes)
     {
         Segment();
         Flush();
-        Line($".dbg line, \"{Path.GetFileName(model.Tree.Path)}\", {line.LineIndex + 1}");
+        if (bytes > 0)
+            Line($".dbg line, \"{Path.GetFileName(model.Tree.Path)}\", {line.LineIndex + 1}");
         Line(text, bytes);
     }
 

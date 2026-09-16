@@ -20,15 +20,11 @@ vector:     .res 2
 buf:        .res 256
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 15
 hi = $12
-.dbg line, "main.nt65", 16
 lo = $34
 
-.dbg line, "main.nt65", 19
 CHROUT = $ffd2
 
-.dbg line, "main.nt65", 21
 forms:
 .dbg line, "main.nt65", 22
     inx
@@ -74,7 +70,6 @@ forms:
     lda z:ptr+1
 .dbg line, "main.nt65", 43
     jsr CHROUT
-.dbg line, "main.nt65", 44
 forms__loop:
 .dbg line, "main.nt65", 45
     rts

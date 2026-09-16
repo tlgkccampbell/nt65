@@ -13,11 +13,9 @@
 .export top
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 9
 z := *
 .dbg line, "main.nt65", 9
 .res 1
-.dbg line, "main.nt65", 10
 f := *
 .dbg line, "main.nt65", 10
 .res 1
@@ -25,12 +23,10 @@ f := *
 ptr:        .res 2
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 16
 top:
 .dbg line, "main.nt65", 17
     rts
 
-.dbg line, "main.nt65", 20
     outer__inner:
 .dbg line, "main.nt65", 21
         lda z:z
@@ -39,23 +35,19 @@ top:
 .dbg line, "main.nt65", 23
         rts
 
-.dbg line, "main.nt65", 27
 draw:
 .dbg line, "main.nt65", 28
     ldx #0
-.dbg line, "main.nt65", 30
     draw__loop:
 .dbg line, "main.nt65", 31
         dex
 .dbg line, "main.nt65", 32
         bne draw__loop
-.dbg line, "main.nt65", 35
     draw__loop_2:
 .dbg line, "main.nt65", 36
         dex
 .dbg line, "main.nt65", 37
         bne draw__loop_2
-.dbg line, "main.nt65", 40
     draw__reused:
 .dbg line, "main.nt65", 41
         jmp draw__reused

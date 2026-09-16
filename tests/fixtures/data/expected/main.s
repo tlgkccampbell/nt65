@@ -10,7 +10,6 @@
 .dbg file, "main.nt65", 667, 0
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 6
 SCREEN = $0400
 
 .segment "RODATA": absolute
@@ -36,7 +35,6 @@ bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
 sums:       .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
 
 .segment "CODE": absolute
-.dbg line, "main.nt65", 21
 use:
 .dbg line, "main.nt65", 22
     lda #$20                        ; ' '
