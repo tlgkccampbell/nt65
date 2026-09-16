@@ -1,0 +1,35 @@
+; What the 65C02 adds to the 6502 (§7.1): the `(zp)` and `(abs,x)` forms, the accumulator
+; forms of `inc` and `dec`, and the Rockwell bit instructions.
+.cpu 65c02
+
+.zeropage {
+ptr:        .res 2
+flags:      .res 1
+}
+
+.rodata {
+table:      .byte 1, 2, 4, 8
+}
+
+.proc forms {
+    lda (ptr)               ; 65C02: through a direct-page pointer
+    sta (ptr)
+    jmp (table,x)           ; 65C02: through a table of pointers
+    bit #$80                ; 65C02: an immediate for bit
+    bit z:flags,x
+    inc a                   ; 65C02: the accumulator forms
+    dec a
+    bra @skip               ; 65C02: an unconditional branch
+    stz z:flags
+    stz a:table
+    trb z:flags
+    tsb z:flags
+    phx
+    ply
+    rmb3 z:flags
+    smb3 z:flags
+    bbr0 flags, @skip       ; a direct-page address and a branch target
+    bbs7 flags, @skip
+@skip:
+    rts
+}

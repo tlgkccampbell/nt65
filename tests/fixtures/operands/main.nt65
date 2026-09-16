@@ -1,7 +1,8 @@
-; Every operand form of §7.1. Syntax does not depend on the CPU, so all three CPUs' forms
-; parse in one file; which of them the target actually has is Stage 5's to say.
-; The operands name symbols, so this file declares them; where each one lives decides the
-; address size of the references to it (§7.2), which is Stage 5's to act on.
+; Every operand form the 6502 has (§7.1), and the addressing mode §7.2 picks for each. The
+; output makes each choice explicit with a `z:` or `a:` prefix wherever the instruction
+; offers more than one width.
+.cpu 6502
+
 .zeropage {
 ptr:        .res 2
 vector:     .res 2
@@ -14,38 +15,32 @@ buf:        .res 256
 hi = $12
 lo = $34
 
+; A routine at a fixed address, which the output writes as the constant it is (§12, §13).
+.proc CHROUT = $ffd2
+
 .proc forms {
     inx                     ; implied
     asl                     ; accumulator, bare
     asl a                   ; accumulator, written out
     lda #$10                ; immediate
-    lda ptr                 ; zero page, direct or absolute (§7.2)
-    lda z:ptr               ; forced zero page
-    lda a:ptr               ; forced absolute
-    lda f:ptr               ; forced far
-    lda d:$2105             ; a constant address reached through the direct page (§7.5)
+    lda ptr                 ; direct, because ptr is in a zero-page segment (§7.2)
+    lda buf                 ; absolute, because buf is not
+    lda z:ptr               ; the same choice, written out in the source
+    lda a:ptr               ; forced wider than it needs to be
+    lda $10                 ; a constant below $100 is direct
+    lda $0400               ; and one above it is absolute
     lda buf,x
     lda buf,y
-    lda 3,s                 ; stack relative
+    ldx buf,y
+    sty z:ptr,x
     lda (ptr),y
     lda (ptr,x)
-    lda (3,s),y
-    lda [ptr]
-    lda [ptr],y
     jmp (vector)
-    jmp (vector,x)
-    jml [vector]
     bne @loop               ; relative
-    jeq @loop               ; long branch (§7.6)
-    brk #0                  ; signature byte, on every CPU
-    cop #1
-    wdm #2
-    mvn #$7e, #$00          ; bank bytes, written as immediates
-    mvp #$7e, #$00
-    bbr0 $12, @loop
-    smb3 $12
+    brk #0                  ; the signature byte is required, and both bytes are counted
     lda (hi + lo) * 2       ; parentheses around part of an expression, not an indirection
-    lda z:ptr+1
+    lda z:ptr+1             ; the prefix reaches the whole expression
+    jsr CHROUT              ; an extern proc is a near target like any other
 @loop:
     rts
 }

@@ -1,5 +1,6 @@
-; Every item the parser reads at Stage 2, in one file, with nothing to report.
-.cpu 65816
+; Every item the parser reads at Stage 2, in one file. Its target is the 65816, whose
+; processor-state analysis (§7.3) is Stage 11's, so nothing is written for it yet.
+.cpu 65816                  ;! error: the 65816 is not transpiled yet
 
 .segment "ZP2": zp
 .segment "WRAM": abs, bank = $7e

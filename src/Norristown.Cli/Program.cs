@@ -1,13 +1,34 @@
 using Norristown;
+using Norristown.Project;
 
-const string Usage = "usage: nt65 build <file.nt65>...";
+const string Usage = "usage: nt65 build [--cpu 6502|65c02|65816] <file.nt65>...";
 
-if (args is not ["build", .. var paths])
+if (args is not ["build", .. var rest])
 {
     Console.Error.WriteLine(Usage);
     return 2;
 }
-if (paths.Length == 0)
+
+// `--cpu` is what the program is built for when no `.cpu` item says; one that does must
+// agree with it (§5.1).
+Cpu? cpu = null;
+var paths = new List<string>();
+for (var i = 0; i < rest.Length; i++)
+{
+    if (rest[i] != "--cpu")
+    {
+        paths.Add(rest[i]);
+        continue;
+    }
+    if (i + 1 >= rest.Length || CpuNames.Parse(rest[i + 1]) is not { } named)
+    {
+        Console.Error.WriteLine("nt65: --cpu takes 6502, 65c02 or 65816");
+        return 2;
+    }
+    cpu = named;
+    i++;
+}
+if (paths.Count == 0)
 {
     Console.Error.WriteLine("nt65: no input files");
     Console.Error.WriteLine(Usage);
@@ -30,7 +51,7 @@ foreach (var path in paths)
 if (failed)
     return 1;
 
-var compilation = Compiler.Compile(files);
+var compilation = Compiler.Compile(files, cpu);
 
 foreach (var d in compilation.Diagnostics)
 {

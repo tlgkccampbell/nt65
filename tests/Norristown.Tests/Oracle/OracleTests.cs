@@ -42,20 +42,50 @@ public sealed partial class OracleTests
         }
     }
 
-    /// <summary>Every expected output in the fixtures must assemble with no errors and no warnings.</summary>
+    /// <summary>
+    /// Everything nt65 generates must assemble with no errors and no warnings — a ca65
+    /// diagnostic on nt65 output is an nt65 bug (§3.2) — and ca65 must generate exactly as
+    /// many bytes for each line as nt65 worked out for it (§7.6). Those lengths are what
+    /// branch range, cycle counts and assertions will be built on, so agreeing with the
+    /// assembler about them is the check that matters.
+    /// </summary>
     [Fact]
-    public void FixtureOutputsAssembleCleanly()
+    public void GeneratedOutputAssemblesToTheLengthsNt65Computed()
     {
         var outputs = FixtureCase.All()
-            .SelectMany(f => f.ExpectedOutputs().Select(o => (Fixture: f.Name, Path: o.Key, Text: o.Value)))
+            .SelectMany(fixture => Compiler.Compile(fixture.Sources).Outputs.Select(o => (fixture.Name, Output: o)))
             .ToList();
-        var failures = Repo.CollectFailures(outputs, o =>
-        {
-            // Lengths are compared against nt65's own once it computes them.
-            var result = Ca65Oracle.Pinned.Assemble(Path.GetFileName(o.Path), o.Text);
-            return result.Succeeded ? [] : [$"[{o.Fixture}] {o.Path}: ca65 reported:\n{result.Messages}"];
-        });
+        Assert.NotEmpty(outputs);
+        Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
+
+        var failures = Repo.CollectFailures(outputs, o => Check(o.Name, o.Output));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
+
+        static IEnumerable<string> Check(string fixture, OutputFile output)
+        {
+            var result = Ca65Oracle.Pinned.Assemble(Path.GetFileName(output.Path), output.Text);
+            if (!result.Succeeded)
+            {
+                yield return $"[{fixture}] {output.Path}: ca65 reported:\n{result.Messages}";
+                yield break;
+            }
+
+            var lines = output.Text.ReplaceLineEndings("\n").TrimEnd('\n').Split('\n');
+            if (output.LineBytes.Count != lines.Length)
+            {
+                yield return $"[{fixture}] {output.Path}: {lines.Length} lines, but nt65 has lengths for " +
+                    $"{output.LineBytes.Count}";
+                yield break;
+            }
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (result.LineBytes[i] != output.LineBytes[i])
+                {
+                    yield return $"[{fixture}] {output.Path}:{i + 1}: nt65 says {output.LineBytes[i]} bytes, " +
+                        $"ca65 generated {result.LineBytes[i]}:\n  {lines[i]}";
+                }
+            }
+        }
     }
 
     [Fact]

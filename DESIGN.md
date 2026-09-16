@@ -1631,7 +1631,14 @@ this happens when an exported macro expands in a file that has its own symbol of
 same name. A fixed spelling (`outer__inner`, `f__end`) that collides with another name
 is an error. A label
 named `z` or `f` is written `z := *`, because ca65 reads `z:` at the start of a line as
-an address-size prefix; references to it need nothing special.
+an address-size prefix; references to it need nothing special. An assignment takes the
+whole line, so anything that followed such a label goes on the next one.
+
+**A prefix binds to the whole operand.** `z:ptr+1` sizes the expression, not just `ptr`.
+Where an operand expression itself begins with `(`, as `lda (hi + lo) * 2` may (§7.1),
+the output writes `z:+(hi + lo) * 2`: ca65 reads a `(` straight after a prefix as an
+indirect operand, and a unary `+` keeps it an expression without changing what it is
+worth.
 
 **Debug information.** After the header, each output file names its source with
 `.dbg file`: the path relative to the output file, the size, and a timestamp of zero,
@@ -1675,6 +1682,7 @@ macros, and a comment naming the call precedes the expansion.
 | a `.func` call | its body, with each parameter replaced by its parenthesized argument |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |
+| `.asciiz "s"` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
 | `.endof(f)`, `.spanof(f)` | `f__end`, `(f__end - f)`, with `f__end:` after the last byte of `f` |
 | `.export s` | `.export s`, `.exportzp s` or `.export s: far`, with nt65's address size |
 | `.import N = v` | `.import N` and `.assert N = v, lderror, ...`; uses of `N` are emitted as `v` |

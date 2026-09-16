@@ -26,7 +26,10 @@ internal static class FixtureRunner
                 Fail($"{file.Path}: {problem}");
         }
 
-        // A program is a set of files: other orders must give identical results.
+        // Output is deterministic: the same sources give byte-identical output (§13), and a
+        // program is a set of files, so other orders must give identical results too.
+        if (!Same(compilation, compile(fixture.Sources)))
+            Fail("output or diagnostics change between two runs over the same files");
         foreach (var (label, order) in OtherOrders(fixture.Sources))
         {
             if (!Same(compilation, compile(order)))
@@ -79,11 +82,15 @@ internal static class FixtureRunner
         yield return ("shuffled", shuffled);
     }
 
+    // Path and text are what "identical output" means; the lengths beside them are worked
+    // out from the same text.
     private static bool Same(Compilation a, Compilation b) =>
-        a.Outputs.OrderBy(o => o.Path, StringComparer.Ordinal)
-            .SequenceEqual(b.Outputs.OrderBy(o => o.Path, StringComparer.Ordinal))
+        Written(a).SequenceEqual(Written(b))
         && a.Diagnostics.Select(FixtureCase.Format).Order(StringComparer.Ordinal)
             .SequenceEqual(b.Diagnostics.Select(FixtureCase.Format).Order(StringComparer.Ordinal));
+
+    private static IEnumerable<(string Path, string Text)> Written(Compilation compilation) =>
+        compilation.Outputs.OrderBy(o => o.Path, StringComparer.Ordinal).Select(o => (o.Path, o.Text));
 
     private static string FirstDifference(string expected, string actual)
     {

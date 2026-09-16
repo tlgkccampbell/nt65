@@ -42,11 +42,6 @@ internal sealed class Binder
         return new Result(binder.fileScope, binder.symbols, binder.references, binder.diagnostics);
     }
 
-    /// <summary>Whether a block's contents belong to a layer this stage does not bind.</summary>
-    private static bool IsDeferred(BlockKind kind) => kind is BlockKind.Macro or BlockKind.MacroBlock
-        or BlockKind.If or BlockKind.Repeat or BlockKind.Each or BlockKind.Enum or BlockKind.Struct
-        or BlockKind.Union or BlockKind.Charmap or BlockKind.List or BlockKind.TagInitializer;
-
     /// <summary>The first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(SyntaxNode statement)
     {
@@ -89,7 +84,7 @@ internal sealed class Binder
     /// </summary>
     private void WalkBlock(SyntaxNode block, BlockKind kind)
     {
-        if (IsDeferred(kind))
+        if (Constructs.IsDeferred(kind))
             return;
 
         var lines = block.ChildNodes;
@@ -158,16 +153,13 @@ internal sealed class Binder
         if (opener is null || opener.Kind != SyntaxKind.SegmentBlock)
             return null;
 
-        if (opener.ChildTokens.Length > 0 && SegmentNames.Shortcut(opener.ChildTokens[0].Text) is { } standard)
-            return standard;
-        if (FirstToken(opener, SyntaxKind.StringLiteral) is not { } quoted)
+        if (Constructs.SegmentOf(opener) is not { } name)
             return null;
 
         // A block that names a segment declared nowhere is an error, so a misspelled name is
         // caught before ld65 runs (§5.2). Its contents still go there, which keeps the
         // mistake to one diagnostic.
-        var name = SegmentNames.Unquote(quoted.Text);
-        if (segments.Find(name) is null)
+        if (segments.Find(name) is null && FirstToken(opener, SyntaxKind.StringLiteral) is { } quoted)
             Report(quoted.Span, $"segment \"{name}\" is not declared");
         return name;
     }

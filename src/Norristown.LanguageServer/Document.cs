@@ -1,3 +1,5 @@
+using Norristown.Layout;
+using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -45,6 +47,13 @@ internal sealed class Document
         var model = SemanticModel.Create(tree, SegmentTable.Build([tree], problems));
         problems.AddRange(tree.Diagnostics);
         problems.AddRange(model.Diagnostics);
+
+        // What the CPU makes wrong is shown as it is typed (§5.1, §7.2). The 65816 needs the
+        // processor-state analysis of §7.3 before its instructions can be sized, so until
+        // Stage 11 there is nothing to say about them.
+        var cpu = ProgramCpu.Resolve([tree], configured: null, problems);
+        if (cpu != Cpu.Wdc65816)
+            problems.AddRange(CodeLayout.Create(model, cpu).Diagnostics);
         return new Analysis(model, Norristown.Diagnostics.Ordered(problems));
     }
 

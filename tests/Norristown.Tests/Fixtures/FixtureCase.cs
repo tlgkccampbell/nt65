@@ -75,6 +75,8 @@ internal sealed partial record FixtureCase(string Name, string Directory, IReadO
     public List<string> ExpectedDiagnostics() =>
         [.. Sources.SelectMany(ParseInlineDiagnostics).Order(StringComparer.Ordinal)];
 
-    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*:(?<message>.*)$")]
+    // A line may carry more than one annotation, so a message runs to the next `;` rather
+    // than to the end of the line; no diagnostic nt65 writes contains one.
+    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*:(?<message>[^;]*)")]
     private static partial Regex InlineDiagnostic();
 }

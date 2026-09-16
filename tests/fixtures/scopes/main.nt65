@@ -1,5 +1,6 @@
 ; §6.2: lookup runs from the innermost scope outward, `::` walks into a named scope, and
 ; cheap locals belong to the nearest `.proc` or `.scope`.
+.cpu 65c02
 
 .zeropage {
 palette:    .res 32

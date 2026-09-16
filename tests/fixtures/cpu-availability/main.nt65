@@ -1,0 +1,34 @@
+; Syntax does not depend on the CPU, so every operand form of §7.1 parses on every target;
+; this is where nt65 says which of them the target actually has (§5.1, §7.2). The program
+; below is built for the 6502 and reaches for what the 6502 has not got.
+.cpu 6502
+
+.zeropage {
+ptr:        .res 2
+}
+
+.segment "FAR": far
+.segment "FAR" {
+away:       .res 1
+}
+
+.proc reaching {
+    lda (ptr)               ;! error: `lda` does not take this operand on the 6502
+    lda [ptr]               ;! error: `lda` does not take this operand on the 6502
+    lda [ptr],y             ;! error: `lda` does not take this operand on the 6502
+    lda 3,s                 ;! error: `lda` does not take this operand on the 6502
+    lda away                ;! error: `lda` cannot reach a far address on the 6502
+    jmp (ptr,x)             ;! error: `jmp` does not take this operand on the 6502
+    jmp a:reaching          ;! error: `jmp` transfers control, and a control transfer is not sized by a prefix
+    jsr away                ;! error: `jsr` takes a near target, and this one is far
+    lda #$1234              ;! error: an immediate is one byte, and $1234 does not fit
+    stz z:ptr               ;! error: `stz` is a 65C02 instruction, and this program is built for the 6502
+    bra @out                ;! error: `bra` is a 65C02 instruction, and this program is built for the 6502
+    bbr0 ptr, @out          ;! error: `bbr0` is a 65C02 instruction, and this program is built for the 6502
+    jml [ptr]               ;! error: `jml` is not available on the 6502
+    cop #1                  ;! error: `cop` is not available on the 6502
+    mvn #$7e, #$00          ;! error: `mvn` is not available on the 6502
+    jeq @out                ;! error: `jeq` is not available on the 6502
+@out:
+    rts
+}
