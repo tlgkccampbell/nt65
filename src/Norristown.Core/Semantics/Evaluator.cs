@@ -280,12 +280,19 @@ internal sealed class Evaluator
     }
 
     /// <summary>
-    /// Reports a cycle once, at the declaration that closes it, naming the rest of the ring.
-    /// Every symbol on it is left without a value, and none of them reports again.
+    /// Reports a cycle once, naming the rest of the ring. Every symbol on it is left without a
+    /// value, and none of them reports again. It is reported at the declaration that comes
+    /// first in the program, by file and then by position, and the ring is named from there:
+    /// which symbol evaluation happened to reach the ring through must not change what is said.
     /// </summary>
     private void ReportCycle(int index)
     {
-        var ring = evaluating[index..];
+        var found = evaluating[index..];
+        var first = found.IndexOf(found
+            .OrderBy(symbol => symbol.Tree.Path, StringComparer.Ordinal)
+            .ThenBy(symbol => symbol.NameSpan.Start)
+            .First());
+        List<Symbol> ring = [.. found.Skip(first), .. found.Take(first)];
         var symbol = ring[0];
         Report(symbol.DeclarationSpan, $"`{symbol.DisplayName}` is defined in terms of itself",
             [.. ring.Skip(1).Select(other =>

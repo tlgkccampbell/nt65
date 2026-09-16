@@ -6,7 +6,8 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>
 /// A 65816 program of many files, each shaped like a module of a real one: constants and data
 /// it exports, a macro, and routines that call the file before it and use its constants and
-/// macro. It exists to measure what an edit costs, and to replay edits against.
+/// macro. Every file also uses the first file's `M000_LIMIT`, as a real program uses its
+/// shared definitions. It exists to measure what an edit costs, and to replay edits against.
 /// </summary>
 internal static class GeneratedProject
 {
@@ -22,7 +23,7 @@ internal static class GeneratedProject
         text.Append(CultureInfo.InvariantCulture, $$"""
             .cpu 65816
 
-            .export m{{i}}_init, m{{i}}_step, m{{i}}_fill, M{{i}}_SIZE, m{{i}}_table, m{{i}}_put
+            .export m{{i}}_init, m{{i}}_step, m{{i}}_fill, M{{i}}_SIZE, M{{i}}_LIMIT, m{{i}}_table, m{{i}}_put
 
             M{{i}}_SIZE = {{16 + index % 32}}
             M{{i}}_LIMIT = M{{before}}_SIZE * 2
@@ -58,6 +59,7 @@ internal static class GeneratedProject
 
             .proc m{{i}}_step: a8, i8 {
                 lda m{{i}}_count
+                and #M000_LIMIT
                 clc
                 adc #1
                 sta m{{i}}_count

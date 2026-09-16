@@ -40,6 +40,10 @@ internal sealed class Binder
     private readonly List<Invocation> calls = [];
     private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
+
+    // Every name looked for in the other files, found or not: a file that declares or stops
+    // declaring one of them, or changes what it means, changes what this file means.
+    private readonly HashSet<string> lookedUp = new(StringComparer.Ordinal);
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
     private Scope scope;
@@ -65,6 +69,9 @@ internal sealed class Binder
 
     /// <summary>The file's top-level scope, which is what another file can reach into.</summary>
     public Scope FileScope => fileScope;
+
+    /// <summary>The names resolving this file looked for in other files, whether it found them or not.</summary>
+    public IReadOnlySet<string> LookedUp => lookedUp;
 
     /// <summary>Binds <paramref name="tree"/> on its own, seeing no other file.</summary>
     public static Result Bind(SyntaxTree tree, SegmentTable segments) =>
@@ -1115,7 +1122,7 @@ internal sealed class Binder
                 return symbol;
 
             // A name the file does not declare may belong to another file of the program.
-            if (program.Lookup(token.Text, tree) is { } external)
+            if (LookUp(token.Text) is { } external)
                 return CheckExported(token, external, last);
 
             // In a condition a bare name may be a word rather than a name at all, and a word
@@ -1193,6 +1200,13 @@ internal sealed class Binder
         return type?.Body;
     }
 
+    /// <summary>A name looked for in the other files of the program, remembering that it was.</summary>
+    private Symbol? LookUp(string name)
+    {
+        lookedUp.Add(name);
+        return program.Lookup(name, tree);
+    }
+
     /// <summary>
     /// The type a <c>.tag</c> names, resolved from where it was written. This runs on demand
     /// rather than in order, because a name may reach into a type the file declares later.
@@ -1215,7 +1229,7 @@ internal sealed class Binder
             }
             part = path
                 ? (part is null ? fileScope : BodyOf(part))?.FindMember(token.Text)
-                : symbol.Scope.Lookup(token.Text) ?? program.Lookup(token.Text, tree);
+                : symbol.Scope.Lookup(token.Text) ?? LookUp(token.Text);
             path = true;
             if (part is null)
                 return null;

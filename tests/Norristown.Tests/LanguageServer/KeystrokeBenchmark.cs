@@ -30,12 +30,17 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Assert.Empty(first.Diagnostics);
 
         // In the middle file: `lda #0` becomes `lda #1` and back; a line is added above it and
-        // taken away; and the file's exported size changes, which the file after it uses.
+        // taken away; and the file's exported size changes, which the file after it uses. Then
+        // the last file's size changes, which the first file's `M000_LIMIT` is worked out from, and
+        // every file uses that.
         var uri = GeneratedProject.Uri(Files / 2);
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "lda #0"), 9, 10, "1", "0");
         Time(workspace, uri, ref version, "new line in a routine body", Line(workspace, uri, "lda #0"), 0, 0, "\n", null);
         Time(workspace, uri, ref version, "exported constant changed", Line(workspace, uri, "_SIZE = "), 12, 14, "17", "32");
+        uri = GeneratedProject.Uri(Files - 1);
+        version = 1;
+        Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, "_SIZE = "), 12, 14, "17", "27");
     }
 
     /// <summary>One file of many routines, which is what rerunning only the edited routine would save on.</summary>
@@ -83,7 +88,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Workspace workspace, string uri, ref int version, string what, int line, int start, int end, string text, string? undo)
     {
         var times = new List<double>();
-        var reasons = new HashSet<string>(StringComparer.Ordinal);
+        var analyzed = new SortedSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < 30; i++)
         {
             var (range, written) = i % 2 == 0
@@ -97,11 +102,11 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             var analysis = workspace.Analysis();
             _ = analysis.DiagnosticsFor(workspace.Find(uri)!.Tree.Path);
             times.Add(watch.Elapsed.TotalMilliseconds);
-            reasons.Add(analysis.WholeProgram?.ToString() ?? "only the changed file");
+            analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");
             Assert.Empty(analysis.Diagnostics);
         }
         times.Sort();
         output.WriteLine($"{what}: median {times[times.Count / 2]:0.0} ms, min {times[0]:0.0} ms, "
-            + $"max {times[^1]:0.0} ms; analyzed: {string.Join(", ", reasons.Order(StringComparer.Ordinal))}");
+            + $"max {times[^1]:0.0} ms; analyzed {string.Join(", ", analyzed)}");
     }
 }

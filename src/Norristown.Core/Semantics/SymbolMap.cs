@@ -38,13 +38,15 @@ internal sealed class SymbolMap : IReadOnlyDictionary<(SyntaxTree Tree, int Posi
     /// <summary>The names written in <paramref name="tree"/>, by position, for a map built from this one.</summary>
     public Dictionary<int, Symbol>? For(SyntaxTree tree) => files.GetValueOrDefault(tree);
 
-    /// <summary>The same map with <paramref name="before"/>'s names replaced by <paramref name="after"/>'s.</summary>
+    /// <summary>The same map with each file's names replaced by those of the version of it that was read again.</summary>
     public Dictionary<SyntaxTree, Dictionary<int, Symbol>> Replacing(
-        SyntaxTree before, SyntaxTree after, Dictionary<int, Symbol> names)
+        IEnumerable<(SyntaxTree Before, SyntaxTree After, Dictionary<int, Symbol> Names)> files)
     {
-        var replaced = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>(files);
-        replaced.Remove(before);
-        replaced[after] = names;
+        var replaced = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>(this.files);
+        foreach (var (before, _, _) in files)
+            replaced.Remove(before);
+        foreach (var (_, after, names) in files)
+            replaced[after] = names;
         return replaced;
     }
 

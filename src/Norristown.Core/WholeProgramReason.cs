@@ -14,9 +14,6 @@ public enum WholeProgramReason
     /// <summary>A file was added to the program or removed from it.</summary>
     FilesAddedOrRemoved,
 
-    /// <summary>More than one file changed since the previous analysis.</summary>
-    SeveralFilesChanged,
-
     /// <summary>An <c>.incbin</c> file is not the length it was.</summary>
     BinaryFileChanged,
 
@@ -27,20 +24,8 @@ public enum WholeProgramReason
     CpuChanged,
 
     /// <summary>
-    /// A symbol of another file holds one of the changed file's symbols itself, rather than
-    /// naming it where it is written: a <c>.tag</c> type, or a macro called or used.
+    /// What the program as a whole found says something about a place an edit rewrote: a
+    /// segment's <c>dp</c> or <c>bank</c>, or the segment table.
     /// </summary>
-    SymbolsHeldElsewhere,
-
-    /// <summary>The changed file declares two symbols under one qualified name, before or after the edit.</summary>
-    DuplicateNames,
-
-    /// <summary>A constant of another file that the changed file reads is worth what it is through the changed file.</summary>
-    EvaluationReachesBack,
-
-    /// <summary>What other files can see of the changed file changed.</summary>
-    InterfaceChanged,
-
-    /// <summary>Another file says something about a place in the changed file that the edit rewrote.</summary>
     DiagnosticInEditedText,
 }

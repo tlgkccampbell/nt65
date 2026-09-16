@@ -164,11 +164,10 @@ public static class Compiler
     }
 
     /// <summary>
-    /// The program <paramref name="previous"/> analyzed, with one file changed, analyzing only
-    /// that file; or null, with the <paramref name="reason"/>, when the change may reach further
-    /// than that file and the whole program has to be analyzed again. Anything decided for the
-    /// program as a whole changing — the files in it, the project, the CPU, the segments — is
-    /// such a change, and so is the file's interface changing.
+    /// The program <paramref name="previous"/> analyzed, with some files changed, analyzing only
+    /// those files and the files the changes reach; or null, with the <paramref name="reason"/>,
+    /// when the whole program has to be analyzed again. Anything decided for the program as a
+    /// whole changing — the files in it, the project, the CPU, the segments — is such a change.
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
@@ -185,9 +184,6 @@ public static class Compiler
         var changed = written.Where(tree => sources[tree.Path] != tree).ToList();
         if (changed.Count == 0)
             return previous;
-        reason = WholeProgramReason.SeveralFilesChanged;
-        if (changed.Count > 1)
-            return null;
 
         // An `.incbin` file that changed on disk changes every file that includes it.
         reason = WholeProgramReason.BinaryFileChanged;
@@ -196,54 +192,89 @@ public static class Compiler
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
         long? Length(string path) => lengths.GetOrAdd(path, binaryLength);
 
-        var before = changed[0];
-        var after = sources[before.Path];
         reason = WholeProgramReason.SegmentsDeclared;
-        if (SegmentTable.Declares(before) || SegmentTable.Declares(after))
+        if (changed.Any(tree => SegmentTable.Declares(tree) || SegmentTable.Declares(sources[tree.Path])))
             return null;
-        List<SyntaxTree> trees = [.. reuse.Trees.Select(tree => tree == before ? after : tree)];
+        List<SyntaxTree> trees = [.. reuse.Trees.Select(tree => sources.GetValueOrDefault(tree.Path) ?? tree)];
         var cpu = new List<Diagnostic>();
         reason = WholeProgramReason.CpuChanged;
         if (ProgramCpu.Resolve(trees, project.Cpu, cpu) != previous.Cpu)
             return null;
 
-        var conditions = new List<Diagnostic>();
-        var configuration = previous.Configuration.Replacing(before, after, previous.Cpu, project.Defines, conditions);
-        var edit = new EditMap(before, after);
-        if (previous.Program.Replacing(before, after, configuration, previous.Defines, edit.Moved, Length, out reason)
-            is not { } program)
+        // A condition depends on nothing but its own file and the build.
+        var configuration = previous.Configuration;
+        var conditions = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
+        foreach (var before in changed)
         {
-            return null;
+            var found = new List<Diagnostic>();
+            configuration = configuration.Replacing(before, sources[before.Path], previous.Cpu, project.Defines, found);
+            conditions[before.Path] = found;
+        }
+        var moved = EditMap.Composed([.. changed.Select(before => new EditMap(before, sources[before.Path]))]);
+
+        // The files to read again start as the ones that changed, and grow by every file the
+        // reading finds a change reaches, until reading them all reaches no further.
+        var current = trees.ToDictionary(tree => tree.Path, StringComparer.Ordinal);
+        var dirty = changed.Select(tree => tree.Path).ToHashSet(StringComparer.Ordinal);
+        var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
+        ProgramModel? program;
+        while (true)
+        {
+            program = previous.Program.Reanalyzing(
+                current, dirty, configuration, previous.Defines, moved, Length, out var affected);
+            if (program is null && affected.Count == 0)
+            {
+                reason = WholeProgramReason.DiagnosticInEditedText;
+                return null;
+            }
+
+            // What laying out every other file found stands, carried to where an edit moved it.
+            analyzed.Clear();
+            foreach (var (path, found) in reuse.Analyzed.Where(pair => !dirty.Contains(pair.Key)))
+            {
+                if (EditMap.Moved(found, moved) is { } kept)
+                    analyzed[path] = kept;
+                else
+                    affected.Add(path);
+            }
+            if (program is not null && affected.Count == 0)
+                break;
+            dirty.UnionWith(affected);
         }
 
-        // What every other file's analysis found stands, carried to where the edit moved it.
         reason = WholeProgramReason.DiagnosticInEditedText;
-        if (edit.Moved(reuse.Conditions, before.Path) is not { } conditionsNow
-            || edit.Moved(reuse.Analyzed, before.Path) is not { } analyzedNow
-            || edit.Moved(reuse.SegmentTable) is not { } segmentTable)
+        foreach (var (path, found) in reuse.Conditions.Where(pair => !conditions.ContainsKey(pair.Key)))
         {
-            return null;
+            if (EditMap.Moved(found, moved) is not { } kept)
+                return null;
+            conditions[path] = kept;
         }
+        if (EditMap.Moved(reuse.SegmentTable, moved) is not { } segmentTable)
+            return null;
 
-        var index = program.Files.ToList().FindIndex(file => file.Tree == after);
-        var (layout, flow, state, found) = AnalyzeFile(program.Files[index], previous.Cpu, project);
         List<CodeLayout> layouts = [.. previous.Layouts];
         List<Flow.ControlFlow> flows = [.. previous.Flows];
         List<Flow.StateAnalysis> states = [.. previous.States];
-        layouts[index] = layout;
-        flows[index] = flow;
-        if (state is not null)
-            states[index] = state;
-        conditionsNow[after.Path] = conditions;
-        analyzedNow[after.Path] = found;
+        for (var i = 0; i < program.Files.Count; i++)
+        {
+            var model = program.Files[i];
+            if (!dirty.Contains(model.Tree.Path))
+                continue;
+            var (layout, flow, state, found) = AnalyzeFile(model, previous.Cpu, project);
+            layouts[i] = layout;
+            flows[i] = flow;
+            if (state is not null)
+                states[i] = state;
+            analyzed[model.Tree.Path] = found;
+        }
 
-        var reused = new ProgramAnalysis.Reuse(project, trees, conditionsNow, analyzedNow, segmentTable, lengths);
+        var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, previous.Cpu, layouts, flows, states, previous.Defines, configuration,
             Collected(project, previous.Cpu, cpu, program, reused))
         {
             Reused = reused,
-            Reanalyzed = 1,
+            Reanalyzed = dirty.Count,
         };
     }
 
