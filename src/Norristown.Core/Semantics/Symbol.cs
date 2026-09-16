@@ -1,0 +1,101 @@
+using Norristown.Syntax;
+
+namespace Norristown.Semantics;
+
+/// <summary>
+/// One declared name (§6.1), with what analysis needs of it: whether it is a constant or an
+/// address, its value where nt65 knows it, its address size, and the segment it sits in.
+/// </summary>
+public sealed class Symbol
+{
+    internal Symbol(string name, SymbolKind kind, Scope scope, SyntaxTree tree, TextSpan nameSpan)
+    {
+        Name = name;
+        Kind = kind;
+        Scope = scope;
+        Tree = tree;
+        NameSpan = nameSpan;
+    }
+
+    /// <summary>The name as the source writes it, without the <c>@</c> of a cheap local.</summary>
+    public string Name { get; }
+
+    /// <summary>What the declaration declares. A <c>NAME = expr</c> is classified once its expression is read.</summary>
+    public SymbolKind Kind { get; internal set; }
+
+    /// <summary>The scope holding the declaration.</summary>
+    public Scope Scope { get; }
+
+    /// <summary>The file it was declared in.</summary>
+    public SyntaxTree Tree { get; }
+
+    /// <summary>Where the name is written, which is what an editor selects and renames.</summary>
+    public TextSpan NameSpan { get; }
+
+    /// <summary>Whether it is a cheap local, <c>@name</c>, private to its proc or scope (§6.2).</summary>
+    public bool IsCheapLocal { get; internal init; }
+
+    /// <summary>The segment the declaration sits in, for an address; null for a constant.</summary>
+    public string? Segment { get; internal set; }
+
+    /// <summary>The expression after <c>=</c>, or null for a label, proc body or scope.</summary>
+    public SyntaxNode? ValueExpression { get; internal init; }
+
+    /// <summary>The scope a <c>.proc</c> or <c>.scope</c> opens; null for everything else.</summary>
+    public Scope? Body { get; internal set; }
+
+    /// <summary>The value, where nt65 knows it (§9).</summary>
+    public Value Value { get; internal set; }
+
+    /// <summary>The address size of §7.2, or null where nt65 cannot tell yet.</summary>
+    public AddressSize? AddressSize { get; internal set; }
+
+    /// <summary>Whether the symbol names an address rather than a value.</summary>
+    public bool IsAddress => Kind is SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Proc
+        or SymbolKind.ExternProc or SymbolKind.ImportedAddress;
+
+    /// <summary>
+    /// Whether the symbol can be reached from outside its scope with <c>::</c> (§6.2): a
+    /// cheap local never can, and neither can anything inside an anonymous <c>.scope</c>.
+    /// </summary>
+    public bool IsReachableByPath => !IsCheapLocal && Scope.IsReachableByPath;
+
+    /// <summary>The name as it is written, with the <c>@</c> of a cheap local.</summary>
+    public string DisplayName => IsCheapLocal ? "@" + Name : Name;
+
+    /// <summary>
+    /// The name qualified by the scopes around it, as another file would write it (§12); the
+    /// file's own top level contributes nothing. A name no path can reach is just itself.
+    /// </summary>
+    public string QualifiedName
+    {
+        get
+        {
+            if (!IsReachableByPath)
+                return DisplayName;
+            var name = DisplayName;
+            for (var scope = Scope; scope is { Kind: not ScopeKind.File }; scope = scope.Parent!)
+                name = $"{scope.Name}::{name}";
+            return name;
+        }
+    }
+
+    /// <summary>Where the declaration is, as a diagnostic names it.</summary>
+    public Span DeclarationSpan => Tree.GetSpan(NameSpan);
+
+    /// <summary>What a programmer calls this kind of symbol.</summary>
+    public string KindText => Kind switch
+    {
+        SymbolKind.Label => "label",
+        SymbolKind.Constant => "constant",
+        SymbolKind.AddressAlias => "address alias",
+        SymbolKind.Proc => "routine",
+        SymbolKind.ExternProc => "extern routine",
+        SymbolKind.Scope => "scope",
+        SymbolKind.ImportedAddress => "imported address",
+        _ => "imported constant",
+    };
+
+    /// <summary>The symbol's kind and name, for debugging.</summary>
+    public override string ToString() => $"{KindText} {QualifiedName}";
+}

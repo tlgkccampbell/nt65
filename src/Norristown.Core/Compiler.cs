@@ -1,3 +1,4 @@
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown;
@@ -8,18 +9,25 @@ namespace Norristown;
 /// </summary>
 public static class Compiler
 {
-    // Lexing and blocks are the only layers so far, so a program yields syntax diagnostics
-    // and no output.
+    // Syntax and names are the layers so far, so a program yields diagnostics and no output.
     /// <summary>Compiles <paramref name="files"/> as one program.</summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files)
     {
-        var diagnostics = files
-            .SelectMany(file => SyntaxTree.Parse(file).Diagnostics)
-            .OrderBy(d => d.Span.File, StringComparer.Ordinal)
-            .ThenBy(d => d.Span.Line)
-            .ThenBy(d => d.Span.StartColumn)
-            .ThenBy(d => d.Message, StringComparer.Ordinal)
+        var trees = files
+            .Select(SyntaxTree.Parse)
+            .OrderBy(tree => tree.Path, StringComparer.Ordinal)
             .ToList();
-        return new([], diagnostics);
+
+        // The segment table is the program's, because a segment is declared exactly once
+        // across it (§5.2); everything else at this stage is one file at a time.
+        var diagnostics = new List<Diagnostic>();
+        var segments = SegmentTable.Build(trees, diagnostics);
+        foreach (var tree in trees)
+        {
+            diagnostics.AddRange(tree.Diagnostics);
+            diagnostics.AddRange(SemanticModel.Create(tree, segments).Diagnostics);
+        }
+
+        return new([], Diagnostics.Ordered(diagnostics));
     }
 }

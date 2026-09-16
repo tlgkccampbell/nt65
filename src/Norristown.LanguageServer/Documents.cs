@@ -46,7 +46,7 @@ internal sealed class Documents
             var tree = document.Tree;
             foreach (var change in changes)
                 tree = Apply(tree, change);
-            return open[id.Uri] = document with { Version = id.Version, Tree = tree };
+            return open[id.Uri] = new Document(id.Uri, id.Version, tree);
         }
     }
 
@@ -59,12 +59,12 @@ internal sealed class Documents
         }
     }
 
-    /// <summary>The syntax of an open document, or null when it is not open.</summary>
-    public SyntaxTree? Tree(string uri)
+    /// <summary>An open document, or null when it is not open.</summary>
+    public Document? Find(string uri)
     {
         lock (gate)
         {
-            return open.TryGetValue(uri, out var document) ? document.Tree : null;
+            return open.GetValueOrDefault(uri);
         }
     }
 

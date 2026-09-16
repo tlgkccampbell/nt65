@@ -1,0 +1,65 @@
+; §6.2: lookup runs from the innermost scope outward, `::` walks into a named scope, and
+; cheap locals belong to the nearest `.proc` or `.scope`.
+
+.zeropage {
+palette:    .res 32
+frames:     .res 1
+}
+
+.scope gfx {
+    COUNT = 32
+
+    .proc init {
+        ldx #COUNT          ; declared in the scope around this one
+        dec frames          ; and on outward to the file
+    @loop:
+        stz palette,x
+        dex
+        bpl @loop
+        rts
+    }
+}
+
+; The same cheap local twice in one proc, each in an anonymous scope of its own (§6.2).
+.proc reset {
+    .scope {                ; clear RAM
+        ldx #0
+    @loop:
+        sta $0200,x
+        inx
+        bne @loop
+    }
+    .scope {                ; clear the palette
+        ldx #31
+    @loop:
+        stz palette,x
+        dex
+        bpl @loop
+    }
+    jmp @done               ; a cheap local of the proc, named before it is declared
+@done:
+    rts
+}
+
+; A reference looks outward through enclosing scopes, and procs do not nest, so this never
+; reaches into another routine (§6.2).
+.proc draw {
+    ldx #0
+    .scope {
+        bne @done
+    }
+@done:
+    lda table,x
+    .rodata {
+    table:  .byte 1, 2, 4, 8    ; a nested segment block changes the segment, not the scope
+    }
+    rts
+}
+
+.proc main {
+    jsr gfx::init           ; into a named scope
+    lda #gfx::COUNT
+    lda draw::table         ; a proc is a scope as well as a label
+    jsr ::reset             ; from the file's own top level
+    rts
+}

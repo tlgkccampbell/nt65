@@ -4,7 +4,17 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="TextDocumentSync">How open documents are kept in step.</param>
 /// <param name="DocumentSymbolProvider">Whether the server answers <c>textDocument/documentSymbol</c>.</param>
 /// <param name="FoldingRangeProvider">Whether the server answers <c>textDocument/foldingRange</c>.</param>
+/// <param name="HoverProvider">Whether the server answers <c>textDocument/hover</c>.</param>
+/// <param name="DefinitionProvider">Whether the server answers <c>textDocument/definition</c>.</param>
+/// <param name="ReferencesProvider">Whether the server answers <c>textDocument/references</c>.</param>
+/// <param name="DocumentHighlightProvider">Whether the server answers <c>textDocument/documentHighlight</c>.</param>
+/// <param name="RenameProvider">How the server renames, or null when it does not.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
     bool DocumentSymbolProvider,
-    bool FoldingRangeProvider);
+    bool FoldingRangeProvider,
+    bool HoverProvider,
+    bool DefinitionProvider,
+    bool ReferencesProvider,
+    bool DocumentHighlightProvider,
+    RenameOptions? RenameProvider);

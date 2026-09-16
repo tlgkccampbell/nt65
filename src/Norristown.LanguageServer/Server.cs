@@ -42,7 +42,12 @@ internal sealed class Server
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
-            FoldingRangeProvider: true);
+            FoldingRangeProvider: true,
+            HoverProvider: true,
+            DefinitionProvider: true,
+            ReferencesProvider: true,
+            DocumentHighlightProvider: true,
+            RenameProvider: new RenameOptions(PrepareProvider: true));
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
 
@@ -84,11 +89,49 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/documentSymbol")]
     public IReadOnlyList<DocumentSymbol> DocumentSymbols(DocumentSymbolParams request) =>
-        documents.Tree(request.TextDocument.Uri) is { } tree ? Lsp.ToSymbols(tree) : [];
+        documents.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : [];
 
     [JsonRpcMethod("textDocument/foldingRange")]
     public IReadOnlyList<FoldingRange> FoldingRanges(FoldingRangeParams request) =>
-        documents.Tree(request.TextDocument.Uri) is { } tree ? Lsp.ToFoldingRanges(tree) : [];
+        documents.Find(request.TextDocument.Uri) is { } document ? Lsp.ToFoldingRanges(document.Tree) : [];
+
+    [JsonRpcMethod("textDocument/hover")]
+    public Hover? Hover(TextDocumentPositionParams request) =>
+        Find(request) is { } document ? Lsp.ToHover(document.Model, Offset(document, request)) : null;
+
+    [JsonRpcMethod("textDocument/definition")]
+    public Location? Definition(TextDocumentPositionParams request) =>
+        Find(request) is { } document
+            ? Lsp.ToDefinition(document.Model, document.Uri, Offset(document, request))
+            : null;
+
+    [JsonRpcMethod("textDocument/references")]
+    public IReadOnlyList<Location> References(ReferenceParams request) =>
+        Find(request) is { } document
+            ? Lsp.ToReferences(document.Model, document.Uri, Offset(document, request),
+                request.Context.IncludeDeclaration)
+            : [];
+
+    [JsonRpcMethod("textDocument/documentHighlight")]
+    public IReadOnlyList<DocumentHighlight> DocumentHighlights(TextDocumentPositionParams request) =>
+        Find(request) is { } document ? Lsp.ToHighlights(document.Model, Offset(document, request)) : [];
+
+    /// <summary>What a rename would replace, which a client asks for before offering one.</summary>
+    [JsonRpcMethod("textDocument/prepareRename")]
+    public Protocol.Range? PrepareRename(TextDocumentPositionParams request) =>
+        Find(request) is { } document ? Lsp.ToRenameRange(document.Model, Offset(document, request)) : null;
+
+    [JsonRpcMethod("textDocument/rename")]
+    public WorkspaceEdit? Rename(RenameParams request)
+    {
+        if (Find(request) is not { } document)
+            return null;
+
+        // A name the language will not accept is the client's to show and the programmer's
+        // to correct, so it comes back as a failed request rather than as an empty edit.
+        var (edit, problem) = Lsp.ToRename(document.Model, document.Uri, Offset(document, request), request.NewName);
+        return problem is null ? edit : throw new LocalRpcException(problem);
+    }
 
     [JsonRpcMethod("shutdown")]
     public object? Shutdown() => null;
@@ -106,5 +149,12 @@ internal sealed class Server
 
     private Task PublishDiagnosticsAsync(Document document) =>
         rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
-            new PublishDiagnosticsParams(document.Uri, document.Version, Lsp.ToDiagnostics(document.Tree)));
+            new PublishDiagnosticsParams(document.Uri, document.Version, Lsp.ToDiagnostics(document.Diagnostics)));
+
+    /// <summary>The document a request names, or null when the client never opened it.</summary>
+    private Document? Find(TextDocumentPositionParams request) => documents.Find(request.TextDocument.Uri);
+
+    /// <summary>Where in the document's text the request points.</summary>
+    private static int Offset(Document document, TextDocumentPositionParams request) =>
+        document.Tree.GetPosition(request.Position.Line, request.Position.Character);
 }

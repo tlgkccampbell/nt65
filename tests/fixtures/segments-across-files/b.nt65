@@ -1,0 +1,6 @@
+.segment "SHARED" {
+other:      .res 1
+}
+
+; The second declaration is the one reported, whichever file it is in.
+.segment "DUP": abs         ;! error: segment "DUP" is already declared

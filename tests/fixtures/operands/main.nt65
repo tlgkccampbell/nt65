@@ -1,5 +1,19 @@
 ; Every operand form of §7.1. Syntax does not depend on the CPU, so all three CPUs' forms
 ; parse in one file; which of them the target actually has is Stage 5's to say.
+; The operands name symbols, so this file declares them; where each one lives decides the
+; address size of the references to it (§7.2), which is Stage 5's to act on.
+.zeropage {
+ptr:        .res 2
+vector:     .res 2
+}
+
+.bss {
+buf:        .res 256
+}
+
+hi = $12
+lo = $34
+
 .proc forms {
     inx                     ; implied
     asl                     ; accumulator, bare

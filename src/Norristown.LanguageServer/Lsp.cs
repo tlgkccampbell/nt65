@@ -1,13 +1,16 @@
+using System.Text;
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The syntax layer as the protocol spells it. Everything the server sends is built here,
-/// so the analysis stays free of LSP and this file holds all of the 0-based counting.
+/// The analysis as the protocol spells it. Everything the server sends is built here, so
+/// the analysis stays free of LSP and this file holds all of the 0-based counting.
 /// <para>
 /// Protocol types are written out in full, because several of them share a name with
-/// something in the analysis core (<c>Diagnostic</c>) or in the framework (<c>Range</c>).
+/// something in the analysis core (<c>Diagnostic</c>, <c>SymbolKind</c>) or in the framework
+/// (<c>Range</c>).
 /// </para>
 /// </summary>
 internal static class Lsp
@@ -15,9 +18,9 @@ internal static class Lsp
     /// <summary>What the client shows as the origin of every diagnostic nt65 reports.</summary>
     private const string SourceName = "nt65";
 
-    /// <summary>Everything wrong with one file's syntax.</summary>
-    public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(SyntaxTree tree) =>
-        [.. tree.Diagnostics.Select(ToDiagnostic)];
+    /// <summary>Everything wrong with one file.</summary>
+    public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(IEnumerable<Diagnostic> diagnostics) =>
+        [.. diagnostics.Select(ToDiagnostic)];
 
     /// <summary>The file's outline, nested the way its blocks are.</summary>
     public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>
@@ -26,6 +29,120 @@ internal static class Lsp
     /// <summary>One foldable range per block.</summary>
     public static IReadOnlyList<Protocol.FoldingRange> ToFoldingRanges(SyntaxTree tree) =>
         [.. Folding.Build(tree).Select(range => new Protocol.FoldingRange(range.StartLine, range.EndLine))];
+
+    /// <summary>What to show about the name at <paramref name="position"/>, or null if there is none.</summary>
+    public static Protocol.Hover? ToHover(SemanticModel model, int position)
+    {
+        if (model.ReferenceAt(position) is not { } reference)
+            return null;
+        return new Protocol.Hover(
+            Protocol.MarkupContent.Markdown(Describe(reference.Symbol)),
+            ToRange(model.Tree, reference.Span));
+    }
+
+    /// <summary>Where the name at <paramref name="position"/> is declared, or null.</summary>
+    public static Protocol.Location? ToDefinition(SemanticModel model, string uri, int position) =>
+        model.ReferenceAt(position) is { } reference
+            ? new Protocol.Location(uri, ToRange(model.Tree, reference.Symbol.NameSpan))
+            : null;
+
+    /// <summary>Every place the name at <paramref name="position"/> is written.</summary>
+    public static IReadOnlyList<Protocol.Location> ToReferences(
+        SemanticModel model, string uri, int position, bool includeDeclaration) =>
+        [.. Occurrences(model, position)
+            .Where(reference => includeDeclaration || !reference.IsDeclaration)
+            .Select(reference => new Protocol.Location(uri, ToRange(model.Tree, reference.Span)))];
+
+    /// <summary>The same places, for a client to mark while the caret is on one of them.</summary>
+    public static IReadOnlyList<Protocol.DocumentHighlight> ToHighlights(SemanticModel model, int position) =>
+        [.. Occurrences(model, position).Select(reference => new Protocol.DocumentHighlight(
+            ToRange(model.Tree, reference.Span),
+            reference.IsDeclaration ? Protocol.DocumentHighlightKind.Write : Protocol.DocumentHighlightKind.Read))];
+
+    /// <summary>The name at <paramref name="position"/>, which is what a rename would replace.</summary>
+    public static Protocol.Range? ToRenameRange(SemanticModel model, int position) =>
+        model.ReferenceAt(position) is { } reference ? ToRange(model.Tree, reference.Span) : null;
+
+    /// <summary>
+    /// Renaming every occurrence of the name at <paramref name="position"/>, or the reason
+    /// it cannot be renamed to <paramref name="newName"/>.
+    /// </summary>
+    public static (Protocol.WorkspaceEdit? Edit, string? Problem) ToRename(
+        SemanticModel model, string uri, int position, string newName)
+    {
+        if (model.ReferenceAt(position) is not { } reference)
+            return (null, "there is no name here to rename");
+        if (CheckNewName(reference.Symbol, newName) is { } problem)
+            return (null, problem);
+
+        var edits = Occurrences(model, position)
+            .Select(occurrence => new Protocol.TextEdit(ToRange(model.Tree, occurrence.Span), newName));
+        return (new Protocol.WorkspaceEdit(
+            new Dictionary<string, IReadOnlyList<Protocol.TextEdit>>(StringComparer.Ordinal)
+            {
+                [uri] = [.. edits],
+            }), null);
+    }
+
+    /// <summary>
+    /// Why <paramref name="newName"/> will not do (§4, §6.2), or null when it will: a rename
+    /// that leaves the file not compiling is not a rename.
+    /// </summary>
+    private static string? CheckNewName(Symbol symbol, string newName)
+    {
+        var name = newName;
+        if (symbol.IsCheapLocal)
+        {
+            if (!name.StartsWith('@'))
+                return $"`{symbol.DisplayName}` is a cheap local, so its new name must start with `@`";
+            name = name[1..];
+        }
+        else if (name.StartsWith('@'))
+        {
+            return $"`{symbol.DisplayName}` is not a cheap local, so its new name may not start with `@`";
+        }
+
+        if (name.Length == 0 || !SyntaxFacts.IsIdentifierStart(name[0]) || !name.All(SyntaxFacts.IsIdentifierPart))
+            return $"`{newName}` is not a name: names are a letter or `_` followed by letters, digits and `_`";
+        if (!symbol.IsCheapLocal && (SyntaxFacts.IsMnemonic(name) || SyntaxFacts.IsRegister(name)))
+            return $"`{newName}` is a reserved word";
+
+        var taken = symbol.IsCheapLocal ? symbol.Scope.FindCheapLocal(name) : symbol.Scope.FindMember(name);
+        return taken is null || taken == symbol ? null : $"`{newName}` is already declared in this scope";
+    }
+
+    /// <summary>Everywhere the symbol at <paramref name="position"/> is written, in source order.</summary>
+    private static IReadOnlyList<SymbolReference> Occurrences(SemanticModel model, int position) =>
+        model.ReferenceAt(position) is { } reference ? model.ReferencesTo(reference.Symbol) : [];
+
+    /// <summary>
+    /// What an editor shows about a symbol: what kind it is, what it is worth, how wide an
+    /// address it is (§7.2) and, for an address, the segment it sits in.
+    /// </summary>
+    private static string Describe(Symbol symbol)
+    {
+        var text = new StringBuilder($"**{symbol.KindText}** `{symbol.QualifiedName}`\n");
+
+        // A name no path can reach is shown as it is written, so the routine or scope it is
+        // private to is worth saying instead (§6.2).
+        if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
+            text.Append($"\n- private to: `{owner}`");
+        if (symbol.Value.IsKnown)
+            text.Append($"\n- value: `{symbol.Value}`");
+        if (symbol.AddressSize is { } size)
+            text.Append($"\n- address size: `{Spell(size)}` ({(int)size} byte{((int)size == 1 ? "" : "s")})");
+        if (symbol.IsAddress && symbol.Segment is { } segment)
+            text.Append($"\n- segment: `{segment}`");
+        return text.ToString();
+    }
+
+    /// <summary>An address size as the language writes it (§5.2).</summary>
+    private static string Spell(AddressSize size) => size switch
+    {
+        AddressSize.ZeroPage => "zp",
+        AddressSize.Absolute => "abs",
+        _ => "far",
+    };
 
     private static Protocol.Diagnostic ToDiagnostic(Diagnostic diagnostic) => new(
         ToRange(diagnostic.Span),

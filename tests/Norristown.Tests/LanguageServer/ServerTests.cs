@@ -133,7 +133,7 @@ public sealed class ServerTests
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         await client.ChangeAsync(Uri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(3, 4), new Position(3, 7)), "jsr wait"),
+            new TextDocumentContentChangeEvent(new Range(new Position(3, 4), new Position(3, 7)), "jsr reset"),
             new TextDocumentContentChangeEvent(new Range(new Position(4, 1), new Position(4, 1)), "\nrts\n"));
 
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);

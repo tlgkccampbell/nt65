@@ -5,6 +5,9 @@ using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 using StreamJsonRpc;
 
+// The protocol has a Range of its own, which is the one this client means.
+using Range = Norristown.LanguageServer.Protocol.Range;
+
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -82,6 +85,40 @@ internal sealed class TestClient : IAsyncDisposable
     public Task<IReadOnlyList<FoldingRange>> FoldingRangesAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<FoldingRange>>("textDocument/foldingRange",
             new FoldingRangeParams(new TextDocumentIdentifier(uri)), cancellation);
+
+    /// <summary>What to show about the name at a place in the document.</summary>
+    public Task<Hover?> HoverAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<Hover?>("textDocument/hover",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
+    /// <summary>Where the name at a place is declared.</summary>
+    public Task<Location?> DefinitionAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<Location?>("textDocument/definition",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
+    /// <summary>Every place the name at a place is written.</summary>
+    public Task<IReadOnlyList<Location>> ReferencesAsync(
+        string uri, Position position, bool includeDeclaration, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<Location>>("textDocument/references",
+            new ReferenceParams(new TextDocumentIdentifier(uri), position, new ReferenceContext(includeDeclaration)),
+            cancellation);
+
+    /// <summary>The same places, as the client marks them.</summary>
+    public Task<IReadOnlyList<DocumentHighlight>> HighlightsAsync(
+        string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentHighlight>>("textDocument/documentHighlight",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
+    /// <summary>What a rename at a place would replace.</summary>
+    public Task<Range?> PrepareRenameAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<Range?>("textDocument/prepareRename",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
+    /// <summary>Renames the name at a place, everywhere it is written.</summary>
+    public Task<WorkspaceEdit?> RenameAsync(
+        string uri, Position position, string newName, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<WorkspaceEdit?>("textDocument/rename",
+            new RenameParams(new TextDocumentIdentifier(uri), position, newName), cancellation);
 
     /// <summary>Shuts the server down the way an editor does, and waits for it to stop.</summary>
     public async ValueTask DisposeAsync()

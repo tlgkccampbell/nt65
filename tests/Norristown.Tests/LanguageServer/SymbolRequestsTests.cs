@@ -1,0 +1,284 @@
+using Norristown.LanguageServer.Protocol;
+using StreamJsonRpc;
+
+// The protocol has a Range of its own, which is the one these tests mean.
+using Range = Norristown.LanguageServer.Protocol.Range;
+
+namespace Norristown.Tests.LanguageServer;
+
+/// <summary>
+/// What Stage 4 gives an editor: hover, go to definition, find references, highlights and
+/// rename, all within one file.
+/// </summary>
+public sealed class SymbolRequestsTests
+{
+    private const string Uri = "file:///c:/work/main.nt65";
+
+    /// <summary>
+    /// A file with a zero-page label, a constant, a scope and two procs, so that every
+    /// request has something of each kind to find.
+    /// </summary>
+    private const string Source = """
+        .zeropage {
+        ptr:    .res 2
+        }
+
+        SCREEN = $0400
+
+        .scope gfx {
+            .proc init {
+                lda #0
+                sta ptr
+            @loop:
+                bne @loop
+                rts
+            }
+        }
+
+        .proc main {
+            jsr gfx::init
+            lda ptr
+            lda #<SCREEN
+            rts
+        }
+        """;
+
+    [Fact]
+    public async Task AnnouncesWhatTheNameLayerCanDo()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+
+        var capabilities = client.Initialized.Capabilities;
+        Assert.True(capabilities.HoverProvider);
+        Assert.True(capabilities.DefinitionProvider);
+        Assert.True(capabilities.ReferencesProvider);
+        Assert.True(capabilities.DocumentHighlightProvider);
+        Assert.True(capabilities.RenameProvider?.PrepareProvider);
+    }
+
+    /// <summary>Hover says what a symbol is, what it is worth and how wide an address it is (§7.2).</summary>
+    [Fact]
+    public async Task HoverDescribesALabelAndAConstant()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var label = await client.HoverAsync(Uri, new Position(1, 0), timeout);
+        Assert.NotNull(label);
+        Assert.Contains("**label** `ptr`", label.Contents.Value);
+        Assert.Contains("address size: `zp` (1 byte)", label.Contents.Value);
+        Assert.Contains("segment: `ZEROPAGE`", label.Contents.Value);
+
+        var constant = await client.HoverAsync(Uri, new Position(4, 0), timeout);
+        Assert.NotNull(constant);
+        Assert.Contains("**constant** `SCREEN`", constant.Contents.Value);
+        Assert.Contains("value: `$0400`", constant.Contents.Value);
+        Assert.Contains("address size: `abs` (2 bytes)", constant.Contents.Value);
+    }
+
+    /// <summary>A name inside a scope hovers under the path another file would write (§12).</summary>
+    [Fact]
+    public async Task HoverQualifiesAScopedName()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(7, 11), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("**routine** `gfx::init`", hover.Contents.Value);
+        Assert.Equal(new Range(new Position(7, 10), new Position(7, 14)), hover.Range);
+    }
+
+    /// <summary>A cheap local has no path, so hover names the routine it is private to (§6.2).</summary>
+    [Fact]
+    public async Task HoverOnACheapLocalSaysWhereItLives()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(10, 4), timeout);
+        Assert.NotNull(hover);
+        Assert.Contains("**label** `@loop`", hover.Contents.Value);
+        Assert.Contains("private to: `init`", hover.Contents.Value);
+    }
+
+    [Fact]
+    public async Task HoverOnSomethingThatIsNotANameSaysNothing()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        Assert.Null(await client.HoverAsync(Uri, new Position(8, 8), timeout));
+    }
+
+    [Fact]
+    public async Task DefinitionGoesToTheDeclaration()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        // `ptr` used on the `lda ptr` line, declared on line 2.
+        var definition = await client.DefinitionAsync(Uri, new Position(18, 8), timeout);
+        Assert.NotNull(definition);
+        Assert.Equal(Uri, definition.Uri);
+        Assert.Equal(new Range(new Position(1, 0), new Position(1, 3)), definition.Range);
+    }
+
+    /// <summary>Each part of a path finds its own declaration.</summary>
+    [Fact]
+    public async Task DefinitionFollowsEachPartOfAPath()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var scope = await client.DefinitionAsync(Uri, new Position(17, 8), timeout);
+        Assert.Equal(new Range(new Position(6, 7), new Position(6, 10)), scope?.Range);
+
+        var routine = await client.DefinitionAsync(Uri, new Position(17, 13), timeout);
+        Assert.Equal(new Range(new Position(7, 10), new Position(7, 14)), routine?.Range);
+    }
+
+    [Fact]
+    public async Task ReferencesFindEveryUse()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var all = await client.ReferencesAsync(Uri, new Position(1, 0), includeDeclaration: true, timeout);
+        Assert.Equal([1, 9, 18], all.Select(location => location.Range.Start.Line));
+
+        var uses = await client.ReferencesAsync(Uri, new Position(1, 0), includeDeclaration: false, timeout);
+        Assert.Equal([9, 18], uses.Select(location => location.Range.Start.Line));
+    }
+
+    /// <summary>A cheap local is private to its proc, so its uses are the ones inside it (§6.2).</summary>
+    [Fact]
+    public async Task ReferencesToACheapLocalStayInItsProc()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var all = await client.ReferencesAsync(Uri, new Position(10, 4), includeDeclaration: true, timeout);
+        Assert.Equal([10, 11], all.Select(location => location.Range.Start.Line));
+    }
+
+    [Fact]
+    public async Task HighlightsMarkTheDeclarationAsAWrite()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var highlights = await client.HighlightsAsync(Uri, new Position(18, 8), timeout);
+        Assert.Equal(
+            [DocumentHighlightKind.Write, DocumentHighlightKind.Read, DocumentHighlightKind.Read],
+            highlights.Select(highlight => highlight.Kind));
+    }
+
+    [Fact]
+    public async Task RenameRewritesEveryOccurrence()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        // What a rename replaces is the name under the caret, which is what the client shows
+        // the programmer to edit.
+        Assert.Equal(new Range(new Position(18, 8), new Position(18, 11)),
+            await client.PrepareRenameAsync(Uri, new Position(18, 8), timeout));
+
+        var edit = await client.RenameAsync(Uri, new Position(18, 8), "pointer", timeout);
+        Assert.NotNull(edit);
+        var edits = edit.Changes[Uri];
+        Assert.Equal([1, 9, 18], edits.Select(e => e.Range.Start.Line));
+        Assert.All(edits, e => Assert.Equal("pointer", e.NewText));
+    }
+
+    /// <summary>Renaming a cheap local touches its proc and keeps it a cheap local (§6.2).</summary>
+    [Fact]
+    public async Task ACheapLocalIsRenamedWithItsAt()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var edit = await client.RenameAsync(Uri, new Position(10, 4), "@again", timeout);
+        Assert.NotNull(edit);
+        Assert.Equal([10, 11], edit.Changes[Uri].Select(e => e.Range.Start.Line));
+
+        var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            client.RenameAsync(Uri, new Position(10, 4), "again", timeout));
+        Assert.Contains("must start with `@`", refused.Message);
+    }
+
+    [Theory]
+    [InlineData("lda", "is a reserved word")]
+    [InlineData("2fast", "is not a name")]
+    [InlineData("SCREEN", "is already declared in this scope")]
+    public async Task ARenameThatWouldNotCompileIsRefused(string newName, string reason)
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            client.RenameAsync(Uri, new Position(1, 0), newName, timeout));
+        Assert.Contains(reason, refused.Message);
+    }
+
+    /// <summary>Names are resolved as the document is edited, not as it was opened.</summary>
+    [Fact]
+    public async Task AnEditChangesWhatANameMeans()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, "COUNT = 1\n.proc main {\n    lda #COUNT\n}\n");
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        // Rename the declaration alone, and the use no longer resolves.
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
+            new Range(new Position(0, 0), new Position(0, 5)), "TOTAL"));
+
+        var published = await client.NextDiagnosticsAsync(timeout);
+        var diagnostic = Assert.Single(published.Diagnostics);
+        Assert.Equal("`COUNT` is not declared", diagnostic.Message);
+        Assert.Equal(2, diagnostic.Range.Start.Line);
+
+        var hover = await client.HoverAsync(Uri, new Position(0, 0), timeout);
+        Assert.Contains("`TOTAL`", hover?.Contents.Value);
+    }
+
+    /// <summary>A duplicate declaration points at the one that got there first.</summary>
+    [Fact]
+    public async Task ADuplicateCarriesRelatedInformation()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, "SIZE = 1\nSIZE = 2\n");
+
+        var diagnostic = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        Assert.Equal("`SIZE` is already declared in this scope", diagnostic.Message);
+        var related = Assert.Single(diagnostic.RelatedInformation!);
+        Assert.Equal(0, related.Location.Range.Start.Line);
+    }
+
+    /// <summary>A request about a document the client never opened is answered, not refused.</summary>
+    [Fact]
+    public async Task ADocumentThatIsNotOpenAnswersEmpty()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+
+        Assert.Null(await client.HoverAsync(Uri, new Position(0, 0), timeout));
+        Assert.Null(await client.DefinitionAsync(Uri, new Position(0, 0), timeout));
+        Assert.Empty(await client.ReferencesAsync(Uri, new Position(0, 0), true, timeout));
+        Assert.Empty(await client.HighlightsAsync(Uri, new Position(0, 0), timeout));
+        Assert.Null(await client.PrepareRenameAsync(Uri, new Position(0, 0), timeout));
+        Assert.Null(await client.RenameAsync(Uri, new Position(0, 0), "x", timeout));
+    }
+
+    private static async Task<TestClient> OpenAsync(CancellationToken cancellation)
+    {
+        var client = await TestClient.StartAsync(cancellation);
+        await client.OpenAsync(Uri, Source);
+        Assert.Empty((await client.NextDiagnosticsAsync(cancellation)).Diagnostics);
+        return client;
+    }
+}

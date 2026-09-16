@@ -102,15 +102,15 @@ public sealed class DocumentsTests
         var documents = new Documents();
         Assert.Null(documents.Change(new VersionedTextDocumentIdentifier(Uri, 2),
             [new TextDocumentContentChangeEvent(null, "nop\n")]));
-        Assert.Null(documents.Tree(Uri));
+        Assert.Null(documents.Find(Uri));
     }
 
     [Fact]
     public void ClosingADocumentForgetsIt()
     {
         var documents = OpenSource(out _);
-        Assert.NotNull(documents.Tree(Uri));
+        Assert.NotNull(documents.Find(Uri));
         documents.Close(Uri);
-        Assert.Null(documents.Tree(Uri));
+        Assert.Null(documents.Find(Uri));
     }
 }
