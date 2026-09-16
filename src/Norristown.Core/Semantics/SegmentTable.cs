@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Runtime.CompilerServices;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -13,6 +14,10 @@ public sealed class SegmentTable
 {
     /// <summary>Where items outside any segment block go.</summary>
     public const string DefaultSegment = "CODE";
+
+    // A file's segment declarations, read once per tree: after an edit, only one file of the
+    // program is a tree nothing has read yet.
+    private static readonly ConditionalWeakTable<SyntaxTree, List<Declaration>> written = new();
 
     private static readonly FrozenDictionary<string, AddressSize> standard = new Dictionary<string, AddressSize>(
         StringComparer.Ordinal)
@@ -145,10 +150,16 @@ public sealed class SegmentTable
     /// <summary>The segment <paramref name="name"/>, or null when nothing declares it.</summary>
     public Segment? Find(string name) => segments.GetValueOrDefault(name);
 
+    /// <summary>Whether <paramref name="tree"/> declares a segment, taken or not by the build.</summary>
+    internal static bool Declares(SyntaxTree tree) => Declarations(tree).Count > 0;
+
     private static Dictionary<string, Segment> Predeclared() =>
         standard.ToDictionary(pair => pair.Key, pair => new Segment(pair.Key, pair.Value, null), StringComparer.Ordinal);
 
-    private static IEnumerable<Declaration> Declarations(SyntaxTree tree)
+    private static List<Declaration> Declarations(SyntaxTree tree) =>
+        written.GetValue(tree, tree => [.. Read(tree)]);
+
+    private static IEnumerable<Declaration> Read(SyntaxTree tree)
     {
         foreach (var node in tree.Root.DescendantNodes())
         {

@@ -116,7 +116,7 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request) =>
-        At(request) is { } asked ? Lsp.ToDefinition(asked.Model, asked.Position) : null;
+        At(request) is { } asked ? Lsp.ToDefinition(asked.Program, asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/references")]
     public IReadOnlyList<Location> References(ReferenceParams request) =>

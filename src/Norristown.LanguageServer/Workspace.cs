@@ -10,10 +10,10 @@ namespace Norristown.LanguageServer;
 /// disk, and an edit re-parses it incrementally, so the lines a change did not touch keep
 /// the green nodes they already had.
 /// <para>
-/// A file is not analyzed on its own, because a name it uses may be one another file exports
-///. The whole program is analyzed together, once, the first time anything asks; an
-/// edit to any file throws that away, so a change in one file shows up in another. Whole-
-/// program re-analysis on each keystroke is what Stage 14 revisits.
+/// A file is not analyzed on its own, because a name it uses may be one another file exports.
+/// The program is analyzed the first time anything asks, and again after an edit, starting
+/// from the analysis before it: an edit that leaves what other files see of a file alone
+/// analyzes only that file.
 /// </para>
 /// </summary>
 internal sealed class Workspace
@@ -23,6 +23,9 @@ internal sealed class Workspace
     private ProjectSettings project = ProjectSettings.None;
     private IReadOnlyList<SyntaxTree> onDisk = [];
     private ProgramAnalysis? analysis;
+
+    // The last analysis, kept past the edit that made it stale so the next one can start from it.
+    private ProgramAnalysis? previous;
 
     /// <summary>
     /// The logical path a URI names, with <c>/</c> separators, which is what diagnostics and
@@ -44,6 +47,7 @@ internal sealed class Workspace
             project = ProjectSettings.None;
             onDisk = [];
             analysis = null;
+            previous = null;
             if (rootUri is null || PathOf(rootUri) is not { Length: > 0 } root)
                 return;
 
@@ -138,7 +142,7 @@ internal sealed class Workspace
                 sources[tree.Path] = tree;
             foreach (var document in open.Values)
                 sources[document.Tree.Path] = document.Tree;
-            return analysis = Compiler.Analyze([.. sources.Values], project);
+            return analysis = previous = Compiler.Analyze([.. sources.Values], project, previous);
         }
     }
 

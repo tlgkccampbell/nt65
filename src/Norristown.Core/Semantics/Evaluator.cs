@@ -35,14 +35,29 @@ internal sealed class Evaluator
     // only a caller that has laid the file out can answer it.
     private readonly Func<Symbol, long?>? spans;
 
+    // For a program in which one file changed: the symbols of the files that did not, whose
+    // values stand as they were, and which of them this file's symbols read.
+    private readonly Func<Symbol, bool>? settled;
+    private readonly HashSet<Symbol> settledReads = [];
+
+    // The file of the symbol being evaluated when each diagnostic was found, alongside them.
+    // What a symbol's evaluation finds belongs to its file even when it is found in another
+    // file's function body, so a file that is not evaluated again keeps saying it.
+    private readonly List<string>? owners;
+    private Symbol? owner;
+
     private Evaluator(
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic>? diagnostics,
         Func<string, long?>? binaryLength = null,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
-        Func<Symbol, long?>? spans = null)
+        Func<Symbol, long?>? spans = null,
+        Func<Symbol, bool>? settled = null,
+        List<string>? owners = null)
     {
+        this.settled = settled;
+        this.owners = owners;
         this.segments = segments;
         this.resolved = resolved;
         this.diagnostics = diagnostics;
@@ -76,6 +91,26 @@ internal sealed class Evaluator
         var evaluator = new Evaluator(segments, resolved, diagnostics, binaryLength);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
+    }
+
+    /// <summary>
+    /// The same, saying for each diagnostic which file's symbol found it, in
+    /// <paramref name="owners"/>. Where <paramref name="settled"/> says a symbol is settled, its
+    /// value is read as it stands rather than worked out again; the ones read are returned.
+    /// </summary>
+    public static IReadOnlySet<Symbol> EvaluateSymbols(
+        SegmentTable segments,
+        IReadOnlyList<Symbol> symbols,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        List<Diagnostic> diagnostics,
+        List<string> owners,
+        Func<Symbol, bool>? settled,
+        Func<string, long?>? binaryLength)
+    {
+        var evaluator = new Evaluator(segments, resolved, diagnostics, binaryLength, settled: settled, owners: owners);
+        foreach (var symbol in symbols)
+            evaluator.EvaluateSymbol(symbol);
+        return evaluator.settledReads;
     }
 
     /// <summary>
@@ -161,6 +196,19 @@ internal sealed class Evaluator
         a is null ? b : b is null ? a : (AddressSize)Math.Max((int)a, (int)b);
 
     private void EvaluateSymbol(Symbol symbol)
+    {
+        if (settled?.Invoke(symbol) == true)
+        {
+            settledReads.Add(symbol);
+            return;
+        }
+        var outer = owner;
+        owner = symbol;
+        EvaluateOwnSymbol(symbol);
+        owner = outer;
+    }
+
+    private void EvaluateOwnSymbol(Symbol symbol)
     {
         var index = evaluating.IndexOf(symbol);
         if (index >= 0)
@@ -916,11 +964,19 @@ internal sealed class Evaluator
     private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
     private void Report(Span span, string message, IReadOnlyList<RelatedSpan> related) =>
-        diagnostics?.Add(new Diagnostic(span, Severity.Error, message, related));
+        Add(new Diagnostic(span, Severity.Error, message, related));
 
     private void Report(SyntaxToken token, string message) =>
-        diagnostics?.Add(new Diagnostic(token.Parent.Tree.GetSpan(token.Span), Severity.Error, message, []));
+        Add(new Diagnostic(token.Parent.Tree.GetSpan(token.Span), Severity.Error, message, []));
 
     private void Report(SyntaxNode node, string message) =>
-        diagnostics?.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, []));
+        Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, []));
+
+    private void Add(Diagnostic diagnostic)
+    {
+        if (diagnostics is null)
+            return;
+        diagnostics.Add(diagnostic);
+        owners?.Add(owner?.Tree.Path ?? diagnostic.Span.File);
+    }
 }

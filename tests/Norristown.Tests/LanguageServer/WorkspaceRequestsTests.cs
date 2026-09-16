@@ -123,6 +123,30 @@ public sealed class WorkspaceRequestsTests
             Assert.Single(published.Diagnostics).Message);
     }
 
+    /// <summary>
+    /// An edit that leaves what other files see of a file alone analyzes only that file, so
+    /// main.nt65 is still the analysis from before the edit. What it names is what gfx.nt65
+    /// declares now, wherever the edit moved it.
+    /// </summary>
+    [Fact]
+    public async Task NamesStillCrossFilesAfterAnEditOnlyOneFileWasAnalyzedFor()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        // A comment line above `.proc clear`, which moves it down a line.
+        await client.ChangeAsync(GfxUri, 2,
+            new TextDocumentContentChangeEvent(new Range(new Position(5, 0), new Position(5, 0)), "; wipes the screen\n"));
+        await NextForAsync(client, MainUri, timeout);
+
+        var definition = await client.DefinitionAsync(MainUri, new Position(1, 8), timeout);
+        Assert.NotNull(definition);
+        Assert.Equal(new Range(new Position(6, 6), new Position(6, 11)), definition.Range);
+
+        var references = await client.ReferencesAsync(GfxUri, new Position(6, 6), true, timeout);
+        Assert.Equal([GfxUri, GfxUri, MainUri], references.Select(r => r.Uri));
+    }
+
     /// <summary>The next diagnostics published for one file, skipping the others.</summary>
     private static async Task<PublishDiagnosticsParams> NextForAsync(
         TestClient client, string uri, CancellationToken cancellation)

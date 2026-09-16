@@ -134,8 +134,8 @@ internal static class Lsp
     /// Where the name at <paramref name="position"/> is declared, or null. The declaration
     /// may be in another file of the program, so the location carries its own URI.
     /// </summary>
-    public static Protocol.Location? ToDefinition(SemanticModel model, int position) =>
-        model.ReferenceAt(position)?.Symbol is { } symbol
+    public static Protocol.Location? ToDefinition(ProgramModel program, SemanticModel model, int position) =>
+        model.ReferenceAt(position)?.Symbol is { } named && program.Current(named) is var symbol
             ? new Protocol.Location(ToUri(symbol.Tree.Path), ToRange(symbol.Tree, symbol.NameSpan))
             : null;
 
@@ -166,7 +166,7 @@ internal static class Lsp
     {
         if (model.ReferenceAt(position) is not { } reference)
             return (null, "there is no name here to rename");
-        if (CheckNewName(reference.Symbol, newName) is { } problem)
+        if (CheckNewName(program.Current(reference.Symbol), newName) is { } problem)
             return (null, problem);
 
         // An exported name is written in every file that uses it, so the edit spans the
@@ -216,11 +216,17 @@ internal static class Lsp
     private static IEnumerable<(SemanticModel File, SymbolReference Reference)> Everywhere(
         ProgramModel program, SemanticModel model, int position)
     {
-        if (model.ReferenceAt(position)?.Symbol is not { } symbol)
+        if (model.ReferenceAt(position)?.Symbol is not { } named)
             return [];
+
+        // A file kept from before an edit elsewhere names what the edited file declared then,
+        // so the symbols are compared as what they stand for now.
+        var symbol = program.Current(named);
         return program.Files
             .OrderBy(file => file.Tree.Path, StringComparer.Ordinal)
-            .SelectMany(file => file.ReferencesTo(symbol).Select(reference => (file, reference)));
+            .SelectMany(file => file.References
+                .Where(reference => program.Current(reference.Symbol) == symbol)
+                .Select(reference => (file, reference)));
     }
 
     /// <summary>

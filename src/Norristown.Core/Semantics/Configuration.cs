@@ -81,6 +81,28 @@ public sealed class Configuration
         omitted.TryGetValue(tree, out var left) ? left : [];
 
     /// <summary>
+    /// The configuration of a program in which <paramref name="before"/> became
+    /// <paramref name="after"/>. A condition depends on nothing but the file it is in and the
+    /// build, so every other file's answers stand.
+    /// </summary>
+    internal Configuration Replacing(
+        SyntaxTree before, SyntaxTree after, Cpu cpu, IEnumerable<Define> defines, List<Diagnostic> diagnostics)
+    {
+        var values = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var define in defines)
+            values[define.Name] = define.Value;
+
+        var replaced = new Dictionary<SyntaxTree, List<TextSpan>>(omitted);
+        replaced.Remove(before);
+        var reanswered = new HashSet<(SyntaxTree, int)>(answered.Where(at => at.Tree != before));
+        var left = new List<TextSpan>();
+        new Reader(after, cpu, values, diagnostics, left, reanswered).Container(after.Root);
+        if (left.Count > 0)
+            replaced[after] = left;
+        return new Configuration(replaced, reanswered);
+    }
+
+    /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks: the <c>.if</c> that
     /// starts it, then whichever <c>.elseif</c>s and <c>.else</c> continue it. The first
     /// branch whose condition holds is the one the build takes; the conditions after it are

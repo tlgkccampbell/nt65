@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Norristown.Syntax;
 
 namespace Norristown.Project;
@@ -10,6 +11,10 @@ public static class ProgramCpu
 {
     /// <summary>What a program with nothing to say about it is built for.</summary>
     public const Cpu Default = Cpu.Mos6502;
+
+    // A file's `.cpu` items, read once per tree: every analysis of the program asks every file,
+    // and after an edit only one of them is a tree it has not seen.
+    private static readonly ConditionalWeakTable<SyntaxTree, List<(Cpu Cpu, TextSpan Span)>> written = new();
 
     /// <summary>
     /// The program's CPU. <paramref name="configured"/> is what the command line or the
@@ -36,7 +41,10 @@ public static class ProgramCpu
     }
 
     /// <summary>Every <c>.cpu</c> item in a file, in source order.</summary>
-    private static IEnumerable<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree)
+    private static List<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree) =>
+        written.GetValue(tree, tree => [.. Read(tree)]);
+
+    private static IEnumerable<(Cpu Cpu, TextSpan Span)> Read(SyntaxTree tree)
     {
         foreach (var node in tree.Root.DescendantNodes())
         {

@@ -1082,7 +1082,7 @@ internal sealed class Binder
                 return;
         }
         if (!macro.Uses.Any(seen => seen.Used == used))
-            macro.Uses.Add((used, used.Tree.GetSpan(token.Span)));
+            macro.Uses.Add((used, token.Parent.Tree.GetSpan(token.Span)));
     }
 
     /// <summary>

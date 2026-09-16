@@ -36,6 +36,15 @@ public sealed record ProgramAnalysis(
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
+    /// <summary>
+    /// How many files this analysis analyzed: every file of the program, or only the one that
+    /// changed when the rest could be kept from the analysis before.
+    /// </summary>
+    public int Reanalyzed { get; internal init; }
+
+    /// <summary>What a later analysis of the same program, one edit on, needs to keep the rest of this one.</summary>
+    internal Reuse? Reused { get; init; }
+
     /// <summary>What is wrong with one file, for an editor that shows a file at a time.</summary>
     public IReadOnlyList<Diagnostic> DiagnosticsFor(string path) =>
         [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];
@@ -67,4 +76,19 @@ public sealed record ProgramAnalysis(
         }
         return null;
     }
+
+    /// <summary>What an analysis keeps so that the next one can start from it.</summary>
+    /// <param name="Project">The project it analyzed, which the next one has to be of too.</param>
+    /// <param name="Trees">Every file analyzed, the defines among them.</param>
+    /// <param name="Conditions">What answering each file's conditions found, by file.</param>
+    /// <param name="Analyzed">What laying out each file and following its control found, by file.</param>
+    /// <param name="SegmentTable">What building the segment table found.</param>
+    /// <param name="Lengths">How long each <c>.incbin</c> file was taken to be.</param>
+    internal sealed record Reuse(
+        ProjectSettings Project,
+        IReadOnlyList<SyntaxTree> Trees,
+        IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Conditions,
+        IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Analyzed,
+        IReadOnlyList<Diagnostic> SegmentTable,
+        IReadOnlyDictionary<string, long?> Lengths);
 }

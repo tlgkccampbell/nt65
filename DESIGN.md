@@ -1850,7 +1850,11 @@ lines in a branch that is not taken still parse, but are not resolved or analyze
 **The incremental boundary is the file's interface**: its exported declarations, each
 carrying everything a user of it needs (a constant's value, a label's address size, a
 data label's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
-body, a macro's kind and body and the exported symbols it uses). Nothing in the interface is derived from a proc body or
+body, a macro's kind and body and the exported symbols it uses). It also holds the names
+of the declarations it does not export that a path can reach, because another file naming
+one is told that it exists and is not exported, and what any of them means that another
+file names anyway. Positions are not part of it: what one file says about a place in
+another moves with an edit there. Nothing in the interface is derived from a proc body or
 depends on `*`: code sizes are layout, left to the linker (§7.6). If an edit leaves
 the interface unchanged, no other file is re-analyzed, and within the file only the
 edited proc's flow analysis reruns. The only program-wide tables are the defines, the
