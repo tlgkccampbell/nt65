@@ -12,7 +12,7 @@ namespace Norristown.Tests.Semantics;
 /// every question an editor asks. Edit sequences are replayed both ways and compared after
 /// every edit.
 /// </summary>
-public sealed class IncrementalAnalysisTests
+public sealed class IncrementalAnalysisTests(ITestOutputHelper output)
 {
     private static readonly ProjectSettings Project = ProjectSettings.None with
     {
@@ -156,45 +156,47 @@ public sealed class IncrementalAnalysisTests
     };
 
     /// <summary>
-    /// Each edit says whether only the file it is in should be analyzed again: an edit inside a
-    /// routine body can be, one that changes what another file sees cannot.
+    /// Each edit says why the whole program should be analyzed again, or null when only the
+    /// file it is in should be: an edit inside a routine body is one of those, and one that
+    /// changes what another file sees is not.
     /// </summary>
     [Fact]
     public void ScriptedEditsMatchAnalyzingFromScratch()
     {
-        (string Path, string Find, string Replace, bool OneFile)[] edits =
+        (string Path, string Find, string Replace, WholeProgramReason? Expected)[] edits =
         [
-            ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", true),     // a routine body
-            ("main.nt65", ".proc main", "\n\n.proc main", true),       // lines move below the edit
-            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", true), // named elsewhere, still 9
-            ("main.nt65", "BASE = 3", "BASE = 4", false),              // an exported value
-            ("gfx.nt65", "    iny\n", "    iny\n    iny\n", true),
-            ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", false),
-            ("errors.nt65", "lda undeclared", "lda #1", true),
-            ("segs.nt65", "lda hud_value", "ldx hud_value", false),    // the file declares a segment
-            ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", false),
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", false), // `origin` holds `Point` itself
-            ("types.nt65", "Point::y", "Point::x", true),
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", false),    // another file names it
-            ("main.nt65", "    rts\n}", "extra:\n    rts\n}", false),  // a new name a path reaches
-            ("main.nt65", "BASE = 4", "BASE = LIMIT", false),          // a cycle through two files
-            ("main.nt65", "sta cursor", "sta cursor+1", false),        // still in the cycle
-            ("main.nt65", "BASE = LIMIT", "BASE = 4", false),
-            ("main.nt65", "dex", "dex\n    dex", true),
-            ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", false),
-            ("errors.nt65", "jsr draw", "jsr clear", true),
-            ("main.nt65", ".if DEBUG {", ".if !DEBUG {", false),       // TRACE is gone
-            ("main.nt65", "BASE = 4", "BASE = 4 ; four", true),        // what it means is the same
+            ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", null),     // a routine body
+            ("main.nt65", ".proc main", "\n\n.proc main", null),       // lines move below the edit
+            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null), // named elsewhere, still 9
+            ("main.nt65", "BASE = 3", "BASE = 4", WholeProgramReason.InterfaceChanged),              // an exported value
+            ("gfx.nt65", "    iny\n", "    iny\n    iny\n", null),
+            ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", WholeProgramReason.InterfaceChanged),
+            ("errors.nt65", "lda undeclared", "lda #1", null),
+            ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared),    // the file declares a segment
+            ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", WholeProgramReason.SymbolsHeldElsewhere),
+            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", WholeProgramReason.SymbolsHeldElsewhere), // `origin` holds `Point` itself
+            ("types.nt65", "Point::y", "Point::x", null),
+            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", WholeProgramReason.SymbolsHeldElsewhere),    // another file names it
+            ("main.nt65", "    rts\n}", "extra:\n    rts\n}", WholeProgramReason.InterfaceChanged),  // a new name a path reaches
+            ("main.nt65", "BASE = 4", "BASE = LIMIT", WholeProgramReason.EvaluationReachesBack),          // a cycle through two files
+            ("main.nt65", "sta cursor", "sta cursor+1", WholeProgramReason.EvaluationReachesBack),        // still in the cycle
+            ("main.nt65", "BASE = LIMIT", "BASE = 4", WholeProgramReason.InterfaceChanged),
+            ("main.nt65", "dex", "dex\n    dex", null),
+            ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", WholeProgramReason.InterfaceChanged),
+            ("errors.nt65", "jsr draw", "jsr clear", null),
+            ("main.nt65", ".if DEBUG {", ".if !DEBUG {", WholeProgramReason.InterfaceChanged),       // TRACE is gone
+            ("main.nt65", "BASE = 4", "BASE = 4 ; four", null),        // what it means is the same
         ];
 
         var replay = new Replay();
-        foreach (var (path, find, replace, oneFile) in edits)
+        foreach (var (path, find, replace, expected) in edits)
         {
             var at = replay.Text(path).IndexOf(find, StringComparison.Ordinal);
             Assert.True(at >= 0, $"{path} has no \"{find}\"");
             var analysis = replay.Change(path, at, find.Length, replace);
-            Assert.True((analysis.Reanalyzed == 1) == oneFile,
-                $"{path}: \"{find}\" analyzed {analysis.Reanalyzed} file(s)");
+            Assert.True(analysis.WholeProgram == expected,
+                $"{path}: \"{find}\" analyzed {analysis.Reanalyzed} file(s), because {analysis.WholeProgram}");
+            Assert.Equal(expected is null, analysis.Reanalyzed == 1);
         }
     }
 
@@ -212,7 +214,7 @@ public sealed class IncrementalAnalysisTests
         var random = new Random(seed);
         var replay = new Replay();
         var paths = Sources.Keys.Order(StringComparer.Ordinal).ToArray();
-        var oneFile = 0;
+        var why = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var step = 0; step < 60; step++)
         {
             var path = paths[random.Next(paths.Length)];
@@ -221,10 +223,12 @@ public sealed class IncrementalAnalysisTests
             var analysis = random.Next(3) == 0
                 ? replay.Change(path, at, Math.Min(random.Next(1, 6), length - at), "")
                 : replay.Insert(path, at, snippets[random.Next(snippets.Length)]);
-            if (analysis.Reanalyzed == 1)
-                oneFile++;
+            var reason = analysis.WholeProgram?.ToString() ?? "only the changed file";
+            why[reason] = why.GetValueOrDefault(reason) + 1;
         }
-        Assert.True(oneFile > 0, "no random edit was analyzed on its own");
+        foreach (var (reason, count) in why.OrderByDescending(pair => pair.Value))
+            output.WriteLine($"{count,3} {reason}");
+        Assert.True(why.ContainsKey("only the changed file"), "no random edit was analyzed on its own");
     }
 
     /// <summary>An <c>.incbin</c> file that changed on disk is a change to the files that include it.</summary>
@@ -234,7 +238,8 @@ public sealed class IncrementalAnalysisTests
         var replay = new Replay();
         Assert.Equal(1, replay.Change("main.nt65", replay.Text("main.nt65").IndexOf("dex", StringComparison.Ordinal), 3, "inx").Reanalyzed);
         replay.Length = 32;
-        Assert.NotEqual(1, replay.Change("main.nt65", replay.Text("main.nt65").IndexOf("inx", StringComparison.Ordinal), 3, "dex").Reanalyzed);
+        Assert.Equal(WholeProgramReason.BinaryFileChanged,
+            replay.Change("main.nt65", replay.Text("main.nt65").IndexOf("inx", StringComparison.Ordinal), 3, "dex").WholeProgram);
     }
 
     /// <summary>Everything an analysis answers, written out so two analyses can be compared.</summary>
@@ -309,7 +314,7 @@ public sealed class IncrementalAnalysisTests
             if (expected != actual)
             {
                 var line = expected.Split('\n').Zip(actual.Split('\n')).FirstOrDefault(pair => pair.First != pair.Second);
-                Assert.Fail($"after editing {path} at {at}, {analysis.Reanalyzed} file(s) analyzed:\n"
+                Assert.Fail($"after editing {path} at {at}, {analysis.Reanalyzed} file(s) analyzed ({analysis.WholeProgram}):\n"
                     + $"from scratch: {line.First}\nincremental:  {line.Second}");
             }
             return analysis;

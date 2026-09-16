@@ -161,8 +161,8 @@ public sealed class ProgramModel
 
     /// <summary>
     /// The program in which <paramref name="before"/> became <paramref name="after"/>, built
-    /// from this one by reading only that file again, or null when that is not enough and
-    /// the whole program has to be read. <paramref name="configuration"/> already answers the
+    /// from this one by reading only that file again, or null, with the <paramref name="reason"/>,
+    /// when that is not enough and the whole program has to be read. <paramref name="configuration"/> already answers the
     /// new file's conditions, and <paramref name="moved"/> carries a diagnostic about the old
     /// file to where it is now, or answers null when the edit rewrote the place it names.
     /// </summary>
@@ -172,10 +172,12 @@ public sealed class ProgramModel
         Configuration configuration,
         SyntaxTree? defines,
         Func<Diagnostic, Diagnostic?> moved,
-        Func<string, long?>? binaryLength)
+        Func<string, long?>? binaryLength,
+        out WholeProgramReason reason)
     {
         var path = before.Path;
         var index = Files.ToList().FindIndex(file => file.Tree == before);
+        reason = WholeProgramReason.FilesAddedOrRemoved;
         if (index < 0 || before == defines)
             return null;
         var old = Files[index];
@@ -183,6 +185,7 @@ public sealed class ProgramModel
         // Another file's symbol that holds on to one of this file's, rather than naming it
         // where it is written, would hold on to the old one: a type, a macro called or used.
         var others = Files.Where(file => file.Tree != before).ToList();
+        reason = WholeProgramReason.SymbolsHeldElsewhere;
         foreach (var symbol in others.SelectMany(file => file.Symbols))
         {
             if (symbol.Type?.Tree.Path == path
@@ -200,6 +203,7 @@ public sealed class ProgramModel
         var tables = new List<Diagnostic>();
         var symbols = ProgramSymbols.Build(replaced, tables);
         var bound = binder.Resolve(symbols);
+        reason = WholeProgramReason.DuplicateNames;
         if (!Forwarding.HasDistinctNames(old.Symbols) || !Forwarding.HasDistinctNames(bound.Symbols))
             return null;
 
@@ -217,6 +221,7 @@ public sealed class ProgramModel
         var reads = Evaluator.EvaluateSymbols(
             Segments, bound.Symbols, resolved, file, owners, symbol => symbol.Tree.Path != path, binaryLength);
         var visited = new HashSet<Symbol>();
+        reason = WholeProgramReason.EvaluationReachesBack;
         if (reads.Any(read => Reaches(read, path, resolved, visited)))
             return null;
 
@@ -235,12 +240,14 @@ public sealed class ProgramModel
             .Where(reference => reference.Symbol.Tree.Path == path)
             .Select(reference => reference.Symbol.QualifiedName)
             .ToHashSet(StringComparer.Ordinal);
+        reason = WholeProgramReason.InterfaceChanged;
         if (FileInterface.Of(old.Symbols, Symbols.IsExported, namedElsewhere)
             != FileInterface.Of(bound.Symbols, symbols.IsExported, namedElsewhere))
         {
             return null;
         }
 
+        reason = WholeProgramReason.DiagnosticInEditedText;
         var byFile = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal) { [path] = file };
         foreach (var (other, found) in this.byFile)
         {

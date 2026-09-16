@@ -97,10 +97,13 @@ public static class Compiler
     /// <summary>The same, with <paramref name="binaryLength"/> answering how long an <c>.incbin</c> file is.</summary>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
-        ProgramAnalysis? previous) =>
-        previous is not null && Reanalyze(previous, files, project, binaryLength) is { } reused
-            ? reused
-            : AnalyzeAll(files, project, binaryLength);
+        ProgramAnalysis? previous)
+    {
+        var reason = WholeProgramReason.NoPreviousAnalysis;
+        if (previous is not null && Reanalyze(previous, files, project, binaryLength, out reason) is { } reused)
+            return reused;
+        return AnalyzeAll(files, project, binaryLength) with { WholeProgram = reason };
+    }
 
     private static ProgramAnalysis AnalyzeAll(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength)
@@ -162,17 +165,19 @@ public static class Compiler
 
     /// <summary>
     /// The program <paramref name="previous"/> analyzed, with one file changed, analyzing only
-    /// that file; or null when the change may reach further than that file and the whole
-    /// program has to be analyzed again. Anything decided for the program as a whole changing
-    /// — the files in it, the project, the CPU, the segments — is such a change, and so is
-    /// the file's interface changing.
+    /// that file; or null, with the <paramref name="reason"/>, when the change may reach further
+    /// than that file and the whole program has to be analyzed again. Anything decided for the
+    /// program as a whole changing — the files in it, the project, the CPU, the segments — is
+    /// such a change, and so is the file's interface changing.
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength)
+        Func<string, long?> binaryLength, out WholeProgramReason reason)
     {
+        reason = WholeProgramReason.ProjectChanged;
         if (previous.Reused is not { } reuse || reuse.Project != project)
             return null;
+        reason = WholeProgramReason.FilesAddedOrRemoved;
         var sources = files.ToDictionary(tree => tree.Path, StringComparer.Ordinal);
         var written = reuse.Trees.Where(tree => tree != previous.Defines).ToList();
         if (sources.Count != written.Count || written.Any(tree => !sources.ContainsKey(tree.Path)))
@@ -180,10 +185,12 @@ public static class Compiler
         var changed = written.Where(tree => sources[tree.Path] != tree).ToList();
         if (changed.Count == 0)
             return previous;
+        reason = WholeProgramReason.SeveralFilesChanged;
         if (changed.Count > 1)
             return null;
 
         // An `.incbin` file that changed on disk changes every file that includes it.
+        reason = WholeProgramReason.BinaryFileChanged;
         if (reuse.Lengths.Any(pair => binaryLength(pair.Key) != pair.Value))
             return null;
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
@@ -191,23 +198,26 @@ public static class Compiler
 
         var before = changed[0];
         var after = sources[before.Path];
+        reason = WholeProgramReason.SegmentsDeclared;
         if (SegmentTable.Declares(before) || SegmentTable.Declares(after))
             return null;
         List<SyntaxTree> trees = [.. reuse.Trees.Select(tree => tree == before ? after : tree)];
         var cpu = new List<Diagnostic>();
+        reason = WholeProgramReason.CpuChanged;
         if (ProgramCpu.Resolve(trees, project.Cpu, cpu) != previous.Cpu)
             return null;
 
         var conditions = new List<Diagnostic>();
         var configuration = previous.Configuration.Replacing(before, after, previous.Cpu, project.Defines, conditions);
         var edit = new EditMap(before, after);
-        if (previous.Program.Replacing(before, after, configuration, previous.Defines, edit.Moved, Length)
+        if (previous.Program.Replacing(before, after, configuration, previous.Defines, edit.Moved, Length, out reason)
             is not { } program)
         {
             return null;
         }
 
         // What every other file's analysis found stands, carried to where the edit moved it.
+        reason = WholeProgramReason.DiagnosticInEditedText;
         if (edit.Moved(reuse.Conditions, before.Path) is not { } conditionsNow
             || edit.Moved(reuse.Analyzed, before.Path) is not { } analyzedNow
             || edit.Moved(reuse.SegmentTable) is not { } segmentTable)

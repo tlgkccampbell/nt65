@@ -42,6 +42,9 @@ public sealed record ProgramAnalysis(
     /// </summary>
     public int Reanalyzed { get; internal init; }
 
+    /// <summary>Why every file was analyzed, or null when only the file that changed was.</summary>
+    public WholeProgramReason? WholeProgram { get; internal init; }
+
     /// <summary>What a later analysis of the same program, one edit on, needs to keep the rest of this one.</summary>
     internal Reuse? Reused { get; init; }
 

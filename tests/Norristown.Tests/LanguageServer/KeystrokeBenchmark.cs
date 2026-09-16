@@ -83,7 +83,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Workspace workspace, string uri, ref int version, string what, int line, int start, int end, string text, string? undo)
     {
         var times = new List<double>();
-        var reanalyzed = new List<int>();
+        var reasons = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < 30; i++)
         {
             var (range, written) = i % 2 == 0
@@ -97,11 +97,11 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             var analysis = workspace.Analysis();
             _ = analysis.DiagnosticsFor(workspace.Find(uri)!.Tree.Path);
             times.Add(watch.Elapsed.TotalMilliseconds);
-            reanalyzed.Add(analysis.Reanalyzed);
+            reasons.Add(analysis.WholeProgram?.ToString() ?? "only the changed file");
             Assert.Empty(analysis.Diagnostics);
         }
         times.Sort();
         output.WriteLine($"{what}: median {times[times.Count / 2]:0.0} ms, min {times[0]:0.0} ms, "
-            + $"max {times[^1]:0.0} ms; files analyzed {reanalyzed.Min()} to {reanalyzed.Max()}");
+            + $"max {times[^1]:0.0} ms; analyzed: {string.Join(", ", reasons.Order(StringComparer.Ordinal))}");
     }
 }
