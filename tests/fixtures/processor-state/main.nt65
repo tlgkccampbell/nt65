@@ -1,0 +1,96 @@
+; Register widths and the emulation flag, tracked through each routine. Every routine
+; declares its state at entry and exit, so the analysis never leaves the routine it is in,
+; and every immediate is sized by the width the analysis found reaching it.
+.cpu 65816
+
+.export render, fill, reset, save, keep, tail
+
+.bss {
+value:  .res 2
+}
+
+; The signature's example: 16-bit A at entry, 8-bit at the `rts`.
+.proc render: a16, i8 -> a8, i8 {
+    lda #$1234          ; 16-bit immediate
+    sep #$20            ; A is now 8-bit
+    lda #$12
+    rts                 ; checked: state here must be a8, i8
+}
+
+; A label reached by a jump from further down the file is sized by the width that arrives
+; there, not by the code above it, so the `.a16` goes where the design shows it.
+.proc fill: a16 {
+    sep #$20
+    bra @b
+@a:
+    lda #$1234
+    rts
+@b:
+    rep #$20
+    bra @a
+}
+
+; From emulation mode into native mode, with both widths known to be 8 bits there.
+.proc reset: emu -> native, a16, i16 {
+    clc
+    xce
+    ldx #$ff
+    rep #$30
+    ldx #$1fff
+    txs
+    lda #0
+    rts
+}
+
+; A save and a restore around a call: `plp` finds the status `php` saved, so the widths
+; after it are the widths before it, and the call in between changes nothing about that.
+.proc save: a8, i8 {
+    php
+    rep #$30
+    jsr keep
+    lda #$1234
+    plp
+    lda #$12
+    rts
+}
+
+; `*` promises to hand back what was found: the caller keeps what it knew across the call.
+.proc keep: a*, i* {
+    pha
+    pla
+    rts
+}
+
+; Two paths that disagree about A meet at `@done`; nothing is reported there, and a
+; constant `sep` makes the width known again before anything needs it.
+.proc merge: a8 {
+    lda value
+    beq @done
+    rep #$20
+@done:
+    sep #$20
+    lda #1
+    rts
+}
+
+; A jump to another routine is a tail call: it returns for this one.
+.proc tail: a16 -> a8 {
+    sep #$20
+    jmp render_again
+}
+
+.proc render_again: a8 {
+    lda #1
+    rts
+}
+
+; An entry point reached from somewhere nt65 cannot see declares its state.
+.proc handler: a?, i? {
+    rep #$30
+    lda #$1234
+    rti
+@vector:
+    .state a8, i16
+    ldx #$1234
+    rti
+}

@@ -115,6 +115,13 @@ public sealed class Symbol
     /// </summary>
     public bool FollowsPrevious { get; internal init; }
 
+    /// <summary>
+    /// The processor state a routine declares, for a proc, an extern proc or a
+    /// <c>proc(...)</c> import; null for everything else, which is what makes a symbol a
+    /// routine rather than an address.
+    /// </summary>
+    public Signature? Signature { get; internal set; }
+
     /// <summary>The address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }
 

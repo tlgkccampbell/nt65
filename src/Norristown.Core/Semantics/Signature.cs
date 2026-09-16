@@ -1,0 +1,131 @@
+using Norristown.Syntax;
+
+namespace Norristown.Semantics;
+
+/// <summary>
+/// The processor state a routine declares at entry and, after <c>-&gt;</c>, at exit, and
+/// whether it is called near or far. Signatures are declared, never inferred: that is what
+/// keeps the analysis inside one routine and a file's interface free of its bodies.
+/// </summary>
+/// <param name="Entry">The state the routine assumes when it is called.</param>
+/// <param name="Exit">The state it returns with. A part the exit does not give is the entry's.</param>
+/// <param name="IsFar">Whether it is entered by <c>jsl</c> and left by <c>rtl</c>.</param>
+public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar)
+{
+    /// <summary>What a routine that writes no signature declares: <c>a8, i8, native, near</c>.</summary>
+    public static Signature Default { get; } = new(ProcessorState.Default, ProcessorState.Default, false);
+
+    /// <summary>How the routine is called and left, as the item that says so.</summary>
+    public string Distance => IsFar ? "far" : "near";
+
+    /// <summary>The signature as it would be written in full.</summary>
+    public override string ToString() =>
+        $"{Entry}, {Distance}" + (Exit == Entry ? "" : $" -> {Exit}");
+
+    /// <summary>
+    /// Reads the signature a proc, an extern proc or an import writes, reporting what is
+    /// wrong with it. <paramref name="syntax"/> is the <c>: entry -&gt; exit</c> of a proc or
+    /// the <c>proc(...)</c> of an import, or null where nothing was written.
+    /// </summary>
+    public static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report)
+    {
+        if (syntax is null)
+            return Default;
+
+        var arrow = syntax.ChildTokens.FirstOrDefault(token => token.Kind == SyntaxKind.Arrow);
+        var lists = syntax.ChildNodes.Where(node => node.Kind == SyntaxKind.StateList).ToList();
+        var entryList = lists.FirstOrDefault(list => arrow.Parent is null || list.Position < arrow.Position);
+        var exitList = arrow.Parent is null ? null : lists.FirstOrDefault(list => list.Position > arrow.Position);
+
+        bool? far = null;
+        var entry = Take(entryList);
+        var exit = Take(exitList);
+
+        var entryState = new ProcessorState(
+            entry.A?.Width ?? Width.Eight, entry.Index?.Width ?? Width.Eight, entry.E?.Mode ?? ProcessorMode.Native);
+        var exitState = new ProcessorState(
+            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exit.E?.Mode ?? entryState.E);
+
+        // An exit that cannot be what it says is reported once, and read as the entry's, so
+        // what uses the signature does not report the same mistake again.
+        if (!Kept(exit.A, entryState.A == Width.Unchanged))
+            exitState = exitState with { A = entryState.A };
+        if (!Kept(exit.Index, entryState.Index == Width.Unchanged))
+            exitState = exitState with { Index = entryState.Index };
+        if (!Kept(exit.E, entryState.E == ProcessorMode.Unchanged))
+            exitState = exitState with { E = entryState.E };
+        CheckEmulation(entry, entryState);
+        CheckEmulation(exit, exitState);
+        return new Signature(entryState, exitState, far ?? false);
+
+        Parts Take(SyntaxNode? list)
+        {
+            var parts = default(Parts);
+            foreach (var item in StateItem.Read(list))
+            {
+                switch (item.Part)
+                {
+                    case StatePart.A:
+                        parts.A = Once(parts.A, item);
+                        break;
+                    case StatePart.Index:
+                        parts.Index = Once(parts.Index, item);
+                        break;
+                    case StatePart.E:
+                        parts.E = Once(parts.E, item);
+                        break;
+                    case StatePart.Distance:
+                        if (far is { } said && said != item.IsFar)
+                        {
+                            report(item.Node.Span,
+                                $"`{item.Text}` disagrees with `{(said ? "far" : "near")}`: a routine is called one way");
+                        }
+                        far = item.IsFar;
+                        break;
+
+                    // The data after a call, the direct page and the data bank belong to the
+                    // analyses that check them.
+                    default:
+                        break;
+                }
+            }
+            return parts;
+        }
+
+        StateItem? Once(StateItem? earlier, StateItem item)
+        {
+            if (earlier is { } first)
+                report(item.Node.Span, $"`{first.Text}` and `{item.Text}` both describe the same part of the state");
+            return item;
+        }
+
+        // A routine can hand back unchanged only what it assumed nothing about.
+        bool Kept(StateItem? exitItem, bool keptAtEntry)
+        {
+            if (exitItem is not { IsUnchanged: true } kept || keptAtEntry)
+                return true;
+            report(kept.Node.Span, $"`{kept.Text}` after `->` needs `{kept.Text}` at entry too: a routine "
+                + "hands back unchanged only what it assumed nothing about");
+            return false;
+        }
+
+        void CheckEmulation(Parts parts, ProcessorState state)
+        {
+            if (state.E != ProcessorMode.Emulation)
+                return;
+            foreach (var wide in new[] { parts.A, parts.Index })
+            {
+                if (wide is { Width: Width.Sixteen } item)
+                    report(item.Node.Span, $"`{item.Text}` cannot hold in emulation mode, where both widths are 8 bits");
+            }
+        }
+    }
+
+    /// <summary>The items one list gives, by part.</summary>
+    private struct Parts
+    {
+        public StateItem? A;
+        public StateItem? Index;
+        public StateItem? E;
+    }
+}

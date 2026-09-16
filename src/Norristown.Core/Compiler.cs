@@ -105,34 +105,36 @@ public static class Compiler
         diagnostics.AddRange(trees.SelectMany(tree => tree.Diagnostics));
         diagnostics.AddRange(program.Diagnostics);
 
-        // The 65816 needs the processor-state analysis before its instructions can be
-        // sized, which is Stage 11's; until then it is refused rather than sized as if its
-        // widths were known.
         var layouts = new List<CodeLayout>();
         var flows = new List<Flow.ControlFlow>();
-        if (target == Cpu.Wdc65816)
-        {
-            diagnostics.AddRange(Ca65816NotYet(trees));
-        }
-        else
-        {
+        var states = new List<Flow.StateAnalysis>();
+        if (target != Cpu.Wdc65816)
             diagnostics.AddRange(FarNeedsA65816(segments, program));
-            foreach (var model in program.Files)
-            {
-                var layout = CodeLayout.Create(model, target);
-                layouts.Add(layout);
-                diagnostics.AddRange(layout.Diagnostics);
+        foreach (var model in program.Files)
+        {
+            // Where control goes is read off the order layout wrote the bytes in, so the macros
+            // are expanded and the repetitions unrolled before anything is asked about the path.
+            var layout = CodeLayout.Create(model, target);
+            var flow = Flow.ControlFlow.Of(model, layout);
 
-                // Where control goes is read off the order layout wrote the bytes in, so the
-                // macros are expanded and the repetitions unrolled before anything is asked
-                // about the path.
-                var flow = Flow.ControlFlow.Of(model, layout);
-                flows.Add(flow);
-                diagnostics.AddRange(flow.Diagnostics);
+            // On the 65816 an immediate is as wide as the register it goes to, which is what the
+            // processor-state analysis says. No edge depends on a length, so the analysis runs
+            // over the first layout, and the file is laid out again with what it found.
+            if (target == Cpu.Wdc65816)
+            {
+                var state = Flow.StateAnalysis.Of(model, layout, flow);
+                states.Add(state);
+                diagnostics.AddRange(state.Diagnostics);
+                layout = CodeLayout.Create(model, target, (statement, on) => state.Before(statement, on)?.Processor);
+                flow = Flow.ControlFlow.Of(model, layout);
             }
+            layouts.Add(layout);
+            flows.Add(flow);
+            diagnostics.AddRange(layout.Diagnostics);
+            diagnostics.AddRange(flow.Diagnostics);
         }
         return new ProgramAnalysis(
-            program, target, layouts, flows, defines, configuration, Diagnostics.Ordered(diagnostics));
+            program, target, layouts, flows, states, defines, configuration, Diagnostics.Ordered(diagnostics));
     }
 
     /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>
@@ -167,34 +169,5 @@ public static class Compiler
             if (symbol is { Kind: SymbolKind.ImportedAddress, AddressSize: AddressSize.Far })
                 yield return new Diagnostic(symbol.DeclarationSpan, Severity.Error, $"`{symbol.Name}`: {Message}");
         }
-    }
-
-    /// <summary>
-    /// Says once per program that the 65816 is a later stage's, at the line that asks for it,
-    /// or at the top of the first file when the command line or the project asked instead.
-    /// </summary>
-    private static IEnumerable<Diagnostic> Ca65816NotYet(IReadOnlyList<SyntaxTree> trees)
-    {
-        const string Message = "the 65816 is not transpiled yet";
-        foreach (var tree in trees)
-        {
-            foreach (var node in tree.Root.DescendantNodes())
-            {
-                if (node.Kind != SyntaxKind.CpuDirective)
-                    continue;
-                foreach (var token in node.ChildTokens)
-                {
-                    if (token.Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral
-                        && CpuNames.Parse(token.Text) == Cpu.Wdc65816)
-                    {
-                        yield return new Diagnostic(tree.GetSpan(token.Span), Severity.Error, Message);
-                        yield break;
-                    }
-                }
-            }
-        }
-
-        if (trees.Count > 0)
-            yield return new Diagnostic(new Span(trees[0].Path, 1, 1, 1), Severity.Error, Message);
     }
 }

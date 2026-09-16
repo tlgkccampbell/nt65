@@ -93,8 +93,8 @@ public static class SyntaxFacts
         [".macro"] = SyntaxKind.MacroDeclaration,
         [".next"] = SyntaxKind.NextDirective,
         [".patch"] = SyntaxKind.PatchDirective,
-        // Stages 11 and 12: processor state and the stack.
-        [".state"] = SyntaxKind.UnsupportedLine,
+        [".state"] = SyntaxKind.StateDirective,
+        // Stage 12: setting widths and naming stack frames.
         [".ensure"] = SyntaxKind.UnsupportedLine,
         [".frame"] = SyntaxKind.UnsupportedLine,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

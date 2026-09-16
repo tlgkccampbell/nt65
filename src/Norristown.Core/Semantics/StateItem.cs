@@ -1,0 +1,73 @@
+using Norristown.Syntax;
+
+namespace Norristown.Semantics;
+
+/// <summary>
+/// One item of a signature or a <c>.state</c>, read: which part of the state it is about and
+/// what it says of it. The items share one grammar wherever they are written, so they are
+/// read in one place.
+/// </summary>
+/// <param name="Node">The item as it is written.</param>
+/// <param name="Part">Which part of the state it is about.</param>
+/// <param name="Width">What it says of a width; meaningless for the other parts.</param>
+/// <param name="Mode">What it says of the emulation flag; meaningless for the other parts.</param>
+/// <param name="IsFar">Whether a <see cref="StatePart.Distance"/> item says <c>far</c>.</param>
+/// <param name="IsUnchanged">Whether it is a <c>*</c> item, which describes a routine rather than a point in it.</param>
+public readonly record struct StateItem(
+    SyntaxNode Node, StatePart Part, Width Width, ProcessorMode Mode, bool IsFar, bool IsUnchanged)
+{
+    /// <summary>The item as it is written, for a message that names it.</summary>
+    public string Text => Node.GetText().Trim();
+
+    /// <summary>The items of a state list, or of a <c>.state</c>, in the order they are written.</summary>
+    public static IEnumerable<StateItem> Read(SyntaxNode? list)
+    {
+        foreach (var node in list?.ChildNodes ?? [])
+        {
+            if (node.Kind == SyntaxKind.StateList)
+            {
+                foreach (var item in Read(node))
+                    yield return item;
+            }
+            else if (node.Kind == SyntaxKind.StateItem && Of(node) is { } item)
+            {
+                yield return item;
+            }
+        }
+    }
+
+    /// <summary>One item, or null when its line did not parse into one.</summary>
+    private static StateItem? Of(SyntaxNode node)
+    {
+        if (node.ChildTokens.Length == 0)
+            return null;
+        var name = node.ChildTokens[0].Text.ToLowerInvariant();
+        var suffix = node.ChildTokens.Length > 1 ? node.ChildTokens[1].Kind : SyntaxKind.None;
+        var width = suffix switch
+        {
+            SyntaxKind.Star => Width.Unchanged,
+            SyntaxKind.Question => Width.Unknown,
+            _ => name.EndsWith("16", StringComparison.Ordinal) ? Width.Sixteen : Width.Eight,
+        };
+        var mode = suffix switch
+        {
+            SyntaxKind.Star => ProcessorMode.Unchanged,
+            SyntaxKind.Question => ProcessorMode.Unknown,
+            _ => name == "emu" ? ProcessorMode.Emulation : ProcessorMode.Native,
+        };
+        StatePart? part = name switch
+        {
+            "a" or "a8" or "a16" => StatePart.A,
+            "i" or "i8" or "i16" => StatePart.Index,
+            "e" or "native" or "emu" => StatePart.E,
+            "near" or "far" => StatePart.Distance,
+            "inline" => StatePart.Inline,
+            "dp" => StatePart.DirectPage,
+            "dbr" => StatePart.DataBank,
+            _ => null,
+        };
+        return part is { } known
+            ? new StateItem(node, known, width, mode, name == "far", suffix == SyntaxKind.Star)
+            : null;
+    }
+}

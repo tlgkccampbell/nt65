@@ -1,6 +1,5 @@
-; Every item the parser reads at Stage 2, in one file. Its target is the 65816, whose
-; processor-state analysis is Stage 11's, so nothing is written for it yet.
-.cpu 65816                  ;! error: the 65816 is not transpiled yet
+; Every item the parser reads at Stage 2, in one file, built for the 65816.
+.cpu 65816
 
 .segment "ZP2": zp
 .segment "WRAM": abs, bank = $7e
@@ -56,7 +55,8 @@ padding:    .res 16, $ff
     .rodata {
     @shifts: .byte 1, 2, 4, 8
     }
-    rtl
+    sep #$20
+    rts
 }
 
 .proc hud: a8, i16, dp = $2100, dbr = $7e {

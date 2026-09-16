@@ -23,7 +23,11 @@ public static class Transfers
         var mnemonic = statement.ChildTokens[0].Text;
         if (Is(mnemonic, "rts") || Is(mnemonic, "rti") || Is(mnemonic, "rtl"))
             return Transfer.Return;
-        if (Is(mnemonic, "bra"))
+
+        // `stp` stops the processor, and nothing after it runs until a reset.
+        if (Is(mnemonic, "stp"))
+            return Transfer.Return;
+        if (Is(mnemonic, "bra") || Is(mnemonic, "brl"))
             return Transfer.Jump;
         if (SyntaxFacts.LongBranches.Contains(mnemonic))
             return Transfer.Branch;
@@ -31,9 +35,9 @@ public static class Transfers
         // An indirect or computed target is one the operand does not name, whichever
         // instruction reaches it.
         if (Is(mnemonic, "jsr") || Is(mnemonic, "jsl"))
-            return mode == AddressingMode.Absolute ? Transfer.Call : Transfer.Elsewhere;
-        if (Is(mnemonic, "jmp") || Is(mnemonic, "jml") || Is(mnemonic, "brl"))
-            return mode == AddressingMode.Absolute ? Transfer.Jump : Transfer.Elsewhere;
+            return mode is AddressingMode.Absolute or AddressingMode.Long ? Transfer.Call : Transfer.Elsewhere;
+        if (Is(mnemonic, "jmp") || Is(mnemonic, "jml"))
+            return mode is AddressingMode.Absolute or AddressingMode.Long ? Transfer.Jump : Transfer.Elsewhere;
 
         return mode is AddressingMode.Relative or AddressingMode.DirectRelative
             ? Transfer.Branch

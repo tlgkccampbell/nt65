@@ -38,6 +38,10 @@ public sealed class Emitter
     // What the file measures with `.endof` or `.spanof`, and so what needs a label just past
     // its last byte. A use may come before the thing it measures, so they are found up front.
     private readonly HashSet<Symbol> ends = [];
+
+    // The width the previous 65816 immediate of each register was written at, in output
+    // order, which is exactly what ca65's setting is when the next one is reached.
+    private readonly Dictionary<WidthRegister, int> widths = [];
     private string segment = SegmentTable.DefaultSegment;
 
     // The routine being written, which is what a generated label is named after.
@@ -714,6 +718,8 @@ public sealed class Emitter
             return;
         }
         var bytes = rest is null ? 0 : layout.Of(rest, expansion)?.Length ?? 0;
+        if (rest is not null)
+            Width(rest);
         var edits = new Edits();
         if (rest is not null)
             Substitute(rest, edits, nested: false);
@@ -1010,9 +1016,33 @@ public sealed class Emitter
 
     private void Source(SyntaxNode line, SyntaxNode statement, int bytes)
     {
+        Width(statement);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
         Code(line, Render(statement, edits), bytes);
+    }
+
+    /// <summary>
+    /// The <c>.a8</c>, <c>.a16</c>, <c>.i8</c> or <c>.i16</c> a 65816 immediate needs. ca65
+    /// sizes an immediate from the last such directive in the text, whatever the control flow,
+    /// so one goes directly before each immediate whose width differs from the previous
+    /// immediate's for the same register, and nowhere else. The width itself is the
+    /// analysis's, which follows control flow.
+    /// </summary>
+    private void Width(SyntaxNode statement)
+    {
+        if (layout.Of(statement, expansion) is not { Bits: { } bits }
+            || statement.ChildTokens.Length == 0
+            || Instructions.SizedBy(statement.ChildTokens[0].Text) is not { } register)
+        {
+            return;
+        }
+        if (widths.TryGetValue(register, out var previous) && previous == bits)
+            return;
+        widths[register] = bits;
+        Segment();
+        Flush();
+        Line($"{Indent(statement)}.{(register == WidthRegister.A ? "a" : "i")}{bits}");
     }
 
     /// <summary>
@@ -1157,6 +1187,17 @@ public sealed class Emitter
             case SyntaxKind.CallExpression:
                 Applied(node, edits);
                 return;
+
+            // `wdm #n` is written as its bytes, which is what it is to every processor but the
+            // emulator that hooks it.
+            case SyntaxKind.InstructionStatement
+                when node.ChildTokens.Length > 0
+                    && node.ChildTokens[0].Text.Equals("wdm", StringComparison.OrdinalIgnoreCase)
+                    && node.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.ImmediateOperand } hook
+                    && hook.ChildTokens.Length > 0:
+                edits.Replace[node.ChildTokens[0].Position] = ".byte";
+                edits.Replace[hook.ChildTokens[0].Position] = "$42, ";
+                break;
 
             case SyntaxKind.AbsoluteOperand:
                 // In a macro body an `operand` parameter stands as a whole operand, so what

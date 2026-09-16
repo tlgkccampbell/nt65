@@ -262,11 +262,18 @@ internal sealed class Binder
             return new Scope(kind, null, scope, null);
 
         var symbol = Declare(name, symbolKind);
+        if (symbol is not null && kind == ScopeKind.Proc)
+            symbol.Signature = ReadSignature(opener);
         var body = new Scope(kind, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         return body;
     }
+
+    /// <summary>The signature a proc or an extern proc writes after its name, or the default.</summary>
+    private Signature ReadSignature(SyntaxNode declaration) =>
+        Signature.Read(declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature),
+            (span, message) => Report(span, message));
 
     /// <summary>
     /// The scope an <c>.enum</c>, <c>.struct</c> or <c>.union</c> opens. An anonymous one
@@ -584,8 +591,11 @@ internal sealed class Binder
 
             case SyntaxKind.ExternProcDeclaration:
                 var address = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.ProcSignature);
-                if (NameToken(statement) is { } routine)
-                    Declare(routine, SymbolKind.ExternProc, address);
+                if (NameToken(statement) is { } routine
+                    && Declare(routine, SymbolKind.ExternProc, address) is { } externProc)
+                {
+                    externProc.Signature = ReadSignature(statement);
+                }
                 CollectUses(address);
                 break;
 
@@ -646,13 +656,19 @@ internal sealed class Binder
         var kind = checkedValue is null ? SymbolKind.ImportedAddress : SymbolKind.ImportedConstant;
         if (Declare(name, kind, checkedValue) is { } symbol && kind == SymbolKind.ImportedAddress)
         {
-            // An import states its own address size. An unqualified import and a routine are
-            // both absolute; a routine declared `far` is Stage 11's to read.
+            // An import states its own address size. An unqualified import is absolute, and so
+            // is a routine, unless its signature says it is called far.
             symbol.AddressSize = AddressSize.Absolute;
             foreach (var token in item.ChildTokens)
             {
                 if (token.Kind == SyntaxKind.Identifier && SegmentNames.ParseSize(token.Text) is { } size)
                     symbol.AddressSize = size;
+            }
+            if (item.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ImportSignature) is { } signature)
+            {
+                symbol.Signature = Signature.Read(signature, (span, message) => Report(span, message));
+                if (symbol.Signature.IsFar)
+                    symbol.AddressSize = AddressSize.Far;
             }
         }
         CollectUses(checkedValue);

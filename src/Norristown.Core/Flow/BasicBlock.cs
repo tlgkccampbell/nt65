@@ -1,5 +1,6 @@
 using Norristown.Layout;
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
@@ -44,6 +45,19 @@ public sealed class BasicBlock
 
     /// <summary>Whether any path from the routine's entry reaches it.</summary>
     public bool IsReached { get; internal set; }
+
+    /// <summary>
+    /// The <c>.next</c> written under the block's last statement, or null. It says where
+    /// control goes after that statement, in place of what its operand says.
+    /// </summary>
+    public SyntaxNode? Next { get; internal set; }
+
+    /// <summary>
+    /// Whether a <c>.state</c> stands directly after the block's label, which declares the
+    /// label an entry point: the state there is what the directive says.
+    /// </summary>
+    public bool IsDeclared => Label is not null && steps.Count > 0
+        && steps[0].Statement.Kind == SyntaxKind.StateDirective;
 
     /// <summary>
     /// How long running the whole block takes, or null when any statement in it has no

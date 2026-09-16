@@ -19,6 +19,10 @@ public sealed class CodeLayout
 {
     private readonly SemanticModel model;
     private readonly Cpu cpu;
+
+    // What the processor-state analysis found reaching each statement, which sizes a 65816
+    // immediate and times its instructions. Null on the first walk, before there is any.
+    private readonly Func<SyntaxNode, Expansion?, ProcessorState?>? states;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly Dictionary<int, LineLayout> anyWriting = [];
     private readonly List<Diagnostic> diagnostics = [];
@@ -72,11 +76,13 @@ public sealed class CodeLayout
     private const int MaximumStatements = 65536;
 
     private CodeLayout(
-        SemanticModel model, Cpu cpu, HashSet<(int Position, Expansion? On)> lengthened,
-        IReadOnlySet<Symbol> measured, Dictionary<Symbol, long> settled)
+        SemanticModel model, Cpu cpu, Func<SyntaxNode, Expansion?, ProcessorState?>? states,
+        HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
+        Dictionary<Symbol, long> settled)
     {
         this.model = model;
         this.cpu = cpu;
+        this.states = states;
         this.lengthened = lengthened;
         this.measured = measured;
         this.settled = settled;
@@ -91,6 +97,13 @@ public sealed class CodeLayout
     /// <summary>Every statement of the file, in the order its bytes are written.</summary>
     public IReadOnlyList<Step> Steps => steps;
 
+    /// <summary>The modes a plain address can be: sized by its width, or a branch target.</summary>
+    private static AddressingMode[] Unindexed =>
+    [
+        AddressingMode.Direct, AddressingMode.Absolute, AddressingMode.Long,
+        AddressingMode.Relative, AddressingMode.RelativeLong,
+    ];
+
     /// <summary>
     /// How many bytes <paramref name="symbol"/> takes in the output, which is what
     /// <c>.spanof</c> is worth, or null when nt65 cannot say — a span with an
@@ -98,8 +111,14 @@ public sealed class CodeLayout
     /// </summary>
     public long? SpanOf(Symbol symbol) => settled.TryGetValue(symbol, out var span) ? span : null;
 
-    /// <summary>Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>.</summary>
-    public static CodeLayout Create(SemanticModel model, Cpu cpu)
+    /// <summary>
+    /// Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>. On the 65816,
+    /// <paramref name="states"/> says what state reaches each statement, which is what sizes
+    /// its immediates; without it they are laid out a byte wide, which is enough to find where
+    /// control goes, since no edge depends on a length.
+    /// </summary>
+    public static CodeLayout Create(
+        SemanticModel model, Cpu cpu, Func<SyntaxNode, Expansion?, ProcessorState?>? states = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until
         // none changes, which terminates because a branch only ever grows. Only the last
@@ -110,7 +129,7 @@ public sealed class CodeLayout
         CodeLayout layout;
         do
         {
-            layout = new CodeLayout(model, cpu, lengthened, measured, settled);
+            layout = new CodeLayout(model, cpu, states, lengthened, measured, settled);
             layout.WalkContainer(model.Tree.Root);
         }
         while (layout.Lengthen() | layout.Settle());
@@ -155,35 +174,41 @@ public sealed class CodeLayout
             case not (SyntaxKind.AbsoluteOperand or SyntaxKind.ImmediateOperand
                 or SyntaxKind.AccumulatorOperand or SyntaxKind.IndirectOperand
                 or SyntaxKind.IndexedIndirectOperand or SyntaxKind.LongIndirectOperand):
-                return [AddressingMode.Direct, AddressingMode.Absolute, AddressingMode.Relative];
+                return Unindexed;
 
             case SyntaxKind.AccumulatorOperand:
                 return [AddressingMode.Accumulator];
+
+            // Two immediates are the source and destination banks of `mvn` and `mvp`.
             case SyntaxKind.ImmediateOperand:
-                return [AddressingMode.Immediate];
+                return operand.ChildNodes.Length > 1 ? [AddressingMode.BlockMove] : [AddressingMode.Immediate];
             case SyntaxKind.IndirectOperand:
                 return IndexedBy(operand, "y")
                     ? [AddressingMode.DirectIndirectY]
                     : [AddressingMode.DirectIndirect, AddressingMode.AbsoluteIndirect];
             case SyntaxKind.IndexedIndirectOperand:
+                if (IndexedBy(operand, "s"))
+                    return IndexedBy(operand, "y") ? [AddressingMode.StackRelativeIndirectY] : [];
                 return IndexedBy(operand, "x")
                     ? [AddressingMode.DirectIndirectX, AddressingMode.AbsoluteIndirectX]
                     : [];
-            case SyntaxKind.AbsoluteOperand:
+            case SyntaxKind.LongIndirectOperand:
+                return IndexedBy(operand, "y")
+                    ? [AddressingMode.DirectIndirectLongY]
+                    : [AddressingMode.DirectIndirectLong, AddressingMode.AbsoluteIndirectLong];
+            default:
                 if (IndexedBy(operand, "x"))
-                    return [AddressingMode.DirectX, AddressingMode.AbsoluteX];
+                    return [AddressingMode.DirectX, AddressingMode.AbsoluteX, AddressingMode.LongX];
                 if (IndexedBy(operand, "y"))
                     return [AddressingMode.DirectY, AddressingMode.AbsoluteY];
                 if (IndexedBy(operand, "s"))
-                    return [];
+                    return [AddressingMode.StackRelative];
 
                 // A second expression rather than an index register: the branch target of
                 // `bbr0 flags, @skip`.
                 return operand.ChildNodes.Count(c => c.Kind != SyntaxKind.AddressPrefix) > 1
                     ? [AddressingMode.DirectRelative]
-                    : [AddressingMode.Direct, AddressingMode.Absolute, AddressingMode.Relative];
-            default:
-                return [];
+                    : Unindexed;
         }
     }
 
@@ -405,9 +430,11 @@ public sealed class CodeLayout
                 break;
 
             // An annotation generates nothing and is here for the flow analysis, which reads
-            // it off the statement above it.
+            // it off the statement above it. A `.state` generates nothing either, and says
+            // what the processor state is where it stands.
             case SyntaxKind.NextDirective:
             case SyntaxKind.PatchDirective:
+            case SyntaxKind.StateDirective:
                 steps.Add(new Step(statement, expansion, routine, Stream, null));
                 break;
             default:
@@ -458,10 +485,21 @@ public sealed class CodeLayout
             return;
         }
 
-        var mode = Choose(mnemonic, operand, candidates, substituted);
+        // On the 65816 an immediate is as wide as the register it goes to, which is what the
+        // analysis found reaching it. Where it found nothing it has said so, and a byte keeps
+        // the rest of the file laid out.
+        var state = states?.Invoke(statement, expansion);
+        int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } register
+            ? state?.Of(register) == Width.Sixteen ? 16 : 8
+            : null;
+
+        var mode = Choose(mnemonic, operand, candidates, substituted, bits);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
-        var length = Instructions.Length(mode);
-        Laid(statement, new LineLayout(length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode)));
+        if (mode != AddressingMode.Immediate)
+            bits = null;
+        var length = Instructions.Length(mode) + (bits == 16 ? 1 : 0);
+        Laid(statement, new LineLayout(
+            length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode, state), bits));
         Place(statement, length);
         steps.Add(new Step(statement, expansion, routine, Stream, null));
 
@@ -652,14 +690,14 @@ public sealed class CodeLayout
     /// <summary>Which of the candidate modes the operand's own width calls for.</summary>
     private AddressingMode Choose(
         SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode[] candidates,
-        OperandSubstitution? substituted)
+        OperandSubstitution? substituted, int? bits)
     {
         var widths = candidates.OrderBy(Instructions.Length).ToArray();
         if (operand is null)
             return widths[0];
         if (candidates.Length == 1)
         {
-            CheckOperand(mnemonic, operand, candidates[0], substituted);
+            CheckOperand(mnemonic, operand, candidates[0], substituted, bits);
             return candidates[0];
         }
 
@@ -677,21 +715,24 @@ public sealed class CodeLayout
             Report(operand.Span,
                 $"`{mnemonic.Text}` cannot reach a {Spell(size)} address on the {CpuNames.Spell(cpu)}");
         }
-        CheckOperand(mnemonic, operand, chosen, substituted);
+        CheckOperand(mnemonic, operand, chosen, substituted, bits);
         return chosen;
     }
 
     /// <summary>
     /// What the operand itself must satisfy: a control transfer takes a near target and is
-    /// not sized by a prefix, and an immediate on these CPUs is one byte.
+    /// not sized by a prefix, and an immediate fits the byte or two it is given.
     /// </summary>
     private void CheckOperand(
-        SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, OperandSubstitution? substituted)
+        SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, OperandSubstitution? substituted,
+        int? bits)
     {
         if (Expression(operand) is not { } expression)
             return;
 
-        if (mode is AddressingMode.Relative or AddressingMode.Absolute or AddressingMode.AbsoluteIndirect
+        if (mode is AddressingMode.Relative or AddressingMode.RelativeLong or AddressingMode.Absolute
+                or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX or AddressingMode.Long
+                or AddressingMode.AbsoluteIndirectLong
             && Instructions.IsControlTransfer(mnemonic.Text))
         {
             if (WrittenPrefix(operand) is not null)
@@ -699,7 +740,11 @@ public sealed class CodeLayout
                 Report(operand.Span,
                     $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
             }
-            else if (model.AddressSizeOf(expression, segment, expansion) == AddressSize.Far)
+
+            // On the 65816 whether a routine is called near or far is its signature's to say,
+            // and the processor-state analysis checks it where it checks the rest of the call.
+            else if (mode != AddressingMode.Long && !(cpu == Cpu.Wdc65816 && NamesRoutine(expression))
+                && model.AddressSizeOf(expression, segment, expansion) == AddressSize.Far)
             {
                 Report(expression.Span,
                     $"`{mnemonic.Text}` takes a near target, and this one is far");
@@ -711,11 +756,17 @@ public sealed class CodeLayout
         // one that has to fit.
         if (mode == AddressingMode.Immediate && substituted is not { ByteOf: true }
             && model.ValueOf(expression, expansion, SpanOf).AsNumber() is { } value
-            && value is < -128 or > 255)
+            && (bits == 16 ? value is < -32768 or > 65535 : value is < -128 or > 255))
         {
-            Report(expression.Span, $"an immediate is one byte, and {Value.Of(value)} does not fit");
+            Report(expression.Span, bits == 16
+                ? $"this immediate is two bytes, and {Value.Of(value)} does not fit"
+                : $"an immediate is one byte, and {Value.Of(value)} does not fit");
         }
     }
+
+    /// <summary>Whether an expression names a routine, which carries a signature.</summary>
+    private bool NamesRoutine(SyntaxNode expression) =>
+        Targets.Of(model, expression, expansion) is { Symbol.Signature: not null };
 
     /// <summary>
     /// An assertion, checked here because this is the pass that walks every statement of a

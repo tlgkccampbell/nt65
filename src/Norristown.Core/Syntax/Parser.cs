@@ -274,6 +274,7 @@ internal sealed class Parser
             SyntaxKind.AssertDirective => Finish(ParseAssert()),
             SyntaxKind.ErrorDirective => Finish(ParseError()),
             SyntaxKind.NextDirective => Finish(ParseNext()),
+            SyntaxKind.StateDirective => Finish(ParseState()),
             SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
@@ -878,6 +879,18 @@ internal sealed class Parser
         else
             ParseCommaSeparated(children, () => ParseTarget("expected a label flow continues at, or `?`"));
         return new GreenSyntax(SyntaxKind.NextDirective, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.state a16, i8</c>: the items of a signature, asserted and set at one point. Which
+    /// items describe a routine rather than a point is the analysis's to say.
+    /// </summary>
+    private GreenSyntax ParseState()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseStateList());
+        return new GreenSyntax(SyntaxKind.StateDirective, children.ToImmutable());
     }
 
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>

@@ -306,6 +306,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.patch @op</c>: the store above writes into the instruction at that label.</summary>
     PatchDirective,
 
+    /// <summary><c>.state a16, i8</c>: asserts, and sets, the processor state at this point.</summary>
+    StateDirective,
+
     /// <summary>A construct a later stage brings online; its tokens are kept and nothing is diagnosed.</summary>
     UnsupportedLine,
 

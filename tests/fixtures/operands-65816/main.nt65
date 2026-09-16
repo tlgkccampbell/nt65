@@ -1,0 +1,75 @@
+; What the 65816 adds to the 65C02: long addresses, long pointers, the stack-relative
+; forms, block moves, the long and relative calls and jumps, and the immediates whose
+; width is the register's.
+.cpu 65816
+
+.segment "FARDATA": far
+
+.zeropage {
+ptr:        .res 3
+}
+
+.segment "FARDATA" {
+far_table:  .res 16
+}
+
+.rodata {
+vector:     .addr forms
+}
+
+.import far_routine: proc(a*, i*, far)
+
+.proc forms: a16, i8 {
+    lda far_table           ; a far symbol takes the long form
+    sta far_table,x
+    lda f:vector            ; a prefix widens it
+    lda [ptr]               ; through a three-byte pointer
+    lda [ptr],y
+    lda 3,s                 ; stack-relative
+    sta (1,s),y
+    lda #$1234              ; A is 16 bits here
+    ldx #$12                ; X and Y are 8
+    rep #$10
+    ldy #$1234
+    cpx #0
+    sep #$20
+    cmp #$12
+    bit #$80
+    mvn #^far_table, #0
+    mvp #0, #^far_table
+    pea vector
+    pei (ptr)
+    per @here
+@here:
+    wdm #1
+    cop #2
+    brk #3
+    phb
+    phd
+    phk
+    plb
+    pld
+    plp
+    rep #$20
+    tcd
+    tdc
+    tcs
+    tsc
+    txy
+    tyx
+    xba
+    jsl far_routine
+    brl @out
+@out:
+    jsr (vector,x)
+    .next ?
+}
+
+.proc long_jumps: far {
+    jml [vector]
+    .next ?
+}
+
+.proc tail: far {
+    jml far_routine
+}

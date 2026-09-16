@@ -4,11 +4,9 @@ using Norristown.Project;
 namespace Norristown.Layout;
 
 /// <summary>
-/// Which addressing modes each mnemonic has, on each CPU, and how long each one is. Syntax does not depend on the CPU, so every form parses everywhere and this table
-/// is what says whether the target actually has it.
-/// <para>
-/// The 65816 arrives with Stage 11; until then this table covers the 6502 and the 65C02.
-/// </para>
+/// Which addressing modes each mnemonic has, on each CPU, and how long each one is. Syntax
+/// does not depend on the CPU, so every form parses everywhere and this table is what says
+/// whether the target actually has it.
 /// </summary>
 public static class Instructions
 {
@@ -16,41 +14,65 @@ public static class Instructions
 
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65C02 = Build65C02();
 
+    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65816 = Build65816();
+
     /// <summary>Whether <paramref name="cpu"/> has <paramref name="mnemonic"/> at all.</summary>
     public static bool Has(Cpu cpu, string mnemonic) => Modes(cpu, mnemonic).Count > 0;
 
     /// <summary>The modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, empty if it has none.</summary>
     public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, string mnemonic)
     {
-        var table = cpu == Cpu.Mos6502 ? mos6502 : wdc65C02;
+        var table = cpu switch
+        {
+            Cpu.Mos6502 => mos6502,
+            Cpu.Wdc65C02 => wdc65C02,
+            _ => wdc65816,
+        };
         return table.GetValueOrDefault(mnemonic.ToLowerInvariant(), FrozenSet<AddressingMode>.Empty);
     }
 
     /// <summary>
     /// How many bytes an instruction in <paramref name="mode"/> takes: the opcode and its
-    /// operand. On the 6502 and the 65C02 an immediate is always one byte; the 65816's
-    /// width-dependent immediates arrive with Stage 11.
+    /// operand. An immediate is one byte here; on the 65816 the immediate of an instruction
+    /// <see cref="SizedBy"/> names a register for is as wide as that register.
     /// </summary>
     public static int Length(AddressingMode mode) => mode switch
     {
         AddressingMode.Implied or AddressingMode.Accumulator => 1,
         AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
             or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX
-            or AddressingMode.DirectRelative => 3,
+            or AddressingMode.AbsoluteIndirectLong or AddressingMode.DirectRelative
+            or AddressingMode.RelativeLong or AddressingMode.BlockMove => 3,
+        AddressingMode.Long or AddressingMode.LongX => 4,
         _ => 2,
     };
 
     /// <summary>
+    /// The register whose width sizes <paramref name="mnemonic"/>'s immediate on the 65816,
+    /// or null when its immediate is always one byte. ca65 sizes exactly these from its
+    /// <c>.a8</c>/<c>.a16</c> and <c>.i8</c>/<c>.i16</c> settings.
+    /// </summary>
+    public static WidthRegister? SizedBy(string mnemonic) => mnemonic.ToLowerInvariant() switch
+    {
+        "lda" or "adc" or "and" or "bit" or "cmp" or "eor" or "ora" or "sbc" => WidthRegister.A,
+        "ldx" or "ldy" or "cpx" or "cpy" => WidthRegister.Index,
+        _ => null,
+    };
+
+    /// <summary>
     /// How wide the address in an operand of this mode is, or null where the mode carries no
-    /// address to size: one byte for the direct page, two for absolute.
+    /// address to size: one byte for the direct page, two for absolute and three for long.
     /// </summary>
     public static Semantics.AddressSize? Width(AddressingMode mode) => mode switch
     {
         AddressingMode.Direct or AddressingMode.DirectX or AddressingMode.DirectY
             or AddressingMode.DirectIndirect or AddressingMode.DirectIndirectX
-            or AddressingMode.DirectIndirectY or AddressingMode.DirectRelative => Semantics.AddressSize.ZeroPage,
+            or AddressingMode.DirectIndirectY or AddressingMode.DirectRelative
+            or AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY => Semantics.AddressSize.ZeroPage,
         AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
-            or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX => Semantics.AddressSize.Absolute,
+            or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX
+            or AddressingMode.AbsoluteIndirectLong => Semantics.AddressSize.Absolute,
+        AddressingMode.Long or AddressingMode.LongX => Semantics.AddressSize.Far,
         _ => null,
     };
 
@@ -59,6 +81,7 @@ public static class Instructions
     {
         Semantics.AddressSize.ZeroPage => "z:",
         Semantics.AddressSize.Absolute => "a:",
+        Semantics.AddressSize.Far => "f:",
         _ => null,
     };
 
@@ -66,8 +89,7 @@ public static class Instructions
     public static bool IsControlTransfer(string mnemonic) =>
         Modes(Cpu.Wdc65C02, mnemonic).Any(mode => mode is AddressingMode.Relative or AddressingMode.DirectRelative)
         || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic)
-        || mnemonic.Equals("jmp", StringComparison.OrdinalIgnoreCase)
-        || mnemonic.Equals("jsr", StringComparison.OrdinalIgnoreCase);
+        || mnemonic.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl" or "brl";
 
     /// <summary>
     /// The two short branches a long branch is written with: the one it takes when the
@@ -147,6 +169,29 @@ public static class Instructions
             Add(table, $"rmb{bit} smb{bit}", AddressingMode.Direct);
             Add(table, $"bbr{bit} bbs{bit}", AddressingMode.DirectRelative);
         }
+        return Freeze(table);
+    }
+
+    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65816()
+    {
+        // The Rockwell bit instructions are the one part of the 65C02 the 65816 left out.
+        var table = wdc65C02
+            .Where(pair => !(pair.Key.Length == 4 && pair.Key[..3] is "bbr" or "bbs" or "rmb" or "smb"))
+            .ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value), StringComparer.Ordinal);
+        Add(table, "adc and cmp eor lda ora sbc sta",
+            AddressingMode.Long, AddressingMode.LongX, AddressingMode.DirectIndirectLong,
+            AddressingMode.DirectIndirectLongY, AddressingMode.StackRelative, AddressingMode.StackRelativeIndirectY);
+        Add(table, "jsr", AddressingMode.AbsoluteIndirectX);
+        Add(table, "jml", AddressingMode.Long, AddressingMode.AbsoluteIndirectLong);
+        Add(table, "jsl", AddressingMode.Long);
+        Add(table, "brl per", AddressingMode.RelativeLong);
+        Add(table, "mvn mvp", AddressingMode.BlockMove);
+        Add(table, "pea", AddressingMode.Absolute);
+        Add(table, "pei", AddressingMode.DirectIndirect);
+
+        // `cop` takes a signature byte as `brk` does, and `wdm` the byte an emulator hooks on.
+        Add(table, "rep sep cop wdm", AddressingMode.Immediate);
+        Add(table, "phb phd phk plb pld rtl tcd tcs tdc tsc txy tyx xba xce", AddressingMode.Implied);
         return Freeze(table);
     }
 

@@ -122,6 +122,7 @@ public sealed class ControlFlow
         for (var i = 0; i < blocks.Count; i++)
         {
             blocks[i].IsFallenInto = fallenInto[i];
+            blocks[i].Next = tails[i]?.Next;
             blocks[i].Cycles = Timing(blocks[i]);
         }
         return blocks;
@@ -191,6 +192,9 @@ public sealed class ControlFlow
         var total = new CycleCount(0);
         foreach (var step in block.Steps)
         {
+            // A `.state` takes no time, because it is not there at all.
+            if (step.Statement.Kind == SyntaxKind.StateDirective)
+                continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
                 return null;
             total += cycles;
@@ -223,7 +227,7 @@ public sealed class ControlFlow
     /// items are all code labels — each optionally minus one, as an RTS dispatch table
     /// writes them — stands for every one of those labels.
     /// </summary>
-    private IEnumerable<(Symbol Symbol, Expansion? At)> Named(SyntaxNode next, Expansion? on)
+    internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(SyntaxNode next, Expansion? on)
     {
         foreach (var written in Annotations.TargetsOf(next))
         {
@@ -300,7 +304,8 @@ public sealed class ControlFlow
     /// <summary>
     /// A label nothing runs into and nothing names. Recognition is complete for what is
     /// written, so once the label exists the checks cover it; this is what pushes the
-    /// programmer to write it down.
+    /// programmer to write it down. A <c>.state</c> directly after the label declares it as
+    /// an entry point, which acknowledges that it is reached from somewhere nt65 cannot see.
     /// </summary>
     private void CheckUnreachableLabels(FlowRegion region, List<Diagnostic> diagnostics)
     {
@@ -308,8 +313,11 @@ public sealed class ControlFlow
             return;
         foreach (var block in region.Blocks)
         {
-            if (block.Index == 0 || block.Label is not { } label || block.Predecessors.Count > 0)
+            if (block.Index == 0 || block.Label is not { } label || block.Predecessors.Count > 0
+                || block.IsDeclared)
+            {
                 continue;
+            }
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
             diagnostics.Add(new Diagnostic(label.DeclarationSpan, Severity.Warning,

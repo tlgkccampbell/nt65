@@ -1,0 +1,102 @@
+; What the processor-state analysis reports, each where the problem is used rather than
+; where two paths happen to disagree.
+.cpu 65816
+
+.import printf: proc(a8, i16)
+.import far_away: proc(far)
+.import plain
+
+.bss {
+value:  .res 2
+}
+
+; An immediate needs a known width.
+.proc unknown_width: a? {
+    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here
+    rts
+}
+
+; `*` assumes nothing, so a width it keeps is not a width anyone knows.
+.proc kept: i* {
+    ldx #1                  ;! error: `ldx #` needs the width of X and Y, and `kept` says `i*`, which assumes nothing about it
+    rts
+}
+
+; Two paths that disagree meet at a label, and the use after it is what is reported.
+.proc merged {
+    lda value
+    beq @done
+    rep #$20
+@done:
+    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here
+    sep #$20
+    rts
+}
+
+; A return has to reach the state the signature declares, and leave the way it is called.
+.proc wrong_exit: a8 -> a16 {
+    rts                     ;! error: `rts`: `wrong_exit` returns with `a16`, and A is 8-bit here
+}
+
+.proc wrong_return: far {
+    rts                     ;! error: `wrong_return` is far, and returns with `rtl`
+}
+
+.proc changed: a* {
+    rep #$20
+    rts                     ;! error: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, and here it may not be
+}
+
+; A call has to meet the routine's entry, and use the instruction its distance calls for.
+.proc wrong_entry: a16, i8 -> a8, i16 {
+    jsr printf              ;! error: `jsr printf` needs `a8`, and A is 16-bit here;! error: `jsr printf` needs `i16`, and X and Y are 8-bit here
+    rts
+}
+
+.proc calls {
+    jsr far_away            ;! error: `far_away` is far, and is called with `jsl`
+    jsl calls               ;! error: `calls` is near, and is called with `jsr`
+    jsr plain               ;! error: `plain` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+    jsr @inside             ;! error: `@inside` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+    rts
+@inside:
+    rts
+}
+
+; A tail call returns for the routine that makes it.
+.proc tail: a16 -> a8 {
+    jmp wrong_entry         ;! error: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
+}
+
+; An assertion that disagrees with what is known.
+.proc asserted: a8 {
+    .state a16              ;! error: `.state a16`, and A is 8-bit here
+    .state near             ;! error: `near` describes a routine rather than a point in it, and belongs in a signature
+    rts                     ;! error: `rts`: `asserted` returns with `a8`, and A is 16-bit here
+}
+
+; A label nothing reaches has no state to size an immediate with.
+.proc orphan {
+    rts
+@lost:                      ;! warning: `@lost` is never reached: nothing runs into it and nothing names it
+    lda #1                  ;! error: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
+    rts
+}
+
+; Signatures that contradict themselves.
+.proc twice: a8, a16 {      ;! error: `a8` and `a16` both describe the same part of the state
+    rts
+}
+
+.proc handed_back: a8 -> a* {   ;! error: `a*` after `->` needs `a*` at entry too: a routine hands back unchanged only what it assumed nothing about
+    rts
+}
+
+.proc pinned: emu, a16 {    ;! error: `a16` cannot hold in emulation mode, where both widths are 8 bits
+    rts
+}
+
+; Outside a routine there is no processor state.
+    rep #$20                ;! error: `rep` changes the processor state, which only a `.proc` has: outside one there is nothing to follow it through
+    lda #1                  ;! error: `lda #` needs the width of A, which only a `.proc` has
+    .state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`

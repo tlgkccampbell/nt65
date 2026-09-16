@@ -14,12 +14,14 @@ namespace Norristown;
 /// <param name="Program">Every file's model, and what they can see of one another.</param>
 /// <param name="Cpu">The processor the program is built for.</param>
 /// <param name="Layouts">
-/// One layout per file of <see cref="Program"/>, in the same order, or empty for a CPU whose
-/// instructions nt65 cannot size yet.
+/// One layout per file of <see cref="Program"/>, in the same order.
 /// </param>
 /// <param name="Flows">
-/// Where control goes in each file of <see cref="Program"/>, in the same order, or empty
-/// alongside an empty <see cref="Layouts"/>.
+/// Where control goes in each file of <see cref="Program"/>, in the same order.
+/// </param>
+/// <param name="States">
+/// The processor state through each file of <see cref="Program"/>, in the same order, on the
+/// 65816; empty on the processors that have no state to track.
 /// </param>
 /// <param name="Defines">The file the build configuration was read as, or null.</param>
 /// <param name="Configuration">Which <c>.if</c> branches this build takes.</param>
@@ -29,6 +31,7 @@ public sealed record ProgramAnalysis(
     Cpu Cpu,
     IReadOnlyList<CodeLayout> Layouts,
     IReadOnlyList<ControlFlow> Flows,
+    IReadOnlyList<StateAnalysis> States,
     SyntaxTree? Defines,
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
@@ -46,6 +49,9 @@ public sealed record ProgramAnalysis(
 
     /// <summary>Where control goes in <paramref name="path"/>, or null when it was not laid out.</summary>
     public ControlFlow? FlowFor(string path) => At(Flows, path);
+
+    /// <summary>The processor state through <paramref name="path"/>, or null when there is none to track.</summary>
+    public StateAnalysis? StatesFor(string path) => At(States, path);
 
     /// <summary>
     /// The entry of <paramref name="alongside"/> for <paramref name="path"/>. Every list

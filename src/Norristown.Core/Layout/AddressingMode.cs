@@ -54,4 +54,31 @@ public enum AddressingMode
 
     /// <summary>A direct-page address and a branch target: <c>bbr0 flags, @skip</c>.</summary>
     DirectRelative,
+
+    /// <summary>Three bytes of address: <c>lda f:table</c>, on the 65816.</summary>
+    Long,
+
+    /// <summary>Long, indexed by X: <c>lda f:table,x</c>, on the 65816.</summary>
+    LongX,
+
+    /// <summary>Through a three-byte direct-page pointer: <c>lda [ptr]</c>, on the 65816.</summary>
+    DirectIndirectLong,
+
+    /// <summary>The same, indexed by Y: <c>lda [ptr],y</c>, on the 65816.</summary>
+    DirectIndirectLongY,
+
+    /// <summary>An offset from the stack pointer: <c>lda 3,s</c>, on the 65816.</summary>
+    StackRelative,
+
+    /// <summary>Through a pointer on the stack, indexed by Y: <c>lda (3,s),y</c>, on the 65816.</summary>
+    StackRelativeIndirectY,
+
+    /// <summary>Through a three-byte absolute pointer: <c>jml [vector]</c>, on the 65816.</summary>
+    AbsoluteIndirectLong,
+
+    /// <summary>A target two signed bytes away: <c>brl @far</c> and <c>per @label</c>, on the 65816.</summary>
+    RelativeLong,
+
+    /// <summary>A source bank and a destination bank: <c>mvn #src, #dst</c>, on the 65816.</summary>
+    BlockMove,
 }

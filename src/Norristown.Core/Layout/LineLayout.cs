@@ -13,5 +13,10 @@ namespace Norristown.Layout;
 /// the form it takes when nt65 does not know the target to be in range.
 /// </param>
 /// <param name="Cycles">How long the instruction takes, or null for data and for one nt65 has no count for.</param>
+/// <param name="Bits">
+/// How wide a 65816 immediate that follows a register's width is, 8 or 16; null for every
+/// other line, and on the CPUs whose immediates are always a byte.
+/// </param>
 public sealed record LineLayout(
-    int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null);
+    int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null,
+    int? Bits = null);
