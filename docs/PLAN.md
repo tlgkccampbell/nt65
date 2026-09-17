@@ -98,23 +98,21 @@ replaced `.ident` for tables: `.each Cmd, c { actions::c }` reads `actions::move
 the same spelling" (§10). That rule *finds* a declaration by a member's name. A family is the
 same rule *making* one.
 
-### Decided: a family is an `.each` over an enum that declares by its binding
+### Decided: `.procs`, a routine family over an enum
 
 ```nt65
 .enum Channel { pulse1, pulse2, triangle, noise }
 
 .scope play {
-    .each Channel, ch {
-        .proc ch: a8, i8 {                  ; play::pulse1, play::pulse2, ...
-            ldx #Channel::ch
-            lda period_lo,x
-            sta $4000 + 4 * Channel::ch
-            .if ch == Channel::noise {      ; the enum's members may be named in a condition here
-                lda #$30
-                sta $400c
-            }
-            rts
+    .procs Channel, ch: a8, i8 {            ; play::pulse1, play::pulse2, ...
+        ldx #Channel::ch
+        lda period_lo,x
+        sta $4000 + 4 * Channel::ch
+        .if ch == Channel::noise {          ; the enum's members may be named in a condition here
+            lda #$30
+            sta $400c
         }
+        rts
     }
 }
 
@@ -127,87 +125,96 @@ same rule *making* one.
     jsr play::triangle
 ```
 
-In an `.each` over a named enum at item level, a `.proc`, a `.data` or a `.scope` whose name
-is the binding is declared **once per member, under the member's name, in the scope around
-the `.each`**. That is the whole construct. Everything below is what follows from the
-design's existing rules.
+`.procs E, b: signature { body }` declares **one routine per member of the enum `E`, named as
+the member, in the scope around it**, with the signature and the body written once. `b` is
+the member in the body, as an `.each` binding is: its value as an expression, its name at the
+end of a path, and a condition may test it. It stands where `.proc` stands. That is the whole
+construct.
+
+It is `.each E, b { .proc b: signature { body } }` with the two blocks folded into one keyword
+line, and the folding is what makes it simple: the family is visible from its opener, so the
+parser knows the block is a routine's, the outline and folding see one block, and there is no
+body outside the routine for anything else to stand in. A first draft of this stage let an
+`.each` at item level declare by its binding, which needed a rule that a declaration named by
+the binding is a family and a rule about where such a declaration may stand; both are gone.
 
 **Why it keeps every requirement.**
 
 - *Names are declared, not computed.* Which names a family declares comes from two headers:
-  the `.each` line and the enum's member list, which is read from the enum's lines without
-  evaluating anything. Nothing is concatenated; the members' names are the names.
+  the `.procs` line and the enum's member list, which is read from the enum's lines without
+  evaluating anything. Nothing is concatenated; the members' names are the names. It is the
+  rule that lets `.each Cmd, c { actions::c }` *find* a member's declaration, run the other
+  way to *make* one.
 - *Declarations remain a set fixed before evaluation.* The set now also depends on an enum's
   member names, which is a syntactic fact, not a value. The dependency runs one way: member
-  names are identifiers on the enum's lines, and an enum declared inside a turn is private to
-  that turn, so no family can feed the enum that names it. Where the enum comes from another
-  module, its member names are already part of that module's interface (an enum crosses by
-  value, §12), so an edit there is news to exactly the modules the incremental rule of §14
-  already names. An instance never depends on a condition: a binding-named declaration stands
-  directly in the body, not under an `.if` in it, because a condition in a turn tests the
-  member's *value*, and a value is evaluated.
+  names are identifiers on the enum's lines, and an enum declared inside a turn or a macro is
+  private to it, so no family can feed the enum that names it. Whether an instance exists
+  never depends on a value: the enum varies by configuration, under `.if` in its body
+  (Stage 25) or around it, and that is where the set of instances is decided. Where the enum
+  comes from another module, its member names are already part of that module's interface
+  (an enum crosses by value, §12), so an edit there is news to exactly the modules the
+  incremental rule of §14 already names.
 - *The interface is derived from headers.* An instance's name, kind and signature come from
-  the `.each` line, the enum and the `.proc` line. A signature may name the binding,
-  `dbr = Bank::b`, and each instance's is that expression with its member's value: still a
-  header, nothing from a body.
-- *One flow analysis per instance.* The binder already reads a repetition body once, with the
-  binding in a scope of its own, and the analysis walks it once per turn, as it walks a macro
-  expansion once per call. A problem in one turn is reported at the body line naming the
-  instance, `in play::noise`, and once when every turn has it.
-- *Tooling without expansion.* Go to definition on `play::triangle` lands on the `.proc ch`
-  line; rename of `triangle` renames the enum member and every use of the instance; the
-  family's `.proc ch` line does not change. Completion after `play::` lists the members. All
-  of it from what the binder knows of the family, with nothing expanded.
+  the `.procs` line and the enum. A signature may name the binding, `dbr = Bank::b`, and
+  each instance's is that expression with its member's value: still a header, nothing from a
+  body.
+- *One flow analysis per instance.* The binder reads the body once, with the binding in a
+  scope of its own, as it reads a repetition body today, and the analysis walks it once per
+  member, as it walks a macro expansion once per call. A problem in one instance is reported
+  at the body line naming it, `in play::noise`, and once when every instance has it.
+- *Tooling without expansion.* Go to definition on `play::triangle` lands on the `.procs`
+  line; rename of `triangle` renames the enum member and every use of the instance, and the
+  `.procs` line does not change. Completion after `play::` lists the members; hover on the
+  `.procs` line lists the instances. All of it from what the binder knows of the family, with
+  nothing expanded.
 - *Flat, deterministic output.* An instance is an ordinary routine in the output,
-  `play__triangle:`, with the `.proc` comment naming the member, and its lines mapped to the
-  body's lines as a `.repeat` turn's are. An exported instance's linker name is ordinary,
-  `snd__play__triangle`.
-- *Syntax is unchanged.* `.proc ch: a8, i8 {` parses as any proc parses; the block layer and
-  Appendix A are untouched. The binder decides what it is: a name that is the binding is a
-  family; any other name is a declaration private to the turn, which is the rule for every
-  declaration in a body today. So an instance may have a helper proc of its own, private to it.
-- *A macro still declares nothing in its caller.* A macro body may not hold a `.proc`, and
-  that does not change, so a family cannot be hidden in one.
+  `play__triangle:`, under a comment naming the family and the member, and its lines are
+  mapped to the body's lines as a `.repeat` turn's are. An exported instance's linker name is
+  ordinary, `snd__play__triangle`.
+- *Syntax stays context-free.* `.procs` is a directive line that opens a block whose body is a
+  routine's; the block layer is untouched, and a new directive is not a breaking change
+  (§17). Nothing changes about `.each`, `.repeat` or macro bodies, which still hold no
+  `.proc` and no `.procs`.
 
 **Rules.**
 
-- A binding-named declaration stands directly in the body of an `.each` over a named enum, at
-  item level: file level, a `.scope`, a segment region or block, or an `.if` around the
-  `.each`. Anywhere else the binding as a declaration's name is an error that says why: inside
-  a proc it would nest; over a list, a `list` parameter or a `.repeat` there are no names.
-- It is one declaration per member in the enclosing scope, so it collides with a hand-written
+- `.procs` stands where `.proc` may: at file level or in a `.scope` outside any routine.
+  Inside a proc, a macro body, a `.repeat` or an `.each` it is the error `.proc` is there.
+- `E` is a named enum, from this module or another. The instances are its members, one
+  declaration each in the enclosing scope, so an instance collides with a hand-written
   declaration of a member's name there, and two families over the same enum in one scope
-  collide too, as any duplicate does.
-- Everything inside a binding-named `.scope` or `.data` is reached through it:
-  `.each Channel, ch { .scope ch { .proc play { } } }` gives `pulse1::play`, and a family
-  nested in a binding-named scope of another gives `bank0::pulse1`. A fixed-name declaration
-  directly in the body stays private to the turn.
-- `.export` before a binding-named declaration exports every instance. It is the one
-  `.export` allowed in a repetition body, since the names it exports are the enum's;
-  `.export .scope play { }` around the family exports them today without any new rule.
-- A condition inside the body may name the enum's members, `.if ch == Channel::noise`. The
-  members' values are known when a turn's conditions are evaluated, because the binding's own
-  value is one of them, so this adds no ordering.
+  collide too, as any duplicate does. Two roles for one member are two scopes, `note::pulse1`
+  and `stop::pulse1`.
+- `.export .procs E, b {` exports every instance; the list form, `.export play::pulse1`,
+  exports one.
+- A condition in the body may name the enum's members, `.if b == E::noise`. The members'
+  values are known when the body's conditions are evaluated, because the binding's own value
+  is one of them, so this adds no ordering.
 - An unused warning names a family only when nothing uses any instance, as an enum's members
   are one of a set.
-- The lens above the family's `.proc` line says what a pass costs; where instances differ it
-  says so per instance.
+- The lens above the `.procs` line says what a pass costs; where instances differ it says so
+  per instance.
+- Data per member is not a family: it is an array indexed by the member's value,
+  `.data voices: .type Voice[.countof(Channel)]` and `lda voices::gain + Channel::ch * .sizeof(Voice)`,
+  which is what the enum's value is for.
 
-**Where the design changes.** §6.1 gains a row for the family; §10 gains the exception for
-binding-named declarations, the `.export`, and members in conditions; §13 the output form;
-§14 the family's instances in the interface; §16 the decision, with the alternatives above
-and why each was refused. Appendix A does not change.
+**Where the design changes.** §6.1 gains a row for `.procs`; §7.3 counts an instance among
+the routines that carry a signature; §10 gains members in a family body's conditions; §13
+the output form; §14 the family's instances in the interface; §16 the decision, with the
+alternatives above, the `.each` form, and why each was refused. Appendix A adds
+`procs := '.procs' path ',' ident (':' state ('->' state)?)? '{' NL body '}'` to `item`.
 
-**Build.** `Binder` declares the instances into the enclosing scope from the `.each` header
-and the enum; `Repetitions` and `Expansion` give each instance its turn; the flow analysis
-and the emitter already run per turn. The server: definition, rename, references, completion,
-hover (the family's line says which instances it declares), lens and unused warnings.
+**Build.** `Parser` reads the line and opens a routine body; `Binder` declares the instances
+into the enclosing scope from the header and the enum, with the binding in a scope of its
+own over the body; the flow analysis and the emitter run per instance as they run per turn
+today. The server: definition, rename, references, completion, hover, outline, lens and
+unused warnings.
 
-**Check.** Fixtures: a family of procs, of data, of scopes; nested families; an exported
-family; a family whose signature names the binding; every wrong place and every collision;
-the `.if` in the body naming a member. All through the oracle. The C64 corpus program gains a
-family where it repeats itself. Editor tests for definition, rename and completion through an
-instance.
+**Check.** Fixtures: a family, an exported family, one whose signature names the binding, one
+over an enum from another module, one over an enum with a member under `.if` built under both
+configurations, the `.if` in the body naming a member, every wrong place and every collision.
+All through the oracle. The C64 corpus program gains a family where it repeats itself. Editor
+tests for definition, rename and completion through an instance.
 
 ## Stage 27: Data conveniences
 
