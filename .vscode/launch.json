@@ -20,6 +20,11 @@
         "${workspaceFolder}"
       ],
       "preLaunchTask": "build",
+      // The client is plain JavaScript beside its package.json. Without these, the debugger
+      // looks for scripts and source maps across the whole repository, which holds the
+      // extension's node_modules, the published server and the packages.
+      "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
       // The client starts the language server, which is a .NET process and not something
       // the JavaScript debugger should follow into.
       "autoAttachChildProcesses": false
