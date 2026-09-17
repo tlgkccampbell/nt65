@@ -1,0 +1,110 @@
+; The design's examples of scopes and the declarative constructs: cheap locals reused in two
+; anonymous scopes, enumerations, structures, unions, initialized records and lists.
+.module scopes
+
+.cpu 65816
+
+.export init, Color, Point, Player, Value, player, actors, boss, hero, wave, lo, hi
+
+MAX_ACTORS = 8
+
+.segment BSS
+.data palette: .byte[32]
+
+.segment CODE
+.proc init {
+    .scope {                ; clear RAM
+        ldx #0
+    @loop:
+        sta $0200,x
+        inx
+        bne @loop
+    }
+    .scope {                ; clear the palette
+        ldx #31
+    @loop:
+        stz palette,x
+        dex
+        bpl @loop
+    }
+    rts
+}
+
+.enum Color {
+    red                 ; 0
+    green = 5
+    blue                ; 6
+}
+
+.struct Point {
+    x: .word
+    y: .word
+}
+
+.struct Player {
+    pos:    .type Point
+    hp:     .byte
+    name:   .res 16, ' '
+    colors: .word[4]
+}
+
+.union Value {
+    b: .byte
+    w: .word
+}
+
+.segment BSS
+.data player: .type Player
+.data actors: .type Player[MAX_ACTORS]
+
+.struct Actor {
+    x:  .word
+    y:  .word
+    hp: .byte
+    ai: .addr
+}
+
+.segment RODATA
+.data boss: .type Actor { x = 100, y = 40, hp = 99, ai = chase }
+
+.data hero: .type Actor {
+    x = 16
+    hp = 3
+    ai = player_input
+}
+
+.data wave: .type Actor[] {
+    { x = 32, ai = chase }
+    { x = 64, ai = chase }
+}
+
+.segment CODE
+.proc chase {
+    rts
+}
+
+.proc player_input {
+    rts
+}
+
+.proc cmd_move {
+    rts
+}
+
+.proc cmd_fire {
+    rts
+}
+
+.proc cmd_quit {
+    rts
+}
+
+.list handlers {
+    cmd_move
+    cmd_fire
+    cmd_quit
+}
+
+.segment RODATA
+.data lo: .lobytes handlers
+.data hi: .hibytes handlers

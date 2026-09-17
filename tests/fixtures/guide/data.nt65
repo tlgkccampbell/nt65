@@ -1,0 +1,31 @@
+.module data
+
+.cpu 6502
+
+.export Actor, buffer, player, sines, title, boss, exe_header, hp
+
+.struct Actor {
+    x:  .word
+    y:  .word
+    hp: .byte
+}
+
+.segment BSS
+.data buffer: .byte[64]             ; 64 bytes, no values
+.data player: .type Actor           ; one record
+
+.segment RODATA
+.data sines: .byte 0, 49, 90, 117   ; four bytes, with values
+.data title: .strz "SPACE TRAIN"
+.data boss: .type Actor { x = 100, y = 40, hp = 99 }
+.data exe_header {                  ; data of several kinds
+    .word @end - exe_header, 0
+    .byte "NT"
+@end:
+}
+
+.segment CODE
+.proc hp {
+    lda player::hp
+    rts
+}

@@ -1,0 +1,33 @@
+.module macros
+
+.cpu 6502
+
+.export copy_twice
+
+.segment ZEROPAGE
+.data ptr: .word
+.data other: .word
+
+.segment CODE
+.macro mov16(dest: operand, src: operand) {
+    lda .byteof(src, 0)
+    sta dest
+    lda .byteof(src, 1)
+    sta dest+1
+}
+
+.macro times_x(count: const, body: block) {
+    ldx #count
+@loop:
+    body
+    dex
+    bne @loop
+}
+
+.proc copy_twice {
+    mov16!(ptr, {#$0400})
+    times_x!(2) {
+        mov16!(ptr, other)
+    }
+    rts
+}

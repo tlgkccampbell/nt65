@@ -1,0 +1,13 @@
+.module game
+
+.cpu 6502
+
+.use gfx::clear
+
+.segment CODE
+.proc start {
+    jsr clear
+    jsr gfx::fill
+    lda gfx::BORDER
+    rts
+}

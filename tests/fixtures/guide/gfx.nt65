@@ -1,0 +1,17 @@
+.module gfx
+
+.cpu 6502
+
+.export BORDER = $D020
+
+.segment CODE
+.export .proc clear {
+    lda #0
+    sta BORDER
+    rts
+}
+
+.proc fill {
+    rts
+}
+.export fill as "_gfx_fill"

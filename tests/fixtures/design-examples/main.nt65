@@ -1,0 +1,26 @@
+; The design's example of names from other modules.
+.module main
+.use hw::init                       ; one name
+.use hw::{BORDER, set_border}       ; several
+.use hw::sid::*                     ; everything the module exports
+.use snd::init as snd_init          ; a name of this module's choosing
+.use very::long::path as p          ; a module, named p::thing
+
+.cpu 65816
+
+.export main, other
+
+.segment CODE
+.proc main {
+    jsr gfx::init                   ; qualified
+    jsr snd_init
+    lda p::thing
+    rts
+}
+
+.proc other {
+    jsr init
+    lda BORDER
+    lda VOLUME
+    jmp set_border
+}

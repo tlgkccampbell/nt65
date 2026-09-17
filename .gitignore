@@ -4,6 +4,10 @@ bin/
 obj/
 node_modules/
 
+# scripts/package.ps1: the packages, and the server it publishes into the extension.
+artifacts/
+editors/vscode/server/
+
 # `nt65 build` in a fixture writes its output, named by module, into the fixture; snapshots live in expected/.
 tests/fixtures/*/*.s
 tests/fixtures/*/.nt65-outputs

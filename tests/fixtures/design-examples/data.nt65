@@ -1,0 +1,61 @@
+; The design's examples of data declarations.
+.module data
+
+.cpu 65816
+
+.export player_x, buffer, gradient, row_lo, handlers, header, sprites, tiles, msg, lo, id
+.export basic_stub
+
+SCREEN = $0400
+
+.struct RomHeader {
+    title: .res 21, ' '
+}
+
+.struct Sprite {
+    x: .byte
+    y: .byte
+}
+
+.segment CODE
+.proc move {
+    rts
+}
+
+.proc fire {
+    rts
+}
+
+.proc jump {
+    rts
+}
+
+.proc quit {
+    rts
+}
+
+.segment RODATA
+.data player_x: .word                            ; one element, no value
+.data buffer: .byte[64]                          ; 64 elements, no values
+.data gradient: .byte 40, $e0, 0                 ; values on one line: three elements
+.data row_lo: .byte[] {                          ; values in a body, which counts them
+    .repeat 25, r {
+        <(SCREEN + r * 40)
+    }
+}
+.data handlers: .addr[4] { move, fire, jump, quit }   ; a body must hold exactly its count
+.data header: .type RomHeader { title = "NT65" }       ; one record (§6.3)
+.data sprites: .type Sprite[] {                        ; an array of records
+    { x = 10, y = 20 }
+    { x = 30, y = 40 }
+}
+.data tiles: .incbin "tiles.bin"                 ; bytes
+.data msg: .strz "hi"
+.data lo: .lobytes handlers
+.data id: .bedword $4e543635                      ; high byte first
+.data basic_stub {                               ; mixed data
+    .word @next, 10
+    .byte $9e, "2061", 0
+@next:
+    .word 0
+}

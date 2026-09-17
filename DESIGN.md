@@ -1,9 +1,10 @@
 # nt65 — Norristown Assembly Language
 
-**Status:** draft design, non-normative. This document describes the shape of the
-language and the reasoning behind it. It is not a specification; the implementation
-decides details, and this document is updated when the implementation teaches us
-something.
+**Status:** version 1. This document defines nt65 version 1: the language, and what the
+`nt65` command promises about its output, its project file and its command line (§17), with
+the reasoning behind each. Where the implementation and this document disagree, one of them
+is wrong, and the fix says which. For a first look at the language from ca65, see
+[the guide](docs/GUIDE.md).
 
 ## 1. What nt65 is
 
@@ -673,10 +674,10 @@ Standard forms, as in ca65:
     lda buf,x           ; indexed
     lda (ptr),y         ; indirect indexed
     lda (ptr,x)         ; indexed indirect
-    jmp (vector)        ; indirect
     bne @loop           ; relative
     jeq @far            ; long branch — see 7.6
     brk #0              ; signature byte required, see below
+    jmp (vector)        ; indirect
 ```
 
 An operand that begins with `(` is indirect only when the parentheses hold the whole
@@ -1263,7 +1264,9 @@ is only a namespace.
 
 ```nt65
     ldx #.spanof(reloc)             ; bytes to copy
+
 .data header: .word .spanof(module) ; length in a header
+
 .assert .spanof(irq) <= 64, "irq handler too big"
 ```
 
@@ -1556,8 +1559,12 @@ symbolically for ca65 and ld65 to resolve.
 }
 
 .assert .sizeof(table) == 32, "table must be 32 bytes"
-.warning "built without sound"
-.error "unsupported configuration"
+.if !SOUND {
+    .warning "built without sound"
+}
+.if PLATFORM > 2 {
+    .error "unsupported configuration"
+}
 ```
 
 `.assert cond, "message"` takes no level. ca65's `error`, `warning`, `lderror` and
@@ -2014,6 +2021,7 @@ and are never visible any other way:
     jsr gfx::init                   ; qualified
     jsr snd_init
     lda p::thing
+    rts
 }
 ```
 
@@ -2493,7 +2501,8 @@ Recorded so the reasoning survives. None is open.
 - **A count is checked exactly.** A body shorter than its count is an error rather than
   padded with zeros, because a short jump table is exactly the mistake a count exists to
   catch; padding is written with a `.repeat` in the body.
-- **JSON for the project file.**
+- **JSON for the project file.** Every build tool, editor and scripting language reads it
+  without a parser of nt65's, and a project file holds settings, not expressions.
 - **Output is named by module**, not by source file. A module is one file, so the mapping is
   one to one, and a source can move or live outside the project without its output moving.
 - **Named configurations in the project file**, over one set of defines. A debug build and a
@@ -2659,30 +2668,161 @@ Recorded so the reasoning survives. None is open.
   `txs` lost `phk`, `plb` straight after it. Tracking pushes over a base nothing is known of
   keeps every idiom that pushes and pulls its own values, and is the model `.frame` already
   used after `tcs`.
-- **Code actions only for diagnostics that name their fix.** The message already says what to
-  write, so the fix writes it; a diagnostic that asks the programmer to choose, such as which
-  labels a `.next` names or what width an immediate needs, is offered nothing, because a guess
-  would compile and be wrong. A fix is part of the diagnostic as what to change, not as an
-  edit, and is worked out against the files when it is asked for.
-- **Each project in a workspace is its own program.** A folder of several games, or a library
-  with its test programs, holds projects that declare the same modules; one program of all
-  of them would report every module twice.
 - **`args n` for arguments the caller pushes.** A frame could not reach past the return
   address, so routines forgot their stack with `tsc`, `tcs` to reach their arguments. The
   item puts the arguments and the return address on the analysis stack at entry and checks
   callers push them. Arguments the callee removes are not in version 1.
+- **A mirror address is an expression.** `(bank << 16) | .loword(f)` says which bank a long
+  transfer lands in, and is checked as a transfer to `f`; a prefix or a rule of its own would
+  hide that bank.
+- **Leading whitespace means nothing.** A line's kind comes from its tokens, never from the
+  column its first token starts in, so labels may be indented and so may everything else.
+- **A slot too narrow for its address is an error, not a truncation.** ca65 keeps the low 16
+  bits of a far address in an `.addr` without a word. nt65 asks for `.faraddr`, or `.loword(x)`
+  where the low bits are meant, so a dropped bank is always written down.
+- **An alias is checked against what it names.** An extern proc naming another routine writes
+  that routine's signature or takes it, so a second name can never make a near routine far.
+- **An operand with one form carries no prefix.** Where the instruction has only one form, ca65
+  has nothing to choose. nt65 checks that the operand fits that form instead, which catches an
+  absolute pointer in `lda (ptr),y` that ca65 would hand to the linker.
+- **Constants open no segment.** A constant has no address, so it is written where it stands,
+  and a module of constants writes no segment at all.
+- **Imports, exports and link-time assertions carry no `.dbg line`.** ld65 reports them at
+  their `.s` line whatever the debug line says, so a directive there would only mislead.
+- **A cause is reported once.** A reserved word as a parameter, a missing signature or a
+  private function used many times gives one error where it can be fixed, not one at each use.
+- **Unused-symbol warnings stop at what could be meant.** An export is used by definition, data
+  that holds values may be there for where it lands, and a name in a branch this configuration
+  leaves out is used by the other build.
+- **`emu` in a signature is a state.** It pins both widths at 8, as in `.state`, and an exit
+  that names a 16-bit width is in native mode without repeating `native`.
+- **Mixed data is a named block.** A header, a vector table or a BASIC stub holds data of
+  several kinds. `.data name { }` measures all of it, names its parts as members and keeps `@`
+  positions private, so no label ever measures what follows it.
+- **A string member declares its pad.** Text fields are padded with spaces as often as with
+  zeros, and a pad written on the member keeps initializers and empty records consistent.
+- **A scope is only a namespace.** A named block of code is a proc and a named block of data is
+  `.data`; a scope with an address would have an extent nothing declares.
+- **Exporting a scope or a `.data` block exports what it declares.** It stops at a routine's
+  interior labels, which are entry points to declare one by one, and at `@` positions, which are
+  private by their spelling.
+- **An import may be re-exported.** One module then declares cc65's runtime symbols for the
+  whole program. Each module that uses one writes its own `.import`, since the object that uses
+  a symbol is the one that must import it.
+- **An exported macro may name only what is exported.** Its body resolves names where it is
+  declared, so an expansion in another module could not link to a private name. The error is
+  at the declaration, and the name is not exported for it.
+- **An export's size may widen, never narrow.** Other modules size their uses by the export,
+  and a narrower size than nt65 knows would make them reach the wrong memory.
+- **Every width has a big-endian partner, and `.long` is a number.** ca65's `.dbyt` beside
+  `.dword` leaves readers guessing which widths have one. `.long` and `.faraddr` are the same
+  bytes, but a C header needs to know which is an address.
+- **No cc65 start-up registration.** `.constructor` and its partners are a convention of cc65's
+  runtime, not of the language, and a ca65 stub that calls the nt65 routine keeps them where
+  cc65 reads them.
+- **Paths are from the project root.** ca65 records a path as written, so a path relative to
+  the output file pointed outside the project in debug files and messages. The root is where a
+  build runs, which is where a debugger looks.
+- **nt65 deletes only what it wrote.** A record under `out` names each output: a removed
+  module's output goes, and a hand-written file beside it never does.
+- **Unchanged output is left alone, and stale output is touched.** make then reassembles only
+  what an edit changed, and one nt65 run brings every output up to date, with no marker files.
+- **A file named on the command line is built in its project.** Without the rest of the project
+  another module's name would read like a typo.
+- **A program that names no CPU is built for the 6502, and nt65 says so.** Requiring a CPU
+  would burden the smallest builds; saying which one was assumed keeps it from being silent.
+- **The editor's configuration is a name, not a project setting.** The projects of a workspace
+  rarely share all their configurations. A project without the chosen one builds its own
+  settings, and the name is a mistake only where no project has it.
+- **The language version is the command's major version.** Neither a source file nor a project
+  file names a version: nt65 1 is what every `nt65` 1.x builds, and anything that would stop a
+  version 1 program building waits for nt65 2 (§17).
+- **Code actions only for diagnostics that name their fix.** The message already says what to
+  write, so the fix writes it. Where the message offers a choice, the fix writes the option that
+  needs nothing more from the programmer, such as `.next ?` rather than the labels a `.next`
+  names, or a `.state` saying what the analysis finds; a diagnostic whose every answer needs a
+  decision, such as what width an immediate needs, is offered nothing, because a guess would
+  compile and be wrong. A fix is part of the diagnostic as what to change, not as an edit, and
+  is worked out against the files when it is asked for.
+- **Each project in a workspace is its own program.** A folder of several games, or a library
+  with its test programs, holds projects that declare the same modules; one program of all
+  of them would report every module twice.
 
-## Appendix A. Grammar sketch
+## 17. Version 1
+
+Version 1 is this document together with the `nt65` command and the language server released
+as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x release.
+
+- **To programmers: the language.** Lexing, syntax, blocks, name resolution, what each
+  construct means and which programs are errors, as §4 to §12 and Appendix A state them, on each
+  CPU with the instructions §5.1 gives it. A program that one 1.x release builds without errors,
+  every later 1.x builds without errors.
+- **To projects that link the output: the interoperability contract** of §1, all of it. The
+  output of a program assembles and links with the pinned ca65 and ld65 to the same bytes, under
+  the same linker names and address sizes, with the same `.nt65` file and line for each byte in
+  the debug information, and the C header declares the same names with the same types.
+- **To whoever writes `nt65.json`: the project file** of §5.3. Every key keeps its meaning, and
+  a project file one release reads, every later one reads.
+- **To scripts and Makefiles: the command line** of §5.3. The options and what they do, where
+  output goes and what it is named, the dependency file, the exit status (0 when the program
+  built, 1 when it is wrong, 2 when the command is) and the form of each diagnostic,
+  `file:line:column: severity: message`, with the path as the person running it would write it.
+- **To packagers: the cc65 pin.** A release's output is tested against, and promised for, ca65
+  and ld65 built from the cc65 commit that release names (§13). The pin moves in a minor
+  release that says so, and only to a commit the same output assembles with, to the same bytes.
+
+Version 1 does not promise:
+
+- which warnings a program gets, or the wording and exact position of any diagnostic;
+- the text of the output beyond what the contract of §1 names: its layout, its comments, and
+  the generated names of cheap locals, expansions and iterations;
+- the editor: which requests the language server answers, what it completes, hints or fixes,
+  its own protocol extensions and the settings of the VS Code extension;
+- the Norristown libraries as an API, the record nt65 keeps in `out`, and how fast anything is.
+
+**Breaking changes.** A change is breaking when a project that one release builds, with the
+same sources, project file and command line, is refused by a later one, or builds to different
+bytes, linker names, export sizes or debug lines; when a project file or a command line one
+release accepts is refused or means something else; or when output one release writes needs a
+different ca65. Breaking changes wait for version 2. These are not breaking:
+
+- a fix where the earlier behaviour broke the contract itself: output ca65 refuses or warns
+  about, bytes that differ from what this document says they are, or a program accepted that
+  this document says is an error;
+- a new warning, a better message, and anything the editor does;
+- a new directive, built-in function, project file key or command-line option, because every
+  `.word` already lexes as a directive and an unknown key or option is already an error;
+- a new CPU, because its mnemonics are reserved only in programs built for it (§4).
+
+Adding an instruction to a CPU nt65 already has reserves its mnemonic in that CPU's programs,
+where it may name a symbol today, so the instruction set of each CPU is part of the language
+version. The same holds for a new state item, whose word a signature set may already be named,
+and for a new contextual word anywhere a name may stand.
+
+**Version names.** The language is named by the major version of the command: nt65 1 is the
+language every `nt65` 1.x builds. A minor release adds what is not breaking, and a patch release
+only fixes. No source file or project file states a version; a project that needs a particular
+release says so where it says which cc65 it builds with.
+
+## Appendix A. Grammar
+
+The grammar of what the parser reads. Expressions follow the precedence and the parenthesis
+rules of §9, and what a construct means, and where it may stand beyond what is written here,
+is in the sections above.
 
 ```text
+; Quoted words are tokens, except that 'a?', 'dp*', 'z:' and the like are a name and the
+; mark after it. Directives, mnemonics, registers and the contextual words (dp, bank,
+; mirrors, as, proc, zp, abs, far and the state items) match without regard to case.
+; What the parser reads and the binder then rejects is noted in comments.
 file        := module-decl item* (region item*)*
-module-decl := '.module' path
+module-decl := '.module' module-path                  ; first
 region      := '.segment' ident NL                    ; at file level only
 item        := const | config | data-decl | padding | proc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
              | warning | error
-config      := '.config' ident '=' expr                ; at file level only
+config      := '.config' ident '=' expr                ; at file level, outside every block
 assert      := '.assert' expr (',' string)?
 warning     := '.warning' string
 error       := '.error' string
@@ -2691,14 +2831,15 @@ segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
 banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
 padding     := '.res' expr (',' expr)? | '.align' expr
-label-line  := (ident | '@' ident) ':' (instr | data | macro-call)?   ; inside a proc
-const       := (ident | '@' ident) '=' expr
+local       := '@'ident                               ; one token
+label-line  := (ident | local) ':' (instr | data | macro-call)?   ; inside a proc
+const       := (ident | local) '=' expr
 data-decl   := '.data' ident ':' data
              | '.data' ident '{' NL mixed* '}'
-mixed       := data | data-decl | '@' ident ':' data? | macro-call
+mixed       := data | data-decl | local ':' data? | macro-call
              | if-block | repeat-block | each-block  ; their contents mixed too
 data        := element count? values?
-             | element count? '{' values-list? '}'
+             | element count? braced
              | element count '{' NL value-line* '}'
              | '.type' path '{' NL (init NL)* '}'
              | directive (expr (',' expr)*)?          ; `.res`, `.align`, `.incbin`,
@@ -2709,7 +2850,8 @@ element     := '.byte' | '.word' | '.long' | '.dword' | '.beword' | '.belong' | 
 count       := '[' expr? ']'
 values      := expr (',' expr)*                       ; with no count only
 values-list := value (',' value)*
-value       := expr | '{' (init (',' init)*)? '}' | '{' values-list '}'
+braced      := '{' (init (',' init)*)? '}' | '{' values-list '}'
+value       := expr | braced
 value-line  := values-list NL
              | if-block | repeat-block | each-block  ; their contents value lines too
 init        := member-name '=' value
@@ -2722,13 +2864,14 @@ signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'
              | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr?'
-enum        := '.enum' ident? '{' NL (ident ('=' expr)? NL)* '}'
+enum        := '.enum' ident? '{' NL (member-name ('=' expr)? NL)* '}'
 struct      := '.struct' ident? '{' NL member* '}'
-union       := '.union' ident '{' NL member* '}'
+union       := '.union' ident? '{' NL member* '}'
 member      := member-name ':' (element ('[' expr ']')? | '.res' expr (',' expr)?) NL
-             | struct
+             | struct | union                         ; anonymous: members without a scope
 member-name := ident | register | mnemonic
-charmap     := '.charmap' ident '{' NL (char ('..' char)? '=' expr NL)* '}'
+charmap     := '.charmap' ident '{' NL (expr ('..' expr)? '=' expr NL)* '}'
+                                                      ; characters, or a range of them
 list        := '.list' ident '{' NL (expr (',' expr)* NL)* '}'
 func        := '.func' ident '(' (ident (',' ident)*)? ')' '=' expr
 scope       := '.scope' ident? '{' NL body '}'
@@ -2736,23 +2879,25 @@ segment     := '.segment' ident '{' NL (item* | body) '}'
 body        := (item | label-line | instr | data | macro-call | assertion | ensure | frame
              | annotation | splice)*                  ; no proc inside a proc
 splice      := ident                                  ; block parameter, in macros only
-assertion   := '.state' point-item (',' point-item)*
-ensure      := '.ensure' width (',' width)*
+assertion   := '.state' state                         ; not near, far, inline, args,
+                                                      ; interrupt, none or the * items
+ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
 width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
 annotation  := '.next' (target (',' target)* | '?')
-             | '.patch' target (',' target)*
-target      := path | '@' ident                       ; or an ident parameter, in macros;
+             | '.patch' target
+target      := path                                   ; or an ident parameter, in macros;
                                                       ; a list, or data declared as addresses,
                                                       ; stands for its labels
-path        := '::'? ident ('::' member-name)*
+path        := '::'? (ident | local) ('::' member-name)*
+module-path := ident ('::' member-name)*              ; always from the modules' root
 instr       := mnemonic operand?                      ; mnemonics include jeq ... jvc (§7.6)
 operand     := '#' expr
              | 'a'
              | prefix? expr (',' ('x' | 'y' | 's'))?
              | prefix? expr ',' expr                   ; bbr / bbs: zero page, branch target
-             | '(' expr ')' (',' 'y')?
-             | '(' expr ',' ('x' | 's') ')' (',' 'y')?
+             | '(' expr ')' (',' 'y')?                 ; indirect only when the parentheses
+             | '(' expr ',' ('x' | 's') ')' (',' 'y')? ; hold the whole operand
              | '[' expr ']' (',' 'y')?
              | '#' expr ',' '#' expr                   ; mvn / mvp: source bank, destination bank
 prefix      := 'z:' | 'a:' | 'f:' | 'd:'
@@ -2764,25 +2909,40 @@ kind        := 'expr' | 'const' | 'ident' | 'operand' | 'block'
 word        := ident | register | mnemonic
 macro-call  := ident '!' '(' (arg (',' arg)*)? ')'
                ('{' NL body ('}' ident '{' NL body)* '}')?
-arg         := expr | '{' operand '}' | '@' ident | word | ident '=' arg
+arg         := (member-name '=')? (expr | '{' operand '}')   ; a word or a local is an expr
 if-block    := '.if' expr '{' NL contents '}' ('.elseif' expr '{' NL contents '}')*
                ('.else' '{' NL contents '}')?
 repeat-block := '.repeat' expr (',' ident)? '{' NL contents '}'
-each-block  := '.each' path ',' ident '{' NL contents '}'
+each-block  := '.each' expr (',' ident)? '{' NL contents '}'   ; a list, a named enum
+                                                      ; or a list parameter
 contents    := item*                                  ; at item level
              | body                                   ; inside a proc
              | value-line* | mixed*                   ; in a data body
 export      := '.export' export-item (',' export-item)*
              | '.export' (const | config | data-decl | proc | extern-proc | scope | macro | enum
                | struct | union | charmap | list | func | signature | import | use)
-export-item := path (':' size)? ('as' string)?
-use         := '.use' path (('::' '*') | ('::' '{' use-item (',' use-item)* '}') | ('as' ident))?
-use-item    := ident ('as' ident)?                   ; a path always starts at the modules' root
-path        := ident ('::' ident)*
+                                                      ; a re-exported use names what it
+                                                      ; re-exports: no '::' '*'
+export-item := module-path (':' size)? ('as' string)?
+use         := '.use' module-path (('::' '*') | ('::' '{' use-item (',' use-item)* '}')
+               | ('as' ident))?                       ; at a module's top level
+use-item    := ident ('as' ident)?
 import      := '.import' import-item (',' import-item)*
 import-item := ident (':' (size | 'proc' '(' state? ('->' state)? ')'))?
              | ident '=' expr                        ; checked import
 size        := 'zp' | 'abs' | 'far'
+expr        := unary (binop unary)*                   ; precedence, and where parentheses
+                                                      ; are required, in §9
+unary       := ('+' | '-' | '~' | '!' | '<' | '>' | '^')* primary
+primary     := number | char | string | cpu-name | '*' | '(' expr ')'
+             | path ('(' (expr (',' expr)*)? ')')?    ; a charmap applied, or a .func call
+             | builtin '(' (expr (',' expr)*)? ')'
+binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' | '>='
+             | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
+builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
+             | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
+             | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
+             | '.mode' | '.byteof' | '.empty'          ; the last three in macro bodies
 ```
 
 ## Appendix B. ca65 macro patterns

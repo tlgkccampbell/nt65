@@ -2,7 +2,7 @@
   "name": "nt65",
   "displayName": "nt65 (Norristown Assembler)",
   "description": "nt65 assembly: highlighting, and the Norristown language server.",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "publisher": "nt65",
   "engines": {
@@ -23,8 +23,12 @@
     "languages": [
       {
         "id": "nt65",
-        "aliases": ["nt65"],
-        "extensions": [".nt65"],
+        "aliases": [
+          "nt65"
+        ],
+        "extensions": [
+          ".nt65"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -41,7 +45,7 @@
         "nt65.server.path": {
           "type": "string",
           "default": "",
-          "description": "Path to the Norristown language server executable. Empty uses the Debug build in this repository."
+          "description": "Path to the Norristown language server executable. Empty uses the server packaged with the extension, or the Debug build of this repository when the extension runs from it."
         },
         "nt65.configuration": {
           "type": "string",
@@ -51,7 +55,13 @@
       }
     }
   },
+  "scripts": {
+    "package": "vsce package --allow-missing-repository --skip-license"
+  },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.2"
   }
 }

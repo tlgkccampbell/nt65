@@ -1,0 +1,19 @@
+; The guide's imports, used so that each is written.
+.module imports
+
+.cpu 6502
+
+.export print
+
+.import _printf: proc()
+.import sp: zp
+.import VIC_BORDER = $D020          ; a value nt65 needs; ld65 checks it at link time
+.proc CHROUT = $FFD2                ; a routine at a fixed address
+
+.segment CODE
+.proc print {
+    lda sp
+    sta VIC_BORDER
+    jsr CHROUT
+    jmp _printf
+}

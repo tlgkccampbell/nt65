@@ -1,0 +1,23 @@
+.module segments
+
+.cpu 6502
+
+.export scratch, draw
+
+.segment ZP2: zp                    ; a declaration: a size after the colon
+
+.segment ZP2                        ; a region
+.data scratch: .byte
+
+.segment CODE
+.proc draw {
+    ldx #3
+@loop:
+    lda table,x
+    dex
+    bpl @loop
+    rts
+    .segment RODATA {
+        .data table: .byte 1, 2, 4, 8
+    }
+}

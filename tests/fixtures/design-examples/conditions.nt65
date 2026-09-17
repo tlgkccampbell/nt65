@@ -1,0 +1,87 @@
+; The design's examples of conditional assembly, settings and repetition.
+.module conditions
+
+.cpu 65816
+
+.export run, bits, table, LINES, dispatch, actions_table
+
+.segment RODATA
+.data table: .byte[32]
+
+.segment CODE
+.proc trace {
+    rts
+}
+
+.proc run {
+.if DEBUG {
+    jsr trace
+} .elseif LEVEL > 2 {
+    nop
+} .else {
+    rts
+}
+    rts
+}
+
+.segment RODATA
+.data bits: .byte[] {
+    .repeat 8, i {
+        1 << i
+    }
+}
+
+.assert .sizeof(table) == 32, "table must be 32 bytes"
+.if !SOUND {
+    .warning "built without sound"
+}
+.if PLATFORM > 2 {
+    .error "unsupported configuration"
+}
+
+.if PLATFORM == 1 {
+    LINES = 262
+}
+.if PLATFORM == 2 {
+    LINES = 312
+}
+
+.segment CODE
+.proc move {
+    rts
+}
+
+.proc fire {
+    rts
+}
+
+.list handlers {
+    move, fire
+}
+
+.enum Cmd {
+    move
+    fire
+}
+
+.scope actions {
+    .proc move {
+        rts
+    }
+    .proc fire {
+        rts
+    }
+}
+
+.segment RODATA
+.data dispatch: .addr[] {
+    .each handlers, h {
+        h - 1                       ; an RTS dispatch table
+    }
+}
+
+.data actions_table: .addr[] {
+    .each Cmd, c {
+        actions::c                  ; one entry per member of Cmd
+    }
+}

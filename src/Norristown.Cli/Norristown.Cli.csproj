@@ -3,6 +3,11 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>nt65</AssemblyName>
     <RootNamespace>Norristown.Cli</RootNamespace>
+    <!-- Packaged as a .NET tool by scripts/package.ps1, which says how to install it. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>nt65</ToolCommandName>
+    <PackageId>nt65</PackageId>
+    <Description>The Norristown Assembler: transpiles nt65, an assembly language for the 6502 family and the 65816, to ca65.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Norristown.Core\Norristown.Core.csproj" />

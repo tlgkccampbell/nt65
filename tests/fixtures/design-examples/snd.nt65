@@ -1,0 +1,8 @@
+.module snd
+
+.cpu 65816
+
+.segment CODE
+.export .proc init {
+    rts
+}

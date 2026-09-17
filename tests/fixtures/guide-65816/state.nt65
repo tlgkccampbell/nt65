@@ -1,0 +1,29 @@
+.module state
+
+.cpu 65816
+
+.export clear_line, long_work
+
+.segment CODE
+.signature std = a8, i16, dbr = $80
+
+.proc clear_line: std {
+    rep #$20
+    lda #0
+    ldx #0
+@loop:
+    sta f:$7e2000,x
+    inx
+    inx
+    cpx #64
+    bne @loop
+    sep #$20
+    rts
+}
+
+.proc long_work: std, far {
+    .ensure a16
+    lda #$1234
+    .ensure a8
+    rtl
+}

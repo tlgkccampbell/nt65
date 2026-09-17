@@ -1,0 +1,15 @@
+.module config
+
+.cpu 6502
+
+.export LINES, rgb15, VOICES, TRACE_LEVEL
+
+LINES = 25                          ; a constant
+.func rgb15(r, g, b) = r | (g << 5) | (b << 10)
+.config VOICES = 3                  ; a setting the build may change
+
+.if .defined(DEBUG) && DEBUG {
+    TRACE_LEVEL = 2
+} .else {
+    TRACE_LEVEL = 0
+}

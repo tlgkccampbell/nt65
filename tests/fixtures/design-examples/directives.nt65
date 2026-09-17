@@ -1,0 +1,88 @@
+; The design's examples of unnamed data directives, character mappings, expressions and
+; functions, and of sizes and spans.
+.module directives
+
+.cpu 65816
+
+.export reloc, irq, module, mixed, greeting, letter, COLUMNS, clamp, red
+
+WIDE = 1
+
+.struct Player {
+    hp: .byte
+}
+
+.segment CODE
+.proc reloc {
+    ldx #.spanof(reloc)             ; bytes to copy
+    rts
+}
+
+.proc irq {
+    rti
+}
+
+.proc label {
+    rts
+}
+
+.proc first {
+    rts
+}
+
+.proc second {
+    rts
+}
+
+.proc third {
+    rts
+}
+
+.list handlers {
+    first, second, third
+}
+
+.segment RODATA
+.data module {
+    .data header: .word .spanof(module) ; length in a header
+}
+
+.assert .spanof(irq) <= 64, "irq handler too big"
+
+.data mixed {
+    .byte 1, 2, $ff, 'A', "text"
+    .word $1234, label
+    .long $123456                   ; 24-bit number
+    .dword $12345678
+    .beword $1234                   ; $12 then $34
+    .addr label                     ; 16-bit address
+    .faraddr label                  ; 24-bit address (65816)
+    .res 16                         ; 16 bytes of zero
+    .res 16, $ff                    ; 16 bytes of $ff
+    .strz "hello"
+    .align 256
+    .incbin "sprites.bin"
+    .incbin "sprites.bin", 64, 32   ; from offset 64, 32 bytes
+    .lobytes first, second, third
+    .hibytes first, second, third
+    .bankbytes first, second, third
+    .type Player                    ; .sizeof(Player) bytes (§6.3)
+    .type Player { hp = 5 }         ; a record with values (§6.3)
+    .addr handlers                  ; a list's items (§6.4)
+}
+
+.charmap screen {
+    'A'..'Z' = $01          ; a range maps to consecutive values
+    '@'      = $00
+    ' '      = $20
+}
+
+.data greeting: .byte screen("HELLO WORLD")
+.data letter: .byte screen('A')
+
+COLUMNS = .select(WIDE, 80, 40)
+.func clamp(v) = .select(v > 255, 255, v)
+
+.func rgb15(r, g, b) = r | (g << 5) | (b << 10)
+
+.data red: .word rgb15(31, 0, 0)

@@ -1,0 +1,5 @@
+.module very::long::path
+
+.cpu 65816
+
+.export thing = $10

@@ -1,18 +1,24 @@
 // The VS Code client for nt65: it starts the Norristown language server over stdio, tells it
 // what changes on disk, and lets the programmer choose the configuration it analyzes.
+const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
 
 let client;
 
-function serverCommand(context) {
+// The server: the configured executable, else the one packaged with the extension, which runs
+// on the installed .NET, else the Debug build of this repository when the extension runs from it.
+function serverOptions(context) {
   const configured = vscode.workspace.getConfiguration('nt65').get('server.path');
-  if (configured) return configured;
-  // Development default: the Debug build of the server in this repository.
+  if (configured) return { command: configured };
+  const packaged = context.asAbsolutePath(path.join('server', 'Norristown.LanguageServer.dll'));
+  if (fs.existsSync(packaged)) return { command: 'dotnet', args: [packaged] };
   const exe = process.platform === 'win32' ? 'Norristown.LanguageServer.exe' : 'Norristown.LanguageServer';
-  return context.asAbsolutePath(
-    path.join('..', '..', 'src', 'Norristown.LanguageServer', 'bin', 'Debug', 'net10.0', exe));
+  return {
+    command: context.asAbsolutePath(
+      path.join('..', '..', 'src', 'Norristown.LanguageServer', 'bin', 'Debug', 'net10.0', exe)),
+  };
 }
 
 // Shows the active configuration, and chooses another when clicked.
@@ -45,7 +51,7 @@ async function activate(context) {
   // settings change. Every file change is sent: a project file, a source no one has open, or a
   // file an `.incbin` names may each change what is wrong, and the server knows which it reads.
   client = new LanguageClient('nt65', 'nt65',
-    { command: serverCommand(context) },
+    serverOptions(context),
     {
       documentSelector: [{ language: 'nt65' }],
       initializationOptions: { configuration: vscode.workspace.getConfiguration('nt65').get('configuration') },

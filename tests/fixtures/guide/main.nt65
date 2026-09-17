@@ -1,0 +1,39 @@
+; Fill four pages of screen memory with spaces, forever.
+.module main
+
+.cpu 6502
+
+SCREEN       = $0400
+SCREEN_PAGES = 4
+
+.segment ZEROPAGE
+.data ptr:    .word             ; destination pointer
+
+.segment CODE
+.proc fill_page {
+    ldy #0
+@loop:
+    sta (ptr),y
+    iny
+    bne @loop
+    rts
+}
+
+.macro set16(dest: operand, value) {
+    lda #<value
+    sta dest
+    lda #>value
+    sta dest+1
+}
+
+.proc main {
+    set16!(ptr, SCREEN)
+    ldx #SCREEN_PAGES
+@page:
+    lda #' '
+    jsr fill_page
+    inc ptr+1
+    dex
+    bne @page
+    jmp main
+}

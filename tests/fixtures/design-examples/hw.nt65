@@ -1,0 +1,41 @@
+; The design's examples of a setting a module exports, of exports, and the module the
+; example of `.use` brings names in from.
+.module hw
+.export .config SOUND_CHANNELS = 3
+.config PAL = 0 ;! warning: `PAL` is never used: nothing names it, and it is not exported
+
+.if SOUND_CHANNELS > 2 {
+    VOICES = 3
+}
+
+.cpu 65816
+
+.export VOICES, set_border
+
+K = $1234
+
+.segment CODE
+.export BORDER = $D020
+.export .proc init {
+    rts
+}
+.export .data vectors {
+    .data native: .addr[8]
+}
+.export fill_page, clear::again, K: abs, init as "_init"
+
+.proc fill_page {
+    rts
+}
+
+.proc clear {
+    rts
+again:
+    .state a8, i8, native
+    rts
+}
+
+.proc set_border {
+    sta BORDER
+    rts
+}

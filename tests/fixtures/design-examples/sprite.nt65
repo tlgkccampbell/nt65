@@ -1,0 +1,4 @@
+; A module's name may be a path, and needs no module of the path before it.
+.module gfx::sprite
+
+.cpu 65816

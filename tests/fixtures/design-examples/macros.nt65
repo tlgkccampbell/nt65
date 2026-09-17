@@ -1,0 +1,162 @@
+; The design's examples of macros: parameters and arguments, list parameters, a macro that
+; leaves data in the instruction stream, blocks, and a macro with a state signature.
+.module macros
+
+.cpu 65816
+
+.export clear, tune, pointers, saves, skip, loop, choose, sum
+
+SCREEN = $0400
+C4 = 60
+E4 = 64
+
+.segment ZEROPAGE
+.data ptr: .word
+.data other_ptr: .word
+.data value: .byte
+.data total: .word
+
+.segment BSS
+.data buf: .byte[16]
+
+.macro set16(dest: operand, value) {
+    lda #<value
+    sta dest
+    lda #>value
+    sta dest+1
+}
+
+.macro note(pitch: const, frames: const = 1) {
+    .byte pitch, frames
+}
+
+.segment CODE
+.proc clear {
+    set16!(ptr, SCREEN)
+    set16!({buf,x}, $1234)
+    rts
+}
+
+.segment RODATA
+.data tune {
+    note!(C4, frames = 8)
+    note!(E4)
+}
+
+.macro mov16(dest: operand, src: operand) {
+    lda .byteof(src, 0)
+    sta dest
+    lda .byteof(src, 1)
+    sta dest+1
+}
+
+.segment CODE
+.proc pointers {
+    mov16!(ptr, {#SCREEN})
+    mov16!(ptr, other_ptr)
+    rts
+}
+
+.macro push(regs: list(one(a, x, y))) {
+    .each regs, r {
+        .if r == a {
+            pha
+        } .elseif r == x {
+            phx
+        } .else {
+            phy
+        }
+    }
+}
+
+.proc saves {
+    push!(a, x, y)
+    ply
+    plx
+    pla
+    rts
+}
+
+.macro skip2() {
+    .byte $2c           ; bit abs: swallows the next two bytes
+}
+
+.proc skip {
+    lda value
+    beq @set_two
+    bne @set_one
+@set_one:
+    lda #1
+    skip2!()
+    .next @store
+@set_two:
+    lda #2
+@store:
+    sta value
+    rts
+}
+
+.macro times_x(count, body: block) {
+    ldx #count
+@loop:
+    body
+    dex
+    bne @loop
+}
+
+.proc loop {
+    ldy #0
+    times_x!(8) {
+        sta (ptr),y
+        iny
+    }
+    rts
+}
+
+.macro branch_unless(c: one(eq, ne, cs, cc), target: ident) {
+    .if c == eq {
+        bne target
+    } .elseif c == ne {
+        beq target
+    } .elseif c == cs {
+        bcc target
+    } .else {
+        bcs target
+    }
+}
+
+.macro if(c: one(eq, ne, cs, cc), then: block, else: block = {}) {
+    branch_unless!(c, @skip)
+    then
+    .if !.empty(else) {
+        jmp @done
+    }
+@skip:
+    else
+@done:
+}
+
+.proc choose {
+    cmp #10
+    if!(cs) {
+        lda #0
+    } else {
+        inx
+    }
+    rts
+}
+
+.macro add16(dest: operand, value: operand): a8 {
+    clc
+    lda dest
+    adc .byteof(value, 0)
+    sta dest
+    lda dest+1
+    adc .byteof(value, 1)
+    sta dest+1
+}
+
+.proc sum {
+    add16!(total, {#1000})
+    rts
+}

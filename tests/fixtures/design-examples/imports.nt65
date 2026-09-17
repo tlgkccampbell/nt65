@@ -1,0 +1,20 @@
+; The design's example of symbols and routines that live outside nt65.
+.module imports
+
+.cpu 65816
+
+.export print, CHROUT
+
+.import _printf: proc(a8, i16)      ; a routine, with its signature (§7.3)
+.import zp_scratch: zp
+.import far_table: far
+.import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
+.proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
+
+.segment CODE
+.proc print: a8, i16 {
+    lda zp_scratch
+    sta VIC_BORDER
+    lda f:far_table
+    jmp _printf
+}

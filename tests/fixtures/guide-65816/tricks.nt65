@@ -1,0 +1,24 @@
+.module tricks
+
+.cpu 65816
+
+.export dispatch
+
+.segment ZEROPAGE
+.data command: .byte
+
+.segment CODE
+.proc dispatch {
+    lda command
+    asl a
+    tax
+    jmp (handlers,x)
+    .next cmd_move, cmd_fire            ; where the indirect jump goes
+
+.data handlers: .addr cmd_move, cmd_fire
+
+cmd_move:
+    rts
+cmd_fire:
+    rts
+}

@@ -1112,7 +1112,6 @@ internal sealed class Parser
     }
 
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
-
     private GreenSyntax ParsePatch()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();

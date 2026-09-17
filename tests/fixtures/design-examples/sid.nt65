@@ -1,0 +1,6 @@
+; A module whose exports `.use hw::sid::*` brings in.
+.module hw::sid
+
+.cpu 65816
+
+.export VOLUME = $D418

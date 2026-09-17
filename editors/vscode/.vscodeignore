@@ -1,0 +1,4 @@
+# What the packaged extension leaves out: vsce keeps only the runtime dependencies of node_modules.
+.vscode/**
+**/*.map
+server/*.xml

@@ -1,0 +1,147 @@
+; The design's examples of 65816 processor state: operands, signatures and signature sets,
+; stack frames, the constructs flow analysis needs told about, and the direct page and bank.
+.module state
+
+.cpu 65816
+
+.export operands, render, main, step, copy, div16, dispatch, nmi, restore, skip, cmd
+
+.segment ZP2: zp, dp = $2100
+.segment WRAM: abs, bank = $7e
+.segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
+
+.segment ZEROPAGE
+.data ptr: .word
+.data cmd: .byte
+.data nmi_flag: .byte
+.data saved_p: .byte
+.data value: .byte
+
+.segment BSS
+.data buf: .byte[16]
+.data vector: .addr
+
+.segment CODE
+.proc operands: dp = $2100 {
+@loop:
+    inx                 ; implied
+    asl a               ; accumulator (bare "asl" also accepted)
+    lda #$10            ; immediate
+    lda ptr             ; zero page / direct, or absolute — see 7.2
+    lda d:$2105         ; a constant address through the direct page — see 7.5
+    lda buf,x           ; indexed
+    lda (ptr),y         ; indirect indexed
+    lda (ptr,x)         ; indexed indirect
+    bne @loop           ; relative
+    jeq @far            ; long branch — see 7.6
+    brk #0              ; signature byte required, see below
+    jmp (vector)        ; indirect
+    .next ?
+@far:
+    rts
+}
+
+.proc render: a16, i8 -> a8, i8 {
+    lda #$1234          ; 16-bit immediate
+    sep #$20            ; A is now 8-bit
+    lda #$12
+    rts                 ; checked: state here must be a8, i8
+}
+
+.signature std = a8, i16, dp = 0, dbr = $80
+
+.proc main: std {
+    rts
+}
+
+.proc step: std, a16 -> std {
+    sep #$20
+    rts
+}
+
+.struct Locals {
+    count: .word
+    src:   .addr
+}
+
+.proc copy: a16, i16 {
+    pea 0                   ; src
+    pea 0                   ; count
+    .frame locals: Locals
+    lda #8
+    sta locals::count,s     ; 1,s
+    pha
+    lda locals::src,s       ; 5,s: the pha is counted
+    pla
+    pla
+    pla
+    rts
+}
+
+.struct DivFrame {
+    remainder: .word
+    ret:       .res 2
+    divisor:   .word
+    dividend:  .word
+}
+
+.proc div16: a16, i16, args 4 {
+    pea 0
+    .frame f: DivFrame          ; the local, the return address, the caller's two words
+    lda f::dividend,s
+    plx
+    rts
+}
+
+.proc dispatch: a8, i16 {
+    lda cmd
+    asl a
+    tax
+    jmp (table,x)
+    .next @move, @fire
+
+.data table: .addr @move, @fire
+
+@move:
+    lda #1
+    rts
+@fire:
+    lda #2
+    rts
+}
+
+.proc nmi: interrupt, native {
+    rep #$30
+    pha
+    sep #$20
+    lda #1
+    sta nmi_flag
+    rep #$20
+    pla
+    rti
+}
+
+.proc restore {
+    lda saved_p
+    pha
+    plp
+    .state a16          ; the analyzer cannot know what was in saved_p
+    lda #$1234
+    sep #$30
+    rts
+}
+
+.proc skip {
+    lda value
+    beq @set_two
+    bne @set_one
+@set_one:
+    lda #1
+    .byte $2c           ; bit abs: swallows the next instruction
+    .next @store
+@set_two:
+    lda #2
+@store:
+    sta value
+    rts
+}

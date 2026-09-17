@@ -1,0 +1,31 @@
+; The examples of the design's program structure: the CPU, segment regions and declarations,
+; segment attributes, and a segment block nested in a routine.
+.module segments
+
+.cpu 65816
+
+.export main, draw, ptr, tmp
+
+.segment ZP2: zp                ; declaration: this segment is zero page
+
+.segment ZP2                    ; a region: what follows is in ZP2
+.data ptr: .word
+.data tmp: .byte
+
+.segment CODE
+.proc main {
+    rts
+}
+
+.proc draw {
+    ldx #0
+@loop:
+    lda table,x
+    inx
+    cpx #4
+    bne @loop
+    rts
+    .segment RODATA {
+        .data table: .byte 1, 2, 4, 8       ; this is draw::table
+    }
+}
