@@ -10,12 +10,21 @@ $PSNativeCommandUseErrorActionPreference = $true
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root 'artifacts'
 $extension = Join-Path $root 'editors/vscode'
-$server = Join-Path $extension 'server'
+$server = [IO.Path]::GetFullPath((Join-Path $extension 'server'))
 
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 dotnet pack (Join-Path $root 'src/Norristown.Cli/Norristown.Cli.csproj') --nologo -v q -c Release -o $artifacts
 
-# A framework-dependent server, so one extension serves every platform .NET runs on.
+# A framework-dependent server, so one extension serves every platform .NET runs on. Windows
+# locks a running server's files, and a delete that fails halfway leaves a server that cannot
+# start, so a running one stops the script before anything is removed.
+if ($IsWindows) {
+    $running = Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
+        Where-Object { $_.CommandLine -like "*$server*" }
+    if ($running) {
+        throw "the packaged language server is running (pid $($running.ProcessId -join ', ')): close the VS Code windows using it first"
+    }
+}
 if (Test-Path $server) { Remove-Item -Recurse -Force $server }
 dotnet publish (Join-Path $root 'src/Norristown.LanguageServer/Norristown.LanguageServer.csproj') --nologo -v q `
     -c Release -o $server -p:UseAppHost=false -p:PublishDocumentationFile=false

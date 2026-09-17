@@ -30,6 +30,23 @@
       "autoAttachChildProcesses": false
     },
     {
+      // The same, opening the SNES example rather than the repository. Opening another folder
+      // from inside a development host restarts its extension host under the debugger, so
+      // this starts in the folder instead.
+      "name": "nt65 extension: SNES example",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "${workspaceFolder}/examples/snes-hello"
+      ],
+      "preLaunchTask": "build",
+      "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
+      "autoAttachChildProcesses": false
+    },
+    {
       // The server runs as a child of the Extension Development Host, so it is attached
       // to rather than launched: pick Norristown.LanguageServer from the list. Needs the
       // C# extension.

@@ -7,18 +7,20 @@ const { LanguageClient } = require('vscode-languageclient/node');
 
 let client;
 
-// The server: the configured executable, else the one packaged with the extension, which runs
-// on the installed .NET, else the Debug build of this repository when the extension runs from it.
+// The server: the configured executable; in a development host, the Debug build of this
+// repository, which the launch task has just built; else the one packaged with the extension,
+// which runs on the installed .NET. A package script run leaves a packaged server beside a
+// development copy too, and that one is only as new as the last package.
 function serverOptions(context) {
   const configured = vscode.workspace.getConfiguration('nt65').get('server.path');
   if (configured) return { command: configured };
-  const packaged = context.asAbsolutePath(path.join('server', 'Norristown.LanguageServer.dll'));
-  if (fs.existsSync(packaged)) return { command: 'dotnet', args: [packaged] };
   const exe = process.platform === 'win32' ? 'Norristown.LanguageServer.exe' : 'Norristown.LanguageServer';
-  return {
-    command: context.asAbsolutePath(
-      path.join('..', '..', 'src', 'Norristown.LanguageServer', 'bin', 'Debug', 'net10.0', exe)),
-  };
+  const debug = context.asAbsolutePath(
+    path.join('..', '..', 'src', 'Norristown.LanguageServer', 'bin', 'Debug', 'net10.0', exe));
+  const packaged = context.asAbsolutePath(path.join('server', 'Norristown.LanguageServer.dll'));
+  if (context.extensionMode === vscode.ExtensionMode.Development && fs.existsSync(debug)) return { command: debug };
+  if (fs.existsSync(packaged)) return { command: 'dotnet', args: [packaged] };
+  return { command: debug };
 }
 
 // Shows the active configuration, and chooses another when clicked.
