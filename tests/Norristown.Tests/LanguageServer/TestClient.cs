@@ -46,9 +46,11 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>
     /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
     /// <paramref name="configuration"/> as the configuration its settings choose.
+    /// <paramref name="refreshesTokens"/> says the client can be asked to fetch semantic tokens again.
     /// </summary>
     public static async Task<TestClient> StartAsync(
-        string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client")
+        string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
+        bool refreshesTokens = false)
     {
         var client = new TestClient();
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
@@ -56,7 +58,9 @@ internal sealed class TestClient : IAsyncDisposable
             {
                 processId = (int?)null,
                 clientInfo = new { name, version = "1.0" },
-                capabilities = new { },
+                capabilities = refreshesTokens
+                    ? new { workspace = new { semanticTokens = new { refreshSupport = true } } }
+                    : (object)new { },
                 rootUri,
                 initializationOptions = new { configuration },
             },
@@ -101,6 +105,10 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(CancellationToken cancellation) =>
         await notifications.Published.Reader.ReadAsync(cancellation);
 
+    /// <summary>Waits for the server to ask for semantic tokens to be fetched again.</summary>
+    public async Task NextTokensRefreshAsync(CancellationToken cancellation) =>
+        await notifications.TokensRefreshed.Reader.ReadAsync(cancellation);
+
     /// <summary>The next message the server logged to the client's window.</summary>
     public async Task<LogMessageParams> NextLogMessageAsync(CancellationToken cancellation) =>
         await notifications.Logged.Reader.ReadAsync(cancellation);
@@ -109,6 +117,11 @@ internal sealed class TestClient : IAsyncDisposable
     public Task<IReadOnlyList<DocumentSymbol>> SymbolsAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentSymbol>>("textDocument/documentSymbol",
             new DocumentSymbolParams(new TextDocumentIdentifier(uri)), cancellation);
+
+    /// <summary>The document's names, classified.</summary>
+    public Task<SemanticTokens> SemanticTokensAsync(string uri, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<SemanticTokens>("textDocument/semanticTokens/full",
+            new SemanticTokensParams(new TextDocumentIdentifier(uri)), cancellation);
 
     /// <summary>The document's foldable ranges.</summary>
     public Task<IReadOnlyList<FoldingRange>> FoldingRangesAsync(string uri, CancellationToken cancellation) =>
@@ -167,10 +180,19 @@ internal sealed class TestClient : IAsyncDisposable
 
         public Channel<LogMessageParams> Logged { get; } = Channel.CreateUnbounded<LogMessageParams>();
 
+        public Channel<bool> TokensRefreshed { get; } = Channel.CreateUnbounded<bool>();
+
         [JsonRpcMethod("textDocument/publishDiagnostics", UseSingleObjectParameterDeserialization = true)]
         public void OnPublishDiagnostics(PublishDiagnosticsParams parameters) => Published.Writer.TryWrite(parameters);
 
         [JsonRpcMethod("window/logMessage", UseSingleObjectParameterDeserialization = true)]
         public void OnLogMessage(LogMessageParams parameters) => Logged.Writer.TryWrite(parameters);
+
+        [JsonRpcMethod("workspace/semanticTokens/refresh")]
+        public object? OnRefreshTokens()
+        {
+            TokensRefreshed.Writer.TryWrite(true);
+            return null;
+        }
     }
 }

@@ -281,4 +281,38 @@ public sealed class BindingTests
         Assert.Equal(2, model.ReferencesTo(model.Symbol("gfx")).Count);
         Assert.Same(model.Symbol("init"), model.SymbolAt("init", occurrence: 2));
     }
+
+    /// <summary>
+    /// A member a record gives a value names the member of its type, on one line or several, in
+    /// an array's body and inside a record member, so a rename or a highlight finds it there too.
+    /// </summary>
+    [Fact]
+    public void AMemberARecordGivesAValueIsAReferenceToIt()
+    {
+        var model = Analysis.Model("""
+            .module main
+            .struct Point {
+                x: .byte
+                y: .byte
+            }
+            .struct Box {
+                corner: .type Point
+                size:   .byte
+            }
+            .segment RODATA
+            .data one: .type Point { x = 1, y = 2 }
+            .data box: .type Box { corner = { x = 3, y = 4 }, size = 5 }
+            .data many: .type Point[] {
+                { x = 5, y = 6 }
+            }
+            .data long: .type Point {
+                x = 7
+                y = 8
+            }
+            """);
+
+        Assert.Empty(model.Problems());
+        Assert.Equal(5, model.ReferencesTo(model.Symbol("x")).Count);
+        Assert.Equal(2, model.ReferencesTo(model.Symbol("corner")).Count);
+    }
 }

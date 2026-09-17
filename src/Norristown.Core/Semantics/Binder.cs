@@ -67,6 +67,10 @@ internal sealed class Binder
     private readonly List<(SyntaxNode Item, Scope Scope)> exportItems = [];
     private readonly List<Symbol> exported = [];
 
+    // The records `.type T` data gives values in, with the `T` each is of: the member names they
+    // write are references to `T`'s members once `T` is resolved.
+    private readonly List<(SyntaxNode Type, IReadOnlyList<SyntaxNode> Values)> records = [];
+
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<SyntaxNode> useDirectives = [];
     private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
@@ -174,6 +178,7 @@ internal sealed class Binder
         // one is a name at all depends on the parameter it binds to: a `one` argument is a
         // word, and words are never looked up.
         ResolveCalls();
+        ResolveRecords();
         references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
         return new Result(fileScope, symbols, references, diagnostics, regions)
         {
@@ -672,6 +677,60 @@ internal sealed class Binder
             if (lines[i].Statement is { } line)
                 CollectUses(line);
         }
+        var directive = opener?.Kind == SyntaxKind.DataDeclaration ? DataSyntax.ElementOf(opener) : opener;
+        if (DataSyntax.TypeOf(directive) is { } type)
+        {
+            records.Add((type, [.. lines.Skip(1).Select(line => line.Statement)
+                .OfType<SyntaxNode>().Where(statement => statement.Kind == SyntaxKind.MemberValue)]));
+        }
+    }
+
+    /// <summary>The records a <c>.type T</c> directive writes on its line, braced or as its values.</summary>
+    private void CollectRecords(SyntaxNode? directive)
+    {
+        if (DataSyntax.TypeOf(directive) is not { } type)
+            return;
+        records.Add((type, [.. DataSyntax.ValuesOf(directive!).Append(DataSyntax.BracedOf(directive!)).OfType<SyntaxNode>()]));
+    }
+
+    /// <summary>
+    /// The member names the records give, as references to the members of their types. A name the
+    /// type has no member of is reported where the records are laid out.
+    /// </summary>
+    private void ResolveRecords()
+    {
+        if (records.Count == 0)
+            return;
+        var named = references.Where(reference => !reference.IsDeclaration)
+            .GroupBy(reference => reference.Span.Start)
+            .ToDictionary(group => group.Key, group => group.Last().Symbol);
+        foreach (var (type, values) in records)
+        {
+            if (type.ChildTokens.Length > 0 && named.GetValueOrDefault(type.ChildTokens[^1].Span.Start) is { IsLayout: true } layout)
+                ReferMembers(layout, values);
+        }
+    }
+
+    private void ReferMembers(Symbol type, IEnumerable<SyntaxNode> values)
+    {
+        foreach (var value in values)
+        {
+            if (value.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            {
+                ReferMembers(type, value.ChildNodes);
+            }
+            else if (value.Kind == SyntaxKind.MemberValue && value.ChildTokens.Length > 0
+                && BodyOf(type)?.FindMember(value.ChildTokens[0].Text) is { Kind: SymbolKind.Member } member)
+            {
+                references.Add(new SymbolReference(member, value.ChildTokens[0].Span, false));
+
+                // A member's type is resolved by the file that declares it, which may not have
+                // been resolved yet; only this file's own members are followed into, so what is
+                // found does not depend on the order the files are read in.
+                if (member.Tree == tree && BodyOf(member) is not null)
+                    ReferMembers(member, value.ChildNodes);
+            }
+        }
     }
 
     /// <summary>The segment a block or a region puts its contents in, or null when its opener does not say.</summary>
@@ -815,6 +874,14 @@ internal sealed class Binder
             case SyntaxKind.DataDirective:
                 CheckDataPlacement(statement);
                 CollectUses(statement);
+                CollectRecords(statement);
+                break;
+
+            // The records of a `.type T` body, one or more to a line.
+            case SyntaxKind.DataValues:
+                CollectUses(statement);
+                if (DataSyntax.TypeOf(DataSyntax.DirectiveOfValues(statement)) is { } recordType)
+                    records.Add((recordType, statement.ChildNodes));
                 break;
 
             // A region line reached as a line is inside a block: one at file level opens the
@@ -824,7 +891,6 @@ internal sealed class Binder
                     + "every block: inside one, `.segment NAME { }` places what it holds");
                 break;
 
-            case SyntaxKind.DataValues:
             case SyntaxKind.AssertDirective:
 
             // An annotation names labels and nothing else, so its names resolve as any
@@ -932,6 +998,7 @@ internal sealed class Binder
             Declare(name, SymbolKind.Data, data: element, type: DataSyntax.TypeOf(element));
         }
         CollectUses(element);
+        CollectRecords(element);
     }
 
     /// <summary>

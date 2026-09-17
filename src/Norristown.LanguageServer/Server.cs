@@ -15,6 +15,10 @@ internal sealed class Server
     private readonly Workspace workspace = new();
     private JsonRpc? rpc;
 
+    // Whether the client may be asked to fetch semantic tokens again, which an edit in one file
+    // needs when it changes what a name in another refers to.
+    private bool refreshesTokens;
+
     private Server(ServerLog log) => this.log = log;
 
     /// <summary>Serves one client until it sends <c>exit</c> or disconnects.</summary>
@@ -47,6 +51,10 @@ internal sealed class Server
             ? [.. folders.Select(folder => folder.Uri)]
             : request.RootUri is { } root ? [root] : [];
         workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
+        refreshesTokens = request.Capabilities is { ValueKind: JsonValueKind.Object } given
+            && given.TryGetProperty("workspace", out var workspaceCapabilities) && workspaceCapabilities.ValueKind == JsonValueKind.Object
+            && workspaceCapabilities.TryGetProperty("semanticTokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object
+            && tokens.TryGetProperty("refreshSupport", out var refresh) && refresh.ValueKind == JsonValueKind.True;
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
@@ -60,7 +68,8 @@ internal sealed class Server
             SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
             InlayHintProvider: true,
             WorkspaceSymbolProvider: true,
-            CodeActionProvider: true);
+            CodeActionProvider: true,
+            SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true));
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
 
@@ -215,6 +224,13 @@ internal sealed class Server
         return LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range);
     }
 
+    [JsonRpcMethod("textDocument/semanticTokens/full")]
+    public Protocol.SemanticTokens SemanticTokens(SemanticTokensParams request) =>
+        workspace.Find(request.TextDocument.Uri) is { } document
+            && workspace.AnalysisFor(document.Tree.Path).ModelFor(document.Tree.Path) is { } model
+            ? NameHighlighting.In(model)
+            : new Protocol.SemanticTokens([]);
+
     [JsonRpcMethod("workspace/symbol")]
     public IReadOnlyList<SymbolInformation> WorkspaceSymbols(WorkspaceSymbolParams request) =>
         LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query);
@@ -241,7 +257,10 @@ internal sealed class Server
         return formatter;
     }
 
-    /// <summary>Publishes what is wrong with every open document, after anything changes.</summary>
+    /// <summary>
+    /// Publishes what is wrong with every open document, after anything changes, and asks the
+    /// client for the names' classes again, since what a name refers to may have changed too.
+    /// </summary>
     private async Task PublishDiagnosticsAsync()
     {
         foreach (var document in workspace.Open())
@@ -251,6 +270,24 @@ internal sealed class Server
                 new PublishDiagnosticsParams(document.Uri, document.Version,
                     Lsp.ToDiagnostics(
                         analysis.DiagnosticsFor(document.Tree.Path), document.Tree, analysis.Configuration)));
+        }
+        if (refreshesTokens)
+            _ = RefreshTokensAsync();
+    }
+
+    /// <summary>
+    /// Asks the client to fetch semantic tokens again. It is not waited for: the client answers
+    /// after it has asked, and a client that has gone away has nothing to refresh.
+    /// </summary>
+    private async Task RefreshTokensAsync()
+    {
+        try
+        {
+            await rpc!.InvokeWithParameterObjectAsync<object?>("workspace/semanticTokens/refresh");
+        }
+        catch (Exception e) when (e is RemoteInvocationException or ConnectionLostException or ObjectDisposedException)
+        {
+            log.Write($"semantic tokens refresh failed: {e.Message}");
         }
     }
 

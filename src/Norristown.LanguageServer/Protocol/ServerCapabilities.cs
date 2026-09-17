@@ -14,6 +14,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="InlayHintProvider">Whether the server answers <c>textDocument/inlayHint</c>.</param>
 /// <param name="WorkspaceSymbolProvider">Whether the server answers <c>workspace/symbol</c>.</param>
 /// <param name="CodeActionProvider">Whether the server answers <c>textDocument/codeAction</c>.</param>
+/// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
     bool DocumentSymbolProvider,
@@ -27,4 +28,5 @@ internal sealed record ServerCapabilities(
     SignatureHelpOptions? SignatureHelpProvider = null,
     bool InlayHintProvider = false,
     bool WorkspaceSymbolProvider = false,
-    bool CodeActionProvider = false);
+    bool CodeActionProvider = false,
+    SemanticTokensOptions? SemanticTokensProvider = null);

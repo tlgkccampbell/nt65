@@ -2381,7 +2381,9 @@ alone and without an assembler:
 - resolve every reference (go to definition, find references, rename, including inside
   macro bodies and block arguments, without expanding a macro, and through qualified names,
   `.use`, `as` and re-exports: a rename across modules rewrites the `.use` items that name
-  the symbol, and leaves a name `as` gave alone);
+  the symbol, and leaves a name `as` gave alone), the member names a record gives values
+  included;
+- colour every name by what it refers to, so `Joy::A` is an enum member and not a register;
 - show on hover a symbol's kind, value, address size, segment and byte size;
 - diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
   module does not export, unused symbols, and constant assertions;
@@ -2747,6 +2749,12 @@ Recorded so the reasoning survives. None is open.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
+- **Names are coloured by the language server, not the grammar.** The TextMate grammar colours
+  what the lexer knows, which is all there is before the server answers and where no server
+  runs. Whether a word is a name depends on where it is written: a member of a named enum,
+  struct or union may be spelled like a register or a mnemonic, and a grammar that guessed at
+  that would be a second parser. So the server classifies every name by what it refers to, as
+  semantic tokens drawn over the grammar's colours, and the grammar stays lexical.
 
 ## 17. Version 1
 

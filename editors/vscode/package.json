@@ -39,6 +39,11 @@
         "path": "./syntaxes/nt65.tmLanguage.json"
       }
     ],
+    "configurationDefaults": {
+      "[nt65]": {
+        "editor.semanticHighlighting.enabled": true
+      }
+    },
     "configuration": {
       "title": "nt65",
       "properties": {
