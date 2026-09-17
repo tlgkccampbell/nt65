@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Norristown.Syntax;
 
 namespace Norristown.Semantics;
 
@@ -55,8 +56,71 @@ public static class UnusedSymbols
             if (omitted.Count > 0 && omitted.Any(new Regex($@"(?<![\w@.]){Regex.Escape(symbol.DisplayName)}(?!\w)").IsMatch))
                 continue;
             yield return new Diagnostic(symbol.DeclarationSpan, Severity.Warning,
-                $"`{symbol.DisplayName}` is never used: nothing names it, and it is not exported");
+                $"`{symbol.DisplayName}` is never used: nothing names it, and it is not exported")
+            {
+                Fix = new DiagnosticFix(FixKind.Unused, symbol.DisplayName),
+                IsUnnecessary = true,
+            };
         }
+
+        foreach (var brought in Unused(model))
+            yield return brought;
+    }
+
+    /// <summary>
+    /// The <c>.use</c> items that bring in a name the file never writes. A <c>.export .use</c>
+    /// re-exports rather than uses, and what it is for is another module's business; a
+    /// <c>.use module::*</c> brings in whatever that module exports, and what of it this file
+    /// wanted is not a question about this file.
+    /// <para>
+    /// A name written in a branch this build leaves out counts as used, as a declaration's does,
+    /// because the lines of that branch are in the file and are what the other build writes.
+    /// </para>
+    /// </summary>
+    private static IEnumerable<Diagnostic> Unused(SemanticModel model)
+    {
+        var tree = model.Tree;
+        var items = model.Brought
+            .Where(pair => pair.Value is { IsExported: false, At.Length: > 0 })
+            .OrderBy(pair => pair.Value.At.Start)
+            .ToList();
+        if (items.Count == 0)
+            yield break;
+
+        var written = Written(tree);
+        foreach (var (name, brought) in items)
+        {
+            if (written.Contains(name))
+                continue;
+            yield return new Diagnostic(tree.GetSpan(brought.At), Severity.Warning,
+                $"`{name}` is brought in and nothing names it: the `.use` item may go")
+            {
+                Fix = new DiagnosticFix(FixKind.UseItem, name),
+                IsUnnecessary = true,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Every name the file writes outside the <c>.use</c> items themselves, and on its own
+    /// rather than as a step on a path, which is what a name brought in is written as. One pass
+    /// answers for all of them, because a file with items to check has them all to check.
+    /// </summary>
+    private static HashSet<string> Written(SyntaxTree tree)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for (var line = 0; line < tree.Lines.Length; line++)
+        {
+            if (tree.Statement(line).Kind == SyntaxKind.UseDirective)
+                continue;
+            var tokens = tree.Lines[line].Tokens;
+            for (var at = 0; at < tokens.Length; at++)
+            {
+                if (at == 0 || tokens[at - 1].Kind != SyntaxKind.ColonColon)
+                    names.Add(tokens[at].Text);
+            }
+        }
+        return names;
     }
 
     /// <summary>Whether the text before <paramref name="position"/> ends in <c>::</c>.</summary>

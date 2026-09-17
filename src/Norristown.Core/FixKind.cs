@@ -20,4 +20,43 @@ public enum FixKind
 
     /// <summary>The label reported, and the data under it, as a <c>.data</c> declaration.</summary>
     DataDeclaration,
+
+    /// <summary>The branch reported, written as the long branch that reaches any near target.</summary>
+    Branch,
+
+    /// <summary>The return reported, written as the one its routine is left by.</summary>
+    Return,
+
+    /// <summary>What ca65 spelled it, written the way nt65 spells it.</summary>
+    Spelling,
+
+    /// <summary>The name reported, written as the declared name it is nearly.</summary>
+    NearestName,
+
+    /// <summary>ca65's assertion level, dropped: an assertion that fails here is always an error.</summary>
+    AssertLevel,
+
+    /// <summary>The <c>.res</c> of a declaration, written as the storage it reserves.</summary>
+    Storage,
+
+    /// <summary>The label in mixed data, written as a member of it or as a position in it.</summary>
+    DataMember,
+
+    /// <summary>The address size an <c>.export</c> gives, widened to the one the declaration has.</summary>
+    ExportSize,
+
+    /// <summary>The expression reported, written with parentheses: one fix per reading of it.</summary>
+    Parentheses,
+
+    /// <summary>An <c>.ensure</c> before the immediate reported: one fix per width it may be.</summary>
+    Width,
+
+    /// <summary>The width item written into the signature of the routine the immediate is in.</summary>
+    Signature,
+
+    /// <summary>The declaration nothing names, removed, or exported so that another module may name it.</summary>
+    Unused,
+
+    /// <summary>The <c>.use</c> item that brings in a name nothing writes, removed.</summary>
+    UseItem,
 }

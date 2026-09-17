@@ -2565,9 +2565,26 @@ alone and without an assembler:
 - find a declaration anywhere in the workspace by name;
 - fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
   transfer or a routine runs off its end, `jsl` for a `jsr` to a far routine and the other way,
+  the long branch where a short one cannot reach, `rti` where an interrupt handler returns,
   the missing `.export` in the module that declares a name or the `.use` that brings it in,
   a `.state` after a label flow may reach unseen, saying what the analysis finds reaching it,
-  and a label outside a routine, with the data under it, as a `.data` declaration;
+  a label outside a routine, with the data under it, as a `.data` declaration, a label in
+  mixed data as a member of it or a position in it, the nt65 spelling of a ca65 directive,
+  the declared name a misspelling is within a letter or two of, ca65's assertion level
+  dropped, a `.res` as the `.byte[n]` that reserves the same room, an export widened to the
+  address size it exports, the width item a routine assumes written into its signature, and
+  the declaration or `.use` item nothing names, taken out or exported. Where a line has two
+  readings — an expression that needs parentheses, a width the analysis cannot work out —
+  each is offered and none is preferred, because which was meant is the programmer's to say;
+- rewrite what is asked for at a selection, which nothing reported: a path written out in
+  full brought in with a `.use` and one brought in written out in full, the `.use` items
+  ordered with what nothing names gone, a declaration exported or no longer exported, what a
+  routine leaves declared from what the analysis finds at its returns, a `rep` or `sep` that
+  only changes the widths written as the `.ensure` that says what it is for and back, a
+  number given a name, a label given a name of its own or made cheap, a declaration a routine
+  owns put in a segment block, selected instructions lifted into a routine of their own with
+  a call left where they were and the state they were written under declared, and ca65 in a
+  selection read as nt65 as far as one line at a time can say it;
 - run incrementally: editing one file re-parses one file; only resolution is global.
 
 **Projects in the editor.** Every `nt65.json` in the folders the editor opened, and in the
@@ -2586,6 +2603,14 @@ never reached is not reported twice. Data that holds values may be there for whe
 as a header, the vectors or a load address are, so only a declaration that reserves storage
 and holds no values is reported. A name written in a branch the configuration leaves out
 counts as used, because the other build uses it, and a file with errors gets none.
+
+A `.use` item that brings in a name the file never writes is reported the same way, on the
+name the item writes rather than on the whole line, so that one item of several in braces is
+the one reported. A `.export .use` re-exports rather than uses, and what another module wants
+of the name is not this file's business; a `.use module::*` brings in whatever that module
+exports, which is no question about this file either, so neither is reported. Everything
+reported as unused, a declaration or an item, is marked as unnecessary rather than only
+listed, which is what fades it in the editor.
 
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
 lines in a branch that is not taken still parse, but are not resolved or analyzed, and the
@@ -2907,13 +2932,21 @@ Recorded so the reasoning survives. None is open.
 - **The language version is the command's major version.** Neither a source file nor a project
   file names a version: nt65 1 is what every `nt65` 1.x builds, and anything that would stop a
   version 1 program building waits for nt65 2 (§17).
-- **Code actions only for diagnostics that name their fix.** The message already says what to
-  write, so the fix writes it. Where the message offers a choice, the fix writes the option that
-  needs nothing more from the programmer, such as `.next ?` rather than the labels a `.next`
-  names, or a `.state` saying what the analysis finds; a diagnostic whose every answer needs a
-  decision, such as what width an immediate needs, is offered nothing, because a guess would
-  compile and be wrong. A fix is part of the diagnostic as what to change, not as an edit, and
-  is worked out against the files when it is asked for.
+- **Fixes for diagnostics that name their fix, and rewrites for a selection.** A message that
+  says what to write has a fix that writes it, and a fix is part of the diagnostic as what to
+  change rather than as an edit, worked out against the files when it is asked for. Where the
+  message names one answer, that fix is the one to apply without asking: `.next ?` rather than
+  the labels a `.next` names, or a `.state` saying what the analysis finds. Where every answer
+  needs a decision — which way `a & $0f == 0` was meant, which width an immediate is — each
+  answer is offered and none is preferred, rather than nothing being offered: a list the
+  programmer picks from is not a guess, and picking from one beats writing either out by hand.
+  The other source is the selection, which reports nothing and is asked a question anyway:
+  what is written at the caret has a way of being written that the analysis can work out, such
+  as a path brought in with a `.use` or the routine a few lines would make. Those are offered
+  only where they would change something, and each is worked out from the analysis, so that a
+  rewrite means what the lines meant. A rewrite that would need a name nt65 cannot know, such
+  as the linker name an `as` gives, is not among them: the editor has no way to ask, and a
+  placeholder in a file's interface is worse than writing the line.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.

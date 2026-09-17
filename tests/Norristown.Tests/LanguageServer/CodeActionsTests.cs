@@ -64,7 +64,7 @@ public sealed class CodeActionsTests
 
         Assert.Equal("quickfix", action.Kind);
         Assert.Equal([MainUri], action.Edit.Changes.Keys);
-        Assert.Equal(Header + fixedBody, Apply(Header + body, action.Edit.Changes[MainUri]));
+        Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit.Changes[MainUri]));
 
         // What the fix leaves is a file with nothing wrong.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(null, Header + fixedBody));
@@ -86,11 +86,11 @@ public sealed class CodeActionsTests
 
         var export = await ActionAsync(client, MainUri, "Export `clear` from `gfx`", timeout);
         Assert.Equal([GfxUri], export.Edit.Changes.Keys);
-        Assert.Equal(".module gfx\n.export clear\n" + Gfx[".module gfx\n".Length..], Apply(Gfx, export.Edit.Changes[GfxUri]));
+        Assert.Equal(".module gfx\n.export clear\n" + Gfx[".module gfx\n".Length..], Editing.Apply(Gfx, export.Edit.Changes[GfxUri]));
 
         var use = await ActionAsync(client, MainUri, "Bring in `gfx::fill` with `.use`", timeout);
         Assert.Equal(".module main\n.use gfx::fill as paint\n.use gfx::fill\n" + Main[".module main\n.use gfx::fill as paint\n".Length..],
-            Apply(Main, use.Edit.Changes[MainUri]));
+            Editing.Apply(Main, use.Edit.Changes[MainUri]));
     }
 
     /// <summary>A diagnostic whose message names no fix is offered none.</summary>
@@ -99,7 +99,10 @@ public sealed class CodeActionsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Header + ".proc main {\n    lda #\n    rts\n}\n");
+
+        // On the 6502 an immediate has no width to be told, so the half-written line is only
+        // what the parser says about it, and nothing can be written from here that fixes it.
+        await client.OpenAsync(MainUri, ".module main\n.cpu 6502\n.segment CODE\n.proc main {\n    lda #\n    rts\n}\n");
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         Assert.Empty(await ActionsAsync(client, MainUri, timeout));
@@ -116,19 +119,4 @@ public sealed class CodeActionsTests
             new CodeActionParams(new TextDocumentIdentifier(uri), new Range(new Position(0, 0), new Position(100, 0)),
                 new CodeActionContext([])),
             timeout);
-
-    /// <summary><paramref name="text"/> with <paramref name="edits"/> made, the last in the file first so the earlier stay where they are.</summary>
-    private static string Apply(string text, IReadOnlyList<TextEdit> edits)
-    {
-        var starts = new List<int> { 0 };
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] == '\n')
-                starts.Add(i + 1);
-        }
-        int Offset(Position position) => position.Line < starts.Count ? starts[position.Line] + position.Character : text.Length;
-        foreach (var edit in edits.OrderByDescending(edit => Offset(edit.Range.Start)))
-            text = text[..Offset(edit.Range.Start)] + edit.NewText + text[Offset(edit.Range.End)..];
-        return text;
-    }
 }

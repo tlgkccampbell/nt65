@@ -92,7 +92,13 @@ public static class DataLengths
         {
             Report(directive, model, diagnostics, on, name == ".res"
                 ? "`.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values"
-                : "`.align` is only padding, and has no name: it goes between declarations");
+                : "`.align` is only padding, and has no name: it goes between declarations",
+
+                // The room a `.res` reserves is the count of the `.byte[n]` that replaces it.
+                // An `.align` is a place to write the declaration rather than a way to write it.
+                name == ".res" && on is null && directive.Tree == model.Tree
+                    ? new DiagnosticFix(FixKind.Storage)
+                    : null);
             return;
         }
         if (directive.Kind == SyntaxKind.DataDirective && DataSyntax.IsElementType(directive))
@@ -509,6 +515,7 @@ public static class DataLengths
     }
 
     private static void Report(
-        SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on, string message) =>
-        diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, on, Severity.Error, message));
+        SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on, string message,
+        DiagnosticFix? fix = null) =>
+        diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, on, Severity.Error, message) with { Fix = fix });
 }

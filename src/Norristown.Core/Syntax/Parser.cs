@@ -83,18 +83,22 @@ internal sealed class Parser
 
     private void Report(string message) => Report(index, message);
 
+    /// <summary>Reports at the current token, with the change the message names as its fix.</summary>
+    private void Report(string message, DiagnosticFix fix) => Report(index, message, fix);
+
     /// <summary>
     /// Reports only when nothing has been said about this line yet. A half-typed
     /// <c>m!({</c> runs out of tokens inside an argument, inside the braces and inside the
     /// parentheses; the first of those says what is missing, and the rest is the same news.
     /// </summary>
-    private void ReportOnce(string message)
+    private void ReportOnce(string message, DiagnosticFix? fix = null)
     {
         if (errors.Count == 0)
-            Report(message);
+            Report(index, message, fix);
     }
 
-    private void Report(int token, string message) => errors.Add(new Error(token, message));
+    private void Report(int token, string message, DiagnosticFix? fix = null) =>
+        errors.Add(new Error(token, message, fix));
 
     private static string Describe(GreenToken token) => $"`{token.Text}`";
 
@@ -161,9 +165,9 @@ internal sealed class Parser
 
     private GreenNode Finish(GreenSyntax statement) => Finish(statement.Kind, statement.Children);
 
-    private GreenNode ErrorLine(string message)
+    private GreenNode ErrorLine(string message, DiagnosticFix? fix = null)
     {
-        Report(message);
+        Report(index, message, fix);
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.AddRange(TakeRest());
         children.Add(Advance());
@@ -271,17 +275,51 @@ internal sealed class Parser
             SyntaxKind.PatchDirective => Finish(ParsePatch()),
             SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective =>
                 ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`"),
-            _ => ErrorLine(Replaced(Current.Text) ?? $"unknown directive `{Current.Text}`"),
+            _ => ReplacedLine(),
         };
+
+        GreenNode ReplacedLine() =>
+            Replaced(Current.Text) is { } instead
+                ? ErrorLine(instead.Message, Spelling(instead, wholeLine: true))
+                : ErrorLine($"unknown directive `{Current.Text}`");
     }
 
-    /// <summary>How a directive nt65 no longer has is written now, or null for one it never had.</summary>
-    private static string? Replaced(string directive) => directive.ToLowerInvariant() switch
+    /// <summary>
+    /// Writing a ca65 spelling the nt65 way, where one word is all it takes. A <c>}</c> replaces
+    /// a whole line and nothing else, and <c>.tag T, n</c> is <c>.type T[n]</c>, which moves the
+    /// count as well as the word, so only the plain form is offered as a change to make.
+    /// </summary>
+    private DiagnosticFix? Spelling((string Message, string? Write) instead, bool wholeLine) =>
+        instead.Write is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
+            ? new DiagnosticFix(FixKind.Spelling, word)
+            : null;
+
+    /// <summary>Whether a comma is written on the rest of the line.</summary>
+    private bool RestHasComma()
+    {
+        for (var at = index; at < tokens.Length; at++)
+        {
+            if (tokens[at].Kind == SyntaxKind.Comma)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// How a directive nt65 no longer has is written now, and the word to write in its place
+    /// where one word is all it takes; null for a directive it never had.
+    /// </summary>
+    private static (string Message, string? Write)? Replaced(string directive) => directive.ToLowerInvariant() switch
     {
         ".zeropage" or ".code" or ".bss" or ".rodata" =>
-            $"`{directive}` is written `.segment {directive[1..].ToUpperInvariant()}`",
-        ".tag" => "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`",
-        ".asciiz" => "`.asciiz` is written `.strz`",
+            ($"`{directive}` is written `.segment {directive[1..].ToUpperInvariant()}`",
+                $".segment {directive[1..].ToUpperInvariant()}"),
+        ".tag" => ("`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`", ".type"),
+        ".asciiz" => ("`.asciiz` is written `.strz`", ".strz"),
+        ".dbyt" => ("`.dbyt` is written `.beword`", ".beword"),
+        ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
+            or ".endif" or ".endrep" or ".endrepeat" =>
+            ($"a block ends with `}}`, and `{directive}` closes nothing", "}"),
         _ => null,
     };
 
@@ -385,9 +423,11 @@ internal sealed class Parser
             }
             else
             {
-                ReportOnce((Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null)
+                var instead = Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null;
+                ReportOnce(instead?.Message
                     ?? "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
-                        + "`.type T`, or bytes such as `.incbin`");
+                        + "`.type T`, or bytes such as `.incbin`",
+                    instead is { } written ? Spelling(written, wholeLine: false) : null);
             }
         }
         else if (Kind == SyntaxKind.OpenBrace)
@@ -853,7 +893,8 @@ internal sealed class Parser
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
         {
             Report($"`{Current.Text}` is ca65's: an nt65 assertion that fails is always an error, checked as soon as "
-                + "nt65 can and otherwise at link time, so `.assert` takes only the condition and the message");
+                + "nt65 can and otherwise at link time, so `.assert` takes only the condition and the message",
+                new DiagnosticFix(FixKind.AssertLevel));
             children.Add(Advance());
             if (Kind != SyntaxKind.Comma)
                 return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
@@ -1749,7 +1790,8 @@ internal sealed class Parser
                 // enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
-                Report(operatorIndex, $"`{op.Text}` and `{inner.Text}` need parentheses to show which applies first");
+                Report(operatorIndex, $"`{op.Text}` and `{inner.Text}` need parentheses to show which applies first",
+                    new DiagnosticFix(FixKind.Parentheses));
                 return;
             }
         }
@@ -1757,7 +1799,8 @@ internal sealed class Parser
         if (RightmostByteOperator(left) is { } byteOperator)
         {
             Report(operatorIndex,
-                $"unary `{byteOperator.Text}` before `{op.Text}` needs parentheses to show what `{byteOperator.Text}` applies to");
+                $"unary `{byteOperator.Text}` before `{op.Text}` needs parentheses to show what `{byteOperator.Text}` applies to",
+                new DiagnosticFix(FixKind.Parentheses));
         }
     }
 
@@ -1780,8 +1823,11 @@ internal sealed class Parser
             : null;
     }
 
-    /// <summary>A parser error: the index of the token it is reported on, and the message.</summary>
-    public readonly record struct Error(int Token, string Message);
+    /// <summary>
+    /// A parser error: the index of the token it is reported on, the message, and the change
+    /// the message names as its fix, for an editor to offer, where it names one.
+    /// </summary>
+    public readonly record struct Error(int Token, string Message, DiagnosticFix? Fix = null);
 
     /// <summary>
     /// One line's statement, the errors found in it, and the block kind it was parsed in, so

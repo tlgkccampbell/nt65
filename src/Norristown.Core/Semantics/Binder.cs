@@ -74,6 +74,10 @@ internal sealed class Binder
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<SyntaxNode> useDirectives = [];
     private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
+
+    // Where each `.use` writes the name it brings in, so that an item nothing names can be
+    // reported on the item rather than on the whole line.
+    private readonly Dictionary<string, (TextSpan At, bool Exported)> broughtAt = new(StringComparer.Ordinal);
     private readonly List<ProgramSymbols.Module> globs = [];
     private readonly List<ProgramSymbols.Reexport> reexports = [];
 
@@ -182,7 +186,12 @@ internal sealed class Binder
         references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
         return new Result(fileScope, symbols, references, diagnostics, regions)
         {
-            Brought = used.ToDictionary(pair => pair.Key, pair => (pair.Value.Symbol, pair.Value.Module), StringComparer.Ordinal),
+            Brought = used.ToDictionary(
+                pair => pair.Key,
+                pair => new BroughtName(pair.Value.Symbol, pair.Value.Module,
+                    broughtAt.TryGetValue(pair.Key, out var at) ? at.At : default,
+                    broughtAt.TryGetValue(pair.Key, out var how) && how.Exported),
+                StringComparer.Ordinal),
             Globs = globs,
         };
     }
@@ -1090,6 +1099,7 @@ internal sealed class Binder
             {
                 Report(name.Span, $"`{name.Text}` is a label in `.data`: a named member is `.data {name.Text}: ...`, "
                     + $"and a position is `@{name.Text}:`");
+                Fixed(new DiagnosticFix(FixKind.DataMember));
             }
             return;
         }
@@ -1538,7 +1548,11 @@ internal sealed class Binder
             }
             var local = at.LookupCheapLocal(token.Text[1..]);
             if (local is null)
+            {
                 Report(token.Span, $"`{token.Text}` is not declared");
+                if (NearestName(at, token.Text[1..], cheap: true) is { } near)
+                    Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
+            }
             return local is null ? null : new Place(local);
         }
 
@@ -1558,7 +1572,7 @@ internal sealed class Binder
             // In a condition a bare name may be a word rather than a name at all, and a word
             // is compared, never looked up.
             if (!word)
-                ReportUndeclared(token, last);
+                ReportUndeclared(token, last, at);
             return null;
         }
 
@@ -1629,7 +1643,7 @@ internal sealed class Binder
     /// like it. One that starts a path, <paramref name="last"/> being false, is most likely a
     /// module the build does not have, such as one left off the command line.
     /// </summary>
-    private void ReportUndeclared(SyntaxToken token, bool last)
+    private void ReportUndeclared(SyntaxToken token, bool last, Scope at)
     {
         lookedUp.Add("name:" + token.Text);
         var exporting = program.ModulesExporting(token.Text).ToList();
@@ -1641,6 +1655,85 @@ internal sealed class Binder
                 : $"`{token.Text}` is not declared, and no module `{token.Text}` is in this build");
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
+        else if (last && NearestName(at, token.Text, cheap: false) is { } nearest)
+            Fixed(new DiagnosticFix(FixKind.NearestName, nearest));
+    }
+
+    /// <summary>
+    /// The declared name a written one is nearly: one in scope, or one a <c>.use</c> brought in,
+    /// that differs from it by a letter or two. A short name has to match more closely than a
+    /// long one, because two letters apart is most of the short names there are. Where two are
+    /// equally near, the earlier by ordinal is the suggestion, so the same file always suggests
+    /// the same name.
+    /// </summary>
+    private string? NearestName(Scope at, string written, bool cheap)
+    {
+        // How many single-letter changes still count as nearly the same name.
+        var allowed = written.Length <= 4 ? 1 : 2;
+        string? nearest = null;
+        var best = allowed + 1;
+        foreach (var name in Candidates(at, cheap))
+        {
+            if (name == written)
+                continue;
+            var distance = Distance(written, name, allowed + 1);
+            if (distance > allowed || distance > best)
+                continue;
+            if (distance < best || string.CompareOrdinal(name, nearest) < 0)
+            {
+                nearest = name;
+                best = distance;
+            }
+        }
+        return nearest;
+    }
+
+    /// <summary>The names a misspelling could have meant: what the scopes around it hold, and what a <c>.use</c> named.</summary>
+    private IEnumerable<string> Candidates(Scope at, bool cheap)
+    {
+        for (var scope = at; scope is not null; scope = scope.Parent)
+        {
+            foreach (var symbol in scope.Symbols)
+            {
+                if (symbol.IsCheapLocal == cheap)
+                    yield return symbol.Name;
+            }
+        }
+        if (!cheap)
+        {
+            foreach (var name in used.Keys)
+                yield return name;
+        }
+    }
+
+    /// <summary>
+    /// How many single-letter changes apart two names are, counted no further than
+    /// <paramref name="bound"/>: past that they are not near each other, and how far past
+    /// makes no difference.
+    /// </summary>
+    private static int Distance(string a, string b, int bound)
+    {
+        if (Math.Abs(a.Length - b.Length) >= bound)
+            return bound;
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++)
+            previous[j] = j;
+        for (var i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            var least = current[0];
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var substitute = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), substitute);
+                least = Math.Min(least, current[j]);
+            }
+            if (least >= bound)
+                return bound;
+            (previous, current) = (current, previous);
+        }
+        return Math.Min(previous[b.Length], bound);
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
@@ -1925,7 +2018,11 @@ internal sealed class Binder
             return;
         }
         if (!used.TryAdd(name.Text, target))
+        {
             Report(name.Span, $"a `.use` already brings in `{name.Text}`");
+            return;
+        }
+        broughtAt[name.Text] = (name.Span, exported);
     }
 
     /// <summary>
@@ -2026,8 +2123,8 @@ internal sealed class Binder
         IReadOnlyList<(TextSpan Span, Scope Scope)> Regions)
     {
         /// <summary>The names the file's <c>.use</c> items bring in, each a symbol or a module path.</summary>
-        public IReadOnlyDictionary<string, (Symbol? Symbol, string? Module)> Brought { get; init; } =
-            new Dictionary<string, (Symbol?, string?)>();
+        public IReadOnlyDictionary<string, BroughtName> Brought { get; init; } =
+            new Dictionary<string, BroughtName>();
 
         /// <summary>The modules whose exports a <c>.use module::*</c> brings in.</summary>
         public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];

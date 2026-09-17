@@ -196,7 +196,7 @@ public sealed class SyntaxTree
     private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
     {
         var result = new List<Diagnostic>();
-        Diagnostic At(int line, int token, string message)
+        Diagnostic At(int line, int token, string message, DiagnosticFix? fix = null)
         {
             var green = Lines[line];
             var tokens = green.Tokens;
@@ -209,14 +209,14 @@ public sealed class SyntaxTree
             if (tokens[token].Kind == SyntaxKind.EndOfLine && token > 0)
             {
                 var caret = green.TextOffset(token - 1) + tokens[token - 1].Text.Length + 1;
-                return new Diagnostic(new Span(Path, line + 1, caret, caret), Severity.Error, message);
+                return new Diagnostic(new Span(Path, line + 1, caret, caret), Severity.Error, message) { Fix = fix };
             }
 
             // Otherwise the token is the problem, and the diagnostic covers it. A line with
             // no tokens at all leaves a caret where its text would start.
             var column = green.TextOffset(token) + 1;
             var width = tokens[token].Kind == SyntaxKind.EndOfLine ? 0 : tokens[token].Text.Length;
-            return new Diagnostic(new Span(Path, line + 1, column, column + width), Severity.Error, message);
+            return new Diagnostic(new Span(Path, line + 1, column, column + width), Severity.Error, message) { Fix = fix };
         }
 
         for (var i = 0; i < Lines.Length; i++)
@@ -228,7 +228,7 @@ public sealed class SyntaxTree
                     result.Add(At(i, t, error));
             }
             foreach (var error in statements[i].Errors)
-                result.Add(At(i, error.Token, error.Message));
+                result.Add(At(i, error.Token, error.Message, error.Fix));
         }
         result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
         return [.. result

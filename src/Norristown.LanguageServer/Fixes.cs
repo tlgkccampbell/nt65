@@ -1,0 +1,393 @@
+using Norristown.Semantics;
+using Norristown.Syntax;
+
+namespace Norristown.LanguageServer;
+
+/// <summary>
+/// The fixes the diagnostics in a range name, as edits. Each writes what its message already
+/// says: the long branch that reaches, the return an interrupt handler leaves by, the nt65
+/// spelling of a ca65 directive, the declared name a misspelling is nearly, the storage a
+/// <c>.res</c> reserves, an export wide enough for what it exports, and the declaration nothing
+/// names, taken out or exported. Where a line has two readings, both are offered and neither is
+/// preferred: which was meant is the programmer's to say.
+/// </summary>
+internal static class Fixes
+{
+    /// <summary>The fixes for the diagnostics of <paramref name="model"/>'s file on the lines <paramref name="range"/> covers.</summary>
+    public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
+    {
+        foreach (var diagnostic in analysis.DiagnosticsFor(model.Tree.Path))
+        {
+            if (diagnostic.Fix is not { } fix
+                || diagnostic.Span.Line - 1 < range.Start.Line || diagnostic.Span.Line - 1 > range.End.Line)
+            {
+                continue;
+            }
+            foreach (var change in For(analysis, model, diagnostic, fix))
+                yield return change;
+        }
+    }
+
+    private static IEnumerable<Change> For(
+        ProgramAnalysis analysis, SemanticModel model, Diagnostic diagnostic, DiagnosticFix fix)
+    {
+        var tree = model.Tree;
+        var line = diagnostic.Span.Line - 1;
+        switch (fix.Kind)
+        {
+            case FixKind.EndPath:
+                yield return Fix(diagnostic, "End the path here with `.next ?`",
+                    [Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}.next ?")]);
+                break;
+
+            case FixKind.Mnemonic when fix.Text is { } mnemonic && Written(tree, line, mnemonic) is { } call:
+                yield return Fix(diagnostic, $"Call with `{mnemonic}`", [call]);
+                break;
+
+            case FixKind.Branch when fix.Text is { } longer && Written(tree, line, longer) is { } branch:
+                yield return Fix(diagnostic, $"Branch with `{longer}`", [branch]);
+                break;
+
+            case FixKind.Return when fix.Text is { } leaves && Written(tree, line, leaves) is { } returned:
+                yield return Fix(diagnostic, $"Leave with `{leaves}`", [returned]);
+                break;
+
+            case FixKind.Export when fix is { Text: { } name, At: { } at } && analysis.ModelFor(at.File) is { } declaring:
+                yield return Fix(diagnostic, $"Export `{name}` from `{declaring.FileScope.Module}`",
+                    [Exported(declaring, name)]);
+                break;
+
+            case FixKind.Use when fix.Text is { } path:
+                yield return Fix(diagnostic, $"Bring in `{path}` with `.use`", [Used(tree, path)]);
+                break;
+
+            case FixKind.State when fix.At is { } label && analysis.ModelFor(label.File) is { } labelled:
+                if (StateAfter(analysis, labelled, label) is { } state)
+                    yield return Fix(diagnostic, state.Title, state.Edits);
+                break;
+
+            case FixKind.DataDeclaration:
+                if (DataDeclaration(tree, line) is { } declaration)
+                    yield return Fix(diagnostic, declaration.Title, declaration.Edits);
+                break;
+
+            case FixKind.Spelling when fix.Text is { } spelled:
+                yield return Fix(diagnostic,
+                    spelled == "}" ? "Close the block with `}`" : $"Write it as `{spelled}`",
+                    [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), spelled)]);
+                break;
+
+            case FixKind.NearestName when fix.Text is { } nearest:
+                yield return Fix(diagnostic, $"Change it to `{nearest}`",
+                    [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), nearest)]);
+                break;
+
+            case FixKind.AssertLevel:
+                if (WithoutLevel(tree, diagnostic.Span) is { } dropped)
+                    yield return Fix(diagnostic, "Drop the level: an assertion that fails is an error", [dropped]);
+                break;
+
+            case FixKind.Storage:
+                if (Storage(tree, diagnostic.Span) is { } reserved)
+                    yield return Fix(diagnostic, $"Declare it as `{reserved.Text}`", [reserved]);
+                break;
+
+            case FixKind.DataMember:
+                foreach (var change in DataMember(model, diagnostic))
+                    yield return change;
+                break;
+
+            case FixKind.ExportSize when fix.Text is { } size:
+                if (ExportSize(tree, diagnostic.Span, size) is { } widened)
+                    yield return Fix(diagnostic, $"Export it as `{size}`", [widened]);
+                break;
+
+            case FixKind.Parentheses:
+                foreach (var change in Parenthesized(tree, diagnostic))
+                    yield return change;
+                break;
+
+            case FixKind.Width when fix.Text is { } item:
+                foreach (var width in (int[])[8, 16])
+                {
+                    yield return Fix(diagnostic, $"Say the width here with `.ensure {item}{width}`",
+                        [Edits.InsertBefore(tree, line, $".ensure {item}{width}")], preferred: false);
+                }
+                break;
+
+            case FixKind.Signature when fix is { Text: { } register, At: { } routine }:
+                foreach (var width in (int[])[8, 16])
+                {
+                    if (Edits.SignatureItem(tree, routine.Line - 1, $"{register}{width}") is { } item)
+                    {
+                        yield return Fix(diagnostic,
+                            $"Declare it `{register}{width}`, which is what the routine assumes", [item],
+                            preferred: false);
+                    }
+                }
+                break;
+
+            case FixKind.Unused when fix.Text is { } unused:
+                foreach (var change in Unused(model, diagnostic, unused))
+                    yield return change;
+                break;
+
+            case FixKind.UseItem when fix.Text is { } brought:
+                if (UseItems.Without(model, brought) is { Count: > 0 } without)
+                    yield return Fix(diagnostic, $"Remove the `.use` of `{brought}`", without);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /// <summary>A fix for <paramref name="diagnostic"/>, preferred unless it is one of several readings.</summary>
+    private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
+        new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
+
+    /// <summary>
+    /// The line's mnemonic written as <paramref name="mnemonic"/>, in the case the line wrote it
+    /// in; null for a line that has none.
+    /// </summary>
+    private static Edit? Written(SyntaxTree tree, int line, string mnemonic)
+    {
+        if (LineContext.TokensOf(tree, line).FirstOrDefault(token => token.Kind == SyntaxKind.Mnemonic)
+            is not { Text: not null } written)
+        {
+            return null;
+        }
+        var spelled = written.Text.All(char.IsUpper) ? mnemonic.ToUpperInvariant() : mnemonic;
+        return new Edit(tree, new TextSpan(written.Start, written.Text.Length), spelled);
+    }
+
+    /// <summary>An <c>.export</c> of <paramref name="name"/>, under the <c>.module</c> of the file that declares it.</summary>
+    private static Edit Exported(SemanticModel declaring, string name) =>
+        Edits.InsertAfter(declaring.Tree, Edits.LastLine(declaring.Tree, SyntaxKind.ModuleDirective), $".export {name}");
+
+    /// <summary>A <c>.use</c> of <paramref name="path"/>, under the last one, or under the <c>.module</c>.</summary>
+    private static Edit Used(SyntaxTree tree, string path)
+    {
+        var after = Edits.LastLine(tree, SyntaxKind.UseDirective) is var use and >= 0
+            ? use
+            : Edits.LastLine(tree, SyntaxKind.ModuleDirective);
+        return Edits.InsertAfter(tree, after, $".use {path}");
+    }
+
+    /// <summary>
+    /// A <c>.state</c> after a label, saying what the analysis finds reaching the line under it,
+    /// or what its routine is entered with where it finds nothing.
+    /// </summary>
+    private static (string Title, IReadOnlyList<Edit> Edits)? StateAfter(
+        ProgramAnalysis analysis, SemanticModel model, Span label)
+    {
+        var tree = model.Tree;
+        var line = label.Line - 1;
+        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == label);
+        var block = analysis.FlowFor(tree.Path)?.Regions
+            .SelectMany(region => region.Blocks)
+            .FirstOrDefault(block => block.Label == symbol && block.On is null);
+        var reaching = block is { Steps: [var first, ..] }
+            ? analysis.StatesFor(tree.Path)?.AnyBefore(first.Statement)?.Processor
+            : null;
+        if ((reaching ?? symbol?.Routine?.Signature?.Entry) is not { } state)
+            return null;
+
+        var items = Edits.SpellState(state);
+        var name = symbol?.DisplayName ?? "the label";
+        var title = $"Declare `{name}` with `.state {items}`";
+
+        // A label with a statement after it on its line is split there, because a `.state`
+        // declares a label only directly after it.
+        var tokens = LineContext.TokensOf(tree, line);
+        var colon = tokens.FindIndex(token => token.Kind == SyntaxKind.Colon);
+        var body = Edits.BodyIndent(tree, line);
+        if (colon >= 0 && colon + 1 < tokens.Count)
+        {
+            var from = tokens[colon].Start + 1;
+            var to = tokens[colon + 1].Start;
+            return (title, [new Edit(tree, new TextSpan(from, to - from), $"\n{body}.state {items}\n{body}")]);
+        }
+        return (title, [Edits.InsertAfter(tree, line, $"{body}.state {items}")]);
+    }
+
+    /// <summary>
+    /// A label outside every routine and the data under it, as one <c>.data</c> declaration: one
+    /// directive on the declaration's own line, and several in its block.
+    /// </summary>
+    private static (string Title, IReadOnlyList<Edit> Edits)? DataDeclaration(SyntaxTree tree, int line)
+    {
+        var tokens = LineContext.TokensOf(tree, line);
+        if (tokens is not [{ Kind: SyntaxKind.Identifier } name, { Kind: SyntaxKind.Colon } colon, ..])
+            return null;
+        var indent = Edits.IndentOf(tree, line);
+        var rest = tokens.Count > 2 ? tree.Text[tokens[2].Start..LineContext.CodeEnd(tree, line)] : null;
+
+        var data = new List<string>();
+        var last = line;
+        for (var next = line + 1; next < tree.LineStarts.Length; next++)
+        {
+            if (tree.Statement(next).Kind != SyntaxKind.DataDirective)
+                break;
+            data.Add(tree.Text[(tree.LineStarts[next] + Edits.IndentOf(tree, next).Length)..LineContext.CodeEnd(tree, next)]);
+            last = next;
+        }
+
+        var title = $"Make `{name.Text}` a `.data` declaration";
+        if (data.Count == 0 && rest is not null)
+        {
+            return (title,
+                [new Edit(tree, new TextSpan(name.Start, colon.Start + 1 - name.Start), $".data {name.Text}:")]);
+        }
+        if (data.Count == 1 && rest is null)
+        {
+            var whole = new TextSpan(name.Start, LineContext.CodeEnd(tree, last) - name.Start);
+            return (title, [new Edit(tree, whole, $".data {name.Text}: {data[0]}")]);
+        }
+        if (data.Count == 0)
+            return null;
+
+        var members = (rest is null ? data : [rest, .. data]).Select(member => $"{indent}{Edits.Indent}{member}");
+        var block = $".data {name.Text} {{\n{string.Join('\n', members)}\n{indent}}}";
+        return (title, [new Edit(tree, new TextSpan(name.Start, LineContext.CodeEnd(tree, last) - name.Start), block)]);
+    }
+
+    /// <summary>
+    /// ca65's assertion level, taken out with the comma that separated it from the message, or
+    /// with the one before it where the level was written last.
+    /// </summary>
+    private static Edit? WithoutLevel(SyntaxTree tree, Span at)
+    {
+        var span = Edits.SpanOf(tree, at);
+        var tokens = LineContext.TokensOf(tree, at.Line - 1);
+        var level = tokens.FindIndex(token => token.Start == span.Start);
+        if (level < 0)
+            return null;
+        var before = level > 0 && tokens[level - 1].Kind == SyntaxKind.Comma ? tokens[level - 1] : default;
+        if (level + 1 < tokens.Count && tokens[level + 1].Kind == SyntaxKind.Comma)
+        {
+            // The message keeps the comma before it, so what goes is the level and the comma
+            // after it, taken from where the comma before it ended.
+            var start = before.Text is null ? span.Start : before.Start + 1;
+            return new Edit(tree, new TextSpan(start, tokens[level + 1].Start + 1 - start), "");
+        }
+        return before.Text is null ? null : new Edit(tree, new TextSpan(before.Start, span.End - before.Start), "");
+    }
+
+    /// <summary>The <c>.res n</c> of a declaration, as the <c>.byte[n]</c> that reserves the same room.</summary>
+    private static Edit? Storage(SyntaxTree tree, Span at)
+    {
+        var span = Edits.SpanOf(tree, at);
+        var written = tree.Text[span.Start..span.End];
+        if (!written.StartsWith(".res", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var count = written[".res".Length..].Trim();
+        return count.Length == 0 ? null : new Edit(tree, span, $".byte[{count}]");
+    }
+
+    /// <summary>A label written in mixed data, as a member of it or as a position in it.</summary>
+    private static IEnumerable<Change> DataMember(SemanticModel model, Diagnostic diagnostic)
+    {
+        var tree = model.Tree;
+        var span = Edits.SpanOf(tree, diagnostic.Span);
+        var name = tree.Text[span.Start..span.End];
+        var tokens = LineContext.TokensOf(tree, diagnostic.Span.Line - 1);
+        var colon = tokens.FindIndex(token => token.Start == span.Start) + 1;
+
+        // A member is a name and what it holds, so the line has to say what it holds: a name on
+        // its own is a position and only a position.
+        if (colon > 0 && colon + 1 < tokens.Count && tokens[colon + 1].Kind == SyntaxKind.Directive)
+        {
+            yield return Fix(diagnostic, $"Make `{name}` a member of the data",
+                [new Edit(tree, new TextSpan(span.Start, 0), ".data ")], preferred: false);
+        }
+
+        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
+        IReadOnlyList<Edit> edits = symbol is null
+            ? [new Edit(tree, new TextSpan(span.Start, 0), "@")]
+            : Edits.Rename(model, symbol, "@" + name);
+        yield return Fix(diagnostic, $"Make `{name}` a position, `@{name}`", edits, preferred: false);
+    }
+
+    /// <summary>The address size an <c>.export</c> gives, written as <paramref name="size"/>.</summary>
+    private static Edit? ExportSize(SyntaxTree tree, Span at, string size)
+    {
+        var span = Edits.SpanOf(tree, at);
+        var tokens = LineContext.TokensOf(tree, at.Line - 1);
+        var colon = tokens.FindIndex(token => token.Start >= span.Start && token.Kind == SyntaxKind.Colon);
+        return colon >= 0 && colon + 1 < tokens.Count
+            ? new Edit(tree, new TextSpan(tokens[colon + 1].Start, tokens[colon + 1].Text.Length), size)
+            : null;
+    }
+
+    /// <summary>
+    /// The two readings of an expression that needs parentheses: the one the language would
+    /// take if it took either, and the other. Each is two brackets written into the expression
+    /// as it stands, so nothing else about the line moves.
+    /// </summary>
+    private static IEnumerable<Change> Parenthesized(SyntaxTree tree, Diagnostic diagnostic)
+    {
+        var at = Edits.SpanOf(tree, diagnostic.Span).Start;
+        var outer = tree.Root.DescendantNodes().FirstOrDefault(node =>
+            node.Kind == SyntaxKind.BinaryExpression && node.ChildTokens is [var op, ..] && op.Span.Start == at);
+        if (outer is null || outer.ChildNodes is not [var left, var right])
+            yield break;
+
+        var readings = new List<(int Open, int Close)>();
+        if (right.Kind == SyntaxKind.BinaryExpression && right.ChildNodes is [var rightInner, _])
+        {
+            readings.Add((right.Span.Start, right.Span.End));
+            readings.Add((outer.Span.Start, rightInner.Span.End));
+        }
+        else if (left.Kind == SyntaxKind.BinaryExpression && left.ChildNodes is [_, var leftInner])
+        {
+            readings.Add((left.Span.Start, left.Span.End));
+            readings.Add((leftInner.Span.Start, outer.Span.End));
+        }
+        else if (Rightmost(left) is { ChildNodes: [var operand] } unary)
+        {
+            readings.Add((unary.Span.Start, unary.Span.End));
+            readings.Add((operand.Span.Start, outer.Span.End));
+        }
+
+        foreach (var (open, close) in readings)
+        {
+            var written = tree.Text[outer.Span.Start..open] + "(" + tree.Text[open..close] + ")"
+                + tree.Text[close..outer.Span.End];
+            yield return Fix(diagnostic, $"Write it as `{written.Trim()}`",
+                [new Edit(tree, new TextSpan(open, 0), "("), new Edit(tree, new TextSpan(close, 0), ")")],
+                preferred: false);
+        }
+    }
+
+    /// <summary>The unary expression at the right edge of an operand, which is what a byte operator applies to.</summary>
+    private static SyntaxNode? Rightmost(SyntaxNode node)
+    {
+        while (node.Kind == SyntaxKind.BinaryExpression && node.ChildNodes is [_, var right])
+            node = right;
+        return node.Kind == SyntaxKind.UnaryExpression ? node : null;
+    }
+
+    /// <summary>
+    /// A declaration nothing names: taken out with what it holds, or exported, which is what
+    /// makes it something another module may name.
+    /// </summary>
+    private static IEnumerable<Change> Unused(SemanticModel model, Diagnostic diagnostic, string name)
+    {
+        var tree = model.Tree;
+        var line = diagnostic.Span.Line - 1;
+        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
+
+        // The declaration is taken out whole, which only holds where the line is the declaration
+        // and nothing else: a label with an instruction after it shares its line with code.
+        var tokens = LineContext.TokensOf(tree, line);
+        if (tokens.Count > 0 && tokens[0].Start == tree.LineStarts[line] + Edits.IndentOf(tree, line).Length)
+            yield return Fix(diagnostic, $"Remove `{name}`", [Edits.RemoveLines(tree, line, Edits.BlockEnd(tree, line))], preferred: false);
+
+        if (symbol is { IsCheapLocal: false, IsReachableByPath: true } exportable && model.FileScope.Module is { } module)
+        {
+            yield return Fix(diagnostic, $"Export `{name}` from `{module}`",
+                [Exported(model, exportable.QualifiedName)], preferred: false);
+        }
+    }
+}

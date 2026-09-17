@@ -13,7 +13,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="SignatureHelpProvider">How the server helps with calls, or null when it does not.</param>
 /// <param name="CodeLensProvider">How the server answers <c>textDocument/codeLens</c>, or null when it does not.</param>
 /// <param name="WorkspaceSymbolProvider">Whether the server answers <c>workspace/symbol</c>.</param>
-/// <param name="CodeActionProvider">Whether the server answers <c>textDocument/codeAction</c>.</param>
+/// <param name="CodeActionProvider">Which kinds of change the server offers, or null when it offers none.</param>
 /// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
@@ -28,5 +28,5 @@ internal sealed record ServerCapabilities(
     SignatureHelpOptions? SignatureHelpProvider = null,
     CodeLensOptions? CodeLensProvider = null,
     bool WorkspaceSymbolProvider = false,
-    bool CodeActionProvider = false,
+    CodeActionOptions? CodeActionProvider = null,
     SemanticTokensOptions? SemanticTokensProvider = null);

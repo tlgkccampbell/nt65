@@ -791,12 +791,13 @@ public sealed class StateAnalysis
         if (width == Width.Unchanged)
         {
             Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and `{Owner(step, routine)}` says "
-                + $"`{item}*`, which assumes nothing about it");
+                + $"`{item}*`, which assumes nothing about it", Declares(step, item, routine));
         }
         else if (!IsKnown(width))
         {
             Report(step, $"`{mnemonic} #` needs the width of {Spell(register)}, and it is not known here"
-                + (why is null ? ": a `.state` says what it is" : $", because {why.Reason}: {why.Fix}"));
+                + (why is null ? ": a `.state` says what it is" : $", because {why.Reason}: {why.Fix}"),
+                Ensure(step, item));
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
         {
@@ -1274,6 +1275,24 @@ public sealed class StateAnalysis
         if (fix is not null && diagnostics.Count > count)
             diagnostics[^1] = diagnostics[^1] with { Fix = fix };
     }
+
+    /// <summary>
+    /// An <c>.ensure</c> of <paramref name="item"/>'s width before the statement, where it is
+    /// written in this file. Which width it is is the programmer's to say, so the fix names the
+    /// register and an editor offers both.
+    /// </summary>
+    private DiagnosticFix? Ensure(Step step, string item) =>
+        step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.Width, item) : null;
+
+    /// <summary>
+    /// The width written into the routine's signature, which is where a routine that assumes
+    /// nothing about it says what it assumes. The routine has to be one this file declares,
+    /// because its signature is what a caller anywhere reads.
+    /// </summary>
+    private DiagnosticFix? Declares(Step step, string item, Symbol routine) =>
+        step.On is null && step.Statement.Tree == model.Tree && routine.Tree == model.Tree
+            ? new DiagnosticFix(FixKind.Signature, item, routine.DeclarationSpan)
+            : Ensure(step, item);
 
     /// <summary>The statement's mnemonic written as <paramref name="mnemonic"/>, where it is written in this file.</summary>
     private DiagnosticFix? Mnemonic(Step step, string mnemonic) =>

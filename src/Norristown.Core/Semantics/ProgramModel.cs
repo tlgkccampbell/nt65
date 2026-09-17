@@ -513,7 +513,10 @@ public sealed class ProgramModel
             if (actual is { } size && given < size)
             {
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at), Severity.Error,
-                    $"`{symbol.Name}` is `{Spell(size)}`, and an export may widen an address size but not narrow it: `{symbol.Name}: {Spell(size)}` or wider"));
+                    $"`{symbol.Name}` is `{Spell(size)}`, and an export may widen an address size but not narrow it: `{symbol.Name}: {Spell(size)}` or wider")
+                {
+                    Fix = new DiagnosticFix(FixKind.ExportSize, Spell(size)),
+                });
             }
         }
     }

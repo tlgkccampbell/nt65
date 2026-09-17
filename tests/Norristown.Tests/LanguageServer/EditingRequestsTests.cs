@@ -163,7 +163,8 @@ public sealed class EditingRequestsTests
         Assert.Equal(["(", ",", "="], capabilities.SignatureHelpProvider?.TriggerCharacters);
         Assert.NotNull(capabilities.CodeLensProvider);
         Assert.True(capabilities.WorkspaceSymbolProvider);
-        Assert.True(capabilities.CodeActionProvider);
+        Assert.Equal(
+            ["quickfix", "refactor.rewrite", "refactor.extract"], capabilities.CodeActionProvider?.CodeActionKinds);
     }
 
     [Theory]

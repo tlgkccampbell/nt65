@@ -13,4 +13,11 @@ public sealed record Diagnostic(Span Span, Severity Severity, string Message, IR
 
     /// <summary>The change its message names as the fix, for an editor to offer, or null.</summary>
     public DiagnosticFix? Fix { get; init; }
+
+    /// <summary>
+    /// Whether what it is about is not needed: a declaration nothing names, or a name brought
+    /// in and never written. An editor fades those rather than only listing them, which is how
+    /// something unnecessary is meant to read.
+    /// </summary>
+    public bool IsUnnecessary { get; init; }
 }

@@ -1,0 +1,12 @@
+; What another module brings in, some of which it never writes.
+.module other
+
+.cpu 65816
+
+SPARE = 1
+.export SPARE
+
+.segment CODE
+.export .proc work: a8, i8 {
+    rts
+}

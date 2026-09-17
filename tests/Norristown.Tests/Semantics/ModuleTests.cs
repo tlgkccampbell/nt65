@@ -55,17 +55,19 @@ public sealed class ModuleTests
 
     /// <summary><c>.use</c> brings names in, one, several or all, and <c>as</c> renames what it brings in.</summary>
     [Theory]
-    [InlineData(".use gfx::clear", "clear")]
-    [InlineData(".use gfx::{SCREEN, clear}", "clear")]
-    [InlineData(".use gfx::*", "clear")]
-    [InlineData(".use gfx::clear as wipe", "wipe")]
-    [InlineData(".use gfx::{clear as wipe}", "wipe")]
-    [InlineData(".use gfx as g", "g::clear")]
-    public void AUseBringsNamesIn(string use, string written)
+    [InlineData(".use gfx::clear", "clear", "")]
+    [InlineData(".use gfx::{SCREEN, clear}", "clear", "    lda SCREEN\n")]
+    [InlineData(".use gfx::*", "clear", "")]
+    [InlineData(".use gfx::clear as wipe", "wipe", "")]
+    [InlineData(".use gfx::{clear as wipe}", "wipe", "")]
+    [InlineData(".use gfx as g", "g::clear", "")]
+    public void AUseBringsNamesIn(string use, string written, string alsoNamed)
     {
+        // Everything a `.use` brings in is named, because a name brought in and never written
+        // is reported as an item that may go.
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", $".module main\n{use}\n.segment CODE\n.proc main {{\n    jsr {written}\n    rts\n}}\n"));
+            ("main.nt65", $".module main\n{use}\n.segment CODE\n.proc main {{\n{alsoNamed}    jsr {written}\n    rts\n}}\n"));
 
         Assert.Empty(program.Problems());
         var main = program.File("main.nt65");

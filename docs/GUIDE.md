@@ -386,6 +386,35 @@ checks every immediate, call and return against it. There are no `.a8`, `.a16`, 
 - Segments may declare their home bank and direct page, `.segment WRAM: abs, bank = $7e`, and
   an absolute operand reached with the wrong data bank is an error.
 
+## In the editor
+
+The language server knows the program, so most of what it offers is the analysis rather than
+the text. Every diagnostic that names a fix offers it: the long branch where a short one cannot
+reach, `jsl` for a `jsr` to a far routine, the missing `.export` or `.use`, a `.state` saying
+what the analysis finds reaching a label, `.byte[n]` for a `.res`, the nt65 spelling of a ca65
+directive, and the declared name a typo is a letter or two from. Where a line has two readings —
+`a & $0f == 0`, or an immediate whose width the analysis cannot work out — both are offered and
+neither is applied for you.
+
+Selecting code offers rewrites nothing reported:
+
+| Ask for | And you get |
+|---|---|
+| a path written out in full | `.use path` at the top, and the name written short everywhere the file writes it |
+| a name a `.use` brought in | the path written out in full, and the item that brought it gone |
+| any `.use` line | the items in order, with what nothing names taken out |
+| a declaration | it exported, or no longer exported |
+| a routine on the 65816 | what it leaves declared, `-> a16`, from what the analysis finds at its returns |
+| `rep #$20` | `.ensure a16`, and an `.ensure` written back out as the `rep` or `sep` it assembles to |
+| a number in an operand | a name for it at the top of the file |
+| a label | a name of its own for a `@cheap` one, or `@cheap` for a name only its routine writes |
+| a `.data` in a routine | it moved into a `.segment NAME { }` block |
+| a few lines of a routine | a `.proc` of their own, a `jsr` where they were, and the state they ran under declared |
+| pasted ca65 | as much of it as one line at a time can be read as nt65 |
+
+A name brought in and never written is faded, as a declaration nothing names is, and both offer
+to go.
+
 ## Migrating from ca65
 
 ### Directives
@@ -443,6 +472,12 @@ checks every immediate, call and return against it. There are no `.a8`, `.a16`, 
 A macro only replaces what needs no analysis. Where a ca65 macro hid control flow or processor
 state, nt65 has a language feature instead; [Appendix B of the design](../DESIGN.md) goes
 through the common macro packages pattern by pattern.
+
+Most of the first two tables are a selection away: paste the ca65 in, select it and take *Read
+the selection as nt65*, and the spellings, the block words, the segment directives and ca65's
+operator words are written the nt65 way. What needs a decision rather than a spelling — an
+unnamed label, a macro call, an `.include` — is left exactly as it was, for you and the
+diagnostics to work through.
 
 ### Ten things that will catch you out
 

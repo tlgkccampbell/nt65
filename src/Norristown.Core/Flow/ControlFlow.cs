@@ -779,7 +779,12 @@ public sealed class ControlFlow
                 var returned = statement.ChildTokens[0].Text.ToLowerInvariant();
                 Report(statement, own.IsInterrupt
                     ? $"`{routine.DisplayName}` is an interrupt handler, and leaves by `rti` rather than `{returned}`"
-                    : $"`{routine.DisplayName}` never returns, as its `noreturn` says, and `{returned}` returns");
+                    : $"`{routine.DisplayName}` never returns, as its `noreturn` says, and `{returned}` returns",
+
+                    // A handler is left by `rti`, which is the instruction to write instead. A
+                    // routine that never returns has no instruction that would do: what it
+                    // should do there is leave some other way, or not say `noreturn`.
+                    own.IsInterrupt ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
             if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
             {
@@ -788,8 +793,8 @@ public sealed class ControlFlow
             }
         }
 
-        void Report(SyntaxNode node, string message) =>
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+        void Report(SyntaxNode node, string message, DiagnosticFix? fix = null) =>
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
     }
 
     /// <summary>The routine a statement calls, directly or as a relative call; null for anything else.</summary>

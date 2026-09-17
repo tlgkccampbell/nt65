@@ -751,11 +751,16 @@ public sealed class CodeLayout
                 continue;
             var mnemonic = branch.Statement.ChildTokens[0].Text;
             var longer = "j" + mnemonic[1..];
-            var fix = SyntaxFacts.LongBranches.Contains(longer)
-                ? $". `{longer}` reaches any near target"
-                : "";
+            var reaches = SyntaxFacts.LongBranches.Contains(longer);
+            var fix = reaches ? $". `{longer}` reaches any near target" : "";
             ReportOnLine(branch.Target, branch.On,
-                $"`{mnemonic}` would branch {reach} bytes, and a branch reaches only -128 to 127{fix}");
+                $"`{mnemonic}` would branch {reach} bytes, and a branch reaches only -128 to 127{fix}",
+
+                // The change is to the branch, so it is offered only where the branch is
+                // written: an expansion's is the macro body's line, which is not this file's.
+                reaches && branch.On is null && branch.Statement.Tree == model.Tree
+                    ? new DiagnosticFix(FixKind.Branch, longer)
+                    : null);
         }
     }
 
@@ -1184,11 +1189,11 @@ public sealed class CodeLayout
     /// A body's line is reported at the call, which is in this file and is the side that
     /// chose the arguments; the body line is named beside it.
     /// </summary>
-    private void ReportOnLine(SyntaxNode node, Expansion? on, string message)
+    private void ReportOnLine(SyntaxNode node, Expansion? on, string message, DiagnosticFix? fix = null)
     {
         if (node.Tree == model.Tree)
         {
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
         }
         else if (on?.NearestCall is { } call)
         {

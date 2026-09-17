@@ -5,6 +5,10 @@
 
 .cpu 65816
 
+; A name brought in and never written is reported on the item that brought it, and one of
+; several in braces is the one reported.
+.use other::{work, SPARE}       ;! warning: `SPARE` is brought in and nothing names it: the `.use` item may go
+
 LIMIT = 10                      ;! warning: `LIMIT` is never used: nothing names it, and it is not exported
 WIDTH = 40
 .export WIDTH
@@ -31,6 +35,7 @@ second: .byte
 
 .segment CODE
 .proc main: a8, i8 {
+    jsr work
     lda #Mode::busy
 @unnamed:                       ;! warning: `@unnamed` is never used: nothing names it, and it is not exported
     ldx #0

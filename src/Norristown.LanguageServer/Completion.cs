@@ -452,7 +452,7 @@ internal static class Completion
             {
                 null when fromRoot => symbols.IsModulePath(part) ? (null, part) : null,
                 null => scope.Lookup(part) is { } local ? (local, null)
-                    : model.Brought.TryGetValue(part, out var brought) ? brought
+                    : model.Brought.TryGetValue(part, out var brought) ? (brought.Symbol, brought.Module)
                     : model.Globs.Select(module => symbols.Member(module, part)).FirstOrDefault(found => found is { IsExported: true }) is { } globbed ? (globbed, null)
                     : symbols.IsModulePath(part) ? (null, part)
                     : symbols.Define(part) is { } define ? (define, null)

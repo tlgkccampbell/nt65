@@ -67,7 +67,7 @@ internal sealed class Server
             SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
             CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
-            CodeActionProvider: true,
+            CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
             SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true));
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
@@ -216,7 +216,7 @@ internal sealed class Server
     {
         if (At(new TextDocumentPositionParams(request.TextDocument, request.Range.Start)) is not { } asked)
             return [];
-        return LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range);
+        return LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only);
     }
 
     [JsonRpcMethod("textDocument/semanticTokens/full")]

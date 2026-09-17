@@ -1,10 +1,17 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>A change that fixes a diagnostic.</summary>
+/// <summary>A change an editor offers: a fix for a diagnostic, or a rewrite asked for at a selection.</summary>
 /// <param name="Title">What the client offers it as.</param>
-/// <param name="Kind">Always <c>quickfix</c>.</param>
-/// <param name="Diagnostics">The diagnostic it fixes.</param>
+/// <param name="Kind">Which menu it belongs in: <c>quickfix</c>, or one of the <c>refactor</c> kinds.</param>
+/// <param name="Diagnostics">The diagnostic it fixes, or none for a change nothing reported.</param>
 /// <param name="Edit">The change.</param>
-/// <param name="IsPreferred">Whether it is the fix to apply without asking which.</param>
+/// <param name="IsPreferred">
+/// Whether it is the change to apply without asking which, left unsaid where it is one of
+/// several readings of the same line and the programmer is the one who knows.
+/// </param>
 internal sealed record CodeAction(
-    string Title, string Kind, IReadOnlyList<Diagnostic> Diagnostics, WorkspaceEdit Edit, bool IsPreferred);
+    string Title,
+    string Kind,
+    IReadOnlyList<Diagnostic> Diagnostics,
+    WorkspaceEdit Edit,
+    bool? IsPreferred = null);

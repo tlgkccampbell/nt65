@@ -11,6 +11,8 @@
 .exportzp main__WIDTH
 .export main__detour
 
+.import other__work
+
 LIMIT = 10
 main__WIDTH = 40
 
@@ -20,8 +22,9 @@ Mode__idle = $00
 Mode__busy = $01
 
 .segment "CODE": absolute
-; .proc main: a8, i8  main.nt65:33
+; .proc main: a8, i8  main.nt65:37
 main:
+    jsr other__work
     .a8
     lda #Mode__busy
 main__unnamed:
@@ -40,7 +43,7 @@ main__hook:
 table: .res 3
 
 .segment "CODE": absolute
-; .proc detour: a8, i8  main.nt65:53
+; .proc detour: a8, i8  main.nt65:58
 main__detour:
 
 .pushseg

@@ -98,7 +98,7 @@ public sealed class SemanticModel
     /// The names the file's <c>.use</c> items bring in, as it writes them: each stands for a
     /// symbol, or for a module path it may write <c>::</c> after.
     /// </summary>
-    public IReadOnlyDictionary<string, (Symbol? Symbol, string? Module)> Brought { get; }
+    public IReadOnlyDictionary<string, BroughtName> Brought { get; }
 
     /// <summary>The modules everything of whose exports a <c>.use module::*</c> brings in.</summary>
     public IReadOnlyList<ProgramSymbols.Module> Globs { get; }

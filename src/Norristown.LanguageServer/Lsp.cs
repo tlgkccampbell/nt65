@@ -295,7 +295,8 @@ internal static class Lsp
         diagnostic.Related.Count == 0
             ? null
             : [.. diagnostic.Related.Select(related => new Protocol.DiagnosticRelatedInformation(
-                new Protocol.Location(ToUri(related.Span.File), ToRange(related.Span)), related.Message))]);
+                new Protocol.Location(ToUri(related.Span.File), ToRange(related.Span)), related.Message))],
+        diagnostic.IsUnnecessary ? [Protocol.DiagnosticTag.Unnecessary] : null);
 
     private static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree, IReadOnlyList<OutlineItem> items) =>
         [.. items.Select(item => new Protocol.DocumentSymbol(
