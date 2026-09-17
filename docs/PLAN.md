@@ -38,6 +38,12 @@ nt65 trips over.
 - **`\0`.** Added to the fixed escapes; it is `\x00`. §4.
 - **`$schema` in `nt65.json`** is accepted and ignored, so a project file can name the schema
   Stage 28 ships. Every other unknown key stays an error. §5.3.
+- **`.if` in an enum body.** A member may stand under an `.if` in the enum, so that
+  `qux` under `.if TEST != 0` is one enum rather than two whole ones under exclusive
+  conditions. The condition tests the configuration, as every `.if` outside a turn does, and
+  a member without a value is still the previous member taken plus one. This is what makes the
+  set of instances of a family (Stage 26) vary by configuration in the place that lists them.
+  §6.3, §10, Appendix A (`enum` takes `if-block` among its members).
 - **Messages name the near miss.** The binder already finds the declared name a misspelling
   is a letter or two from, for the editor's fix; the message now says it, in the voice the
   messages use: "`COUNTR` is not declared; `COUNTER` is". The same for a `nt65.json` key:
@@ -53,8 +59,9 @@ nt65 trips over.
   The migration table already names all three; the diagnostics catch up with it.
 
 **Check.** Fixtures for each: numbers with separators through the oracle, `\0` in a `.strz`
-(an error, as any zero inside it is), `$schema` accepted, the near-miss messages, the three
-cascades reduced to one line each. A CLI test for the command-line messages.
+(an error, as any zero inside it is), `$schema` accepted, an enum with a member under `.if`
+built under both configurations, the near-miss messages, the three cascades reduced to one
+line each. A CLI test for the command-line messages.
 
 ## Stage 26: Routine families
 
