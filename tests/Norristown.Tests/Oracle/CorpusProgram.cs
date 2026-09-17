@@ -1,3 +1,4 @@
+using Norristown.Cli;
 using Norristown.Project;
 using Norristown.Tests.Fixtures;
 
@@ -5,13 +6,14 @@ namespace Norristown.Tests.Oracle;
 
 /// <summary>
 /// A realistic program under <c>tests/corpus</c>, built the way its <c>build.sh</c> builds it:
-/// its <c>nt65.json</c>, its sources, one linker configuration, and whatever hand-written ca65,
-/// include files and binaries sit beside them. Its <c>build/</c> directory is output and is
-/// never read.
+/// its <c>nt65.json</c>, the sources its globs name, which may be outside it, one linker
+/// configuration, and whatever hand-written ca65, include files and binaries sit beside them.
+/// Its <c>build/</c> directory is output and is never read, and a directory with no
+/// <c>nt65.json</c> is no program, only sources programs share.
 /// </summary>
 /// <param name="Name">The program's directory name.</param>
 /// <param name="Directory">Where it is.</param>
-/// <param name="Sources">Its nt65 sources, with paths relative to <paramref name="Directory"/>.</param>
+/// <param name="Sources">Its nt65 sources, with paths relative to <paramref name="Directory"/>, some perhaps above it.</param>
 /// <param name="Project">Its <c>nt65.json</c>.</param>
 /// <param name="LinkerConfig">The text of its one <c>.cfg</c> file.</param>
 /// <param name="HandWritten">Its ca65 sources, relative to <paramref name="Directory"/>.</param>
@@ -33,6 +35,7 @@ internal sealed record CorpusProgram(
     {
         var filter = Repo.Selection;
         return [.. System.IO.Directory.GetDirectories(Repo.Path("tests", "corpus"))
+            .Where(dir => File.Exists(Path.Combine(dir, ProjectFile.Name)))
             .Where(dir => string.IsNullOrEmpty(filter)
                 || Path.GetFileName(dir).Contains(filter, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal)
@@ -48,13 +51,15 @@ internal sealed record CorpusProgram(
             .OrderBy(file => file.Relative, StringComparer.Ordinal)
             .ToList();
 
-        var project = Repo.ReadText(Path.Combine(directory, ProjectFile.Name));
+        var project = ProjectFile.Read(ProjectFile.Name, Repo.ReadText(Path.Combine(directory, ProjectFile.Name)));
         return new CorpusProgram(
             Path.GetFileName(directory),
             directory,
-            [.. files.Where(f => f.Relative.EndsWith(".nt65", StringComparison.Ordinal))
-                .Select(f => new SourceFile(f.Relative, Repo.ReadText(f.Path)))],
-            ProjectFile.Read(ProjectFile.Name, project),
+            [.. project.Files.SelectMany(glob => SourceGlobs.Matching(directory, glob))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Select(path => new SourceFile(path, Repo.ReadText(Path.GetFullPath(path, directory))))],
+            project,
             Repo.ReadText(files.Single(f => f.Relative.EndsWith(".cfg", StringComparison.Ordinal)).Path),
             [.. files.Where(f => f.Relative.EndsWith(".s", StringComparison.Ordinal))
                 .Select(f => (f.Relative, Repo.ReadText(f.Path)))],

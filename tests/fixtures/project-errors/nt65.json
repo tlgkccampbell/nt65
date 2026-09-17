@@ -18,5 +18,9 @@
     "$2180": ["$00"],     // ;! error: `$2180` overlaps `$2100-$21ff`: an address is in one range at most
     "$21ff-$2100": [0],   // ;! error: `$21ff-$2100` is not a range of absolute addresses, such as "$2100-$21ff"
     "$4200": ["$00-$1ff"] // ;! error: `$4200`: "$00-$1ff" is not a bank or a range of banks
+  },
+  "configurations": {
+    "fast": { "cpu": "65816" },   // ;! error: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines` and `out`
+    "slow down": {}               // ;! error: `slow down` is not a configuration name: one is letters, digits, `_` and `-`
   }
 }

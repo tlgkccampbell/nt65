@@ -4,8 +4,9 @@ bin/
 obj/
 node_modules/
 
-# `nt65 build` writes the transpiled file next to its source; fixture snapshots live in expected/.
+# `nt65 build` in a fixture writes its output, named by module, into the fixture; snapshots live in expected/.
 tests/fixtures/*/*.s
+tests/fixtures/*/.nt65-outputs
 
 # Corpus build outputs.
 tests/corpus/*/build/

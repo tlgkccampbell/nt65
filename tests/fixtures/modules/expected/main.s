@@ -23,9 +23,9 @@ gfx__SCREEN = $0400
 .import gfx__clear__again
 .import host_print
 .import HOST_VERSION
+.assert HOST_VERSION = $0102, lderror, "HOST_VERSION is not $0102, which is what main.nt65 was built against"
 gfx__Color__white = $01
 gfx__palette__ink = $01
-.import gfx__tables
 .import gfx__tables__lo
 hw__vic__BORDER = $d020
 .import hw__vic__set_border

@@ -30,17 +30,23 @@ public static class Compiler
 
     /// <summary>
     /// The same, with <paramref name="binaryLength"/> answering how long the file an
-    /// <c>.incbin</c> names is, for a caller whose files are not where the paths say.
+    /// <c>.incbin</c> names is, for a caller whose files are not where the paths say, and a C
+    /// header of what the program exports when <paramref name="cHeader"/> names one.
     /// </summary>
     public static Compilation Compile(
-        IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?> binaryLength) =>
-        Emit(Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength), project);
+        IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?> binaryLength,
+        string? cHeader = null) =>
+        Emit(Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength), project, cHeader);
 
-    /// <summary>Writes out the program <paramref name="analysis"/> worked out.</summary>
-    public static Compilation Emit(ProgramAnalysis analysis, ProjectSettings project)
+    /// <summary>
+    /// Writes out the program <paramref name="analysis"/> worked out, and a C header of what it
+    /// exports when <paramref name="cHeader"/> names the file it goes in.
+    /// </summary>
+    public static Compilation Emit(ProgramAnalysis analysis, ProjectSettings project, string? cHeader = null)
     {
         var diagnostics = new List<Diagnostic>(analysis.Diagnostics);
         var outputs = new List<OutputFile>();
+        var direct = new Dictionary<SyntaxTree, HashSet<string>>();
 
         // Every file is written even when the program is already wrong, because what emission
         // finds — a construct no stage has reached, two names that meet in the output — is
@@ -56,14 +62,21 @@ public static class Compiler
             var elsewhere = measured.Where((_, j) => j != i).SelectMany(set => set)
                 .Where(symbol => symbol.Tree == model.Tree)
                 .ToHashSet();
-            outputs.Add(Emitter.Emit(
-                model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out, elsewhere));
+            var output = Emitter.Emit(
+                model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out, elsewhere);
+            outputs.Add(output with { Dependencies = Dependencies(analysis.Program, model, direct) });
         }
+        var header = cHeader is null ? null : CHeader.Write(analysis.Program, cHeader, diagnostics);
 
         // A program that is wrong produces no output: what would be written for it is not a
         // translation of anything.
         var ordered = Diagnostics.Ordered(diagnostics);
-        return new Compilation(ordered.Any(d => d.Severity == Severity.Error) ? [] : outputs, ordered);
+        var wrong = ordered.Any(d => d.Severity == Severity.Error);
+        return new Compilation(wrong ? [] : outputs, ordered)
+        {
+            Header = wrong ? null : header,
+            IsCpuAssumed = project.Cpu is null && !ProgramCpu.IsStated(analysis.Program.Files.Select(file => file.Tree)),
+        };
     }
 
     /// <summary>
@@ -350,6 +363,64 @@ public static class Compiler
         }
         return found.ToDictionary(
             pair => pair.Key, IReadOnlyList<Diagnostic> (pair) => pair.Value, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The files a file's output depends on, by logical path: its own source; the sources of the
+    /// modules whose interfaces it uses, and of the ones those use in turn; the files that
+    /// declare segments or settings, which any file's meaning may follow from; and the files an
+    /// <c>.incbin</c> in any of them names, whose lengths are what their addresses follow from.
+    /// <paramref name="direct"/> keeps what each file names itself, for the next file to ask.
+    /// </summary>
+    private static IReadOnlyList<string> Dependencies(
+        ProgramModel program, SemanticModel model, Dictionary<SyntaxTree, HashSet<string>> direct)
+    {
+        var models = program.Files.ToDictionary(file => file.Tree.Path, StringComparer.Ordinal);
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<SemanticModel>([model]);
+        var seen = new HashSet<SyntaxTree> { model.Tree };
+        while (pending.TryPop(out var file))
+        {
+            found.Add(file.Tree.Path);
+            foreach (var path in Named(file))
+            {
+                if (!models.TryGetValue(path, out var other))
+                    found.Add(path);
+                else if (seen.Add(other.Tree))
+                    pending.Push(other);
+            }
+        }
+        foreach (var file in program.Files)
+        {
+            if (SegmentTable.Declares(file.Tree) || Configuration.DeclaresSettings(file.Tree))
+                found.Add(file.Tree.Path);
+        }
+        found.Remove(Defines.Path);
+        return [.. found];
+
+        // The other sources a file names, and the binaries it includes.
+        HashSet<string> Named(SemanticModel file)
+        {
+            if (direct.TryGetValue(file.Tree, out var named))
+                return named;
+            named = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var reference in file.References)
+                named.Add(reference.Symbol.Tree.Path);
+            foreach (var used in file.Used)
+                named.Add(used.Tree.Path);
+            foreach (var node in file.Tree.Root.DescendantNodes())
+            {
+                if (node is { Kind: SyntaxKind.DataDirective, ChildTokens.Length: > 0 }
+                    && node.ChildTokens[0].Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
+                    && node.ChildNodes.FirstOrDefault() is { } operand
+                    && file.ValueOf(operand) is { Kind: ValueKind.String, Text: { } included })
+                {
+                    named.Add(Paths.Beside(file.Tree.Path, included));
+                }
+            }
+            named.Remove(file.Tree.Path);
+            return direct[file.Tree] = named;
+        }
     }
 
     /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>

@@ -13,6 +13,7 @@
 .export gfx__SCREEN
 .exportzp gfx__Color__black
 .exportzp gfx__Color__white
+.exportzp gfx__Sprite__sizeof
 .exportzp gfx__Sprite__x
 .exportzp gfx__Sprite__y
 .exportzp gfx__palette__border
@@ -37,6 +38,7 @@ rows   = 25
 
 gfx__Sprite__x = $00
 gfx__Sprite__y = $01
+gfx__Sprite__sizeof = $02
 
     gfx__palette__border = $0f
     gfx__palette__ink    = rows - 24

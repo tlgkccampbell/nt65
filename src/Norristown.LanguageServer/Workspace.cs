@@ -37,10 +37,11 @@ internal sealed class Workspace
             : uri;
 
     /// <summary>
-    /// Reads the project the client opened, if there is one. Its files are read from
-    /// disk; open documents replace them as the client sends them.
+    /// Reads the project the client opened, if there is one, built as the named
+    /// <paramref name="configuration"/> when one is given, as the editor's setting chooses. Its
+    /// files are read from disk; open documents replace them as the client sends them.
     /// </summary>
-    public void Load(string? rootUri)
+    public void Load(string? rootUri, string? configuration = null)
     {
         lock (gate)
         {
@@ -57,7 +58,10 @@ internal sealed class Workspace
 
             // What is wrong with the project file travels with the settings, and is reported
             // when the program is analyzed.
-            project = ProjectFile.Read(PathOf(new Uri(file).AbsoluteUri), Read(file) ?? "");
+            var path = PathOf(new Uri(file).AbsoluteUri);
+            project = ProjectFile.Read(path, Read(file) ?? "");
+            if (configuration is { Length: > 0 })
+                project = project.Configured(configuration, new Span(path, 1, 1, 2));
             onDisk = [.. project.Files
                 .SelectMany(glob => Matching(root, glob))
                 .Distinct(StringComparer.Ordinal)
@@ -169,7 +173,7 @@ internal sealed class Workspace
             ? (normalized[..at], normalized[(at + 3)..], SearchOption.AllDirectories)
             : (Folder(normalized), Leaf(normalized), SearchOption.TopDirectoryOnly);
 
-        var from = Path.Combine(root, under.Replace('/', Path.DirectorySeparatorChar));
+        var from = Path.GetFullPath(Path.Combine(root, under.Replace('/', Path.DirectorySeparatorChar)));
         if (!Directory.Exists(from) || pattern.Contains('/'))
             return [];
         return Directory.EnumerateFiles(from, pattern, search).Select(path => path.Replace('\\', '/'));

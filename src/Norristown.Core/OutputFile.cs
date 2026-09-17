@@ -13,6 +13,15 @@ namespace Norristown;
 /// </param>
 public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> LineBytes)
 {
+    /// <summary>
+    /// The files what is written depends on, by logical path, sorted: the sources whose
+    /// changing may change it, and the binaries it includes.
+    /// </summary>
+    public IReadOnlyList<string> Dependencies { get; init; } = [];
+
+    /// <summary>The logical path of the source it was written from.</summary>
+    public string Source { get; init; } = "";
+
     /// <summary>A file whose lengths nothing has worked out, such as one a test wrote by hand.</summary>
     public OutputFile(string path, string text) : this(path, text, []) { }
 }

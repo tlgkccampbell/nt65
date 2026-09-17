@@ -30,6 +30,26 @@ public sealed record ProjectSettings(
     /// <summary>No project: what <c>nt65 build main.nt65</c> works from.</summary>
     public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
 
+    /// <summary>The named configurations, in name order, of which a build chooses one or none.</summary>
+    public IReadOnlyList<BuildConfiguration> Configurations { get; init; } = [];
+
+    /// <summary>
+    /// The settings the configuration named <paramref name="name"/> builds with: its defines over
+    /// the project's, and its <c>out</c> if it gives one. A name the project does not have is
+    /// reported at <paramref name="given"/>, and the project's own settings build.
+    /// </summary>
+    public ProjectSettings Configured(string name, Span given)
+    {
+        if (Configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
+            return With(chosen.Defines) with { Out = chosen.Out ?? Out };
+        var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
+        var message = named.Count == 0
+            ? $"`{name}` is not a configuration: {ProjectFile.Name} names none"
+            : $"`{name}` is not a configuration: {ProjectFile.Name} names "
+                + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]);
+        return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, Severity.Error, message)] };
+    }
+
     /// <summary>The same settings with <paramref name="defines"/> added, overriding by name.</summary>
     public ProjectSettings With(IReadOnlyList<Define> defines)
     {

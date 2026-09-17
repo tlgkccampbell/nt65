@@ -32,6 +32,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the Norristown language server executable. Empty uses the Debug build in this repository."
+        },
+        "nt65.configuration": {
+          "type": "string",
+          "default": "",
+          "description": "The named configuration from nt65.json the editor analyzes the program as, such as \"debug\". Empty uses the project's own settings."
         }
       }
     }

@@ -73,7 +73,7 @@ public sealed partial class OracleTests
 
         var failures = Repo.CollectFailures(outputs,
             o => AssemblesToComputedLengths(
-                o.Fixture.Name, o.Output, Path.GetFileName(o.Output.Path), o.Fixture.Binaries()));
+                o.Fixture.Name, o.Output, o.Output.Path, o.Fixture.Binaries()));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 

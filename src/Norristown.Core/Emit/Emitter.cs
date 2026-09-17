@@ -29,8 +29,8 @@ public sealed class Emitter
     private readonly FlatNames names;
     private readonly List<Diagnostic> diagnostics;
     private readonly string source;
-    private readonly string directory;
-    private readonly StringBuilder output = new();
+    private readonly string output;
+    private readonly StringBuilder generated = new();
     private readonly List<int> lineBytes = [];
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
@@ -66,7 +66,7 @@ public sealed class Emitter
 
     private Emitter(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
-        string source, string directory, IReadOnlySet<Symbol> measuredElsewhere)
+        string source, string output, IReadOnlySet<Symbol> measuredElsewhere)
     {
         this.measuredElsewhere = measuredElsewhere;
         this.model = model;
@@ -74,61 +74,42 @@ public sealed class Emitter
         this.names = names;
         this.diagnostics = diagnostics;
         this.source = source;
-        this.directory = directory;
+        this.output = output;
     }
 
     /// <summary>
     /// The ca65 for <paramref name="model"/>'s file. <paramref name="outRoot"/> is the
-    /// project's output tree, or null to write beside the source. <paramref name="measuredElsewhere"/>
+    /// project's output tree, or null for the project's root. <paramref name="measuredElsewhere"/>
     /// is what the program's other files measure with <c>.endof</c> and <c>.spanof</c>.
     /// </summary>
     public static OutputFile Emit(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
         string? outRoot = null, IReadOnlySet<Symbol>? measuredElsewhere = null)
     {
-        var path = OutputPath(model.Tree.Path, outRoot);
+        var path = OutputPath(model, outRoot);
         var emitter = new Emitter(model, layout, names, diagnostics,
-            Relative(Directory(path), model.Tree.Path), Directory(path), measuredElsewhere ?? new HashSet<Symbol>());
+            model.Tree.Path, path, measuredElsewhere ?? new HashSet<Symbol>());
         emitter.Ends();
         emitter.Header();
         emitter.Exports();
         emitter.Imports();
         emitter.WalkContainer(model.Tree.Root);
-        return new OutputFile(path, emitter.output.ToString(), emitter.lineBytes);
+        return new OutputFile(path, emitter.generated.ToString(), emitter.lineBytes) { Source = model.Tree.Path };
     }
 
     /// <summary>
-    /// One <c>foo.nt65</c> produces one <c>foo.s</c>, beside it or under the project's
-    /// output tree, which mirrors the source tree.
+    /// Where a file's output goes: <c>.module gfx::sprite</c> is written to <c>gfx/sprite.s</c>
+    /// under the project's output tree, wherever the source is, so a source can move, or live
+    /// outside the project, without its output moving. A file that says no module, which is
+    /// already an error, is named after its source.
     /// </summary>
-    public static string OutputPath(string source, string? outRoot = null)
+    public static string OutputPath(SemanticModel model, string? outRoot = null)
     {
-        var path = source.EndsWith(".nt65", StringComparison.OrdinalIgnoreCase)
-            ? source[..^5] + ".s"
-            : source + ".s";
-        return string.IsNullOrEmpty(outRoot) ? path : $"{outRoot.TrimEnd('/')}/{path}";
-    }
-
-    /// <summary>The directory part of a logical path, without its trailing separator.</summary>
-    private static string Directory(string path)
-    {
-        var at = path.LastIndexOf('/');
-        return at < 0 ? "" : path[..at];
-    }
-
-    /// <summary>
-    /// <paramref name="path"/> as it is reached from <paramref name="directory"/>. Debug
-    /// information names the source relative to the output file, so that a debugger
-    /// finds the <c>.nt65</c> wherever the tree is checked out.
-    /// </summary>
-    private static string Relative(string directory, string path)
-    {
-        var from = directory.Length == 0 ? [] : directory.Split('/');
-        var to = path.Split('/');
-        var shared = 0;
-        while (shared < from.Length && shared < to.Length - 1 && from[shared] == to[shared])
-            shared++;
-        return string.Join('/', Enumerable.Repeat("..", from.Length - shared).Concat(to[shared..]));
+        var path = model.FileScope.Module is { } module
+            ? module.Replace("::", "/", StringComparison.Ordinal) + ".s"
+            : Paths.Normalized(model.Tree.Path).Split('/')[^1] is var name
+                && name.EndsWith(".nt65", StringComparison.OrdinalIgnoreCase) ? name[..^5] + ".s" : name + ".s";
+        return string.IsNullOrEmpty(outRoot) || outRoot == "." ? path : $"{outRoot.TrimEnd('/')}/{path}";
     }
 
     /// <summary>A number as the output writes it: hexadecimal, at the width it is used at.</summary>
@@ -190,10 +171,31 @@ public sealed class Emitter
             }
             names.Claim(end);
         }
+
+        foreach (var type in model.Symbols.Where(symbol => symbol.Tree == model.Tree && IsSized(symbol)))
+        {
+            var size = SizeOf(type);
+            if (names.Claimed(size) is { } other)
+            {
+                diagnostics.Add(new Diagnostic(type.DeclarationSpan, Severity.Error,
+                    $"`{other.QualifiedName}` and the size of `{type.QualifiedName}` both become `{size}` in the output",
+                    [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
+            }
+            names.Claim(size);
+        }
     }
 
     /// <summary>The label just past a symbol's last byte, which is what <c>.endof</c> stands for.</summary>
     private string EndOf(Symbol symbol) => Named(symbol) + "__end";
+
+    /// <summary>
+    /// The constant an exported struct or union's size is exported as, so that ca65 and C code
+    /// can size what they allocate by it. Like an end, its spelling is fixed.
+    /// </summary>
+    private string SizeOf(Symbol type) => Named(type) + "__sizeof";
+
+    /// <summary>Whether <paramref name="symbol"/> is a struct or union this file exports the size of.</summary>
+    private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
 
     /// <summary>Writes the end label of whatever <paramref name="declaration"/> names, if it has one.</summary>
     private void End(SyntaxNode? declaration)
@@ -255,6 +257,13 @@ public sealed class Emitter
         var any = false;
         foreach (var symbol in model.Symbols)
         {
+            if (IsSized(symbol) && symbol.Tree == model.Tree)
+            {
+                if (!any)
+                    Blank();
+                any = true;
+                Line(Linked(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeOf(symbol)));
+            }
             if (!symbol.IsExported || !ProgramSymbols.IsLinked(symbol))
                 continue;
             if (!any)
@@ -277,8 +286,10 @@ public sealed class Emitter
 
     /// <summary>
     /// Everything the file gets from outside it: what another nt65 file exports and
-    /// this one names, and what an <c>.import</c> item declares. Each carries the address
-    /// size nt65 gives it, so ca65 sizes an operand the way nt65 did.
+    /// this one names, and what an <c>.import</c> item declares and the file uses. Each carries
+    /// the address size nt65 gives it, so ca65 sizes an operand the way nt65 did. Nothing the
+    /// file does not use is imported, because an import pulls the module that defines it out
+    /// of a library.
     /// <para>
     /// A constant is not imported: ca65 cannot use an imported symbol where it needs a value,
     /// so the constant is written out here instead. A checked import is both — the value nt65
@@ -288,8 +299,9 @@ public sealed class Emitter
     private void Imports()
     {
         var any = false;
+        var used = model.Used.ToHashSet();
         foreach (var symbol in model.Symbols
-            .Where(symbol => symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant)
+            .Where(symbol => symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant && used.Contains(symbol))
             .Concat(model.ExternalSymbols))
         {
             if (Import(symbol) is not { } line)
@@ -299,9 +311,9 @@ public sealed class Emitter
             any = true;
             Line(line);
 
-            // A checked import re-exported to other modules is checked once, by the module that declares it.
-            if (symbol is { Kind: SymbolKind.ImportedConstant } && symbol.Tree == model.Tree
-                && symbol.Value.AsNumber() is { } checkedValue)
+            // A checked import is checked by every module that uses it, since each was built
+            // against the value.
+            if (symbol is { Kind: SymbolKind.ImportedConstant } && symbol.Value.AsNumber() is { } checkedValue)
             {
                 Line($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
                     + $"\"{Named(symbol)} is not {Constant(checkedValue)}, which is what "
@@ -675,8 +687,7 @@ public sealed class Emitter
     /// <summary>Where a call was written, as the comment before its expansion names it.</summary>
     private string Where(SyntaxNode call)
     {
-        var file = call.Tree == model.Tree ? source : Relative(directory, call.Tree.Path);
-        return $"{file}:{call.LineIndex + 1}";
+        return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
 
     /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
@@ -999,7 +1010,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The members of an exported layout, each written out as the constant offset it is.
+    /// The members of an exported layout, each written out as the constant offset it is, and its size.
     /// A layout nothing exports says nothing to ca65 and is left out entirely.
     /// </summary>
     private void Offsets(SyntaxNode line, SyntaxNode? opener)
@@ -1016,6 +1027,8 @@ public sealed class Emitter
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
                 Definition($"{Indent(opener)}{Named(member)} = {Constant(offset)}");
         }
+        if (IsSized(reference))
+            Definition($"{Indent(opener)}{SizeOf(reference)} = {Constant(reference.Size!.Value)}");
     }
 
     /// <summary>One enum member, which is a constant like any other.</summary>
@@ -1457,13 +1470,13 @@ public sealed class Emitter
         if (!pendingBlank)
             return;
         pendingBlank = false;
-        if (output.Length > 0)
+        if (generated.Length > 0)
             Line("");
     }
 
     private void Line(string text, int bytes = 0)
     {
-        output.Append(text.TrimEnd()).Append('\n');
+        generated.Append(text.TrimEnd()).Append('\n');
         lineBytes.Add(bytes);
     }
 
@@ -1742,7 +1755,8 @@ public sealed class Emitter
 
     /// <summary>
     /// The path of an <c>.incbin</c>, rewritten so that ca65 finds the file from the output
-    /// rather than from the source. Returns whether the directive was one.
+    /// rather than from the source: ca65 looks beside the file it is assembling, so the output
+    /// assembles from any directory. Returns whether the directive was one.
     /// </summary>
     private bool Included(SyntaxNode directive, Edits edits)
     {
@@ -1754,8 +1768,7 @@ public sealed class Emitter
         if (directive.ChildNodes.FirstOrDefault() is { } path
             && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
         {
-            var at = source.LastIndexOf('/');
-            Replace(path, "\"" + (at < 0 ? named : source[..(at + 1)] + named) + "\"", edits);
+            Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"", edits);
         }
         foreach (var argument in directive.ChildNodes.Skip(1))
             Substitute(argument, edits, nested: false);

@@ -15,9 +15,15 @@ function serverCommand(context) {
 }
 
 async function activate(context) {
+  // The active configuration goes to the server when it starts, and again whenever the
+  // `nt65` settings change.
   client = new LanguageClient('nt65', 'nt65',
     { command: serverCommand(context) },
-    { documentSelector: [{ language: 'nt65' }] });
+    {
+      documentSelector: [{ language: 'nt65' }],
+      initializationOptions: { configuration: vscode.workspace.getConfiguration('nt65').get('configuration') },
+      synchronize: { configurationSection: 'nt65' },
+    });
   await client.start();
 }
 

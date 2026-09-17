@@ -46,6 +46,23 @@ public sealed class CorpusTests
         static int Bytes(OutputFile output) => output.LineBytes.Where(bytes => bytes > 0).Sum();
     }
 
+    /// <summary>
+    /// The interop program's C is compiled with the pinned cc65 against the header nt65 writes, so
+    /// what the header declares is C cc65 accepts, and the struct sizes it asserts are cc65's.
+    /// </summary>
+    [Fact]
+    public void TheInteropCCompilesAgainstTheGeneratedHeader()
+    {
+        var program = CorpusProgram.All().SingleOrDefault(p => p.Name == "interop");
+        if (program is null)
+            return;
+        var compilation = Compiler.Compile(program.Sources, program.Project, _ => 16, "nt65.h");
+        Assert.NotNull(compilation.Header);
+
+        var said = Ca65Oracle.Pinned.CompileC(Path.Combine(program.Directory, "c", "main.c"), [("nt65.h", compilation.Header)]);
+        Assert.True(said.Length == 0, $"cc65 reported:\n{said}\nagainst:\n{compilation.Header}");
+    }
+
     private static IEnumerable<string> Check(CorpusProgram program, Compilation compilation)
     {
         if (compilation.Diagnostics.Count > 0)

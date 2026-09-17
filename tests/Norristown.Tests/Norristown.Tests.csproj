@@ -16,5 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Norristown.Core\Norristown.Core.csproj" />
     <ProjectReference Include="..\..\src\Norristown.LanguageServer\Norristown.LanguageServer.csproj" />
+    <ProjectReference Include="..\..\src\Norristown.Cli\Norristown.Cli.csproj" />
   </ItemGroup>
 </Project>

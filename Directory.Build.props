@@ -13,5 +13,7 @@
     <!-- Output never depends on the machine's culture (PLAN.md, determinism). -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The version nt65 reports. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>

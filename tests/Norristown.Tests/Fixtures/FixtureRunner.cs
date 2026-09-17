@@ -53,7 +53,16 @@ internal static class FixtureRunner
         if (update)
         {
             foreach (var path in expected.Keys.Except(actual.Keys))
+            {
                 File.Delete(Path.Combine(expectedDir, path));
+                for (var directory = Path.GetDirectoryName(Path.Combine(expectedDir, path));
+                    directory is not null && directory.Length > expectedDir.Length
+                        && !System.IO.Directory.EnumerateFileSystemEntries(directory).Any();
+                    directory = Path.GetDirectoryName(directory))
+                {
+                    System.IO.Directory.Delete(directory);
+                }
+            }
             foreach (var (path, text) in actual)
             {
                 if (!expected.TryGetValue(path, out var old) || old != text)

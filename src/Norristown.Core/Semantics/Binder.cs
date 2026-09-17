@@ -1104,7 +1104,7 @@ internal sealed class Binder
                 continue;
             if (Resolve(new Use(callee, at, Path: false, First: true, Last: true), null) is not { Symbol: { } symbol } place)
                 continue;
-            references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias));
+            references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
             if (symbol.Kind != SymbolKind.Macro)
             {
                 Report(callee.Span, $"`{callee.Text}` is a {symbol.KindText}, and `!` calls a macro");
@@ -1290,6 +1290,7 @@ internal sealed class Binder
     {
         Place? previous = null;
         var broken = false;
+        var steps = new List<(int Reference, Scope At, Symbol Symbol, SyntaxToken Token)>();
         foreach (var use in list)
         {
             var (token, at, _, first, last, splice, _, _) = use;
@@ -1297,6 +1298,7 @@ internal sealed class Binder
             {
                 previous = null;
                 broken = false;
+                steps.Clear();
             }
             else if (broken)
             {
@@ -1324,8 +1326,21 @@ internal sealed class Binder
                 }
                 continue;
             }
-            references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias));
-            RecordBodyUse(at, symbol, token);
+            var inMacro = RecordBodyUse(at, symbol, token, last);
+            if (!last)
+                steps.Add((references.Count, at, symbol, token));
+            references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias, IsStep: !last, InMacro: inMacro));
+
+            // A path to a member is an offset into what it walks through, which it therefore uses:
+            // `oam::x` is the address of `oam` plus the offset of `x`.
+            if (last && symbol.Kind == SymbolKind.Member)
+            {
+                foreach (var step in steps)
+                {
+                    references[step.Reference] = references[step.Reference] with { IsStep = false };
+                    RecordBodyUse(step.At, step.Symbol, step.Token, last: true);
+                }
+            }
             if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
                 Report(token.Span, $"`{token.Text}` is a {symbol.KindText}; a name written on its "
@@ -1339,7 +1354,8 @@ internal sealed class Binder
     /// wherever it lands, so the macro remembers it: the file that calls the macro brings it
     /// in, and an exported macro may only use what is exported too.
     /// </summary>
-    private static void RecordBodyUse(Scope at, Symbol used, SyntaxToken token)
+    /// <returns>Whether the name is written in a macro body.</returns>
+    private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
     {
         Scope? body = null;
         for (var around = at; around is not null; around = around.Parent)
@@ -1351,16 +1367,18 @@ internal sealed class Binder
             }
         }
         if (body?.Owner is not { } macro)
-            return;
+            return false;
 
-        // What the body declares, and the parameters it was given, travel with it.
+        // What the body declares, and the parameters it was given, travel with it. A step on a
+        // path is walked through, and only what the path leads to is used.
         for (var owner = used.Scope; owner is not null; owner = owner.Parent)
         {
             if (owner == body)
-                return;
+                return true;
         }
-        if (!macro.Uses.Any(seen => seen.Used == used))
+        if (last && !macro.Uses.Any(seen => seen.Used == used))
             macro.Uses.Add((used, token.Parent.Tree.GetSpan(token.Span)));
+        return true;
     }
 
     /// <summary>
@@ -1400,7 +1418,7 @@ internal sealed class Binder
             // In a condition a bare name may be a word rather than a name at all, and a word
             // is compared, never looked up.
             if (!word)
-                ReportUndeclared(token);
+                ReportUndeclared(token, last);
             return null;
         }
 
@@ -1466,15 +1484,21 @@ internal sealed class Binder
         return chosen ?? (last && IsModulePath(token.Text) ? new Place(null, token.Text) : null);
     }
 
-    /// <summary>A name no scope, <c>.use</c> or define gives any meaning, and the modules that export one like it.</summary>
-    private void ReportUndeclared(SyntaxToken token)
+    /// <summary>
+    /// A name no scope, <c>.use</c> or define gives any meaning, and the modules that export one
+    /// like it. One that starts a path, <paramref name="last"/> being false, is most likely a
+    /// module the build does not have, such as one left off the command line.
+    /// </summary>
+    private void ReportUndeclared(SyntaxToken token, bool last)
     {
         lookedUp.Add("name:" + token.Text);
         var exporting = program.ModulesExporting(token.Text).ToList();
-        Report(token.Span, exporting.Count == 0
-            ? $"`{token.Text}` is not declared"
-            : $"`{token.Text}` is not declared here, and module `{exporting[0]}` exports it: "
-                + $"write `{exporting[0]}::{token.Text}`, or bring it in with `.use {exporting[0]}::{token.Text}`");
+        Report(token.Span, exporting.Count > 0
+            ? $"`{token.Text}` is not declared here, and module `{exporting[0]}` exports it: "
+                + $"write `{exporting[0]}::{token.Text}`, or bring it in with `.use {exporting[0]}::{token.Text}`"
+            : last
+                ? $"`{token.Text}` is not declared"
+                : $"`{token.Text}` is not declared, and no module `{token.Text}` is in this build");
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
@@ -1482,7 +1506,7 @@ internal sealed class Binder
     {
         if (IsModulePath(token.Text))
             return new Place(null, token.Text);
-        report?.Invoke(token.Span, $"there is no module `{token.Text}`");
+        report?.Invoke(token.Span, $"no module `{token.Text}` is in this build");
         return null;
     }
 
@@ -1494,7 +1518,7 @@ internal sealed class Binder
             return new Place(null, path);
         if (program.ModuleNamed(prefix) is not { } module)
         {
-            report?.Invoke(token.Span, $"there is no module `{path}`");
+            report?.Invoke(token.Span, $"no module `{path}` is in this build");
             return null;
         }
         if (program.Member(module, token.Text, Touch) is not { } member)

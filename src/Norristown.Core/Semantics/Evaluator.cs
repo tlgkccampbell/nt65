@@ -1234,9 +1234,7 @@ internal sealed class Evaluator
         if (operands.Count == 0 || Evaluate(operands[0]) is not { Kind: ValueKind.String, Text: { } path })
             return null;
 
-        var from = directive.Tree.Path.LastIndexOf('/') is var at && at >= 0
-            ? directive.Tree.Path[..(at + 1)] + path
-            : path;
+        var from = Paths.Beside(directive.Tree.Path, path);
         if (binaryLength?.Invoke(from) is not { } length)
         {
             Report(directive, $"`{path}` cannot be read");

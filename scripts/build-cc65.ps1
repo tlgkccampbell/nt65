@@ -1,5 +1,6 @@
-# Builds ca65 and ld65 from the cc65 commit pinned in scripts/cc65.commit into
-# .cache/cc65/bin. The source checkout lives in .cache/cc65-src. Both are git-ignored.
+# Builds cc65, ca65 and ld65 from the cc65 commit pinned in scripts/cc65.commit into
+# .cache/cc65/bin, with the headers C and its assembly include in .cache/cc65. The source checkout lives in
+# .cache/cc65-src. Both are git-ignored.
 # Needs git, make and a MinGW gcc on PATH.
 [CmdletBinding()]
 param([switch]$Force)
@@ -13,10 +14,10 @@ $src = Join-Path $root '.cache/cc65-src'
 $bin = Join-Path $root '.cache/cc65/bin'
 $short = $sha.Substring(0, 7)
 
-if (-not $Force -and (Test-Path (Join-Path $bin 'ca65.exe'))) {
+if (-not $Force -and (Test-Path (Join-Path $bin 'ca65.exe')) -and (Test-Path (Join-Path $bin 'cc65.exe'))) {
     $version = & (Join-Path $bin 'ca65.exe') --version 2>&1 | Out-String
     if ($version -match "Git $short") {
-        Write-Host "ca65 and ld65 at $short are already built."
+        Write-Host "cc65, ca65 and ld65 at $short are already built."
         exit 0
     }
 }
@@ -29,10 +30,13 @@ if (-not (Test-Path (Join-Path $src '.git'))) {
 git -C $src fetch --quiet --depth 1 origin $sha
 git -C $src checkout --quiet --force FETCH_HEAD
 
-make -C (Join-Path $src 'src') -j $env:NUMBER_OF_PROCESSORS ca65 ld65
+make -C (Join-Path $src 'src') -j $env:NUMBER_OF_PROCESSORS cc65 ca65 ld65
 
 New-Item -ItemType Directory -Force $bin | Out-Null
-foreach ($tool in 'ca65', 'ld65') {
+foreach ($tool in 'cc65', 'ca65', 'ld65') {
     Copy-Item -Force (Join-Path $src "bin/$tool.exe") $bin
+}
+foreach ($directory in 'include', 'asminc') {
+    Copy-Item -Recurse -Force (Join-Path $src $directory) (Join-Path $root '.cache/cc65')
 }
 & (Join-Path $bin 'ca65.exe') --version

@@ -14,6 +14,7 @@ internal sealed class Server
     private readonly ServerLog log;
     private readonly Workspace workspace = new();
     private JsonRpc? rpc;
+    private string? rootUri;
 
     private Server(ServerLog log) => this.log = log;
 
@@ -41,9 +42,10 @@ internal sealed class Server
         var client = request.ClientInfo is { } info ? $"{info.Name} {info.Version}".TrimEnd() : "unknown client";
         log.Write($"connected: {client}");
 
-        // The project is read once, at the folder the client opened: its files are the program
-        // a name is resolved against.
-        workspace.Load(request.RootUri);
+        // The project is read at the folder the client opened, as the configuration the client's
+        // settings choose: its files are the program a name is resolved against.
+        rootUri = request.RootUri;
+        workspace.Load(rootUri, ActiveConfiguration(request.InitializationOptions));
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
@@ -60,6 +62,20 @@ internal sealed class Server
     public Task InitializedAsync(JsonElement _) =>
         rpc!.NotifyWithParameterObjectAsync("window/logMessage",
             new LogMessageParams(MessageType.Info, "Norristown language server ready"));
+
+    /// <summary>The client's settings changed: the project is read again as the configuration they now choose.</summary>
+    [JsonRpcMethod("workspace/didChangeConfiguration")]
+    public Task DidChangeConfigurationAsync(JsonElement request)
+    {
+        var settings = request.ValueKind == JsonValueKind.Object && request.TryGetProperty("settings", out var given)
+            && given.ValueKind == JsonValueKind.Object && given.TryGetProperty("nt65", out var own)
+            ? own
+            : (JsonElement?)null;
+        var configuration = ActiveConfiguration(settings);
+        log.Write($"configuration: {configuration ?? "the project's own"}");
+        workspace.Load(rootUri, configuration);
+        return PublishDiagnosticsAsync();
+    }
 
     [JsonRpcMethod("textDocument/didOpen")]
     public Task DidOpenAsync(DidOpenTextDocumentParams request)
@@ -150,6 +166,14 @@ internal sealed class Server
 
     [JsonRpcMethod("exit")]
     public void Exit() => rpc!.Dispose();
+
+    /// <summary>The named configuration the client's <c>nt65</c> settings choose, or null for the project's own settings.</summary>
+    private static string? ActiveConfiguration(JsonElement? settings) =>
+        settings is { ValueKind: JsonValueKind.Object } options
+            && options.TryGetProperty("configuration", out var named)
+            && named.ValueKind == JsonValueKind.String && named.GetString() is { Length: > 0 } name
+            ? name
+            : null;
 
     internal static SystemTextJsonFormatter CreateFormatter()
     {

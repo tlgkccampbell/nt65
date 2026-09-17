@@ -215,7 +215,7 @@ public sealed class BindingTests
     {
         var model = Analysis.Model(".module main\n.proc p {\n    lda nowhere::inner::deeper\n}\n");
 
-        Assert.Equal(["3: `nowhere` is not declared"], model.Problems());
+        Assert.Equal(["3: `nowhere` is not declared, and no module `nowhere` is in this build"], model.Problems());
     }
 
     [Fact]

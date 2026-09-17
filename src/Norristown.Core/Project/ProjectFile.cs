@@ -19,7 +19,7 @@ public static class ProjectFile
     /// <summary>What the project file is called.</summary>
     public const string Name = "nt65.json";
 
-    private static readonly string[] known = ["cpu", "files", "out", "defines", "segments", "ranges"];
+    private static readonly string[] known = ["cpu", "files", "out", "defines", "segments", "ranges", "configurations"];
 
     /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
@@ -71,6 +71,7 @@ public static class ProjectFile
                 diagnostics)
             {
                 Ranges = reader.Ranges(document.RootElement),
+                Configurations = reader.Configurations(document.RootElement),
             };
         }
     }
@@ -132,9 +133,14 @@ public static class ProjectFile
             return null;
         }
 
-        public IReadOnlyList<Define> Defines(JsonElement root)
+        /// <summary>
+        /// The <c>defines</c> of <paramref name="root"/>, which is the project or one of its
+        /// configurations; <paramref name="from"/> is where that is written, so a define both
+        /// give is reported where this one gives it.
+        /// </summary>
+        public IReadOnlyList<Define> Defines(JsonElement root, int from = 0)
         {
-            if (!Object(root, "defines", out var defines))
+            if (!Object(root, "defines", out var defines, from))
                 return [];
 
             var read = new List<Define>();
@@ -142,17 +148,55 @@ public static class ProjectFile
             {
                 if (!IsName(property.Name))
                 {
-                    Report(property.Name, $"`{property.Name}` is not a name");
+                    Report(property.Name, $"`{property.Name}` is not a name", from);
                     continue;
                 }
                 if (Number(property.Value) is not { } value)
                 {
-                    Report(property.Name, $"`{property.Name}` is not a number, and a define is a number");
+                    Report(property.Name, $"`{property.Name}` is not a number, and a define is a number", from);
                     continue;
                 }
-                read.Add(new Define(property.Name, value, At(property.Name)));
+                read.Add(new Define(property.Name, value, At(property.Name, from)));
             }
             return [.. read.OrderBy(define => define.Name, StringComparer.Ordinal)];
+        }
+
+        /// <summary>
+        /// <c>"debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }</c>: the named
+        /// configurations, each giving defines over the project's and an output directory.
+        /// </summary>
+        public IReadOnlyList<BuildConfiguration> Configurations(JsonElement root)
+        {
+            if (!Object(root, "configurations", out var configurations))
+                return [];
+
+            var read = new List<BuildConfiguration>();
+            var within = Offset("configurations");
+            foreach (var property in configurations.EnumerateObject())
+            {
+                var from = Offset(property.Name, within);
+                if (property.Name.Length == 0 || !property.Name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+                {
+                    Report(property.Name, $"`{property.Name}` is not a configuration name: one is letters, digits, `_` and `-`", within);
+                    continue;
+                }
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                {
+                    Report(property.Name, $"configuration `{property.Name}` is an object with `defines` and `out`", within);
+                    continue;
+                }
+                foreach (var key in property.Value.EnumerateObject())
+                {
+                    if (key.Name is not ("defines" or "out"))
+                    {
+                        Report(key.Name, $"configuration `{property.Name}`: `{key.Name}` is not a configuration key: "
+                            + "a configuration has `defines` and `out`", from);
+                    }
+                }
+                read.Add(new BuildConfiguration(
+                    property.Name, Defines(property.Value, from), String(property.Value, "out", from), At(property.Name, within)));
+            }
+            return [.. read.OrderBy(configuration => configuration.Name, StringComparer.Ordinal)];
         }
 
         public IReadOnlyList<Segment> Segments(JsonElement root)
@@ -286,18 +330,18 @@ public static class ProjectFile
             return read;
         }
 
-        public string? String(JsonElement root, string key)
+        public string? String(JsonElement root, string key, int from = 0)
         {
             if (!root.TryGetProperty(key, out var value))
                 return null;
             if (value.ValueKind == JsonValueKind.String)
                 return value.GetString();
-            Report(key, $"`{key}` is a string");
+            Report(key, $"`{key}` is a string", from);
             return null;
         }
 
-        public void Report(string key, string message) =>
-            diagnostics.Add(new Diagnostic(At(key), Severity.Error, message));
+        public void Report(string key, string message, int from = 0) =>
+            diagnostics.Add(new Diagnostic(At(key, from), Severity.Error, message));
 
         /// <summary><c>first-last</c> or a single number, each no more than <paramref name="largest"/>.</summary>
         private static (long First, long Last)? Interval(string text, long largest)
@@ -311,23 +355,27 @@ public static class ProjectFile
             return first >= 0 && first <= last && last <= largest ? (first, last) : null;
         }
 
-        private bool Object(JsonElement root, string key, out JsonElement value)
+        private bool Object(JsonElement root, string key, out JsonElement value, int from = 0)
         {
             if (!root.TryGetProperty(key, out value))
                 return false;
             if (value.ValueKind == JsonValueKind.Object)
                 return true;
-            Report(key, $"`{key}` is an object");
+            Report(key, $"`{key}` is an object", from);
             return false;
         }
 
+        /// <summary>Where a key is first written at or after <paramref name="from"/>, or <paramref name="from"/> when it is not.</summary>
+        private int Offset(string key, int from = 0) =>
+            text.IndexOf($"\"{key}\"", from, StringComparison.Ordinal) is var at && at >= 0 ? at : from;
+
         /// <summary>
-        /// Where a key is written. The text is searched for it rather than tracked while
-        /// parsing, which is enough to put a diagnostic on the right line.
+        /// Where a key is written, at or after <paramref name="from"/>. The text is searched for
+        /// it rather than tracked while parsing, which is enough to put a diagnostic on the right line.
         /// </summary>
-        private Span At(string key)
+        private Span At(string key, int from = 0)
         {
-            var at = key.Length == 0 ? -1 : text.IndexOf($"\"{key}\"", StringComparison.Ordinal);
+            var at = key.Length == 0 ? -1 : text.IndexOf($"\"{key}\"", from, StringComparison.Ordinal);
             if (at < 0)
                 return new Span(path, 1, 1, 2);
             var line = 1;

@@ -31,6 +31,37 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
+    /// The editor's active configuration is the one the program is analyzed as: its defines over
+    /// the project's, and a name the project does not have is reported.
+    /// </summary>
+    [Fact]
+    public void TheActiveConfigurationIsWhatTheProgramIsAnalyzedAs()
+    {
+        var root = Directory.CreateTempSubdirectory("nt65-workspace-");
+        try
+        {
+            File.WriteAllText(Path.Combine(root.FullName, "nt65.json"),
+                """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
+            File.WriteAllText(Path.Combine(root.FullName, "main.nt65"), ".module main\n.if DEBUG {\n    .error \"built for debugging\"\n}\n");
+            var uri = new Uri(root.FullName).AbsoluteUri;
+            var workspace = new Workspace();
+
+            workspace.Load(uri);
+            Assert.Empty(workspace.Analysis().Diagnostics);
+
+            workspace.Load(uri, "debug");
+            Assert.Equal(["built for debugging"], workspace.Analysis().Diagnostics.Select(d => d.Message));
+
+            workspace.Load(uri, "ntsc");
+            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], workspace.Analysis().Diagnostics.Select(d => d.Message));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
     /// An edit re-lexes the lines it touches and no others: the lines above and below keep
     /// the green nodes they had, which is the reuse the tree is built for.
     /// </summary>

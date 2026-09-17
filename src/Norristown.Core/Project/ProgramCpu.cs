@@ -40,6 +40,9 @@ public static class ProgramCpu
         return chosen ?? Default;
     }
 
+    /// <summary>Whether any of <paramref name="trees"/> says which CPU the program is for.</summary>
+    public static bool IsStated(IEnumerable<SyntaxTree> trees) => trees.Any(tree => Statements(tree).Count > 0);
+
     /// <summary>Every <c>.cpu</c> item in a file, in source order.</summary>
     private static List<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree) =>
         written.GetValue(tree, tree => [.. Read(tree)]);

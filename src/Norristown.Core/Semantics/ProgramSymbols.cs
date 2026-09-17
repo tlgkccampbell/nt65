@@ -59,6 +59,15 @@ public sealed class ProgramSymbols
                     [new RelatedSpan(other.Tree.GetSpan(other.NameSpan), "declared here")]));
                 continue;
             }
+            // A module's output is named after it, and a file system that ignores case would
+            // write two whose names differ only in case to one file.
+            if (byName.Values.FirstOrDefault(named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)) is { } same)
+            {
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Severity.Error,
+                    $"modules `{name}` and `{same.Name}` differ only in case, and a file system that ignores case "
+                    + "writes both to one file",
+                    [new RelatedSpan(same.Tree.GetSpan(same.NameSpan), "the other module")]));
+            }
             byName[name] = module;
             for (var at = name.LastIndexOf("::", StringComparison.Ordinal); at > 0; at = name.LastIndexOf("::", at - 1, StringComparison.Ordinal))
                 prefixes.Add(name[..at]);

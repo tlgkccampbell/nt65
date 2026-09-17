@@ -7,14 +7,9 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "rt.nt65", 476, 0
+.dbg file, "rt.nt65", 513, 0
 
 .export rt__ticks: abs
-
-.importzp host_tick
-.import host_print
-.import HOST_VERSION
-.assert HOST_VERSION = $0102, lderror, "HOST_VERSION is not $0102, which is what rt.nt65 was built against"
 
 .segment "ZEROPAGE": zeropage
 .dbg line, "rt.nt65", 14

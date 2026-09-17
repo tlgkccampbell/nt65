@@ -1,5 +1,8 @@
 {
   "cpu": "6502",
   "files": ["src/*.nt65"],
-  "defines": { "VOICES": 2 }
+  "defines": { "VOICES": 2 },
+  "configurations": {
+    "pal": { "defines": { "hw::PAL": 1, "hw::CHANNELS": 1 } }
+  }
 }

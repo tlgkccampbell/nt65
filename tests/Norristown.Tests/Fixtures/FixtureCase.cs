@@ -14,8 +14,9 @@ namespace Norristown.Tests.Fixtures;
 /// output's path.</item>
 /// </list>
 /// <para>
-/// A fixture may also be built more than one way: an <c>nt65.<em>label</em>.json</c> beside
-/// the project file is another configuration of the same sources, with its snapshot under
+/// A fixture may also be built more than one way: each named configuration in its project
+/// file, and each <c>nt65.<em>label</em>.json</c> beside it — for what a configuration cannot
+/// change, such as the CPU — is another build of the same sources, with its snapshot under
 /// <c>expected.<em>label</em></c>. What differs between two builds of one program is then
 /// two snapshots to read side by side. All of them must be clean, because an inline
 /// <c>;!</c> says nothing about which configuration reports it.
@@ -63,13 +64,26 @@ internal sealed partial record FixtureCase(
             var label = file.Length > "nt65.json".Length ? file["nt65.".Length..^".json".Length] : "";
 
             var text = new SourceFile(file, Repo.ReadText(json));
+            var project = Norristown.Project.ProjectFile.Read(Norristown.Project.ProjectFile.Name, text.Text);
             cases.Add(new FixtureCase(
                 label.Length == 0 ? name : $"{name} ({label})",
                 directory,
                 sources,
-                Norristown.Project.ProjectFile.Read(Norristown.Project.ProjectFile.Name, text.Text),
+                project,
                 text,
                 label.Length == 0 ? DefaultExpectedDirectory : $"{DefaultExpectedDirectory}.{label}"));
+            if (label.Length > 0)
+                continue;
+            foreach (var configuration in project.Configurations)
+            {
+                cases.Add(new FixtureCase(
+                    $"{name} ({configuration.Name})",
+                    directory,
+                    sources,
+                    project.Configured(configuration.Name, default),
+                    text,
+                    $"{DefaultExpectedDirectory}.{configuration.Name}"));
+            }
         }
         if (cases.Count == 0)
         {
@@ -108,13 +122,13 @@ internal sealed partial record FixtureCase(
     }
 
     /// <summary>
-    /// The binaries a fixture's sources name, for an assembler that has to find them beside
-    /// the generated file rather than beside the fixture.
+    /// The binaries a fixture's sources name, at their paths in the fixture, which is where
+    /// the generated file looks for them from its own path.
     /// </summary>
     public IReadOnlyList<(string Name, byte[] Content)> Binaries() =>
-        [.. System.IO.Directory.GetFiles(Directory, "*.bin")
+        [.. System.IO.Directory.GetFiles(Directory, "*.bin", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
-            .Select(path => (System.IO.Path.GetFileName(path), File.ReadAllBytes(path)))];
+            .Select(path => (RelativePath(Directory, path), File.ReadAllBytes(path)))];
 
     /// <summary>Expected output, keyed by output path.</summary>
     public SortedDictionary<string, string> ExpectedOutputs()

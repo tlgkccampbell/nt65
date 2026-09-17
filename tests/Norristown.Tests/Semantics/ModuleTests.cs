@@ -202,7 +202,8 @@ public sealed class ModuleTests
 
     /// <summary>
     /// A re-exported import is used by other modules as if they had declared it: each imports it
-    /// under its own name, and only the module that declares it asserts its value.
+    /// under its own name and asserts its value, and the module that declares it and uses it nowhere
+    /// writes nothing for it.
     /// </summary>
     [Fact]
     public void AReexportedImportIsImportedWhereItIsUsed()
@@ -213,9 +214,30 @@ public sealed class ModuleTests
 
         Assert.Contains(".import BORDER\n", outputs["main.s"]);
         Assert.Contains(".importzp tick\n", outputs["main.s"]);
-        Assert.DoesNotContain(".assert", outputs["main.s"]);
-        Assert.Contains(".assert BORDER = $d020, lderror,", outputs["hw.s"]);
+        Assert.Contains(".assert BORDER = $d020, lderror,", outputs["main.s"]);
+        Assert.DoesNotContain(".import", outputs["hw.s"]);
         Assert.DoesNotContain(".export", outputs["hw.s"]);
+    }
+
+    /// <summary>
+    /// Only what a file uses is imported, since an import pulls its module out of a library: a
+    /// path uses what it leads to and not the routine it walks through, a macro body is used
+    /// where it is called, and an import nothing uses is not written at all.
+    /// </summary>
+    [Fact]
+    public void OnlyWhatAFileUsesIsImported()
+    {
+        var outputs = Analysis.Outputs(
+            ("lib.nt65", ".module lib\n.segment CODE\n.export .proc outer {\n    .export inner\ninner:\n    rts\n}\n"
+                + ".export .proc other {\n    rts\n}\n"),
+            ("main.nt65", ".module main\n.import unused: proc(), later: proc()\n.macro call_other() {\n    jsr lib::other\n    jsr later\n}\n"
+                + ".segment CODE\n.proc main {\n    jmp lib::outer::inner\n}\n"));
+
+        Assert.Contains(".import lib__outer__inner\n", outputs["main.s"]);
+        Assert.DoesNotContain("lib__outer\n", outputs["main.s"]);
+        Assert.DoesNotContain("lib__other", outputs["main.s"]);
+        Assert.DoesNotContain("unused", outputs["main.s"]);
+        Assert.DoesNotContain("later", outputs["main.s"]);
     }
 
     /// <summary>Two modules may each export a name; the linker sees each under its own module's.</summary>

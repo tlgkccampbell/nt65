@@ -32,6 +32,9 @@ SCREEN_PAGES = 4
 .data here:       .addr table
 .data there:      .faraddr table
 .data greeting:   .strz "hello"
+; An import is written into the output only where it is used.
+.data imported:   .addr _printf, tick, reset, raw, VIC_BORDER, zp_scratch
+.data far_import: .faraddr far_table
 .data padding:    .byte[16] {
     .repeat 16 {
         $ff
@@ -85,4 +88,4 @@ SCREEN_PAGES = 4
 }
 
 ; Exported, so that what the file only declares counts as used.
-.export SCREEN_PAGES, frame, words, wide, here, there, greeting, padding
+.export SCREEN_PAGES, frame, words, wide, here, there, greeting, padding, imported, far_import

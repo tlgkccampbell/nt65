@@ -45,13 +45,14 @@ public sealed class SemanticModel
         // linker either, any more than a define is.
         // A macro this file calls is expanded into it, so what its body uses is named in this
         // file's output and has to be brought in here, exactly as if the file had written it.
-        ExternalSymbols = [.. References
-            .Where(reference => !reference.IsDeclaration && !reference.InUse)
+        Used = [.. References
+            .Where(reference => reference is { IsDeclaration: false, InUse: false, IsStep: false, InMacro: false })
             .Select(reference => reference.Symbol)
             .Concat(expanded)
-            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine && !symbol.IsConfig
-                && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))
             .Distinct()];
+        ExternalSymbols = [.. Used
+            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine && !symbol.IsConfig
+                && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))];
     }
 
     /// <summary>The file this model is of.</summary>
@@ -81,6 +82,13 @@ public sealed class SemanticModel
     /// define is written as its value and is no symbol to the linker.
     /// </summary>
     public IReadOnlyList<Symbol> ExternalSymbols { get; }
+
+    /// <summary>
+    /// Every symbol this file's output uses, in the order it first names them: what its code and
+    /// data name, and what the bodies of the macros it calls name. A path uses what it leads to
+    /// and not the steps on the way, and a macro body is used where it is called.
+    /// </summary>
+    public IReadOnlyList<Symbol> Used { get; }
 
     /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
     public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>

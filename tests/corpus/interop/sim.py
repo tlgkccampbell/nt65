@@ -1,7 +1,7 @@
-# Minimal 65C02 simulator for this test (binary mode only). Loads build/app.bin.
+# Minimal 65C02 simulator for this test (binary mode only). Loads build/release/app.bin, or the binary named.
 import sys
 m = bytearray(0x10000)
-img = open('build/app.bin', 'rb').read()
+img = open(sys.argv[1] if len(sys.argv) > 1 else 'build/release/app.bin', 'rb').read()
 m[0x0800:0x7800] = img[:0x7000]
 m[0xF000:0x10000] = img[0x7000:]
 A = X = Y = 0; S = 0xFF; C = Z = N = V = 0; I = 1; D = 0

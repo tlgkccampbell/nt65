@@ -42,7 +42,7 @@ that targets an existing, widely deployed toolchain rather than replacing it.
 The priority is working alongside existing ca65 and cc65 code in the same build, not
 accepting ca65 source. nt65 promises a project that mixes them:
 
-1. **Toolchain.** `nt65 build` writes one ca65 source file per `.nt65` file. The project
+1. **Toolchain.** `nt65 build` writes one ca65 source file per module, named after it. The project
    assembles those files with its existing ca65, built from the cc65 commit nt65 pins
    (§13), and links them with its existing ld65 configuration. nt65 never runs ca65 or ld65, and never reads,
    requires or changes a linker configuration.
@@ -58,16 +58,20 @@ accepting ca65 source. nt65 promises a project that mixes them:
    (`gfx__clear` for `clear` in module `gfx`, `gfx__clear__again` for an exported interior
    label), or as the name its `as` gives, and carries the address size nt65 uses or its
    export states: `.exportzp` for a zero-page label or a constant below `$100`, `far` for a
-   far label or constant. Enum, struct and union members are exported as flat constants,
-   and a checked import is verified by ld65.
+   far label or constant. Enum, struct and union members are exported as flat constants, a
+   struct or union's size as its linker name and `__sizeof`, and a checked import is verified
+   by ld65. A module imports only what it uses, so it pulls nothing else out of a library.
 5. **Nothing extra.** nt65 adds no runtime, library, segment or startup code. Every
    label it generates is local to its file, except an `f__end` label that another file
-   uses through `.endof`.
+   uses through `.endof` and the `__sizeof` of an exported struct or union.
 6. **Deterministic output.** The same sources and configuration produce byte-identical
    output, and `nt65 build` rewrites only the output files whose contents change, so a
    build system reassembles only what an edit affected.
 7. **Debugging.** With `ca65 -g` and `ld65 --dbgfile`, debug information refers to
-   `.nt65` files and lines (§13), and generated names are derived from source names.
+   `.nt65` files, by their paths from the project root, and lines (§13), and generated names
+   are derived from source names.
+8. **C.** `nt65 build --c-header` writes a C header of what the program exports, in cc65's
+   types, and make-style dependencies come from `--depfile` (§5.3, §13).
 
 nt65 does not promise:
 
@@ -381,13 +385,22 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],
     "$4200-$43ff": ["$00-$3f", "$80-$bf"]
+  },
+  "configurations": {
+    "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" },
+    "pal":   { "defines": { "hw::PAL": 1 }, "out": "build/pal" }
   }
 }
 ```
 
 - `cpu`: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`. A `.cpu` item in a file must agree.
-- `files`: globs. Order is not significant.
-- `out`: where each `foo.s` goes, mirroring the source tree.
+- `files`: globs, from the project root. Order is not significant, and a glob may reach above
+  the root, so a library shared between projects is part of each.
+- `out`: where the output goes, the project root when there is none. A module's output is
+  named after it, `.module gfx::sprite` in `out/gfx/sprite.s`, wherever its source is, so
+  moving a source does not move its output. nt65 records what it wrote in
+  `out/.nt65-outputs`, and a later build deletes the output of a module that has gone from the
+  program; it deletes nothing the record does not name.
 - `defines`: the build configuration. Each define is a constant visible in every file,
   as if every module had brought it in, and defines are the only symbols an `.if` condition
   may test (§10). `-D NAME=value` on the command line adds a define or overrides one
@@ -403,8 +416,39 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
   and no two keys may overlap.
+- `configurations`: named builds of the program. Each gives `defines` over the project's,
+  by name, and an `out` in place of the project's; `--config name` chooses one, `-D`
+  overrides on top of it, and with none chosen the project's own settings build. The editor's
+  setting for the active configuration chooses the one a language server analyzes.
 
 Numbers are JSON numbers or strings in nt65 number syntax.
+
+**The command line.** `nt65 build` finds `nt65.json` in the directory it runs in or the
+nearest one above it, or takes `--project`. Every path it writes into output, and every
+path in the dependency file, is from the project root, which is the directory a build
+normally runs in; what it tells the person running it is from where they are.
+
+| option | |
+|---|---|
+| `--project <file>` | the project file, or the directory that holds it |
+| `--config <name>` | a named configuration |
+| `--cpu <cpu>` | the processor, when the project does not say |
+| `-D NAME[=value]` | a define, or a module's `.config` |
+| `--out <dir>` | where output goes, in place of the configuration's `out` |
+| `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
+| `--c-header <file>` | a C header of what the program exports (§13) |
+| `--help`, `--version` | |
+
+A file named on the command line is built as part of its project, so a name another module
+exports means what it means there, and only its output is written. Without a project the
+named files are the program, and a name whose module is not among them says so. A program
+that says nothing about its processor is built for the 6502, and `nt65 build` notes it.
+
+An output whose text is unchanged is not rewritten, so a build tool sees it as unchanged; one
+that is older than something it depends on is touched instead, so that make does not run nt65
+for it again. One nt65 run writes every output that changed, and the others are up to date
+when make reaches them, so a Makefile names each output as a target of the same rule, with no
+marker file.
 
 ## 6. Symbols and scopes
 
@@ -2015,7 +2059,8 @@ What another module's output does with a name depends on its kind:
 - **An import** may be exported, `.export .import sp: zp`. Other modules use it as if they had
   declared the import, with its size, signature and checked value; each writes its own
   `.import`, the re-exporting module writes no ca65 export, and the `lderror` assertion of a
-  checked import is written once, by the module that declares it.
+  checked import is written by each module that uses it, since each was built against the
+  value.
 - **Another module's name** is re-exported with `.export .use hw::vic::border`, which makes
   `border` part of this module's interface: users reach it as `hw::border`, and it keeps the
   linker name of its definition, so a re-export emits nothing. A facade module presents the
@@ -2053,19 +2098,26 @@ empty.
   operand, sized by its import, but it cannot appear where nt65 needs its value (`.res`,
   `.repeat`, the `ranges` check of §7.5).
 - **A checked import**, `.import NAME = value`, gives nt65 the value. nt65 uses `value`
-  wherever `NAME` appears, and the output imports `NAME` and asserts `NAME = value` with
-  `lderror`, so ld65 fails the link if the ca65 definition differs.
+  wherever `NAME` appears, and the output of each module that uses it imports `NAME` and
+  asserts `NAME = value` with `lderror`, so ld65 fails the link if the ca65 definition differs.
+- **An import is written only where it is used.** A module's output imports what its code and
+  data name, and what the macros it calls name; an import nothing uses is not written, and a
+  path imports what it leads to rather than what it walks through, so `jmp outer::inner`
+  imports `outer__inner` alone. An import pulls the module that defines it out of an `ar65`
+  library, so writing an unused one would link code nothing calls.
 - **nt65 exports** are ordinary symbols to ca65: addresses, routines and constants, and
   for an exported enum, struct or union its members as flat constants (`gfx__Color__red`,
-  `game__Player__hp`). Each export carries the address size nt65 uses, so a zero-page label
-  or a constant below `$100` is exported with `.exportzp`, unless its export gives a size.
+  `game__Player__hp`), and for a struct or union its size (`game__Player__sizeof`). Each export
+  carries the address size nt65 uses, so a zero-page label or a constant below `$100` is
+  exported with `.exportzp`, unless its export gives a size.
 - **Macros do not cross** from ca65, and there is no `.include`. Definitions several nt65
   modules share, such as a machine's hardware registers, live in an nt65 module that exports
   them.
 
 ## 13. Transpilation
 
-One `foo.nt65` produces one `foo.s`. The output is readable ca65 with a header comment
+One module produces one `.s`, named after it: `.module gfx::sprite` is `gfx/sprite.s` under
+the project's `out` (§5.3). The output is readable ca65 with a header comment
 and source spellings preserved where possible. It is deterministic: the same sources and
 configuration give byte-identical output, and `nt65 build` rewrites a file only when its
 contents change.
@@ -2127,8 +2179,10 @@ indirect operand, and a unary `+` keeps it an expression without changing what i
 worth.
 
 **Debug information.** After the header, each output file names its source with
-`.dbg file`: the path relative to the output file, the size, and a timestamp of zero,
-so the output does not depend on file timestamps. A `.dbg line` directive precedes every
+`.dbg file`: the source's path from the project root, the size, and a timestamp of zero,
+so the output does not depend on file timestamps. ca65 records the path as written, in its
+messages and in the object file, and ld65 copies it into the debug file, so it is spelled
+from the directory a build runs in, where a debugger reading the debug file finds the source. A `.dbg line` directive precedes every
 generated line that produces bytes, instruction or data. With `ca65 -g` and
 `ld65 --dbgfile`, ld65's debug file maps each span of bytes to its `.nt65` file and line,
 recorded as external source lines, as cc65 does for C; without `-g`, ca65 ignores the
@@ -2187,11 +2241,32 @@ macros, and a comment naming the call precedes the expansion.
 | `.export s`, `.export .proc s {` | `.export m__s`, `.exportzp m__s`, `.export m__s: far` or `.export m__s: abs`, in module `m`, with nt65's address size or the export's |
 | `.import N = v` | `.import N` and `.assert N = v, lderror, ...`; uses of `N` are emitted as `v` |
 | `.incbin "f"` | `.incbin` with the path made relative to the output file |
+| `.export .struct T {`, `.export .union T {` | its members as constants, and `m__T__sizeof`, its size |
 | `.module`, `.use`, `.export .use` | nothing |
 | reference to another module's address | `.import m__s` or `.importzp m__s` in the referencing module, or an import's own name |
 | reference to another module's constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing module |
 | `NAME = expr` | `NAME = expr`, for a constant or an address alias, written where it stands and opening no segment; one using `*` is in its segment |
 | a define | its value |
+
+**The C header.** `nt65 build --c-header nt65.h` writes what the program exports as C for
+cc65, so C and nt65 share one declaration of each type rather than two kept in step by hand:
+
+- a struct or union as a C struct or union, member by member in cc65's types, with
+  `_Static_assert` on the size nt65 gives it: `.byte` is `unsigned char`, `.word`
+  `unsigned int`, `.addr` `void*`, `.dword` `unsigned long`, a record member its type, and a
+  width C has no integer for (`.faraddr`, `.long` and the big-endian types) an array of bytes;
+  an array member is an array;
+- an enum as a C enum, and a constant as `#define`;
+- a data declaration as `extern`, an array sized by its count, and bytes where it holds text,
+  binary data or mixed data;
+- a routine, or an exported interior label, as `extern void name(void);`. What it takes and
+  returns is the programmer's to declare, and C does not allow a second prototype that
+  differs, so each is skipped when `NT65_OWN_name` is defined before the header is included.
+
+Every C name is the symbol's linker name, without the `_` cc65 puts before a C name. A routine
+or data declaration exported without one, which C cannot name, is left out with a warning
+saying to export it `as "_name"`, and data of a type that is not exported is declared as
+bytes, with a warning.
 
 ### Example
 
@@ -2318,7 +2393,8 @@ and holds no values is reported. A name written in a branch the configuration le
 counts as used, because the other build uses it, and a file with errors gets none.
 
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
-lines in a branch that is not taken still parse, but are not resolved or analyzed.
+lines in a branch that is not taken still parse, but are not resolved or analyzed. The editor
+has a setting for which named configuration (§5.3) that is.
 
 **The incremental boundary is the file's interface**: its module's name, what it
 re-exports, and its exported declarations, each
@@ -2395,6 +2471,18 @@ Recorded so the reasoning survives. None is open.
   padded with zeros, because a short jump table is exactly the mistake a count exists to
   catch; padding is written with a `.repeat` in the body.
 - **JSON for the project file.**
+- **Output is named by module**, not by source file. A module is one file, so the mapping is
+  one to one, and a source can move or live outside the project without its output moving.
+- **Named configurations in the project file**, over one set of defines. A debug build and a
+  release build differ in a few defines and where their output goes, and a Makefile or an
+  editor names one rather than repeating its `-D`s; each writing to its own `out` is what lets
+  a build switch between them without marker files.
+- **The C header comes from exports.** Declaring a struct in C and in nt65 is two layouts kept
+  in step by hand; the linker name is already the C name. Routines are `void name(void)`, with
+  `NT65_OWN_name` to replace it, because nt65 knows how a routine leaves the processor and not
+  which C types its arguments are.
+- **Only what is used is imported**, and a checked import is asserted by each module that uses
+  it. An import pulls its module out of a library, so an unused one links code nothing calls.
 - **Whitespace binds nothing.** `lda # 1` is `lda #1`, as it is in ca65, which assembles
   it without complaint. Maximal munch (§4) stays the one place spacing changes what a line
   means; making `#` bind to its expression would be a second such rule, and would raise the

@@ -89,6 +89,65 @@ public sealed class ProjectFileTests
         Assert.Equal("build", project.Out);
     }
 
+    /// <summary>
+    /// A named configuration gives defines over the project's, by name, and its own output
+    /// directory; with none chosen, the project's own settings build.
+    /// </summary>
+    [Fact]
+    public void AConfigurationOverridesTheDefinesAndTheOutput()
+    {
+        var project = Read("""
+            {
+              "out": "build",
+              "defines": { "DEBUG": 0, "LEVEL": 3 },
+              "configurations": {
+                "pal":   { "defines": { "hw::PAL": 1 } },
+                "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }
+              }
+            }
+            """);
+
+        Assert.Empty(project.Diagnostics);
+        Assert.Equal(["debug", "pal"], project.Configurations.Select(configuration => configuration.Name));
+
+        var debug = project.Configured("debug", default);
+        Assert.Equal("build/debug", debug.Out);
+        Assert.Equal([("DEBUG", 1L), ("LEVEL", 3L)], debug.Defines.Select(define => (define.Name, define.Value)));
+
+        var pal = project.Configured("pal", default);
+        Assert.Equal("build", pal.Out);
+        Assert.Equal([("DEBUG", 0L), ("LEVEL", 3L), ("hw::PAL", 1L)], pal.Defines.Select(define => (define.Name, define.Value)));
+    }
+
+    [Theory]
+    [InlineData("""{ "configurations": { "debug": {} } }""", "ntsc", "`ntsc` is not a configuration: nt65.json names `debug`")]
+    [InlineData("{}", "ntsc", "`ntsc` is not a configuration: nt65.json names none")]
+    public void AConfigurationTheProjectDoesNotNameIsReported(string text, string name, string message)
+    {
+        var configured = Read(text).Configured(name, new Span("--config", 1, 1, 2));
+
+        Assert.Equal(message, Assert.Single(configured.Diagnostics).Message);
+    }
+
+    /// <summary>A define a configuration gets wrong is reported where the configuration writes it.</summary>
+    [Fact]
+    public void AConfigurationsDefineIsReportedWhereItIsWritten()
+    {
+        var project = Read("""
+            {
+              "defines": { "N": 1 },
+              "configurations": {
+                "a": { "defines": { "N": true }, "cpu": "65816" }
+              }
+            }
+            """);
+
+        Assert.Equal(
+            [(4, "`N` is not a number, and a define is a number"),
+                (4, "configuration `a`: `cpu` is not a configuration key: a configuration has `defines` and `out`")],
+            project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
+    }
+
     /// <summary><c>-D NAME=value</c> takes a number in nt65's syntax; a bare name is a flag.</summary>
     [Theory]
     [InlineData("DEBUG=1", "DEBUG", 1L)]

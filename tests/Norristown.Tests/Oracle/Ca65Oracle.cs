@@ -7,7 +7,8 @@ namespace Norristown.Tests.Oracle;
 
 /// <summary>
 /// Runs ca65 built from the pinned cc65 commit (scripts/cc65.commit), and nothing else: not
-/// whatever is on PATH, and not a build that reports another commit.
+/// whatever is on PATH, and not a build that reports another commit. The ld65 and cc65 beside
+/// it are the same build.
 /// </summary>
 internal sealed partial class Ca65Oracle
 {
@@ -18,6 +19,7 @@ internal sealed partial class Ca65Oracle
 
     private readonly string ca65;
     private readonly string ld65;
+    private readonly string cc65;
     private readonly string commit;
     private readonly string? cacheDirectory;
 
@@ -29,6 +31,7 @@ internal sealed partial class Ca65Oracle
         CheckVersion(output, pinnedCommit);
         ca65 = ca65Path;
         ld65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "ld65.exe" : "ld65");
+        cc65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "cc65.exe" : "cc65");
         commit = pinnedCommit;
         this.cacheDirectory = cacheDirectory;
     }
@@ -169,6 +172,28 @@ internal sealed partial class Ca65Oracle
 
             var binary = Path.Combine(work.FullName, "linked.bin");
             return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : []);
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Compiles the C file <paramref name="source"/> with cc65 for no particular target, finding
+    /// <paramref name="headers"/> beside it and cc65's own headers where the build put them.
+    /// </summary>
+    /// <returns>What cc65 said, which is empty when it compiled cleanly.</returns>
+    public string CompileC(string source, IReadOnlyList<(string Name, string Text)> headers)
+    {
+        var work = Directory.CreateTempSubdirectory("nt65-cc65-");
+        try
+        {
+            foreach (var (name, text) in headers)
+                WriteText(work.FullName, name, text);
+            var include = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(cc65)!)!, "include");
+            var (code, said) = Execute(cc65, ["-t", "none", "-I", ".", "-I", include, "-o", "compiled.s", source], work.FullName);
+            return code == 0 && said.Trim().Length == 0 ? "" : said.Trim() + (code == 0 ? "" : $"\n(exit code {code})");
         }
         finally
         {
