@@ -19,6 +19,7 @@ public sealed class SymbolRequestsTests
     /// something of each kind to find.
     /// </summary>
     private const string Source = """
+        .module main
         .segment ZEROPAGE {
         .data ptr:    .word
         }
@@ -64,13 +65,13 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var label = await client.HoverAsync(Uri, new Position(1, 6), timeout);
+        var label = await client.HoverAsync(Uri, new Position(2, 6), timeout);
         Assert.NotNull(label);
         Assert.Contains("**data declaration** `ptr`", label.Contents.Value);
         Assert.Contains("address size: `zp` (1 byte)", label.Contents.Value);
         Assert.Contains("segment: `ZEROPAGE`", label.Contents.Value);
 
-        var constant = await client.HoverAsync(Uri, new Position(4, 0), timeout);
+        var constant = await client.HoverAsync(Uri, new Position(5, 0), timeout);
         Assert.NotNull(constant);
         Assert.Contains("**constant** `SCREEN`", constant.Contents.Value);
         Assert.Contains("value: `$0400`", constant.Contents.Value);
@@ -84,10 +85,10 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(7, 11), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(8, 11), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**routine** `gfx::init`", hover.Contents.Value);
-        Assert.Equal(new Range(new Position(7, 10), new Position(7, 14)), hover.Range);
+        Assert.Equal(new Range(new Position(8, 10), new Position(8, 14)), hover.Range);
     }
 
     /// <summary>
@@ -100,6 +101,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, """
+            .module main
             .struct Point {
             x:      .word
             y:      .word
@@ -114,18 +116,18 @@ public sealed class SymbolRequestsTests
             """);
         await client.NextDiagnosticsAsync(timeout);
 
-        var member = await client.HoverAsync(Uri, new Position(7, 0), timeout);
+        var member = await client.HoverAsync(Uri, new Position(8, 0), timeout);
         Assert.NotNull(member);
         Assert.Contains("**member** `Player::hp`", member.Contents.Value);
         Assert.Contains("offset: `4`", member.Contents.Value);
         Assert.Contains("size: `1` byte", member.Contents.Value);
 
-        var nested = await client.HoverAsync(Uri, new Position(6, 0), timeout);
+        var nested = await client.HoverAsync(Uri, new Position(7, 0), timeout);
         Assert.NotNull(nested);
         Assert.Contains("type: `Point`", nested.Contents.Value);
         Assert.Contains("size: `4` bytes", nested.Contents.Value);
 
-        var array = await client.HoverAsync(Uri, new Position(10, 6), timeout);
+        var array = await client.HoverAsync(Uri, new Position(11, 6), timeout);
         Assert.NotNull(array);
         Assert.Contains("**data declaration** `here`", array.Contents.Value);
         Assert.Contains("size: `20` bytes", array.Contents.Value);
@@ -139,7 +141,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(10, 4), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(11, 4), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**label** `@loop`", hover.Contents.Value);
         Assert.Contains("private to: `init`", hover.Contents.Value);
@@ -151,7 +153,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        Assert.Null(await client.HoverAsync(Uri, new Position(13, 4), timeout));
+        Assert.Null(await client.HoverAsync(Uri, new Position(14, 4), timeout));
     }
 
     /// <summary>
@@ -165,7 +167,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(8, 8), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(9, 8), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**2 cycles**", hover.Contents.Value, StringComparison.Ordinal);
 
@@ -181,7 +183,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(11, 8), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(12, 8), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**2-4 cycles**", hover.Contents.Value, StringComparison.Ordinal);
     }
@@ -195,10 +197,10 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".cpu 65816\n.segment CODE\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(Uri, new Position(4, 5), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(5, 5), timeout);
         Assert.NotNull(hover);
         Assert.Contains("**3 cycles**", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("state here: `a16, i8, native`, 1 pushed", hover.Contents.Value, StringComparison.Ordinal);
@@ -210,10 +212,10 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".cpu 65816\n.segment CODE\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(Uri, new Position(3, 5), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(4, 5), timeout);
         Assert.NotNull(hover);
         Assert.Contains("writes `rep #$20`", hover.Contents.Value, StringComparison.Ordinal);
     }
@@ -225,10 +227,10 @@ public sealed class SymbolRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `ptr` used on the `lda ptr` line, declared on line 2.
-        var definition = await client.DefinitionAsync(Uri, new Position(18, 8), timeout);
+        var definition = await client.DefinitionAsync(Uri, new Position(19, 8), timeout);
         Assert.NotNull(definition);
         Assert.Equal(Uri, definition.Uri);
-        Assert.Equal(new Range(new Position(1, 6), new Position(1, 9)), definition.Range);
+        Assert.Equal(new Range(new Position(2, 6), new Position(2, 9)), definition.Range);
     }
 
     /// <summary>Each part of a path finds its own declaration.</summary>
@@ -238,11 +240,11 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var scope = await client.DefinitionAsync(Uri, new Position(17, 8), timeout);
-        Assert.Equal(new Range(new Position(6, 7), new Position(6, 10)), scope?.Range);
+        var scope = await client.DefinitionAsync(Uri, new Position(18, 8), timeout);
+        Assert.Equal(new Range(new Position(7, 7), new Position(7, 10)), scope?.Range);
 
-        var routine = await client.DefinitionAsync(Uri, new Position(17, 13), timeout);
-        Assert.Equal(new Range(new Position(7, 10), new Position(7, 14)), routine?.Range);
+        var routine = await client.DefinitionAsync(Uri, new Position(18, 13), timeout);
+        Assert.Equal(new Range(new Position(8, 10), new Position(8, 14)), routine?.Range);
     }
 
     [Fact]
@@ -251,11 +253,11 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var all = await client.ReferencesAsync(Uri, new Position(1, 6), includeDeclaration: true, timeout);
-        Assert.Equal([1, 9, 18], all.Select(location => location.Range.Start.Line));
+        var all = await client.ReferencesAsync(Uri, new Position(2, 6), includeDeclaration: true, timeout);
+        Assert.Equal([2, 10, 19], all.Select(location => location.Range.Start.Line));
 
-        var uses = await client.ReferencesAsync(Uri, new Position(1, 6), includeDeclaration: false, timeout);
-        Assert.Equal([9, 18], uses.Select(location => location.Range.Start.Line));
+        var uses = await client.ReferencesAsync(Uri, new Position(2, 6), includeDeclaration: false, timeout);
+        Assert.Equal([10, 19], uses.Select(location => location.Range.Start.Line));
     }
 
     /// <summary>A cheap local is private to its proc, so its uses are the ones inside it.</summary>
@@ -265,8 +267,8 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var all = await client.ReferencesAsync(Uri, new Position(10, 4), includeDeclaration: true, timeout);
-        Assert.Equal([10, 11], all.Select(location => location.Range.Start.Line));
+        var all = await client.ReferencesAsync(Uri, new Position(11, 4), includeDeclaration: true, timeout);
+        Assert.Equal([11, 12], all.Select(location => location.Range.Start.Line));
     }
 
     [Fact]
@@ -275,7 +277,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var highlights = await client.HighlightsAsync(Uri, new Position(18, 8), timeout);
+        var highlights = await client.HighlightsAsync(Uri, new Position(19, 8), timeout);
         Assert.Equal(
             [DocumentHighlightKind.Write, DocumentHighlightKind.Read, DocumentHighlightKind.Read],
             highlights.Select(highlight => highlight.Kind));
@@ -289,13 +291,13 @@ public sealed class SymbolRequestsTests
 
         // What a rename replaces is the name under the caret, which is what the client shows
         // the programmer to edit.
-        Assert.Equal(new Range(new Position(18, 8), new Position(18, 11)),
-            await client.PrepareRenameAsync(Uri, new Position(18, 8), timeout));
+        Assert.Equal(new Range(new Position(19, 8), new Position(19, 11)),
+            await client.PrepareRenameAsync(Uri, new Position(19, 8), timeout));
 
-        var edit = await client.RenameAsync(Uri, new Position(18, 8), "pointer", timeout);
+        var edit = await client.RenameAsync(Uri, new Position(19, 8), "pointer", timeout);
         Assert.NotNull(edit);
         var edits = edit.Changes[Uri];
-        Assert.Equal([1, 9, 18], edits.Select(e => e.Range.Start.Line));
+        Assert.Equal([2, 10, 19], edits.Select(e => e.Range.Start.Line));
         Assert.All(edits, e => Assert.Equal("pointer", e.NewText));
     }
 
@@ -306,12 +308,12 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        var edit = await client.RenameAsync(Uri, new Position(10, 4), "@again", timeout);
+        var edit = await client.RenameAsync(Uri, new Position(11, 4), "@again", timeout);
         Assert.NotNull(edit);
-        Assert.Equal([10, 11], edit.Changes[Uri].Select(e => e.Range.Start.Line));
+        Assert.Equal([11, 12], edit.Changes[Uri].Select(e => e.Range.Start.Line));
 
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
-            client.RenameAsync(Uri, new Position(10, 4), "again", timeout));
+            client.RenameAsync(Uri, new Position(11, 4), "again", timeout));
         Assert.Contains("must start with `@`", refused.Message);
     }
 
@@ -325,7 +327,7 @@ public sealed class SymbolRequestsTests
         await using var client = await OpenAsync(timeout);
 
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
-            client.RenameAsync(Uri, new Position(1, 6), newName, timeout));
+            client.RenameAsync(Uri, new Position(2, 6), newName, timeout));
         Assert.Contains(reason, refused.Message);
     }
 
@@ -335,19 +337,19 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, "COUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n}\n");
+        await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         // Rename the declaration alone, and the use no longer resolves.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(0, 0), new Position(0, 5)), "TOTAL"));
+            new Range(new Position(1, 0), new Position(1, 5)), "TOTAL"));
 
         var published = await client.NextDiagnosticsAsync(timeout);
         var diagnostic = Assert.Single(published.Diagnostics);
         Assert.Equal("`COUNT` is not declared", diagnostic.Message);
-        Assert.Equal(3, diagnostic.Range.Start.Line);
+        Assert.Equal(4, diagnostic.Range.Start.Line);
 
-        var hover = await client.HoverAsync(Uri, new Position(0, 0), timeout);
+        var hover = await client.HoverAsync(Uri, new Position(1, 0), timeout);
         Assert.Contains("`TOTAL`", hover?.Contents.Value);
     }
 
@@ -360,14 +362,14 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".if 0 {\nBROKEN = nowhere\n}\nON = 1\n.export ON\n");
+        await client.OpenAsync(Uri, ".module main\n.if 0 {\nBROKEN = nowhere\n}\nON = 1\n.export ON\n");
 
         var dimmed = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal(DiagnosticSeverity.Hint, dimmed.Severity);
         Assert.Equal([DiagnosticTag.Unnecessary], dimmed.Tags);
         // The `.if` through its closing brace, and not the line after it.
-        Assert.Equal(0, dimmed.Range.Start.Line);
-        Assert.Equal(2, dimmed.Range.End.Line);
+        Assert.Equal(1, dimmed.Range.Start.Line);
+        Assert.Equal(3, dimmed.Range.End.Line);
     }
 
     /// <summary>A duplicate declaration points at the one that got there first.</summary>
@@ -376,12 +378,12 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, "SIZE = 1\nSIZE = 2\n");
+        await client.OpenAsync(Uri, ".module main\nSIZE = 1\nSIZE = 2\n");
 
         var diagnostic = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal("`SIZE` is already declared in this scope", diagnostic.Message);
         var related = Assert.Single(diagnostic.RelatedInformation!);
-        Assert.Equal(0, related.Location.Range.Start.Line);
+        Assert.Equal(1, related.Location.Range.Start.Line);
     }
 
     /// <summary>A request about a document the client never opened is answered, not refused.</summary>
@@ -391,12 +393,12 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
 
-        Assert.Null(await client.HoverAsync(Uri, new Position(0, 0), timeout));
-        Assert.Null(await client.DefinitionAsync(Uri, new Position(0, 0), timeout));
-        Assert.Empty(await client.ReferencesAsync(Uri, new Position(0, 0), true, timeout));
-        Assert.Empty(await client.HighlightsAsync(Uri, new Position(0, 0), timeout));
-        Assert.Null(await client.PrepareRenameAsync(Uri, new Position(0, 0), timeout));
-        Assert.Null(await client.RenameAsync(Uri, new Position(0, 0), "x", timeout));
+        Assert.Null(await client.HoverAsync(Uri, new Position(1, 0), timeout));
+        Assert.Null(await client.DefinitionAsync(Uri, new Position(1, 0), timeout));
+        Assert.Empty(await client.ReferencesAsync(Uri, new Position(1, 0), true, timeout));
+        Assert.Empty(await client.HighlightsAsync(Uri, new Position(1, 0), timeout));
+        Assert.Null(await client.PrepareRenameAsync(Uri, new Position(1, 0), timeout));
+        Assert.Null(await client.RenameAsync(Uri, new Position(1, 0), "x", timeout));
     }
 
     private static async Task<TestClient> OpenAsync(CancellationToken cancellation)

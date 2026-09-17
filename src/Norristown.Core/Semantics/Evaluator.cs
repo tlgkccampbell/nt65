@@ -828,7 +828,7 @@ internal sealed class Evaluator
                 if ((SymbolOf(node) is { IsAddress: true } symbol ? symbol : AddressAlong(node)) is { } address)
                 {
                     named = true;
-                    widest = Widest(widest, address.AddressSize);
+                    widest = Widest(widest, address.AddressSizeIn(node.Tree));
                 }
                 return;
             }

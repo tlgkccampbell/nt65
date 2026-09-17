@@ -7,64 +7,64 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1432, 0
+.dbg file, "main.nt65", 1446, 0
 
-.export dispatch
+.export main__dispatch
 
 .segment "CODE": absolute
-dispatch:
-.dbg line, "main.nt65", 15
-    lda a:cmd
-.dbg line, "main.nt65", 16
-    asl a
+main__dispatch:
 .dbg line, "main.nt65", 17
-    tax
+    lda a:cmd
 .dbg line, "main.nt65", 18
+    asl a
+.dbg line, "main.nt65", 19
+    tax
+.dbg line, "main.nt65", 20
     jmp (dispatch__table,x)
 
-.dbg line, "main.nt65", 21
+.dbg line, "main.nt65", 23
 dispatch__table: .addr dispatch__move, dispatch__fire
 
 dispatch__move:
-.dbg line, "main.nt65", 24
+.dbg line, "main.nt65", 26
     lda #1
-.dbg line, "main.nt65", 25
+.dbg line, "main.nt65", 27
     rts
 dispatch__fire:
-.dbg line, "main.nt65", 27
+.dbg line, "main.nt65", 29
     lda #2
-.dbg line, "main.nt65", 28
+.dbg line, "main.nt65", 30
     rts
 
 set:
-.dbg line, "main.nt65", 34
-    beq set__set_two
-.dbg line, "main.nt65", 35
-    lda #1
 .dbg line, "main.nt65", 36
+    beq set__set_two
+.dbg line, "main.nt65", 37
+    lda #1
+.dbg line, "main.nt65", 38
     .byte $2c
 set__set_two:
-.dbg line, "main.nt65", 39
+.dbg line, "main.nt65", 41
     lda #2
 set__store:
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 43
     sta a:value
-.dbg line, "main.nt65", 42
+.dbg line, "main.nt65", 44
     rts
 
 patching:
-.dbg line, "main.nt65", 48
+.dbg line, "main.nt65", 50
     lda #$60
 patching__op:
-.dbg line, "main.nt65", 50
+.dbg line, "main.nt65", 52
     sta a:$0400
-.dbg line, "main.nt65", 51
-    sta a:patching__op+1
 .dbg line, "main.nt65", 53
+    sta a:patching__op+1
+.dbg line, "main.nt65", 55
     rts
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 57
+.dbg line, "main.nt65", 59
 cmd:    .res 1
-.dbg line, "main.nt65", 58
+.dbg line, "main.nt65", 60
 value:  .res 1

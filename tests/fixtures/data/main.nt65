@@ -1,6 +1,8 @@
 ; Every data directive nt65 sizes, text written out as byte values with the
 ; source spelling kept in a comment, and expressions parenthesized so that nothing in the
 ; output depends on ca65's precedence table.
+.module main
+
 .cpu 6502
 
 SCREEN = $0400

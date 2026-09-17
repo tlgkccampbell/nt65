@@ -125,6 +125,7 @@ public sealed class LayoutTests
     public void AFarTargetIsNotNear()
     {
         var source = """
+            .module main
             .segment FAR: far
             .segment FAR {
             .data away:   .byte
@@ -146,6 +147,7 @@ public sealed class LayoutTests
     private static (CodeLayout Layout, SyntaxNode Statement) Layout(string line, Cpu cpu)
     {
         var source = $$"""
+            .module main
             SIXTEEN = 16
             .segment ZEROPAGE
             .data ptr:    .byte[2]

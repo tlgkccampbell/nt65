@@ -1,1 +1,2 @@
 ; A file with nothing but a comment compiles without diagnostics.
+.module main

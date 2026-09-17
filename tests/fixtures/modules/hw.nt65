@@ -1,0 +1,8 @@
+; A facade: a module whose interface is names its submodules define. A re-export writes
+; nothing, and a name keeps the linker name of its definition, `hw__vic__set_border`.
+.module hw
+
+.cpu 6502
+
+.export .use hw::vic::{BORDER, set_border}
+.export .use hw::sid::volume as sid_volume

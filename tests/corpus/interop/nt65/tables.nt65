@@ -1,17 +1,24 @@
-; Data shared with C.
-.import ptr1: zp, ptr2: zp, tmp1: zp
-.export _sprites, _sprite_count, Sprite, _cmd_table, _message, _glyphs, _glyphs_size
-.export _buffer, _buffer_size, Cmd
+; Data shared with C, under the names cc65 gives C's.
+.module tables
+
+.use cc65::{ptr1, ptr2, tmp1}
+
+.export sprites as "_sprites", sprite_count as "_sprite_count", cmd_table as "_cmd_table"
+.export message as "_message", glyphs as "_glyphs", glyphs_size as "_glyphs_size"
+.export buffer as "_buffer"
+
+; A constant C takes the address of, which cc65 imports as absolute.
+.export buffer_size: abs as "_buffer_size"
 
 ; struct sprite { unsigned char x, y; unsigned tile; const char* name; };
-.struct Sprite {
+.export .struct Sprite {
 x:      .byte
 y:      .byte
 tile:   .word
 name:   .addr
 }
 
-.enum Cmd {
+.export .enum Cmd {
     move
     fire
     jump
@@ -23,23 +30,23 @@ name:   .addr
 }
 
 .segment RODATA
-.data _sprites: .type Sprite[] {
+.data sprites: .type Sprite[] {
     { x = 10, y = 20, tile = $0100, name = name_hero }
     { x = 30, y = 40, tile = $0200, name = name_boss }
     { x = 50, y = 60, tile = $0300, name = name_boss }
 }
-.data _sprite_count: .byte .countof(_sprites)
+.data sprite_count: .byte .countof(sprites)
 
 .data name_hero: .asciiz "HERO"
 .data name_boss: .asciiz "BOSS"
 
-.data _message:  .byte apple("HELLO, WORLD"), 0
+.data message:  .byte apple("HELLO, WORLD"), 0
 
-.data _glyphs:   .incbin "../data/glyphs.bin"
-.data _glyphs_size: .word .sizeof(_glyphs)
+.data glyphs:   .incbin "../data/glyphs.bin"
+.data glyphs_size: .word .sizeof(glyphs)
 
 ; One handler address per command, in enum order: each is the routine named after it.
-.data _cmd_table: .addr[] {
+.data cmd_table: .addr[] {
     .each Cmd, c {
         actions::c
     }
@@ -62,16 +69,15 @@ name:   .addr
 }
 
 .segment BSS
-.data _buffer: .byte[BUF_SIZE]
-_buffer_size = BUF_SIZE
+.data buffer: .byte[BUF_SIZE]
+buffer_size = BUF_SIZE
 
 ; Run once at start-up (registered as a constructor by asm/ctor.s).
-.export init_lib
 .segment ONCE
-.proc init_lib {
-    lda #<_buffer
+.export .proc init_lib {
+    lda #<buffer
     sta ptr1
-    lda #>_buffer
+    lda #>buffer
     sta ptr1+1
     lda #<BUF_SIZE
     sta ptr2
@@ -79,5 +85,5 @@ _buffer_size = BUF_SIZE
     sta ptr2+1
     lda #$EE
     sta tmp1
-    jmp _memfill::fill      ; the interior entry of mem.nt65
+    jmp mem::memfill::fill  ; the interior entry of module mem
 }

@@ -1,0 +1,6 @@
+; A module's name is a path, and nothing in a module may have the path of another module.
+.module hw
+
+.export .scope vic {        ;! error: `hw::vic` is the path of a module, and module `hw` may not declare `vic` as well
+    BORDER = $d020
+}

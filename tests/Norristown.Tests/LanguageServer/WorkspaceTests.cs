@@ -13,7 +13,7 @@ public sealed class WorkspaceTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
-    private const string Source = ".proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
+    private const string Source = ".module main\n.proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
     private static Workspace OpenSource(out Document document)
     {
@@ -39,14 +39,14 @@ public sealed class WorkspaceTests
     {
         var workspace = OpenSource(out var opened);
         var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
-            [new TextDocumentContentChangeEvent(new Range(new Position(1, 9), new Position(1, 10)), "1")]);
+            [new TextDocumentContentChangeEvent(new Range(new Position(2, 9), new Position(2, 10)), "1")]);
 
         Assert.NotNull(changed);
         Assert.Equal(2, changed.Version);
         Assert.Equal(Source.Replace("ldx #0", "ldx #1"), changed.Tree.Text);
         for (var line = 0; line < opened.Tree.Lines.Length; line++)
         {
-            if (line == 1)
+            if (line == 2)
                 Assert.NotSame(opened.Tree.Lines[line], changed.Tree.Lines[line]);
             else
                 Assert.Same(opened.Tree.Lines[line], changed.Tree.Lines[line]);
@@ -55,10 +55,10 @@ public sealed class WorkspaceTests
 
     /// <summary>However the edit arrived, the tree is the one a fresh parse would give.</summary>
     [Theory]
-    [InlineData(2, 0, 2, 6, "@again:")]     // replacing a whole label
-    [InlineData(5, 1, 5, 1, "\n    nop\n")] // appending lines past the last `}`
-    [InlineData(0, 0, 6, 0, "")]            // deleting everything
-    [InlineData(3, 8, 3, 13, "")]           // shortening an operand
+    [InlineData(3, 0, 3, 6, "@again:")]     // replacing a whole label
+    [InlineData(6, 1, 6, 1, "\n    nop\n")] // appending lines past the last `}`
+    [InlineData(0, 0, 7, 0, "")]            // deleting everything
+    [InlineData(4, 8, 4, 13, "")]           // shortening an operand
     public void AnIncrementalEditMatchesAFreshParse(int startLine, int startCharacter, int endLine, int endCharacter, string text)
     {
         var workspace = OpenSource(out _);
@@ -90,7 +90,7 @@ public sealed class WorkspaceTests
     {
         var workspace = OpenSource(out _);
         var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
-            [new TextDocumentContentChangeEvent(new Range(new Position(99, 0), new Position(99, 4)), "nop\n")]);
+            [new TextDocumentContentChangeEvent(new Range(new Position(100, 0), new Position(100, 4)), "nop\n")]);
 
         Assert.NotNull(changed);
         Assert.Equal(Source + "nop\n", changed.Tree.Text);

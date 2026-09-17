@@ -112,7 +112,7 @@ public sealed class RepetitionTests
     [InlineData("SIZE = 4\n.data t: .byte[] {\n.each SIZE, h {\n    h\n}\n}\n", "`.each` walks a list or an enum, and this is neither")]
     public void WhatIsWrongWithARepetitionIsReported(string text, string message)
     {
-        Assert.Contains(message, Analysis.Program(("main.nt65", ".segment RODATA\n" + text)).Problems().Single());
+        Assert.Contains(message, Analysis.Program(("main.nt65", ".module main\n.segment RODATA\n" + text)).Problems().Single());
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ public sealed class RepetitionTests
     }
 
     /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
-    private static string Output(string text) => Analysis.Outputs(("main.nt65", ".segment CODE\n" + text))["main.s"];
+    private static string Output(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static IReadOnlyList<string> Lines(string output, string directive) =>
         [.. output.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith(directive, StringComparison.Ordinal))];

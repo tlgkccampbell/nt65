@@ -2,6 +2,8 @@
 ; `.spanof` describe layout: the address just past something, and how many bytes it
 ; takes. Those are address expressions like any label difference — usable in operands,
 ; data and `.assert`, never where a constant is required — and ca65 and ld65 resolve them.
+.module main
+
 .cpu 6502
 
 .segment CODE

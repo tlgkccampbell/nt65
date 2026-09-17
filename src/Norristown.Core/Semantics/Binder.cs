@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using Norristown.Layout;
+using Norristown.Project;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -17,6 +19,13 @@ namespace Norristown.Semantics;
 /// resolve there.
 /// </para>
 /// <para>
+/// A file is a module, and a name another module declares is reached only by its path,
+/// <c>hw::init</c>, or by bringing it in with <c>.use</c>. A name is looked for in the scopes
+/// around it, then among what the file's <c>.use</c> items name, then among the defines, then
+/// as the start of a module's path, and last among what a <c>.use module::*</c> brings in: a
+/// module adding an export can never change what a name in another module already means.
+/// </para>
+/// <para>
 /// An <c>.if</c> is neither: its conditions were answered before any of this ran, so a
 /// branch the build takes is read as if the <c>.if</c> were not written and one it leaves
 /// out is not read at all. That is what lets the same name be declared under two of them.
@@ -32,11 +41,15 @@ internal sealed class Binder
     private readonly SyntaxTree tree;
     private readonly SegmentTable segments;
     private readonly Configuration configuration;
+    private readonly Cpu cpu;
+    private readonly bool isDefines;
     private readonly List<Diagnostic> diagnostics = [];
+
+    // What a lookup that may report reports through; one asked quietly is given none.
+    private readonly Action<TextSpan, string> report;
     private readonly List<Symbol> symbols = [];
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
-    private readonly List<Use> exports = [];
 
     // Where a condition asks `.defined` about a name, which may only be a define.
     private readonly List<(SyntaxToken Name, Scope Scope)> definedAsked = [];
@@ -44,6 +57,18 @@ internal sealed class Binder
     private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
     private readonly HashSet<Symbol> unexported = [];
+
+    // What the file exports: the declarations written after `.export`, the items of its
+    // `.export` lists with the scope each was written in, and everything exporting those spreads to.
+    private readonly List<(Symbol Symbol, TextSpan At)> exportedDeclarations = [];
+    private readonly List<(SyntaxNode Item, Scope Scope)> exportItems = [];
+    private readonly List<Symbol> exported = [];
+
+    // The file's `.use` items, what they bring in once resolved, and what it re-exports.
+    private readonly List<SyntaxNode> useDirectives = [];
+    private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
+    private readonly List<ProgramSymbols.Module> globs = [];
+    private readonly List<ProgramSymbols.Reexport> reexports = [];
 
     // Every name looked for in the other files, found or not: a file that declares or stops
     // declaring one of them, or changes what it means, changes what this file means.
@@ -53,19 +78,27 @@ internal sealed class Binder
     private Scope scope;
     // The segment the walk is placing things in, or null before any region or block names one.
     private string? segment;
+    private string? moduleName;
+    private TextSpan moduleNameSpan;
+
+    // Whether the walk has passed an item, which `.module` has to come before.
+    private bool pastFirstItem;
     private Symbol? previousEnumMember;
 
     // A label written on a line of its own, while nothing but blank lines has followed it: a
     // `.state` here is that label's declaration.
     private Symbol? bareLabel;
 
-    private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration)
+    private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
     {
         this.tree = tree;
         this.segments = segments;
         this.configuration = configuration;
+        this.cpu = cpu;
+        this.isDefines = isDefines;
         fileScope = new Scope(ScopeKind.File, null, null, null);
         scope = fileScope;
+        report = (span, message) => Report(span, message);
     }
 
     /// <summary>The file being bound.</summary>
@@ -74,36 +107,38 @@ internal sealed class Binder
     /// <summary>The file's top-level scope, which is what another file can reach into.</summary>
     public Scope FileScope => fileScope;
 
-    /// <summary>The names resolving this file looked for in other files, whether it found them or not.</summary>
+    /// <summary>
+    /// What resolving this file looked for in other modules, whether it found it or not: each
+    /// name in a module, as <c>member:</c> and <c>module::name</c>, and each name no one
+    /// declared, as <c>name:</c> and the name, which another module exporting would change
+    /// what is said.
+    /// </summary>
     public IReadOnlySet<string> LookedUp => lookedUp;
 
-    /// <summary>Binds <paramref name="tree"/> on its own, seeing no other file.</summary>
-    public static Result Bind(SyntaxTree tree, SegmentTable segments) =>
-        Collect(tree, segments, Configuration.Everything).Resolve(ProgramSymbols.Empty);
+    /// <summary>The file as the program sees it: its module's name, its top level and what it exports.</summary>
+    public ProgramSymbols.Module Module => new(tree, moduleName, moduleNameSpan, fileScope, exported, reexports);
 
     /// <summary>
     /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
-    /// resolved once every file of the program has been read.
+    /// resolved once every file of the program has been read. What the file exports is known
+    /// from here on, because a file exports only what it declares. <paramref name="isDefines"/>
+    /// says the file is the build configuration's defines, which is no module.
     /// </summary>
-    public static Binder Collect(SyntaxTree tree, SegmentTable segments, Configuration configuration)
+    public static Binder Collect(
+        SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines = false)
     {
-        var binder = new Binder(tree, segments, configuration);
+        var binder = new Binder(tree, segments, configuration, cpu, isDefines);
         binder.WalkContainer(tree.Root);
+        binder.Export();
         return binder;
     }
-
-    /// <summary>
-    /// What this file's <c>.export</c> items name. Nothing is reported from here:
-    /// this answers what the program may see, before the program is known, and
-    /// <see cref="Resolve(ProgramSymbols)"/> reports on the same names afterwards.
-    /// </summary>
-    public IReadOnlyList<Symbol> Exported() =>
-        [.. exports.Select(export => export.Scope.Lookup(export.Token.Text)).OfType<Symbol>()];
 
     /// <summary>Resolves the names the file uses, with <paramref name="program"/> for the ones it does not declare.</summary>
     public Result Resolve(ProgramSymbols program)
     {
         this.program = program;
+        foreach (var directive in useDirectives)
+            ResolveUse(directive);
         ResolveUses(uses);
 
         // Conditions are answered before the program is read, so `.defined` of a name the
@@ -117,14 +152,18 @@ internal sealed class Binder
             }
         }
 
-        // An import is somebody else's symbol: exporting it would declare it in two places at
-        // once, which ca65 refuses. Every file that uses it declares its own `.import`.
-        foreach (var export in exports)
+        // A module exports what it declares. What it brought in from another module is that
+        // module's, and making it part of this one is a re-export, which says where it came from.
+        foreach (var (item, _) in exportItems)
         {
-            if (export.Scope.Lookup(export.Token.Text) is { Kind: SymbolKind.ImportedAddress or SymbolKind.ImportedConstant } imported)
+            if (item.ChildNodes.FirstOrDefault() is not { } name || name.ChildTokens.Length == 0)
+                continue;
+            var last = name.ChildTokens[^1];
+            var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
+            if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
-                Report(export.Token.Span,
-                    $"`{imported.Name}` is imported, and an import cannot be exported: each file that uses it imports it");
+                Report(name.Span, $"`{foreign.Name}` is declared in module `{foreign.Module}`, and a module exports what it "
+                    + $"declares: `.export .use {foreign.PathName}` makes it part of this one");
             }
         }
 
@@ -172,6 +211,7 @@ internal sealed class Binder
             {
                 bareLabel = null;
                 WalkBlock(child, block.BlockKind);
+                pastFirstItem = true;
             }
             else
             {
@@ -647,6 +687,8 @@ internal sealed class Binder
         if (line.Statement is not { } statement)
             return;
         CheckAllowedHere(statement);
+        if (statement.Kind is not (SyntaxKind.BlankLine or SyntaxKind.ModuleDirective))
+            pastFirstItem = true;
         CheckAnnotation(line, statement);
         var label = bareLabel;
         if (statement.Kind != SyntaxKind.BlankLine)
@@ -694,19 +736,22 @@ internal sealed class Binder
                 CollectUses(address);
                 break;
 
+            // A cheap local can neither be reached with `::` nor exported, and the parser has
+            // already refused one here.
             case SyntaxKind.ExportDirective:
-                // The names are written as bare tokens rather than as expressions, so they
-                // are collected here rather than by looking for name expressions.
-                // A cheap local can neither be reached with `::` nor exported, and
-                // the parser has already refused one here.
-                foreach (var token in statement.ChildTokens)
+                foreach (var item in statement.ChildNodes.Where(child => child.Kind == SyntaxKind.ExportItem))
                 {
-                    if (token.Kind != SyntaxKind.Identifier)
-                        continue;
-                    var export = new Use(token, scope, Path: false, First: true, Last: true);
-                    uses.Add(export);
-                    exports.Add(export);
+                    exportItems.Add((item, scope));
+                    CollectUses(item.ChildNodes.FirstOrDefault());
                 }
+                break;
+
+            case SyntaxKind.ModuleDirective:
+                BindModule(statement);
+                break;
+
+            case SyntaxKind.UseDirective:
+                BindUse(statement);
                 break;
 
             case SyntaxKind.ImportDirective:
@@ -1030,9 +1075,9 @@ internal sealed class Binder
         {
             if (Macros.CalleeOf(call) is not { } callee)
                 continue;
-            if (Resolve(callee, at, path: false, previous: null, last: true) is not { } symbol)
+            if (Resolve(new Use(callee, at, Path: false, First: true, Last: true), null) is not { Symbol: { } symbol } place)
                 continue;
-            references.Add(new SymbolReference(symbol, callee.Span, false));
+            references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias));
             if (symbol.Kind != SymbolKind.Macro)
             {
                 Report(callee.Span, $"`{callee.Text}` is a {symbol.KindText}, and `!` calls a macro");
@@ -1161,6 +1206,12 @@ internal sealed class Binder
         }
         symbols.Add(symbol);
         references.Add(new SymbolReference(symbol, name.Span, true));
+
+        // A declaration written after `.export` exports what it declares; the parameters of an
+        // exported macro or function are written inside it and are not declarations of it.
+        var declaring = name.Parent.Kind == SyntaxKind.ImportItem ? name.Parent.Parent : name.Parent;
+        if (declaring?.ExportToken is { } export)
+            exportedDeclarations.Add((symbol, export.Span));
         return symbol;
     }
 
@@ -1180,14 +1231,15 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// The reserved words: a symbol may not be named after a mnemonic or a register.
-    /// Members of a named struct, union or enum are exempt.
+    /// The reserved words: a symbol may not be named after a register, or after a mnemonic of
+    /// the CPU the program is built for. Members of a named struct, union or enum are exempt.
     /// </summary>
     private bool CheckReservedWord(SyntaxToken name)
     {
         var what = name.Kind switch
         {
-            SyntaxKind.Mnemonic => "a mnemonic",
+            SyntaxKind.Mnemonic when SyntaxFacts.LongBranches.Contains(name.Text) || Instructions.Has(cpu, name.Text) =>
+                $"a mnemonic of the {CpuNames.Spell(cpu)}",
             SyntaxKind.Register => "a register name",
             _ => null,
         };
@@ -1199,10 +1251,11 @@ internal sealed class Binder
 
     private void ResolveUses(IReadOnlyList<Use> list)
     {
-        Symbol? previous = null;
+        Place? previous = null;
         var broken = false;
-        foreach (var (token, at, path, first, last, splice, word) in list)
+        foreach (var use in list)
         {
+            var (token, at, _, first, last, splice, _) = use;
             if (first)
             {
                 previous = null;
@@ -1215,20 +1268,27 @@ internal sealed class Binder
                 continue;
             }
 
-            previous = Resolve(token, at, path, previous, last, word);
-            if (previous is null)
+            previous = Resolve(use, previous);
+            if (previous is not { IsReported: false } place)
             {
                 broken = true;
+                continue;
             }
-            else
+            if (place.Symbol is not { } symbol)
             {
-                references.Add(new SymbolReference(previous, token.Span, false));
-                RecordBodyUse(at, previous, token);
-                if (splice && previous.Parameter is not { Kind: ParameterKind.Block })
+                if (last)
                 {
-                    Report(token.Span, $"`{token.Text}` is a {previous.KindText}; a name written on its "
-                        + "own splices a `block` parameter, and nothing else belongs on a line alone");
+                    Report(token.Span, $"`{place.Module}` is a module: a name in it is written `{place.Module}::name`");
+                    broken = true;
                 }
+                continue;
+            }
+            references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias));
+            RecordBodyUse(at, symbol, token);
+            if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
+            {
+                Report(token.Span, $"`{token.Text}` is a {symbol.KindText}; a name written on its "
+                    + "own splices a `block` parameter, and nothing else belongs on a line alone");
             }
         }
     }
@@ -1264,10 +1324,12 @@ internal sealed class Binder
 
     /// <summary>
     /// What one part of a written name means. <paramref name="previous"/> is what the part
-    /// before it resolved to, so a path walks into a scope instead of looking outward again.
+    /// before it resolved to, so a path walks into a scope or a module instead of looking
+    /// outward again.
     /// </summary>
-    private Symbol? Resolve(SyntaxToken token, Scope at, bool path, Symbol? previous, bool last, bool word = false)
+    private Place? Resolve(Use use, Place? previous)
     {
+        var (token, at, path, _, last, _, word) = use;
         if (token.Kind == SyntaxKind.CheapLocal)
         {
             if (path)
@@ -1278,7 +1340,7 @@ internal sealed class Binder
             var local = at.LookupCheapLocal(token.Text[1..]);
             if (local is null)
                 Report(token.Span, $"`{token.Text}` is not declared");
-            return local;
+            return local is null ? null : new Place(local);
         }
 
         if (!path)
@@ -1288,27 +1350,30 @@ internal sealed class Binder
             // is beats saying the name is not declared.
             // A reserved name that was declared anyway has been reported where it was declared.
             if (at.Lookup(token.Text) is { } symbol)
-                return symbol;
+                return new Place(symbol);
             if (!word && !CheckReservedWord(token))
                 return null;
-
-            // A name the file does not declare may belong to another file of the program.
-            if (LookUp(token.Text) is { } external)
-                return CheckExported(token, external, last);
+            if (Outside(token, last, report) is { } found)
+                return found;
 
             // In a condition a bare name may be a word rather than a name at all, and a word
             // is compared, never looked up.
             if (!word)
-                Report(token.Span, $"`{token.Text}` is not declared");
+                ReportUndeclared(token);
             return null;
         }
 
-        // A part after `::`: the scope to look in is the one the part before it opened, and a
-        // leading `::` starts at the file's own top level.
-        var container = previous is null ? fileScope : BodyOf(previous);
+        // A leading `::` starts at the root of the modules.
+        if (previous is not { } before)
+            return ModuleRoot(token, report);
+        if (before.Module is { } prefix)
+            return InModule(token, prefix, last, report);
+
+        // A part after `::`: the scope to look in is the one the part before it opened.
+        var container = BodyOf(before.Symbol!);
         if (container is null)
         {
-            Report(token.Span, $"`{previous!.DisplayName}` is a {previous.KindText}, not a scope");
+            Report(token.Span, $"`{before.Symbol!.DisplayName}` is a {before.Symbol.KindText}, not a scope");
             return null;
         }
 
@@ -1319,30 +1384,107 @@ internal sealed class Binder
             // the same spelling, which is a different member on every turn: each turn works
             // out which.
             if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
-                return binding;
-            Report(token.Span, container.Kind == ScopeKind.File
-                ? $"`{token.Text}` is not declared at file scope"
-                : $"`{token.Text}` is not declared in `{container.Name}`");
+                return new Place(binding);
+            Report(token.Span, $"`{token.Text}` is not declared in `{container.Name}`");
             return null;
         }
-        return CheckExported(token, member, last);
+        return new Place(CheckExported(token, member, last));
     }
 
     /// <summary>
-    /// A symbol another file declares may only be named if that file exports it. The
-    /// check is on the last part of a name: <c>outer::inner</c> needs <c>inner</c> exported,
-    /// and <c>outer</c> is only the way in. The symbol is returned either way, so an editor
-    /// can still go to a declaration that is private rather than missing.
+    /// What a name the scopes around it do not declare means: what a <c>.use</c> brought in, a
+    /// define, the first part of a module's path, or what a <c>.use module::*</c> brought in.
     /// </summary>
-    private Symbol? CheckExported(SyntaxToken token, Symbol symbol, bool last)
+    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, string>? report)
+    {
+        if (used.TryGetValue(token.Text, out var brought))
+            return brought with { IsAlias = brought.Symbol is { } target && target.Name != token.Text };
+        if (program.Define(token.Text) is { } define)
+            return new Place(define);
+        if (!last && IsModulePath(token.Text))
+            return new Place(null, token.Text);
+
+        // A module on its own is no value, so a name a `*` brought in is what one standing
+        // alone means; with nothing else, it is the module, which is reported as one.
+        Place? chosen = null;
+        foreach (var module in globs)
+        {
+            if (program.Member(module, token.Text, Touch) is not { } exported
+                || exported.Tree == module.Tree && !exported.IsExported || chosen?.Symbol == exported)
+            {
+                continue;
+            }
+            if (chosen is { } other)
+            {
+                report?.Invoke(token.Span, $"`{token.Text}` is exported by both `{other.From}` and `{module.Name}`, "
+                    + $"and a `.use` brings in everything each exports: `{module.Name}::{token.Text}` says which");
+                return Place.Reported;
+            }
+            chosen = new Place(exported, From: module.Name);
+        }
+        return chosen ?? (last && IsModulePath(token.Text) ? new Place(null, token.Text) : null);
+    }
+
+    /// <summary>A name no scope, <c>.use</c> or define gives any meaning, and the modules that export one like it.</summary>
+    private void ReportUndeclared(SyntaxToken token)
+    {
+        lookedUp.Add("name:" + token.Text);
+        var exporting = program.ModulesExporting(token.Text).ToList();
+        Report(token.Span, exporting.Count == 0
+            ? $"`{token.Text}` is not declared"
+            : $"`{token.Text}` is not declared here, and module `{exporting[0]}` exports it: "
+                + $"write `{exporting[0]}::{token.Text}`, or bring it in with `.use {exporting[0]}::{token.Text}`");
+    }
+
+    /// <summary>The first part of a path written from the root of the modules.</summary>
+    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, string>? report)
+    {
+        if (IsModulePath(token.Text))
+            return new Place(null, token.Text);
+        report?.Invoke(token.Span, $"there is no module `{token.Text}`");
+        return null;
+    }
+
+    /// <summary>The part after <paramref name="prefix"/>, which is a module or the start of one's name.</summary>
+    private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, string>? report)
+    {
+        var path = $"{prefix}::{token.Text}";
+        if (IsModulePath(path))
+            return new Place(null, path);
+        if (program.ModuleNamed(prefix) is not { } module)
+        {
+            report?.Invoke(token.Span, $"there is no module `{path}`");
+            return null;
+        }
+        if (program.Member(module, token.Text, Touch) is not { } member)
+        {
+            report?.Invoke(token.Span, $"`{token.Text}` is not declared in module `{prefix}`");
+            return null;
+        }
+        return new Place(report is null ? member : CheckExported(token, member, last));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is a module or the start of one's name. Which modules
+    /// there are changes only when a file names a different one, which is read again whole.
+    /// </summary>
+    private bool IsModulePath(string path) => program.IsModulePath(path);
+
+    /// <summary>Remembers that resolving this file looked for <paramref name="member"/>, written <c>module::name</c>.</summary>
+    private void Touch(string member) => lookedUp.Add("member:" + member);
+
+    /// <summary>
+    /// A symbol another module declares may only be named if that module exports it. The
+    /// check is on the last part of a name: <c>hw::outer::inner</c> needs <c>inner</c>
+    /// exported, and <c>outer</c> is only the way in. The symbol is returned either way, so an
+    /// editor can still go to a declaration that is private rather than missing.
+    /// </summary>
+    private Symbol CheckExported(SyntaxToken token, Symbol symbol, bool last)
     {
         // Said once, where the file first names it: every other use is the same mistake.
-        if (!last || symbol.Tree == tree || program.IsExported(symbol) || !unexported.Add(symbol))
+        if (!last || symbol.Tree == tree || symbol.IsExported || symbol.IsDefine || !unexported.Add(symbol))
             return symbol;
-        // The file is named by its own name rather than by its whole path: the related span
-        // is what takes an editor there, and a path is long enough to bury the message.
-        var file = symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..];
-        Report(token.Span, $"`{symbol.QualifiedName}` is declared in `{file}` and is not exported",
+        Report(token.Span, $"`{symbol.PathName}` is not exported by module `{symbol.Module}`",
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         return symbol;
     }
@@ -1368,16 +1510,11 @@ internal sealed class Binder
         return type?.Body;
     }
 
-    /// <summary>A name looked for in the other files of the program, remembering that it was.</summary>
-    private Symbol? LookUp(string name)
-    {
-        lookedUp.Add(name);
-        return program.Lookup(name, tree);
-    }
-
     /// <summary>
     /// The type a <c>.type</c> names, resolved from where it was written. This runs on demand
     /// rather than in order, because a name may reach into a type the file declares later.
+    /// Nothing is reported from here: the names in the type are uses like any others, and are
+    /// reported where they are resolved.
     /// </summary>
     private Symbol? TypeOf(Symbol symbol)
     {
@@ -1386,24 +1523,276 @@ internal sealed class Binder
         if (symbol.TypeExpression is not { } named)
             return null;
 
-        Symbol? part = null;
+        Place? part = null;
         var path = false;
-        foreach (var token in named.ChildTokens)
+        var tokens = named.ChildTokens;
+        for (var i = 0; i < tokens.Length; i++)
         {
+            var token = tokens[i];
             if (token.Kind == SyntaxKind.ColonColon)
             {
                 path = true;
                 continue;
             }
-            part = path
-                ? (part is null ? fileScope : BodyOf(part))?.FindMember(token.Text)
-                : symbol.Scope.Lookup(token.Text) ?? LookUp(token.Text);
+            var last = i == tokens.Length - 1;
+            part = !path ? (symbol.Scope.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null))
+                : part is null ? ModuleRoot(token, null)
+                : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
+                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Place(member)
+                : null;
             path = true;
-            if (part is null)
+            if (part is null or { IsReported: true })
                 return null;
         }
-        symbol.Type = part;
-        return part;
+        symbol.Type = part?.Symbol;
+        return symbol.Type;
+    }
+
+    /// <summary>
+    /// <c>.module name</c>: once, before the file's other items. A file is one module, so what
+    /// it declares belongs to one path however the file is laid out.
+    /// </summary>
+    private void BindModule(SyntaxNode statement)
+    {
+        var parts = statement.ChildTokens.Skip(1)
+            .Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic).ToList();
+        if (parts.Count == 0)
+            return;
+        var span = new TextSpan(parts[0].Span.Start, parts[^1].Span.End - parts[0].Span.Start);
+        if (moduleName is not null)
+            Report(span, "a file is one module, and names it once");
+        else if (pastFirstItem || scope != fileScope)
+            Report(statement.ChildTokens[0].Span, "`.module` comes first: the file's other items belong to the module it names");
+        if (moduleName is not null)
+            return;
+        foreach (var part in parts)
+            CheckReservedWord(part);
+        moduleName = string.Join("::", parts.Select(part => part.Text));
+        moduleNameSpan = span;
+        fileScope.Module = moduleName;
+    }
+
+    /// <summary>
+    /// A <c>.use</c>, which is resolved once the program is known. What an exported one
+    /// re-exports is part of the module from here on, as the path it was written with.
+    /// </summary>
+    private void BindUse(SyntaxNode statement)
+    {
+        if (scope != fileScope)
+        {
+            Report(statement.ChildTokens[0].Span, "`.use` belongs at the top level of a module");
+            return;
+        }
+        useDirectives.Add(statement);
+        if (!statement.IsExported)
+            return;
+        var (path, glob, items, alias) = UseParts(statement);
+        if (path.Count == 0 || glob)
+            return;
+        if (items.Count == 0)
+        {
+            reexports.Add(new ProgramSymbols.Reexport((alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]));
+            return;
+        }
+        foreach (var (name, itemAlias) in items)
+            reexports.Add(new ProgramSymbols.Reexport((itemAlias ?? name).Text, [.. path.Select(part => part.Text), name.Text]));
+    }
+
+    /// <summary>
+    /// What a <c>.use</c> is written as: the path, whether it ends <c>::*</c>, the names in its
+    /// braces with the names they are brought in as, and the name after <c>as</c>.
+    /// </summary>
+    private static (List<SyntaxToken> Path, bool Glob, List<(SyntaxToken Name, SyntaxToken? Alias)> Items, SyntaxToken? Alias)
+        UseParts(SyntaxNode statement)
+    {
+        var path = new List<SyntaxToken>();
+        var glob = false;
+        SyntaxToken? alias = null;
+        var tokens = statement.ChildTokens;
+        for (var i = 1; i < tokens.Length; i++)
+        {
+            var token = tokens[i];
+            if (token.Kind == SyntaxKind.Star)
+                glob = true;
+            else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
+                && (i == 1 || tokens[i - 1].Kind == SyntaxKind.ColonColon))
+                path.Add(token);
+            else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
+                && tokens[i - 1].Text.Equals("as", StringComparison.OrdinalIgnoreCase))
+                alias = token;
+        }
+        var items = new List<(SyntaxToken Name, SyntaxToken? Alias)>();
+        foreach (var item in statement.ChildNodes.Where(child => child.Kind == SyntaxKind.UseItem))
+        {
+            if (item.ChildTokens.Length == 0)
+                continue;
+            items.Add((item.ChildTokens[0], item.ChildTokens.Length > 2 ? item.ChildTokens[2] : null));
+        }
+        return (path, glob, items, alias);
+    }
+
+    /// <summary>
+    /// Resolves a <c>.use</c>: its path from the root of the modules, and each name it brings
+    /// in. A name it brings in may not also be declared in the module, because then which one a
+    /// use of it meant would depend on a rule rather than on what is written.
+    /// </summary>
+    private void ResolveUse(SyntaxNode statement)
+    {
+        var (path, glob, items, alias) = UseParts(statement);
+        if (path.Count == 0)
+            return;
+        Place? place = null;
+        for (var i = 0; i < path.Count && (i == 0 || place is not null); i++)
+        {
+            var last = i == path.Count - 1 && !glob && items.Count == 0;
+            place = i == 0 ? ModuleRoot(path[i], report)
+                : place!.Value.Module is { } prefix ? InModule(path[i], prefix, last, report)
+                : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Place(CheckExported(path[i], member, last))
+                : NotIn(path[i], place.Value.Symbol!);
+            if (place?.Symbol is { } symbol)
+                references.Add(new SymbolReference(symbol, path[i].Span, false, InUse: true));
+        }
+        if (place is not { } target)
+            return;
+
+        if (glob)
+        {
+            if (statement.IsExported)
+            {
+                Report(statement.Span, "`.export .use` names what it re-exports: a `*` would make everything the other "
+                    + "module exports, now and later, part of this one");
+            }
+            else if (target.Module is { } name && program.ModuleNamed(name) is { } module)
+            {
+                globs.Add(module);
+            }
+            else
+            {
+                Report(path[^1].Span, $"`.use {target.Module ?? target.Symbol!.PathName}::*` brings in what a module exports, "
+                    + $"and `{path[^1].Text}` is {(target.Module is null ? "not a module" : "only the start of a module's name")}");
+            }
+            return;
+        }
+        if (items.Count == 0)
+        {
+            BringIn(alias ?? path[^1], target, alias is not null, statement.IsExported);
+            return;
+        }
+        foreach (var (name, itemAlias) in items)
+        {
+            var found = target.Module is { } prefix ? InModule(name, prefix, last: true, report)
+                : BodyOf(target.Symbol!)?.FindMember(name.Text) is { } member ? new Place(CheckExported(name, member, last: true))
+                : NotIn(name, target.Symbol!);
+            if (found is not { } item)
+                continue;
+            if (item.Symbol is { } symbol)
+                references.Add(new SymbolReference(symbol, name.Span, false, InUse: true));
+            BringIn(itemAlias ?? name, item, itemAlias is not null, statement.IsExported);
+        }
+    }
+
+    /// <summary>A part of a <c>.use</c> path that names nothing in the symbol before it.</summary>
+    private Place? NotIn(SyntaxToken token, Symbol container)
+    {
+        Report(token.Span, container.Body is null && container.TypeExpression is null
+            ? $"`{container.DisplayName}` is a {container.KindText}, not a scope"
+            : $"`{token.Text}` is not declared in `{container.DisplayName}`");
+        return null;
+    }
+
+    /// <summary>One name a <c>.use</c> brings in, under the name <paramref name="name"/> writes.</summary>
+    private void BringIn(SyntaxToken name, Place target, bool renamed, bool exported)
+    {
+        if (exported && target.Symbol is null)
+        {
+            Report(name.Span, $"`{target.Module}` is a module, and `.export .use` re-exports a name in one");
+            return;
+        }
+        if (renamed && target.Symbol is { } symbol)
+            references.Add(new SymbolReference(symbol, name.Span, true, IsAlias: true, InUse: true));
+        if (fileScope.FindMember(name.Text) is { } local)
+        {
+            Report(name.Span, $"`{name.Text}` is declared in this module, and a `.use` may not bring in another: "
+                + $"`as` brings it in under a name of its own", new RelatedSpan(local.DeclarationSpan, "declared here"));
+            return;
+        }
+        if (!used.TryAdd(name.Text, target))
+            Report(name.Span, $"a `.use` already brings in `{name.Text}`");
+    }
+
+    /// <summary>
+    /// Works out what the file exports, once it has been read: each declaration written after
+    /// <c>.export</c> and each name an <c>.export</c> list gives, and what exporting those
+    /// spreads to. Only what the file declares is looked for, so this needs no other module.
+    /// </summary>
+    private void Export()
+    {
+        if (moduleName is null && !isDefines)
+        {
+            Report(new TextSpan(0, 0), "a file is a module, and says which first: `.module name`");
+        }
+        foreach (var (symbol, at) in exportedDeclarations)
+            Export(symbol, at, linkerName: null, size: null);
+        foreach (var (item, around) in exportItems)
+        {
+            if (item.ChildNodes.FirstOrDefault() is not { } name || Declared(name, around) is not { } symbol)
+                continue;
+            AddressSize? size = null;
+            string? linkerName = null;
+            var tokens = item.ChildTokens;
+            for (var i = 0; i < tokens.Length; i++)
+            {
+                if (tokens[i].Kind == SyntaxKind.Identifier && i > 0 && tokens[i - 1].Kind == SyntaxKind.Colon)
+                    size = SegmentNames.ParseSize(tokens[i].Text);
+                if (tokens[i].Kind == SyntaxKind.StringLiteral)
+                    linkerName = tokens[i].Text.Trim('"');
+            }
+            Export(symbol, item.Span, linkerName, size);
+        }
+    }
+
+    /// <summary>
+    /// Exports one symbol. Exporting a named scope or mixed data exports what it declares,
+    /// through the scopes and data inside it, and exporting a type exports its members; a
+    /// routine's interior labels are exported one by one, and cheap locals never are.
+    /// </summary>
+    private void Export(Symbol symbol, TextSpan at, string? linkerName, AddressSize? size)
+    {
+        if (!symbol.IsExported)
+        {
+            symbol.IsExported = true;
+            symbol.ExportSpan = at;
+            exported.Add(symbol);
+        }
+        if (linkerName is not null)
+            symbol.LinkerName = linkerName;
+        symbol.LinkerName ??= symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant || moduleName is null
+            ? symbol.FlatName
+            : $"{moduleName.Replace("::", "__", StringComparison.Ordinal)}__{symbol.FlatName}";
+        if (size is not null)
+            symbol.ExportSize = size;
+        if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+            return;
+        foreach (var member in symbol.Body?.Symbols ?? [])
+        {
+            if (!member.IsCheapLocal && !member.IsExported)
+                Export(member, at, linkerName: null, size: null);
+        }
+    }
+
+    /// <summary>What a name in an <c>.export</c> list is among the file's own declarations, or null.</summary>
+    private static Symbol? Declared(SyntaxNode name, Scope around)
+    {
+        Symbol? symbol = null;
+        foreach (var token in name.ChildTokens)
+        {
+            if (token.Kind == SyntaxKind.ColonColon)
+                continue;
+            symbol = symbol is null ? around.Lookup(token.Text) : symbol.Body?.FindMember(token.Text);
+            if (symbol is null)
+                return null;
+        }
+        return symbol;
     }
 
     private void Report(TextSpan span, string message, params RelatedSpan[] related) =>
@@ -1437,4 +1826,18 @@ internal sealed class Binder
     /// <param name="Scope">The scope it was written in, which its arguments resolve in.</param>
     /// <param name="Inside">The macro whose body holds it, or null when it is called outright.</param>
     private readonly record struct Invocation(SyntaxNode Call, Scope Scope, Symbol? Inside);
+
+    /// <summary>What a part of a name resolved to: a symbol, or a module or the start of one's name.</summary>
+    /// <param name="Symbol">The symbol, or null for a module path.</param>
+    /// <param name="Module">The module path, when it is one.</param>
+    /// <param name="IsAlias">Whether the name was written as the name a <c>.use ... as</c> gave the symbol.</param>
+    /// <param name="From">The module whose <c>.use module::*</c> brought the symbol in, when one did.</param>
+    private readonly record struct Place(Symbol? Symbol, string? Module = null, bool IsAlias = false, string? From = null)
+    {
+        /// <summary>A name that means nothing, which has been reported as such.</summary>
+        public static Place Reported => default;
+
+        /// <summary>Whether this is <see cref="Reported"/>.</summary>
+        public bool IsReported => Symbol is null && Module is null;
+    }
 }

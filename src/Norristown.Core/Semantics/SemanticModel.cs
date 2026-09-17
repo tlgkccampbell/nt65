@@ -46,7 +46,7 @@ public sealed class SemanticModel
         // A macro this file calls is expanded into it, so what its body uses is named in this
         // file's output and has to be brought in here, exactly as if the file had written it.
         ExternalSymbols = [.. References
-            .Where(reference => !reference.IsDeclaration)
+            .Where(reference => !reference.IsDeclaration && !reference.InUse)
             .Select(reference => reference.Symbol)
             .Concat(expanded)
             .Where(symbol => symbol.Tree != tree && !symbol.IsDefine

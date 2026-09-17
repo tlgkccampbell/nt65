@@ -1,5 +1,7 @@
 ; A line the parser cannot read is one line's problem: it is reported once, and the line
 ; after it parses as if nothing had happened.
+.module main
+
 .segment RODATA
 .frobnicate 1           ;! error: unknown directive `.frobnicate`
 .data one: .word .frobnicate(1) ;! error: `.frobnicate` is not a function

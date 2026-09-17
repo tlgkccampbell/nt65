@@ -71,10 +71,10 @@ public sealed class BranchTests
     public void AShortBranchThatCannotReachItsTargetIsReported()
     {
         var program = Analysis.Program(
-            ("main.nt65", $".segment CODE\n.proc p {{\n    beq @out\n    {Nops(128)}@out:\n    rts\n}}\n"));
+            ("main.nt65", $".module main\n.segment CODE\n.proc p {{\n    beq @out\n    {Nops(128)}@out:\n    rts\n}}\n"));
 
         Assert.Equal(
-            ["main.nt65:3: `beq` would branch 128 bytes, and a branch reaches only -128 to 127. "
+            ["main.nt65:4: `beq` would branch 128 bytes, and a branch reaches only -128 to 127. "
                 + "`jeq` reaches any near target"],
             program.Problems());
     }
@@ -88,7 +88,7 @@ public sealed class BranchTests
     [InlineData(".proc p {\n    beq elsewhere\n    rts\n}\n\n.proc elsewhere {\n    rts\n}\n")]
     public void ADistanceNt65DoesNotKnowIsNotReported(string text)
     {
-        Assert.Empty(Analysis.Program(("main.nt65", ".segment CODE\n" + text)).Problems());
+        Assert.Empty(Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems());
     }
 
     /// <summary>
@@ -98,13 +98,13 @@ public sealed class BranchTests
     [Fact]
     public void ANestedSegmentBlockIsNotBetweenABranchAndItsTarget()
     {
-        var text = ".segment CODE\n.proc p {\n    beq @out\n    .segment RODATA {\n    .data table: .byte[200]\n    }\n@out:\n    lda table\n    rts\n}\n";
+        var text = ".module main\n.segment CODE\n.proc p {\n    beq @out\n    .segment RODATA {\n    .data table: .byte[200]\n    }\n@out:\n    lda table\n    rts\n}\n";
 
         Assert.Empty(Analysis.Program(("main.nt65", text)).Problems());
     }
 
     /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
-    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".segment CODE\n" + text))["main.s"];
+    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static int Occurrences(string text, string find)
     {

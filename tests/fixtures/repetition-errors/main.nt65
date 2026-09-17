@@ -1,5 +1,7 @@
 ; What a repetition refuses.
 
+.module main
+
 .segment RODATA
 .data here: .byte 0
 

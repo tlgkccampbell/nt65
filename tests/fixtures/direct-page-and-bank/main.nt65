@@ -1,5 +1,7 @@
 ; The direct page and the data bank, tracked through each routine and checked against what
 ; the segments and the project's ranges declare. None of it changes the output except `d:`.
+.module main
+
 .cpu 65816
 
 .export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail

@@ -1,6 +1,8 @@
 ; Assembly's tricks on the 65816, each with the annotation that tells the analysis what it
 ; cannot see for itself. Here the analysis consumes processor state, so the annotations
 ; that are optional on the 6502 are required, and every one below is needed.
+.module main
+
 .cpu 65816
 
 .import print: proc(inline .asciiz)

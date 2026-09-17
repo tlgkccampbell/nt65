@@ -1,9 +1,14 @@
-; Code and data that live in bank $81 and are reached with jsl.
+; Code and data that live in bank $81 and are reached with jsl, as `bank1::load_palette`.
+.module bank1
+
 .cpu 65816
 
-.segment BANK1
-.scope bank1 {
+.use snes::*
+.use gfx::cgram_copy_far
+
 .export load_palette, spawn_player, level_speed
+
+.segment BANK1
 
 .data palette: .word[] {
     rgb15(0, 0, 0)
@@ -67,6 +72,4 @@
     sep #$20
     lda f:speeds,x
     rtl
-}
-
 }

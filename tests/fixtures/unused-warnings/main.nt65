@@ -1,6 +1,8 @@
 ; Labels, constants, macros and types that nothing names. What a file exports is used by
 ; the files that import it, and what a branch this build leaves out names is used by the
 ; build that takes it.
+.module main
+
 .cpu 65816
 
 LIMIT = 10                      ;! warning: `LIMIT` is never used: nothing names it, and it is not exported

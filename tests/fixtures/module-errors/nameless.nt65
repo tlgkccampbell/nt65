@@ -1,0 +1,2 @@
+LONELY = 1              ;! error: a file is a module, and says which first: `.module name`
+.export LONELY

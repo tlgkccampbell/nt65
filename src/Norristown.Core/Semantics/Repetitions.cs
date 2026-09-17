@@ -105,7 +105,7 @@ public static class Repetitions
     /// may. What the body declares is a different name on every turn, and each of these is
     /// one thing for the whole file.
     /// </summary>
-    public static string? Forbidden(SyntaxNode statement) => statement.Kind switch
+    public static string? Forbidden(SyntaxNode statement) => (statement.IsExported ? SyntaxKind.ExportDirective : statement.Kind) switch
     {
         SyntaxKind.ExportDirective or SyntaxKind.ImportDirective =>
             "an export or an import belongs outside a repetition: it names one symbol, and a "

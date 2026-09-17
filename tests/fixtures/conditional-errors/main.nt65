@@ -1,5 +1,7 @@
 ; What a condition may not do, and what an assertion says when it does not hold.
 
+.module main
+
 SIZE = 4
 
 .if SIZE > 2 {                  ;! error: `SIZE` is not a define. A condition tests the build configuration, and a check on the program is an `.assert`

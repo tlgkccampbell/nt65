@@ -11,6 +11,7 @@ public sealed class AssertionTests
     public void AnAssertionAboutAConstantIsCheckedHere()
     {
         var program = Analysis.Program(("main.nt65", """
+            .module main
             .struct Point {
             x:  .word
             y:  .word
@@ -19,14 +20,14 @@ public sealed class AssertionTests
                 .assert .sizeof(Point) == 8, error, "Point must be 8 bytes"
             """));
 
-        Assert.Equal(["main.nt65:6: Point must be 8 bytes"], program.Problems());
+        Assert.Equal(["main.nt65:7: Point must be 8 bytes"], program.Problems());
     }
 
     /// <summary>The level says how much a failure matters, and a warning still compiles.</summary>
     [Fact]
     public void TheLevelDecidesTheSeverity()
     {
-        var program = Analysis.Program(("main.nt65", "    .assert 0, warning, \"only a warning\"\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\n    .assert 0, warning, \"only a warning\"\n"));
 
         var diagnostic = Assert.Single(program.Diagnostics);
         Assert.Equal(Severity.Warning, diagnostic.Severity);
@@ -37,9 +38,9 @@ public sealed class AssertionTests
     [Fact]
     public void AnAssertionWithNoMessageSaysSomething()
     {
-        var program = Analysis.Program(("main.nt65", "    .assert 1 == 2, error\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\n    .assert 1 == 2, error\n"));
 
-        Assert.Equal(["main.nt65:1: this assertion does not hold"], program.Problems());
+        Assert.Equal(["main.nt65:2: this assertion does not hold"], program.Problems());
     }
 
     /// <summary>
@@ -50,6 +51,7 @@ public sealed class AssertionTests
     public void WhatNt65CannotAnswerIsPassedOn()
     {
         var main = Analysis.Outputs(("main.nt65", """
+            .module main
             .segment CODE
                 .assert 4 == 4, error, "checked here"
             .proc irq {
@@ -67,7 +69,7 @@ public sealed class AssertionTests
     public void AnErrorTheBuildReachesIsReported()
     {
         var compilation = Compiler.Compile(
-            [new SourceFile("main.nt65", "    .error \"unsupported configuration\"\n")]);
+            [new SourceFile("main.nt65", ".module main\n    .error \"unsupported configuration\"\n")]);
 
         Assert.Equal(["unsupported configuration"], compilation.Diagnostics.Select(d => d.Message));
         Assert.Empty(compilation.Outputs);
@@ -78,6 +80,7 @@ public sealed class AssertionTests
     public void AnErrorInABranchThatIsNotTakenSaysNothing()
     {
         var program = Analysis.Program(("main.nt65", """
+            .module main
             .if 0 {
                 .error "unsupported configuration"
             }

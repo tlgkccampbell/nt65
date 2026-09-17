@@ -143,6 +143,7 @@ public sealed partial class OracleTests
     public void AnInitializedInstanceAssemblesToTheBytesWrittenByHand()
     {
         const string Nt65 = """
+            .module main
             .struct Point {
             x:      .word
             y:      .word

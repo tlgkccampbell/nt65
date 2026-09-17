@@ -1,5 +1,9 @@
 ; Power-on, interrupt entry and hardware initialisation.
+.module reset
+
 .cpu 65816
+
+.use snes::*
 
 .export reset_stub, nmi_stub, irq_stub, cop_stub, brk_stub
 
@@ -55,13 +59,13 @@
     jsr clear_ram
     jsr init_ppu
     jsl bank1::load_palette
-    jsr upload_graphics
+    jsr gfx::upload_graphics
     lda #GameState::title
     sta game_state
     lda #$81
     sta NMITIMEN                ; NMI and joypad auto-read
     cli
-    jmp main
+    jmp main::main
 }
 
 ; Zero low RAM and all of bank $7e with block moves.

@@ -7,16 +7,16 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1534, 0
+.dbg file, "main.nt65", 1548, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 7
+.dbg line, "main.nt65", 9
 ptr:        .res 2
-.dbg line, "main.nt65", 8
+.dbg line, "main.nt65", 10
 vector:     .res 2
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 11
+.dbg line, "main.nt65", 13
 buf:        .res 256
 
 hi = $12
@@ -26,50 +26,50 @@ CHROUT = $ffd2
 
 .segment "CODE": absolute
 forms:
-.dbg line, "main.nt65", 21
-    inx
-.dbg line, "main.nt65", 22
-    asl
 .dbg line, "main.nt65", 23
-    asl a
+    inx
 .dbg line, "main.nt65", 24
-    lda #$10
+    asl
 .dbg line, "main.nt65", 25
-    lda z:ptr
+    asl a
 .dbg line, "main.nt65", 26
-    lda a:buf
+    lda #$10
 .dbg line, "main.nt65", 27
     lda z:ptr
 .dbg line, "main.nt65", 28
-    lda a:ptr
+    lda a:buf
 .dbg line, "main.nt65", 29
-    lda z:$10
+    lda z:ptr
 .dbg line, "main.nt65", 30
-    lda a:$0400
+    lda a:ptr
 .dbg line, "main.nt65", 31
-    lda a:buf,x
+    lda z:$10
 .dbg line, "main.nt65", 32
-    lda buf,y
+    lda a:$0400
 .dbg line, "main.nt65", 33
-    ldx a:buf,y
+    lda a:buf,x
 .dbg line, "main.nt65", 34
-    sty z:ptr,x
+    lda buf,y
 .dbg line, "main.nt65", 35
-    lda (ptr),y
+    ldx a:buf,y
 .dbg line, "main.nt65", 36
-    lda (ptr,x)
+    sty z:ptr,x
 .dbg line, "main.nt65", 37
-    jmp (vector)
+    lda (ptr),y
 .dbg line, "main.nt65", 38
-    bne forms__loop
+    lda (ptr,x)
 .dbg line, "main.nt65", 39
-    brk #0
+    jmp (vector)
 .dbg line, "main.nt65", 40
-    lda z:+(hi + lo) * 2
+    bne forms__loop
 .dbg line, "main.nt65", 41
-    lda z:ptr+1
+    brk #0
 .dbg line, "main.nt65", 42
+    lda z:+(hi + lo) * 2
+.dbg line, "main.nt65", 43
+    lda z:ptr+1
+.dbg line, "main.nt65", 44
     jsr CHROUT
 forms__loop:
-.dbg line, "main.nt65", 44
+.dbg line, "main.nt65", 46
     rts

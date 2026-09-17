@@ -54,10 +54,12 @@ accepting ca65 source. nt65 promises a project that mixes them:
    each with its declared address size. Within a file, items keep their source order in
    each segment; the order across files is the project's link order.
 4. **Symbols.** Everything shared with ca65 is an ordinary linker symbol (§12). An
-   export is spelled as its nt65 name, or `outer__inner` for an exported interior label,
-   and carries the address size nt65 uses: `.exportzp` for a zero-page label or a
-   constant below `$100`, `far` for a far label or constant. Enum, struct and union
-   members are exported as flat constants, and a checked import is verified by ld65.
+   export is spelled as its path with its module's in front, joined with `__`
+   (`gfx__clear` for `clear` in module `gfx`, `gfx__clear__again` for an exported interior
+   label), or as the name its `as` gives, and carries the address size nt65 uses or its
+   export states: `.exportzp` for a zero-page label or a constant below `$100`, `far` for a
+   far label or constant. Enum, struct and union members are exported as flat constants,
+   and a checked import is verified by ld65.
 5. **Nothing extra.** nt65 adds no runtime, library, segment or startup code. Every
    label it generates is local to its file, except an `f__end` label that another file
    uses through `.endof`.
@@ -74,7 +76,7 @@ nt65 does not promise:
   declared signature, and checking stops at the boundary;
 - a calling convention: signatures describe processor state only, and cc65's C calling
   convention (the software stack, return values in A/X) is the programmer's job;
-- stable generated names across edits: only exported names and the fixed spellings
+- stable generated names across edits: only linker names and the fixed spellings
   `outer__inner` and `f__end` are stable;
 - that a debugger shows scopes: debuggers see flat names such as `draw__loop`.
 
@@ -156,10 +158,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   macro call's block, `name {` for its next block (§11.4).
 - **Leading whitespace is insignificant.** Labels may be indented.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, case-sensitive. Scoped names use `::`
-  (`gfx::init`, `::top_level`); `::` is one token, so `z::foo` walks into scope `z`
-  and a prefix on a global reference is written `z: ::foo`. Cheap locals are `@name`
-  (§6.2).
-- **Reserved words:** all mnemonics of all three CPUs and the long branches of §7.6
+  (`gfx::init`, `::hw::init`); `::` is one token, so `z::foo` walks into scope `z`
+  and a prefix on a path from the root of the modules is written `z: ::hw::foo`. Cheap
+  locals are `@name` (§6.2).
+- **Reserved words:** the mnemonics of the program's CPU and the long branches of §7.6
   (case-insensitive), the
   registers `a`, `x`, `y`, `s` (case-insensitive), and every `.directive` (also
   case-insensitive). The mnemonics are the canonical WDC names, with the bit number in
@@ -167,9 +169,12 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   ca65's alternative 65816 spellings (`tad`, `swa`, ...) are ordinary identifiers. A user
   symbol, a macro parameter or a member of an anonymous enum cannot be named `lda` or
   `X`. Members of a named struct, union or enum are exempt: they are always reached
-  through `::`, where a register name or mnemonic is unambiguous (`Point::x`). The
-  mnemonic set is part of the language version: adding a CPU later reserves new words
-  and is a breaking change.
+  through `::`, where a register name or mnemonic is unambiguous (`Point::x`). Parsing does
+  not depend on the CPU: a line that starts with a mnemonic of any CPU is an instruction,
+  and one the CPU lacks is an error there. But a name that is not a mnemonic of the
+  program's CPU may be declared, so a 6502 program may call something `per` or `REP`, and
+  `ident :` is always a label. Changing a program's CPU can therefore make an existing name
+  reserved, and adding a CPU to the language reserves new words for its programs.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` is a
   CPU name, one token, valid only where a CPU is named (§5.1).
 - **Strings:** `"..."` with fixed escapes `\n \r \t \\ \" \' \xHH`, which character
@@ -223,11 +228,12 @@ items after a missing `}` are still found.
 
 ## 5. Program structure
 
-A program is the set of `.nt65` files handed to the transpiler. Each file is a sequence
-of **items**: constants, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`,
-`.struct`, `.union`, `.charmap`, `.list`, `.func`, `.export`, `.import`, `.if`, `.repeat`
-and `.each` at item level, unnamed `.res` and `.align` padding, segment declarations,
-segment regions and segment blocks.
+A program is the set of `.nt65` files handed to the transpiler. Each file is a module, and
+begins by saying which, `.module name` (§12). After that it is a sequence of **items**:
+constants, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
+`.charmap`, `.list`, `.func`, `.export`, `.import`, `.use`, `.if`, `.repeat` and `.each` at
+item level, unnamed `.res` and `.align` padding, segment declarations, segment regions and
+segment blocks.
 
 Outside a proc there are no instructions and no labels. Code lives in a `.proc`, and every
 byte outside one belongs to a `.data` declaration (§8), except unnamed `.res` and `.align`,
@@ -356,7 +362,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 - `files`: globs. Order is not significant.
 - `out`: where each `foo.s` goes, mirroring the source tree.
 - `defines`: the build configuration. Each define is a constant visible in every file,
-  as if declared and exported once, and defines are the only symbols an `.if` condition
+  as if every module had brought it in, and defines are the only symbols an `.if` condition
   may test (§10). `-D NAME=value` on the command line adds a define or overrides one
   given here, and `-D NAME` on its own defines it as 1, for a define a condition only
   tests. A declaration in a file may not reuse a define's name. There is no way
@@ -390,6 +396,8 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
 | `.macro name(...) { ... }` | a macro (§11). |
+| `.module path` | the module the file is, once, before its other items (§12). |
+| `.use path`, `.use path::{a, b}`, `.use path::*`, `.use path as name` | names another module declares, or a module, brought in under their own names or `as` ones (§12). |
 
 Every symbol carries what analysis needs: whether it is a constant or an address, its
 address size (from its value, or from its segment), and for data its size in bytes
@@ -397,9 +405,10 @@ address size (from its value, or from its segment), and for data its size in byt
 
 ### 6.2 Scoping rules
 
-- Name lookup proceeds from the innermost scope outward to file scope, then to symbols
-  exported by other files (§12). `::name` starts at file scope; `a::b` walks into a
-  named scope.
+- Name lookup proceeds from the innermost scope outward to the module's top level, then to
+  what its `.use` items bring in and to the defines, then to the modules themselves
+  (§12). `a::b` walks into a named scope, or into a module; `::hw::name` starts at the
+  root of the modules.
 - **Cheap locals** `@name` are labels or constants private to the innermost enclosing
   `.proc` or `.scope`. A macro expansion and each `.repeat` or `.each` iteration also have their
   own, and so does a `.data name { }` block, whose `@` positions are private to it. `.if`
@@ -418,7 +427,8 @@ address size (from its value, or from its segment), and for data its size in byt
   Because nothing outside a proc can name the cheap locals declared inside it, every
   edge into such a label is visible to the proc's flow analysis (§7.3). The output gives
   each cheap local a generated name (§13).
-- Two files may not export the same name.
+- Nothing another module declares is visible without its path or a `.use`, and two
+  modules may each export the same name: the linker sees each under its module's (§12).
 
 ```nt65
 .proc init {
@@ -570,7 +580,7 @@ A line holds one or more comma-separated items, constants or addresses, whose na
 resolve where the list is declared. A list name stands for its items in the operands of
 `.byte`, `.word`, `.dword`, `.addr`, `.faraddr`, `.lobytes` and `.hibytes`, in `.each`
 (§10), and as a `.next` target (§7.4). `.countof(handlers)` is the number of items, a
-constant. A list emits nothing by itself, and is exported and used across files like a
+constant. A list emits nothing by itself, and is exported and used across modules like a
 constant, by value.
 
 ## 7. Instructions
@@ -896,7 +906,7 @@ label:
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from this file is checked against for the parts it gives. Such a label may be a jump target, never a call target |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives. Such a label may be a jump target, never a call target |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
@@ -1239,7 +1249,7 @@ a declaration, not a mode, and is applied explicitly where text is emitted:
 
 A mapping may name any character, ASCII or not, and a character with no mapping is an
 error when the mapping is applied. A mapping is an ordinary declaration,
-exported and used across files like a constant. `.strlen(s)` and `.strat(s, i)` remain
+exported and used across modules like a constant. `.strlen(s)` and `.strat(s, i)` remain
 for the cases a `.repeat` needs.
 
 A value in a `.byte`, a `.word`, a `.res` fill or an immediate is not negative: ca65
@@ -1314,7 +1324,7 @@ appear wherever a constant may, including `.res` counts, but not in an `.if` con
 function is a declaration of the program, and conditions are answered before any declaration
 is read (§10). Functions may call functions, but not in a cycle, which is an error whether or
 not anything calls them. A function
-is exported and used across files like a constant, and the output writes each call as
+is exported and used across modules like a constant, and the output writes each call as
 its parenthesized body.
 
 nt65 evaluates every expression it can (anything built only from constants) and uses
@@ -1414,8 +1424,8 @@ so is a scope with no member of the name the binding stands for on some turn.
 None of these reaches the output. nt65 resolves every `.if` and unrolls every `.repeat`
 and `.each` itself; names declared inside a `.repeat` or `.each` body are distinct per
 iteration, as macro expansion labels are, and nothing outside the body can name them. A
-body holds nothing that is one thing for the whole file: no `.export`, `.import`, `.cpu`,
-segment declaration, `.proc`, `.macro` or `.func`.
+body holds nothing that is one thing for the whole file: no `.export`, `.import`, `.use`,
+`.module`, `.cpu`, segment declaration, `.proc`, `.macro` or `.func`.
 
 ## 11. Macros
 
@@ -1465,8 +1475,8 @@ expansion.
   ordinary nt65 and parses on its own. The syntax of an argument never depends on the
   kind of the parameter it binds to; kinds are checked when names are resolved.
 - **Names.** A body sees the scope in which the macro is declared. A symbol that an
-  exported macro uses without receiving it as a parameter must itself be exported, which
-  nt65 checks. Names in a `block` argument resolve in the caller, including the caller's
+  exported macro uses without receiving it as a parameter must be exported by its module, or
+  come from another, which nt65 checks at the macro's declaration (§12). Names in a `block` argument resolve in the caller, including the caller's
   `@labels`. A macro cannot declare names in its caller: labels, constants and types in
   a body are local to each expansion, and to name what a macro emits, a `.data` block holds
   the call, `.data player_sprite { sprite!(...) }`, or inside a proc a label goes on the
@@ -1594,7 +1604,7 @@ never gives the caller a shape.
 | item | why |
 |---|---|
 | a label or constant named by an `ident` parameter | it would declare a name in the caller |
-| `.export` | other files resolve names through the export map, and a file's interface (§14) would depend on expansion |
+| `.export`, `.use`, `.module` | other modules resolve names through the modules' exports, and a module's interface (§14) would depend on expansion |
 | a segment declaration, `.segment X: zp` | the segment table is program-wide and declared exactly once; it would depend on how many times the macro is called |
 | `.cpu` | the CPU is program-wide |
 | `.proc` | inside a proc it would nest (§6.1); at item level it would need a name from the caller, and its signature is part of the file's interface. A wrapper is a block macro called inside a proc the caller declares |
@@ -1711,29 +1721,117 @@ ca65's.
 
 ## 12. Modules
 
-Every file is a module. Its symbols are private unless exported:
+Every file is a module, and says which first:
 
 ```nt65
-.export fill_page, SCREEN, Player, set16
+.module gfx::sprite
 ```
 
-References from another nt65 file simply name the symbol. What the output does depends
-on the symbol's kind:
+A file without one is an error, a single-file build included, and two files may not be the
+same module. A module's name may be a path, and a path is only a name: `gfx::sprite` needs no
+module `gfx`, and has no special view into it or into `gfx::tile`. **A module is one file**,
+so it is one ca65 translation unit. That buys what no module spread over files could have:
+a private name is private to one `.s`, where no other object can see it, and nt65 never
+chooses the order of two files' bytes in a segment, which the build's link order states. A
+large module is split into submodules, `hw::vic` and `hw::sid`, that share names by exporting
+them.
+
+A module's symbols are private unless exported. `.export` goes before a declaration, or
+lists names:
+
+```nt65
+.export BORDER = $D020
+.export .proc init {
+    rts
+}
+.export .data vectors {
+    .data native: .addr[8]
+}
+.export fill_page, clear::again, K: abs, init as "_init"
+```
+
+The list form is for what cannot carry `.export` itself: an interior label (`.export again`
+inside `.proc clear`, or `clear::again` outside it), a member, an address size and a linker
+name.
+
+- **Exporting a named scope** exports what it declares, through the named scopes inside it.
+  It stops at a routine's interior labels, which are exported one by one, and never exports
+  cheap locals. **Exporting `.data`** exports its address and its named members, to any depth;
+  its `@` positions stay its own. **Exporting a type** exports its members as flat constants.
+- **An export's size** is written `.export K: abs`, as an import's is. It may widen what nt65
+  knows, zero page to absolute or far, and another module's uses are sized by the export; it
+  may not narrow it.
+
+**Names from another module** are written with the module's path, or brought in with `.use`,
+and are never visible any other way:
+
+```nt65
+.module main
+.use hw::init                       ; one name
+.use hw::{BORDER, set_border}       ; several
+.use hw::sid::*                     ; everything the module exports
+.use snd::init as snd_init          ; a name of this module's choosing
+.use very::long::path as p          ; a module, named p::thing
+
+.proc main {
+    jsr gfx::init                   ; qualified
+    jsr snd_init
+    lda p::thing
+}
+```
+
+A `.use` path always starts at the root of the modules. `.use` belongs at a module's top
+level, and a macro from another module is called through a name `.use` brings in. A name is
+looked for in this order:
+
+1. the scopes around it, out to the module's top level;
+2. what a `.use` names, explicitly or with `as`;
+3. the defines;
+4. the first part of a module's path, for a qualified name;
+5. what a `.use module::*` brings in.
+
+A local declaration beats a name a `*` brings in, and a name two `*` imports bring in is an
+error only where it is used. A name a `.use` brings in explicitly may not also be declared
+in the module; `as` renames one of them. So another module adding an export never changes
+what a name here already means. A leading `::` starts at the root of the modules,
+`::hw::init`, past any scope with the same name as a module. A module `hw::vic` and a name
+`vic` that module `hw` declares cannot both exist, because a path to one reaches the other.
+
+**Linker names are qualified by module.** An export reaches ca65 as its whole path joined with
+`__`: `init` in `.module gfx::sprite` is `gfx__sprite__init`, and an interior label, a scope
+member or a `.data` member continues the path (`hw__vectors__native`). `as` sets the linker
+name exactly, which is how a name meant for C or hand-written ca65 gets one: `.export memfill
+as "_memfill"`, with cc65's underscore written out. A name that is not exported is private to
+its `.s` and keeps its local spelling (§13). Two exports that still meet under one linker
+name, through `as` or an identifier containing `__`, are an error.
+
+What another module's output does with a name depends on its kind:
 
 - **address symbols**, labels and address aliases alike, become `.import`/`.importzp`
-  in the referencing file's output, sized from the declaration;
-- **constants** whose value nt65 knows are emitted by value (`SCREEN = $0400`) in every
-  file that uses them, because ca65 cannot use an imported symbol where it needs a
+  under their linker names in the referencing module's output, sized from the export;
+- **constants** whose value nt65 knows are emitted by value (`gfx__SCREEN = $0400`) in every
+  module that uses them, because ca65 cannot use an imported symbol where it needs a
   constant (`.res`, `.if`, `.repeat`, `.sizeof`);
 - **enums, structs, unions, charmaps, lists and functions** are used by value: an enum member becomes a
   constant, a member offset or type size a number, mapped text bytes, a list its items and a function
-  call its body; **macros** are
-  expanded in the referencing file;
-- an **exported interior label** (`.export inner` inside `.proc outer`) is named
-  `outer::inner` from other files and travels through the object file as
-  `outer__inner` (§13).
+  call its body; **macros** are expanded in the referencing module.
 
-`.export` may appear anywhere in the defining file.
+**Re-exports.** A module may make names it did not declare part of itself:
+
+- **An import** may be exported, `.export .import sp: zp`. Other modules use it as if they had
+  declared the import, with its size, signature and checked value; each writes its own
+  `.import`, the re-exporting module writes no ca65 export, and the `lderror` assertion of a
+  checked import is written once, by the module that declares it.
+- **Another module's name** is re-exported with `.export .use hw::vic::border`, which makes
+  `border` part of this module's interface: users reach it as `hw::border`, and it keeps the
+  linker name of its definition, so a re-export emits nothing. A facade module presents the
+  names its submodules define this way. A re-export names what it re-exports, explicitly or
+  in braces; `.export .use hw::vic::*` is an error, because a glob would grow the interface
+  silently.
+- **A macro** that is exported may name only what its module exports, or what another module
+  does. One whose body names something its module keeps private is an error at its
+  declaration: the body resolves names where it is declared, and an expansion in another
+  module could not link. The name is not exported for it.
 
 **The object file is the only boundary with ca65.** nt65 never reads ca65 source and
 ca65 never reads nt65 source; everything the two share is a linker symbol.
@@ -1753,24 +1851,23 @@ On the 6502 and 65C02 the signature of a `proc(...)` import or an extern proc ma
 empty.
 
 - **ca65 modules** export symbols in the usual way. cc65's runtime library already
-  exports its zero-page variables, so `.import sp: zp` needs nothing more.
+  exports its zero-page variables, so `.import sp: zp` needs nothing more. An import keeps
+  its own name to the linker.
 - **Constants defined only in a ca65 include file**, such as hardware registers and
   struct offsets, reach nt65 through a small ca65 module that includes the file and
   `.export`s the names needed. An imported symbol is opaque to nt65: it can be an
   operand, sized by its import, but it cannot appear where nt65 needs its value (`.res`,
   `.repeat`, the `ranges` check of §7.5).
-- **An import is not exported.** It is somebody else's symbol, and each nt65 file that
-  uses it imports it.
 - **A checked import**, `.import NAME = value`, gives nt65 the value. nt65 uses `value`
   wherever `NAME` appears, and the output imports `NAME` and asserts `NAME = value` with
   `lderror`, so ld65 fails the link if the ca65 definition differs.
 - **nt65 exports** are ordinary symbols to ca65: addresses, routines and constants, and
-  for an exported enum, struct or union its members as flat constants (`Color__red`,
-  `Player__hp`). Each export carries the address size nt65 uses, so a zero-page label
-  or a constant below `$100` is exported with `.exportzp`.
-- **Macros do not cross** in either direction, and there is no `.include`. Definitions
-  several nt65 files share, such as a machine's hardware registers, live in an nt65
-  module that exports them.
+  for an exported enum, struct or union its members as flat constants (`gfx__Color__red`,
+  `game__Player__hp`). Each export carries the address size nt65 uses, so a zero-page label
+  or a constant below `$100` is exported with `.exportzp`, unless its export gives a size.
+- **Macros do not cross** from ca65, and there is no `.include`. Definitions several nt65
+  modules share, such as a machine's hardware registers, live in an nt65 module that exports
+  them.
 
 ## 13. Transpilation
 
@@ -1812,14 +1909,16 @@ of addressing modes.
 
 **Names in the output are flat.** The output contains no ca65 `.proc`, `.scope`,
 `.enum`, `.struct` or cheap local labels, so it never depends on how ca65 resolves
-names. A top-level name keeps its spelling. A scoped name `outer::inner` becomes
-`outer__inner`, and the end label behind `.endof(f)` is `f__end`; these spellings are
-fixed, because other files and hand-written ca65 can refer to them once exported. Cheap
+names. An export is its linker name (§12), its path with its module's in front,
+`gfx__clear`, or the name its `as` gives. A top-level name that is not exported keeps its
+spelling, a scoped name `outer::inner` becomes `outer__inner`, and the end label behind
+`.endof(f)` is `f__end` after whatever `f` is written as; these spellings are fixed, because
+other modules and hand-written ca65 refer to them. Cheap
 locals, labels from macro expansions and labels from `.repeat` iterations get names
 derived from the source, such as `draw__loop` and, for a second `@loop` in the same
 proc, `draw__loop_2`; the same source always yields the same names. An import keeps its
-exported spelling, so a local name that would collide with one is renamed in the output;
-this happens when an exported macro expands in a file that has its own symbol of the
+linker name, so a local name that would collide with one is renamed in the output;
+this happens when an exported macro expands in a module that has its own symbol of the
 same name. A fixed spelling (`outer__inner`, `f__end`) that collides with another name
 is an error. A label
 named `z` or `f` is written `z := *`, because ca65 reads `z:` at the start of a line as
@@ -1883,11 +1982,12 @@ macros, and a comment naming the call precedes the expansion.
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |
 | `.asciiz "s"` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
 | `.endof(f)`, `.spanof(f)` | `f__end`, `(f__end - f)`, with `f__end:` after the last byte of `f` |
-| `.export s` | `.export s`, `.exportzp s` or `.export s: far`, with nt65's address size |
+| `.export s`, `.export .proc s {` | `.export m__s`, `.exportzp m__s`, `.export m__s: far` or `.export m__s: abs`, in module `m`, with nt65's address size or the export's |
 | `.import N = v` | `.import N` and `.assert N = v, lderror, ...`; uses of `N` are emitted as `v` |
 | `.incbin "f"` | `.incbin` with the path made relative to the output file |
-| cross-file reference to an address | `.import s` or `.importzp s` in the referencing file |
-| cross-file reference to a constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing file |
+| `.module`, `.use`, `.export .use` | nothing |
+| reference to another module's address | `.import m__s` or `.importzp m__s` in the referencing module, or an import's own name |
+| reference to another module's constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing module |
 | `NAME = expr` | `NAME = expr`, for a constant or an address alias, written where it stands and opening no segment; one using `*` is in its segment |
 | a define | its value |
 
@@ -1897,6 +1997,8 @@ macros, and a comment naming the call precedes the expansion.
 
 ```nt65
 ; Fill four pages of screen memory with spaces, forever.
+.module main
+
 .cpu 6502
 
 SCREEN       = $0400
@@ -1953,15 +2055,15 @@ here):
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 614, 0
-.export fill_page
+.dbg file, "main.nt65", 628, 0
+.export main__fill_page
 SCREEN       = $0400
 SCREEN_PAGES = 4
 .segment "ZEROPAGE": zeropage
 ptr:    .res 2
 frame:  .res 1
 .segment "CODE": absolute
-fill_page:
+main__fill_page:
     ldy #0
 fill_page__loop:
     sta (ptr),y
@@ -1969,7 +2071,7 @@ fill_page__loop:
     bne fill_page__loop
     rts
 main:
-    ; set16!(ptr, SCREEN)  main.nt65:32
+    ; set16!(ptr, SCREEN)  main.nt65:34
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
@@ -1977,7 +2079,7 @@ main:
     ldx #SCREEN_PAGES
 main__page:
     lda #$20                        ; ' '
-    jsr fill_page
+    jsr main__fill_page
     inc z:ptr+1
     dex
     bne main__page
@@ -1992,10 +2094,12 @@ alone and without an assembler:
 
 - parse any file in isolation and report syntax errors per line;
 - resolve every reference (go to definition, find references, rename, including inside
-  macro bodies and block arguments, without expanding a macro);
+  macro bodies and block arguments, without expanding a macro, and through qualified names,
+  `.use`, `as` and re-exports: a rename across modules rewrites the `.use` items that name
+  the symbol, and leaves a name `as` gave alone);
 - show on hover a symbol's kind, value, address size, segment and byte size;
-- diagnose wrong-CPU instructions, unavailable addressing modes, unexported cross-file
-  references, unused symbols, and constant assertions;
+- diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
+  module does not export, unused symbols, and constant assertions;
 - on the 65816, diagnose width, mode and near/far mismatches at calls and returns,
   immediates reached with unknown width, every unannotated construct of §7.4, and
   direct-page and bank mismatches against declared segments and ranges (§7.5);
@@ -2014,20 +2118,22 @@ counts as used, because the other build uses it, and a file with errors gets non
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
 lines in a branch that is not taken still parse, but are not resolved or analyzed.
 
-**The incremental boundary is the file's interface**: its exported declarations, each
+**The incremental boundary is the file's interface**: its module's name, what it
+re-exports, and its exported declarations, each
 carrying everything a user of it needs (a constant's value, a label's address size, a
 data declaration's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
 body, a macro's kind and body and the exported symbols it uses). It also holds the names
-of the declarations it does not export that a path can reach, because another file naming
+of the declarations it does not export that a path can reach, because another module naming
 one is told that it exists and is not exported, and what any of them means that another
-file names anyway. Positions are not part of it: what one file says about a place in
+module names anyway. A changed name is news only to the modules that looked that name up in
+this one; a changed module name or re-export is news to all of them. Positions are not part of it: what one file says about a place in
 another moves with an edit there. The one exception is where a macro is written, because an
 expansion's comment names the calls in it by file and line (§13) and a problem with a line of
 its body is reported at the call with that line named beside it. Nothing in the interface is derived from a proc body or
 depends on `*`: code sizes are layout, left to the linker (§7.6). If an edit leaves
 the interface unchanged, no other file is re-analyzed, and within the file only the
 edited proc's flow analysis reruns. The only program-wide tables are the defines, the
-export map, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
+module table, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
 signatures declared rather than inferred is what protects this: inference would make
 every caller depend on every callee's body.
 
@@ -2094,8 +2200,31 @@ Recorded so the reasoning survives. None is open.
   included, but not for members of named structs, unions and enums, which are only
   reached through `::`. The output never names members, so ca65's restriction on member
   names does not apply.
-- **Constants cross files by value, addresses by import.** ca65 needs constants where
+- **Constants cross modules by value, addresses by import.** ca65 needs constants where
   it needs them, and an imported symbol is never constant to ca65.
+- **Every file is a module that names itself, and a module is one file.** A name from another
+  module is written with its path or brought in with `.use`, as in Rust, C# and Go, so what a
+  name means never depends on which other files the build holds. One file per module keeps a
+  private name private at the link, where ca65 has no namespace but the global one, and
+  keeps nt65 from choosing the order of two files' bytes. A module's path is only a name,
+  with no relative paths and no special view of its neighbours.
+- **A local name beats a `*`, and an explicit `.use` may not collide.** Another module adding
+  an export can never change what a name here means, and a name brought in on purpose that a
+  declaration would hide is a mistake to say so about.
+- **`::` alone reaches the root of the modules.** It meant the file's top level, which the
+  file's own module name now reaches; local scopes still come before modules for a first
+  part, so a module never hides a scope written around the use.
+- **Linker names are qualified by module**, as Rust, C# and Go keep their modules apart by
+  mangling, so two modules may export `init`. `as` names a symbol for C or hand-written ca65
+  exactly, as `#[no_mangle]` and `export_name` do. The interoperability contract changes with
+  it: an export is no longer spelled as its nt65 name.
+- **Export at the declaration**, with the list form kept for what cannot carry it. Writing
+  every export twice was the most common complaint about `.export`.
+- **Re-exports name what they re-export.** A glob re-export would grow a module's interface
+  whenever another module grows, which is what `.export` exists to prevent.
+- **Mnemonics are reserved by the program's CPU**, not by every CPU nt65 knows. Parsing still
+  knows them all, so a line means the same on every CPU; only which names a program may
+  declare depends on its CPU.
 - **Merge disagreement is not an error.** The lattice already has unknown; reporting at
   the use is precise, reporting at the label is not.
 - **Signatures are declared, never inferred**, for procs, extern procs and imports
@@ -2182,10 +2311,11 @@ Recorded so the reasoning survives. None is open.
 ## Appendix A. Grammar sketch
 
 ```text
-file        := item* (region item*)*
+file        := module-decl item* (region item*)*
+module-decl := '.module' path
 region      := '.segment' ident NL                    ; at file level only
 item        := const | data-decl | padding | proc | extern-proc | scope | macro
-             | enum | struct | union | charmap | list | func | export | import | cpu
+             | enum | struct | union | charmap | list | func | export | import | use | cpu
              | segment-decl | segment | if-block | repeat-block | each-block | assert
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr
@@ -2267,7 +2397,13 @@ each-block  := '.each' path ',' ident '{' NL contents '}'
 contents    := item*                                  ; at item level
              | body                                   ; inside a proc
              | value-line* | mixed*                   ; in a data body
-export      := '.export' ident (',' ident)*
+export      := '.export' export-item (',' export-item)*
+             | '.export' (const | data-decl | proc | extern-proc | scope | macro | enum
+               | struct | union | charmap | list | func | import | use)
+export-item := path (':' size)? ('as' string)?
+use         := '.use' path (('::' '*') | ('::' '{' use-item (',' use-item)* '}') | ('as' ident))?
+use-item    := ident ('as' ident)?                   ; a path always starts at the modules' root
+path        := ident ('::' ident)*
 import      := '.import' import-item (',' import-item)*
 import-item := ident (':' (size | 'proc' '(' state? ('->' state)? ')'))?
              | ident '=' expr                        ; checked import

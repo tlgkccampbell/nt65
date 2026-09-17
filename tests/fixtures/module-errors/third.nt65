@@ -1,0 +1,3 @@
+SMALL = 5
+.export SMALL
+.module third           ;! error: `.module` comes first: the file's other items belong to the module it names

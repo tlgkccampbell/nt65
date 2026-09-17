@@ -240,54 +240,36 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Every export, with the address size nt65 gives it, hoisted to the top of the
-    /// file.
+    /// Every export, under its linker name and with the address size nt65 gives it, hoisted
+    /// to the top of the file in the order the file declares them.
+    /// <para>
+    /// A macro is no symbol to the linker: what crosses is its expansion, written into whichever
+    /// module called it. A charmap, a function and a list are used by value, and what crosses
+    /// is the values, written where they are used. A scope and a type are only the way to
+    /// their members, which are exported one by one, a type's as the flat constants they
+    /// become. An import is somebody else's, and every module that uses one imports it.
+    /// </para>
     /// </summary>
     private void Exports()
     {
         var any = false;
-        foreach (var node in model.Tree.Root.DescendantNodes())
+        foreach (var symbol in model.Symbols)
         {
-            if (node.Kind != SyntaxKind.ExportDirective)
+            if (!symbol.IsExported || !ProgramSymbols.IsLinked(symbol))
                 continue;
-            foreach (var token in node.ChildTokens)
-            {
-                if (token.Kind != SyntaxKind.Identifier || model.SymbolAt(token) is not { } reference)
-                    continue;
+            if (!any)
+                Blank();
+            any = true;
+            exported.Add(symbol);
 
-                // A macro is no symbol to the linker: what crosses is its expansion, written
-                // into whichever file called it. A charmap, a function, a list and a define are
-                // used by value, and what crosses is the values, written where they are used.
-                if (reference.Kind is SymbolKind.Macro or SymbolKind.Charmap or SymbolKind.Func or SymbolKind.List
-                    || reference.IsDefine)
-                {
-                    continue;
-                }
-                if (!any)
-                    Blank();
-                any = true;
-                exported.Add(reference);
+            // A constant is as wide as its value, which is how ca65 sizes one it is given.
+            var size = symbol.ExportSize
+                ?? Implicit(symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize());
+            Line(Linked(".export", size, Named(symbol)));
 
-                // A type is not a symbol to the linker: what crosses is each of its members,
-                // as the flat constant it becomes.
-                if (reference.Kind is SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union)
-                {
-                    foreach (var member in reference.Body?.Symbols ?? [])
-                    {
-                        exported.Add(member);
-                        Line(member.Value.AsNumber() is >= 0 and < 0x100
-                            ? $".exportzp {Named(member)}"
-                            : $".export {Named(member)}");
-                    }
-                    continue;
-                }
-
-                Line(Linked(".export", reference, Named(reference)));
-
-                // Another file that measures the declaration names its end, which goes with it.
-                if (measuredElsewhere.Contains(reference))
-                    Line(Linked(".export", reference, EndOf(reference)));
-            }
+            // Another module that measures the declaration names its end, which goes with it.
+            if (measuredElsewhere.Contains(symbol))
+                Line(Linked(".export", size, EndOf(symbol)));
         }
         if (any)
             pendingBlank = true;
@@ -316,7 +298,10 @@ public sealed class Emitter
                 Blank();
             any = true;
             Line(line);
-            if (symbol.Kind == SymbolKind.ImportedConstant && symbol.Value.AsNumber() is { } checkedValue)
+
+            // A checked import re-exported to other modules is checked once, by the module that declares it.
+            if (symbol is { Kind: SymbolKind.ImportedConstant } && symbol.Tree == model.Tree
+                && symbol.Value.AsNumber() is { } checkedValue)
             {
                 Line($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
                     + $"\"{Named(symbol)} is not {Constant(checkedValue)}, which is what "
@@ -332,7 +317,7 @@ public sealed class Emitter
             if (!any)
                 Blank();
             any = true;
-            Line(Linked(".import", measured, EndOf(measured)));
+            Line(Linked(".import", Implicit(measured.AddressSizeIn(model.Tree)), EndOf(measured)));
         }
         if (any)
             pendingBlank = true;
@@ -340,28 +325,28 @@ public sealed class Emitter
 
     /// <summary>
     /// An <c>.export</c> or <c>.import</c> of <paramref name="name"/>, with the address size
-    /// of <paramref name="symbol"/>: <c>.exportzp</c>, <c>.export name: far</c> or plain.
+    /// <paramref name="size"/>: <c>.exportzp</c>, <c>.export name: far</c> or plain.
     /// </summary>
-    private static string Linked(string directive, Symbol symbol, string name) => symbol.AddressSize switch
+    private static string Linked(string directive, AddressSize? size, string name) => size switch
     {
         AddressSize.ZeroPage => $"{directive}zp {name}",
+        AddressSize.Absolute => $"{directive} {name}: abs",
         AddressSize.Far => $"{directive} {name}: far",
         _ => $"{directive} {name}",
     };
+
+    /// <summary>
+    /// A size as a line that states none has it: ca65 takes an import, and an export of an
+    /// address, as absolute unless told otherwise.
+    /// </summary>
+    private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
 
     /// <summary>The line that brings one symbol in, or null for one that needs no line at all.</summary>
     private string? Import(Symbol symbol)
     {
         var name = Named(symbol);
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
-        {
-            return symbol.AddressSize switch
-            {
-                AddressSize.ZeroPage => $".importzp {name}",
-                AddressSize.Far => $".import {name}: far",
-                _ => $".import {name}",
-            };
-        }
+            return Linked(".import", Implicit(symbol.AddressSizeIn(model.Tree)), name);
 
         // A constant another file declares, written out by value. One whose value nt65
         // does not know has already been reported, and a string is only ever used through

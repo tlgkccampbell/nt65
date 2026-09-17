@@ -1,4 +1,6 @@
 ; Every item the parser reads, in one file, built for the 65816.
+.module main
+
 .cpu 65816
 
 .segment ZP2: zp

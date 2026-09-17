@@ -1,6 +1,9 @@
-; Names in the output are flat. A top-level name keeps its spelling, `outer::inner`
-; becomes `outer__inner`, and cheap locals and names inside an anonymous scope get a name
-; derived from the source and made unique.
+; Names in the output are flat. An export is its linker name, with its module's path in
+; front; a top-level name that is not exported keeps its spelling, `outer::inner` becomes
+; `outer__inner`, and cheap locals and names inside an anonymous scope get a name derived
+; from the source and made unique.
+.module main
+
 .cpu 6502
 
 .segment ZEROPAGE
@@ -10,7 +13,7 @@
 .data f:          .byte
 .data ptr:        .word
 
-.export z, top
+.export top
 
 .segment CODE
 .proc top {

@@ -1,5 +1,7 @@
-; A macro is no symbol to the linker: what crosses a file boundary is its expansion,
-; written into whichever file called it, with whatever it uses brought in there.
+; A macro is no symbol to the linker: what crosses a module boundary is its expansion,
+; written into whichever module called it, with whatever it uses brought in there.
+.module lib
+
 .export set16, delay, SCREEN, tiles
 
 SCREEN = $0400

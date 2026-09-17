@@ -1,6 +1,8 @@
 ; Every operand form the 6502 has, and the addressing mode nt65 picks for each. The
 ; output makes each choice explicit with a `z:` or `a:` prefix wherever the instruction
 ; offers more than one width.
+.module main
+
 .cpu 6502
 
 .segment ZEROPAGE

@@ -7,18 +7,18 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1618, 0
+.dbg file, "main.nt65", 1632, 0
 
-.export fill_page
-.export SCREEN
-.exportzp SCREEN_PAGES
-.exportzp frame
-.export words
-.export wide
-.export here
-.export there
-.export greeting
-.export padding
+.export main__SCREEN
+.exportzp main__SCREEN_PAGES
+.exportzp main__frame
+.export main__words
+.export main__wide
+.export main__here
+.export main__there
+.export main__greeting
+.export main__padding
+.export main__fill_page
 
 .importzp zp_scratch
 .import far_table: far
@@ -30,116 +30,116 @@
 .import raw
 
 CHROUT = $FFD2
-alias = fill_page
+alias = main__fill_page
 
-SCREEN       = $0400
-SCREEN_PAGES = 4
+main__SCREEN       = $0400
+main__SCREEN_PAGES = 4
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 23
+.dbg line, "main.nt65", 25
 ptr:        .res 2
-.dbg line, "main.nt65", 24
-frame:      .res 1
+.dbg line, "main.nt65", 26
+main__frame: .res 1
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 27
-table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-.dbg line, "main.nt65", 28
-words:      .word $1234, table
 .dbg line, "main.nt65", 29
-wide:       .dword $12345678
+table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
 .dbg line, "main.nt65", 30
-here:       .addr table
+main__words: .word $1234, table
 .dbg line, "main.nt65", 31
-there:      .faraddr table
+main__wide: .dword $12345678
 .dbg line, "main.nt65", 32
-greeting:   .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
-padding:
-.dbg line, "main.nt65", 35
+main__here: .addr table
+.dbg line, "main.nt65", 33
+main__there: .faraddr table
+.dbg line, "main.nt65", 34
+main__greeting: .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
+main__padding:
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
-.dbg line, "main.nt65", 35
+.dbg line, "main.nt65", 37
         .byte $ff
 
 .segment "CODE": absolute
-fill_page:
+main__fill_page:
     .i16
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 43
     ldy #0
 fill_page__loop:
-.dbg line, "main.nt65", 43
-    sta (ptr),y
-.dbg line, "main.nt65", 44
-    iny
 .dbg line, "main.nt65", 45
-    bne fill_page__loop
+    sta (ptr),y
 .dbg line, "main.nt65", 46
+    iny
+.dbg line, "main.nt65", 47
+    bne fill_page__loop
+.dbg line, "main.nt65", 48
     rts
 
 render:
         .i8
-.dbg line, "main.nt65", 52
+.dbg line, "main.nt65", 54
         ldx #0
     render__loop:
-.dbg line, "main.nt65", 54
-        stz a:$0200,x
-.dbg line, "main.nt65", 55
-        inx
 .dbg line, "main.nt65", 56
+        stz a:$0200,x
+.dbg line, "main.nt65", 57
+        inx
+.dbg line, "main.nt65", 58
         bne render__loop
 
 .pushseg
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 59
+.dbg line, "main.nt65", 61
     render__shifts: .byte 1, 2, 4, 8
 .popseg
 
-.dbg line, "main.nt65", 61
-    ldx a:render__shifts
-.dbg line, "main.nt65", 62
-    sep #$20
 .dbg line, "main.nt65", 63
+    ldx a:render__shifts
+.dbg line, "main.nt65", 64
+    sep #$20
+.dbg line, "main.nt65", 65
     rts
 
 hud:
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 69
     rts
 
 show:
-.dbg line, "main.nt65", 71
+.dbg line, "main.nt65", 73
     rts
 
 skip2:
-.dbg line, "main.nt65", 75
+.dbg line, "main.nt65", 77
     rtl
 
     gfx__init:
-.dbg line, "main.nt65", 81
+.dbg line, "main.nt65", 83
         rts

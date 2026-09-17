@@ -1,6 +1,8 @@
 ; What the 65816 adds to the 65C02: long addresses, long pointers, the stack-relative
 ; forms, block moves, the long and relative calls and jumps, and the immediates whose
 ; width is the register's.
+.module main
+
 .cpu 65816
 
 .segment FARDATA: far

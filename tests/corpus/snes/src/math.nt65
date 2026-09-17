@@ -1,5 +1,9 @@
 ; 16-bit arithmetic with stack-frame locals.
+.module math
+
 .cpu 65816
+
+.use snes::scratch
 
 .export mul16, div16, clamp16, abs16
 

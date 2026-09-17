@@ -8,12 +8,14 @@ public sealed class MacroExpansionTests
 {
     /// <summary>
     /// The ca65 a one-file program becomes, without the header or the imports. A program that
-    /// names no segment is placed in the code segment, on a line of its own before the rest.
+    /// names no segment is placed in the code segment, on a line of its own before the rest,
+    /// and every program is module `main`, on a line before that.
     /// </summary>
     private static string Body(string text)
     {
         if (!text.Contains(".segment", StringComparison.Ordinal))
             text = ".segment CODE\n" + text;
+        text = ".module main\n" + text;
         var outputs = Analysis.Outputs(("main.nt65", text));
         Assert.True(outputs.ContainsKey("main.s"),
             "the program did not transpile:\n" + string.Join(
@@ -34,7 +36,7 @@ public sealed class MacroExpansionTests
 
             .segment "CODE": absolute
             main:
-                ; set16!(ptr, SCREEN)  main.nt65:13
+                ; set16!(ptr, SCREEN)  main.nt65:14
                 lda #<SCREEN
                 sta z:ptr
                 lda #>SCREEN
@@ -130,7 +132,7 @@ public sealed class MacroExpansionTests
             .segment "CODE": absolute
             main:
                 ldy #0
-                ; times_x!(8)  main.nt65:14
+                ; times_x!(8)  main.nt65:15
                 ldx #8
             times_x__loop:
                     sta (ptr),y
@@ -199,7 +201,7 @@ public sealed class MacroExpansionTests
         Assert.Equal("""
             .segment "CODE": absolute
             main:
-                ; push!(a, x, y)  main.nt65:17
+                ; push!(a, x, y)  main.nt65:18
                         pha
                         phx
                         phy

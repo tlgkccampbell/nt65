@@ -1,5 +1,11 @@
 ; Screen-code text output directly to screen RAM.
+.module text
+
 .cpu 6502
+
+.use hw::SCREEN_RAM
+.use zp::{ptr1, ptr2, score}
+.use macros::inc16
 
 .export screen, print_at, print_score, clear_screen, set_cursor, print_hex
 

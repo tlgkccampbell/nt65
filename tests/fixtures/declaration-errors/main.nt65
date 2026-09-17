@@ -1,4 +1,6 @@
 ; What a data declaration refuses, and what belongs in a declaration or a routine instead.
+.module main
+
 .cpu 6502
 
 .struct Point {

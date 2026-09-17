@@ -194,7 +194,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    rts\n@gone:\n    nop\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:4: `@gone` is never reached: nothing runs into it and nothing names it"],
+            ["main.nt65:5: `@gone` is never reached: nothing runs into it and nothing names it"],
             problems);
     }
 
@@ -227,7 +227,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    lda #1\n    .byte $2c\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:4: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:5: the instruction above runs into this data. `.next` on it says where flow goes instead"],
             problems);
     }
 
@@ -269,7 +269,7 @@ public sealed class FlowTests
             ".proc set {\n    beq @two\n    lda #1\n    .byte $2c\n@two:\n    lda #2\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:5: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:6: the instruction above runs into this data. `.next` on it says where flow goes instead"],
             problems);
     }
 
@@ -282,12 +282,12 @@ public sealed class FlowTests
 
     /// <summary>What is wrong with <paramref name="text"/>, placed in the code segment on a line before it.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(("main.nt65", ".segment CODE\n" + text)).Problems();
+        Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
 
     /// <summary>The one region of the one routine in <paramref name="text"/>.</summary>
     private static FlowRegion Region(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", ".segment CODE\n" + text));
+        var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));
         Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
         return Assert.Single(analysis.Flows.Single().Regions);
     }

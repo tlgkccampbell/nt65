@@ -11,7 +11,7 @@ public sealed class AddressSizeTests
     [InlineData("$7e0000", AddressSize.Far)]
     public void AConstantIsSizedByItsValue(string value, AddressSize expected)
     {
-        var model = Analysis.Model($"VALUE = {value}\n");
+        var model = Analysis.Model($".module main\nVALUE = {value}\n");
 
         Assert.Equal(expected, model.Symbol("VALUE").AddressSize);
     }
@@ -20,6 +20,7 @@ public sealed class AddressSizeTests
     public void ALabelIsSizedByItsSegment()
     {
         var model = Analysis.Model("""
+            .module main
             .segment LONG: far
 
             .segment ZEROPAGE
@@ -40,7 +41,7 @@ public sealed class AddressSizeTests
     [Fact]
     public void ARegionPlacesWhatFollowsIt()
     {
-        var model = Analysis.Model("SIZE = 1\n.segment ZEROPAGE\n.data ptr: .word\n.proc early {\nrts\n}\n"
+        var model = Analysis.Model(".module main\nSIZE = 1\n.segment ZEROPAGE\n.data ptr: .word\n.proc early {\nrts\n}\n"
             + ".segment CODE\n.proc main {\nrts\n}\n");
 
         Assert.Null(model.Symbol("SIZE").Segment);
@@ -54,12 +55,12 @@ public sealed class AddressSizeTests
     [Fact]
     public void BytesOutsideEverySegmentAreAnError()
     {
-        var program = Analysis.Program(("main.nt65", "SIZE = 1\n.proc main {\n    rts\n}\n.data table: .byte SIZE\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\nSIZE = 1\n.proc main {\n    rts\n}\n.data table: .byte SIZE\n"));
 
         Assert.Equal(
             [
-                "main.nt65:2: `main` is outside every segment: a `.segment NAME` region or block places it",
-                "main.nt65:5: `table` is outside every segment: a `.segment NAME` region or block places it",
+                "main.nt65:3: `main` is outside every segment: a `.segment NAME` region or block places it",
+                "main.nt65:6: `table` is outside every segment: a `.segment NAME` region or block places it",
             ],
             program.Problems());
     }
@@ -72,6 +73,7 @@ public sealed class AddressSizeTests
     public void AnAliasTakesTheWidestAddressItNames()
     {
         var model = Analysis.Model("""
+            .module main
             .segment LONG: far
 
             .segment ZEROPAGE
@@ -92,6 +94,7 @@ public sealed class AddressSizeTests
     public void AddrsizeIsTheSizeInBytes()
     {
         var model = Analysis.Model("""
+            .module main
             .segment ZEROPAGE
             .data ptr:    .word
             SCREEN  = $0400
@@ -108,9 +111,9 @@ public sealed class AddressSizeTests
     [Fact]
     public void AnUndeclaredSegmentIsReported()
     {
-        var model = Analysis.Model(".segment NOWHERE\n.data lost:   .byte 0\n");
+        var model = Analysis.Model(".module main\n.segment NOWHERE\n.data lost:   .byte 0\n");
 
-        Assert.Equal(["1: segment \"NOWHERE\" is not declared"], model.Problems());
+        Assert.Equal(["2: segment \"NOWHERE\" is not declared"], model.Problems());
         Assert.Null(model.Symbol("lost").AddressSize);
     }
 }

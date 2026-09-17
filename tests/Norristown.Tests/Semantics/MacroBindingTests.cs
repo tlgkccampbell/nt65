@@ -12,6 +12,7 @@ public sealed class MacroBindingTests
     public void AMacroDeclaresItsNameAndItsParameters()
     {
         var model = Analysis.Model("""
+            .module main
             .macro set16(dest: operand, value) {
                 lda #<value
                 sta dest
@@ -36,6 +37,7 @@ public sealed class MacroBindingTests
     public void EveryKindOfParameterIsRead()
     {
         var model = Analysis.Model("""
+            .module main
             .macro m(n: const, t: ident, c: one(eq, ne), r: list(one(x, y)), then: block, el: block = {}) {
                 then
             }
@@ -57,6 +59,7 @@ public sealed class MacroBindingTests
     public void ADefaultResolvesWhereTheMacroIsDeclared()
     {
         var model = Analysis.Model("""
+            .module main
             ONE = 1
 
             .macro note(pitch: const, frames: const = ONE) {
@@ -76,6 +79,7 @@ public sealed class MacroBindingTests
     public void ABodysOwnNamesAreItsAlone()
     {
         var model = Analysis.Model("""
+            .module main
             SCREEN = $0400
 
             .macro times_x(count) {
@@ -110,6 +114,7 @@ public sealed class MacroBindingTests
     public void ABodysNamesAreNotReachableFromOutside()
     {
         var model = Analysis.Model("""
+            .module main
             .macro m() {
             LOCAL = 1
             }
@@ -117,7 +122,7 @@ public sealed class MacroBindingTests
                 .res m::LOCAL
             """);
 
-        Assert.Equal(["5: `m` is a macro, not a scope"], model.Problems());
+        Assert.Equal(["6: `m` is a macro, not a scope"], model.Problems());
     }
 
     [Theory]
@@ -131,9 +136,9 @@ public sealed class MacroBindingTests
     [InlineData(".func f(a) = a", "`.func` belongs outside a macro body")]
     public void AMacroBodyRefusesTheItemsThatWouldReachItsCaller(string item, string message)
     {
-        var model = Analysis.Model(".macro m() {\n" + item + "\n}\n");
+        var model = Analysis.Model(".module main\n.macro m() {\n" + item + "\n}\n");
 
-        Assert.Contains(model.Problems(), problem => problem.StartsWith("2: " + message, StringComparison.Ordinal));
+        Assert.Contains(model.Problems(), problem => problem.StartsWith("3: " + message, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -143,9 +148,9 @@ public sealed class MacroBindingTests
     [Fact]
     public void AMacroBelongsOutsideAnyRoutine()
     {
-        var model = Analysis.Model(".proc p {\n.macro m() {\n}\n}\n");
+        var model = Analysis.Model(".module main\n.proc p {\n.macro m() {\n}\n}\n");
 
-        Assert.Equal(["2: a `.macro` belongs at file level or in a `.scope`, not inside a routine"],
+        Assert.Equal(["3: a `.macro` belongs at file level or in a `.scope`, not inside a routine"],
             model.Problems());
     }
 
@@ -153,7 +158,7 @@ public sealed class MacroBindingTests
     [Fact]
     public void AMacroMayBeDeclaredInAScope()
     {
-        var model = Analysis.Model(".scope gfx {\n.macro m() {\n    nop\n}\n}\n");
+        var model = Analysis.Model(".module main\n.scope gfx {\n.macro m() {\n    nop\n}\n}\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal("gfx::m", model.Symbol("m").QualifiedName);
@@ -163,9 +168,9 @@ public sealed class MacroBindingTests
     [Fact]
     public void AnIdentParameterCannotBeDeclaredInTheBody()
     {
-        var model = Analysis.Model(".macro m(target: ident) {\ntarget:\n    nop\n}\n");
+        var model = Analysis.Model(".module main\n.macro m(target: ident) {\ntarget:\n    nop\n}\n");
 
-        Assert.Equal(["2: `target` is an `ident` parameter, and a body may not declare the name it stands for"],
+        Assert.Equal(["3: `target` is an `ident` parameter, and a body may not declare the name it stands for"],
             model.Problems());
     }
 
@@ -173,9 +178,9 @@ public sealed class MacroBindingTests
     [Fact]
     public void AListParameterComesLast()
     {
-        var model = Analysis.Model(".macro m(regs: list(expr), n) {\n    nop\n}\n");
+        var model = Analysis.Model(".module main\n.macro m(regs: list(expr), n) {\n    nop\n}\n");
 
-        Assert.Equal(["1: `n` comes after the `list` parameter `regs`, which takes every remaining argument"],
+        Assert.Equal(["2: `n` comes after the `list` parameter `regs`, which takes every remaining argument"],
             model.Problems());
     }
 
@@ -183,10 +188,10 @@ public sealed class MacroBindingTests
     [Fact]
     public void ABlockParameterComesAfterTheOthers()
     {
-        var model = Analysis.Model(".macro m(body: block, n) {\n    body\n}\n");
+        var model = Analysis.Model(".module main\n.macro m(body: block, n) {\n    body\n}\n");
 
         Assert.Equal(
-            ["1: `n` comes after the `block` parameter `body`, and a block is written after the parentheses"],
+            ["2: `n` comes after the `block` parameter `body`, and a block is written after the parentheses"],
             model.Problems());
     }
 
@@ -194,10 +199,10 @@ public sealed class MacroBindingTests
     [Fact]
     public void ASpliceNamesABlockParameter()
     {
-        var model = Analysis.Model(".macro m(n: const, body: block) {\n    body\n    n\n}\n");
+        var model = Analysis.Model(".module main\n.macro m(n: const, body: block) {\n    body\n    n\n}\n");
 
         Assert.Equal(
-            ["3: `n` is a macro parameter; a name written on its own splices a `block` parameter, "
+            ["4: `n` is a macro parameter; a name written on its own splices a `block` parameter, "
                 + "and nothing else belongs on a line alone"],
             model.Problems());
     }
@@ -206,8 +211,8 @@ public sealed class MacroBindingTests
     [Fact]
     public void ANameAloneOutsideAMacroIsNotALine()
     {
-        var model = Analysis.Model(".proc p {\n    rts\n    body\n}\n");
+        var model = Analysis.Model(".module main\n.proc p {\n    rts\n    body\n}\n");
 
-        Assert.Equal(["3: expected a label, a constant, an instruction or a directive"], model.Problems());
+        Assert.Equal(["4: expected a label, a constant, an instruction or a directive"], model.Problems());
     }
 }

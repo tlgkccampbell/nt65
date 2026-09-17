@@ -140,7 +140,7 @@ public static class Compiler
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.
-        var program = ProgramModel.Create(trees, segments, configuration, defines, Length);
+        var program = ProgramModel.Create(trees, segments, configuration, defines, Length, target);
 
         var layouts = new List<CodeLayout>();
         var flows = new List<Flow.ControlFlow>();

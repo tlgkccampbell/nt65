@@ -1,0 +1,20 @@
+; Joypad bits, as read 16-bit from JOY1L. A member of a named enum may be spelled like a
+; register, since it is only ever named through the enum.
+.module snes::pad
+
+.cpu 65816
+
+.export .enum Joy {
+    R      = $0010
+    L      = $0020
+    X      = $0040
+    A      = $0080
+    right  = $0100
+    left   = $0200
+    down   = $0400
+    up     = $0800
+    start  = $1000
+    select = $2000
+    Y      = $4000
+    B      = $8000
+}

@@ -1,4 +1,7 @@
 ; A function this file keeps to itself.
+.module lib
+
 .cpu 65816
 
+.export .func thrice(n) = n * 3
 .func twice(n) = n * 2

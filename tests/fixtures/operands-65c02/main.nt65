@@ -1,5 +1,7 @@
 ; What the 65C02 adds to the 6502: the `(zp)` and `(abs,x)` forms, the accumulator
 ; forms of `inc` and `dec`, and the Rockwell bit instructions.
+.module main
+
 .cpu 65c02
 
 .segment ZEROPAGE

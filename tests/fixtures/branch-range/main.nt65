@@ -1,6 +1,8 @@
 ; The distance from a relative branch to its target is known when both sit in the same
 ; segment block with no `.align` between them, and nt65 says so at edit time rather than
 ; leaving it to ca65. Where the distance is unknown, ca65's own check stands.
+.module main
+
 .cpu 6502
 
 .segment CODE

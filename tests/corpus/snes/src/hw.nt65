@@ -1,11 +1,15 @@
-; SNES hardware: register addresses, shared variables and small macros.
+; SNES hardware: the facade the rest of the program uses. The registers and the joypad bits
+; are submodules' names, which this module presents as its own; the shared variables, the
+; types and the small macros are its own.
+.module snes
+
 .cpu 65816
 
-.export INIDISP, OBSEL, BGMODE, BG1SC, BG12NBA, VMAIN, VMADDL, CGADD, TM, SETINI
-.export NMITIMEN, WRMPYA, RDNMI, HVBJOY, JOY1L, MDMAEN, HDMAEN, MEMSEL
-.export DMAP0, BBAD0, A1T0L, A1B0, DAS0L
-.export JOY_B, JOY_Y, JOY_SELECT, JOY_START, JOY_UP, JOY_DOWN, JOY_LEFT, JOY_RIGHT
-.export JOY_A, JOY_X, JOY_L, JOY_R
+.export .use snes::reg::{INIDISP, OBSEL, BGMODE, BG1SC, BG12NBA, VMAIN, VMADDL, CGADD, TM, SETINI}
+.export .use snes::reg::{NMITIMEN, WRMPYA, RDNMI, HVBJOY, JOY1L, MDMAEN, HDMAEN, MEMSEL}
+.export .use snes::reg::{DMAP0, BBAD0, A1T0L, A1B0, DAS0L}
+.export .use snes::pad::Joy
+
 .export frame_count, nmi_ready, inidisp_shadow, pad_held, pad_pressed, pad_last
 .export game_state, player_x, player_y, dma_src, dma_len, dma_dst, scratch
 .export oam_shadow, Sprite, GameState, WRAM_BANK, CODE_BANK
@@ -16,49 +20,6 @@ WRAM_BANK = $7e
 
 ; A BGR555 colour from 5-bit components.
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
-
-; PPU registers ($21xx), mirrored in banks $00-$3f and $80-$bf
-INIDISP = $2100
-OBSEL   = $2101
-BGMODE  = $2105
-BG1SC   = $2107
-BG12NBA = $210b
-VMAIN   = $2115
-VMADDL  = $2116
-CGADD   = $2121
-TM      = $212c
-SETINI  = $2133
-
-; CPU registers ($42xx)
-NMITIMEN = $4200
-WRMPYA   = $4202
-MEMSEL   = $420d
-MDMAEN   = $420b
-HDMAEN   = $420c
-RDNMI    = $4210
-HVBJOY   = $4212
-JOY1L    = $4218
-
-; DMA channel 0 ($43x0)
-DMAP0 = $4300
-BBAD0 = $4301
-A1T0L = $4302
-A1B0  = $4304
-DAS0L = $4305
-
-; joypad bits, as read 16-bit from JOY1L
-JOY_R      = $0010
-JOY_L      = $0020
-JOY_X      = $0040
-JOY_A      = $0080
-JOY_RIGHT  = $0100
-JOY_LEFT   = $0200
-JOY_DOWN   = $0400
-JOY_UP     = $0800
-JOY_START  = $1000
-JOY_SELECT = $2000
-JOY_Y      = $4000
-JOY_B      = $8000
 
 .enum GameState {
     title

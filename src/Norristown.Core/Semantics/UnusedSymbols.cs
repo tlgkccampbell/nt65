@@ -29,6 +29,7 @@ public static class UnusedSymbols
             .Select(reference => reference.Symbol)
             .ToHashSet();
         named.UnionWith(entries);
+        named.UnionWith(model.Symbols.Where(symbol => symbol.IsExported));
 
         // `actions::c`, where `c` walks an enum, names a member of `actions` on every turn,
         // so what that scope holds counts as named.

@@ -1,5 +1,7 @@
 ; Each construct the 65816's analysis cannot follow, written without the annotation it
 ; needs, and the diagnostic that says which one.
+.module main
+
 .cpu 65816
 
 .import print: proc(inline .asciiz)
@@ -125,7 +127,7 @@ entry:
 ; An exported label inside a routine is another way in.
 .proc exported_inner {
     rts
-.export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other files jump into the routine: a `.state` after the label says what the state is there
+.export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
 inside:
     rts
 }

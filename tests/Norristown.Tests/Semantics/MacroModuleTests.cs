@@ -1,12 +1,13 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// A macro crosses a file boundary by being expanded in the file that calls it, not by
+/// A macro crosses a module boundary by being expanded in the module that calls it, not by
 /// reaching ca65: nothing of it is in the object file.
 /// </summary>
 public sealed class MacroModuleTests
 {
     private const string Library = """
+        .module lib
         .export set16, SCREEN, table
 
         SCREEN = $0400
@@ -29,11 +30,13 @@ public sealed class MacroModuleTests
         var outputs = Analysis.Outputs(
             ("lib.nt65", Library),
             ("main.nt65", """
+            .module main
+            .use lib::set16
             ptr = $10
 
             .segment CODE
             .proc main {
-                set16!(ptr, SCREEN)
+                set16!(ptr, lib::SCREEN)
                 rts
             }
             """));
@@ -41,14 +44,14 @@ public sealed class MacroModuleTests
         var written = outputs["main.s"];
 
         // The body is written into the caller, with the caller's own names.
-        Assert.Contains("lda #<SCREEN", written);
+        Assert.Contains("lda #<lib__SCREEN", written);
         Assert.Contains("sta z:ptr", written);
         Assert.Contains("sta z:ptr+1", written);
 
         // What the body uses and did not receive comes with it: a constant by value, as any
-        // cross-file constant does, and an address as an import.
-        Assert.Contains("SCREEN = $0400", written);
-        Assert.Contains(".import table", written);
+        // constant from another module is, and an address as an import.
+        Assert.Contains("lib__SCREEN = $0400", written);
+        Assert.Contains(".import lib__table", written);
 
         // The macro itself is no symbol to the linker, and the library writes nothing for it.
         Assert.DoesNotContain("set16", outputs["lib.s"]);
@@ -64,6 +67,7 @@ public sealed class MacroModuleTests
     {
         var program = Analysis.Program(
             ("lib.nt65", """
+            .module lib
             .export show
 
             PRIVATE = $10
@@ -72,24 +76,23 @@ public sealed class MacroModuleTests
                 lda PRIVATE
             }
             """),
-            ("main.nt65", ".proc main {\n    show!()\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.use lib::show\n.segment CODE\n.proc main {\n    show!()\n    rts\n}\n"));
 
-        Assert.Contains(program.Problems(), problem => problem.StartsWith(
-            "lib.nt65:6: `show` is exported and uses `PRIVATE`, which is not.",
-            StringComparison.Ordinal));
+        Assert.Equal(
+            ["lib.nt65:6: `show!` is exported but names `PRIVATE`, which is not: a macro expands in the module "
+                + "that calls it, and what it names there has to be exported"],
+            program.Problems());
     }
 
-    /// <summary>A macro another file declares but does not export cannot be called.</summary>
+    /// <summary>A macro another module declares but does not export cannot be brought in.</summary>
     [Fact]
     public void AMacroThatIsNotExportedCannotBeCalled()
     {
         var program = Analysis.Program(
-            ("lib.nt65", ".macro hidden() {\n    nop\n}\n"),
-            ("main.nt65", ".proc main {\n    hidden!()\n    rts\n}\n"));
+            ("lib.nt65", ".module lib\n.macro hidden() {\n    nop\n}\n"),
+            ("main.nt65", ".module main\n.use lib::hidden\n.segment CODE\n.proc main {\n    hidden!()\n    rts\n}\n"));
 
-        Assert.Contains(program.Problems(), problem =>
-            problem.StartsWith("main.nt65:2: `hidden` is declared in `lib.nt65` and is not exported",
-                StringComparison.Ordinal));
+        Assert.Contains("main.nt65:2: `lib::hidden` is not exported by module `lib`", program.Problems());
     }
 
     /// <summary>
@@ -101,6 +104,7 @@ public sealed class MacroModuleTests
     {
         var outputs = Analysis.Outputs(
             ("lib.nt65", """
+            .module lib
             .export delay
 
             .macro delay(count) {
@@ -111,6 +115,8 @@ public sealed class MacroModuleTests
             }
             """),
             ("main.nt65", """
+            .module main
+            .use lib::delay
             .segment CODE
             .proc delay__loop {
                 rts

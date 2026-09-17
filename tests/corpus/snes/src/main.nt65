@@ -1,5 +1,11 @@
 ; The main loop: wait for the frame, read the pads, run the current game state.
+.module main
+
 .cpu 65816
+
+.use snes::*
+.use math::{mul16, div16, clamp16}
+.use gfx::{clear_oam, setup_hdma, print_inline}
 
 .export main
 
@@ -49,7 +55,7 @@
 .proc state_title: a8, i16, dp = 0, dbr = CODE_BANK {
     rep #$20
     lda pad_pressed
-    and #JOY_START
+    and #Joy::start
     sep #$20
     beq @stay
     ldx #0
@@ -68,25 +74,25 @@
 .proc state_play: a8, i16, dp = 0, dbr = CODE_BANK {
     rep #$20
     lda pad_pressed
-    bit #JOY_START
+    bit #Joy::start
     beq @move
     sep #$20
     lda #GameState::pause
     sta game_state
     lda pad_pressed+1
-    and #>JOY_SELECT
+    and #>Joy::select
     beq @keep
     jsr reset_player
 @keep:
     rts
 @move:
     lda pad_held
-    bit #JOY_RIGHT
+    bit #Joy::right
     beq @left
     jsr step_right
 @left:
     lda pad_held
-    bit #JOY_LEFT
+    bit #Joy::left
     beq @vertical
     lda player_x
     dec a
@@ -120,7 +126,7 @@
 .proc state_pause: a8, i16, dp = 0, dbr = CODE_BANK {
     rep #$20
     lda pad_pressed
-    and #JOY_START
+    and #Joy::start
     sep #$20
     beq @stay
     lda #GameState::play

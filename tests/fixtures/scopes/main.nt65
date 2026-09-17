@@ -1,5 +1,7 @@
 ; Lookup runs from the innermost scope outward, `::` walks into a named scope, and
 ; cheap locals belong to the nearest `.proc` or `.scope`.
+.module main
+
 .cpu 65c02
 
 .segment ZEROPAGE
@@ -61,6 +63,6 @@
     jsr gfx::init           ; into a named scope
     lda #gfx::COUNT
     lda draw::table         ; a proc is a scope as well as a label
-    jsr ::reset             ; from the file's own top level
+    jsr ::main::reset       ; from the root of the modules
     rts
 }

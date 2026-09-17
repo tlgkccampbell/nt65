@@ -1,9 +1,7 @@
 ; What ca65 would refuse, reported by nt65 where it was written.
-.cpu 65816
+.module main
 
-; An import is somebody else's symbol.
-.import host_tick: zp
-.export host_tick           ;! error: `host_tick` is imported, and an import cannot be exported: each file that uses it imports it
+.cpu 65816
 
 ; A value ca65 takes only unsigned.
 TEXT = "hello"

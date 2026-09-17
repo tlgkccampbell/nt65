@@ -10,4 +10,12 @@ namespace Norristown.Semantics;
 /// <param name="Symbol">What the name means there.</param>
 /// <param name="Span">The name itself, without any <c>::</c> around it.</param>
 /// <param name="IsDeclaration">Whether this is where the symbol is declared.</param>
-public sealed record SymbolReference(Symbol Symbol, TextSpan Span, bool IsDeclaration);
+/// <param name="IsAlias">
+/// Whether the name written is not the symbol's own, but the one a <c>.use ... as</c> brings it
+/// in under. Renaming the symbol leaves those alone, and renaming one of them renames only them.
+/// </param>
+/// <param name="InUse">
+/// Whether it is written in a <c>.use</c>, which brings the name in rather than using it: a
+/// module that only re-exports a name writes nothing for it.
+/// </param>
+public sealed record SymbolReference(Symbol Symbol, TextSpan Span, bool IsDeclaration, bool IsAlias = false, bool InUse = false);

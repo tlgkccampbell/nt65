@@ -1,3 +1,5 @@
+.module second
+
 .segment SHARED
 .data other:      .byte
 

@@ -7,56 +7,56 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 882, 0
+.dbg file, "main.nt65", 896, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 6
+.dbg line, "main.nt65", 8
 ptr:        .res 2
-.dbg line, "main.nt65", 7
+.dbg line, "main.nt65", 9
 flags:      .res 1
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 10
+.dbg line, "main.nt65", 12
 table:      .byte 1, 2, 4, 8
 
 .segment "CODE": absolute
 forms:
-.dbg line, "main.nt65", 14
-    lda (ptr)
-.dbg line, "main.nt65", 15
-    sta (ptr)
 .dbg line, "main.nt65", 16
-    jmp (table,x)
+    lda (ptr)
 .dbg line, "main.nt65", 17
-    bit #$80
+    sta (ptr)
 .dbg line, "main.nt65", 18
-    bit z:flags,x
+    jmp (table,x)
 .dbg line, "main.nt65", 19
-    inc a
+    bit #$80
 .dbg line, "main.nt65", 20
-    dec a
+    bit z:flags,x
 .dbg line, "main.nt65", 21
-    bra forms__skip
+    inc a
 .dbg line, "main.nt65", 22
-    stz z:flags
+    dec a
 .dbg line, "main.nt65", 23
-    stz a:table
+    bra forms__skip
 .dbg line, "main.nt65", 24
-    trb z:flags
+    stz z:flags
 .dbg line, "main.nt65", 25
-    tsb z:flags
+    stz a:table
 .dbg line, "main.nt65", 26
-    phx
+    trb z:flags
 .dbg line, "main.nt65", 27
-    ply
+    tsb z:flags
 .dbg line, "main.nt65", 28
-    rmb3 z:flags
+    phx
 .dbg line, "main.nt65", 29
-    smb3 z:flags
+    ply
 .dbg line, "main.nt65", 30
-    bbr0 flags, forms__skip
+    rmb3 z:flags
 .dbg line, "main.nt65", 31
+    smb3 z:flags
+.dbg line, "main.nt65", 32
+    bbr0 flags, forms__skip
+.dbg line, "main.nt65", 33
     bbs7 flags, forms__skip
 forms__skip:
-.dbg line, "main.nt65", 33
+.dbg line, "main.nt65", 35
     rts

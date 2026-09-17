@@ -7,83 +7,83 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1503, 0
+.dbg file, "main.nt65", 1516, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 6
+.dbg line, "main.nt65", 8
 palette:    .res 32
-.dbg line, "main.nt65", 7
+.dbg line, "main.nt65", 9
 frames:     .res 1
 
     gfx__COUNT = 32
 
 .segment "CODE": absolute
     gfx__init:
-.dbg line, "main.nt65", 14
+.dbg line, "main.nt65", 16
         ldx #gfx__COUNT
-.dbg line, "main.nt65", 15
+.dbg line, "main.nt65", 17
         dec z:frames
     gfx__init__loop:
-.dbg line, "main.nt65", 17
-        stz z:palette,x
-.dbg line, "main.nt65", 18
-        dex
 .dbg line, "main.nt65", 19
-        bpl gfx__init__loop
+        stz z:palette,x
 .dbg line, "main.nt65", 20
+        dex
+.dbg line, "main.nt65", 21
+        bpl gfx__init__loop
+.dbg line, "main.nt65", 22
         rts
 
 reset:
-.dbg line, "main.nt65", 27
+.dbg line, "main.nt65", 29
         ldx #0
     reset__loop:
-.dbg line, "main.nt65", 29
-        sta a:$0200,x
-.dbg line, "main.nt65", 30
-        inx
 .dbg line, "main.nt65", 31
+        sta a:$0200,x
+.dbg line, "main.nt65", 32
+        inx
+.dbg line, "main.nt65", 33
         bne reset__loop
-.dbg line, "main.nt65", 34
+.dbg line, "main.nt65", 36
         ldx #31
     reset__loop_2:
-.dbg line, "main.nt65", 36
-        stz z:palette,x
-.dbg line, "main.nt65", 37
-        dex
 .dbg line, "main.nt65", 38
-        bpl reset__loop_2
+        stz z:palette,x
+.dbg line, "main.nt65", 39
+        dex
 .dbg line, "main.nt65", 40
+        bpl reset__loop_2
+.dbg line, "main.nt65", 42
     jmp reset__done
 reset__done:
-.dbg line, "main.nt65", 42
+.dbg line, "main.nt65", 44
     rts
 
 draw:
-.dbg line, "main.nt65", 48
-    ldx #0
 .dbg line, "main.nt65", 50
+    ldx #0
+.dbg line, "main.nt65", 52
         bne draw__done
 draw__done:
-.dbg line, "main.nt65", 53
+.dbg line, "main.nt65", 55
     lda a:draw__table,x
 
 .pushseg
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 55
+.dbg line, "main.nt65", 57
     draw__table: .byte 1, 2, 4, 8
 .popseg
 
-.dbg line, "main.nt65", 57
+.dbg line, "main.nt65", 59
     rts
 
 main:
-.dbg line, "main.nt65", 61
-    jsr gfx__init
-.dbg line, "main.nt65", 62
-    lda #gfx__COUNT
 .dbg line, "main.nt65", 63
-    lda a:draw__table
+    jsr gfx__init
 .dbg line, "main.nt65", 64
-    jsr reset
+    lda #gfx__COUNT
 .dbg line, "main.nt65", 65
+    lda a:draw__table
+.dbg line, "main.nt65", 66
+    jsr reset
+.dbg line, "main.nt65", 67
     rts

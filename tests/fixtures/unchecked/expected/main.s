@@ -7,203 +7,203 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 3011, 0
+.dbg file, "main.nt65", 3025, 0
 
-.export dispatch
-.export nmi
-.export restore
-.export set
-.export table_jump
-.export relative
-.export far_relative
-.export first
-.export second
-.export patching
-.export enter
-.export jumper
+.export main__dispatch
+.export main__nmi
+.export main__restore
+.export main__set
+.export main__table_jump
+.export main__relative
+.export main__far_relative
+.export main__first
+.export main__second
+.export main__patching
+.export main__enter
+.export main__jumper
 
 .import print
 .import beep
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 12
-cmd:        .res 1
-.dbg line, "main.nt65", 13
-value:      .res 1
 .dbg line, "main.nt65", 14
-nmi_flag:   .res 1
+cmd:        .res 1
 .dbg line, "main.nt65", 15
+value:      .res 1
+.dbg line, "main.nt65", 16
+nmi_flag:   .res 1
+.dbg line, "main.nt65", 17
 saved_p:    .res 1
 
 .segment "CODE": absolute
-dispatch:
-.dbg line, "main.nt65", 21
-    lda a:cmd
-.dbg line, "main.nt65", 22
-    asl a
+main__dispatch:
 .dbg line, "main.nt65", 23
-    tax
+    lda a:cmd
 .dbg line, "main.nt65", 24
+    asl a
+.dbg line, "main.nt65", 25
+    tax
+.dbg line, "main.nt65", 26
     jmp (dispatch__table,x)
 
-.dbg line, "main.nt65", 27
+.dbg line, "main.nt65", 29
 dispatch__table: .addr dispatch__move, dispatch__fire
 
 dispatch__move:
     .a8
-.dbg line, "main.nt65", 30
+.dbg line, "main.nt65", 32
     lda #1
-.dbg line, "main.nt65", 31
+.dbg line, "main.nt65", 33
     rts
 dispatch__fire:
-.dbg line, "main.nt65", 33
+.dbg line, "main.nt65", 35
     lda #2
-.dbg line, "main.nt65", 34
+.dbg line, "main.nt65", 36
     rts
 
-nmi:
-.dbg line, "main.nt65", 40
-    rep #$30
-.dbg line, "main.nt65", 41
-    pha
+main__nmi:
 .dbg line, "main.nt65", 42
-    sep #$20
+    rep #$30
 .dbg line, "main.nt65", 43
-    lda #1
+    pha
 .dbg line, "main.nt65", 44
-    sta a:nmi_flag
+    sep #$20
 .dbg line, "main.nt65", 45
-    rep #$20
+    lda #1
 .dbg line, "main.nt65", 46
-    pla
+    sta a:nmi_flag
 .dbg line, "main.nt65", 47
+    rep #$20
+.dbg line, "main.nt65", 48
+    pla
+.dbg line, "main.nt65", 49
     rti
 
-restore:
-.dbg line, "main.nt65", 53
-    lda a:saved_p
-.dbg line, "main.nt65", 54
-    pha
+main__restore:
 .dbg line, "main.nt65", 55
-    plp
+    lda a:saved_p
+.dbg line, "main.nt65", 56
+    pha
 .dbg line, "main.nt65", 57
+    plp
+.dbg line, "main.nt65", 59
     rts
 
-set:
-.dbg line, "main.nt65", 62
-    beq set__set_two
-.dbg line, "main.nt65", 63
-    lda #1
+main__set:
 .dbg line, "main.nt65", 64
+    beq set__set_two
+.dbg line, "main.nt65", 65
+    lda #1
+.dbg line, "main.nt65", 66
     .byte $2c
 set__set_two:
-.dbg line, "main.nt65", 67
+.dbg line, "main.nt65", 69
     lda #2
 set__store:
-.dbg line, "main.nt65", 69
+.dbg line, "main.nt65", 71
     sta a:value
-.dbg line, "main.nt65", 70
+.dbg line, "main.nt65", 72
     rts
 
-table_jump:
-.dbg line, "main.nt65", 76
+main__table_jump:
+.dbg line, "main.nt65", 78
     lda a:cmd
     .a16
-.dbg line, "main.nt65", 77
-    and #$00ff
-.dbg line, "main.nt65", 78
-    asl a
 .dbg line, "main.nt65", 79
-    tax
+    and #$00ff
 .dbg line, "main.nt65", 80
-    lda a:table_jump__targets,x
+    asl a
 .dbg line, "main.nt65", 81
-    pha
+    tax
 .dbg line, "main.nt65", 82
+    lda a:table_jump__targets,x
+.dbg line, "main.nt65", 83
+    pha
+.dbg line, "main.nt65", 84
     rts
 
-.dbg line, "main.nt65", 85
+.dbg line, "main.nt65", 87
 table_jump__targets: .addr table_jump__one - 1, table_jump__two - 1
 
 table_jump__one:
-.dbg line, "main.nt65", 88
+.dbg line, "main.nt65", 90
     rts
 table_jump__two:
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 92
     rts
 
 talk:
-.dbg line, "main.nt65", 95
-    jsr print
-.dbg line, "main.nt65", 96
-    .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
 .dbg line, "main.nt65", 97
-    jsr beep
+    jsr print
 .dbg line, "main.nt65", 98
-    .byte 10, 20
+    .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
 .dbg line, "main.nt65", 99
+    jsr beep
+.dbg line, "main.nt65", 100
+    .byte 10, 20
+.dbg line, "main.nt65", 101
     rts
 
-relative:
-.dbg line, "main.nt65", 105
+main__relative:
+.dbg line, "main.nt65", 107
     per relative__back - 1
-.dbg line, "main.nt65", 106
+.dbg line, "main.nt65", 108
     brl talk
 relative__back:
-.dbg line, "main.nt65", 108
+.dbg line, "main.nt65", 110
     rts
 
-far_relative:
-.dbg line, "main.nt65", 112
-    phk
-.dbg line, "main.nt65", 113
-    per far_relative__back - 1
+main__far_relative:
 .dbg line, "main.nt65", 114
+    phk
+.dbg line, "main.nt65", 115
+    per far_relative__back - 1
+.dbg line, "main.nt65", 116
     brl far_target
 far_relative__back:
-.dbg line, "main.nt65", 116
+.dbg line, "main.nt65", 118
     rtl
 
 far_target:
-.dbg line, "main.nt65", 120
+.dbg line, "main.nt65", 122
     rtl
 
-first:
-.dbg line, "main.nt65", 126
+main__first:
+.dbg line, "main.nt65", 128
     lda #$1234
-.dbg line, "main.nt65", 127
+.dbg line, "main.nt65", 129
     sep #$20
-second:
+main__second:
     .a8
-.dbg line, "main.nt65", 131
+.dbg line, "main.nt65", 133
     lda #$12
-.dbg line, "main.nt65", 132
+.dbg line, "main.nt65", 134
     rts
 
-patching:
-.dbg line, "main.nt65", 137
+main__patching:
+.dbg line, "main.nt65", 139
     lda #$60
 patching__op:
-.dbg line, "main.nt65", 139
+.dbg line, "main.nt65", 141
     sta a:$0400
-.dbg line, "main.nt65", 140
-    sta a:patching__op+1
 .dbg line, "main.nt65", 142
+    sta a:patching__op+1
+.dbg line, "main.nt65", 144
     rts
 
-enter:
+main__enter:
     .a16
-.dbg line, "main.nt65", 147
+.dbg line, "main.nt65", 149
     lda #$1234
-.dbg line, "main.nt65", 148
+.dbg line, "main.nt65", 150
     sep #$20
 enter__into:
     .a8
-.dbg line, "main.nt65", 151
+.dbg line, "main.nt65", 153
     lda #$12
-.dbg line, "main.nt65", 152
+.dbg line, "main.nt65", 154
     rts
 
-jumper:
-.dbg line, "main.nt65", 156
+main__jumper:
+.dbg line, "main.nt65", 158
     jmp enter__into

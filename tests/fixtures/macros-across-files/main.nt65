@@ -1,3 +1,9 @@
+.module main
+
+; A macro another module exports is brought in to be called; what its body names is the
+; other module's, and needs nothing brought in here.
+.use lib::{set16, delay}
+
 .segment ZEROPAGE
 .data ptr:    .word
 
@@ -9,7 +15,7 @@
 }
 
 .proc main {
-    set16!(ptr, SCREEN)
+    set16!(ptr, lib::SCREEN)
     delay!(4)
     delay!(8)
     rts

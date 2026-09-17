@@ -1,5 +1,9 @@
 ; Internal ROM header at $00:ffc0 and the interrupt vectors at $00:ffe0.
+.module header
+
 .cpu 65816
+
+.use reset::{cop_stub, brk_stub, nmi_stub, irq_stub, reset_stub}
 
 .struct RomHeader {
     title:     .res 21, ' '

@@ -1,6 +1,8 @@
 ; What nt65 keeps macros for, once constants, lists, charmaps, enums,
 ; initialized instances and long branches have taken the rest of the work away —
 ; instruction idioms, structured control built from blocks, computed data and wrappers.
+.module main
+
 .cpu 65c02
 
 .struct Pair {

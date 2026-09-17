@@ -7,49 +7,49 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 302, 0
+.dbg file, "main.nt65", 488, 0
 
-SCREEN = $0400
-.import tiles
+lib__SCREEN = $0400
+.import lib__tiles
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 2
+.dbg line, "main.nt65", 8
 ptr:    .res 2
 
 .segment "CODE": absolute
 delay__loop:
-.dbg line, "main.nt65", 8
+.dbg line, "main.nt65", 14
     rts
 
 main:
-    ; set16!(ptr, SCREEN)  main.nt65:12
-.dbg line, "main.nt65", 12
-    lda #<SCREEN
-.dbg line, "main.nt65", 12
+    ; set16!(ptr, lib::SCREEN)  main.nt65:18
+.dbg line, "main.nt65", 18
+    lda #<lib__SCREEN
+.dbg line, "main.nt65", 18
     sta z:ptr
-.dbg line, "main.nt65", 12
-    lda #>SCREEN
-.dbg line, "main.nt65", 12
+.dbg line, "main.nt65", 18
+    lda #>lib__SCREEN
+.dbg line, "main.nt65", 18
     sta z:ptr+1
-    ; delay!(4)  main.nt65:13
-.dbg line, "main.nt65", 13
+    ; delay!(4)  main.nt65:19
+.dbg line, "main.nt65", 19
     ldx #4
 delay__loop_2:
-.dbg line, "main.nt65", 13
-    lda a:tiles
-.dbg line, "main.nt65", 13
+.dbg line, "main.nt65", 19
+    lda a:lib__tiles
+.dbg line, "main.nt65", 19
     dex
-.dbg line, "main.nt65", 13
+.dbg line, "main.nt65", 19
     bne delay__loop_2
-    ; delay!(8)  main.nt65:14
-.dbg line, "main.nt65", 14
+    ; delay!(8)  main.nt65:20
+.dbg line, "main.nt65", 20
     ldx #8
 delay__loop_3:
-.dbg line, "main.nt65", 14
-    lda a:tiles
-.dbg line, "main.nt65", 14
+.dbg line, "main.nt65", 20
+    lda a:lib__tiles
+.dbg line, "main.nt65", 20
     dex
-.dbg line, "main.nt65", 14
+.dbg line, "main.nt65", 20
     bne delay__loop_3
-.dbg line, "main.nt65", 15
+.dbg line, "main.nt65", 21
     rts

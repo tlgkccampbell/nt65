@@ -1,5 +1,7 @@
 ; An address slot holds an address of its width and nothing wider. ca65 would keep the low
 ; bits of what does not fit, so nt65 says so instead.
+.module main
+
 .cpu 65816
 
 .segment FARDATA

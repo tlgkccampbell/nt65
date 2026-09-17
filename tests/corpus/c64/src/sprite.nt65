@@ -1,7 +1,13 @@
 ; Player sprite: joystick in port 2 moves sprite 0 inside the visible area.
+.module sprite
+
 .cpu 6502
 
-.export sprite_init, player_update, player_reset
+.use hw::{vic, cia1, SPRITE_PTRS, Color, Joy}
+.use zp::{player_x, player_y, joy_prev}
+.use macros::*
+
+.export init, player_update, player_reset
 
 SPRITE_BLOCK = 13               ; sprite data at 13 * 64 = $0340 (cassette buffer)
 SPRITE_ADDR  = SPRITE_BLOCK * 64
@@ -28,7 +34,7 @@ SPEED        = 2
 }
 
 .segment CODE
-.proc sprite_init {
+.proc init {
     ldx #63
 @copy:
     lda ship_shape,x
@@ -37,8 +43,8 @@ SPEED        = 2
     bpl @copy
 
     poke!(SPRITE_PTRS, SPRITE_BLOCK)
-    poke!(VIC_SPR0_COL, Color::yellow)
-    poke!(VIC_SPR_ENA, %00000001)
+    poke!(vic::SPR0_COL, Color::yellow)
+    poke!(vic::SPR_ENA, %00000001)
     rts
 }
 
@@ -51,7 +57,7 @@ SPEED        = 2
 
 ; Read the joystick and move. Returns C set when fire was newly pressed.
 .proc player_update {
-    lda CIA1_PRA
+    lda cia1::PRA
     eor #$FF                    ; active high
     and #Joy::up | Joy::down | Joy::left | Joy::right | Joy::fire
     tax                         ; keep for edge detection
@@ -114,15 +120,15 @@ SPEED        = 2
 
 .proc write_position {
     lda player_x
-    sta VIC_SPR0_X
-    lda VIC_SPR_MSB
+    sta vic::SPR0_X
+    lda vic::SPR_MSB
     and #%11111110
     ldy player_x+1
     if!(ne) {
         ora #%00000001
     }
-    sta VIC_SPR_MSB
+    sta vic::SPR_MSB
     lda player_y
-    sta VIC_SPR0_Y
+    sta vic::SPR0_Y
     rts
 }

@@ -11,9 +11,9 @@ public sealed class ServerTests
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>A file with one syntax error on line 4 (0-based line 3).</summary>
-    private const string Broken = ".segment CODE\n.proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
+    private const string Broken = ".module main\n.segment CODE\n.proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
 
-    private const string Fixed = ".segment CODE\n.proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
+    private const string Fixed = ".module main\n.segment CODE\n.proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
 
     [Fact]
     public async Task InitializesLogsTheConnectionAndExits()
@@ -55,8 +55,8 @@ public sealed class ServerTests
         var diagnostic = Assert.Single(published.Diagnostics);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal("nt65", diagnostic.Source);
-        Assert.Equal(3, diagnostic.Range.Start.Line);
-        Assert.Equal(3, diagnostic.Range.End.Line);
+        Assert.Equal(4, diagnostic.Range.Start.Line);
+        Assert.Equal(4, diagnostic.Range.End.Line);
         Assert.Null(diagnostic.RelatedInformation);
     }
 
@@ -71,7 +71,7 @@ public sealed class ServerTests
 
         // Insert `1` at the end of line 4, which is where the operand is missing.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(3, 9), new Position(3, 9)), "1"));
+            new Range(new Position(4, 9), new Position(4, 9)), "1"));
 
         var published = await client.NextDiagnosticsAsync(timeout);
         Assert.Equal(2, published.Version);
@@ -97,18 +97,18 @@ public sealed class ServerTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n");
         await client.NextDiagnosticsAsync(timeout);
 
         var scope = Assert.Single(await client.SymbolsAsync(Uri, timeout));
         Assert.Equal("gfx", scope.Name);
         Assert.Equal(SymbolKind.Namespace, scope.Kind);
-        Assert.Equal(new Position(0, 7), scope.SelectionRange.Start);
+        Assert.Equal(new Position(1, 7), scope.SelectionRange.Start);
         Assert.NotNull(scope.Children);
         Assert.Equal(["init", "COUNT"], scope.Children.Select(child => child.Name));
         Assert.Equal([SymbolKind.Function, SymbolKind.Constant], scope.Children.Select(child => child.Kind));
 
-        Assert.Equal([new FoldingRange(0, 5), new FoldingRange(1, 3)],
+        Assert.Equal([new FoldingRange(1, 6), new FoldingRange(2, 4)],
             await client.FoldingRangesAsync(Uri, timeout));
     }
 
@@ -135,13 +135,13 @@ public sealed class ServerTests
         // The second edit is past the end of what the first one wrote, so it is only where it
         // is meant to be once the first has been applied.
         await client.ChangeAsync(Uri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(4, 4), new Position(4, 7)), "jsr reset"),
-            new TextDocumentContentChangeEvent(new Range(new Position(4, 13), new Position(4, 13)), "\n    rts"));
+            new TextDocumentContentChangeEvent(new Range(new Position(5, 4), new Position(5, 7)), "jsr reset"),
+            new TextDocumentContentChangeEvent(new Range(new Position(5, 13), new Position(5, 13)), "\n    rts"));
 
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         var segment = Assert.Single(await client.SymbolsAsync(Uri, timeout));
         var proc = Assert.Single(segment.Children!);
         Assert.Equal("reset", proc.Name);
-        Assert.Equal([new FoldingRange(0, 6), new FoldingRange(1, 6)], await client.FoldingRangesAsync(Uri, timeout));
+        Assert.Equal([new FoldingRange(1, 7), new FoldingRange(2, 7)], await client.FoldingRangesAsync(Uri, timeout));
     }
 }

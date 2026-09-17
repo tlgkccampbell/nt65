@@ -143,7 +143,7 @@ internal static class Lsp
     /// <summary>Every place the name at <paramref name="position"/> is written, in every file.</summary>
     public static IReadOnlyList<Protocol.Location> ToReferences(
         ProgramModel program, SemanticModel model, int position, bool includeDeclaration) =>
-        [.. Everywhere(program, model, position)
+        [.. Everywhere(program, model, position, renaming: false)
             .Where(found => includeDeclaration || !found.Reference.IsDeclaration)
             .Select(found => new Protocol.Location(
                 ToUri(found.File.Tree.Path), ToRange(found.File.Tree, found.Reference.Span)))];
@@ -167,13 +167,13 @@ internal static class Lsp
     {
         if (model.ReferenceAt(position) is not { } reference)
             return (null, "there is no name here to rename");
-        if (CheckNewName(program.Current(reference.Symbol), newName) is { } problem)
+        if (CheckNewName(program.Current(reference.Symbol), newName, reference.IsAlias ? model.FileScope : null) is { } problem)
             return (null, problem);
 
         // An exported name is written in every file that uses it, so the edit spans the
         // program rather than the file the caret is in.
         var edits = new Dictionary<string, IReadOnlyList<Protocol.TextEdit>>(StringComparer.Ordinal);
-        foreach (var byFile in Everywhere(program, model, position).GroupBy(found => found.File))
+        foreach (var byFile in Everywhere(program, model, position, renaming: true).GroupBy(found => found.File))
         {
             edits[ToUri(byFile.Key.Tree.Path)] =
                 [.. byFile.Select(found => new Protocol.TextEdit(
@@ -184,9 +184,11 @@ internal static class Lsp
 
     /// <summary>
     /// Why <paramref name="newName"/> will not do, or null when it will: a rename
-    /// that leaves the file not compiling is not a rename.
+    /// that leaves the file not compiling is not a rename. <paramref name="alias"/> is the
+    /// top level of the module whose <c>.use ... as</c> name is being renamed, where the new
+    /// name has to be free instead.
     /// </summary>
-    private static string? CheckNewName(Symbol symbol, string newName)
+    private static string? CheckNewName(Symbol symbol, string newName, Scope? alias)
     {
         var name = newName;
         if (symbol.IsCheapLocal)
@@ -205,7 +207,7 @@ internal static class Lsp
         if (!symbol.IsCheapLocal && (SyntaxFacts.IsMnemonic(name) || SyntaxFacts.IsRegister(name)))
             return $"`{newName}` is a reserved word";
 
-        var taken = symbol.IsCheapLocal ? symbol.Scope.FindCheapLocal(name) : symbol.Scope.FindMember(name);
+        var taken = symbol.IsCheapLocal ? symbol.Scope.FindCheapLocal(name) : (alias ?? symbol.Scope).FindMember(name);
         return taken is null || taken == symbol ? null : $"`{newName}` is already declared in this scope";
     }
 
@@ -213,20 +215,33 @@ internal static class Lsp
     private static IReadOnlyList<SymbolReference> Occurrences(SemanticModel model, int position) =>
         model.ReferenceAt(position) is { } reference ? model.ReferencesTo(reference.Symbol) : [];
 
-    /// <summary>The same, across every file of the program, in file and source order.</summary>
+    /// <summary>
+    /// The same, across every file of the program, in file and source order. A name a
+    /// <c>.use ... as</c> gives is written instead of the symbol's own, so for a rename it is
+    /// kept apart: renaming the symbol leaves those alone, and renaming one renames only the
+    /// names that module wrote the same way.
+    /// </summary>
     private static IEnumerable<(SemanticModel File, SymbolReference Reference)> Everywhere(
-        ProgramModel program, SemanticModel model, int position)
+        ProgramModel program, SemanticModel model, int position, bool renaming)
     {
-        if (model.ReferenceAt(position)?.Symbol is not { } named)
+        if (model.ReferenceAt(position) is not { } asked)
             return [];
 
         // A file kept from before an edit elsewhere names what the edited file declared then,
         // so the symbols are compared as what they stand for now.
-        var symbol = program.Current(named);
+        var symbol = program.Current(asked.Symbol);
+        if (renaming && asked.IsAlias)
+        {
+            var written = model.Tree.Text.Substring(asked.Span.Start, asked.Span.Length);
+            return model.References
+                .Where(reference => reference.IsAlias && program.Current(reference.Symbol) == symbol
+                    && model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length) == written)
+                .Select(reference => (model, reference));
+        }
         return program.Files
             .OrderBy(file => file.Tree.Path, StringComparer.Ordinal)
             .SelectMany(file => file.References
-                .Where(reference => program.Current(reference.Symbol) == symbol)
+                .Where(reference => program.Current(reference.Symbol) == symbol && !(renaming && reference.IsAlias))
                 .Select(reference => (file, reference)));
     }
 
@@ -236,7 +251,7 @@ internal static class Lsp
     /// </summary>
     private static string Describe(Symbol symbol, SyntaxTree asked)
     {
-        var text = new StringBuilder($"**{symbol.KindText}** `{symbol.QualifiedName}`\n");
+        var text = new StringBuilder($"**{symbol.KindText}** `{(symbol.Tree != asked ? symbol.PathName : symbol.QualifiedName)}`\n");
 
         // A name from another module is worth naming that module for: it is the file the
         // declaration is in, and the file whose `.export` makes it nameable here.

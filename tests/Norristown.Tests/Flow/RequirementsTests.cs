@@ -17,6 +17,7 @@ public sealed class RequirementsTests
     public void NothingIsRequiredOnThe65C02()
     {
         const string Text = """
+            .module main
             .cpu 65c02
             .segment BSS
             .data vec: .byte[2]
@@ -42,6 +43,7 @@ public sealed class RequirementsTests
     public void InlineDataIsCheckedOnEveryCpu()
     {
         const string Text = """
+            .module main
             .cpu 6502
             .import print: proc(inline .asciiz)
             .segment CODE
@@ -56,8 +58,8 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:7: `print` returns past one `.asciiz` written after each call, and none follows this one",
-                "main.nt65:8: the instruction above runs into this data. `.next` on it says where flow goes instead",
+                "main.nt65:8: `print` returns past one `.asciiz` written after each call, and none follows this one",
+                "main.nt65:9: the instruction above runs into this data. `.next` on it says where flow goes instead",
             ],
             Analysis.Program(("main.nt65", Text)).Problems());
     }
@@ -151,8 +153,8 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:12: `jsr wide` needs `a8`, and A is 16-bit here",
-                "main.nt65:12: `jsr wider` needs `a8`, and A is 16-bit here",
+                "main.nt65:13: `jsr wide` needs `a8`, and A is 16-bit here",
+                "main.nt65:13: `jsr wider` needs `a8`, and A is 16-bit here",
             ],
             analysis.Problems());
         Assert.Equal("a16, i?, native", StateAt(analysis, "tax").Processor.ToString());
@@ -202,7 +204,7 @@ public sealed class RequirementsTests
             """;
 
         Assert.Equal(
-            ["main.nt65:7: `p` runs off the end of a segment block into whatever that segment holds next: "
+            ["main.nt65:8: `p` runs off the end of a segment block into whatever that segment holds next: "
                 + "`.next` says where flow goes, or `.next ?` ends the path"],
             Program(Text).Problems());
     }
@@ -227,7 +229,7 @@ public sealed class RequirementsTests
         Assert.Empty(Program(Text).Problems());
     }
 
-    private static ProgramAnalysis Program(string text) => Analysis.Program(("main.nt65", ".cpu 65816\n.segment CODE\n" + text));
+    private static ProgramAnalysis Program(string text) => Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
 
     /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)

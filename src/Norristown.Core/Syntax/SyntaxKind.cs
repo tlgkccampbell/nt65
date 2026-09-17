@@ -201,8 +201,26 @@ public enum SyntaxKind : byte
     /// <summary><c>.cpu 6502</c>.</summary>
     CpuDirective,
 
-    /// <summary><c>.export a, b</c>.</summary>
+    /// <summary><c>.export a, b: abs, c as "_c"</c>.</summary>
     ExportDirective,
+
+    /// <summary>One item of an <c>.export</c> list: a name or a path, and its size or linker name.</summary>
+    ExportItem,
+
+    /// <summary>
+    /// <c>.export</c> written before a declaration, <c>.export .proc init {</c>. The line's
+    /// statement is the declaration, whose parent this is.
+    /// </summary>
+    ExportedDeclaration,
+
+    /// <summary><c>.module hw::vic</c>: the name of the module a file is.</summary>
+    ModuleDirective,
+
+    /// <summary><c>.use hw::init</c>, <c>.use hw::{a, b}</c>, <c>.use hw::*</c>, <c>.use hw::init as i</c>.</summary>
+    UseDirective,
+
+    /// <summary>One name in the braces of a <c>.use</c>, with the name it is brought in as.</summary>
+    UseItem,
 
     /// <summary><c>.import a: zp, b = $10</c>.</summary>
     ImportDirective,

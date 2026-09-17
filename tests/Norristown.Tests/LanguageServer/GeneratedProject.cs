@@ -4,10 +4,10 @@ using System.Text;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// A 65816 program of many files, each shaped like a module of a real one: constants and data
-/// it exports, a macro, and routines that call the file before it and use its constants and
-/// macro. Every file also uses the first file's `M000_LIMIT`, as a real program uses its
-/// shared definitions. It exists to measure what an edit costs, and to replay edits against.
+/// A 65816 program of many modules, each shaped like a module of a real one: constants and data
+/// it exports, a macro, and routines that call the module before it and use its constants and
+/// macro, which it brings in with `.use`. Every module also uses the first module's `M000_LIMIT`,
+/// as a real program uses its shared definitions. It exists to measure what an edit costs, and to replay edits against.
 /// </summary>
 internal static class GeneratedProject
 {
@@ -21,7 +21,9 @@ internal static class GeneratedProject
         var before = ((index + count - 1) % count).ToString("D3", CultureInfo.InvariantCulture);
         var text = new StringBuilder();
         text.Append(CultureInfo.InvariantCulture, $$"""
+            .module mod{{i}}
             .cpu 65816
+            {{Uses(index, count)}}
 
             .export m{{i}}_init, m{{i}}_step, m{{i}}_fill, M{{i}}_SIZE, M{{i}}_LIMIT, m{{i}}_table, m{{i}}_put
 
@@ -85,5 +87,18 @@ internal static class GeneratedProject
 
             """);
         return text.ToString().ReplaceLineEndings("\n");
+    }
+
+    /// <summary>What file <paramref name="index"/> brings in from the file before it and from the first file.</summary>
+    private static string Uses(int index, int count)
+    {
+        var before = (index + count - 1) % count;
+        var b = before.ToString("D3", CultureInfo.InvariantCulture);
+        var uses = new List<string>();
+        if (before != index)
+            uses.Add($".use mod{b}::{{M{b}_SIZE, m{b}_step, m{b}_put, m{b}_fill}}");
+        if (index != 0)
+            uses.Add(".use mod000::M000_LIMIT");
+        return string.Join("\n", uses);
     }
 }

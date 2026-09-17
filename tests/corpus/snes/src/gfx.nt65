@@ -1,5 +1,9 @@
 ; Graphics upload: DMA to VRAM and CGRAM during forced blank or vblank.
+.module gfx
+
 .cpu 65816
+
+.use snes::*
 
 .export upload_graphics, vram_copy, cgram_copy, cgram_copy_far, print_text, setup_hdma
 .export clear_oam, print_inline

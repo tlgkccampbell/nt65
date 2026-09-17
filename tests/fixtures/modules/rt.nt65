@@ -1,0 +1,15 @@
+; The imports of the hand-written ca65 module, declared once and shared: a module that uses
+; them imports them as if it had declared them, and the value of the checked import is
+; asserted here only.
+.module rt
+
+.cpu 6502
+
+.export .import host_tick: zp
+.export .import host_print: proc()
+.export .import HOST_VERSION = $0102
+
+; An export may be wider than what it is, so that what imports it keeps working if it moves.
+.segment ZEROPAGE
+.data ticks: .byte
+.export ticks: abs

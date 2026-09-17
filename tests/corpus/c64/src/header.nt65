@@ -1,4 +1,6 @@
 ; PRG load address and the BASIC stub: 10 SYS2061
+.module header
+
 .cpu 6502
 
 .segment LOADADDR
@@ -15,4 +17,4 @@
     .word 0                     ; end of program
 }
 
-.assert start == $080D, error, "BASIC stub SYS address is out of date"
+.assert main::start == $080D, error, "BASIC stub SYS address is out of date"

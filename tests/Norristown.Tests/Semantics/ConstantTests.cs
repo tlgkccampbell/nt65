@@ -39,7 +39,7 @@ public sealed class ConstantTests
     [InlineData(".strat(\"hello\", 1)", 'e')]
     public void ExpressionsEvaluate(string expression, long expected)
     {
-        var model = Analysis.Model($"VALUE = {expression}\n");
+        var model = Analysis.Model($".module main\nVALUE = {expression}\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal(expected, model.Symbol("VALUE").Value.Number);
@@ -48,7 +48,7 @@ public sealed class ConstantTests
     [Fact]
     public void AStringIsAValue()
     {
-        var model = Analysis.Model("GREETING = \"hi\\n\"\n");
+        var model = Analysis.Model(".module main\nGREETING = \"hi\\n\"\n");
 
         Assert.Equal("hi\n", model.Symbol("GREETING").Value.Text);
     }
@@ -57,7 +57,7 @@ public sealed class ConstantTests
     [Fact]
     public void ForwardReferencesResolve()
     {
-        var model = Analysis.Model("FIRST = SECOND + 1\nSECOND = THIRD * 2\nTHIRD = 3\n");
+        var model = Analysis.Model(".module main\nFIRST = SECOND + 1\nSECOND = THIRD * 2\nTHIRD = 3\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal([7, 6, 3], model.Symbols.Select(symbol => symbol.Value.Number));
@@ -66,9 +66,9 @@ public sealed class ConstantTests
     [Fact]
     public void ANameThatNeedsItselfIsReportedOnce()
     {
-        var model = Analysis.Model("SELF = SELF + 1\n");
+        var model = Analysis.Model(".module main\nSELF = SELF + 1\n");
 
-        Assert.Equal(["1: `SELF` is defined in terms of itself"], model.Problems());
+        Assert.Equal(["2: `SELF` is defined in terms of itself"], model.Problems());
         Assert.False(model.Symbol("SELF").Value.IsKnown);
     }
 
@@ -76,7 +76,7 @@ public sealed class ConstantTests
     [Fact]
     public void ACycleIsReportedOnceAndNamesTheRest()
     {
-        var model = Analysis.Model("ONE = TWO\nTWO = THREE\nTHREE = ONE\n");
+        var model = Analysis.Model(".module main\nONE = TWO\nTWO = THREE\nTHREE = ONE\n");
 
         var diagnostic = Assert.Single(model.Diagnostics);
         Assert.Equal("`ONE` is defined in terms of itself", diagnostic.Message);
@@ -87,17 +87,17 @@ public sealed class ConstantTests
     [Fact]
     public void DivisionByZeroIsReported()
     {
-        var model = Analysis.Model("QUOTIENT = 1 / 0\nREMAINDER = 1 .mod 0\n");
+        var model = Analysis.Model(".module main\nQUOTIENT = 1 / 0\nREMAINDER = 1 .mod 0\n");
 
-        Assert.Equal(["1: division by zero", "2: division by zero"], model.Problems());
+        Assert.Equal(["2: division by zero", "3: division by zero"], model.Problems());
     }
 
     [Fact]
     public void ArithmeticOnAStringIsReported()
     {
-        var model = Analysis.Model("TEXT = \"hi\"\nJOIN = TEXT + 1\n");
+        var model = Analysis.Model(".module main\nTEXT = \"hi\"\nJOIN = TEXT + 1\n");
 
-        Assert.Equal(["2: `+` cannot be used on a string"], model.Problems());
+        Assert.Equal(["3: `+` cannot be used on a string"], model.Problems());
     }
 
     /// <summary>
@@ -108,6 +108,7 @@ public sealed class ConstantTests
     public void AnExpressionNamingAnAddressIsAnAlias()
     {
         var model = Analysis.Model("""
+            .module main
             .segment ZEROPAGE
             .data ptr:    .byte[2]
             SCREEN  = $0400
@@ -128,7 +129,7 @@ public sealed class ConstantTests
     [Fact]
     public void ALabelHasNoValue()
     {
-        var model = Analysis.Model(".proc main {\nrts\n}\n");
+        var model = Analysis.Model(".module main\n.proc main {\nrts\n}\n");
 
         Assert.False(model.Symbol("main").Value.IsKnown);
         Assert.Equal(SymbolKind.Proc, model.Symbol("main").Kind);
@@ -138,7 +139,7 @@ public sealed class ConstantTests
     [Fact]
     public void AnExternProcKeepsItsAddress()
     {
-        var model = Analysis.Model(".proc CHROUT = $ffd2: a8, i8\n");
+        var model = Analysis.Model(".module main\n.proc CHROUT = $ffd2: a8, i8\n");
 
         Assert.Equal(SymbolKind.ExternProc, model.Symbol("CHROUT").Kind);
         Assert.Equal(0xffd2, model.Symbol("CHROUT").Value.Number);
@@ -149,7 +150,7 @@ public sealed class ConstantTests
     [Fact]
     public void ImportsCarryTheirValueOrTheirSize()
     {
-        var model = Analysis.Model(".import VIC_BORDER = $d020\n.import scratch: zp\n.import table: far\n.import raw\n");
+        var model = Analysis.Model(".module main\n.import VIC_BORDER = $d020\n.import scratch: zp\n.import table: far\n.import raw\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal(0xd020, model.Symbol("VIC_BORDER").Value.Number);
@@ -163,9 +164,9 @@ public sealed class ConstantTests
     [Fact]
     public void AnExportNamesADeclaration()
     {
-        var model = Analysis.Model(".export main, missing\n.proc main {\nrts\n}\n");
+        var model = Analysis.Model(".module main\n.export main, missing\n.proc main {\nrts\n}\n");
 
-        Assert.Equal(["1: `missing` is not declared"], model.Problems());
+        Assert.Equal(["2: `missing` is not declared"], model.Problems());
         Assert.Equal(2, model.ReferencesTo(model.Symbol("main")).Count);
     }
 }

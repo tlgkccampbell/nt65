@@ -11,6 +11,7 @@ public sealed class AnnotationTests
     public void ANextNamesTheLabelsFlowReaches()
     {
         var model = Analysis.Model("""
+            .module main
             .proc dispatch {
                 lda cmd
                 jmp (@table)
@@ -34,6 +35,7 @@ public sealed class AnnotationTests
     public void ATargetMayBeAScopedPath()
     {
         var model = Analysis.Model("""
+            .module main
             .scope gfx {
             .proc init {
                 rts
@@ -56,7 +58,7 @@ public sealed class AnnotationTests
     [Fact]
     public void NextQuestionNamesNothing()
     {
-        var model = Analysis.Model(".proc jump {\n    jmp (ptr)\n    .next ?\n}\n\n.data ptr: .addr 0\n");
+        var model = Analysis.Model(".module main\n.proc jump {\n    jmp (ptr)\n    .next ?\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Empty(model.Problems());
     }
@@ -64,15 +66,16 @@ public sealed class AnnotationTests
     [Fact]
     public void ATargetThatNamesNothingIsReported()
     {
-        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n    .next @gone\n}\n\n.data ptr: .addr 0\n");
+        var model = Analysis.Model(".module main\n.proc p {\n    jmp (ptr)\n    .next @gone\n}\n\n.data ptr: .addr 0\n");
 
-        Assert.Equal(["3: `@gone` is not declared"], model.Problems());
+        Assert.Equal(["4: `@gone` is not declared"], model.Problems());
     }
 
     [Fact]
     public void APatchNamesTheInstructionWrittenInto()
     {
         var model = Analysis.Model("""
+            .module main
             .proc poke {
                 lda #0
             @op:
@@ -106,7 +109,7 @@ public sealed class AnnotationTests
     [Fact]
     public void ABlankLineDoesNotSeparateAnAnnotationFromItsStatement()
     {
-        var model = Analysis.Model(".proc p {\n    jmp (ptr)\n\n    .next ?\n}\n\n.data ptr: .addr 0\n");
+        var model = Analysis.Model(".module main\n.proc p {\n    jmp (ptr)\n\n    .next ?\n}\n\n.data ptr: .addr 0\n");
 
         Assert.Empty(model.Problems());
     }
@@ -116,6 +119,7 @@ public sealed class AnnotationTests
     public void ATargetMayBeAnIdentParameter()
     {
         var model = Analysis.Model("""
+            .module main
             .macro go(target: ident) {
                 jmp (ptr)
                 .next target
@@ -139,6 +143,7 @@ public sealed class AnnotationTests
     public void NeitherAnnotationIsWritten()
     {
         var written = Analysis.Outputs(("main.nt65", """
+            .module main
             .segment CODE
             .proc p {
             @op:

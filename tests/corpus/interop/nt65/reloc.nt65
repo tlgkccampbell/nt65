@@ -1,5 +1,7 @@
-; A position-independent blob copied to $0300 at run time, then called there. . .
-.export _install_blob, _call_blob
+; A position-independent blob copied to $0300 at run time, then called there.
+.module reloc
+
+.export install_blob as "_install_blob", call_blob as "_call_blob"
 
 BLOB_ADDR = $0300
 
@@ -16,7 +18,7 @@ BLOB_ADDR = $0300
 
 ; void install_blob(void)
 .segment CODE
-.proc _install_blob {
+.proc install_blob {
     ldx #0
 @copy:
     lda blob,x
@@ -28,6 +30,6 @@ BLOB_ADDR = $0300
 }
 
 ; void call_blob(void)
-.proc _call_blob {
+.proc call_blob {
     jmp run_blob
 }

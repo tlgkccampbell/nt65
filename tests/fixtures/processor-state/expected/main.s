@@ -7,164 +7,164 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2806, 0
+.dbg file, "main.nt65", 2820, 0
 
-.export render
-.export fill
-.export reset
-.export save
-.export keep
-.export tail
-.export command
+.export main__render
+.export main__fill
+.export main__reset
+.export main__save
+.export main__keep
+.export main__tail
+.export main__command
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 9
+.dbg line, "main.nt65", 11
 value:  .res 2
 
 .segment "CODE": absolute
-render:
+main__render:
     .a16
-.dbg line, "main.nt65", 14
+.dbg line, "main.nt65", 16
     lda #$1234
-.dbg line, "main.nt65", 15
+.dbg line, "main.nt65", 17
     sep #$20
     .a8
-.dbg line, "main.nt65", 16
+.dbg line, "main.nt65", 18
     lda #$12
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
     rts
 
-fill:
-.dbg line, "main.nt65", 23
+main__fill:
+.dbg line, "main.nt65", 25
     sep #$20
-.dbg line, "main.nt65", 24
+.dbg line, "main.nt65", 26
     bra fill__b
 fill__a:
     .a16
-.dbg line, "main.nt65", 26
+.dbg line, "main.nt65", 28
     lda #$1234
-.dbg line, "main.nt65", 27
+.dbg line, "main.nt65", 29
     rts
 fill__b:
-.dbg line, "main.nt65", 29
+.dbg line, "main.nt65", 31
     rep #$20
-.dbg line, "main.nt65", 30
+.dbg line, "main.nt65", 32
     bra fill__a
 
-reset:
-.dbg line, "main.nt65", 35
+main__reset:
+.dbg line, "main.nt65", 37
     clc
-.dbg line, "main.nt65", 36
+.dbg line, "main.nt65", 38
     xce
     .i8
-.dbg line, "main.nt65", 37
+.dbg line, "main.nt65", 39
     ldx #$ff
-.dbg line, "main.nt65", 38
+.dbg line, "main.nt65", 40
     rep #$30
     .i16
-.dbg line, "main.nt65", 39
-    ldx #$1fff
-.dbg line, "main.nt65", 40
-    txs
 .dbg line, "main.nt65", 41
-    lda #0
+    ldx #$1fff
 .dbg line, "main.nt65", 42
+    txs
+.dbg line, "main.nt65", 43
+    lda #0
+.dbg line, "main.nt65", 44
     rts
 
 hooked:
     .a8
-.dbg line, "main.nt65", 48
-    lda #1
-.dbg line, "main.nt65", 49
-    clc
 .dbg line, "main.nt65", 50
-    xce
+    lda #1
 .dbg line, "main.nt65", 51
-    rep #$10
+    clc
 .dbg line, "main.nt65", 52
-    ldx #$1234
+    xce
 .dbg line, "main.nt65", 53
+    rep #$10
+.dbg line, "main.nt65", 54
+    ldx #$1234
+.dbg line, "main.nt65", 55
     rts
 
-save:
-.dbg line, "main.nt65", 59
-    php
-.dbg line, "main.nt65", 60
-    rep #$30
+main__save:
 .dbg line, "main.nt65", 61
-    jsr keep
-    .a16
+    php
 .dbg line, "main.nt65", 62
-    lda #$1234
+    rep #$30
 .dbg line, "main.nt65", 63
+    jsr main__keep
+    .a16
+.dbg line, "main.nt65", 64
+    lda #$1234
+.dbg line, "main.nt65", 65
     plp
     .a8
-.dbg line, "main.nt65", 64
+.dbg line, "main.nt65", 66
     lda #$12
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 67
     rts
 
-keep:
-.dbg line, "main.nt65", 70
-    pha
-.dbg line, "main.nt65", 71
-    pla
+main__keep:
 .dbg line, "main.nt65", 72
+    pha
+.dbg line, "main.nt65", 73
+    pla
+.dbg line, "main.nt65", 74
     rts
 
 merge:
-.dbg line, "main.nt65", 78
-    lda a:value
-.dbg line, "main.nt65", 79
-    beq merge__done
 .dbg line, "main.nt65", 80
+    lda a:value
+.dbg line, "main.nt65", 81
+    beq merge__done
+.dbg line, "main.nt65", 82
     rep #$20
 merge__done:
-.dbg line, "main.nt65", 82
-    sep #$20
-.dbg line, "main.nt65", 83
-    lda #1
 .dbg line, "main.nt65", 84
+    sep #$20
+.dbg line, "main.nt65", 85
+    lda #1
+.dbg line, "main.nt65", 86
     rts
 
-tail:
-.dbg line, "main.nt65", 89
+main__tail:
+.dbg line, "main.nt65", 91
     sep #$20
-.dbg line, "main.nt65", 90
+.dbg line, "main.nt65", 92
     jmp render_again
 
 render_again:
-.dbg line, "main.nt65", 94
+.dbg line, "main.nt65", 96
     lda #1
-.dbg line, "main.nt65", 95
+.dbg line, "main.nt65", 97
     rts
 
 handler:
-.dbg line, "main.nt65", 100
+.dbg line, "main.nt65", 102
     rep #$30
     .a16
-.dbg line, "main.nt65", 101
+.dbg line, "main.nt65", 103
     lda #$1234
-.dbg line, "main.nt65", 102
+.dbg line, "main.nt65", 104
     rti
 handler__vector:
-.dbg line, "main.nt65", 105
+.dbg line, "main.nt65", 107
     ldx #$1234
-.dbg line, "main.nt65", 106
+.dbg line, "main.nt65", 108
     rti
 
-command:
-    ; dispatch!(@load, @save)  main.nt65:121
-.dbg line, "main.nt65", 121
+main__command:
+    ; dispatch!(@load, @save)  main.nt65:123
+.dbg line, "main.nt65", 123
     jmp (dispatch__table,x)
 dispatch__table:
-.dbg line, "main.nt65", 121
+.dbg line, "main.nt65", 123
     .addr command__load             ; t
-.dbg line, "main.nt65", 121
+.dbg line, "main.nt65", 123
     .addr command__save             ; t
 command__load:
-.dbg line, "main.nt65", 123
+.dbg line, "main.nt65", 125
     rts
 command__save:
-.dbg line, "main.nt65", 125
+.dbg line, "main.nt65", 127
     rts

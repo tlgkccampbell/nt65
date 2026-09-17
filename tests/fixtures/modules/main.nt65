@@ -1,42 +1,53 @@
-; What another nt65 file exports is named as if it were declared here. The output
-; imports an address and writes a constant out by value, because ca65 cannot use an imported
-; symbol where it needs a value.
+; Names from other modules are written with their module's path, or brought in with `.use`.
+; The output imports an address and writes a constant out by value, because ca65 cannot use
+; an imported symbol where it needs a value.
+.module main
+
 .cpu 6502
 
-.export main
+.use gfx::{SCREEN, ptr, clear}
+.use snd::init as snd_init
+.use hw::*
+.use rt::host_tick
 
-; Symbols that live outside nt65 are declared explicitly, with the size or signature nt65
-; needs. A checked import gives nt65 the value and asserts at link time that the definition
-; it is linked against agrees.
-.import host_tick: zp
-.import host_print: proc()
-.import HOST_VERSION = $0102
+; A name another CPU calls a mnemonic is a name on this one.
+.segment ZEROPAGE
+.data REP: .byte
+.data per: .byte
 
 .segment CODE
-.proc main {
-    lda #<SCREEN            ; a constant from gfx.nt65
-    sta ptr                 ; a zero-page label from gfx.nt65
+.export .proc main {
+    lda #<SCREEN            ; a constant from gfx
+    sta ptr                 ; a zero-page label from gfx
     lda #>SCREEN
     sta ptr+1
     lda host_tick
+    lda rt::ticks           ; exported as absolute, so used as absolute
+    sta REP
+    sta per
+    jsr gfx::init           ; two modules' `init`, qualified and renamed
+    jsr snd_init
     jsr clear
-    jsr clear::again        ; an interior label, named through the routine it is in
-    jsr host_print
-    lda #<HOST_VERSION      ; the checked import, written out as the value nt65 used
-    lda #Color::white       ; an enum member from another file
-    ldx #Sprite::y          ; and a member offset from one
-    lda #screen('A')        ; a charmap, a function and a list from gfx.nt65
-    ldy #centred(10)
+    jsr gfx::clear::again   ; an interior label, named through the routine it is in
+    jsr rt::host_print
+    lda #<rt::HOST_VERSION  ; the checked import, written out as the value nt65 used
+    lda #gfx::Color::white  ; an enum member from another module
+    ldx #gfx::Sprite::y     ; and a member offset from one
+    lda #gfx::screen('A')   ; a charmap, a function and a list from gfx
+    ldy #gfx::centred(10)
+    lda #gfx::palette::ink  ; a constant in an exported scope
+    lda gfx::tables::lo     ; a member of exported data
+    lda #<BORDER            ; from the facade, which `hw::*` brought in
+    jsr set_border
+    sta sid_volume
+    sta hw::sid_volume
     rts
 }
 
 .segment RODATA
-.data shape:  .byte glyphs
-; Where another file's routine ends, and how long it is: gfx.nt65 exports the end with it.
-.data clear_extent: .addr .endof(clear), .spanof(clear)
-
-; Exported, so that what the file only declares counts as used.
-.export shape, clear_extent
+.export .data shape: .byte gfx::glyphs
+; Where another module's routine ends, and how long it is: gfx exports the end with it.
+.export .data clear_extent: .addr .endof(clear), .spanof(clear)
 
 ; The linker evaluates these, so ca65 has to read the operators as nt65 does: it spells `==`
 ; and `!=` its own way and has no `^^` at all.

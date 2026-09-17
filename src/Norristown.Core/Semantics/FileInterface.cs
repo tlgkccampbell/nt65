@@ -28,24 +28,33 @@ namespace Norristown.Semantics;
 internal static class FileInterface
 {
     /// <summary>
-    /// The interface of a file that declares <paramref name="symbols"/>, by qualified name.
-    /// <paramref name="isExported"/> says what its <c>.export</c> items make visible, and
-    /// <paramref name="resolved"/> what the names written in it mean.
+    /// The interface of <paramref name="module"/>, a file that declares <paramref name="symbols"/>,
+    /// by qualified name. <paramref name="resolved"/> says what the names written in it mean.
+    /// The module's name and what it re-exports are entries too, whose names start with a space
+    /// so that no symbol's can be the same.
     /// </summary>
     public static Dictionary<string, string> Of(
+        ProgramSymbols.Module module,
         IEnumerable<Symbol> symbols,
-        Func<Symbol, bool> isExported,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved)
     {
-        var entries = new Dictionary<string, string>(StringComparer.Ordinal);
+        var entries = new Dictionary<string, string>(StringComparer.Ordinal) { [" module"] = module.Name ?? "" };
+        foreach (var reexport in module.Reexports)
+            entries.TryAdd(" reexport " + reexport.Name, string.Join("::", reexport.Path));
         foreach (var symbol in symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var text = new StringBuilder($"{symbol.Kind}{(isExported(symbol) ? " exported" : "")}\n");
+            var text = new StringBuilder($"{symbol.Kind}{(symbol.IsExported ? $" exported {symbol.LinkerName} {symbol.ExportSize}" : "")}\n");
             Describe(symbol, resolved, text, [], "  ");
             entries.TryAdd(symbol.QualifiedName, text.ToString());
         }
         return entries;
     }
+
+    /// <summary>
+    /// Whether an entry that changed changes what every path in the program may mean, rather
+    /// than what one name does: the module's name, or a name it re-exports.
+    /// </summary>
+    public static bool IsModuleWide(string entry) => entry.StartsWith(' ');
 
     /// <summary>
     /// The names whose entries differ between <paramref name="before"/> and

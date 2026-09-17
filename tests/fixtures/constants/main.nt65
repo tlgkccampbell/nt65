@@ -1,6 +1,8 @@
 ; What a name is worth, which names are addresses rather than constants,
 ; and what a name that needs itself does.
 
+.module main
+
 FIRST   = SECOND + 1        ; a name may be used before the line that declares it
 SECOND  = 2
 SCREEN  = $0400

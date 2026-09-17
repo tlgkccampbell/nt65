@@ -13,6 +13,7 @@ public sealed class ConfigurationTests
     public void TheSameNameMayBeDeclaredUnderSeveralConditions()
     {
         const string Source = """
+            .module main
             .if PLATFORM == 1 {
             LINES = 262
             }
@@ -36,7 +37,7 @@ public sealed class ConfigurationTests
             TOTAL = LINES
             """, ("PLATFORM", 2));
 
-        Assert.Equal(["main.nt65:4: `LINES` is not declared"], program.Problems());
+        Assert.Equal(["main.nt65:5: `LINES` is not declared"], program.Problems());
     }
 
     /// <summary>A chain takes its first holding branch, whatever the later ones say.</summary>
@@ -93,6 +94,7 @@ public sealed class ConfigurationTests
     {
         var project = ProjectSettings.None with { Cpu = Cpu.Wdc65C02 };
         var program = Analysis.Program(project, ("main.nt65", """
+            .module main
             .segment CODE
             .proc main {
             .if .target(65c02) {
@@ -117,7 +119,7 @@ public sealed class ConfigurationTests
     {
         var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
 
-        Assert.Equal([$"main.nt65:3: {message}"], program.Problems());
+        Assert.Equal([$"main.nt65:4: {message}"], program.Problems());
     }
 
     /// <summary>
@@ -163,7 +165,7 @@ public sealed class ConfigurationTests
         var program = Built(".if 1 {\n.cpu 65c02\n}\n");
 
         Assert.Equal(
-            ["main.nt65:2: `.cpu` states the program's processor, which a condition may test, "
+            ["main.nt65:3: `.cpu` states the program's processor, which a condition may test, "
                 + "so it may not be written under an `.if`"],
             program.Problems());
     }
@@ -174,7 +176,7 @@ public sealed class ConfigurationTests
     {
         var program = Built(".scope gfx {\n} .else {\n}\n");
 
-        Assert.Equal(["main.nt65:2: `.else` continues an `.if`, and there is none to continue"],
+        Assert.Equal(["main.nt65:3: `.else` continues an `.if`, and there is none to continue"],
             program.Problems());
     }
 
@@ -223,10 +225,10 @@ public sealed class ConfigurationTests
     }
 
     private static ProgramAnalysis Built(string text, params (string Name, long Value)[] defines) =>
-        Analysis.Program(Project(defines), ("main.nt65", text));
+        Analysis.Program(Project(defines), ("main.nt65", ".module main\n" + text));
 
     private static string Output(string text, params (string Name, long Value)[] defines) =>
-        Analysis.Outputs(Project(defines), ("main.nt65", text))["main.s"];
+        Analysis.Outputs(Project(defines), ("main.nt65", ".module main\n" + text))["main.s"];
 
     private static ProjectSettings Project((string Name, long Value)[] defines) =>
         ProjectSettings.None with

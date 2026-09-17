@@ -213,6 +213,7 @@ public sealed class CycleTests
     public void LayoutKeepsTheCountForTheModeItChose()
     {
         var analysis = Analysis.Program(("main.nt65", """
+            .module main
             .segment ZEROPAGE
             .data near:   .byte
 
@@ -252,7 +253,7 @@ public sealed class CycleTests
     [Fact]
     public void ABlockCostsWhatItsStatementsCost()
     {
-        var analysis = Analysis.Program(("main.nt65", ".proc p {\n    ldx #0\n    inx\n    rts\n}\n"));
+        var analysis = Analysis.Program(("main.nt65", ".module main\n.proc p {\n    ldx #0\n    inx\n    rts\n}\n"));
         var block = analysis.Flows.Single().Regions.Single().Blocks.Single();
 
         Assert.Equal("10", block.Cycles?.ToString());

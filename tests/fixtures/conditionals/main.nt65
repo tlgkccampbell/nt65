@@ -3,6 +3,8 @@
 ; is the program this configuration asks for.
 
 ; The same name under two conditions. Only the branch the build takes declares anything.
+.module main
+
 .if PLATFORM == 1 {
 LINES = 262
 }

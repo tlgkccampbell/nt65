@@ -1,5 +1,7 @@
 ; Every form of data declaration, measured twice: nt65 answers `.sizeof` and `.countof` at
 ; edit time, and ld65 checks each answer against where the declaration's bytes end.
+.module main
+
 .cpu 6502
 
 .struct Point {

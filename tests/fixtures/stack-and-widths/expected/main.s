@@ -7,112 +7,112 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2042, 0
+.dbg file, "main.nt65", 2056, 0
 
-.export copy
-.export setup
-.export mixed
-.export unknown
-.export entered
-.export adder
+.export main__copy
+.export main__setup
+.export main__mixed
+.export main__unknown
+.export main__entered
+.export main__adder
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 13
+.dbg line, "main.nt65", 15
 total:  .res 2
 
 .segment "CODE": absolute
-copy:
-.dbg line, "main.nt65", 19
+main__copy:
+.dbg line, "main.nt65", 21
     pea 0
-.dbg line, "main.nt65", 20
+.dbg line, "main.nt65", 22
     pea 0
     .a16
-.dbg line, "main.nt65", 22
-    lda #8
-.dbg line, "main.nt65", 23
-    sta 1,s                         ; locals::count
 .dbg line, "main.nt65", 24
-    pha
+    lda #8
 .dbg line, "main.nt65", 25
+    sta 1,s                         ; locals::count
+.dbg line, "main.nt65", 26
+    pha
+.dbg line, "main.nt65", 27
     lda 5,s                         ; locals::src
     .i16
-.dbg line, "main.nt65", 26
-    ldy #0
-.dbg line, "main.nt65", 27
-    lda (5,s),y                     ; locals::src
 .dbg line, "main.nt65", 28
-    pla
+    ldy #0
 .dbg line, "main.nt65", 29
-    pla
+    lda (5,s),y                     ; locals::src
 .dbg line, "main.nt65", 30
     pla
 .dbg line, "main.nt65", 31
+    pla
+.dbg line, "main.nt65", 32
+    pla
+.dbg line, "main.nt65", 33
     rts
 
-setup:
-.dbg line, "main.nt65", 38
-    rep #$20
-.dbg line, "main.nt65", 39
-    lda #$1234
+main__setup:
 .dbg line, "main.nt65", 40
-    rep #$10
+    rep #$20
 .dbg line, "main.nt65", 41
-    ldx #$1234
+    lda #$1234
 .dbg line, "main.nt65", 42
+    rep #$10
+.dbg line, "main.nt65", 43
+    ldx #$1234
+.dbg line, "main.nt65", 44
     rts
 
-mixed:
-.dbg line, "main.nt65", 46
+main__mixed:
+.dbg line, "main.nt65", 48
     rep #$10
-.dbg line, "main.nt65", 46
+.dbg line, "main.nt65", 48
     sep #$20
     .a8
-.dbg line, "main.nt65", 47
-    lda #$12
-.dbg line, "main.nt65", 48
-    ldx #$1234
 .dbg line, "main.nt65", 49
+    lda #$12
+.dbg line, "main.nt65", 50
+    ldx #$1234
+.dbg line, "main.nt65", 51
     rts
 
-unknown:
-.dbg line, "main.nt65", 54
-    sep #$30
-.dbg line, "main.nt65", 55
-    lda #1
+main__unknown:
 .dbg line, "main.nt65", 56
+    sep #$30
+.dbg line, "main.nt65", 57
+    lda #1
+.dbg line, "main.nt65", 58
     rts
 
-entered:
-.dbg line, "main.nt65", 61
+main__entered:
+.dbg line, "main.nt65", 63
     tsc
-.dbg line, "main.nt65", 62
+.dbg line, "main.nt65", 64
     sec
     .a16
-.dbg line, "main.nt65", 63
+.dbg line, "main.nt65", 65
     sbc #4
-.dbg line, "main.nt65", 64
-    tcs
 .dbg line, "main.nt65", 66
+    tcs
+.dbg line, "main.nt65", 68
     lda 3,s                         ; locals::src
 
-adder:
-    ; add16!(total, {#$1234})  main.nt65:83
-.dbg line, "main.nt65", 83
+main__adder:
+    ; add16!(total, {#$1234})  main.nt65:85
+.dbg line, "main.nt65", 85
     clc
-.dbg line, "main.nt65", 83
+.dbg line, "main.nt65", 85
     lda a:total
     .a8
-.dbg line, "main.nt65", 83
-    adc #$34
-.dbg line, "main.nt65", 83
-    sta a:total
-.dbg line, "main.nt65", 83
-    lda a:total+1
-.dbg line, "main.nt65", 83
-    adc #$12
-.dbg line, "main.nt65", 83
-    sta a:total+1
-.dbg line, "main.nt65", 84
-    ldx #$1234
 .dbg line, "main.nt65", 85
+    adc #$34
+.dbg line, "main.nt65", 85
+    sta a:total
+.dbg line, "main.nt65", 85
+    lda a:total+1
+.dbg line, "main.nt65", 85
+    adc #$12
+.dbg line, "main.nt65", 85
+    sta a:total+1
+.dbg line, "main.nt65", 86
+    ldx #$1234
+.dbg line, "main.nt65", 87
     rts

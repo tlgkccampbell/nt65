@@ -7,60 +7,96 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1680, 0
+.dbg file, "main.nt65", 1977, 0
 
-.export main
-.export shape
-.export clear_extent
+.export main__main
+.export main__shape
+.export main__clear_extent
 
+gfx__SCREEN = $0400
+.importzp gfx__ptr
 .importzp host_tick
+.import rt__ticks
+.import gfx__init
+.import snd__init
+.import gfx__clear
+.import gfx__clear__again
 .import host_print
 .import HOST_VERSION
-.assert HOST_VERSION = $0102, lderror, "HOST_VERSION is not $0102, which is what main.nt65 was built against"
-SCREEN = $0400
-.importzp ptr
-.import clear
-.import clear__again
-Color__white = $01
-.import clear__end
+gfx__Color__white = $01
+gfx__palette__ink = $01
+.import gfx__tables
+.import gfx__tables__lo
+hw__vic__BORDER = $d020
+.import hw__vic__set_border
+hw__sid__volume = $d418
+.import gfx__clear__end
+
+.segment "ZEROPAGE": zeropage
+.dbg line, "main.nt65", 15
+REP: .res 1
+.dbg line, "main.nt65", 16
+per: .res 1
 
 .segment "CODE": absolute
-main:
-.dbg line, "main.nt65", 17
-    lda #<SCREEN
-.dbg line, "main.nt65", 18
-    sta z:ptr
-.dbg line, "main.nt65", 19
-    lda #>SCREEN
+main__main:
 .dbg line, "main.nt65", 20
-    sta z:ptr+1
+    lda #<gfx__SCREEN
 .dbg line, "main.nt65", 21
-    lda z:host_tick
+    sta z:gfx__ptr
 .dbg line, "main.nt65", 22
-    jsr clear
+    lda #>gfx__SCREEN
 .dbg line, "main.nt65", 23
-    jsr clear__again
+    sta z:gfx__ptr+1
 .dbg line, "main.nt65", 24
-    jsr host_print
+    lda z:host_tick
 .dbg line, "main.nt65", 25
-    lda #<$0102                     ; HOST_VERSION
+    lda a:rt__ticks
 .dbg line, "main.nt65", 26
-    lda #Color__white
+    sta z:REP
 .dbg line, "main.nt65", 27
-    ldx #$01                        ; Sprite::y
+    sta z:per
 .dbg line, "main.nt65", 28
-    lda #$01                        ; screen('A')
+    jsr gfx__init
 .dbg line, "main.nt65", 29
-    ldy #$0f                        ; centred(10)
+    jsr snd__init
 .dbg line, "main.nt65", 30
+    jsr gfx__clear
+.dbg line, "main.nt65", 31
+    jsr gfx__clear__again
+.dbg line, "main.nt65", 32
+    jsr host_print
+.dbg line, "main.nt65", 33
+    lda #<$0102                     ; HOST_VERSION
+.dbg line, "main.nt65", 34
+    lda #gfx__Color__white
+.dbg line, "main.nt65", 35
+    ldx #$01                        ; gfx::Sprite::y
+.dbg line, "main.nt65", 36
+    lda #$01                        ; gfx::screen('A')
+.dbg line, "main.nt65", 37
+    ldy #$0f                        ; gfx::centred(10)
+.dbg line, "main.nt65", 38
+    lda #gfx__palette__ink
+.dbg line, "main.nt65", 39
+    lda a:gfx__tables__lo
+.dbg line, "main.nt65", 40
+    lda #<hw__vic__BORDER
+.dbg line, "main.nt65", 41
+    jsr hw__vic__set_border
+.dbg line, "main.nt65", 42
+    sta a:hw__sid__volume
+.dbg line, "main.nt65", 43
+    sta a:hw__sid__volume
+.dbg line, "main.nt65", 44
     rts
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 34
-shape:  .byte $3c, $42, $3c         ; glyphs
+.dbg line, "main.nt65", 48
+main__shape:   .byte $3c, $42, $3c  ; gfx::glyphs
 
-.dbg line, "main.nt65", 36
-clear_extent: .addr clear__end, (clear__end - clear)
+.dbg line, "main.nt65", 50
+main__clear_extent:   .addr gfx__clear__end, (gfx__clear__end - gfx__clear)
 
-.dbg line, "main.nt65", 43
-.assert ((main = main) && (main <> clear)) && (!(main .xor main)), lderror, "an operator reached ld65 misspelled"
+.dbg line, "main.nt65", 54
+.assert ((main__main = main__main) && (main__main <> gfx__clear)) && (!(main__main .xor main__main)), lderror, "an operator reached ld65 misspelled"

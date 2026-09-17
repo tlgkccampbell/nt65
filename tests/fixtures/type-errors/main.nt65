@@ -1,4 +1,6 @@
 ; What the declarative constructs make wrong.
+.module main
+
 .charmap screen {
     'A'..'Z' = $01
 }

@@ -1,7 +1,13 @@
 ; Raster interrupt: two colour splits per frame, chained into the KERNAL IRQ.
+.module irq
+
 .cpu 6502
 
-.export irq_install, irq_remove
+.use hw::{vic, cia1, cia2, kernal, Color}
+.use zp::{split_index, frame_flag, frame_count}
+.use macros::{mov16, inc16, if}
+
+.export install, remove
 
 SPLITS = 3
 
@@ -18,56 +24,56 @@ SPLITS = 3
 .data old_irq: .word
 
 .segment CODE
-.proc irq_install {
+.proc install {
     sei
     lda #%01111111              ; disable CIA timer interrupts
-    sta CIA1_ICR
-    sta CIA2_ICR
-    lda CIA1_ICR                ; acknowledge pending
-    lda CIA2_ICR
+    sta cia1::ICR
+    sta cia2::ICR
+    lda cia1::ICR                ; acknowledge pending
+    lda cia2::ICR
 
-    mov16!(old_irq, IRQ_VECTOR)
-    mov16!(IRQ_VECTOR, {#raster_irq})
+    mov16!(old_irq, kernal::IRQ_VECTOR)
+    mov16!(kernal::IRQ_VECTOR, {#raster_irq})
 
     lda #0
     sta split_index
     lda split_line
-    sta VIC_RASTER
-    lda VIC_CTRL1
+    sta vic::RASTER
+    lda vic::CTRL1
     and #%01111111              ; raster bit 8 = 0
-    sta VIC_CTRL1
+    sta vic::CTRL1
 
     lda #%00000001              ; enable raster IRQ
-    sta VIC_IRQ_MASK
-    asl VIC_IRQ_FLAG            ; acknowledge any pending VIC IRQ
+    sta vic::IRQ_MASK
+    asl vic::IRQ_FLAG            ; acknowledge any pending VIC IRQ
     cli
     rts
 }
 
-.proc irq_remove {
+.proc remove {
     sei
     lda #0
-    sta VIC_IRQ_MASK
-    mov16!(IRQ_VECTOR, old_irq)
+    sta vic::IRQ_MASK
+    mov16!(kernal::IRQ_VECTOR, old_irq)
     lda #%10000001
-    sta CIA1_ICR
+    sta cia1::ICR
     cli
     rts
 }
 
 .proc raster_irq {
-    lda VIC_IRQ_FLAG
+    lda vic::IRQ_FLAG
     and #1
     bne @ours
     jmp (old_irq)               ; not a raster IRQ: let the KERNAL have it
 
 @ours:
-    sta VIC_IRQ_FLAG            ; A = 1: acknowledge
+    sta vic::IRQ_FLAG            ; A = 1: acknowledge
     ldx split_index
     lda split_border,x
-    sta VIC_BORDER
+    sta vic::BORDER
     lda split_bg,x
-    sta VIC_BG0
+    sta vic::BG0
 
     inx
     cpx #SPLITS
@@ -76,7 +82,7 @@ SPLITS = 3
     }
     stx split_index
     lda split_line,x
-    sta VIC_RASTER
+    sta vic::RASTER
 
     ; Only the first split of the frame runs the KERNAL (keyboard, jiffy clock).
     cpx #1
@@ -84,7 +90,7 @@ SPLITS = 3
     lda #1
     sta frame_flag
     inc16!(frame_count)
-    jmp KERNAL_IRQ
+    jmp kernal::IRQ
 @exit:
-    jmp KERNAL_IRQ_EXIT
+    jmp kernal::IRQ_EXIT
 }

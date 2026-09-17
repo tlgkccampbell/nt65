@@ -355,21 +355,16 @@ internal sealed class Requirements
     /// </summary>
     private void CheckExports()
     {
-        foreach (var statement in model.Tree.Root.DescendantNodes().Select(node => node.Statement).OfType<SyntaxNode>())
+        foreach (var symbol in model.Symbols)
         {
-            if (statement.Kind != SyntaxKind.ExportDirective)
-                continue;
-            foreach (var token in statement.ChildTokens)
+            if (symbol is not { IsExported: true, ExportSpan: { } at } || !labels.TryGetValue(symbol, out var labelled)
+                || labelled.Block.IsDeclared)
             {
-                if (model.SymbolAt(token) is not { } symbol || !labels.TryGetValue(symbol, out var labelled)
-                    || labelled.Block.IsDeclared)
-                {
-                    continue;
-                }
-                diagnostics.Add(new Diagnostic(model.Tree.GetSpan(token.Span), Severity.Error,
-                    $"`{symbol.DisplayName}` is inside `{labelled.Region.Routine.DisplayName}`, and exporting it lets "
-                    + "other files jump into the routine: a `.state` after the label says what the state is there"));
+                continue;
             }
+            diagnostics.Add(new Diagnostic(model.Tree.GetSpan(at), Severity.Error,
+                $"`{symbol.DisplayName}` is inside `{labelled.Region.Routine.DisplayName}`, and exporting it lets "
+                + "other modules jump into the routine: a `.state` after the label says what the state is there"));
         }
     }
 

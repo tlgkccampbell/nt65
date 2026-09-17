@@ -9,6 +9,7 @@ public sealed class BindingTests
     public void LookupRunsFromTheInnermostScopeOutward()
     {
         var model = Analysis.Model("""
+            .module main
             COUNT = 4
             .scope gfx {
                 COUNT = 8
@@ -29,9 +30,10 @@ public sealed class BindingTests
     }
 
     [Fact]
-    public void ScopedNamesWalkIntoAScopeAndDoubleColonStartsAtTheFile()
+    public void ScopedNamesWalkIntoAScopeAndDoubleColonStartsAtTheModules()
     {
         var model = Analysis.Model("""
+            .module main
             .scope gfx {
                 .proc init {
                     rts
@@ -39,7 +41,7 @@ public sealed class BindingTests
             }
             .proc init {
                 jsr gfx::init
-                jsr ::init
+                jsr ::main::init
                 rts
             }
             """);
@@ -54,6 +56,7 @@ public sealed class BindingTests
     public void AProcIsAScope()
     {
         var model = Analysis.Model("""
+            .module main
             .proc draw {
                 .segment RODATA {
                 table:  .byte 1, 2
@@ -74,6 +77,7 @@ public sealed class BindingTests
     public void CheapLocalsBelongToTheNearestProcOrScope()
     {
         var model = Analysis.Model("""
+            .module main
             .proc reset {
                 .scope {
                     bne @loop
@@ -104,6 +108,7 @@ public sealed class BindingTests
     public void ACheapLocalIsFoundOutwardThroughScopes()
     {
         var model = Analysis.Model("""
+            .module main
             .proc draw {
                 .scope {
                     bne @done
@@ -122,6 +127,7 @@ public sealed class BindingTests
     public void ACheapLocalAndAPlainNameDoNotCollide()
     {
         var model = Analysis.Model("""
+            .module main
             .proc draw {
             loop:
             @loop:
@@ -138,6 +144,7 @@ public sealed class BindingTests
     public void ANameMayBeDeclaredOnceInItsScope()
     {
         var model = Analysis.Model("""
+            .module main
             SIZE = 1
             SIZE = 2
             .proc p {
@@ -148,7 +155,7 @@ public sealed class BindingTests
             """);
 
         Assert.Equal(
-            ["2: `SIZE` is already declared in this scope", "5: `@a` is already declared in this scope"],
+            ["3: `SIZE` is already declared in this scope", "6: `@a` is already declared in this scope"],
             model.Problems());
     }
 
@@ -156,23 +163,23 @@ public sealed class BindingTests
     [Fact]
     public void ADuplicateNamesTheFirstDeclaration()
     {
-        var model = Analysis.Model("SIZE = 1\nSIZE = 2\n");
+        var model = Analysis.Model(".module main\nSIZE = 1\nSIZE = 2\n");
 
         var related = Assert.Single(Assert.Single(model.Diagnostics).Related);
-        Assert.Equal(1, related.Span.Line);
+        Assert.Equal(2, related.Span.Line);
         Assert.Equal("declared here", related.Message);
     }
 
     [Fact]
     public void ReservedWordsCannotBeNames()
     {
-        var model = Analysis.Model("lda = 5\n.data X: .byte 0\njeq = 1\n");
+        var model = Analysis.Model(".module main\nlda = 5\n.data X: .byte 0\njeq = 1\n");
 
         Assert.Equal(
             [
-                "1: `lda` is a mnemonic and cannot be used as a name",
-                "2: `X` is a register name and cannot be used as a name",
-                "3: `jeq` is a mnemonic and cannot be used as a name",
+                "2: `lda` is a mnemonic of the 6502 and cannot be used as a name",
+                "3: `X` is a register name and cannot be used as a name",
+                "4: `jeq` is a mnemonic of the 6502 and cannot be used as a name",
             ],
             model.Problems());
     }
@@ -180,43 +187,43 @@ public sealed class BindingTests
     [Fact]
     public void ACheapLocalNeedsAnEnclosingProcOrScope()
     {
-        var model = Analysis.Model("@stray:\n");
+        var model = Analysis.Model(".module main\n@stray:\n");
 
-        Assert.Equal(["1: `@stray` is a cheap local, which needs an enclosing `.proc` or `.scope`"],
+        Assert.Equal(["2: `@stray` is a cheap local, which needs an enclosing `.proc` or `.scope`"],
             model.Problems());
     }
 
     [Fact]
     public void ACheapLocalCannotBeReachedWithAPath()
     {
-        var model = Analysis.Model(".proc p {\n@loop:\n    lda ::@loop\n}\n");
+        var model = Analysis.Model(".module main\n.proc p {\n@loop:\n    lda ::@loop\n}\n");
 
-        Assert.Equal(["3: `@loop` is a cheap local and cannot be reached with `::`"], model.Problems());
+        Assert.Equal(["4: `@loop` is a cheap local and cannot be reached with `::`"], model.Problems());
     }
 
     [Fact]
     public void AnUndeclaredNameIsReportedOncePerUse()
     {
-        var model = Analysis.Model(".proc p {\n    jsr missing\n    jmp missing\n}\n");
+        var model = Analysis.Model(".module main\n.proc p {\n    jsr missing\n    jmp missing\n}\n");
 
-        Assert.Equal(["2: `missing` is not declared", "3: `missing` is not declared"], model.Problems());
+        Assert.Equal(["3: `missing` is not declared", "4: `missing` is not declared"], model.Problems());
     }
 
     /// <summary>A path whose first part is unknown is one error, not one per part.</summary>
     [Fact]
     public void ABrokenPathIsReportedOnce()
     {
-        var model = Analysis.Model(".proc p {\n    lda nowhere::inner::deeper\n}\n");
+        var model = Analysis.Model(".module main\n.proc p {\n    lda nowhere::inner::deeper\n}\n");
 
-        Assert.Equal(["2: `nowhere` is not declared"], model.Problems());
+        Assert.Equal(["3: `nowhere` is not declared"], model.Problems());
     }
 
     [Fact]
     public void APathIntoSomethingThatIsNotAScopeSaysSo()
     {
-        var model = Analysis.Model("SIZE = 1\n.proc p {\n    lda SIZE::inner\n}\n");
+        var model = Analysis.Model(".module main\nSIZE = 1\n.proc p {\n    lda SIZE::inner\n}\n");
 
-        Assert.Equal(["3: `SIZE` is a constant, not a scope"], model.Problems());
+        Assert.Equal(["4: `SIZE` is a constant, not a scope"], model.Problems());
     }
 
     /// <summary>A segment block changes the segment of its contents, not their scope.</summary>
@@ -224,6 +231,7 @@ public sealed class BindingTests
     public void ASegmentBlockDoesNotStartAScope()
     {
         var model = Analysis.Model("""
+            .module main
             .proc draw {
                 .segment RODATA {
             @table: .byte 1, 2
@@ -246,6 +254,7 @@ public sealed class BindingTests
     public void OnlyNamesWithAWayInAreQualified()
     {
         var model = Analysis.Model("""
+            .module main
             .scope gfx {
                 .proc init {
                 @loop:
@@ -267,7 +276,7 @@ public sealed class BindingTests
     [Fact]
     public void EveryPartOfAPathIsAReferenceOfItsOwn()
     {
-        var model = Analysis.Model(".scope gfx {\n.proc init {\nrts\n}\n}\n.proc main {\njsr gfx::init\n}\n");
+        var model = Analysis.Model(".module main\n.scope gfx {\n.proc init {\nrts\n}\n}\n.proc main {\njsr gfx::init\n}\n");
 
         Assert.Equal(2, model.ReferencesTo(model.Symbol("gfx")).Count);
         Assert.Same(model.Symbol("init"), model.SymbolAt("init", occurrence: 2));

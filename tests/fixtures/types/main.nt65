@@ -1,6 +1,8 @@
 ; The declarative constructs, as the design writes them: enumerations, structures, unions,
 ; lists, character mappings and functions. None of them generates anything by itself; what
 ; they mean shows up where they are used.
+.module main
+
 .cpu 6502
 
 .enum Color {

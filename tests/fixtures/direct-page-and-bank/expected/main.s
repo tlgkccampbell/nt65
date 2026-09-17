@@ -7,171 +7,171 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2890, 0
+.dbg file, "main.nt65", 2904, 0
 
-.export hud
-.export setup
-.export pushed
-.export keep
-.export registers
-.export ppu
-.export from_k
-.export caller
-.export move
-.export relay
-.export fast
-.export tail
+.export main__hud
+.export main__setup
+.export main__pushed
+.export main__keep
+.export main__registers
+.export main__ppu
+.export main__from_k
+.export main__caller
+.export main__move
+.export main__relay
+.export main__fast
+.export main__tail
 
 HUD_PAGE = $0300
 
 .segment "ZP2": zeropage
-.dbg line, "main.nt65", 12
+.dbg line, "main.nt65", 14
 ptr:    .res 2
 
 .segment "HUD": zeropage
-.dbg line, "main.nt65", 15
+.dbg line, "main.nt65", 17
 lives:  .res 1
 
 .segment "WRAM": absolute
-.dbg line, "main.nt65", 18
+.dbg line, "main.nt65", 20
 score:  .res 2
 
 .segment "CODE": absolute
-hud:
-.dbg line, "main.nt65", 23
-    lda z:ptr
-.dbg line, "main.nt65", 24
-    sta a:score
+main__hud:
 .dbg line, "main.nt65", 25
-    ldy a:score,x
+    lda z:ptr
 .dbg line, "main.nt65", 26
-    lda f:score
+    sta a:score
 .dbg line, "main.nt65", 27
+    ldy a:score,x
+.dbg line, "main.nt65", 28
+    lda f:score
+.dbg line, "main.nt65", 29
     rts
 
-setup:
+main__setup:
     .a16
-.dbg line, "main.nt65", 32
-    lda #$2100
-.dbg line, "main.nt65", 33
-    tcd
 .dbg line, "main.nt65", 34
+    lda #$2100
+.dbg line, "main.nt65", 35
+    tcd
+.dbg line, "main.nt65", 36
     sep #$20
     .a8
-.dbg line, "main.nt65", 35
-    lda #$7e
-.dbg line, "main.nt65", 36
-    pha
 .dbg line, "main.nt65", 37
-    plb
-.dbg line, "main.nt65", 38
-    rep #$20
-.dbg line, "main.nt65", 39
-    lda z:ptr
-.dbg line, "main.nt65", 40
-    rts
-
-pushed:
-.dbg line, "main.nt65", 45
-    pea HUD_PAGE
-.dbg line, "main.nt65", 46
-    pld
-.dbg line, "main.nt65", 47
-    lda z:lives
-.dbg line, "main.nt65", 48
-    rts
-
-keep:
-.dbg line, "main.nt65", 54
-    phd
-.dbg line, "main.nt65", 55
-    phb
-.dbg line, "main.nt65", 56
-    pea $2100
-.dbg line, "main.nt65", 57
-    pld
-.dbg line, "main.nt65", 58
     lda #$7e
-.dbg line, "main.nt65", 59
+.dbg line, "main.nt65", 38
     pha
-.dbg line, "main.nt65", 60
+.dbg line, "main.nt65", 39
     plb
-.dbg line, "main.nt65", 61
+.dbg line, "main.nt65", 40
+    rep #$20
+.dbg line, "main.nt65", 41
     lda z:ptr
-.dbg line, "main.nt65", 62
-    sta a:score
-.dbg line, "main.nt65", 63
-    plb
-.dbg line, "main.nt65", 64
+.dbg line, "main.nt65", 42
+    rts
+
+main__pushed:
+.dbg line, "main.nt65", 47
+    pea HUD_PAGE
+.dbg line, "main.nt65", 48
     pld
-.dbg line, "main.nt65", 65
+.dbg line, "main.nt65", 49
+    lda z:lives
+.dbg line, "main.nt65", 50
     rts
 
-registers:
-.dbg line, "main.nt65", 70
-    lda z:$05
-.dbg line, "main.nt65", 71
-    sta z:$00,x
-.dbg line, "main.nt65", 72
-    rts
-
-ppu:
-.dbg line, "main.nt65", 77
-    sta a:$2100
-.dbg line, "main.nt65", 78
-    stz a:$4200
-.dbg line, "main.nt65", 79
-    sta f:$7e2100
-.dbg line, "main.nt65", 80
+main__keep:
+.dbg line, "main.nt65", 56
+    phd
+.dbg line, "main.nt65", 57
+    phb
+.dbg line, "main.nt65", 58
     pea $2100
+.dbg line, "main.nt65", 59
+    pld
+.dbg line, "main.nt65", 60
+    lda #$7e
+.dbg line, "main.nt65", 61
+    pha
+.dbg line, "main.nt65", 62
+    plb
+.dbg line, "main.nt65", 63
+    lda z:ptr
+.dbg line, "main.nt65", 64
+    sta a:score
+.dbg line, "main.nt65", 65
+    plb
+.dbg line, "main.nt65", 66
+    pld
+.dbg line, "main.nt65", 67
+    rts
+
+main__registers:
+.dbg line, "main.nt65", 72
+    lda z:$05
+.dbg line, "main.nt65", 73
+    sta z:$00,x
+.dbg line, "main.nt65", 74
+    rts
+
+main__ppu:
+.dbg line, "main.nt65", 79
+    sta a:$2100
+.dbg line, "main.nt65", 80
+    stz a:$4200
 .dbg line, "main.nt65", 81
+    sta f:$7e2100
+.dbg line, "main.nt65", 82
+    pea $2100
+.dbg line, "main.nt65", 83
     rts
 
 .segment "BANK1": absolute
-from_k:
-.dbg line, "main.nt65", 87
-    phk
-.dbg line, "main.nt65", 88
-    plb
+main__from_k:
 .dbg line, "main.nt65", 89
+    phk
+.dbg line, "main.nt65", 90
+    plb
+.dbg line, "main.nt65", 91
     rts
 
 .segment "CODE": absolute
-caller:
-.dbg line, "main.nt65", 95
-    jsr setup
-.dbg line, "main.nt65", 96
-    lda z:ptr
+main__caller:
 .dbg line, "main.nt65", 97
-    sta a:score
+    jsr main__setup
 .dbg line, "main.nt65", 98
-    rts
-
-move:
-.dbg line, "main.nt65", 103
-    mvn #$00, #$7e
-.dbg line, "main.nt65", 104
+    lda z:ptr
+.dbg line, "main.nt65", 99
     sta a:score
-.dbg line, "main.nt65", 105
+.dbg line, "main.nt65", 100
     rts
 
-relay:
-.dbg line, "main.nt65", 110
+main__move:
+.dbg line, "main.nt65", 105
+    mvn #$00, #$7e
+.dbg line, "main.nt65", 106
+    sta a:score
+.dbg line, "main.nt65", 107
+    rts
+
+main__relay:
+.dbg line, "main.nt65", 112
     beq relay__skip
-.dbg line, "main.nt65", 111
+.dbg line, "main.nt65", 113
     lda #1
 relay__skip:
-.dbg line, "main.nt65", 113
+.dbg line, "main.nt65", 115
     lda z:ptr
-.dbg line, "main.nt65", 114
+.dbg line, "main.nt65", 116
     rts
 
-fast:
-.dbg line, "main.nt65", 119
+main__fast:
+.dbg line, "main.nt65", 121
     lda z:$01
-.dbg line, "main.nt65", 120
+.dbg line, "main.nt65", 122
     rts
 
-tail:
-.dbg line, "main.nt65", 125
-    jmp hud
+main__tail:
+.dbg line, "main.nt65", 127
+    jmp main__hud

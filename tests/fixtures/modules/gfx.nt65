@@ -1,48 +1,61 @@
-; A module. Its symbols are private unless exported: `rows` and `palette` below are
-; named nowhere else in this program, and naming them from `main.nt65` is an error.
+; A module. Its symbols are private unless exported: `rows` below is named nowhere else in
+; this program, and naming it from another module is an error. Everything this module
+; exports reaches the linker with the module's name in front, `gfx__clear`.
+.module gfx
+
 .cpu 6502
 
-.export clear, SCREEN, ptr, Color, Sprite, screen, centred, glyphs
-
 .segment ZEROPAGE
-.data ptr:        .word
+.export .data ptr: .word
 
-SCREEN = $0400
+.export SCREEN = $0400
 rows   = 25
 
 ; An exported type is not a symbol to the linker: each of its members crosses instead, as
 ; the flat constant it becomes.
-.enum Color {
+.export .enum Color {
     black
     white
 }
 
-.struct Sprite {
+.export .struct Sprite {
 x:      .byte
 y:      .byte
 }
 
 ; A charmap, a function and a list are used by value, so exporting one writes nothing for
 ; the linker: what crosses is what they come to, written where they are used.
-.charmap screen {
+.export .charmap screen {
     'A'..'Z' = $01
 }
 
-.func centred(width) = (40 - width) / 2
+.export .func centred(width) = (40 - width) / 2
 
-.list glyphs {
+.export .list glyphs {
     $3c, $42, $3c
 }
 
-.segment CODE
-.scope palette {
-    .export border
+; Exporting a scope exports what it declares.
+.export .scope palette {
     border = $0f
+    ink    = rows - 24
 }
 
-.proc clear {
-    ; An interior label is exported from inside the routine it belongs to, and another file
-    ; names it `clear::again`.
+; Exporting mixed data exports its address and its named members; its positions stay its own.
+; An `as` gives a member the linker name hand-written ca65 uses.
+.segment RODATA
+.export .data tables {
+    .data lo: .byte 1, 2
+@middle:
+    .data hi: .byte 3, 4
+    .addr @middle
+}
+.export tables::hi as "gfx_high_bytes"
+
+.segment CODE
+.export .proc clear {
+    ; An interior label is exported one by one, and another module names it
+    ; `gfx::clear::again`.
     .export again
     ldy #0
 again:
@@ -52,5 +65,8 @@ again:
     rts
 }
 
-; Exported, so that what the file only declares counts as used.
-.export rows
+; Another module exports an `init` too; each is its module's own.
+.export .proc init {
+    lda #palette::border
+    jmp clear
+}

@@ -2,12 +2,12 @@
 .setcpu "65C02"
 .export _main
 .import pushax, pusha
-.import _memfill, _memsum, _memfill__fill, _install_blob, _call_blob, _beep
+.import _memfill, _memsum, mem__memfill__fill, _install_blob, _call_blob, _beep
 .import _read_key, _set_left_margin
 .import _sprites, _sprite_count, _cmd_table, _message, _glyphs, _glyphs_size
 .import _buffer
-.importzp _buffer_size   ; cc65 would emit .import here, and ld65 warns about the size
-.importzp Sprite__tile, Cmd__quit
+.import _buffer_size     ; as cc65 would; tables.nt65 exports it as absolute to match
+.importzp tables__Sprite__tile, tables__Cmd__quit
 .importzp ptr1, ptr2, tmp1
 
 RESULT = $0200          ; results area the harness dumps
@@ -42,14 +42,14 @@ _main:
         sta ptr2
         lda #0
         sta ptr2+1
-        jsr _memfill__fill
+        jsr mem__memfill__fill
         ; blob
         jsr _install_blob
         jsr _call_blob
         ; sprite_count, sprites[1].tile, cmd_table[quit], message[0], glyphs_size, buffer[0]
         lda _sprite_count
         sta RESULT+2
-        ldx #6 + Sprite__tile
+        ldx #6 + tables__Sprite__tile
         lda _sprites,x
         sta RESULT+3
         lda _sprites+1,x
@@ -64,7 +64,7 @@ _main:
         sta RESULT+8
         lda _glyphs+1
         sta RESULT+9
-        lda #Cmd__quit
+        lda #tables__Cmd__quit
         asl a
         tax
         lda _cmd_table,x

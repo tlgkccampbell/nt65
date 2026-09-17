@@ -32,6 +32,25 @@ public sealed class Symbol
     /// <summary>Where the name is written, which is what an editor selects and renames.</summary>
     public TextSpan NameSpan { get; }
 
+    /// <summary>
+    /// Whether other modules may name it: an <c>.export</c> names it, is written before its
+    /// declaration, or exports the scope, the data or the type it is declared in.
+    /// </summary>
+    public bool IsExported { get; internal set; }
+
+    /// <summary>
+    /// The name the linker knows it by, for an export: the <c>as</c> name its <c>.export</c>
+    /// gives, an import's own name, or its path with the module's in front, joined with
+    /// <c>__</c>. Null for a symbol that is not exported.
+    /// </summary>
+    public string? LinkerName { get; internal set; }
+
+    /// <summary>The address size an <c>.export</c> gives it, <c>.export K: abs</c>, or null when it gives none.</summary>
+    public AddressSize? ExportSize { get; internal set; }
+
+    /// <summary>Where the <c>.export</c> that exports it is written, or null for a symbol that is not exported.</summary>
+    public TextSpan? ExportSpan { get; internal set; }
+
     /// <summary>Whether it is a cheap local, <c>@name</c>, private to its proc or scope.</summary>
     public bool IsCheapLocal { get; internal init; }
 
@@ -216,6 +235,27 @@ public sealed class Symbol
         }
     }
 
+    /// <summary>The module the symbol is declared in, or null for a define or a file that names none.</summary>
+    public string? Module
+    {
+        get
+        {
+            var scope = Scope;
+            while (scope.Parent is { } outer)
+                scope = outer;
+            return scope.Module;
+        }
+    }
+
+    /// <summary>The qualified name with the module's in front, as another module would write it.</summary>
+    public string PathName => Module is { } module && IsReachableByPath ? $"{module}::{QualifiedName}" : QualifiedName;
+
+    /// <summary>
+    /// What the output calls it: the linker name of an export, and otherwise the name
+    /// <see cref="FlatName"/> starts from.
+    /// </summary>
+    public string OutputName => LinkerName ?? FlatName;
+
     /// <summary>Where the declaration is, as a diagnostic names it.</summary>
     public Span DeclarationSpan => Tree.GetSpan(NameSpan);
 
@@ -244,6 +284,12 @@ public sealed class Symbol
 
         _ => "function",
     };
+
+    /// <summary>
+    /// How wide an address it is to code in <paramref name="tree"/>. Another module sees the
+    /// size its export gives it, which may be wider than the size it has.
+    /// </summary>
+    public AddressSize? AddressSizeIn(SyntaxTree tree) => tree != Tree && ExportSize is { } exported ? exported : AddressSize;
 
     /// <summary>The symbol's kind and name, for debugging.</summary>
     public override string ToString() => $"{KindText} {QualifiedName}";

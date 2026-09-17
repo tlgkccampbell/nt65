@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -25,6 +26,7 @@ public sealed class ProgramModel
     private readonly SymbolMap resolved;
     private readonly SymbolMap declared;
     private readonly Forwarding forwarding;
+    private readonly Cpu cpu;
 
     // The names each file looked for in the others, found or not.
     private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> lookedUp;
@@ -36,7 +38,7 @@ public sealed class ProgramModel
     private readonly IReadOnlyList<Diagnostic> segmentValues;
 
     private ProgramModel(
-        IReadOnlyList<SemanticModel> files, SegmentTable segments, ProgramSymbols symbols,
+        IReadOnlyList<SemanticModel> files, SegmentTable segments, ProgramSymbols symbols, Cpu cpu,
         IReadOnlyList<ProgramSymbols.Module> modules, SymbolMap resolved, SymbolMap declared, Forwarding forwarding,
         IReadOnlyDictionary<string, IReadOnlySet<string>> lookedUp,
         IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> byFile, IReadOnlyList<Diagnostic> tables,
@@ -45,6 +47,7 @@ public sealed class ProgramModel
         Files = files;
         Segments = segments;
         Symbols = symbols;
+        this.cpu = cpu;
         this.modules = modules;
         this.resolved = resolved;
         this.declared = declared;
@@ -72,36 +75,32 @@ public sealed class ProgramModel
     /// <summary>
     /// Builds the program from <paramref name="trees"/>. <paramref name="defines"/>, where
     /// there is one, is the file the build configuration was read as: everything it
-    /// declares is a define, visible everywhere.
+    /// declares is a define, visible everywhere. <paramref name="cpu"/> is what the program
+    /// is built for, which decides the mnemonics no name may take; without one, the files'
+    /// <c>.cpu</c> items say.
     /// </summary>
     public static ProgramModel Create(
         IReadOnlyList<SyntaxTree> trees,
         SegmentTable segments,
         Configuration? configuration = null,
         SyntaxTree? defines = null,
-        Func<string, long?>? binaryLength = null)
+        Func<string, long?>? binaryLength = null,
+        Cpu? cpu = null)
     {
         configuration ??= Configuration.Everything;
-        // What is wrong with the program rather than with one file: a name two files export,
-        // a file shadowing a define.
+        var target = cpu ?? ProgramCpu.Resolve(trees, null, []);
+        // What is wrong with the program rather than with one file: two files that are one
+        // module, two exports under one linker name, a file shadowing a define.
         var tables = new List<Diagnostic>();
-        var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration)).ToList();
+        var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration, target, tree == defines)).ToList();
 
-        var modules = new List<ProgramSymbols.Module>();
-        foreach (var binder in binders)
-        {
-            // A define is exported by being one: it is visible in every file, as if
-            // declared and exported once.
-            var exported = binder.Tree == defines ? binder.FileScope.Symbols : binder.Exported();
-            if (binder.Tree == defines)
-            {
-                foreach (var symbol in exported)
-                    symbol.IsDefine = true;
-            }
-            modules.Add(new ProgramSymbols.Module(binder.Tree, binder.FileScope, exported));
-        }
+        // A define is visible in every file by being one, as if every file brought it in.
+        var modules = binders.Select(binder => binder.Module).ToList();
+        var defined = binders.FirstOrDefault(binder => binder.Tree == defines)?.FileScope.Symbols ?? [];
+        foreach (var symbol in defined)
+            symbol.IsDefine = true;
 
-        var symbols = ProgramSymbols.Build(modules, tables);
+        var symbols = ProgramSymbols.Build(modules, defined, tables);
         var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
         var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
         foreach (var tree in trees)
@@ -115,7 +114,7 @@ public sealed class ProgramModel
         var declaredMacros = binders.SelectMany(binder => binder.DeclaredMacros()).ToList();
         Macros.CheckRecursion(declaredMacros, symbol => symbol, (macro, found) => byFile[macro.Tree.Path].Add(found));
         var macros = new List<Diagnostic>();
-        Macros.CheckExportedUses(declaredMacros, symbols.IsExported, macros);
+        Macros.CheckExportedUses(declaredMacros, symbol => symbol.IsExported, macros);
         foreach (var diagnostic in macros)
             byFile[diagnostic.Span.File].Add(diagnostic);
 
@@ -144,7 +143,10 @@ public sealed class ProgramModel
         foreach (var result in bound)
             Value(result.Symbols, segments, resolved, byFile);
         foreach (var result in bound)
+        {
             CheckAliases(result.Symbols, resolved, byFile);
+            CheckExportSizes(result.Symbols, byFile);
+        }
         CheckDefineNames(modules, defines, tables);
 
         var all = byFile.Values.SelectMany(file => file).Concat(tables).Concat(segmentValues).ToList();
@@ -159,7 +161,7 @@ public sealed class ProgramModel
         foreach (var binder in binders)
             lookedUp.TryAdd(binder.Tree.Path, binder.LookedUp);
         return new ProgramModel(
-            files, segments, symbols, modules, resolved, declared, Forwarding.None, lookedUp,
+            files, segments, symbols, target, modules, resolved, declared, Forwarding.None, lookedUp,
             byFile.ToDictionary(pair => pair.Key, IReadOnlyList<Diagnostic> (pair) => pair.Value, StringComparer.Ordinal),
             tables, segmentValues);
     }
@@ -195,13 +197,13 @@ public sealed class ProgramModel
             byPath.TryAdd(file.Tree.Path, file);
         var others = Files.Where(file => !dirty.Contains(file.Tree.Path)).ToList();
 
-        var binders = dirty.ToDictionary(path => path, path => Binder.Collect(trees[path], Segments, configuration), StringComparer.Ordinal);
+        var binders = dirty.ToDictionary(
+            path => path, path => Binder.Collect(trees[path], Segments, configuration, cpu, trees[path] == defines), StringComparer.Ordinal);
         List<ProgramSymbols.Module> replaced = [.. modules.Select(module =>
-            binders.TryGetValue(module.Tree.Path, out var binder)
-                ? new ProgramSymbols.Module(binder.Tree, binder.FileScope, binder.Exported())
-                : module)];
+            binders.TryGetValue(module.Tree.Path, out var binder) ? binder.Module : module)];
         var tables = new List<Diagnostic>();
-        var symbols = ProgramSymbols.Build(replaced, tables);
+        var symbols = ProgramSymbols.Build(
+            replaced, replaced.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [], tables);
         var bound = binders.ToDictionary(pair => pair.Key, pair => pair.Value.Resolve(symbols), StringComparer.Ordinal);
 
         // Another file's symbol may hold on to one of these files' symbols itself, rather than
@@ -240,22 +242,27 @@ public sealed class ProgramModel
         var declaredMacros = binders.Values.SelectMany(binder => binder.DeclaredMacros()).ToList();
         Macros.CheckRecursion(declaredMacros, forwarding.Current, (macro, diagnostic) => found[macro.Tree.Path].Add(diagnostic));
         var macros = new List<Diagnostic>();
-        Macros.CheckExportedUses(declaredMacros, symbols.IsExported, macros);
+        Macros.CheckExportedUses(declaredMacros, symbol => symbol.IsExported, macros);
         foreach (var diagnostic in macros)
             found[diagnostic.Span.File].Add(diagnostic);
         foreach (var result in bound.Values)
             Value(result.Symbols, Segments, resolved, found);
         foreach (var result in bound.Values)
+        {
             CheckAliases(result.Symbols, resolved, found);
+            CheckExportSizes(result.Symbols, found);
+        }
         CheckDefineNames(replaced, defines, tables);
 
-        // A name whose meaning changed is news to every file that looked it up. A macro, a
-        // function or a list that names it in its body has changed too, and is news in turn to
-        // every file that looked that up.
+        // A name whose meaning changed is news to every file that looked it up in its module. A
+        // macro, a function or a list that names it in its body has changed too, and is news in
+        // turn to every file that looked that up. A module that changed its name or what it
+        // re-exports changed what paths mean, and every file is read again.
         foreach (var path in dirty)
         {
-            var before = FileInterface.Of(byPath[path].Symbols, Symbols.IsExported, this.resolved);
-            var after = FileInterface.Of(bound[path].Symbols, symbols.IsExported, resolved);
+            var module = modules.First(module => module.Tree.Path == path);
+            var before = FileInterface.Of(module, byPath[path].Symbols, this.resolved);
+            var after = FileInterface.Of(binders[path].Module, bound[path].Symbols, resolved);
             HashSet<string> changed = [.. FileInterface.Changed(before, after)];
 
             // Two declarations under one name leave a file that names it with no telling which.
@@ -263,10 +270,15 @@ public sealed class ProgramModel
                 changed.UnionWith(before.Keys.Concat(after.Keys));
             if (changed.Count == 0)
                 continue;
-            var heads = changed.Select(name => name.Split("::")[0]).ToHashSet(StringComparer.Ordinal);
+            var everything = changed.Any(FileInterface.IsModuleWide);
+            var heads = changed.Select(name => name.Split("::")[0])
+                .SelectMany(head => new[] { $"member:{module.Name}::{head}", "name:" + head })
+                .ToHashSet(StringComparer.Ordinal);
             foreach (var other in others)
             {
-                if (lookedUp.GetValueOrDefault(other.Tree.Path) is { } looked && looked.Overlaps(heads))
+                if (other.Tree == defines)
+                    continue;
+                if (everything || lookedUp.GetValueOrDefault(other.Tree.Path) is { } looked && looked.Overlaps(heads))
                     affected.Add(other.Tree.Path);
             }
         }
@@ -297,7 +309,7 @@ public sealed class ProgramModel
         foreach (var (path, binder) in binders)
             lookups[path] = binder.LookedUp;
         return new ProgramModel(
-            files, Segments, symbols, replaced, resolved, declared, forwarding, lookups, byFile, tables, segmentValuesNow);
+            files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, byFile, tables, segmentValuesNow);
     }
 
     /// <summary>
@@ -438,6 +450,34 @@ public sealed class ProgramModel
         foreach (var other in linked)
             yield return resolved.Current(other);
     }
+
+    /// <summary>
+    /// An export may be given a wider address size than its own, <c>.export K: abs</c>, so that
+    /// what imports it is sized to what it may later become; a narrower one would tell the
+    /// linker, and every other module, something that is not so.
+    /// </summary>
+    private static void CheckExportSizes(IEnumerable<Symbol> symbols, Dictionary<string, List<Diagnostic>> byFile)
+    {
+        foreach (var symbol in symbols)
+        {
+            if (symbol is not { ExportSize: { } given, ExportSpan: { } at })
+                continue;
+            var actual = symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize();
+            if (actual is { } size && given < size)
+            {
+                byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at), Severity.Error,
+                    $"`{symbol.Name}` is `{Spell(size)}`, and an export may widen an address size but not narrow it: `{symbol.Name}: {Spell(size)}` or wider"));
+            }
+        }
+    }
+
+    /// <summary>An address size as an export or an import writes it.</summary>
+    private static string Spell(AddressSize size) => size switch
+    {
+        AddressSize.ZeroPage => "zp",
+        AddressSize.Absolute => "abs",
+        _ => "far",
+    };
 
     /// <summary>A file may not declare a name the build configuration already gives it.</summary>
     private static void CheckDefineNames(

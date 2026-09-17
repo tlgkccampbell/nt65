@@ -7,13 +7,13 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "lib.nt65", 564, 0
+.dbg file, "lib.nt65", 581, 0
 
-.export SCREEN
-.export tiles
+.export lib__SCREEN
+.export lib__tiles
 
-SCREEN = $0400
+lib__SCREEN = $0400
 
 .segment "RODATA": absolute
-.dbg line, "lib.nt65", 8
-tiles:  .byte 0, 1, 2, 3
+.dbg line, "lib.nt65", 10
+lib__tiles: .byte 0, 1, 2, 3

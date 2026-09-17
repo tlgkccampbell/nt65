@@ -1,0 +1,4 @@
+; What the rest of the program uses of the machine, whichever submodule defines it.
+.module apple2
+
+.export .use apple2::hw::{SPKR, TXTPAGE1, read_key, set_left_margin}

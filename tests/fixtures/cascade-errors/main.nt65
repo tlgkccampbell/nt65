@@ -1,4 +1,6 @@
 ; One mistake, one message: what a mistake leaves behind is not reported again.
+.module main
+
 .cpu 65816
 
 ; A parameter with a reserved name is reported where it is declared, and is still the
@@ -24,10 +26,14 @@ q:      .byte
 .proc main: a8, i16 {
     load!($10)
 
-    ; A name another file keeps to itself, named three times.
-    lda #twice(1)           ;! error: `twice` is declared in `lib.nt65` and is not exported
-    lda #twice(2)
-    lda #twice(3)
+    ; A name another module keeps to itself, named three times.
+    lda #lib::twice(1)      ;! error: `lib::twice` is not exported by module `lib`
+    lda #lib::twice(2)
+    lda #lib::twice(3)
+
+    ; A name another module exports, named as if it were declared here: said once for each.
+    lda #thrice(1)          ;! error: `thrice` is not declared here, and module `lib` exports it: write `lib::thrice`, or bring it in with `.use lib::thrice`
+    lda #lib::thrice(1)
 
     ; A call through a pointer with no `.next` leaves the state as it was.
     jsr (table,x)           ;! error: `jsr (table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls

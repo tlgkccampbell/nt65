@@ -1,4 +1,6 @@
 ; Fill four pages of screen memory with spaces, forever.
+.module main
+
 .cpu 6502
 
 SCREEN       = $0400

@@ -1,5 +1,7 @@
 ; A segment's address size is declared exactly once per program, and a block may only
 ; name a segment that something declares.
+.module main
+
 .segment ZP2: zp
 .segment WRAM: abs, bank = $7e
 

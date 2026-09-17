@@ -1,14 +1,16 @@
-; Hardware constants from asm/apple2.inc, checked at link time against asm/hwconst.s.
-; (Re-exporting them from here emits both .import and .export of each name, which ca65
-; rejects, so every user has to repeat its own checked imports.)
-.import KBD = $C000, KBDSTRB = $C010, SPKR = $C030
-.import TXTPAGE1 = $0400
-.import WNDLFT = $20
+; Hardware constants from asm/apple2.inc, checked at link time against asm/hwconst.s. They are
+; imported once, here, and every module that uses one imports it as if it had declared it.
+.module apple2::hw
+
+.export .import KBD = $C000, KBDSTRB = $C010, SPKR = $C030
+.export .import TXTPAGE1 = $0400
+.export .import WNDLFT = $20
+
+.export read_key as "_read_key", set_left_margin as "_set_left_margin"
 
 ; uint8 read_key(void): returns the key with the strobe bit clear, 0 if none waiting.
-.export _read_key
 .segment CODE
-.proc _read_key {
+.proc read_key {
     ldx #0
     lda KBD
     bpl @none
@@ -21,8 +23,7 @@
 }
 
 ; void set_left_margin(unsigned char col)
-.export _set_left_margin
-.proc _set_left_margin {
+.proc set_left_margin {
     sta WNDLFT
     rts
 }

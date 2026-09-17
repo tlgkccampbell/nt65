@@ -31,6 +31,9 @@ public sealed class Scope
     /// <summary>The symbol this scope belongs to, or null for a file or an anonymous <c>.scope</c>.</summary>
     public Symbol? Owner { get; }
 
+    /// <summary>For a file, the module its <c>.module</c> names; null for every other scope.</summary>
+    public string? Module { get; internal set; }
+
     /// <summary>Everything declared here, cheap locals included, in source order.</summary>
     public IReadOnlyList<Symbol> Symbols => order;
 

@@ -1,18 +1,19 @@
 ; void beep(void) -- clicks the speaker, using the hand-written wait_short.
-.import wait_short: proc()
-.import SPKR = $C030, TXTPAGE1 = $0400
+.module sound
 
-.export _beep
+.use apple2::{SPKR, TXTPAGE1}
+
+.export beep as "_beep"
 
 BEEP_CYCLES = 32
 
 .segment CODE
-.proc _beep {
+.proc beep {
     ldy #BEEP_CYCLES
 @loop:
     lda SPKR            ; toggles the speaker
     lda #40
-    jsr wait_short
+    jsr cc65::wait_short
     dey
     bne @loop
     .if DEBUG {

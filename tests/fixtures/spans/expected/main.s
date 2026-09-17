@@ -7,54 +7,54 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1125, 0
+.dbg file, "main.nt65", 1139, 0
 
-.export header
-.export count
+.export main__header
+.export main__count
 
 .segment "CODE": absolute
 reloc:
-.dbg line, "main.nt65", 9
-    lda a:source
-.dbg line, "main.nt65", 10
-    sta a:dest
 .dbg line, "main.nt65", 11
+    lda a:source
+.dbg line, "main.nt65", 12
+    sta a:dest
+.dbg line, "main.nt65", 13
     rts
 reloc__end:
 
 .segment "RODATA": absolute
-header:
-.dbg line, "main.nt65", 18
-    .addr reloc
-.dbg line, "main.nt65", 19
-    .word (reloc__end - reloc)
+main__header:
 .dbg line, "main.nt65", 20
+    .addr reloc
+.dbg line, "main.nt65", 21
+    .word (reloc__end - reloc)
+.dbg line, "main.nt65", 22
     .addr reloc__end
 
-.dbg line, "main.nt65", 23
+.dbg line, "main.nt65", 25
 table:  .byte 1, 2, 4, 8
 table__end:
-.dbg line, "main.nt65", 24
-count:  .byte (table__end - table)
+.dbg line, "main.nt65", 26
+main__count: .byte (table__end - table)
 
 .segment "CODE": absolute
 copy:
-.dbg line, "main.nt65", 28
+.dbg line, "main.nt65", 30
     ldx #(reloc__end - reloc)
 copy__loop:
-.dbg line, "main.nt65", 30
-    lda a:reloc,x
-.dbg line, "main.nt65", 31
-    sta a:dest,x
 .dbg line, "main.nt65", 32
-    dex
+    lda a:reloc,x
 .dbg line, "main.nt65", 33
-    bne copy__loop
+    sta a:dest,x
 .dbg line, "main.nt65", 34
+    dex
+.dbg line, "main.nt65", 35
+    bne copy__loop
+.dbg line, "main.nt65", 36
     rts
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 41
+.dbg line, "main.nt65", 43
 source: .res 1
-.dbg line, "main.nt65", 42
+.dbg line, "main.nt65", 44
 dest:   .res 1

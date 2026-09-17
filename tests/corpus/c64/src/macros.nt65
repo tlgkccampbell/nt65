@@ -1,4 +1,7 @@
-; Shared instruction idioms.
+; Shared instruction idioms. An exported macro may name only what its module exports, or
+; another module does: its expansion lands in the module that calls it.
+.module macros
+
 .cpu 6502
 
 .export add16, sub16, cmp16, mov16, inc16, if, while_ne, poke, trace, save_regs, restore_regs
@@ -111,6 +114,6 @@
 .macro trace(color: const) {
     .if DEBUG {
         lda #color
-        sta VIC_BORDER
+        sta hw::vic::BORDER
     }
 }

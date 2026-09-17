@@ -1,5 +1,7 @@
 ; Setting widths with `.ensure`, naming stack frames with `.frame`, and macros that declare
 ; the state they expect and leave.
+.module main
+
 .cpu 65816
 
 .export copy, setup, mixed, unknown, entered, adder

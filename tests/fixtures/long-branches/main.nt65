@@ -3,6 +3,8 @@
 ; as the inverted branch over a `jmp`. ca65's own `longbranch` package can choose the
 ; short form only for a target it has already seen, so its forward branches are always
 ; long; here they are not.
+.module main
+
 .cpu 6502
 
 ; Forward, and near enough: the short branch, exactly as `beq` would have been written.

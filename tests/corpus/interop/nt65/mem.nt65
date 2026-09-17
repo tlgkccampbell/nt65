@@ -1,14 +1,16 @@
-; extra line
 ; void __fastcall__ memfill(void* p, unsigned char v, unsigned n);
 ; unsigned __fastcall__ memsum(const unsigned char* p, unsigned char n);
-.import sp: zp, ptr1: zp, ptr2: zp, tmp1: zp
-.import popa: proc(), popax: proc()
+.module mem
 
-.export _memfill, _memsum
+.use cc65::*
+
+; C names these, so each is exported under the name cc65 gives a C function.
+.export memfill as "_memfill", memsum as "_memsum"
 
 .segment CODE
-.proc _memfill {
-    ; An entry for ca65 callers that have set ptr1 (dest), tmp1 (value), ptr2 (count).
+.proc memfill {
+    ; An entry for ca65 callers that have set ptr1 (dest), tmp1 (value), ptr2 (count),
+    ; which they name `mem__memfill__fill`.
     .export fill
     sta ptr2
     stx ptr2+1
@@ -41,7 +43,7 @@ fill:
     rts
 }
 
-.proc _memsum {
+.proc memsum {
     sta tmp1            ; n
     jsr popax
     sta ptr1

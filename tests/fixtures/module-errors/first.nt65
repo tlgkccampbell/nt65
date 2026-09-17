@@ -1,0 +1,33 @@
+; What one module keeps to itself, and what two modules may not both claim.
+.module first
+
+.export shared as "common", WIDE: abs
+.export SMALL: zp       ;! error: `SMALL` is `abs`, and an export may widen an address size but not narrow it: `SMALL: abs` or wider
+
+; A segment the project file already declares.
+.segment VRAM: abs    ;! error: segment "VRAM" is already declared
+
+shared = 1
+SMALL  = $1234
+WIDE   = $12
+
+hidden = 2
+
+; `pal::ink` and `pal__ink` both become `first__pal__ink` for the linker.
+.export .scope pal {
+    ink = 1
+}
+pal__ink = 2
+.export pal__ink        ;! error: `first::pal__ink` and `first::pal::ink` are both exported to the linker as `first__pal__ink`
+
+; A module's names come after it says which module it is, and it says so once.
+.module again           ;! error: a file is one module, and names it once
+
+; An exported macro expands in the module that calls it, where it has to be able to reach
+; everything it names.
+.export .macro poke(value) {        ;! error: `poke!` is exported but names `shadow`, which is not: a macro expands in the module that calls it, and what it names there has to be exported
+    lda #value
+    sta shadow
+}
+.segment ZEROPAGE
+.data shadow: .byte

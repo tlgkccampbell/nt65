@@ -1,0 +1,33 @@
+; SNES register addresses. The rest of the program reaches them through the `snes` facade.
+.module snes::reg
+
+.cpu 65816
+
+; PPU registers ($21xx), mirrored in banks $00-$3f and $80-$bf
+.export INIDISP = $2100
+.export OBSEL   = $2101
+.export BGMODE  = $2105
+.export BG1SC   = $2107
+.export BG12NBA = $210b
+.export VMAIN   = $2115
+.export VMADDL  = $2116
+.export CGADD   = $2121
+.export TM      = $212c
+.export SETINI  = $2133
+
+; CPU registers ($42xx)
+.export NMITIMEN = $4200
+.export WRMPYA   = $4202
+.export MEMSEL   = $420d
+.export MDMAEN   = $420b
+.export HDMAEN   = $420c
+.export RDNMI    = $4210
+.export HVBJOY   = $4212
+.export JOY1L    = $4218
+
+; DMA channel 0 ($43x0)
+.export DMAP0 = $4300
+.export BBAD0 = $4301
+.export A1T0L = $4302
+.export A1B0  = $4304
+.export DAS0L = $4305

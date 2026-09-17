@@ -7,9 +7,11 @@ namespace Norristown.Emit;
 /// output contains no ca65 <c>.proc</c>, <c>.scope</c> or cheap local labels, so it never
 /// depends on how ca65 resolves names.
 /// <para>
-/// A top-level name keeps its spelling and a scoped name <c>outer::inner</c> becomes
-/// <c>outer__inner</c>. Those spellings are fixed, because other files and hand-written
-/// ca65 refer to them once exported, so two of them that collide is an error rather than a
+/// An export is its linker name: its path with its module's in front, <c>gfx__clear</c> for
+/// <c>clear</c> in module <c>gfx</c>, or the name its <c>as</c> gives. A top-level name that is
+/// not exported keeps its spelling, and a scoped name <c>outer::inner</c> becomes
+/// <c>outer__inner</c>. Those spellings are fixed, because other modules and hand-written
+/// ca65 refer to them, so two of them that collide is an error rather than a
 /// rename. Everything else — cheap locals, and names inside an anonymous scope — is derived
 /// from the source and made unique, as <c>draw__loop</c> and <c>draw__loop_2</c>.
 /// </para>
@@ -37,19 +39,21 @@ public sealed class FlatNames
         // What another file exports keeps the spelling it was exported under, because that is
         // the name in the object file; a local name claims its spelling after them.
         foreach (var symbol in model.ExternalSymbols)
-            taken[symbol.FlatName] = symbol;
+            taken[symbol.OutputName] = symbol;
 
         // The fixed spellings next, so that a generated name gives way to them and not the
         // other way round.
         foreach (var symbol in model.Symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var name = symbol.FlatName;
+            var name = symbol.OutputName;
             if (taken.TryGetValue(name, out var other))
             {
                 // Two declarations of the same name in the same scope are one problem, which
                 // binding has already reported; only names that differ in the source and meet
                 // in the output are news.
-                if (other is not null && other.QualifiedName != symbol.QualifiedName)
+                // Two exports that meet are the program's to report, whichever modules they are in.
+                if (other is not null && other.QualifiedName != symbol.QualifiedName
+                    && (other.LinkerName is null || symbol.LinkerName is null))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
                         $"`{symbol.QualifiedName}` and `{other.QualifiedName}` both become `{name}` in the output",
@@ -81,7 +85,7 @@ public sealed class FlatNames
     /// What <paramref name="symbol"/> is called in the output. A symbol another file
     /// declares keeps its own file's spelling, which is what the linker sees.
     /// </summary>
-    public string Of(Symbol symbol) => names.GetValueOrDefault(symbol, symbol.FlatName);
+    public string Of(Symbol symbol) => names.GetValueOrDefault(symbol, symbol.OutputName);
 
     /// <summary>
     /// The same, for a symbol being written out at <paramref name="on"/>. A name a macro

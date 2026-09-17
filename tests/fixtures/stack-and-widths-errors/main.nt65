@@ -1,5 +1,7 @@
 ; What is wrong with `.ensure`, `.frame` and macro state signatures, each where it can be
 ; fixed.
+.module main
+
 .cpu 65816
 
 .struct Locals {

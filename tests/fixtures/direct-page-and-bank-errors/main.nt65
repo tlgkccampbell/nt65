@@ -1,4 +1,6 @@
 ; What is wrong with the direct page and the data bank, each where it can be fixed.
+.module main
+
 .cpu 65816
 
 .segment ZP2

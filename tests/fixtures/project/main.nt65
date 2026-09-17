@@ -1,6 +1,8 @@
 ; The project file says what this program is built for, where its output goes, what its
 ; defines are worth and which segments it has. Nothing here repeats any of it.
 
+.module main
+
 .segment FAST
 .data scratch:    .word
 

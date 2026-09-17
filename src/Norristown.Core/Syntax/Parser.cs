@@ -248,6 +248,8 @@ internal sealed class Parser
             SyntaxKind.ScopeDeclaration => Finish(ParseScope()),
             SyntaxKind.ExportDirective => Finish(ParseExport()),
             SyntaxKind.ImportDirective => Finish(ParseImport()),
+            SyntaxKind.ModuleDirective => Finish(ParseModule()),
+            SyntaxKind.UseDirective => Finish(ParseUse()),
             SyntaxKind.EnumDeclaration => Finish(ParseTypeBlock(SyntaxKind.EnumDeclaration, named: false)),
             SyntaxKind.StructDeclaration => Finish(ParseTypeBlock(SyntaxKind.StructDeclaration, named: false)),
             SyntaxKind.UnionDeclaration => Finish(ParseTypeBlock(SyntaxKind.UnionDeclaration, named: false)),
@@ -1047,18 +1049,169 @@ internal sealed class Parser
         return null;
     }
 
+    /// <summary>
+    /// <c>.export</c> before a declaration, which exports what it declares, or a list of names:
+    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>.
+    /// </summary>
     private GreenSyntax ParseExport()
+    {
+        var export = Advance();
+        if (Kind == SyntaxKind.Directive && ParseExportable() is { } declaration)
+            return new GreenSyntax(SyntaxKind.ExportedDeclaration, [export, declaration]);
+        if (Kind == SyntaxKind.Directive)
+        {
+            Report($"`.export` goes before a declaration, and `{Current.Text}` declares nothing to export");
+            return new GreenSyntax(SyntaxKind.ExportDirective, [export]);
+        }
+        if (AtName && Next == SyntaxKind.Equals)
+        {
+            var name = Advance();
+            var equals = Advance();
+            return new GreenSyntax(SyntaxKind.ExportedDeclaration,
+                [export, new GreenSyntax(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()])]);
+        }
+
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(export);
+        ParseCommaSeparated(children, ParseExportItem);
+        return new GreenSyntax(SyntaxKind.ExportDirective, children.ToImmutable());
+    }
+
+    /// <summary>The declaration after <c>.export</c>, or null when the directive declares nothing that can be exported.</summary>
+    private GreenSyntax? ParseExportable() => SyntaxFacts.LineDirectiveKind(Current.Text) switch
+    {
+        SyntaxKind.DataDeclaration => ParseDataDeclaration(),
+        SyntaxKind.ProcDeclaration => ParseProc(),
+        SyntaxKind.ScopeDeclaration => ParseScope(),
+        SyntaxKind.ImportDirective => ParseImport(),
+        SyntaxKind.UseDirective => ParseUse(),
+        SyntaxKind.EnumDeclaration => ParseTypeBlock(SyntaxKind.EnumDeclaration, named: false),
+        SyntaxKind.StructDeclaration => ParseTypeBlock(SyntaxKind.StructDeclaration, named: false),
+        SyntaxKind.UnionDeclaration => ParseTypeBlock(SyntaxKind.UnionDeclaration, named: false),
+        SyntaxKind.CharmapDeclaration => ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true),
+        SyntaxKind.ListDeclaration => ParseTypeBlock(SyntaxKind.ListDeclaration, named: true),
+        SyntaxKind.FuncDeclaration => ParseFunc(),
+        SyntaxKind.MacroDeclaration => ParseMacro(),
+        _ => null,
+    };
+
+    /// <summary><c>name</c> or <c>outer::inner</c>, then <c>: size</c> or <c>as "linker_name"</c>.</summary>
+    private GreenNode? ParseExportItem()
+    {
+        if (!AtName)
+        {
+            Report("expected a name to export");
+            return null;
+        }
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(ParseName());
+        if (Kind == SyntaxKind.Colon)
+        {
+            children.Add(Advance());
+            if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
+                children.Add(Advance());
+            else
+                Report("expected `zp`, `abs` or `far`");
+        }
+        if (AtWord("as"))
+        {
+            children.Add(Advance());
+            if (Kind == SyntaxKind.StringLiteral)
+                children.Add(Advance());
+            else
+                Report("expected the linker name, in quotes: `as \"_name\"`");
+        }
+        return new GreenSyntax(SyntaxKind.ExportItem, children.ToImmutable());
+    }
+
+    /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
+    private GreenSyntax ParseModule()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
-        ParseCommaSeparated(children, () =>
+        if (Kind == SyntaxKind.StringLiteral)
+            Report("a module name is written without quotes: `.module hw::vic`");
+        else
+            ParsePath(children, "expected the module's name: `.module name`");
+        return new GreenSyntax(SyntaxKind.ModuleDirective, children.ToImmutable());
+    }
+
+    /// <summary>
+    /// <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>. A
+    /// path is always written from the root of the modules, and names at least a module and
+    /// one name in it, or a module.
+    /// </summary>
+    private GreenSyntax ParseUse()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (!ParsePath(children, "expected what to use: `.use module::name`"))
+            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+
+        if (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Star or SyntaxKind.OpenBrace)
         {
-            if (AtName)
-                return Advance();
-            Report("expected a name to export");
+            children.Add(Advance());
+            if (Kind == SyntaxKind.Star)
+            {
+                children.Add(Advance());
+                return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+            }
+            children.Add(Advance());
+            ParseCommaSeparated(children, ParseUseItem);
+            if (Kind == SyntaxKind.CloseBrace)
+                children.Add(Advance());
+            else
+                ReportOnce("expected `}`");
+            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+        }
+        ParseUseAlias(children);
+        return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+    }
+
+    /// <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
+    private GreenNode? ParseUseItem()
+    {
+        if (!AtName)
+        {
+            ReportOnce("expected a name");
             return null;
-        });
-        return new GreenSyntax(SyntaxKind.ExportDirective, children.ToImmutable());
+        }
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        ParseUseAlias(children);
+        return new GreenSyntax(SyntaxKind.UseItem, children.ToImmutable());
+    }
+
+    /// <summary><c>as name</c>, when it is written.</summary>
+    private void ParseUseAlias(ImmutableArray<GreenNode>.Builder children)
+    {
+        if (!AtWord("as"))
+            return;
+        children.Add(Advance());
+        if (AtName)
+            children.Add(Advance());
+        else
+            ReportOnce("expected the name to bring it in as: `as name`");
+    }
+
+    /// <summary>
+    /// <c>a::b::c</c> as tokens, stopping before a <c>::</c> that is not followed by a name.
+    /// False when not even the first name is there.
+    /// </summary>
+    private bool ParsePath(ImmutableArray<GreenNode>.Builder children, string expected)
+    {
+        if (!AtName)
+        {
+            Report(expected);
+            return false;
+        }
+        children.Add(Advance());
+        while (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
+        {
+            children.Add(Advance());
+            children.Add(Advance());
+        }
+        return true;
     }
 
     private GreenSyntax ParseImport()

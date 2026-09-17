@@ -60,10 +60,18 @@ public sealed class SyntaxNode
     /// For a line, what its tokens parse to; null for every other node. A line's tokens are
     /// reachable both directly and through the statement, which holds the same tokens in the
     /// same order.
+    /// <para>
+    /// A declaration written after <c>.export</c> is the line's statement, so it reads as the
+    /// same declaration without it; <see cref="IsExported"/> says the <c>.export</c> is there.
+    /// </para>
     /// </summary>
-    public SyntaxNode? Statement => Green is GreenLine
-        ? statement ??= new SyntaxNode(Tree, this, Tree.Statement(LineIndex), Position)
-        : null;
+    public SyntaxNode? Statement => Green is GreenLine ? statement ??= Parsed() : null;
+
+    /// <summary>Whether this is a declaration written after <c>.export</c>.</summary>
+    public bool IsExported => Parent is { Kind: SyntaxKind.ExportedDeclaration };
+
+    /// <summary>The <c>.export</c> a declaration is written after, or null.</summary>
+    public SyntaxToken? ExportToken => IsExported ? Parent!.ChildTokens[0] : null;
 
     /// <summary>Child lines and blocks of a file or block, or a line's statement.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
@@ -156,5 +164,11 @@ public sealed class SyntaxNode
             Measure(slot, position, ref start, ref end);
             position += slot.FullWidth;
         }
+    }
+
+    private SyntaxNode Parsed()
+    {
+        var parsed = new SyntaxNode(Tree, this, Tree.Statement(LineIndex), Position);
+        return parsed.Kind == SyntaxKind.ExportedDeclaration && parsed.ChildNodes.Length > 0 ? parsed.ChildNodes[0] : parsed;
     }
 }

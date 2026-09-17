@@ -7,78 +7,78 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 897, 0
+.dbg file, "main.nt65", 911, 0
 
-.export words
-.export wide
-.export here
-.export there
-.export greeting
-.export padding
-.export escaped
-.export bytes
-.export sums
+.export main__words
+.export main__wide
+.export main__here
+.export main__there
+.export main__greeting
+.export main__padding
+.export main__escaped
+.export main__bytes
+.export main__sums
 
 SCREEN = $0400
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 9
-table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-.dbg line, "main.nt65", 10
-words:      .word $1234, table
 .dbg line, "main.nt65", 11
-wide:       .dword $12345678
+table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
 .dbg line, "main.nt65", 12
-here:       .addr table
+main__words: .word $1234, table
 .dbg line, "main.nt65", 13
-there:      .faraddr table
+main__wide: .dword $12345678
 .dbg line, "main.nt65", 14
-greeting:   .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
-padding:
-.dbg line, "main.nt65", 17
+main__here: .addr table
+.dbg line, "main.nt65", 15
+main__there: .faraddr table
+.dbg line, "main.nt65", 16
+main__greeting: .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
+main__padding:
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 17
+.dbg line, "main.nt65", 19
         .byte $ff
-.dbg line, "main.nt65", 20
-escaped:    .byte $61, $0a, $62, $7f  ; "a\nb", '\x7f'
-.dbg line, "main.nt65", 21
-bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
 .dbg line, "main.nt65", 22
-sums:       .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
+main__escaped: .byte $61, $0a, $62, $7f  ; "a\nb", '\x7f'
+.dbg line, "main.nt65", 23
+main__bytes: .byte <SCREEN, >SCREEN, SCREEN .mod 256
+.dbg line, "main.nt65", 24
+main__sums: .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
 
 .segment "CODE": absolute
 use:
-.dbg line, "main.nt65", 26
-    lda #$20                        ; ' '
-.dbg line, "main.nt65", 27
-    lda a:table+1
 .dbg line, "main.nt65", 28
+    lda #$20                        ; ' '
+.dbg line, "main.nt65", 29
+    lda a:table+1
+.dbg line, "main.nt65", 30
     rts

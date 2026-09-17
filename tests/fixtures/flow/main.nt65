@@ -3,6 +3,8 @@
 ; takes an annotation that tells the analysis what it cannot see for itself. On the 6502
 ; and the 65C02 nothing consumes processor state, so the annotations are accepted and
 ; their names checked, and none is required.
+.module main
+
 .cpu 65c02
 
 .export dispatch

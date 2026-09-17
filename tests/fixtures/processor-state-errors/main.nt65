@@ -1,5 +1,7 @@
 ; What the processor-state analysis reports, each where the problem is used rather than
 ; where two paths happen to disagree.
+.module main
+
 .cpu 65816
 
 .import printf: proc(a8, i16)

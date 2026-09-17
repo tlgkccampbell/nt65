@@ -11,6 +11,7 @@ namespace Norristown.Tests.Semantics;
 public sealed class TypeSyntaxTests
 {
     private const string Source = """
+        .module main
         .enum Color {
             red
             green = 5
@@ -89,7 +90,7 @@ public sealed class TypeSyntaxTests
     [Fact]
     public void DataOfATypeHasItsFields()
     {
-        var model = Analysis.Model(".struct Point {\nx:      .word\n}\n\n.data here: .type Point\n");
+        var model = Analysis.Model(".module main\n.struct Point {\nx:      .word\n}\n\n.data here: .type Point\n");
 
         Assert.Equal(SymbolKind.Data, model.Symbol("here").Kind);
         Assert.NotNull(model.Symbol("here").TypeExpression);

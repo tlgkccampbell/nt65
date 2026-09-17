@@ -237,10 +237,10 @@ public static class Macros
             {
                 if (used.Tree != macro.Tree || used.IsDefine || isExported(used))
                     continue;
-                diagnostics.Add(new Diagnostic(at, Severity.Error,
-                    $"`{macro.Name}` is exported and uses `{used.DisplayName}`, which is not. A macro "
-                    + "expands in the file that calls it, and what it names there has to be reachable",
-                    [new RelatedSpan(used.DeclarationSpan, "declared here")]));
+                diagnostics.Add(new Diagnostic(macro.DeclarationSpan, Severity.Error,
+                    $"`{macro.Name}!` is exported but names `{used.DisplayName}`, which is not: a macro expands "
+                    + "in the module that calls it, and what it names there has to be exported",
+                    [new RelatedSpan(at, "named here")]));
             }
         }
     }
@@ -250,7 +250,7 @@ public static class Macros
     /// would either declare a name in the caller or make something program-wide depend on
     /// how many times the macro is called.
     /// </summary>
-    public static string? Forbidden(SyntaxNode statement) => statement.Kind switch
+    public static string? Forbidden(SyntaxNode statement) => (statement.IsExported ? SyntaxKind.ExportDirective : statement.Kind) switch
     {
         SyntaxKind.ExportDirective =>
             "`.export` belongs outside a macro body: other files resolve names through the "

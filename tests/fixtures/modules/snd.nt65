@@ -1,0 +1,11 @@
+; A second module with an `init` of its own. The linker sees `snd__init` beside `gfx__init`.
+.module snd
+
+.cpu 6502
+
+.segment CODE
+.export .proc init {
+    lda #hw::sid::VOLUME
+    sta hw::sid::volume
+    rts
+}

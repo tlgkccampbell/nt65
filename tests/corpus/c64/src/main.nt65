@@ -1,5 +1,13 @@
 ; Entry point, state machine and main loop.
+.module main
+
 .cpu 6502
+
+.use hw::*
+.use zp::*
+.use macros::{poke, trace, if}
+.use text::{screen, print_at, print_score, clear_screen, set_cursor}
+.use sprite::{player_update, player_reset}
 
 .export start
 
@@ -29,13 +37,13 @@
 ; Straight after the BASIC stub, whose SYS names this address.
 .segment STARTUP
 .proc start {
-    jsr CLRSCR
-    poke!(VIC_BORDER, Color::black)
-    poke!(VIC_BG0, Color::black)
-    poke!(VIC_MEMSETUP, $15)    ; upper case charset
+    jsr kernal::CLRSCR
+    poke!(vic::BORDER, Color::black)
+    poke!(vic::BG0, Color::black)
+    poke!(vic::MEMSETUP, $15)    ; upper case charset
     jsr clear_screen
-    jsr sprite_init
-    jsr irq_install
+    jsr sprite::init
+    jsr irq::install
 
     lda #State::title
     sta game_state
@@ -137,11 +145,11 @@
     } else {
         lda #Color::yellow
     }
-    sta VIC_SPR0_COL
+    sta vic::SPR0_COL
     dec timer
     if!(eq) {
         lda #Color::yellow
-        sta VIC_SPR0_COL
+        sta vic::SPR0_COL
         dec lives
         if!(eq) {
             lda #State::game_over

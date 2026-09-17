@@ -55,6 +55,8 @@ public static class SyntaxFacts
         [".scope"] = SyntaxKind.ScopeDeclaration,
         [".export"] = SyntaxKind.ExportDirective,
         [".import"] = SyntaxKind.ImportDirective,
+        [".module"] = SyntaxKind.ModuleDirective,
+        [".use"] = SyntaxKind.UseDirective,
         [".byte"] = SyntaxKind.DataDirective,
         [".word"] = SyntaxKind.DataDirective,
         [".dword"] = SyntaxKind.DataDirective,

@@ -7,47 +7,68 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 1179, 0
+.dbg file, "gfx.nt65", 1672, 0
 
-.export clear
-.export clear__end
-.export SCREEN
-.exportzp ptr
-.exportzp Color__black
-.exportzp Color__white
-.exportzp Sprite__x
-.exportzp Sprite__y
-.exportzp palette__border
-.export clear__again
-.exportzp rows
+.exportzp gfx__ptr
+.export gfx__SCREEN
+.exportzp gfx__Color__black
+.exportzp gfx__Color__white
+.exportzp gfx__Sprite__x
+.exportzp gfx__Sprite__y
+.exportzp gfx__palette__border
+.exportzp gfx__palette__ink
+.export gfx__tables
+.export gfx__tables__lo
+.export gfx_high_bytes
+.export gfx__clear
+.export gfx__clear__end
+.export gfx__clear__again
+.export gfx__init
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "gfx.nt65", 8
-ptr:        .res 2
+.dbg line, "gfx.nt65", 9
+gfx__ptr:    .res 2
 
-SCREEN = $0400
+gfx__SCREEN = $0400
 rows   = 25
 
-    Color__black = $00
-    Color__white = $01
+    gfx__Color__black = $00
+    gfx__Color__white = $01
 
-Sprite__x = $00
-Sprite__y = $01
+gfx__Sprite__x = $00
+gfx__Sprite__y = $01
 
-    palette__border = $0f
+    gfx__palette__border = $0f
+    gfx__palette__ink    = rows - 24
+
+.segment "RODATA": absolute
+gfx__tables:
+.dbg line, "gfx.nt65", 48
+    gfx__tables__lo: .byte 1, 2
+tables__middle:
+.dbg line, "gfx.nt65", 50
+    gfx_high_bytes: .byte 3, 4
+.dbg line, "gfx.nt65", 51
+    .addr tables__middle
 
 .segment "CODE": absolute
-clear:
+gfx__clear:
 
-.dbg line, "gfx.nt65", 47
+.dbg line, "gfx.nt65", 60
     ldy #0
-clear__again:
-.dbg line, "gfx.nt65", 49
-    sta (ptr),y
-.dbg line, "gfx.nt65", 50
+gfx__clear__again:
+.dbg line, "gfx.nt65", 62
+    sta (gfx__ptr),y
+.dbg line, "gfx.nt65", 63
     iny
-.dbg line, "gfx.nt65", 51
-    bne clear__again
-.dbg line, "gfx.nt65", 52
+.dbg line, "gfx.nt65", 64
+    bne gfx__clear__again
+.dbg line, "gfx.nt65", 65
     rts
-clear__end:
+gfx__clear__end:
+
+gfx__init:
+.dbg line, "gfx.nt65", 70
+    lda #gfx__palette__border
+.dbg line, "gfx.nt65", 71
+    jmp gfx__clear

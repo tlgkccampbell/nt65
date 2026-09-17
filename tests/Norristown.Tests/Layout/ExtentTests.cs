@@ -59,6 +59,7 @@ public sealed class ExtentTests
     public void AnAssertionAboutASpanIsAnsweredAtEditTime()
     {
         var program = Analysis.Program(("main.nt65", """
+            .module main
             .segment CODE
             .proc irq {
                 nop
@@ -69,7 +70,7 @@ public sealed class ExtentTests
             .assert .spanof(irq) <= 2, error, "irq handler too big"
             """));
 
-        Assert.Equal(["main.nt65:8: irq handler too big"], program.Problems());
+        Assert.Equal(["main.nt65:9: irq handler too big"], program.Problems());
     }
 
     /// <summary>A span may be written before the thing it measures, as any constant may.</summary>
@@ -77,6 +78,7 @@ public sealed class ExtentTests
     public void ASpanMayBeWrittenBeforeWhatItMeasures()
     {
         var program = Analysis.Program(("main.nt65", """
+            .module main
             .assert .spanof(irq) == 3, error, "irq is not three bytes"
 
             .segment CODE
@@ -118,40 +120,40 @@ public sealed class ExtentTests
     public void SizeofOfARoutineIsItsSpan()
     {
         var program = Analysis.Program(("main.nt65",
-            ".segment CODE\n.proc f {\n    nop\n    rts\n}\n\n.assert .sizeof(f) == 2, error, \"f is not two bytes\"\n"
+            ".module main\n.segment CODE\n.proc f {\n    nop\n    rts\n}\n\n.assert .sizeof(f) == 2, error, \"f is not two bytes\"\n"
             + ".data n: .byte .countof(f)\n"));
 
         Assert.Equal(
-            ["main.nt65:8: `f` is a routine, which has bytes and no elements: `.sizeof(f)` is how many bytes it takes"],
+            ["main.nt65:9: `f` is a routine, which has bytes and no elements: `.sizeof(f)` is how many bytes it takes"],
             program.Problems());
     }
 
     /// <summary>A label is only a position, and a scope only a namespace: neither has an extent.</summary>
     [Theory]
-    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1, error\n}\n", "main.nt65:5: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
-    [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:4: `s` is a scope, which is only a namespace: `.endof` measures a `.data` declaration, a routine or a type")]
+    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1, error\n}\n", "main.nt65:6: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
+    [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:5: `s` is a scope, which is only a namespace: `.endof` measures a `.data` declaration, a routine or a type")]
     public void ALabelAndAScopeHaveNoExtent(string text, string problem)
     {
-        Assert.Contains(problem, Analysis.Program(("main.nt65", ".segment CODE\n" + text)).Problems());
+        Assert.Contains(problem, Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems());
     }
 
     /// <summary>A constant has no bytes of its own, so there is nothing to measure.</summary>
     [Fact]
     public void MeasuringSomethingWithNoBytesIsAnError()
     {
-        var program = Analysis.Program(("main.nt65", "N = 5\n\nM = .spanof(N)\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\nN = 5\n\nM = .spanof(N)\n"));
 
         Assert.Contains(program.Problems(), problem => problem.StartsWith(
-            "main.nt65:3: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
+            "main.nt65:4: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
     }
 
     /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
-    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".segment CODE\n" + text))["main.s"];
+    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     /// <summary>How many bytes layout worked out for the one thing the file measures.</summary>
     private static long? SpanOf(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", ".segment CODE\n" + text));
+        var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));
         var model = analysis.File("main.nt65");
         var measured = Norristown.Semantics.Extents.MeasuredIn(model).Single();
         return analysis.Layouts.Single().SpanOf(measured);

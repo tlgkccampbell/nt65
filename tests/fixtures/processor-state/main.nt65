@@ -1,6 +1,8 @@
 ; Register widths and the emulation flag, tracked through each routine. Every routine
 ; declares its state at entry and exit, so the analysis never leaves the routine it is in,
 ; and every immediate is sized by the width the analysis found reaching it.
+.module main
+
 .cpu 65816
 
 .export render, fill, reset, save, keep, tail

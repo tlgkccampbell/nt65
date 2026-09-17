@@ -1,0 +1,30 @@
+.module second
+
+; Two modules exporting under one linker name would be one symbol to the linker, so it is
+; reported at the export that collides.
+.export other as "common"   ;! error: `second::other` and `first::shared` are both exported to the linker as `common`
+.export .use first::*       ;! error: `.export .use` names what it re-exports: a `*` would make everything the other module exports, now and later, part of this one
+
+other  = 3
+DEBUG  = 0                  ;! error: `DEBUG` is a define, and a file may not declare one
+
+; A name a `.use` brings in may not also be declared here, and two may not bring in one name.
+.use first::shared          ;! error: `shared` is declared in this module, and a `.use` may not bring in another: `as` brings it in under a name of its own
+.use first::WIDE
+.use first::WIDE            ;! error: a `.use` already brings in `WIDE`
+.use first::nothing         ;! error: `nothing` is not declared in module `first`
+.use nowhere::thing         ;! error: there is no module `nowhere`
+.use first::*
+.use third::*
+shared = 4
+
+.segment CODE
+.proc use {
+    lda #first::hidden      ;! error: `first::hidden` is not exported by module `first`
+    lda #nowhere            ;! error: `nowhere` is not declared
+    lda #SMALL              ;! error: `SMALL` is exported by both `first` and `third`, and a `.use` brings in everything each exports: `third::SMALL` says which
+    lda #first              ;! error: `first` is a module: a name in it is written `first::name`
+    .use first::SMALL       ;! error: `.use` belongs at the top level of a module
+    rts
+}
+.export use

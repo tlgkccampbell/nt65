@@ -3,115 +3,203 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What the files of a program can see of one another. Every file is a module, and
-/// its symbols are private unless exported; a name a file does not declare is looked for
-/// here before it is called undeclared.
+/// What the modules of a program can see of one another. Every file is a module with a name,
+/// and its symbols are private unless exported. A name from another module is written with
+/// the module's path, <c>hw::vic::border</c>, or brought in with <c>.use</c>; nothing from
+/// another module is ever visible without one of those.
 /// <para>
-/// Lookup finds any file-scope symbol of another file, exported or not, because a better
-/// diagnostic for a private name is that it exists and is not exported. Whether it may
-/// actually be used is <see cref="IsExported"/>, asked of the whole name once it resolves:
-/// an interior label reached as <c>outer::inner</c> is exported by <c>inner</c>, and
-/// <c>outer</c> itself need not be.
+/// A module's name is only a name: <c>gfx::sprite</c> needs no module <c>gfx</c>, and the
+/// modules whose names start the same way are no closer to one another than any others. What
+/// the path does make is a tree of names, so <c>gfx</c> alone is a prefix a path may walk
+/// through on its way to a module.
+/// </para>
+/// <para>
+/// Lookup finds a module's private names too, because a better diagnostic for one is that
+/// it exists and is not exported. Whether it may actually be used is asked of the whole name
+/// once it resolves: an interior label reached as <c>hw::outer::inner</c> is exported by
+/// <c>inner</c>, and <c>outer</c> itself need not be.
 /// </para>
 /// </summary>
 public sealed class ProgramSymbols
 {
-    private readonly Dictionary<string, List<Symbol>> atFileScope;
-    private readonly HashSet<Symbol> exported;
+    private readonly Dictionary<string, Module> modules;
+    private readonly HashSet<string> prefixes;
+    private readonly Dictionary<string, Symbol> defines;
 
-    private ProgramSymbols(Dictionary<string, List<Symbol>> atFileScope, HashSet<Symbol> exported)
+    private ProgramSymbols(Dictionary<string, Module> modules, HashSet<string> prefixes, Dictionary<string, Symbol> defines)
     {
-        this.atFileScope = atFileScope;
-        this.exported = exported;
+        this.modules = modules;
+        this.prefixes = prefixes;
+        this.defines = defines;
     }
 
     /// <summary>A program of one file, which can see nothing beyond itself.</summary>
-    public static ProgramSymbols Empty { get; } = new([], []);
+    public static ProgramSymbols Empty { get; } = new([], [], []);
 
     /// <summary>
-    /// The table for a program whose files have been collected but not yet resolved. Two
-    /// files exporting the same output name is reported here, because it is the program's
-    /// problem rather than either file's.
+    /// The table for a program whose files have been collected but not yet resolved. What is
+    /// wrong with the modules rather than with one file is reported here: two files that are
+    /// the same module, a name that is also the path of a module, and two exports that meet
+    /// under one linker name.
     /// </summary>
-    internal static ProgramSymbols Build(IReadOnlyList<Module> modules, List<Diagnostic> diagnostics)
+    internal static ProgramSymbols Build(
+        IReadOnlyList<Module> modules, IEnumerable<Symbol> defines, List<Diagnostic> diagnostics)
     {
-        var atFileScope = new Dictionary<string, List<Symbol>>(StringComparer.Ordinal);
-        var exported = new HashSet<Symbol>();
-        var byOutputName = new Dictionary<string, Symbol>(StringComparer.Ordinal);
-
+        var byName = new Dictionary<string, Module>(StringComparer.Ordinal);
+        var prefixes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var module in modules.OrderBy(module => module.Tree.Path, StringComparer.Ordinal))
+        {
+            if (module.Name is not { } name)
+                continue;
+            if (byName.TryGetValue(name, out var other))
+            {
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Severity.Error,
+                    $"module `{name}` is already `{FileName(other.Tree)}`: a module is one file, and a large one "
+                    + "is split into submodules",
+                    [new RelatedSpan(other.Tree.GetSpan(other.NameSpan), "declared here")]));
+                continue;
+            }
+            byName[name] = module;
+            for (var at = name.LastIndexOf("::", StringComparison.Ordinal); at > 0; at = name.LastIndexOf("::", at - 1, StringComparison.Ordinal))
+                prefixes.Add(name[..at]);
+        }
+
+        // `hw::vic` cannot be both a module and a name module `hw` declares: a path to one of
+        // them would reach the other just as well.
+        foreach (var module in byName.Values)
         {
             foreach (var symbol in module.FileScope.Symbols)
             {
-                if (symbol.IsCheapLocal)
-                    continue;
-                if (!atFileScope.TryGetValue(symbol.Name, out var declared))
-                    atFileScope[symbol.Name] = declared = [];
-                declared.Add(symbol);
-            }
-
-            foreach (var symbol in module.Exported.SelectMany(Spread))
-            {
-                if (!exported.Add(symbol))
-                    continue;
-                if (byOutputName.TryGetValue(symbol.FlatName, out var other))
+                var path = $"{module.Name}::{symbol.Name}";
+                if (!symbol.IsCheapLocal && (byName.ContainsKey(path) || prefixes.Contains(path)))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                        $"`{symbol.FlatName}` is exported by two files",
-                        [new RelatedSpan(other.DeclarationSpan, "also exported here")]));
-                    continue;
+                        $"`{path}` is the path of a module, and module `{module.Name}` may not declare `{symbol.Name}` as well"));
                 }
-                byOutputName[symbol.FlatName] = symbol;
             }
         }
-        return new ProgramSymbols(atFileScope, exported);
-    }
 
-    /// <summary>
-    /// What exporting one name makes visible. A type is not a symbol to the linker: what
-    /// crosses is each of its members, as the flat constant it becomes. The type itself
-    /// travels too, because a member is named through it.
-    /// </summary>
-    private static IEnumerable<Symbol> Spread(Symbol symbol)
-    {
-        yield return symbol;
-        if (symbol.Kind is not (SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
-            yield break;
-        foreach (var member in symbol.Body?.Symbols ?? [])
-            yield return member;
-    }
-
-    /// <summary>
-    /// The symbol another file declares at its top level under <paramref name="name"/>, or
-    /// null when no file does or when more than one private one does and nothing says which.
-    /// </summary>
-    public Symbol? Lookup(string name, SyntaxTree from)
-    {
-        if (!atFileScope.TryGetValue(name, out var candidates))
-            return null;
-        Symbol? onlyPrivate = null;
-        var privates = 0;
-        foreach (var symbol in candidates)
+        var byLinkerName = new Dictionary<string, Symbol>(StringComparer.Ordinal);
+        foreach (var module in byName.Values.OrderBy(module => module.Tree.Path, StringComparer.Ordinal))
         {
-            if (symbol.Tree == from)
-                continue;
-            if (exported.Contains(symbol))
-                return symbol;
-            onlyPrivate ??= symbol;
-            privates++;
+            foreach (var symbol in module.Exported)
+            {
+                if (symbol.LinkerName is not { } linked || !IsLinked(symbol))
+                    continue;
+                if (byLinkerName.TryGetValue(linked, out var other))
+                {
+                    diagnostics.Add(new Diagnostic(symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan,
+                        Severity.Error,
+                        $"`{symbol.PathName}` and `{other.PathName}` are both exported to the linker as `{linked}`",
+                        [new RelatedSpan(other.DeclarationSpan, "the other export")]));
+                    continue;
+                }
+                byLinkerName[linked] = symbol;
+            }
         }
 
-        // Several files keeping a private name of their own is not an ambiguity anyone can
-        // resolve, and saying the name is undeclared is the honest answer.
-        return privates == 1 ? onlyPrivate : null;
+        var defined = new Dictionary<string, Symbol>(StringComparer.Ordinal);
+        foreach (var define in defines)
+            defined.TryAdd(define.Name, define);
+        return new ProgramSymbols(byName, prefixes, defined);
     }
 
-    /// <summary>Whether <paramref name="symbol"/> is exported, and so may be named from another file.</summary>
-    public bool IsExported(Symbol symbol) => exported.Contains(symbol);
+    /// <summary>
+    /// Whether an export is a symbol to the linker. A macro, a charmap, a function and a list
+    /// are used by value, a scope and a type are only the way to their members, and an import
+    /// is defined by somebody else.
+    /// </summary>
+    internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
+        or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
+        or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
+        or SymbolKind.Binding or SymbolKind.MacroParameter) && !symbol.IsDefine;
+
+    /// <summary>The module named <paramref name="name"/>, or null when no file is.</summary>
+    public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);
+
+    /// <summary>Whether <paramref name="path"/> is a module, or the start of one's name.</summary>
+    public bool IsModulePath(string path) => modules.ContainsKey(path) || prefixes.Contains(path);
+
+    /// <summary>The define named <paramref name="name"/>, which every file sees, or null.</summary>
+    public Symbol? Define(string name) => defines.GetValueOrDefault(name);
+
+    /// <summary>
+    /// What <paramref name="name"/> is in <paramref name="module"/>: a name its file declares at
+    /// its top level, exported or not, or a name it re-exports. <paramref name="touched"/> hears
+    /// of every name looked for, as <c>module::name</c>, those a re-export leads through included.
+    /// </summary>
+    public Symbol? Member(Module module, string name, Action<string>? touched = null) =>
+        Member(module, name, touched, []);
+
+    /// <summary>The modules that export a top-level name <paramref name="name"/>, which is what a name no one declared may have meant.</summary>
+    public IEnumerable<string> ModulesExporting(string name) =>
+        modules.Values
+            .Where(module => module.FileScope.FindMember(name) is { IsExported: true }
+                || module.Reexports.Any(reexport => reexport.Name == name))
+            .Select(module => module.Name!)
+            .Order(StringComparer.Ordinal);
+
+    private static string FileName(SyntaxTree tree) => tree.Path[(tree.Path.LastIndexOf('/') + 1)..];
+
+    private Symbol? Member(Module module, string name, Action<string>? touched, HashSet<(string, string)> visiting)
+    {
+        touched?.Invoke($"{module.Name}::{name}");
+        if (module.FileScope.FindMember(name) is { } declared)
+            return declared;
+        foreach (var reexport in module.Reexports)
+        {
+            if (reexport.Name == name && visiting.Add((module.Name!, name)))
+                return Resolve(reexport.Path, touched, visiting);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The symbol a path written from the root of the modules leads to, or null. A re-export
+    /// is resolved the same way, and one that leads back to itself leads nowhere.
+    /// </summary>
+    private Symbol? Resolve(IReadOnlyList<string> path, Action<string>? touched, HashSet<(string, string)> visiting)
+    {
+        var at = 0;
+        Module? module = null;
+        var name = "";
+        for (var i = 0; i < path.Count; i++)
+        {
+            name = i == 0 ? path[0] : $"{name}::{path[i]}";
+            if (modules.TryGetValue(name, out var found))
+            {
+                module = found;
+                at = i + 1;
+            }
+            else if (!prefixes.Contains(name))
+            {
+                break;
+            }
+        }
+        if (module is null || at >= path.Count || Member(module, path[at], touched, visiting) is not { } symbol)
+            return null;
+        for (var i = at + 1; i < path.Count; i++)
+        {
+            if (symbol.Body?.FindMember(path[i]) is not { } inner)
+                return null;
+            symbol = inner;
+        }
+        return symbol;
+    }
 
     /// <summary>One file as the program sees it before its own names are resolved.</summary>
     /// <param name="Tree">The file.</param>
-    /// <param name="FileScope">Its top-level scope, which is what another file can reach into.</param>
-    /// <param name="Exported">The symbols its <c>.export</c> items name.</param>
-    internal sealed record Module(SyntaxTree Tree, Scope FileScope, IReadOnlyList<Symbol> Exported);
+    /// <param name="Name">The module its <c>.module</c> names, or null when it names none.</param>
+    /// <param name="NameSpan">Where that name is written.</param>
+    /// <param name="FileScope">Its top-level scope, which is what another module can reach into.</param>
+    /// <param name="Exported">Every symbol it exports, members of what it exports included.</param>
+    /// <param name="Reexports">The names its <c>.export .use</c> items make part of it.</param>
+    public sealed record Module(
+        SyntaxTree Tree, string? Name, TextSpan NameSpan, Scope FileScope, IReadOnlyList<Symbol> Exported,
+        IReadOnlyList<Reexport> Reexports);
+
+    /// <summary>A name a module re-exports: <c>.export .use hw::vic::border</c>.</summary>
+    /// <param name="Name">The name it is part of the module as.</param>
+    /// <param name="Path">The path it was brought in from, from the root of the modules.</param>
+    public sealed record Reexport(string Name, IReadOnlyList<string> Path);
 }

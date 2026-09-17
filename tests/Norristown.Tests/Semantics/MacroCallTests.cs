@@ -7,6 +7,7 @@ namespace Norristown.Tests.Semantics;
 public sealed class MacroCallTests
 {
     private const string Set16 = """
+        .module main
         .macro set16(dest: operand, value) {
             lda #<value
             sta dest
@@ -61,7 +62,7 @@ public sealed class MacroCallTests
         var model = Analysis.Model(Set16 + "ptr = $10\n\n    set16!((ptr), 0)\n");
 
         Assert.Equal(
-            ["9: `dest` takes an operand, and `(ptr)` reads as an expression in parentheses. "
+            ["10: `dest` takes an operand, and `(ptr)` reads as an expression in parentheses. "
                 + "Brace it to pass indirect addressing"],
             model.Problems());
     }
@@ -70,6 +71,7 @@ public sealed class MacroCallTests
     public void ANamedArgumentBindsThatParameter()
     {
         var model = Analysis.Model("""
+            .module main
             C4 = 60
 
             .macro note(pitch: const, frames: const = 1) {
@@ -95,6 +97,7 @@ public sealed class MacroCallTests
     public void ACallIsCheckedAgainstTheParameters(string call, string message)
     {
         var model = Analysis.Model("""
+            .module main
             C4 = 60
 
             .macro note(pitch: const, frames: const = 1) {
@@ -104,7 +107,7 @@ public sealed class MacroCallTests
             .segment RODATA
             """ + "\n" + call + "\n}\n");
 
-        Assert.Equal([$"8: {message}"], model.Problems());
+        Assert.Equal([$"9: {message}"], model.Problems());
     }
 
     /// <summary>A word is checked against the list and never looked up, so a register is fine.</summary>
@@ -112,6 +115,7 @@ public sealed class MacroCallTests
     public void AOneArgumentIsAWordRatherThanAName()
     {
         var model = Analysis.Model("""
+            .module main
             .macro push(regs: list(one(a, x, y))) {
                 nop
             }
@@ -129,6 +133,7 @@ public sealed class MacroCallTests
     public void AWordOutsideTheListIsReported()
     {
         var model = Analysis.Model("""
+            .module main
             .macro branch_unless(c: one(eq, ne)) {
                 nop
             }
@@ -139,21 +144,22 @@ public sealed class MacroCallTests
             }
             """);
 
-        Assert.Equal(["6: `c` takes one of `eq`, `ne`, and this is `cs`"], model.Problems());
+        Assert.Equal(["7: `c` takes one of `eq`, `ne`, and this is `cs`"], model.Problems());
     }
 
     [Fact]
     public void OnlyAMacroIsCalledWithABang()
     {
-        var model = Analysis.Model("SIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
+        var model = Analysis.Model(".module main\nSIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
 
-        Assert.Equal(["4: `SIZE` is a constant, and `!` calls a macro"], model.Problems());
+        Assert.Equal(["5: `SIZE` is a constant, and `!` calls a macro"], model.Problems());
     }
 
     [Fact]
     public void ATrailingBlockBindsTheBlockParameter()
     {
         var model = Analysis.Model("""
+            .module main
             ptr = $10
 
             .macro times_x(count, body: block) {
@@ -185,6 +191,7 @@ public sealed class MacroCallTests
     public void ASecondBlockIsNamedByItsContinuation()
     {
         var model = Analysis.Model("""
+            .module main
             .macro wrap(then: block, otherwise: block = {}) {
                 then
                 otherwise
@@ -207,6 +214,7 @@ public sealed class MacroCallTests
     public void ABlockNamingNoParameterIsReported()
     {
         var model = Analysis.Model("""
+            .module main
             .macro wrap(then: block) {
                 then
             }
@@ -221,7 +229,7 @@ public sealed class MacroCallTests
             }
             """);
 
-        Assert.Equal(["8: `wrap` has no `block` parameter called `otherwise`"], model.Problems());
+        Assert.Equal(["9: `wrap` has no `block` parameter called `otherwise`"], model.Problems());
     }
 
     /// <summary>
@@ -232,6 +240,7 @@ public sealed class MacroCallTests
     public void ABlockArgumentMayDeclareOnlyCheapLocals()
     {
         var model = Analysis.Model("""
+            .module main
             .macro wrap(body: block) {
                 body
             }
@@ -247,7 +256,7 @@ public sealed class MacroCallTests
             """);
 
         Assert.Equal(
-            ["7: `HERE` is declared in a block argument, which may declare only cheap locals: "
+            ["8: `HERE` is declared in a block argument, which may declare only cheap locals: "
                 + "the macro it is given to may splice it in more than one place"],
             model.Problems());
     }
@@ -255,15 +264,16 @@ public sealed class MacroCallTests
     [Fact]
     public void AMacroThatCallsItselfIsReported()
     {
-        var model = Analysis.Model(".macro m(n) {\n    m!(n)\n}\n");
+        var model = Analysis.Model(".module main\n.macro m(n) {\n    m!(n)\n}\n");
 
-        Assert.Equal(["2: `m` calls itself, and every expansion has to be bounded"], model.Problems());
+        Assert.Equal(["3: `m` calls itself, and every expansion has to be bounded"], model.Problems());
     }
 
     [Fact]
     public void AMacroThatReachesItselfThroughAnotherIsReported()
     {
         var model = Analysis.Model("""
+            .module main
             .macro ping() {
                 pong!()
             }
@@ -273,7 +283,7 @@ public sealed class MacroCallTests
             }
             """);
 
-        Assert.Equal(["6: `ping` calls itself through `pong`, and every expansion has to be bounded"],
+        Assert.Equal(["7: `ping` calls itself through `pong`, and every expansion has to be bounded"],
             model.Problems());
     }
 
@@ -285,6 +295,7 @@ public sealed class MacroCallTests
     public void CallingAMacroThatReachesItselfIsReportedOnce()
     {
         var analysis = Analysis.Program(("main.nt65", """
+            .module main
             .macro ping() {
                 pong!()
             }
@@ -300,7 +311,7 @@ public sealed class MacroCallTests
             }
             """));
 
-        Assert.Equal(["main.nt65:6: `ping` calls itself through `pong`, and every expansion has to be bounded"],
+        Assert.Equal(["main.nt65:7: `ping` calls itself through `pong`, and every expansion has to be bounded"],
             analysis.Problems());
     }
 
@@ -309,6 +320,7 @@ public sealed class MacroCallTests
     public void CallingTheSameMacroTwiceIsNotRecursion()
     {
         var model = Analysis.Model("""
+            .module main
             .macro leaf() {
                 nop
             }

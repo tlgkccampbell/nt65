@@ -1,4 +1,6 @@
 ; C's precedence, and the three places where the language asks for parentheses.
+.module main
+
 P = 1
 Q = 2
 R = 4
@@ -17,7 +19,7 @@ BANK    = ^SCREEN
 NESTED  = .max(.min(P, Q), R)
 WIDTH   = .addrsize(SCREEN)
 HERE    = *
-SCOPED  = ::SCREEN
+SCOPED  = ::main::SCREEN
 
 ; An operand of a shift or a bitwise operator may not be a different binary operator.
 BAD_SHIFT = 1 << P + 1      ;! error: `<<` and `+` need parentheses to show which applies first

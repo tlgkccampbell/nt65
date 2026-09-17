@@ -1,0 +1,6 @@
+.module hw::sid
+
+.cpu 6502
+
+.export VOLUME = $0f
+.export volume = $d418

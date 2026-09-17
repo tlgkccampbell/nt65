@@ -1,0 +1,13 @@
+; A submodule. Its name is a path, and needs no module `hw` to exist: `hw.nt65` is a
+; module of its own, which only chooses to present some of this one's names.
+.module hw::vic
+
+.cpu 6502
+
+.export BORDER = $d020
+
+.segment CODE
+.export .proc set_border {
+    sta BORDER
+    rts
+}

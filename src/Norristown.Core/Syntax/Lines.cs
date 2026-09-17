@@ -86,6 +86,13 @@ internal static class Lines
             LineKind.BlockClose => 1,
             _ => 0,
         };
+
+        // `.export .proc init {` opens the block the declaration after `.export` does.
+        if (kind == LineKind.Directive && tokens[0].Text.Equals(".export", StringComparison.OrdinalIgnoreCase)
+            && tokens[1].Kind == SyntaxKind.Directive)
+        {
+            start = 1;
+        }
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
             return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOfDirective(token.Text);

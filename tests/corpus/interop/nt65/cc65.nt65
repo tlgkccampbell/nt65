@@ -1,0 +1,9 @@
+; The cc65 runtime this program is linked with, declared once for every module that uses it.
+; An import keeps its own name to the linker, and each module that uses one imports it.
+.module cc65
+
+.export .import sp: zp, ptr1: zp, ptr2: zp, tmp1: zp
+.export .import popa: proc(), popax: proc()
+
+; Hand-written in asm/delay.s.
+.export .import wait_short: proc()
