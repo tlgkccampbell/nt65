@@ -18,7 +18,9 @@ code --install-extension artifacts/nt65-1.0.0.vsix
 ```
 
 The extension runs the language server it carries on the installed .NET; `nt65.server.path`
-points it at another. Output assembles with ca65 and ld65 built from the cc65 commit in
+points it at another. It also validates `nt65.json` against the schema it contributes, and
+offers a build task per configuration under **Run Task → nt65**, whose output lands in the
+Problems panel. Output assembles with ca65 and ld65 built from the cc65 commit in
 `scripts/cc65.commit`.
 
 ## Using it

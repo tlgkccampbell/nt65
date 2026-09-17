@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "nt65 project",
+  "description": "nt65.json: what a program is built from, and how. `nt65 build` reads it from the directory it runs in or the nearest one above it.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The schema this file is validated against. nt65 accepts it and reads nothing from it."
+    },
+    "cpu": {
+      "description": "The processor the program is built for. A `.cpu` item in a file must agree with it.",
+      "enum": ["6502", "65sc02", "r65c02", "65c02", "65816"]
+    },
+    "files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Globs naming the program's sources, from the project root. Order is not significant, and a glob may reach above the root, so a library shared between projects is part of each.",
+      "examples": [["src/**/*.nt65"]]
+    },
+    "out": {
+      "type": "string",
+      "description": "Where the output goes; the project root when there is none. A module's output is named after it, so `.module gfx::sprite` is written to `out/gfx/sprite.s` wherever its source is."
+    },
+    "defines": {
+      "description": "The build configuration: constants visible in every file, and the only symbols an `.if` condition may test. A name with a module's path, \"hw::SOUND\", sets that module's `.config` instead.",
+      "allOf": [{ "$ref": "#/definitions/defines" }]
+    },
+    "segments": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/segment" },
+      "description": "The segments the program uses, with the address size each is reached at. A segment declared here may not also be declared in a file.",
+      "examples": [{ "ZEROPAGE": { "size": "zp" }, "CODE": { "size": "abs" } }]
+    },
+    "ranges": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/banks" },
+      "propertyNames": {
+        "pattern": "^\\s*[+-]?(\\$[0-9A-Fa-f_]+|%[01_]+|[0-9][0-9_]*)\\s*(-\\s*[+-]?(\\$[0-9A-Fa-f_]+|%[01_]+|[0-9][0-9_]*)\\s*)?$"
+      },
+      "description": "Which banks an absolute constant address in each range may be reached from, for hardware registers mirrored in some banks only. A key is one address or a range of them, and no two keys may overlap.",
+      "examples": [{ "$2100-$21ff": ["$00-$3f", "$80-$bf"] }]
+    },
+    "configurations": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/configuration" },
+      "propertyNames": { "pattern": "^[A-Za-z0-9_-]+$" },
+      "description": "Named builds of the program, chosen with `--config name`. A name is letters, digits, `_` and `-`; with none chosen the project's own settings build.",
+      "examples": [{ "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" } }]
+    }
+  },
+  "definitions": {
+    "number": {
+      "description": "A number: a JSON number, or a string in nt65's number syntax, \"$2100\" or \"%1010\".",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^[+-]?(\\$[0-9A-Fa-f_]+|%[01_]+|[0-9][0-9_]*)$" }
+      ]
+    },
+    "defines": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/number" },
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$" }
+    },
+    "banks": {
+      "type": "array",
+      "description": "Banks, each one bank or a range of them: 1, \"$7e\" or \"$00-$3f\".",
+      "items": {
+        "anyOf": [
+          { "$ref": "#/definitions/number" },
+          { "type": "string", "pattern": "^\\s*[+-]?(\\$[0-9A-Fa-f_]+|%[01_]+|[0-9][0-9_]*)\\s*-\\s*[+-]?(\\$[0-9A-Fa-f_]+|%[01_]+|[0-9][0-9_]*)\\s*$" }
+        ]
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size"],
+      "properties": {
+        "size": {
+          "description": "How wide an address in the segment is: \"zp\" for the direct page, \"abs\" for two bytes, \"far\" for three.",
+          "enum": ["zp", "abs", "far"]
+        },
+        "dp": {
+          "description": "The direct-page register the segment is reached through, for a `zp` segment on the 65816.",
+          "allOf": [{ "$ref": "#/definitions/number" }]
+        },
+        "bank": {
+          "description": "The bank the segment sits in, on the 65816.",
+          "allOf": [{ "$ref": "#/definitions/number" }]
+        },
+        "mirrors": {
+          "description": "The other banks the segment appears in, written as `ranges` writes banks. A segment with mirrors needs a bank.",
+          "allOf": [{ "$ref": "#/definitions/banks" }]
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defines": {
+          "description": "Defines over the project's, by name.",
+          "allOf": [{ "$ref": "#/definitions/defines" }]
+        },
+        "out": {
+          "type": "string",
+          "description": "Where this configuration's output goes, in place of the project's `out`."
+        }
+      }
+    }
+  }
+}

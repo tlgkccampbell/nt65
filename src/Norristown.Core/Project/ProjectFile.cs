@@ -28,6 +28,18 @@ public static class ProjectFile
     private static readonly string[] ignored = ["$schema"];
 
     /// <summary>
+    /// Every key the file may hold, for whoever describes it to an editor. The schema the
+    /// extension contributes is kept in step with these three lists.
+    /// </summary>
+    public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
+
+    /// <summary>The keys one named configuration may hold.</summary>
+    public static IReadOnlyList<string> ConfigurationKeys { get; } = ["defines", "out"];
+
+    /// <summary>The keys one segment may hold.</summary>
+    public static IReadOnlyList<string> SegmentKeys { get; } = ["size", "dp", "bank", "mirrors"];
+
+    /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
     /// logical path diagnostics name it by; what is wrong with it comes back in the settings.
     /// </summary>
@@ -207,7 +219,7 @@ public static class ProjectFile
                 }
                 foreach (var key in property.Value.EnumerateObject())
                 {
-                    if (key.Name is not ("defines" or "out"))
+                    if (!ConfigurationKeys.Contains(key.Name, StringComparer.Ordinal))
                     {
                         Report(key.Name, $"configuration `{property.Name}`: `{key.Name}` is not a configuration key: "
                             + "a configuration has `defines` and `out`", from);
@@ -244,17 +256,17 @@ public static class ProjectFile
                 var segment = new Segment(property.Name, address, At(property.Name));
                 foreach (var attribute in property.Value.EnumerateObject())
                 {
+                    if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
+                    {
+                        Report(property.Name, $"segment \"{property.Name}\": `{attribute.Name}` is not a segment key: "
+                            + "a segment has a `size`, a `dp`, a `bank` and `mirrors`");
+                        continue;
+                    }
                     if (attribute.Name == "size")
                         continue;
                     if (attribute.Name == "mirrors")
                     {
                         segment = segment with { Mirrors = Banks(property.Name, attribute.Value) };
-                        continue;
-                    }
-                    if (attribute.Name is not ("dp" or "bank"))
-                    {
-                        Report(property.Name, $"segment \"{property.Name}\": `{attribute.Name}` is not a segment key: "
-                            + "a segment has a `size`, a `dp`, a `bank` and `mirrors`");
                         continue;
                     }
                     var value = Number(attribute.Value);

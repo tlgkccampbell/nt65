@@ -292,6 +292,15 @@ decided once beside the kind now.
 **Check.** The schema test; a client test that the matcher parses the CLI's output; the
 extension packages without `--allow-missing-repository` once the repository is named.
 
+**Done.** The schema, the matcher, the task provider, the word pattern, the extension's README
+and the file icon. `--allow-missing-repository` stays: this repository has no remote to name,
+so there is no URL to write down, and the flag comes out with the first push. Two things the
+writing of it found: the reader's key lists had to become `ProjectFile.Keys`,
+`ConfigurationKeys` and `SegmentKeys` for a test to hold the schema to them, which also made
+the segment reader check its keys in one place instead of three; and a task has to run in the
+workspace folder rather than beside the project file, because the command prints paths
+relative to where it ran and the matcher resolves them against the folder.
+
 ## Stage 29: What the server still owes
 
 **Build.**

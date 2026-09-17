@@ -10,7 +10,8 @@
   },
   "main": "./extension.js",
   "activationEvents": [
-    "workspaceContains:**/nt65.json"
+    "workspaceContains:**/nt65.json",
+    "onTaskType:nt65"
   ],
   "contributes": {
     "commands": [
@@ -29,7 +30,11 @@
         "extensions": [
           ".nt65"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/nt65-file.svg",
+          "dark": "./icons/nt65-file.svg"
+        }
       }
     ],
     "grammars": [
@@ -37,6 +42,47 @@
         "language": "nt65",
         "scopeName": "source.nt65",
         "path": "./syntaxes/nt65.tmLanguage.json"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "nt65.json",
+        "url": "./nt65.schema.json"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "nt65",
+        "properties": {
+          "config": {
+            "type": "string",
+            "description": "The named configuration from nt65.json to build, such as \"debug\". Left out, the project's own settings build."
+          },
+          "project": {
+            "type": "string",
+            "description": "The project file, or the directory holding it, relative to the workspace folder. Left out, nt65 finds it from the folder the build runs in."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "nt65",
+        "label": "nt65",
+        "owner": "nt65",
+        "source": "nt65",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+): (error|warning|info): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
       }
     ],
     "configurationDefaults": {
@@ -51,6 +97,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the Norristown language server executable. Empty uses the server packaged with the extension, or the Debug build of this repository when the extension runs from it."
+        },
+        "nt65.cli.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the nt65 command the build tasks run. Empty uses `nt65` on the path, or the Debug build of this repository when the extension runs from it."
         },
         "nt65.configuration": {
           "type": "string",

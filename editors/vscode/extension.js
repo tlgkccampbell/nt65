@@ -23,6 +23,63 @@ function serverOptions(context) {
   return { command: debug };
 }
 
+// The nt65 command the build tasks run: the configured one; in a development host, the Debug
+// build of this repository; else the command on the path, which is where `dotnet tool install`
+// puts it. The extension carries a language server, not a command, so there is nothing else.
+function cliCommand(context) {
+  const configured = vscode.workspace.getConfiguration('nt65').get('cli.path');
+  if (configured) return configured;
+  const exe = process.platform === 'win32' ? 'nt65.exe' : 'nt65';
+  const debug = context.asAbsolutePath(
+    path.join('..', '..', 'src', 'Norristown.Cli', 'bin', 'Debug', 'net10.0', exe));
+  if (context.extensionMode === vscode.ExtensionMode.Development && fs.existsSync(debug)) return debug;
+  return 'nt65';
+}
+
+// One build task. It runs in the workspace folder rather than beside the project file, because
+// what the command prints is relative to where it ran and the `$nt65` matcher resolves those
+// against the folder.
+function buildTask(context, folder, definition, name) {
+  const args = ['build'];
+  if (definition.project) args.push('--project', definition.project);
+  if (definition.config) args.push('--config', definition.config);
+  const task = new vscode.Task(definition, folder, name, 'nt65',
+    new vscode.ShellExecution(cliCommand(context), args, { cwd: folder.uri.fsPath }), '$nt65');
+  task.group = vscode.TaskGroup.Build;
+  return task;
+}
+
+// The configurations a project file names, or none when it cannot be read. nt65 allows comments
+// and trailing commas where JSON.parse does not, so a file it accepts may not parse here; the
+// project's own settings are still offered, and the file's own diagnostics say what is wrong.
+function configurationsIn(text) {
+  try {
+    return Object.keys(JSON.parse(text).configurations || {});
+  } catch {
+    return [];
+  }
+}
+
+// A task for each project file in the workspace: one for the project's own settings and one for
+// each named configuration.
+async function buildTasks(context) {
+  const tasks = [];
+  for (const folder of vscode.workspace.workspaceFolders || []) {
+    const found = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(folder, '**/nt65.json'), '**/node_modules/**');
+    for (const file of found.sort((a, b) => a.fsPath.localeCompare(b.fsPath))) {
+      const directory = path.relative(folder.uri.fsPath, path.dirname(file.fsPath)).split(path.sep).join('/');
+      const where = directory ? `${directory}: ` : '';
+      const definition = directory ? { type: 'nt65', project: directory } : { type: 'nt65' };
+      tasks.push(buildTask(context, folder, definition, `${where}build`));
+      for (const name of configurationsIn(fs.readFileSync(file.fsPath, 'utf8'))) {
+        tasks.push(buildTask(context, folder, { ...definition, config: name }, `${where}build ${name}`));
+      }
+    }
+  }
+  return tasks;
+}
+
 // Shows the active configuration, and chooses another when clicked.
 function statusItem(context) {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
@@ -78,7 +135,17 @@ async function activate(context) {
   // being contributed: the command palette has nothing to offer for it.
   context.subscriptions.push(
     vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
-    vscode.commands.registerCommand('nt65.rename', renameAt));
+    vscode.commands.registerCommand('nt65.rename', renameAt),
+    vscode.tasks.registerTaskProvider('nt65', {
+      provideTasks: () => buildTasks(context),
+
+      // A task written by hand in tasks.json arrives with its definition and nothing to run;
+      // this gives it the same command the offered ones have.
+      resolveTask(task) {
+        const folder = task.scope && task.scope.uri ? task.scope : (vscode.workspace.workspaceFolders || [])[0];
+        return folder ? buildTask(context, folder, task.definition, task.name) : undefined;
+      },
+    }));
   statusItem(context);
   await client.start();
 }
