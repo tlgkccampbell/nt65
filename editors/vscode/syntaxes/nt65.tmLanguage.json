@@ -4,64 +4,414 @@
   "scopeName": "source.nt65",
   "patterns": [
     {
-      "match": ";.*$",
-      "name": "comment.line.semicolon.nt65"
-    },
-    {
-      "match": "\"(?:[^\"\\\\]|\\\\.)*\"?",
-      "name": "string.quoted.double.nt65"
-    },
-    {
-      "match": "'(?:[^'\\\\]|\\\\.)*'?",
-      "name": "constant.character.nt65"
-    },
-    {
-      "match": "(?i)\\.mod\\b",
-      "name": "keyword.operator.word.nt65"
-    },
-    {
-      "match": "\\.[A-Za-z_][A-Za-z0-9_]*",
-      "name": "keyword.control.directive.nt65"
-    },
-    {
-      "match": "^\\s*(@?[A-Za-z_][A-Za-z0-9_]*)(?=\\s*:(?!:))",
-      "captures": {
-        "1": {
-          "name": "entity.name.label.nt65"
-        }
-      }
-    },
-    {
-      "match": "@[A-Za-z_][A-Za-z0-9_]*",
-      "name": "variable.other.local.nt65"
-    },
-    {
-      "match": "(?i)\\b65c02\\b",
-      "name": "constant.language.cpu.nt65"
-    },
-    {
-      "match": "\\$[A-Za-z0-9_]*|%[A-Za-z0-9_]*|\\b[0-9][A-Za-z0-9_]*",
-      "name": "constant.numeric.nt65"
-    },
-    {
-      "match": "(?i)\\b(?:adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya|bra|phx|phy|plx|ply|stz|trb|tsb|stp|wai|bbr0|bbs0|rmb0|smb0|bbr1|bbs1|rmb1|smb1|bbr2|bbs2|rmb2|smb2|bbr3|bbs3|rmb3|smb3|bbr4|bbs4|rmb4|smb4|bbr5|bbs5|rmb5|smb5|bbr6|bbs6|rmb6|smb6|bbr7|bbs7|rmb7|smb7|brl|cop|jml|jsl|mvn|mvp|pea|pei|per|phb|phd|phk|plb|pld|rep|rtl|sep|tcd|tcs|tdc|tsc|txy|tyx|wdm|xba|xce|jcc|jcs|jeq|jmi|jne|jpl|jvc|jvs)\\b",
-      "name": "keyword.other.mnemonic.nt65"
-    },
-    {
-      "match": "(?i)\\b(?:a|x|y|s)\\b",
-      "name": "variable.language.register.nt65"
-    },
-    {
-      "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*!(?!=))",
-      "name": "entity.name.function.macro.nt65"
-    },
-    {
-      "match": "\\b[A-Za-z_][A-Za-z0-9_]*",
-      "name": "variable.other.nt65"
-    },
-    {
-      "match": "->|\\.\\.|<<|>>|<=|>=|==|!=|&&|\\|\\||\\^\\^|[-+*/&|^~!<>=#?]",
-      "name": "keyword.operator.nt65"
+      "include": "#line"
     }
-  ]
+  ],
+  "repository": {
+    "line": {
+      "patterns": [
+        {
+          "match": ";.*$",
+          "name": "comment.line.semicolon.nt65"
+        },
+        {
+          "match": "\"(?:[^\"\\\\]|\\\\.)*\"?",
+          "name": "string.quoted.double.nt65"
+        },
+        {
+          "match": "'(?:[^'\\\\]|\\\\.)*'?",
+          "name": "constant.character.nt65"
+        },
+        {
+          "match": "(?i)\\.mod\\b",
+          "name": "keyword.operator.word.nt65"
+        },
+        {
+          "begin": "(?i)(\\.enum)(?:\\s+([A-Za-z_][A-Za-z0-9_]*))?\\s*(\\{)",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.type.enum.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.enummember.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "include": "#layout"
+        },
+        {
+          "begin": "(?i)(\\.type)\\b",
+          "end": "$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#record"
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)(\\.macro)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.function.preprocessor.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\(",
+              "end": "\\)",
+              "patterns": [
+                {
+                  "include": "#line"
+                }
+              ]
+            },
+            {
+              "match": "(?<=[(,])\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[,):=])",
+              "captures": {
+                "1": {
+                  "name": "variable.parameter.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)(\\.import)\\b",
+          "end": "$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\(",
+              "end": "\\)",
+              "patterns": [
+                {
+                  "include": "#line"
+                }
+              ]
+            },
+            {
+              "match": "(?i)(?<=\\.import\\s|,)\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+              "captures": {
+                "1": {
+                  "name": "variable.other.constant.nt65"
+                }
+              }
+            },
+            {
+              "match": "(?i)(?<=\\.import\\s|,)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.readwrite.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)(\\.(?:repeat|each))\\b",
+          "end": "(?=\\{)|$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": ",\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\{)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.constant.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)(\\.func)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.function.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.parameter.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "match": "(?i)(\\.proc)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.function.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.macro)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.function.preprocessor.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.scope)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.namespace.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.(?:charmap|signature))\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.type.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.(?:data|list|frame))\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "variable.other.readwrite.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.(?:config|export))\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "variable.other.constant.nt65"
+            }
+          }
+        },
+        {
+          "match": "\\.[A-Za-z_][A-Za-z0-9_]*",
+          "name": "keyword.control.directive.nt65"
+        },
+        {
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+          "captures": {
+            "1": {
+              "name": "variable.other.constant.nt65"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(@?[A-Za-z_][A-Za-z0-9_]*)(?=\\s*:(?!:))",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.nt65"
+            }
+          }
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "variable.other.local.nt65"
+        },
+        {
+          "match": "(?i)\\b65c02\\b",
+          "name": "constant.language.cpu.nt65"
+        },
+        {
+          "match": "\\$[A-Za-z0-9_]*|%[A-Za-z0-9_]*|\\b[0-9][A-Za-z0-9_]*",
+          "name": "constant.numeric.nt65"
+        },
+        {
+          "match": "::([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "variable.other.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(?:adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya|bra|phx|phy|plx|ply|stz|trb|tsb|stp|wai|bbr0|bbs0|rmb0|smb0|bbr1|bbs1|rmb1|smb1|bbr2|bbs2|rmb2|smb2|bbr3|bbs3|rmb3|smb3|bbr4|bbs4|rmb4|smb4|bbr5|bbs5|rmb5|smb5|bbr6|bbs6|rmb6|smb6|bbr7|bbs7|rmb7|smb7|brl|cop|jml|jsl|mvn|mvp|pea|pei|per|phb|phd|phk|plb|pld|rep|rtl|sep|tcd|tcs|tdc|tsc|txy|tyx|wdm|xba|xce|jcc|jcs|jeq|jmi|jne|jpl|jvc|jvs)\\b",
+          "name": "keyword.other.mnemonic.nt65"
+        },
+        {
+          "match": "(?i)\\b(?:a|x|y|s)\\b",
+          "name": "variable.language.register.nt65"
+        },
+        {
+          "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(!)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "entity.name.function.preprocessor.nt65"
+            },
+            "2": {
+              "name": "keyword.operator.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\(",
+              "end": "\\)",
+              "patterns": [
+                {
+                  "include": "#line"
+                }
+              ]
+            },
+            {
+              "match": "([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+              "captures": {
+                "1": {
+                  "name": "variable.parameter.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=\\s*!(?!=))",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.preprocessor.nt65"
+            }
+          }
+        },
+        {
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*",
+          "name": "variable.other.nt65"
+        },
+        {
+          "match": "->|\\.\\.|<<|>>|<=|>=|==|!=|&&|\\|\\||\\^\\^|[-+*/&|^~!<>=#?]",
+          "name": "keyword.operator.nt65"
+        }
+      ]
+    },
+    "record": {
+      "patterns": [
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#record"
+            },
+            {
+              "match": "\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+              "captures": {
+                "1": {
+                  "name": "variable.other.property.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        }
+      ]
+    },
+    "layout": {
+      "patterns": [
+        {
+          "begin": "(?i)(\\.(?:struct|union))(?:\\s+([A-Za-z_][A-Za-z0-9_]*))?\\s*(\\{)",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "entity.name.type.struct.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#layout"
+            },
+            {
+              "match": "^\\s*(@?[A-Za-z_][A-Za-z0-9_]*)(?=\\s*:(?!:))",
+              "captures": {
+                "1": {
+                  "name": "variable.other.property.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        }
+      ]
+    }
+  }
 }

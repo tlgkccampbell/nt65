@@ -5,7 +5,7 @@ namespace Norristown.Tests.Syntax;
 
 public sealed class TextMateGrammarTests
 {
-    // Lines that exercise the places a regex and the lexer could disagree.
+    // Lines that exercise the places a regex and the parser could disagree.
     private const string Tricky = """
         z: ::foo
         lda z:ptr+1
@@ -20,6 +20,51 @@ public sealed class TextMateGrammarTests
         x != y
         gfx::init::x
         a8: ldax bbr7 tad
+        .export .enum Joy { ; {
+            A = $80
+            inc
+        }
+        .enum {
+            FIRST
+        }
+        .struct Point {
+            x: .byte
+            .union {
+                y: .word
+                @tag: .byte
+            }
+        }
+        .data one: .type Point { x = 1, y = { a = 2 } }
+        .data many: .type Point[4] {
+            { x = 1, y = 2 }
+        }
+        .data long: .type Point {
+            x = 3 ; x = 4
+            y = x
+        }
+        .struct Box {
+            corner: .type Point
+        }
+        .macro mac(dest: operand, count, w: one(a, b) = a): a8 {
+            mac!(dest = 1, 2, w = b)
+        }
+        mac!(dest = {x}, w = (a))
+        .func twice(n, m) = n * 2
+        .export .proc main: a8, dp = 0 {
+        }
+        .proc far = $1234
+        .scope gfx {
+        }
+        .export .signature std = a8, dp = 0
+        .charmap text {
+        }
+        .data table: .byte 1
+        .list L {
+        }
+        .frame f: Point
+        .export K = Joy::A
+        .config C = 2
+        K == 1
         """;
 
     [Fact]
@@ -35,19 +80,26 @@ public sealed class TextMateGrammarTests
             "editors/vscode/syntaxes/nt65.tmLanguage.json is out of date; run scripts/test.ps1 -Update");
     }
 
+    /// <summary>
+    /// Every token is scoped as the lexer classifies it, and every name as the parser reads it: a
+    /// declaration by what it declares, a member of an enum, a struct, a union or a record as a
+    /// member, a parameter as a parameter, and any other name plainly.
+    /// </summary>
     [Fact]
-    public void GrammarScopesEveryTokenAsTheLexerClassifiesIt()
+    public void GrammarScopesEveryTokenAsTheParserReadsIt()
     {
         var sources = DesignCorpus.Blocks.Select(b => (Name: b.ToString(), b.Text)).Append(("tricky", Tricky));
         var failures = new List<string>();
         foreach (var (name, text) in sources)
         {
             var tree = SyntaxTree.Parse(name, text);
+            var bodies = Bodies(tree);
+            var lineScopes = TextMateGrammar.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
             for (var l = 0; l < tree.Lines.Length; l++)
             {
                 var line = tree.Lines[l];
                 var lineText = line.ToFullString().TrimEnd('\r', '\n');
-                var scopes = TextMateGrammar.Scope(lineText);
+                var scopes = lineScopes[l];
                 var offset = 0;
                 for (var t = 0; t < line.Tokens.Length; t++)
                 {
@@ -64,7 +116,7 @@ public sealed class TextMateGrammarTests
                     }
                     if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.Error is not null)
                         continue;
-                    var expected = TextMateGrammar.Expected(line, t);
+                    var expected = TextMateGrammar.Expected(tree, l, t, bodies.GetValueOrDefault(l));
                     var actual = scopes[start..triviaStart].Distinct().ToList();
                     if (actual.Count != 1 || actual[0] != expected)
                         failures.Add($"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}");
@@ -72,5 +124,30 @@ public sealed class TextMateGrammarTests
             }
         }
         Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// The block each line is in the body of, looking through conditionals and repetitions, which
+    /// the grammar does not follow. A block's opener is written in the block around it.
+    /// </summary>
+    private static Dictionary<int, BlockKind> Bodies(SyntaxTree tree)
+    {
+        var bodies = new Dictionary<int, BlockKind>();
+        foreach (var line in tree.Root.DescendantNodes().Where(node => node.Green is GreenLine))
+        {
+            var child = line;
+            for (var block = line.Parent; block is not null; child = block, block = block.Parent)
+            {
+                if (block.Green is not GreenBlock { BlockKind: var kind }
+                    || (block.ChildNodes.Length > 0 && block.ChildNodes[0].Green == child.Green && block.ChildNodes[0].Position == child.Position)
+                    || kind is BlockKind.If or BlockKind.Repeat or BlockKind.Each)
+                {
+                    continue;
+                }
+                bodies[line.LineIndex] = kind;
+                break;
+            }
+        }
+        return bodies;
     }
 }

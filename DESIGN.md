@@ -2749,12 +2749,17 @@ Recorded so the reasoning survives. None is open.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
-- **Names are coloured by the language server, not the grammar.** The TextMate grammar colours
-  what the lexer knows, which is all there is before the server answers and where no server
-  runs. Whether a word is a name depends on where it is written: a member of a named enum,
-  struct or union may be spelled like a register or a mnemonic, and a grammar that guessed at
-  that would be a second parser. So the server classifies every name by what it refers to, as
-  semantic tokens drawn over the grammar's colours, and the grammar stays lexical.
+- **Names are coloured by the language server; the grammar colours declarations the same way.**
+  What a name refers to is the server's to say: a use, `jsr init` or `Joy::A`, names something
+  only resolution can see, and a member of a named enum, struct or union may be spelled like a
+  register or a mnemonic. So the server classifies every name as semantic tokens, drawn over the
+  TextMate grammar's colours. The grammar is all there is while an editor starts and where no
+  server runs, and a name that changed colour when the server answered would flicker, so the
+  grammar gives each declaration the scope the editor maps the server's token to: the name after
+  `.proc` or `.enum`, a label, a constant, a parameter, and the members of an enum, a struct, a
+  union and a record. It knows these from the line and the block they are in; a use keeps the
+  plain colour until the server answers, and so does a constant whose expression turns out to be
+  an address.
 
 ## 17. Version 1
 

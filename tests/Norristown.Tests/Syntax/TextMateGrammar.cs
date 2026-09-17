@@ -8,8 +8,16 @@ namespace Norristown.Tests.Syntax;
 
 /// <summary>
 /// The VS Code grammar, editors/vscode/syntaxes/nt65.tmLanguage.json, is generated from the
-/// lexer's tables and checked against the lexer's tokens. Every pattern is a single-line
-/// <c>match</c>, since nothing in nt65 spans lines, which also makes it easy to run here.
+/// lexer's tables and checked against the parser's reading of each line.
+/// <para>
+/// The language server colours every name by what it refers to, and the client draws that over
+/// the grammar once the server answers. So that a name does not change colour then, the grammar
+/// gives each declaration the scope VS Code maps the server's token type to: the name after
+/// <c>.proc</c> is <c>entity.name.function</c>, as a <c>function</c> token is. A declaration is
+/// known from its own line, or from the block it is in: the members of an enum, a struct or a
+/// union, and the member names of a record. A use, <c>jsr init</c> or <c>Joy::A</c>, names
+/// something only the server can see, and keeps the plain scope.
+/// </para>
 /// </summary>
 internal static class TextMateGrammar
 {
@@ -24,41 +32,53 @@ internal static class TextMateGrammar
     public const string Number = "constant.numeric.nt65";
     public const string Mnemonic = "keyword.other.mnemonic.nt65";
     public const string Register = "variable.language.register.nt65";
-    public const string Macro = "entity.name.function.macro.nt65";
     public const string Identifier = "variable.other.nt65";
     public const string Operator = "keyword.operator.nt65";
 
+    // The scopes VS Code gives the server's token types, which a theme colours them by.
+    public const string Macro = "entity.name.function.preprocessor.nt65";
+    public const string Function = "entity.name.function.nt65";
+    public const string Namespace = "entity.name.namespace.nt65";
+    public const string Enum = "entity.name.type.enum.nt65";
+    public const string Struct = "entity.name.type.struct.nt65";
+    public const string Type = "entity.name.type.nt65";
+    public const string Variable = "variable.other.readwrite.nt65";
+    public const string Constant = "variable.other.constant.nt65";
+    public const string EnumMember = "variable.other.enummember.nt65";
+    public const string Property = "variable.other.property.nt65";
+    public const string Parameter = "variable.parameter.nt65";
+
     private const string Word = "[A-Za-z_][A-Za-z0-9_]*";
+    private const string LineRules = "line";
 
     public static readonly string Path = Repo.Path("editors", "vscode", "syntaxes", "nt65.tmLanguage.json");
 
-    private static readonly Lazy<List<(string Scope, Regex Regex)>> compiled =
-        new(() => [.. Patterns().Select(p => (p.Scope, new Regex(p.Match, RegexOptions.CultureInvariant)))]);
+    private static readonly Lazy<Dictionary<Rule, Compiled>> compiled = new(() =>
+    {
+        var all = new Dictionary<Rule, Compiled>(ReferenceEqualityComparer.Instance);
+        void Add(IEnumerable<Rule> rules)
+        {
+            foreach (var rule in rules)
+            {
+                if (rule.Include is not null || all.ContainsKey(rule))
+                    continue;
+                all[rule] = new Compiled(
+                    new Regex(rule.Match ?? rule.Begin!, RegexOptions.CultureInvariant),
+                    rule.End is null ? null : new Regex(rule.End, RegexOptions.CultureInvariant));
+                Add(rule.Patterns);
+            }
+        }
+        Add(Repository.Values.SelectMany(rules => rules));
+        return all;
+    });
 
-    /// <summary>(scope, regex) in priority order. A pattern with a group scopes only group 1.</summary>
-    public static IReadOnlyList<(string Scope, string Match)> Patterns() =>
-    [
-        (Comment, ";.*$"),
-        (String, """
-            "(?:[^"\\]|\\.)*"?
-            """),
-        (Character, """
-            '(?:[^'\\]|\\.)*'?
-            """),
-        (OperatorWord, @"(?i)\.mod\b"),
-        (Directive, @"\.[A-Za-z_][A-Za-z0-9_]*"),
-        // A label at the start of a line; `name::` is a scoped name, not a label.
-        (Label, $@"^\s*(@?{Word})(?=\s*:(?!:))"),
-        (CheapLocal, "@" + Word),
-        (Cpu, @"(?i)\b65c02\b"),
-        (Number, @"\$[A-Za-z0-9_]*|%[A-Za-z0-9_]*|\b[0-9][A-Za-z0-9_]*"),
-        (Mnemonic, $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics)})\b"),
-        (Register, $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b"),
-        // After mnemonics and registers, which keep their scope even before a `!`.
-        (Macro, $@"\b{Word}(?=\s*!(?!=))"),
-        (Identifier, @"\b" + Word),
-        (Operator, @"->|\.\.|<<|>>|<=|>=|==|!=|&&|\|\||\^\^|[-+*/&|^~!<>=#?]"),
-    ];
+    private static readonly Lazy<Dictionary<string, IReadOnlyList<Rule>>> repository = new(Build);
+
+    /// <summary>The rules every line is scoped with, and the blocks that reach past a line.</summary>
+    private static Dictionary<string, IReadOnlyList<Rule>> Repository => repository.Value;
+
+    /// <summary>The top level of the grammar: every line's rules.</summary>
+    private static IReadOnlyList<Rule> Root => [Rule.Including(LineRules)];
 
     public static string Generate()
     {
@@ -71,70 +91,93 @@ internal static class TextMateGrammar
                 "scripts/test.ps1 -Update rewrites it.");
             json.WriteString("name", "nt65");
             json.WriteString("scopeName", "source.nt65");
-            json.WriteStartArray("patterns");
-            foreach (var (scope, match) in Patterns())
+            WritePatterns(json, Root);
+            json.WriteStartObject("repository");
+            foreach (var (name, rules) in Repository)
             {
-                json.WriteStartObject();
-                json.WriteString("match", match);
-                if (new Regex(match).GetGroupNumbers().Length > 1)
-                {
-                    json.WriteStartObject("captures");
-                    json.WriteStartObject("1");
-                    json.WriteString("name", scope);
-                    json.WriteEndObject();
-                    json.WriteEndObject();
-                }
-                else
-                {
-                    json.WriteString("name", scope);
-                }
+                json.WriteStartObject(name);
+                WritePatterns(json, rules);
                 json.WriteEndObject();
             }
-            json.WriteEndArray();
+            json.WriteEndObject();
             json.WriteEndObject();
         }
         return Encoding.UTF8.GetString(stream.ToArray()) + "\n";
     }
 
     /// <summary>
-    /// Scopes each character of one line the way a TextMate tokenizer runs a list of match
-    /// rules: from the current position, the leftmost match of any pattern wins, and the
-    /// earlier pattern breaks a tie.
+    /// Scopes each character of each line the way a TextMate tokenizer runs the grammar. From the
+    /// current position, the end of the innermost open block and every rule it holds are tried,
+    /// the leftmost match wins, and an earlier one breaks a tie, the end first. A block's end may
+    /// be <c>$</c>, which matches at the end of a line.
     /// </summary>
-    public static string?[] Scope(string line)
+    public static string?[][] Scope(IReadOnlyList<string> lines)
     {
-        var patterns = compiled.Value;
-        var scopes = new string?[line.Length];
-        var pos = 0;
-        while (pos < line.Length)
+        var rules = compiled.Value;
+        var open = new Stack<Rule>();
+        var result = new string?[lines.Count][];
+        for (var l = 0; l < lines.Count; l++)
         {
-            Match? best = null;
-            string? bestScope = null;
-            foreach (var (scope, regex) in patterns)
+            var line = lines[l];
+            var scopes = result[l] = new string?[line.Length];
+            var pos = 0;
+            while (true)
             {
-                var m = regex.Match(line, pos);
-                if (m.Success && (best is null || m.Index < best.Index))
-                    (best, bestScope) = (m, scope);
+                // The end of the innermost block is tried even at the end of the line, where `$` matches.
+                Match? best = null;
+                Rule? chosen = null;
+                if (open.TryPeek(out var inside) && rules[inside].End!.Match(line, pos) is { Success: true } end)
+                    best = end;
+                if (pos < line.Length)
+                {
+                    foreach (var rule in Flatten(open.Count > 0 ? open.Peek().Patterns : Root))
+                    {
+                        var m = rules[rule].Regex.Match(line, pos);
+                        if (m.Success && (best is null || m.Index < best.Index))
+                            (best, chosen) = (m, rule);
+                    }
+                }
+                if (best is null)
+                    break;
+                if (chosen is null)
+                {
+                    open.Pop();
+                }
+                else
+                {
+                    if (chosen.Captures is { } captures)
+                    {
+                        for (var g = 1; g < captures.Count; g++)
+                            Paint(scopes, best.Groups[g], captures[g]);
+                    }
+                    else
+                    {
+                        Paint(scopes, best.Groups[0], chosen.Name);
+                    }
+                    if (chosen.Begin is not null)
+                        open.Push(chosen);
+                }
+                pos = best.Length == 0 && chosen is { Begin: null } ? best.Index + 1 : best.Index + best.Length;
             }
-            if (best is null)
-                break;
-            var group = best.Groups.Count > 1 ? best.Groups[1] : best.Groups[0];
-            for (var i = group.Index; i < group.Index + group.Length; i++)
-                scopes[i] = bestScope;
-            pos = Math.Max(best.Index + best.Length, pos + (best.Length == 0 ? 1 : 0));
         }
-        return scopes;
+        return result;
     }
 
-    /// <summary>The scope the grammar should give a token, or null for none (punctuation).</summary>
-    public static string? Expected(GreenLine line, int index)
+    /// <summary>
+    /// The scope the grammar should give a token, or null for none (punctuation), from what the
+    /// parser reads the line as and the block it is in.
+    /// </summary>
+    public static string? Expected(SyntaxTree tree, int lineIndex, int index, BlockKind body)
     {
+        var line = tree.Lines[lineIndex];
         var token = line.Tokens[index];
-        if (index == 0 && line.LineKind == LineKind.Label)
-            return Label;
+        if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal
+            && NameScope(tree, lineIndex, index, body) is { } name)
+        {
+            return name;
+        }
         return token.Kind switch
         {
-            SyntaxKind.Identifier when line.Tokens[index + 1].Kind == SyntaxKind.Bang => Macro,
             SyntaxKind.Identifier => Identifier,
             SyntaxKind.CheapLocal => CheapLocal,
             SyntaxKind.Mnemonic => Mnemonic,
@@ -150,4 +193,233 @@ internal static class TextMateGrammar
             _ => Operator,
         };
     }
+
+    /// <summary>
+    /// The scope of a name the parser reads as a declaration, a member or a parameter, or null
+    /// for a name the grammar cannot place.
+    /// </summary>
+    private static string? NameScope(SyntaxTree tree, int lineIndex, int index, BlockKind body)
+    {
+        var tokens = tree.Lines[lineIndex].Tokens;
+        if (index > 0 && tokens[index - 1].Kind == SyntaxKind.ColonColon)
+            return Identifier;
+        if (Parent(tree.Statement(lineIndex), index) is not { } found)
+            return null;
+        var (parent, first) = found;
+        return parent.Kind switch
+        {
+            SyntaxKind.Label when first => body is BlockKind.Struct or BlockKind.Union ? Property : Label,
+            SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration or SyntaxKind.FuncDeclaration when first => Function,
+            SyntaxKind.MacroDeclaration when first => Macro,
+            SyntaxKind.MacroParameter when first => Parameter,
+            SyntaxKind.ImportItem when first => HasToken(parent, SyntaxKind.Equals) ? Constant : Variable,
+            SyntaxKind.RepeatDirective or SyntaxKind.EachDirective => Constant,
+            SyntaxKind.ParameterList => Parameter,
+            SyntaxKind.EnumDeclaration when first => Enum,
+            SyntaxKind.StructDeclaration or SyntaxKind.UnionDeclaration when first => Struct,
+            SyntaxKind.ScopeDeclaration when first => Namespace,
+            SyntaxKind.CharmapDeclaration or SyntaxKind.SignatureDeclaration when first => Type,
+            SyntaxKind.DataDeclaration or SyntaxKind.ListDeclaration or SyntaxKind.FrameDirective when first => Variable,
+            SyntaxKind.ConstantDeclaration or SyntaxKind.ConfigDeclaration when first => Constant,
+            SyntaxKind.EnumMember when first => EnumMember,
+            SyntaxKind.MemberValue when first => Property,
+            SyntaxKind.NamedArgument when first => Parameter,
+            SyntaxKind.MacroCall when first && index + 1 < tokens.Length && tokens[index + 1].Kind == SyntaxKind.Bang => Macro,
+            _ => tokens[index].Kind == SyntaxKind.Identifier && index + 1 < tokens.Length && tokens[index + 1].Kind == SyntaxKind.Bang
+                ? Macro
+                : null,
+        };
+    }
+
+    /// <summary>
+    /// The node holding the line's token at <paramref name="index"/>, and whether it is the first
+    /// name that node holds, which is the one a declaration declares.
+    /// </summary>
+    private static (GreenNode Parent, bool First)? Parent(GreenNode statement, int index)
+    {
+        var at = 0;
+        (GreenNode, bool)? found = null;
+        void Walk(GreenNode node)
+        {
+            var named = false;
+            for (var i = 0; i < node.SlotCount && found is null; i++)
+            {
+                var child = node.GetSlot(i);
+                if (child is GreenToken token)
+                {
+                    var isName = token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal;
+                    if (at++ == index)
+                        found = (node, isName && !named);
+                    named |= isName;
+                }
+                else
+                {
+                    Walk(child);
+                }
+            }
+        }
+        Walk(statement);
+        return found;
+    }
+
+    private static bool HasToken(GreenNode node, SyntaxKind kind) =>
+        Enumerable.Range(0, node.SlotCount).Any(i => node.GetSlot(i) is GreenToken token && token.Kind == kind);
+
+    private static void Paint(string?[] scopes, Group group, string? scope)
+    {
+        if (!group.Success || scope is null)
+            return;
+        for (var i = group.Index; i < group.Index + group.Length; i++)
+            scopes[i] = scope;
+    }
+
+    private static IEnumerable<Rule> Flatten(IEnumerable<Rule> rules) =>
+        rules.SelectMany(rule => rule.Include is { } name ? Flatten(Repository[name]) : [rule]);
+
+    private static Dictionary<string, IReadOnlyList<Rule>> Build()
+    {
+        var line = new List<Rule>();
+        var rules = new Dictionary<string, IReadOnlyList<Rule>> { [LineRules] = line };
+        var include = Rule.Including(LineRules);
+
+        // Brackets inside a header or a call, so that their `)` does not close it.
+        var parentheses = new Rule(Begin: @"\(", End: @"\)", Patterns: [include]);
+
+        // A record's values, on the directive's line or the lines after it. A `{` inside one is a
+        // record or a list of its own. A member's match starts with the space before it, so that
+        // it starts where a constant declaration's would and wins the tie.
+        var record = Rule.Including("record");
+        rules["record"] = [new Rule(Begin: @"\{", End: @"\}",
+            Patterns: [record, Rule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Property), include])];
+
+        // A struct or union body, which may hold anonymous ones.
+        var layout = Rule.Including("layout");
+        rules["layout"] = [Rule.Block($@"(?i)(\.(?:struct|union))(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Struct],
+            [layout, Rule.Scoped($@"^\s*(@?{Word})(?=\s*:(?!:))", Property), include])];
+
+        line.AddRange(
+        [
+            new Rule(Match: ";.*$", Name: Comment),
+            new Rule(Match: """
+                "(?:[^"\\]|\\.)*"?
+                """, Name: String),
+            new Rule(Match: """
+                '(?:[^'\\]|\\.)*'?
+                """, Name: Character),
+            new Rule(Match: @"(?i)\.mod\b", Name: OperatorWord),
+
+            // Blocks, each opened by a directive on its line.
+            Rule.Block($@"(?i)(\.enum)(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Enum],
+                [Rule.Scoped($@"^\s*({Word})", EnumMember), include]),
+            layout,
+            Rule.Block($@"(?i)(\.type)\b", "$", [Directive], [record, include]),
+            Rule.Block($@"(?i)(\.macro)\s+({Word})\s*(\()", @"\)", [Directive, Macro],
+                [parentheses, Rule.Scoped($@"(?<=[(,])\s*({Word})(?=\s*[,):=])", Parameter), include]),
+
+            // The names an import declares, each first in its item: a constant given a value, or
+            // an address. A routine's signature is in brackets of its own. "First in its item" is
+            // a lookbehind, as a macro's parameters are, because `\G` means only "just after the
+            // block opened" to VS Code's tokenizer.
+            Rule.Block($@"(?i)(\.import)\b", "$", [Directive],
+                [parentheses, Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})(?=\s*=(?!=))", Constant),
+                    Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})", Variable), include]),
+
+            // The name a repetition binds, last before its brace.
+            Rule.Block($@"(?i)(\.(?:repeat|each))\b", @"(?=\{)|$", [Directive],
+                [Rule.Scoped($@",\s*({Word})(?=\s*\{{)", Constant), include]),
+            Rule.Block($@"(?i)(\.func)\s+({Word})\s*(\()", @"\)", [Directive, Function],
+                [Rule.Scoped($@"\b({Word})", Parameter), include]),
+
+            // A declaration's name, after the directive that declares it.
+            Rule.Scoped($@"(?i)(\.proc)\s+({Word})", Directive, Function),
+            Rule.Scoped($@"(?i)(\.macro)\s+({Word})", Directive, Macro),
+            Rule.Scoped($@"(?i)(\.scope)\s+({Word})", Directive, Namespace),
+            Rule.Scoped($@"(?i)(\.(?:charmap|signature))\s+({Word})", Directive, Type),
+            Rule.Scoped($@"(?i)(\.(?:data|list|frame))\s+({Word})", Directive, Variable),
+            Rule.Scoped($@"(?i)(\.(?:config|export))\s+({Word})(?=\s*=(?!=))", Directive, Constant),
+            new Rule(Match: @"\.[A-Za-z_][A-Za-z0-9_]*", Name: Directive),
+            Rule.Scoped($@"^\s*({Word})(?=\s*=(?!=))", Constant),
+
+            // A label at the start of a line; `name::` is a scoped name, not a label.
+            Rule.Scoped($@"^\s*(@?{Word})(?=\s*:(?!:))", Label),
+            new Rule(Match: "@" + Word, Name: CheapLocal),
+            new Rule(Match: @"(?i)\b65c02\b", Name: Cpu),
+            new Rule(Match: @"\$[A-Za-z0-9_]*|%[A-Za-z0-9_]*|\b[0-9][A-Za-z0-9_]*", Name: Number),
+
+            // After `::` a word is a member, however it is spelled.
+            Rule.Scoped($@"::({Word})", Identifier),
+            new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics)})\b", Name: Mnemonic),
+            new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b", Name: Register),
+
+            // A macro call, after mnemonics and registers, which keep their scope even before a
+            // `!`. Its named arguments are its parameters.
+            Rule.Block($@"\b({Word})\s*(!)\s*(\()", @"\)", [Macro, Operator],
+                [parentheses, Rule.Scoped($@"({Word})(?=\s*=(?!=))", Parameter), include]),
+            Rule.Scoped($@"\b({Word})(?=\s*!(?!=))", Macro),
+            new Rule(Match: @"\b" + Word, Name: Identifier),
+            new Rule(Match: @"->|\.\.|<<|>>|<=|>=|==|!=|&&|\|\||\^\^|[-+*/&|^~!<>=#?]", Name: Operator),
+        ]);
+        return rules;
+    }
+
+    private static void WritePatterns(Utf8JsonWriter json, IReadOnlyList<Rule> rules)
+    {
+        json.WriteStartArray("patterns");
+        foreach (var rule in rules)
+            WriteRule(json, rule);
+        json.WriteEndArray();
+    }
+
+    private static void WriteRule(Utf8JsonWriter json, Rule rule)
+    {
+        json.WriteStartObject();
+        if (rule.Include is { } name)
+        {
+            json.WriteString("include", "#" + name);
+            json.WriteEndObject();
+            return;
+        }
+        json.WriteString(rule.Begin is null ? "match" : "begin", rule.Match ?? rule.Begin);
+        if (rule.End is { } end)
+            json.WriteString("end", end);
+        if (rule.Name is { } scope)
+            json.WriteString("name", scope);
+        if (rule.Captures is { } captures)
+        {
+            json.WriteStartObject(rule.Begin is null ? "captures" : "beginCaptures");
+            for (var g = 1; g < captures.Count; g++)
+            {
+                if (captures[g] is not { } captured)
+                    continue;
+                json.WriteStartObject(g.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                json.WriteString("name", captured);
+                json.WriteEndObject();
+            }
+            json.WriteEndObject();
+        }
+        if (rule.Begin is not null)
+            WritePatterns(json, rule.Patterns);
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// One grammar rule: a <c>match</c> scoped by its name or by its groups, a <c>begin</c>/<c>end</c>
+    /// block with the rules inside it, or an include of the repository. <c>Captures</c> holds the
+    /// scope of each group by number, and its index 0 is unused.
+    /// </summary>
+    private sealed record Rule(
+        string? Match = null, string? Name = null, IReadOnlyList<string?>? Captures = null,
+        string? Begin = null, string? End = null, IReadOnlyList<Rule>? Patterns = null, string? Include = null)
+    {
+        public IReadOnlyList<Rule> Patterns { get; } = Patterns ?? [];
+
+        public static Rule Including(string name) => new(Include: name);
+
+        public static Rule Scoped(string match, params string?[] groups) => new(Match: match, Captures: [null, .. groups]);
+
+        public static Rule Block(string begin, string end, IReadOnlyList<string?> groups, IReadOnlyList<Rule> patterns) =>
+            new(Begin: begin, End: end, Captures: [null, .. groups], Patterns: patterns);
+    }
+
+    private sealed record Compiled(Regex Regex, Regex? End);
 }
