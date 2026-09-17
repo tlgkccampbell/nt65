@@ -57,7 +57,7 @@ public sealed partial class OracleTests
         var fixtures = FixtureCase.All();
         var outputs = fixtures
             .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project, fixture.BinaryLength)
-                .Outputs.Select(o => (Fixture: fixture, Output: o)))
+                .Ca65.Select(o => (Fixture: fixture, Output: o)))
             .ToList();
         if (Repo.Selection is null)
             Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
@@ -98,7 +98,7 @@ public sealed partial class OracleTests
             var (config, handWritten) = LinkFiles(fixture)!.Value;
             var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
             var result = Ca65Oracle.Pinned.Link(config,
-                [.. compilation.Outputs.Select(o => (Path.GetFileName(o.Path), o.Text)), .. handWritten]);
+                [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text)), .. handWritten]);
             if (!result.Succeeded)
                 yield return $"[{fixture.Name}] ld65 reported:\n{result.Messages}";
             else if (result.Binary.Length == 0)
@@ -126,7 +126,7 @@ public sealed partial class OracleTests
         Assert.Contains(wrong, file => file.Source.Contains("$0103"));
 
         var result = Ca65Oracle.Pinned.Link(config,
-            [.. Compiler.Compile(fixture.Sources, fixture.Project).Outputs
+            [.. Compiler.Compile(fixture.Sources, fixture.Project).Ca65
                 .Select(o => (Path.GetFileName(o.Path), o.Text)),
              .. wrong]);
 
@@ -183,7 +183,7 @@ public sealed partial class OracleTests
         var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)]);
         Assert.Empty(generated.Diagnostics);
 
-        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Outputs).Text)]);
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Ca65).Text)]);
         var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
 
         Assert.True(fromNt65.Succeeded, fromNt65.Messages);

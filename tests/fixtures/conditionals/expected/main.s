@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 3388, 0
 
 .export main__bits
 .export main__dispatch
@@ -23,30 +22,19 @@ TRACE = 1
 main:
 
 main__again:
-.dbg line, "main.nt65", 39
     jsr trace
-.dbg line, "main.nt65", 40
     bne main__again
-.dbg line, "main.nt65", 42
     ldy #$03
-.dbg line, "main.nt65", 43
     lda #<LINES
-.dbg line, "main.nt65", 44
     ldx #>LINES
-.dbg line, "main.nt65", 45
     rts
 
 trace:
-.dbg line, "main.nt65", 51
     phx
-.dbg line, "main.nt65", 52
     plx
-.dbg line, "main.nt65", 59
     rts
 
-.dbg line, "main.nt65", 63
     .assert main >= $0200, lderror, "main must be past the zero page"
-.dbg line, "main.nt65", 64
     .assert (main <> trace) && (main = main), lderror, "ca65 spells these operators its own way"
 
 Cmd__move = $00
@@ -55,124 +43,77 @@ Cmd__wait = $02
 
 .segment "RODATA": absolute
 main__bits:
-.dbg line, "main.nt65", 80
         .byte 1 << $00              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $01              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $02              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $03              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $04              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $05              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $06              ; i
-.dbg line, "main.nt65", 80
         .byte 1 << $07              ; i
 
 main__dispatch:
-.dbg line, "main.nt65", 86
         .addr main - 1              ; h
-.dbg line, "main.nt65", 86
         .addr trace - 1             ; h
 
 main__commands:
-.dbg line, "main.nt65", 92
         .byte $00                   ; c
-.dbg line, "main.nt65", 92
         .byte $01                   ; c
-.dbg line, "main.nt65", 92
         .byte $02                   ; c
 
 main__actions_table:
-.dbg line, "main.nt65", 100
         .addr actions__move
-.dbg line, "main.nt65", 100
         .addr actions__fire
-.dbg line, "main.nt65", 100
         .addr actions__wait
 
 main__grid:
-.dbg line, "main.nt65", 107
             .byte ($00 * 3) + $00   ; row, col
-.dbg line, "main.nt65", 107
             .byte ($00 * 3) + $01   ; row, col
-.dbg line, "main.nt65", 107
             .byte ($00 * 3) + $02   ; row, col
-.dbg line, "main.nt65", 107
             .byte ($01 * 3) + $00   ; row, col
-.dbg line, "main.nt65", 107
             .byte ($01 * 3) + $01   ; row, col
-.dbg line, "main.nt65", 107
             .byte ($01 * 3) + $02   ; row, col
 
     COLUMNS = 80
 
 .segment "CODE": absolute
 indented:
-.dbg line, "main.nt65", 123
         lda #COLUMNS
-.dbg line, "main.nt65", 129
     rts
 
 actions__move:
-.dbg line, "main.nt65", 134
     rts
 actions__fire:
-.dbg line, "main.nt65", 137
     jmp actions__move
 actions__wait:
-.dbg line, "main.nt65", 140
     rts
 
 slow:
-.dbg line, "main.nt65", 148
     ldx #$00 + 1                    ; i
 slow__delay:
-.dbg line, "main.nt65", 150
     dex
-.dbg line, "main.nt65", 151
     bne slow__delay
-.dbg line, "main.nt65", 152
     bcc slow__skip
-.dbg line, "main.nt65", 153
     nop
 slow__skip:
-.dbg line, "main.nt65", 148
     ldx #$01 + 1                    ; i
 slow__delay_2:
-.dbg line, "main.nt65", 150
     dex
-.dbg line, "main.nt65", 151
     bne slow__delay_2
-.dbg line, "main.nt65", 152
     bcc slow__skip_2
-.dbg line, "main.nt65", 153
     nop
 slow__skip_2:
-.dbg line, "main.nt65", 148
     ldx #$02 + 1                    ; i
 slow__delay_3:
-.dbg line, "main.nt65", 150
     dex
-.dbg line, "main.nt65", 151
     bne slow__delay_3
-.dbg line, "main.nt65", 152
     bcc slow__skip_3
-.dbg line, "main.nt65", 153
     nop
 slow__skip_3:
-.dbg line, "main.nt65", 156
     rts
 
 run_all:
-.dbg line, "main.nt65", 162
     jsr actions__move
-.dbg line, "main.nt65", 162
     jsr actions__fire
-.dbg line, "main.nt65", 162
     jsr actions__wait
-.dbg line, "main.nt65", 164
     rts

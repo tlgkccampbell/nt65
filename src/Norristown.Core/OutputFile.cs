@@ -19,8 +19,25 @@ public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> Lin
     /// </summary>
     public IReadOnlyList<string> Dependencies { get; init; } = [];
 
+    /// <summary>What it is: the ca65 of a module, or the line map beside it.</summary>
+    public OutputKind Kind { get; init; } = OutputKind.Ca65;
+
     /// <summary>The logical path of the source it was written from.</summary>
     public string Source { get; init; } = "";
+
+    /// <summary>
+    /// How many bytes that source is, which the line map records so that ld65's debug file can
+    /// say the same, and a debugger can tell that the source has changed under it.
+    /// </summary>
+    public int SourceSize { get; init; }
+
+    /// <summary>
+    /// Which line of <see cref="Source"/> each line of <see cref="Text"/> came from, one entry
+    /// per line, or 0 for a line that came from nowhere a debugger should name. This is what
+    /// <see cref="Emit.LineMap"/> writes beside the output, in place of the <c>.dbg line</c>
+    /// directives that would otherwise stand between every two lines of ca65.
+    /// </summary>
+    public IReadOnlyList<int> LineSources { get; init; } = [];
 
     /// <summary>A file whose lengths nothing has worked out, such as one a test wrote by hand.</summary>
     public OutputFile(string path, string text) : this(path, text, []) { }

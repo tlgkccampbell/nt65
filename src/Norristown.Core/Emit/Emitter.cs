@@ -18,6 +18,11 @@ namespace Norristown.Emit;
 /// size; every addressing mode that could be read two ways carries its prefix; and character
 /// and string data is written as bytes, so no ca65 command line can change what it means.
 /// </para>
+/// <para>
+/// What the output does not hold is debug information. Where each line came from is recorded
+/// in <see cref="OutputFile.LineSources"/>, which <see cref="LineMap"/> writes beside the
+/// ca65 as its own file, so that the ca65 is only the program.
+/// </para>
 /// </summary>
 public sealed class Emitter
 {
@@ -32,6 +37,7 @@ public sealed class Emitter
     private readonly string output;
     private readonly StringBuilder generated = new();
     private readonly List<int> lineBytes = [];
+    private readonly List<int> lineSources = [];
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
@@ -61,7 +67,7 @@ public sealed class Emitter
 
     // The line an expansion's output maps back to. The lines of an expansion map to the line
     // of the call, the way a C debugger treats a preprocessor macro, and only a line of this
-    // file can be named: `.dbg file` declares one file, and a body may belong to another.
+    // file can be named: the line map names one source, and a body may belong to another.
     private SyntaxNode? callLine;
 
     private Emitter(
@@ -94,7 +100,12 @@ public sealed class Emitter
         emitter.Exports();
         emitter.Imports();
         emitter.WalkContainer(model.Tree.Root);
-        return new OutputFile(path, emitter.generated.ToString(), emitter.lineBytes) { Source = model.Tree.Path };
+        return new OutputFile(path, emitter.generated.ToString(), emitter.lineBytes)
+        {
+            Source = model.Tree.Path,
+            SourceSize = Encoding.UTF8.GetByteCount(model.Tree.Text),
+            LineSources = emitter.lineSources,
+        };
     }
 
     /// <summary>
@@ -235,10 +246,6 @@ public sealed class Emitter
         Line(".feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -");
         Line(".feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -");
         Line(".feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -");
-
-        // The size lets ld65 check that the source has not changed under the debug file; the
-        // timestamp is zero, so the output does not depend on when the file was written.
-        Line($".dbg file, \"{source}\", {Encoding.UTF8.GetByteCount(model.Tree.Text)}, 0");
     }
 
     /// <summary>
@@ -1409,25 +1416,20 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Writes one line that came from the source, with the debug line that maps it back.
-    /// A line that generates bytes gets one, because ld65 attaches a span of bytes to the line
-    /// in effect while they were generated. So does one that is <paramref name="located"/>: an
-    /// assertion ca65 evaluates, whose failure ca65 notes as generated from the line in effect.
-    /// A label or a constant gets none, and neither do imports and exports: ld65 names the
-    /// output's own line for what goes wrong with those, whatever the debug line says, and each
-    /// would only record a line covering nothing.
+    /// Writes one line that came from the source, and records where it came from. A line that
+    /// generates bytes is mapped, because ld65 attaches a span of bytes to the line in effect
+    /// while they were generated. So is one that is <paramref name="located"/>: an assertion ca65
+    /// evaluates, whose failure ca65 notes as generated from the line in effect. A label or a
+    /// constant is not, and neither are imports and exports: ld65 names the output's own line for
+    /// what goes wrong with those, whatever the map says, and each would only map a line covering
+    /// nothing.
     /// </summary>
     private void Code(SyntaxNode line, string text, int bytes, bool located = false)
     {
         Segment();
         Flush();
-        if (bytes != 0 || located)
-            Located((callLine ?? line).LineIndex + 1);
-        Line(text, bytes);
+        Line(text, bytes, bytes != 0 || located ? (callLine ?? line).LineIndex + 1 : 0);
     }
-
-    /// <summary>The debug line that says what follows came from line <paramref name="number"/>.</summary>
-    private void Located(int number) => Line($".dbg line, \"{source}\", {number}");
 
     /// <summary>
     /// Writes a definition that is in no segment: a constant, or a name for an address given
@@ -1474,10 +1476,16 @@ public sealed class Emitter
             Line("");
     }
 
-    private void Line(string text, int bytes = 0)
+    /// <summary>
+    /// Appends one line of output. <paramref name="bytes"/> is what it assembles to, and
+    /// <paramref name="line"/> the source line it came from, or 0 for a line that came from
+    /// nowhere the map should name.
+    /// </summary>
+    private void Line(string text, int bytes = 0, int line = 0)
     {
         generated.Append(text.TrimEnd()).Append('\n');
         lineBytes.Add(bytes);
+        lineSources.Add(line);
     }
 
     /// <summary>The whitespace a line starts with, which the output keeps.</summary>

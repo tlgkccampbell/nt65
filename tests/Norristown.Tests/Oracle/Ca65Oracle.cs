@@ -145,7 +145,7 @@ internal sealed partial class Ca65Oracle
     /// </summary>
     public LinkResult Link(
         string config, IReadOnlyList<(string Name, string Source)> files,
-        IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
+        IReadOnlyList<(string Name, byte[] Content)>? alongside = null, bool debugFile = false)
     {
         var work = Directory.CreateTempSubdirectory("nt65-ld65-");
         try
@@ -165,13 +165,19 @@ internal sealed partial class Ca65Oracle
                 objects.Add(target);
             }
 
+            string[] dbg = debugFile ? ["--dbgfile", "linked.dbg"] : [];
             var (exitCode, output) = Execute(ld65,
-                ["-C", "oracle-link.cfg", "-o", "linked.bin", .. objects.Order(StringComparer.Ordinal)], work.FullName);
+                ["-C", "oracle-link.cfg", "-o", "linked.bin", .. dbg, .. objects.Order(StringComparer.Ordinal)],
+                work.FullName);
             if (exitCode != 0 || output.Trim().Length > 0)
                 return new LinkResult(false, output.Trim(), []);
 
             var binary = Path.Combine(work.FullName, "linked.bin");
-            return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : []);
+            var debug = Path.Combine(work.FullName, "linked.dbg");
+            return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : [])
+            {
+                DebugFile = File.Exists(debug) ? File.ReadAllText(debug) : "",
+            };
         }
         finally
         {

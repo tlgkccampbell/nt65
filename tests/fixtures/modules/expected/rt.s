@@ -7,10 +7,8 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "rt.nt65", 513, 0
 
 .export rt__ticks: abs
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "rt.nt65", 14
 rt__ticks: .res 1

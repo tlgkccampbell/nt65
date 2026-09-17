@@ -7,169 +7,104 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 3511, 0
 
     Cmd__move = $00
     Cmd__fire = $01
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 25
 cursor: .res 2
 cursor__end:
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 28
 buffer: .res 16
 buffer__end:
-.dbg line, "main.nt65", 29
 points: .res 8                      ; Point
 points__end:
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 32
 gradient: .byte 40, $e0, 0
 gradient__end:
-.dbg line, "main.nt65", 33
 lut: .byte 1, 2, 4, 8
 lut__end:
 row_lo:
-.dbg line, "main.nt65", 36
         .byte $00 * 40              ; i
-.dbg line, "main.nt65", 36
         .byte $01 * 40              ; i
-.dbg line, "main.nt65", 36
         .byte $02 * 40              ; i
-.dbg line, "main.nt65", 36
         .byte $03 * 40              ; i
-.dbg line, "main.nt65", 36
         .byte $04 * 40              ; i
 row_lo__end:
-.dbg line, "main.nt65", 39
 text: .byte $68, $69, $00           ; "hi"
 text__end:
 handlers:
-.dbg line, "main.nt65", 42
         .addr actions__move
-.dbg line, "main.nt65", 42
         .addr actions__fire
 handlers__end:
 hero:
-.dbg line, "main.nt65", 45
     .byte $01                       ; pos::x
-.dbg line, "main.nt65", 45
     .byte $02                       ; pos::y
-.dbg line, "main.nt65", 45
     .word $0100                     ; tile
-.dbg line, "main.nt65", 45
     .byte $01, $02, $03             ; colors
-.dbg line, "main.nt65", 45
     .byte $48, $45, $52, $4f        ; name
 hero__end:
 sprites:
-.dbg line, "main.nt65", 47
         .byte $0a                   ; pos::x
-.dbg line, "main.nt65", 47
         .byte $00                   ; pos::y
-.dbg line, "main.nt65", 47
         .word $00                   ; tile
-.dbg line, "main.nt65", 47
         .res 3                      ; colors
-.dbg line, "main.nt65", 47
         .byte $41, $20, $20, $20    ; name
-.dbg line, "main.nt65", 48
         .byte $14                   ; pos::x
-.dbg line, "main.nt65", 48
         .byte $1e                   ; pos::y
-.dbg line, "main.nt65", 48
         .word $00                   ; tile
-.dbg line, "main.nt65", 48
         .res 3                      ; colors
-.dbg line, "main.nt65", 48
         .byte $20, $20, $20, $20    ; name
-.dbg line, "main.nt65", 49
         .byte $00                   ; pos::x
-.dbg line, "main.nt65", 49
         .byte $00                   ; pos::y
-.dbg line, "main.nt65", 49
         .word $0300                 ; tile
-.dbg line, "main.nt65", 49
         .res 3                      ; colors
-.dbg line, "main.nt65", 49
         .byte $20, $20, $20, $20    ; name
 sprites__end:
 blank:
-.dbg line, "main.nt65", 51
     .byte $00                       ; pos::x
-.dbg line, "main.nt65", 51
     .byte $00                       ; pos::y
-.dbg line, "main.nt65", 51
     .word $00                       ; tile
-.dbg line, "main.nt65", 51
     .res 3                          ; colors
-.dbg line, "main.nt65", 51
     .byte $20, $20, $20, $20        ; name
 blank__end:
 vectors:
-.dbg line, "main.nt65", 53
     vectors__native: .addr 0, main
-.dbg line, "main.nt65", 54
     .byte $ff
 vectors__middle:
     vectors__emulation:
-.dbg line, "main.nt65", 57
         .addr main, vectors__middle
 vectors__end:
 
-.dbg line, "main.nt65", 78
 .assert (cursor__end - cursor) = $02, lderror, "cursor"
-.dbg line, "main.nt65", 79
 .assert (buffer__end - buffer) = $10, lderror, "buffer"
-.dbg line, "main.nt65", 80
 .assert (points__end - points) = ($04 * $02), lderror, "points"
-.dbg line, "main.nt65", 81
 .assert (gradient__end - gradient) = $03, lderror, "gradient"
-.dbg line, "main.nt65", 82
 .assert (lut__end - lut) = $04, lderror, "lut"
-.dbg line, "main.nt65", 83
 .assert (row_lo__end - row_lo) = $05, lderror, "row_lo"
-.dbg line, "main.nt65", 84
 .assert (text__end - text) = $03, lderror, "text"
-.dbg line, "main.nt65", 85
 .assert (handlers__end - handlers) = $04, lderror, "handlers"
-.dbg line, "main.nt65", 86
 .assert (hero__end - hero) = $0b, lderror, "hero"
-.dbg line, "main.nt65", 87
 .assert (sprites__end - sprites) = ($03 * $0b), lderror, "sprites"
-.dbg line, "main.nt65", 88
 .assert (blank__end - blank) = $0b, lderror, "blank"
-.dbg line, "main.nt65", 89
 .assert (vectors__end - vectors) = $09, lderror, "vectors"
-.dbg line, "main.nt65", 90
 .assert (vectors__emulation - vectors) = ($04 + 1), lderror, "vectors::emulation"
 
 .segment "CODE": absolute
     actions__move:
-.dbg line, "main.nt65", 95
         rts
     actions__fire:
-.dbg line, "main.nt65", 98
         rts
 
 main:
 
-.dbg line, "main.nt65", 105
     ldx #2 * $0b
-.dbg line, "main.nt65", 106
     lda a:sprites+2,x               ; sprites::tile
-.dbg line, "main.nt65", 107
     lda a:+(sprites + (2 * $0b)) + $02  ; Sprite::tile
-.dbg line, "main.nt65", 108
     lda a:points+1,x                ; points::y
-.dbg line, "main.nt65", 109
     lda a:vectors__emulation
-.dbg line, "main.nt65", 110
     lda z:cursor
-.dbg line, "main.nt65", 111
     sta a:buffer
-.dbg line, "main.nt65", 112
     jmp (handlers)

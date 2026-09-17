@@ -39,10 +39,13 @@ as you would any ca65 source:
 nt65 build
 ca65 -g build/main.s -o build/main.o
 ld65 -C c64.cfg -o game.prg --dbgfile game.dbg build/main.o
+nt65 remap-dbg game.dbg
 ```
 
-With `-g` and `--dbgfile`, the debug file points at your `.nt65` lines, not at the
-generated `.s`.
+The `.s` is the program and nothing else: no debug directives between the instructions. What
+a debugger needs is in the `build/main.s.lines` map written beside it, and the last step puts
+it into the debug file, so that `game.dbg` points at your `.nt65` lines. Leave the step out
+and the debug file still works — it just talks about the generated `.s`.
 
 ## A first program
 

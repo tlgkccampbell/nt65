@@ -42,8 +42,11 @@ $(OBJ)/c/main.o: c/main.c $(GEN)/nt65.h
 	$(CC65) -t none -I $(GEN) -I $(ROOT)/.cache/cc65/include -o $(@:.o=.s) $<
 	$(CA65) -I $(ROOT)/.cache/cc65/asminc -o $@ $(@:.o=.s)
 
+# The nt65 output carries no debug directives, so the debug file is remapped from the line maps
+# beside it afterwards. The hand-written and cc65 modules have no maps and are left alone.
 $(OBJ)/app.bin: $(ASM_O) $(NT65_O) link.cfg
 	$(LD65) -C link.cfg -o $@ -m $(OBJ)/app.map --dbgfile $(OBJ)/app.dbg $(ASM_O) $(NT65_O)
+	$(NT65) remap-dbg $(OBJ)/app.dbg
 
 -include $(NT65_O:.o=.d) $(ASM_O:.o=.d)
 

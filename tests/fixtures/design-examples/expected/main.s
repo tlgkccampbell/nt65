@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 634, 0
 
 .export main__main
 .export main__other
@@ -22,21 +21,13 @@ hw__sid__VOLUME = $d418
 
 .segment "CODE": absolute
 main__main:
-.dbg line, "main.nt65", 15
     jsr gfx__init
-.dbg line, "main.nt65", 16
     jsr snd__init
-.dbg line, "main.nt65", 17
     lda z:very__long__path__thing
-.dbg line, "main.nt65", 18
     rts
 
 main__other:
-.dbg line, "main.nt65", 22
     jsr _init
-.dbg line, "main.nt65", 23
     lda a:hw__BORDER
-.dbg line, "main.nt65", 24
     lda a:hw__sid__VOLUME
-.dbg line, "main.nt65", 25
     jmp hw__set_border

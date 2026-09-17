@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "vic.nt65", 280, 0
 
 .export hw__vic__BORDER
 .export hw__vic__set_border
@@ -16,7 +15,5 @@ hw__vic__BORDER = $d020
 
 .segment "CODE": absolute
 hw__vic__set_border:
-.dbg line, "vic.nt65", 11
     sta a:hw__vic__BORDER
-.dbg line, "vic.nt65", 12
     rts

@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "state.nt65", 3031, 0
 
 .exportzp state__cmd
 .export state__operands
@@ -22,186 +21,114 @@
 .export state__skip
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "state.nt65", 14
 ptr: .res 2
-.dbg line, "state.nt65", 15
 state__cmd: .res 1
-.dbg line, "state.nt65", 16
 nmi_flag: .res 1
-.dbg line, "state.nt65", 17
 saved_p: .res 1
-.dbg line, "state.nt65", 18
 value: .res 1
 
 .segment "BSS": absolute
-.dbg line, "state.nt65", 21
 buf: .res 16
-.dbg line, "state.nt65", 22
 vector: .res 2
 
 .segment "CODE": absolute
 state__operands:
 operands__loop:
-.dbg line, "state.nt65", 27
     inx
-.dbg line, "state.nt65", 28
     asl a
     .a8
-.dbg line, "state.nt65", 29
     lda #$10
-.dbg line, "state.nt65", 30
     lda z:ptr
-.dbg line, "state.nt65", 31
     lda z:$05
-.dbg line, "state.nt65", 32
     lda a:buf,x
-.dbg line, "state.nt65", 33
     lda (ptr),y
-.dbg line, "state.nt65", 34
     lda (ptr,x)
-.dbg line, "state.nt65", 35
     bne operands__loop
-.dbg line, "state.nt65", 36
     beq operands__far
-.dbg line, "state.nt65", 37
     brk #0
-.dbg line, "state.nt65", 38
     jmp (vector)
 operands__far:
-.dbg line, "state.nt65", 41
     rts
 
 state__render:
     .a16
-.dbg line, "state.nt65", 45
     lda #$1234
-.dbg line, "state.nt65", 46
     sep #$20
     .a8
-.dbg line, "state.nt65", 47
     lda #$12
-.dbg line, "state.nt65", 48
     rts
 
 state__main:
-.dbg line, "state.nt65", 54
     rts
 
 state__step:
-.dbg line, "state.nt65", 58
     sep #$20
-.dbg line, "state.nt65", 59
     rts
 
 state__copy:
-.dbg line, "state.nt65", 68
     pea 0
-.dbg line, "state.nt65", 69
     pea 0
     .a16
-.dbg line, "state.nt65", 71
     lda #8
-.dbg line, "state.nt65", 72
     sta 1,s                         ; locals::count
-.dbg line, "state.nt65", 73
     pha
-.dbg line, "state.nt65", 74
     lda 5,s                         ; locals::src
-.dbg line, "state.nt65", 75
     pla
-.dbg line, "state.nt65", 76
     pla
-.dbg line, "state.nt65", 77
     pla
-.dbg line, "state.nt65", 78
     rts
 
 state__div16:
-.dbg line, "state.nt65", 89
     pea 0
-.dbg line, "state.nt65", 91
     lda 7,s                         ; f::dividend
-.dbg line, "state.nt65", 92
     plx
-.dbg line, "state.nt65", 93
     rts
 
 state__dispatch:
-.dbg line, "state.nt65", 97
     lda z:state__cmd
-.dbg line, "state.nt65", 98
     asl a
-.dbg line, "state.nt65", 99
     tax
-.dbg line, "state.nt65", 100
     jmp (dispatch__table,x)
 
-.dbg line, "state.nt65", 103
 dispatch__table: .addr dispatch__move, dispatch__fire
 
 dispatch__move:
     .a8
-.dbg line, "state.nt65", 106
     lda #1
-.dbg line, "state.nt65", 107
     rts
 dispatch__fire:
-.dbg line, "state.nt65", 109
     lda #2
-.dbg line, "state.nt65", 110
     rts
 
 state__nmi:
-.dbg line, "state.nt65", 114
     rep #$30
-.dbg line, "state.nt65", 115
     pha
-.dbg line, "state.nt65", 116
     sep #$20
-.dbg line, "state.nt65", 117
     lda #1
-.dbg line, "state.nt65", 118
     sta z:nmi_flag
-.dbg line, "state.nt65", 119
     rep #$20
-.dbg line, "state.nt65", 120
     pla
-.dbg line, "state.nt65", 121
     rti
 
 state__restore:
-.dbg line, "state.nt65", 125
     lda z:saved_p
-.dbg line, "state.nt65", 126
     pha
-.dbg line, "state.nt65", 127
     plp
     .a16
-.dbg line, "state.nt65", 129
     lda #$1234
-.dbg line, "state.nt65", 130
     sep #$30
-.dbg line, "state.nt65", 131
     rts
 
 state__skip:
-.dbg line, "state.nt65", 135
     lda z:value
-.dbg line, "state.nt65", 136
     beq skip__set_two
-.dbg line, "state.nt65", 137
     bne skip__set_one
 skip__set_one:
     .a8
-.dbg line, "state.nt65", 139
     lda #1
-.dbg line, "state.nt65", 140
     .byte $2c
 skip__set_two:
-.dbg line, "state.nt65", 143
     lda #2
 skip__store:
-.dbg line, "state.nt65", 145
     sta z:value
-.dbg line, "state.nt65", 146
     rts

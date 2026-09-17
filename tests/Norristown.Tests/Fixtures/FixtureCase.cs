@@ -10,8 +10,8 @@ namespace Norristown.Tests.Fixtures;
 /// comments: <c>;! error: message</c> on the line the diagnostic is reported on;</item>
 /// <item><c>nt65.json</c>, optional. Its own expected diagnostics are written in
 /// <c>//</c> comments, which the reader skips;</item>
-/// <item><c>expected/**/*.s</c>, the output snapshot, one file per generated file, at the
-/// output's path.</item>
+/// <item><c>expected/**</c>, the output snapshot, one file per generated file, at the
+/// output's path: the ca65 of each module and the line map beside it.</item>
 /// </list>
 /// <para>
 /// A fixture may also be built more than one way: each named configuration in its project
@@ -137,7 +137,7 @@ internal sealed partial record FixtureCase(
         var outputs = new SortedDictionary<string, string>(StringComparer.Ordinal);
         if (System.IO.Directory.Exists(dir))
         {
-            foreach (var path in System.IO.Directory.GetFiles(dir, "*.s", SearchOption.AllDirectories))
+            foreach (var path in System.IO.Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
                 outputs[RelativePath(dir, path)] = Repo.ReadText(path).ReplaceLineEndings("\n");
         }
         return outputs;

@@ -129,6 +129,6 @@ public sealed class TypeSyntaxTests
     {
         var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);
         Assert.Empty(compilation.Diagnostics);
-        return Assert.Single(compilation.Outputs).Text;
+        return Assert.Single(compilation.Ca65).Text;
     }
 }

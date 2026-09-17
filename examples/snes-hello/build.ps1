@@ -26,6 +26,11 @@ try {
     $objects = (Get-ChildItem build -Filter *.o).FullName
     & $Ld65 -C snes.cfg -o build/hello.sfc --dbgfile build/hello.dbg @objects
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # The .s files carry no debug directives; this puts what the .s.lines maps beside them say
+    # into the debug file, so an emulator shows the .nt65 source.
+    & $Nt65 remap-dbg build/hello.dbg
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Pop-Location

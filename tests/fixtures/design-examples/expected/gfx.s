@@ -7,11 +7,9 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 70, 0
 
 .export gfx__init
 
 .segment "CODE": absolute
 gfx__init:
-.dbg line, "gfx.nt65", 7
     rts

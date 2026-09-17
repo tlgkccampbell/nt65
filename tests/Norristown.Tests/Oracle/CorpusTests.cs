@@ -42,7 +42,7 @@ public sealed class CorpusTests
         Assert.Equal((2 + 2 + 2) + 2 * (2 + 3), Bytes(Main(debug)) - Bytes(Main(release)));
 
         static OutputFile Main(Compilation compilation) =>
-            compilation.Outputs.Single(o => o.Path.EndsWith("/main.s", StringComparison.Ordinal));
+            compilation.Ca65.Single(o => o.Path.EndsWith("/main.s", StringComparison.Ordinal));
         static int Bytes(OutputFile output) => output.LineBytes.Where(bytes => bytes > 0).Sum();
     }
 
@@ -72,7 +72,7 @@ public sealed class CorpusTests
             yield break;
         }
 
-        var failures = Repo.CollectFailures(compilation.Outputs, output =>
+        var failures = Repo.CollectFailures([.. compilation.Ca65], output =>
             OracleTests.AssemblesToComputedLengths(program.Name, output, output.Path, program.Other));
         foreach (var failure in failures)
             yield return failure;
@@ -81,7 +81,7 @@ public sealed class CorpusTests
 
         var result = Ca65Oracle.Pinned.Link(
             program.LinkerConfig,
-            [.. program.HandWritten, .. compilation.Outputs.Select(o => (o.Path, o.Text))],
+            [.. program.HandWritten, .. compilation.Ca65.Select(o => (o.Path, o.Text))],
             program.Other);
         if (!result.Succeeded)
             yield return $"[{program.Name}] ld65 reported:\n{result.Messages}";

@@ -7,115 +7,69 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1408, 0
 
 .import far_routine: far
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 11
 ptr:        .res 3
 
 .segment "FARDATA": far
-.dbg line, "main.nt65", 14
 far_table:  .res 16
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 17
 vector:     .addr forms
 
 .segment "CODE": absolute
 forms:
-.dbg line, "main.nt65", 23
     lda f:far_table
-.dbg line, "main.nt65", 24
     sta f:far_table,x
-.dbg line, "main.nt65", 25
     lda f:vector
-.dbg line, "main.nt65", 26
     lda [ptr]
-.dbg line, "main.nt65", 27
     lda [ptr],y
-.dbg line, "main.nt65", 28
     lda 3,s
-.dbg line, "main.nt65", 29
     sta (1,s),y
     .a16
-.dbg line, "main.nt65", 30
     lda #$1234
     .i8
-.dbg line, "main.nt65", 31
     ldx #$12
-.dbg line, "main.nt65", 32
     rep #$10
     .i16
-.dbg line, "main.nt65", 33
     ldy #$1234
-.dbg line, "main.nt65", 34
     cpx #0
-.dbg line, "main.nt65", 35
     sep #$20
     .a8
-.dbg line, "main.nt65", 36
     cmp #$12
-.dbg line, "main.nt65", 37
     bit #$80
-.dbg line, "main.nt65", 38
     mvn #^far_table, #0
-.dbg line, "main.nt65", 39
     mvp #0, #^far_table
-.dbg line, "main.nt65", 40
     pea vector
-.dbg line, "main.nt65", 41
     pei (ptr)
-.dbg line, "main.nt65", 42
     per forms__here
 forms__here:
-.dbg line, "main.nt65", 45
     .byte $42, 1
-.dbg line, "main.nt65", 46
     cop #2
-.dbg line, "main.nt65", 47
     brk #3
-.dbg line, "main.nt65", 48
     phb
-.dbg line, "main.nt65", 49
     phd
-.dbg line, "main.nt65", 50
     phk
-.dbg line, "main.nt65", 51
     plb
-.dbg line, "main.nt65", 52
     pld
-.dbg line, "main.nt65", 53
     plp
-.dbg line, "main.nt65", 54
     rep #$20
-.dbg line, "main.nt65", 55
     tcd
-.dbg line, "main.nt65", 56
     tdc
-.dbg line, "main.nt65", 57
     tcs
-.dbg line, "main.nt65", 58
     tsc
-.dbg line, "main.nt65", 59
     txy
-.dbg line, "main.nt65", 60
     tyx
-.dbg line, "main.nt65", 61
     xba
-.dbg line, "main.nt65", 62
     jsl far_routine
-.dbg line, "main.nt65", 63
     brl forms__out
 forms__out:
-.dbg line, "main.nt65", 65
     jsr (vector,x)
 
 long_jumps:
-.dbg line, "main.nt65", 70
     jml [vector]
 
 tail:
-.dbg line, "main.nt65", 75
     jml far_routine

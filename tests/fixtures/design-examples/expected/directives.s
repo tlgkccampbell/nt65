@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "directives.nt65", 2017, 0
 
 .export directives__reloc
 .export directives__irq
@@ -24,85 +23,55 @@ WIDE = 1
 .segment "CODE": absolute
 directives__reloc:
     .i8
-.dbg line, "directives.nt65", 17
     ldx #(directives__reloc__end - directives__reloc)
-.dbg line, "directives.nt65", 18
     rts
 directives__reloc__end:
 
 directives__irq:
-.dbg line, "directives.nt65", 22
     rti
 directives__irq__end:
 
 label:
-.dbg line, "directives.nt65", 26
     rts
 
 first:
-.dbg line, "directives.nt65", 30
     rts
 
 second:
-.dbg line, "directives.nt65", 34
     rts
 
 third:
-.dbg line, "directives.nt65", 38
     rts
 
 .segment "RODATA": absolute
 directives__module:
-.dbg line, "directives.nt65", 47
     directives__module__header: .word (directives__module__end - directives__module)
 directives__module__end:
 
 directives__mixed:
-.dbg line, "directives.nt65", 53
     .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-.dbg line, "directives.nt65", 54
     .word $1234, label
-.dbg line, "directives.nt65", 55
     .faraddr $123456
-.dbg line, "directives.nt65", 56
     .dword $12345678
-.dbg line, "directives.nt65", 57
     .dbyt $1234
-.dbg line, "directives.nt65", 58
     .addr label
-.dbg line, "directives.nt65", 59
     .faraddr label
-.dbg line, "directives.nt65", 60
     .res 16
-.dbg line, "directives.nt65", 61
     .res 16, $ff
-.dbg line, "directives.nt65", 62
     .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
-.dbg line, "directives.nt65", 63
     .align 256
-.dbg line, "directives.nt65", 64
     .incbin "sprites.bin"
-.dbg line, "directives.nt65", 65
     .incbin "sprites.bin", 64, 32
-.dbg line, "directives.nt65", 66
     .lobytes first, second, third
-.dbg line, "directives.nt65", 67
     .hibytes first, second, third
-.dbg line, "directives.nt65", 68
     .bankbytes first, second, third
-.dbg line, "directives.nt65", 69
     .res 1                          ; Player
-.dbg line, "directives.nt65", 70
         .byte $05                   ; hp
-.dbg line, "directives.nt65", 71
     .addr first, second, third      ; handlers
 
-.dbg line, "directives.nt65", 80
 directives__greeting: .byte $08, $05, $0c, $0c, $0f, $20, $17, $0f, $12, $0c, $04  ; screen("HELLO WORLD")
-.dbg line, "directives.nt65", 81
 directives__letter: .byte $01       ; screen('A')
 
 directives__COLUMNS = $50
 
-.dbg line, "directives.nt65", 88
 directives__red: .word $1f          ; rgb15(31, 0, 0)

@@ -7,11 +7,9 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "snd.nt65", 70, 0
 
 .export snd__init
 
 .segment "CODE": absolute
 snd__init:
-.dbg line, "snd.nt65", 7
     rts

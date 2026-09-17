@@ -43,10 +43,12 @@ that targets an existing, widely deployed toolchain rather than replacing it.
 The priority is working alongside existing ca65 and cc65 code in the same build, not
 accepting ca65 source. nt65 promises a project that mixes them:
 
-1. **Toolchain.** `nt65 build` writes one ca65 source file per module, named after it. The project
+1. **Toolchain.** `nt65 build` writes one ca65 source file per module, named after it, and a
+   line map beside each (§13). The project
    assembles those files with its existing ca65, built from the cc65 commit nt65 pins
    (§13), and links them with its existing ld65 configuration. nt65 never runs ca65 or ld65, and never reads,
-   requires or changes a linker configuration.
+   requires or changes a linker configuration. A build that wants source-level debugging runs
+   `nt65 remap-dbg` on the debug file afterwards; one that does not can leave the maps alone.
 2. **Command line.** The output assembles to the same bytes under any ca65 options the
    project uses (§13). Where an option genuinely conflicts with nt65's declarations,
    such as a `-mm` memory model against the segment table or a `-D` name against a
@@ -68,9 +70,11 @@ accepting ca65 source. nt65 promises a project that mixes them:
 6. **Deterministic output.** The same sources and configuration produce byte-identical
    output, and `nt65 build` rewrites only the output files whose contents change, so a
    build system reassembles only what an edit affected.
-7. **Debugging.** With `ca65 -g` and `ld65 --dbgfile`, debug information refers to
-   `.nt65` files, by their paths from the project root, and lines (§13), and generated names
-   are derived from source names.
+7. **Debugging.** With `ca65 -g` and `ld65 --dbgfile`, followed by `nt65 remap-dbg` on the
+   debug file, debug information refers to `.nt65` files, by their paths from the project
+   root, and lines (§13), and generated names are derived from source names. The output
+   itself carries no debug directives: each `foo.s` is written with a `foo.s.lines` beside
+   it, which is what `remap-dbg` reads.
 8. **C.** `nt65 build --c-header` writes a C header of what the program exports, in cc65's
    types, and make-style dependencies come from `--depfile` (§5.3, §13).
 
@@ -2237,8 +2241,9 @@ empty, because there is no state for it to declare. On the 65816 it may not (§7
 ## 13. Transpilation
 
 One module produces one `.s`, named after it: `.module gfx::sprite` is `gfx/sprite.s` under
-the project's `out` (§5.3). The output is readable ca65 with a header comment
-and source spellings preserved where possible. It is deterministic: the same sources and
+the project's `out` (§5.3), with its line map `gfx/sprite.s.lines` beside it. The output is
+readable ca65 with a header comment and source spellings preserved where possible: it is the
+program and nothing else, with everything a debugger needs in the map. It is deterministic: the same sources and
 configuration give byte-identical output, and `nt65 build` rewrites a file only when its
 contents change.
 
@@ -2298,25 +2303,45 @@ the output writes `z:+(hi + lo) * 2`: ca65 reads a `(` straight after a prefix a
 indirect operand, and a unary `+` keeps it an expression without changing what it is
 worth.
 
-**Debug information.** After the header, each output file names its source with
-`.dbg file`: the source's path from the project root, the size, and a timestamp of zero,
-so the output does not depend on file timestamps. ca65 records the path as written, in its
-messages and in the object file, and ld65 copies it into the debug file, so it is spelled
-from the directory a build runs in, where a debugger reading the debug file finds the source. A `.dbg line` directive precedes every
-generated line that produces bytes, instruction or data. With `ca65 -g` and
-`ld65 --dbgfile`, ld65's debug file maps each span of bytes to its `.nt65` file and line,
-recorded as external source lines, as cc65 does for C; without `-g`, ca65 ignores the
-directives. A line that produces no bytes gets none: ld65 attaches a span to whichever
-line is in effect while bytes are generated, so a directive before a label or a constant
-records a line covering nothing, which nothing can step to or break on, and a label's
-address is that of the bytes after it either way. The lines of a
-macro expansion map to the line of the call, the way C debuggers treat preprocessor
-macros, and a comment naming the call precedes the expansion.
+**Debug information is beside the output, not in it.** ca65 has one way to say that a
+generated line came from somewhere else, a `.dbg line` directive before the line itself, and
+nt65 would need one before nearly every instruction it writes: a third of the output,
+standing between every two lines of every routine. The point of writing ca65 rather than
+object code is that a person can read it, so what the output would have said is written
+beside it instead, and put into the debug file after the link.
+
+Each `foo.s` is written with a `foo.s.lines` next to it, the module's *line map*. It holds
+one record a line: `version`, the format's, which is checked; `file`, naming the source by
+its path from the project root and its size in bytes, so that a debugger can tell the source
+has changed under it; and one `line` per line of the `.s` that produces bytes, saying which
+line of which source it came from. A line that produces no bytes gets no record: ld65
+attaches a span to whichever line is in effect while bytes are generated, so a record for a
+label or a constant would cover nothing, which nothing can step to or break on, and a label's
+address is that of the bytes after it either way. The lines of a macro expansion map to the
+line of the call, the way C debuggers treat preprocessor macros, and a comment naming the
+call precedes the expansion. A module that produces no bytes at all — one of nothing but
+constants — is written with no map.
+
+The map is put to work after the link. `ca65 -g` records the lines of the `.s` it assembles
+and ld65 copies them into the file `--dbgfile` names; `nt65 remap-dbg game.dbg` then reads
+that file, finds the `foo.s.lines` beside each `.s` it names, and adds what they say: a
+`file` record for each source, one `line` record per source line carrying the spans of every
+generated line that came from it, recorded as an external source line as cc65 does for C, and
+that line on each `sym` defined or used there. Only a module's `file` changes, to the source
+it was written from, because it names one file and the one worth naming is the source.
+Everything that was there stays, so a debugger that was showing the generated ca65 still can.
+
+It needs nothing but the debug file, which names every `.s` the program was built from, and
+takes the paths as ca65 recorded them, which is from the directory a build runs in — where a
+debugger reading the debug file also looks. A `.s` with no map beside it, which is anything
+hand-written that the same program links, is left alone; that is also what makes running it
+twice do nothing the second time. Skipping it entirely leaves a debug file that refers to the
+generated ca65, which is what ld65 wrote and is still true.
 
 | nt65 | ca65 |
 |---|---|
-| file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off, then `.dbg file` |
-| each generated line that produces bytes, and each `.assert` ca65 evaluates | preceded by `.dbg line` naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the debug line says, so those get none |
+| file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off |
+| each generated line that produces bytes, and each `.assert` ca65 evaluates | nothing in the output; a `line` record in the map beside it, naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the map says, so those get none |
 | `a == b`, `a != b`, `a ^^ b` | `a = b`, `a <> b`, `a .xor b`; nt65's other operators are ca65's |
 | `.segment X: zp` declaration | nothing by itself |
 | `.segment X` region, `.segment X { }` at file level | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
@@ -2439,8 +2464,7 @@ SCREEN_PAGES = 4
 }
 ```
 
-`main.s` (generated; the `.dbg line` directive before each generated line is omitted
-here):
+`main.s` (generated):
 
 ```ca65
 ; Generated by nt65 from main.nt65. Do not edit.
@@ -2452,7 +2476,6 @@ here):
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 628, 0
 .export main__fill_page
 SCREEN       = $0400
 SCREEN_PAGES = 4
@@ -2736,9 +2759,13 @@ Recorded so the reasoning survives. None is open.
   ca65 options to every `.s` file, so nt65 output resets or avoids everything those
   options can change, and is tested against ca65 built from one pinned cc65 commit,
   because cc65's version number no longer identifies what ca65 accepts.
-- **Debug information through `.dbg`.** cc65 uses the same directives to map compiled
-  code to C source, so debuggers that read ld65 debug files need nothing new. A zero
-  timestamp keeps the output deterministic.
+- **Debug information beside the output, not in it.** ca65 can only carry it as a `.dbg line`
+  before each generated line, which would be a third of the output and would stand between
+  every two lines of every routine; the output is meant to be read. A line map beside each
+  `.s`, put into ld65's debug file after the link, says the same thing and leaves the ca65
+  alone. What lands in the debug file is what cc65 writes for C, as external source lines, so
+  debuggers that read ld65 debug files need nothing new. A zero timestamp keeps it
+  deterministic.
 - **The object file is the only boundary with ca65.** Reading ca65 include files, even a
   declaration-only subset, would put nt65 in the business of parsing ca65 and require
   existing files to fit a layout. Symbols already cross at the link, and a checked
@@ -2808,8 +2835,8 @@ Recorded so the reasoning survives. None is open.
   absolute pointer in `lda (ptr),y` that ca65 would hand to the linker.
 - **Constants open no segment.** A constant has no address, so it is written where it stands,
   and a module of constants writes no segment at all.
-- **Imports, exports and link-time assertions carry no `.dbg line`.** ld65 reports them at
-  their `.s` line whatever the debug line says, so a directive there would only mislead.
+- **Imports, exports and link-time assertions are not mapped.** ld65 reports them at their
+  `.s` line whatever the map says, so a record for them would only mislead.
 - **A cause is reported once.** A reserved word as a parameter, a missing signature or a
   private function used many times gives one error where it can be fixed, not one at each use.
 - **Unused-symbol warnings stop at what could be meant.** An export is used by definition, data

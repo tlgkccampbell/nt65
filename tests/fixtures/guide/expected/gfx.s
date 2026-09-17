@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 172, 0
 
 .export gfx__BORDER
 .export gfx__clear
@@ -17,13 +16,9 @@ gfx__BORDER = $D020
 
 .segment "CODE": absolute
 gfx__clear:
-.dbg line, "gfx.nt65", 9
     lda #0
-.dbg line, "gfx.nt65", 10
     sta a:gfx__BORDER
-.dbg line, "gfx.nt65", 11
     rts
 
 _gfx_fill:
-.dbg line, "gfx.nt65", 15
     rts

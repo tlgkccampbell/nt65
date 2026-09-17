@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2460, 0
 
 .export main__main
 .export main__shape
@@ -33,70 +32,40 @@ hw__sid__volume = $d418
 .import gfx__clear__end
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 16
 REP: .res 1
-.dbg line, "main.nt65", 17
 per: .res 1
 
 .segment "CODE": absolute
 main__main:
-.dbg line, "main.nt65", 21
     lda #<gfx__SCREEN
-.dbg line, "main.nt65", 22
     sta z:gfx__ptr
-.dbg line, "main.nt65", 23
     lda #>gfx__SCREEN
-.dbg line, "main.nt65", 24
     sta z:gfx__ptr+1
-.dbg line, "main.nt65", 25
     lda z:host_tick
-.dbg line, "main.nt65", 26
     lda a:rt__ticks
-.dbg line, "main.nt65", 27
     sta z:REP
-.dbg line, "main.nt65", 28
     sta z:per
-.dbg line, "main.nt65", 29
     jsr gfx__init
-.dbg line, "main.nt65", 30
     jsr snd__init
-.dbg line, "main.nt65", 31
     jsr gfx__clear
-.dbg line, "main.nt65", 32
     jsr gfx__clear__again
-.dbg line, "main.nt65", 33
     jsr host_print
-.dbg line, "main.nt65", 34
     lda #<$0102                     ; HOST_VERSION
-.dbg line, "main.nt65", 35
     lda #gfx__Color__white
-.dbg line, "main.nt65", 36
     ldx #$01                        ; gfx::Sprite::y
-.dbg line, "main.nt65", 37
     lda #$01                        ; gfx::screen('A')
-.dbg line, "main.nt65", 38
     ldy #$0f                        ; gfx::centred(10)
-.dbg line, "main.nt65", 39
     lda #gfx__palette__ink
-.dbg line, "main.nt65", 40
     lda a:gfx__tables__lo
-.dbg line, "main.nt65", 41
     lda #<hw__vic__BORDER
-.dbg line, "main.nt65", 42
     jsr hw__vic__set_border
-.dbg line, "main.nt65", 43
     sta a:hw__sid__volume
-.dbg line, "main.nt65", 44
     sta a:hw__sid__volume
-.dbg line, "main.nt65", 45
     rts
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 49
 main__shape:   .byte $3c, $42, $3c  ; gfx::glyphs
 
-.dbg line, "main.nt65", 51
 main__clear_extent:   .addr gfx__clear__end, (gfx__clear__end - gfx__clear)
 
-.dbg line, "main.nt65", 55
 .assert ((main__main = main__main) && (main__main <> gfx__clear)) && (!(main__main .xor main__main)), lderror, "an operator reached ld65 misspelled"

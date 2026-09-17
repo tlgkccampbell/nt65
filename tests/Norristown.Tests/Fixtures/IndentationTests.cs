@@ -55,9 +55,10 @@ public sealed partial class IndentationTests
     private static string Indent(string text) =>
         string.Join("\n", text.ReplaceLineEndings("\n").Split('\n').Select(line => line.Length == 0 ? line : "    " + line));
 
+    /// <summary>The lines that should match, which is all of them but the line map's source size.</summary>
     private static List<string> Normalize(string text) =>
         [.. text.Split('\n')
-            .Where(line => !line.StartsWith(".dbg file", StringComparison.Ordinal))
+            .Where(line => !line.StartsWith("file ", StringComparison.Ordinal))
             .Select(line => Whitespace().Replace(line, ""))];
 
     [GeneratedRegex(@"\s+")]

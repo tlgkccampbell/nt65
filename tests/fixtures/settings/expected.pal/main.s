@@ -7,17 +7,12 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "src/main.nt65", 282, 0
 
 hw__LINES = $0138
 
 .segment "CODE": absolute
 main:
-.dbg line, "src/main.nt65", 7
         lda #50
-.dbg line, "src/main.nt65", 11
     ldx #$01                        ; CHANNELS
-.dbg line, "src/main.nt65", 12
     ldy #<hw__LINES
-.dbg line, "src/main.nt65", 16
     rts

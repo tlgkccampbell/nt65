@@ -7,22 +7,16 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 867, 0
 
 .export main__putc
 .export main__memcpy
 
 .segment "CODE": absolute
 main__putc:
-.dbg line, "main.nt65", 23
     sta a:$d000
-.dbg line, "main.nt65", 24
     rts
 
 main__memcpy:
-.dbg line, "main.nt65", 28
     lda z:$10
-.dbg line, "main.nt65", 29
     sta z:$11
-.dbg line, "main.nt65", 30
     rts

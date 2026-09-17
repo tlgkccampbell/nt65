@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "imports.nt65", 538, 0
 
 .export imports__CHROUT
 .export imports__print
@@ -22,11 +21,7 @@ imports__CHROUT = $FFD2
 
 .segment "CODE": absolute
 imports__print:
-.dbg line, "imports.nt65", 16
     lda z:zp_scratch
-.dbg line, "imports.nt65", 17
     sta a:$d020                     ; VIC_BORDER
-.dbg line, "imports.nt65", 18
     lda f:far_table
-.dbg line, "imports.nt65", 19
     jmp _printf

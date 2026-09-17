@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "game.nt65", 132, 0
 
 .import gfx__clear
 .import _gfx_fill
@@ -15,11 +14,7 @@ gfx__BORDER = $d020
 
 .segment "CODE": absolute
 start:
-.dbg line, "game.nt65", 9
     jsr gfx__clear
-.dbg line, "game.nt65", 10
     jsr _gfx_fill
-.dbg line, "game.nt65", 11
     lda a:gfx__BORDER
-.dbg line, "game.nt65", 12
     rts

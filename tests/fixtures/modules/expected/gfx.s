@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "gfx.nt65", 1672, 0
 
 .exportzp gfx__ptr
 .export gfx__SCREEN
@@ -27,7 +26,6 @@
 .export gfx__init
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "gfx.nt65", 9
 gfx__ptr:    .res 2
 
 gfx__SCREEN = $0400
@@ -45,32 +43,22 @@ gfx__Sprite__sizeof = $02
 
 .segment "RODATA": absolute
 gfx__tables:
-.dbg line, "gfx.nt65", 48
     gfx__tables__lo: .byte 1, 2
 tables__middle:
-.dbg line, "gfx.nt65", 50
     gfx_high_bytes: .byte 3, 4
-.dbg line, "gfx.nt65", 51
     .addr tables__middle
 
 .segment "CODE": absolute
 gfx__clear:
 
-.dbg line, "gfx.nt65", 60
     ldy #0
 gfx__clear__again:
-.dbg line, "gfx.nt65", 62
     sta (gfx__ptr),y
-.dbg line, "gfx.nt65", 63
     iny
-.dbg line, "gfx.nt65", 64
     bne gfx__clear__again
-.dbg line, "gfx.nt65", 65
     rts
 gfx__clear__end:
 
 gfx__init:
-.dbg line, "gfx.nt65", 70
     lda #gfx__palette__border
-.dbg line, "gfx.nt65", 71
     jmp gfx__clear

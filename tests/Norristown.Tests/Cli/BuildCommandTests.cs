@@ -32,8 +32,11 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal((0, ""), (code, said));
         Assert.True(Exists("app/build/main.s"));
         Assert.True(Exists("app/build/hw/vic.s"));
-        Assert.Contains(".dbg file, \"../lib/vic.nt65\"", Read("app/build/hw/vic.s"));
-        Assert.Contains(".dbg file, \"src/main.nt65\"", Read("app/build/main.s"));
+        Assert.Contains("from ../lib/vic.nt65.", Read("app/build/hw/vic.s"));
+        Assert.Contains("file 0, \"src/main.nt65\"", Read("app/build/main.s.lines"));
+
+        // A module of nothing but constants generates no bytes, so nothing maps back to it.
+        Assert.False(Exists("app/build/hw/vic.s.lines"));
     }
 
     /// <summary><c>--config</c> gives the configuration's defines over the project's, and its output directory.</summary>
@@ -111,6 +114,11 @@ public sealed class BuildCommandTests : IDisposable
               src/main.nt65 \
               src/vic.nt65 \
               nt65.json
+            build/main.s.lines: \
+              data/font.bin \
+              src/main.nt65 \
+              src/vic.nt65 \
+              nt65.json
             build/hw/vic.s: \
               src/vic.nt65 \
               nt65.json
@@ -181,7 +189,7 @@ public sealed class BuildCommandTests : IDisposable
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
-        var code = BuildCommand.Run(arguments, directory, output, error);
+        var code = Commands.Run(arguments, directory, output, error);
         return (code, output.ToString() + error.ToString());
     }
 

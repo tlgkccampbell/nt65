@@ -20,12 +20,14 @@ public sealed class MacroExpansionTests
         Assert.True(outputs.ContainsKey("main.s"),
             "the program did not transpile:\n" + string.Join(
                 "\n", Analysis.Program(("main.nt65", text)).Problems()));
-        var lines = outputs["main.s"].Split('\n')
-            .SkipWhile(line => !line.StartsWith(".dbg file", StringComparison.Ordinal))
-            .Skip(1)
-            .Where(line => !line.StartsWith(".dbg", StringComparison.Ordinal));
-        return string.Join("\n", lines).Trim();
+        return string.Join("\n", outputs["main.s"].Split('\n').SkipWhile(IsHeader)).Trim();
     }
+
+    /// <summary>Whether a line is part of the header every output starts with.</summary>
+    private static bool IsHeader(string line) =>
+        line.Length == 0 || line.StartsWith(';') || line.StartsWith(".setcpu", StringComparison.Ordinal)
+            || line.StartsWith(".smart", StringComparison.Ordinal) || line.StartsWith(".case", StringComparison.Ordinal)
+            || line.StartsWith(".feature", StringComparison.Ordinal);
 
     [Fact]
     public void ACallBecomesItsBodyWithTheArgumentsInPlace()

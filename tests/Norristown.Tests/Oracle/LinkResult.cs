@@ -4,4 +4,8 @@ namespace Norristown.Tests.Oracle;
 /// <param name="Succeeded">Whether ca65 and ld65 both finished with nothing to say.</param>
 /// <param name="Messages">What they said, when they said anything.</param>
 /// <param name="Binary">The linked image, empty when the link failed.</param>
-internal sealed record LinkResult(bool Succeeded, string Messages, byte[] Binary);
+internal sealed record LinkResult(bool Succeeded, string Messages, byte[] Binary)
+{
+    /// <summary>What <c>--dbgfile</c> wrote, when the link was asked for one.</summary>
+    public string DebugFile { get; init; } = "";
+}

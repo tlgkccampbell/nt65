@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1933, 0
 
 .export main__SCREEN
 .exportzp main__SCREEN_PAGES
@@ -38,115 +37,72 @@ main__SCREEN       = $0400
 main__SCREEN_PAGES = 4
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 25
 ptr:        .res 2
-.dbg line, "main.nt65", 26
 main__frame: .res 1
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 29
 table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-.dbg line, "main.nt65", 30
 main__words: .word $1234, table
-.dbg line, "main.nt65", 31
 main__wide: .dword $12345678
-.dbg line, "main.nt65", 32
 main__here: .addr table
-.dbg line, "main.nt65", 33
 main__there: .faraddr table
-.dbg line, "main.nt65", 34
 main__greeting: .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
 
-.dbg line, "main.nt65", 36
 main__imported: .addr _printf, tick, reset, raw, $d020, zp_scratch  ; VIC_BORDER
-.dbg line, "main.nt65", 37
 main__far_import: .faraddr far_table
 main__padding:
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
-.dbg line, "main.nt65", 40
         .byte $ff
 
 .segment "CODE": absolute
 main__fill_page:
     .i16
-.dbg line, "main.nt65", 46
     ldy #0
 fill_page__loop:
-.dbg line, "main.nt65", 48
     sta (ptr),y
-.dbg line, "main.nt65", 49
     iny
-.dbg line, "main.nt65", 50
     bne fill_page__loop
-.dbg line, "main.nt65", 51
     rts
 
 render:
         .i8
-.dbg line, "main.nt65", 57
         ldx #0
     render__loop:
-.dbg line, "main.nt65", 59
         stz a:$0200,x
-.dbg line, "main.nt65", 60
         inx
-.dbg line, "main.nt65", 61
         bne render__loop
 
 .pushseg
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 64
     render__shifts: .byte 1, 2, 4, 8
 .popseg
 
-.dbg line, "main.nt65", 66
     ldx a:render__shifts
-.dbg line, "main.nt65", 67
     sep #$20
-.dbg line, "main.nt65", 68
     rts
 
 hud:
-.dbg line, "main.nt65", 72
     rts
 
 show:
-.dbg line, "main.nt65", 76
     rts
 
 skip2:
-.dbg line, "main.nt65", 80
     rtl
 
     gfx__init:
-.dbg line, "main.nt65", 86
         rts

@@ -7,33 +7,21 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1029, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 8
 flags:    .res 1
 
 .segment "CODE": absolute
 main:
-.dbg line, "main.nt65", 23
     phx
-.dbg line, "main.nt65", 24
     stz z:flags
     ; set_ready!(flags)  main.nt65:25
-.dbg line, "main.nt65", 25
         lda z:flags
-.dbg line, "main.nt65", 25
         ora #%00001000
-.dbg line, "main.nt65", 25
         sta z:flags
-.dbg line, "main.nt65", 27
         bbs3 flags, main__done
-.dbg line, "main.nt65", 33
     nop
 main__done:
-.dbg line, "main.nt65", 35
     plx
-.dbg line, "main.nt65", 37
         wai
-.dbg line, "main.nt65", 42
     rts

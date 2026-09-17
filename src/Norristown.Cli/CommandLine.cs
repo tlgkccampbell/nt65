@@ -24,10 +24,15 @@ public sealed record CommandLine(
     /// <summary>How the command is used, as <c>--help</c> prints it.</summary>
     public const string Usage = """
         usage: nt65 build [options] [<file.nt65>...]
+               nt65 remap-dbg <file.dbg> [--out <file>]
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
         Naming files builds the whole program and writes output only for those files.
+
+        `remap-dbg` runs after the link: it makes the debug file ld65 wrote name the `.nt65`
+        sources as well as the `.s` files, from the `.s.lines` map beside each one, in place
+        unless `--out` gives somewhere else.
 
         options:
           --project <file>      the project file, or the directory that holds nt65.json

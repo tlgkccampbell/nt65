@@ -7,33 +7,22 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 683, 0
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 18
 title:        .byte $4e, $54, $36, $35, 0  ; TITLE
-.dbg line, "main.nt65", 19
 title_screen: .byte $0e, $14, $36, $35, $00  ; screen(TITLE)
-.dbg line, "main.nt65", 20
 prompt:       .byte $50, $52, $45, $53, $53, $20, $53, $54, $41, $52, $54, $00  ; PROMPT
-.dbg line, "main.nt65", 21
 first:        .byte $50, $0b
 best:
-.dbg line, "main.nt65", 22
     .byte $4e, $54, $36, $35, $00, $00, $00, $00  ; name
-.dbg line, "main.nt65", 22
     .word $64                       ; score
 labels:
     ; label!(PROMPT)  main.nt65:24
-.dbg line, "main.nt65", 24
     .byte $50, $52, $45, $53, $53, $20, $53, $54, $41, $52, $54, $00  ; PROMPT
     ; label!("GO")  main.nt65:25
-.dbg line, "main.nt65", 25
     .byte $47, $4f, $00             ; "GO"
 
 .segment "CODE": absolute
 length:
-.dbg line, "main.nt65", 30
     lda #$04
-.dbg line, "main.nt65", 31
     rts

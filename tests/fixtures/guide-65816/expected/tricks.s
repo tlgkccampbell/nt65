@@ -7,31 +7,22 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "tricks.nt65", 356, 0
 
 .export tricks__dispatch
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "tricks.nt65", 8
 command: .res 1
 
 .segment "CODE": absolute
 tricks__dispatch:
-.dbg line, "tricks.nt65", 12
     lda z:command
-.dbg line, "tricks.nt65", 13
     asl a
-.dbg line, "tricks.nt65", 14
     tax
-.dbg line, "tricks.nt65", 15
     jmp (dispatch__handlers,x)
 
-.dbg line, "tricks.nt65", 18
 dispatch__handlers: .addr dispatch__cmd_move, dispatch__cmd_fire
 
 dispatch__cmd_move:
-.dbg line, "tricks.nt65", 21
     rts
 dispatch__cmd_fire:
-.dbg line, "tricks.nt65", 23
     rts

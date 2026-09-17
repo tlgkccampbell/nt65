@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2841, 0
 
 .export main__sizes
 .export main__counts
@@ -35,97 +34,61 @@
 MAX_ACTORS = 3
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 53
 player: .res 13                     ; Player
-.dbg line, "main.nt65", 54
 actors: .res 39                     ; Player
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 58
 main__sizes: .byte $0d, $04, $02
-.dbg line, "main.nt65", 59
 main__counts: .byte $03, $03
-.dbg line, "main.nt65", 60
 main__offs: .byte $02, $04, $02     ; Player::pos::y, Player::hp, Point::y
 
-.dbg line, "main.nt65", 63
 main__plain: .byte $48, $49         ; "HI"
-.dbg line, "main.nt65", 64
 main__mapped: .byte $08, $09, $00   ; screen("HI@")
-.dbg line, "main.nt65", 65
 main__one: .byte $1a                ; screen('Z')
 
-.dbg line, "main.nt65", 68
 main__color: .word $1f              ; rgb15(31, 0, 0)
-.dbg line, "main.nt65", 69
 main__table: .byte $00, $05, $06    ; handlers
-.dbg line, "main.nt65", 70
 main__lo: .lobytes $00, $05, $06    ; handlers
 
 boss:
-.dbg line, "main.nt65", 73
     .word $64                       ; pos::x
-.dbg line, "main.nt65", 73
     .word $28                       ; pos::y
-.dbg line, "main.nt65", 73
     .byte $63                       ; hp
-.dbg line, "main.nt65", 73
     .byte $00, $00, $00, $00, $00, $00, $00, $00  ; name
 
 hero:
-.dbg line, "main.nt65", 75
     .word $00                       ; pos::x
-.dbg line, "main.nt65", 75
     .word $00                       ; pos::y
-.dbg line, "main.nt65", 75
     .byte $03                       ; hp
-.dbg line, "main.nt65", 75
     .byte $5a, $49, $50, $00, $00, $00, $00, $00  ; name
 
-.dbg line, "main.nt65", 81
 main__blob: .incbin "sprites.bin"
-.dbg line, "main.nt65", 82
 main__part: .incbin "sprites.bin", 6, 4
 
-.dbg line, "main.nt65", 85
     .align 16
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 88
 cursor: .res 13                     ; Player
 
 .segment "CODE": absolute
 main:
 
-.dbg line, "main.nt65", 93
     lda a:player+4                  ; player::hp
-.dbg line, "main.nt65", 94
     ldx a:actors                    ; actors::pos::x
 
-.dbg line, "main.nt65", 96
     lda z:cursor+4                  ; cursor::hp
-.dbg line, "main.nt65", 97
     sta z:cursor+1                  ; cursor::pos::x
-.dbg line, "main.nt65", 98
     lda #Color__green
-.dbg line, "main.nt65", 99
     ldx #Reg__x
-.dbg line, "main.nt65", 100
     lda #$0d
-.dbg line, "main.nt65", 101
     rts
 
 .segment "RODATA": absolute
 main__as_word:
-.dbg line, "main.nt65", 106
     .word $1234                     ; w
 main__as_byte:
-.dbg line, "main.nt65", 107
     .byte $01                       ; b
-.dbg line, "main.nt65", 107
     .res 1, $00                     ; Value
 main__as_nothing:
-.dbg line, "main.nt65", 108
     .byte $00                       ; b
-.dbg line, "main.nt65", 108
     .res 1, $00                     ; Value

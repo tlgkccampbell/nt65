@@ -7,16 +7,12 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1548, 0
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 9
 ptr:        .res 2
-.dbg line, "main.nt65", 10
 vector:     .res 2
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 13
 buf:        .res 256
 
 hi = $12
@@ -26,50 +22,27 @@ CHROUT = $ffd2
 
 .segment "CODE": absolute
 forms:
-.dbg line, "main.nt65", 23
     inx
-.dbg line, "main.nt65", 24
     asl
-.dbg line, "main.nt65", 25
     asl a
-.dbg line, "main.nt65", 26
     lda #$10
-.dbg line, "main.nt65", 27
     lda z:ptr
-.dbg line, "main.nt65", 28
     lda a:buf
-.dbg line, "main.nt65", 29
     lda z:ptr
-.dbg line, "main.nt65", 30
     lda a:ptr
-.dbg line, "main.nt65", 31
     lda z:$10
-.dbg line, "main.nt65", 32
     lda a:$0400
-.dbg line, "main.nt65", 33
     lda a:buf,x
-.dbg line, "main.nt65", 34
     lda buf,y
-.dbg line, "main.nt65", 35
     ldx a:buf,y
-.dbg line, "main.nt65", 36
     sty z:ptr,x
-.dbg line, "main.nt65", 37
     lda (ptr),y
-.dbg line, "main.nt65", 38
     lda (ptr,x)
-.dbg line, "main.nt65", 39
     jmp (vector)
-.dbg line, "main.nt65", 40
     bne forms__loop
-.dbg line, "main.nt65", 41
     brk #0
-.dbg line, "main.nt65", 42
     lda z:+(hi + lo) * 2
-.dbg line, "main.nt65", 43
     lda z:ptr+1
-.dbg line, "main.nt65", 44
     jsr CHROUT
 forms__loop:
-.dbg line, "main.nt65", 46
     rts

@@ -7,31 +7,23 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "segments.nt65", 357, 0
 
 .exportzp segments__scratch
 .export segments__draw
 
 .segment "ZP2": zeropage
-.dbg line, "segments.nt65", 10
 segments__scratch: .res 1
 
 .segment "CODE": absolute
 segments__draw:
-.dbg line, "segments.nt65", 14
     ldx #3
 draw__loop:
-.dbg line, "segments.nt65", 16
     lda a:draw__table,x
-.dbg line, "segments.nt65", 17
     dex
-.dbg line, "segments.nt65", 18
     bpl draw__loop
-.dbg line, "segments.nt65", 19
     rts
 
 .pushseg
 .segment "RODATA": absolute
-.dbg line, "segments.nt65", 21
         draw__table: .byte 1, 2, 4, 8
 .popseg

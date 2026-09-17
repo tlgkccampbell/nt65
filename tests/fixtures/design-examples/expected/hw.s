@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "hw.nt65", 742, 0
 
 .exportzp hw__VOICES
 .export hw__K: abs
@@ -26,25 +25,18 @@ hw__K = $1234
 hw__BORDER = $D020
 .segment "CODE": absolute
 _init:
-.dbg line, "hw.nt65", 20
     rts
 hw__vectors:
-.dbg line, "hw.nt65", 23
     hw__vectors__native: .res 16
 
 hw__fill_page:
-.dbg line, "hw.nt65", 28
     rts
 
 clear:
-.dbg line, "hw.nt65", 32
     rts
 hw__clear__again:
-.dbg line, "hw.nt65", 35
     rts
 
 hw__set_border:
-.dbg line, "hw.nt65", 39
     sta a:hw__BORDER
-.dbg line, "hw.nt65", 40
     rts

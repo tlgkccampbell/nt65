@@ -7,49 +7,34 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 1150, 0
 
 .exportzp main__ptr
 .export main__top
 
 .segment "ZEROPAGE": zeropage
 z := *
-.dbg line, "main.nt65", 12
     .res 1
 f := *
-.dbg line, "main.nt65", 13
     .res 1
-.dbg line, "main.nt65", 14
 main__ptr:  .res 2
 
 .segment "CODE": absolute
 main__top:
-.dbg line, "main.nt65", 20
     rts
 
     outer__inner:
-.dbg line, "main.nt65", 25
         lda z:z
-.dbg line, "main.nt65", 26
         lda z:f
-.dbg line, "main.nt65", 27
         rts
 
 draw:
-.dbg line, "main.nt65", 32
     ldx #0
     draw__loop:
-.dbg line, "main.nt65", 35
         dex
-.dbg line, "main.nt65", 36
         bne draw__loop
     draw__loop_2:
-.dbg line, "main.nt65", 40
         dex
-.dbg line, "main.nt65", 41
         bne draw__loop_2
     draw__reused:
-.dbg line, "main.nt65", 45
         jmp draw__reused
-.dbg line, "main.nt65", 47
     jmp outer__inner

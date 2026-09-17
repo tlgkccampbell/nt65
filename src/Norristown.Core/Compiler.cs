@@ -64,7 +64,13 @@ public static class Compiler
                 .ToHashSet();
             var output = Emitter.Emit(
                 model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out, elsewhere);
-            outputs.Add(output with { Dependencies = Dependencies(analysis.Program, model, direct) });
+            output = output with { Dependencies = Dependencies(analysis.Program, model, direct) };
+            outputs.Add(output);
+
+            // Where its lines came from goes beside it rather than into it, so that the ca65 is
+            // only the program; `nt65 remap-dbg` puts it into ld65's debug file after the link.
+            if (LineMap.For(output) is { } map)
+                outputs.Add(map);
         }
         var header = cHeader is null ? null : CHeader.Write(analysis.Program, cHeader, diagnostics);
 

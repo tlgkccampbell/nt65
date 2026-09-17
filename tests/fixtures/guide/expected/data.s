@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "data.nt65", 607, 0
 
 .exportzp data__Actor__sizeof
 .exportzp data__Actor__x
@@ -27,33 +26,22 @@ data__Actor__hp = $04
 data__Actor__sizeof = $05
 
 .segment "BSS": absolute
-.dbg line, "data.nt65", 14
 data__buffer: .res 64
-.dbg line, "data.nt65", 15
 data__player: .res 5                ; Actor
 
 .segment "RODATA": absolute
-.dbg line, "data.nt65", 18
 data__sines: .byte 0, 49, 90, 117
-.dbg line, "data.nt65", 19
 data__title: .byte $53, $50, $41, $43, $45, $20, $54, $52, $41, $49, $4e, $00  ; "SPACE TRAIN"
 data__boss:
-.dbg line, "data.nt65", 20
     .word $64                       ; x
-.dbg line, "data.nt65", 20
     .word $28                       ; y
-.dbg line, "data.nt65", 20
     .byte $63                       ; hp
 data__exe_header:
-.dbg line, "data.nt65", 22
     .word exe_header__end - data__exe_header, 0
-.dbg line, "data.nt65", 23
     .byte $4e, $54                  ; "NT"
 exe_header__end:
 
 .segment "CODE": absolute
 data__hp:
-.dbg line, "data.nt65", 29
     lda a:data__player+4            ; player::hp
-.dbg line, "data.nt65", 30
     rts

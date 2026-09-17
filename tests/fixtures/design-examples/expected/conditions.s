@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "conditions.nt65", 1280, 0
 
 .export conditions__table
 .export conditions__run
@@ -17,69 +16,49 @@
 .export conditions__actions_table
 
 .segment "RODATA": absolute
-.dbg line, "conditions.nt65", 9
 conditions__table: .res 32
 
 .segment "CODE": absolute
 trace:
-.dbg line, "conditions.nt65", 13
     rts
 
 conditions__run:
-.dbg line, "conditions.nt65", 18
     jsr trace
-.dbg line, "conditions.nt65", 24
     rts
 
 .segment "RODATA": absolute
 conditions__bits:
-.dbg line, "conditions.nt65", 30
         .byte 1 << $00              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $01              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $02              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $03              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $04              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $05              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $06              ; i
-.dbg line, "conditions.nt65", 30
         .byte 1 << $07              ; i
 
     conditions__LINES = 262
 
 .segment "CODE": absolute
 move:
-.dbg line, "conditions.nt65", 51
     rts
 
 fire:
-.dbg line, "conditions.nt65", 55
     rts
 
     Cmd__move = $00
     Cmd__fire = $01
 
     actions__move:
-.dbg line, "conditions.nt65", 69
         rts
     actions__fire:
-.dbg line, "conditions.nt65", 72
         rts
 
 .segment "RODATA": absolute
 conditions__dispatch:
-.dbg line, "conditions.nt65", 79
         .addr move - 1              ; h
-.dbg line, "conditions.nt65", 79
         .addr fire - 1              ; h
 
 conditions__actions_table:
-.dbg line, "conditions.nt65", 85
         .addr actions__move
-.dbg line, "conditions.nt65", 85
         .addr actions__fire

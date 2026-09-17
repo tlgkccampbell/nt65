@@ -7,7 +7,6 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 749, 0
 
     ROWS = 25
 
@@ -15,24 +14,18 @@ COLUMNS = $50
 BORDER = $00
 
 .segment "ZEROPAGE": zeropage
-.dbg line, "main.nt65", 18
 narrow:   .res 2
 
 .segment "BSS": absolute
-.dbg line, "main.nt65", 21
 wide:     .res 2
 
 BUFFER = wide
 
 .segment "RODATA": absolute
-.dbg line, "main.nt65", 27
 sizes:    .byte COLUMNS, ROWS, BORDER, $ff, $07  ; clamp(300), clamp(7)
 
 .segment "CODE": absolute
 main:
-.dbg line, "main.nt65", 31
     lda a:BUFFER
-.dbg line, "main.nt65", 32
     sta a:wide + 1
-.dbg line, "main.nt65", 33
     rts
