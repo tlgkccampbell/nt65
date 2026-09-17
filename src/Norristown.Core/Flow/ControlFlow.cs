@@ -41,6 +41,7 @@ public sealed class ControlFlow
     {
         var flow = new ControlFlow(model, layout);
         var diagnostics = new List<Diagnostic>();
+        var inline = Inline(model.Tree);
 
         // A routine's bytes are one stream unless a nested segment block takes some of them
         // somewhere else. Fall-through stays inside a stream, but a jump may go from one to
@@ -54,7 +55,10 @@ public sealed class ControlFlow
 
             // The routine is entered where its own name stands.
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
-            var region = new FlowRegion(routine, entered, blocks);
+            CountedLoops.Find(model, layout, blocks);
+            var (least, most, ends) = Paths.Through(blocks);
+            var region = new FlowRegion(
+                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends), flow.Costed(blocks, inline));
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
@@ -74,6 +78,147 @@ public sealed class ControlFlow
         return flow;
     }
 
+    /// <summary>
+    /// Every <c>.scope</c> block written inside a routine, as the span of the line that opens
+    /// it and of the whole block. One at file level is a namespace holding declarations, and
+    /// holds no code of its own, so it is not one of these.
+    /// </summary>
+    private static List<(TextSpan Opener, TextSpan Whole)> Inline(SyntaxTree tree)
+    {
+        var found = new List<(TextSpan, TextSpan)>();
+        Walk(tree.Root, false);
+        return found;
+
+        void Walk(SyntaxNode node, bool inProc)
+        {
+            foreach (var child in node.ChildNodes)
+            {
+                if (child.Green is not GreenBlock block)
+                    continue;
+                if (inProc && block.BlockKind == BlockKind.Scope && child.ChildNodes.Length > 0)
+                    found.Add((child.ChildNodes[0].Span, child.FullSpan));
+                Walk(child, inProc || block.BlockKind == BlockKind.Proc);
+            }
+        }
+    }
+
+    /// <summary>
+    /// What each inline <c>.scope</c> of a routine costs. A scope whose lines are blocks of
+    /// their own costs what a pass through those blocks costs; one written inside a single
+    /// block costs what its own statements add up to, since a block runs all of it. A scope
+    /// that is neither, whose first block nothing reaches, or that something branches into
+    /// past its start, gets no cost: a pass through it is not one thing to count.
+    /// </summary>
+    private List<ScopeCost> Costed(
+        IReadOnlyList<BasicBlock> blocks, IReadOnlyList<(TextSpan Opener, TextSpan Whole)> inline)
+    {
+        var costs = new List<ScopeCost>();
+        foreach (var (opener, whole) in inline)
+        {
+            if (Cost(blocks, whole) is { } cost)
+                costs.Add(new ScopeCost(opener, cost));
+        }
+        return costs;
+    }
+
+    /// <summary>What one pass through the part of a routine written inside <paramref name="whole"/> costs.</summary>
+    private RoutineCost? Cost(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
+    {
+        var held = Held(blocks, whole);
+        var part = 0;
+        var all = 0;
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            if (held[i].Inside == 0)
+                continue;
+            if (held[i].Inside == held[i].Total)
+                all++;
+            else
+                part++;
+        }
+
+        // Written inside one block, and so with nothing in it that branches: what it costs is
+        // what its statements cost, and the block runs every one of them.
+        if (part == 1 && all == 0)
+        {
+            var at = Array.FindIndex(held, block => block.Inside > 0);
+            return blocks[at].IsReached ? Straight(blocks[at], whole) : null;
+        }
+        if (part > 0 || all == 0)
+            return null;
+
+        var inside = new bool[blocks.Count];
+        for (var i = 0; i < blocks.Count; i++)
+            inside[i] = held[i].Inside > 0;
+        var entry = Array.FindIndex(inside, held => held);
+        if (!blocks[entry].IsReached || inside.All(held => held))
+            return null;
+
+        // A branch into the middle of it makes falling in at the top only one way through.
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            if (inside[i] && i != entry && blocks[i].Predecessors.Any(from => !inside[from]))
+                return null;
+        }
+        var (least, most, ends) = Paths.Through(blocks, entry, at => inside[at], Paths.Costing);
+        return least is null ? null : new RoutineCost(least, most, Calls(blocks, inside), ends);
+    }
+
+    /// <summary>
+    /// How many of each block's statements are written inside <paramref name="whole"/>, and how
+    /// many it has. A statement of the file says where the walk is, and one from an expansion
+    /// is wherever the call that wrote it was, so the walk carries the answer forward.
+    /// </summary>
+    private static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
+    {
+        var held = new (int Inside, int Total)[blocks.Count];
+        var within = false;
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var inside = 0;
+            foreach (var step in blocks[i].Steps)
+            {
+                if (step.On is null)
+                    within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
+                if (within)
+                    inside++;
+            }
+            held[i] = (inside, blocks[i].Steps.Count);
+        }
+        return held;
+    }
+
+    /// <summary>What the statements of <paramref name="block"/> written inside a span add up to.</summary>
+    private RoutineCost? Straight(BasicBlock block, TextSpan whole)
+    {
+        var total = new CycleCount(0);
+        var within = false;
+        var any = false;
+        foreach (var step in block.Steps)
+        {
+            if (step.On is null)
+                within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
+            if (!within || step.Statement.Kind is SyntaxKind.StateDirective or SyntaxKind.FrameDirective || step.IsMarker)
+                continue;
+            if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
+                return null;
+            total += cycles;
+            any = true;
+        }
+        return any ? new RoutineCost(total.Least, total.Most, false, true) : null;
+    }
+
+    /// <summary>Whether any block of a part of a routine calls.</summary>
+    private static bool Calls(IReadOnlyList<BasicBlock> blocks, bool[] inside)
+    {
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            if (inside[i] && (blocks[i].Calls.Count > 0 || blocks[i].CallsUnknown))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>The annotations written under <paramref name="step"/>'s statement, in order.</summary>
     internal IReadOnlyList<SyntaxNode> AnnotationsOf(Step step) =>
         annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
@@ -87,6 +232,13 @@ public sealed class ControlFlow
         return Transfers.Of(step.Statement, mode) == Transfer.Call
             && Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol.Signature is { NeverReturns: true };
     }
+
+    /// <summary>
+    /// Whether a routine calls, which the count of its own cycles does not follow: a call
+    /// costs the call here, and what the routine it names does is that routine's own count.
+    /// </summary>
+    private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
+        blocks.Any(block => block.Calls.Count > 0 || block.CallsUnknown);
 
     /// <summary>The call a branch makes, for a branch written as a relative call; null for every other statement.</summary>
     internal RelativeCall? RelativeCallAt(Step step) =>
@@ -242,6 +394,11 @@ public sealed class ControlFlow
             if (tails[i] is not { } tail)
                 continue;
 
+            var mode = layout.Of(tail.Step.Statement, tail.Step.On)?.Mode;
+            var transfer = Transfers.Of(tail.Step.Statement, mode);
+            var relative = RelativeCallAt(tail.Step);
+            var calls = transfer == Transfer.Call || relative is not null;
+
             // A `.next` replaces what the operand says, because the operand does not say it.
             // A call is the exception: it lists where the call goes, and the call still
             // returns to the statement after it.
@@ -251,20 +408,31 @@ public sealed class ControlFlow
                 {
                     if (found.TryGetValue(named, out var to))
                         Edge(i, to, EdgeKind.Declared);
+                    if (calls)
+                        blocks[i].Called(named.Symbol);
                 }
                 continue;
             }
 
-            var mode = layout.Of(tail.Step.Statement, tail.Step.On)?.Mode;
-            var transfer = Transfers.Of(tail.Step.Statement, mode);
             if (transfer is not (Transfer.Branch or Transfer.Jump or Transfer.Call))
-                continue;
-            var calls = transfer == Transfer.Call || RelativeCallAt(tail.Step) is not null;
-            if (Targets.Of(model, Transfers.TargetOf(tail.Step.Statement, mode), tail.Step.On) is { } target
-                && found.TryGetValue(target, out var reached))
             {
-                Edge(i, reached, calls ? EdgeKind.Call : EdgeKind.Taken);
+                // A `jsr` whose target the operand does not name is a call all the same, and
+                // one nothing here can follow into.
+                blocks[i].CallsUnknown |= transfer == Transfer.Elsewhere && IsCall(tail.Step.Statement);
+                continue;
             }
+            var target = Targets.Of(model, Transfers.TargetOf(tail.Step.Statement, mode), tail.Step.On);
+            var inside = target is { } named2 && found.TryGetValue(named2, out var reached);
+            if (inside)
+                Edge(i, found[target!.Value], calls ? EdgeKind.Call : EdgeKind.Taken);
+
+            // What a call reaches costs what that routine costs, and so does what a tail jump
+            // reaches, since control comes back from it to this routine's caller. A target
+            // this routine holds itself is neither: the path simply carries on into it.
+            if (relative is { } known)
+                blocks[i].Called(known.Routine);
+            else if (calls || (transfer == Transfer.Jump && !inside))
+                blocks[i].SetCalled(target?.Symbol);
         }
 
         void Edge(int from, int to, EdgeKind kind)
@@ -291,7 +459,10 @@ public sealed class ControlFlow
                 return null;
             total += cycles;
         }
-        return block.Steps.Count == 0 ? null : total;
+
+        // A block with nothing in it is the one a routine opens with when its first line is a
+        // label, and running none of it takes no time at all.
+        return total;
     }
 
     /// <summary>Which blocks any path from the region's first one reaches.</summary>

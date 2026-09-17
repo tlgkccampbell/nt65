@@ -171,6 +171,9 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
+        // What a routine costs with its calls is a question about the program, not about one
+        // file, so it is worked out once every file's own costs are in.
+        Flow.CallCosts.Compose(flows);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
@@ -291,6 +294,9 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
+        // A file kept from before the edit keeps its own costs, and what it costs with its
+        // calls may still have moved, because a routine it calls is in the file that changed.
+        Flow.CallCosts.Compose(flows);
         var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, previous.Cpu, layouts, flows, states, previous.Defines, configuration,

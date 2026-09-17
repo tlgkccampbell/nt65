@@ -19,6 +19,17 @@ public static class SyntaxFacts
     /// <summary>The register names, lower case.</summary>
     public static readonly IReadOnlyList<string> Registers = ["a", "x", "y", "s"];
 
+    /// <summary>The built-in functions any expression may call.</summary>
+    public static readonly IReadOnlyList<string> BuiltinFunctions =
+    [
+        ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
+        ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
+        ".defined", ".has", ".select",
+    ];
+
+    /// <summary>The three a macro body adds, which ask about the arguments it was given.</summary>
+    public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".empty"];
+
     private static readonly FrozenSet<string> mnemonicSet = Mnemonics.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> registerSet = Registers.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
@@ -114,13 +125,8 @@ public static class SyntaxFacts
         [".bedword"] = 4,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The built-in functions, and the three a macro body adds.</summary>
-    private static readonly FrozenSet<string> builtinFunctions = new[]
-    {
-        ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
-        ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
-        ".defined", ".has", ".select", ".mode", ".byteof", ".empty",
-    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenSet<string> builtinFunctions =
+        BuiltinFunctions.Concat(MacroBuiltinFunctions).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // The processor-state items, by the suffix that follows the name: a point item stands
     // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.

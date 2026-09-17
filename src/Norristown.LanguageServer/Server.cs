@@ -18,6 +18,7 @@ internal sealed class Server
     // Whether the client may be asked to fetch semantic tokens again, which an edit in one file
     // needs when it changes what a name in another refers to.
     private bool refreshesTokens;
+    private bool refreshesLenses;
 
     private Server(ServerLog log) => this.log = log;
 
@@ -51,10 +52,8 @@ internal sealed class Server
             ? [.. folders.Select(folder => folder.Uri)]
             : request.RootUri is { } root ? [root] : [];
         workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
-        refreshesTokens = request.Capabilities is { ValueKind: JsonValueKind.Object } given
-            && given.TryGetProperty("workspace", out var workspaceCapabilities) && workspaceCapabilities.ValueKind == JsonValueKind.Object
-            && workspaceCapabilities.TryGetProperty("semanticTokens", out var tokens) && tokens.ValueKind == JsonValueKind.Object
-            && tokens.TryGetProperty("refreshSupport", out var refresh) && refresh.ValueKind == JsonValueKind.True;
+        refreshesTokens = Refreshes(request.Capabilities, "semanticTokens");
+        refreshesLenses = Refreshes(request.Capabilities, "codeLens");
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
@@ -64,9 +63,9 @@ internal sealed class Server
             ReferencesProvider: true,
             DocumentHighlightProvider: true,
             RenameProvider: new RenameOptions(PrepareProvider: true),
-            CompletionProvider: new CompletionOptions([":", "@", "!", "(", ","]),
+            CompletionProvider: new CompletionOptions([" ", ".", ":", "@", "!", "#", "(", "[", ","]),
             SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
-            InlayHintProvider: true,
+            CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
             CodeActionProvider: true,
             SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true));
@@ -195,25 +194,21 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/completion")]
     public IReadOnlyList<CompletionItem> Completion(TextDocumentPositionParams request) =>
-        At(request) is { } asked ? LanguageServer.Completion.At(asked.Program, asked.Model, asked.Position) : [];
+        At(request) is { } asked
+            ? LanguageServer.Completion.At(asked.Program, asked.Model, asked.Analysis.Cpu, asked.Position)
+            : [];
 
     [JsonRpcMethod("textDocument/signatureHelp")]
     public SignatureHelp? SignatureHelp(TextDocumentPositionParams request) =>
         At(request) is { } asked ? CallHelp.At(asked.Program, asked.Model, asked.Position) : null;
 
-    [JsonRpcMethod("textDocument/inlayHint")]
-    public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request)
+    [JsonRpcMethod("textDocument/codeLens")]
+    public IReadOnlyList<CodeLens> CodeLenses(CodeLensParams request)
     {
-        if (At(new TextDocumentPositionParams(request.TextDocument, request.Range.Start)) is not { } asked)
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return [];
-        var tree = asked.Model.Tree;
-        var end = tree.GetPosition(request.Range.End.Line, request.Range.End.Character);
-        return LanguageServer.InlayHints.In(
-            asked.Model,
-            asked.Analysis.LayoutFor(tree.Path),
-            asked.Analysis.FlowFor(tree.Path),
-            asked.Analysis.StatesFor(tree.Path),
-            new Syntax.TextSpan(asked.Position, Math.Max(0, end - asked.Position)));
+        var path = document.Tree.Path;
+        return LanguageServer.CodeLenses.In(document.Tree, workspace.AnalysisFor(path).FlowFor(path));
     }
 
     [JsonRpcMethod("textDocument/codeAction")]
@@ -272,22 +267,34 @@ internal sealed class Server
                         analysis.DiagnosticsFor(document.Tree.Path), document.Tree, analysis.Configuration)));
         }
         if (refreshesTokens)
-            _ = RefreshTokensAsync();
+            _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
+
+        // What a routine costs with its calls is worked out across the program, so an edit to
+        // one file moves what the lenses of another say.
+        if (refreshesLenses)
+            _ = RefreshAsync("workspace/codeLens/refresh", "code lenses");
     }
 
+    /// <summary>Whether the client asks to be told when what it holds of <paramref name="what"/> is stale.</summary>
+    private static bool Refreshes(JsonElement? capabilities, string what) =>
+        capabilities is { ValueKind: JsonValueKind.Object } given
+        && given.TryGetProperty("workspace", out var workspace) && workspace.ValueKind == JsonValueKind.Object
+        && workspace.TryGetProperty(what, out var kind) && kind.ValueKind == JsonValueKind.Object
+        && kind.TryGetProperty("refreshSupport", out var refresh) && refresh.ValueKind == JsonValueKind.True;
+
     /// <summary>
-    /// Asks the client to fetch semantic tokens again. It is not waited for: the client answers
-    /// after it has asked, and a client that has gone away has nothing to refresh.
+    /// Asks the client to fetch something again. It is not waited for: the client answers after
+    /// it has asked, and a client that has gone away has nothing to refresh.
     /// </summary>
-    private async Task RefreshTokensAsync()
+    private async Task RefreshAsync(string method, string what)
     {
         try
         {
-            await rpc!.InvokeWithParameterObjectAsync<object?>("workspace/semanticTokens/refresh");
+            await rpc!.InvokeWithParameterObjectAsync<object?>(method);
         }
         catch (Exception e) when (e is RemoteInvocationException or ConnectionLostException or ObjectDisposedException)
         {
-            log.Write($"semantic tokens refresh failed: {e.Message}");
+            log.Write($"{what} refresh failed: {e.Message}");
         }
     }
 

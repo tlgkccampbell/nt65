@@ -11,7 +11,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="RenameProvider">How the server renames, or null when it does not.</param>
 /// <param name="CompletionProvider">How the server completes, or null when it does not.</param>
 /// <param name="SignatureHelpProvider">How the server helps with calls, or null when it does not.</param>
-/// <param name="InlayHintProvider">Whether the server answers <c>textDocument/inlayHint</c>.</param>
+/// <param name="CodeLensProvider">How the server answers <c>textDocument/codeLens</c>, or null when it does not.</param>
 /// <param name="WorkspaceSymbolProvider">Whether the server answers <c>workspace/symbol</c>.</param>
 /// <param name="CodeActionProvider">Whether the server answers <c>textDocument/codeAction</c>.</param>
 /// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
@@ -26,7 +26,7 @@ internal sealed record ServerCapabilities(
     RenameOptions? RenameProvider,
     CompletionOptions? CompletionProvider = null,
     SignatureHelpOptions? SignatureHelpProvider = null,
-    bool InlayHintProvider = false,
+    CodeLensOptions? CodeLensProvider = null,
     bool WorkspaceSymbolProvider = false,
     bool CodeActionProvider = false,
     SemanticTokensOptions? SemanticTokensProvider = null);

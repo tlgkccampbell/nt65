@@ -5,4 +5,9 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Kind">What it is, which picks its icon.</param>
 /// <param name="Detail">A short description beside it, or null.</param>
 /// <param name="TextEdit">What choosing it writes, over the part of a name already typed.</param>
-internal sealed record CompletionItem(string Label, CompletionItemKind Kind, string? Detail, TextEdit TextEdit);
+/// <param name="Command">
+/// What to run once it is written, or null. An item that writes more than its own name leaves
+/// the caret where something else may go, and asks the client for that list straight away.
+/// </param>
+internal sealed record CompletionItem(
+    string Label, CompletionItemKind Kind, string? Detail, TextEdit TextEdit, Command? Command = null);

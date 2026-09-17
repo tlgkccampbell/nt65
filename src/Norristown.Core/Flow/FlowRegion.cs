@@ -9,11 +9,14 @@ namespace Norristown.Flow;
 /// </summary>
 public sealed class FlowRegion
 {
-    internal FlowRegion(Symbol routine, bool entered, IReadOnlyList<BasicBlock> blocks)
+    internal FlowRegion(
+        Symbol routine, bool entered, IReadOnlyList<BasicBlock> blocks, RoutineCost cost, IReadOnlyList<ScopeCost> scopes)
     {
         Routine = routine;
         IsEntered = entered;
         Blocks = blocks;
+        Cost = cost;
+        Scopes = scopes;
     }
 
     /// <summary>The routine.</summary>
@@ -21,6 +24,15 @@ public sealed class FlowRegion
 
     /// <summary>Whether its first block is where a call to the routine enters it.</summary>
     public bool IsEntered { get; }
+
+    /// <summary>What one pass through it costs.</summary>
+    public RoutineCost Cost { get; internal set; }
+
+    /// <summary>What one pass through it costs with what it calls, worked out across the program.</summary>
+    public RoutineCost Total { get; internal set; }
+
+    /// <summary>What one pass through each inline <c>.scope</c> block of it costs.</summary>
+    public IReadOnlyList<ScopeCost> Scopes { get; }
 
     /// <summary>
     /// Its blocks: those of the routine's own stream of bytes first, then those of each nested

@@ -1,12 +1,16 @@
+using Norristown.Layout;
+using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What could be written at the caret: the names a path leads to after <c>::</c> and in a
-/// <c>.use</c>, the names in scope where an operand or an expression goes, the items of a
-/// processor-state signature, and a macro's parameters as named arguments.
+/// What could be written at the caret, and only that: the statements the place the caret is in
+/// accepts, the forms an instruction has on this CPU and the registers that index them, the
+/// names a path leads to after <c>::</c> and in a <c>.use</c>, the names in scope where an
+/// operand or an expression goes, the items of a processor-state signature, and a macro's
+/// parameters as named arguments.
 /// </summary>
 internal static class Completion
 {
@@ -25,28 +29,56 @@ internal static class Completion
     /// <summary>What an <c>.ensure</c> makes hold.</summary>
     private static readonly string[] Widths = ["a8", "a16", "i8", "i16"];
 
+    /// <summary>What a segment declaration says about where it lands.</summary>
+    private static readonly string[] SegmentAttributes = ["dp = ", "bank = ", "mirrors = "];
+
+    /// <summary>What a macro parameter accepts.</summary>
+    private static readonly string[] ParameterKinds = ["expr", "const", "ident", "operand", "block", "one(", "list("];
+
     /// <summary>The directives that declare the name written after them, where nothing is completed.</summary>
     private static readonly HashSet<string> Declaring = new(StringComparer.Ordinal)
     {
         ".module", ".proc", ".scope", ".data", ".enum", ".struct", ".union", ".macro", ".func", ".list",
-        ".charmap", ".signature", ".segment", ".frame", ".config", ".repeat", ".each", ".import",
+        ".charmap", ".signature", ".segment", ".frame", ".config", ".import",
     };
 
+    /// <summary>
+    /// What the client runs once it has written an item. VS Code asks for the next list with
+    /// this, so that choosing <c>lda</c> offers what its operand may be straight away.
+    /// </summary>
+    private static readonly Protocol.Command Again = new("Suggest", "editor.action.triggerSuggest");
+
     /// <summary>What could be written at <paramref name="position"/> in the file <paramref name="model"/> is of.</summary>
-    public static IReadOnlyList<Protocol.CompletionItem> At(ProgramModel program, SemanticModel model, int position)
+    public static IReadOnlyList<Protocol.CompletionItem> At(
+        ProgramModel program, SemanticModel model, Cpu cpu, int position)
     {
         var line = LineContext.At(model.Tree, position);
         var items = new Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)>(StringComparer.Ordinal);
-        Collect(program, model, line, items);
+        if (!line.InText)
+            Collect(program, model, line, cpu, items);
         var range = Lsp.ToRange(model.Tree, line.Replaced);
         return [.. items
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => new Protocol.CompletionItem(item.Key, item.Value.Kind, item.Value.Detail,
-                new Protocol.TextEdit(range, item.Value.Text)))];
+                new Protocol.TextEdit(range, item.Value.Text), Unfinished(item.Value.Text) ? Again : null))];
+    }
+
+    /// <summary>
+    /// The macro or function a call names, written as the name or path that ends at
+    /// <paramref name="end"/>, exclusive.
+    /// </summary>
+    public static Symbol? Callee(ProgramModel program, SemanticModel model, Scope scope, LineContext line, int end)
+    {
+        var before = line.Before;
+        if (end < 1 || !LineContext.IsWord(before[end - 1].Kind))
+            return null;
+        var path = line.PathBefore(end - 1) ?? [];
+        var found = Walk(program, model, scope, [.. path, before[end - 1].Text], fromRoot: false);
+        return found?.Symbol;
     }
 
     private static void Collect(
-        ProgramModel program, SemanticModel model, LineContext line,
+        ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
         Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
     {
         var before = line.Before;
@@ -72,9 +104,21 @@ internal static class Completion
             return;
         }
 
+        // A `}` closes a block, and only the next branch of a condition may follow it.
+        if (before.Count == 1 && before[0].Kind == SyntaxKind.CloseBrace)
+        {
+            AddDirectives([".else", ".elseif"], items);
+            return;
+        }
+
         if (directive == ".ensure")
         {
             AddWords(Widths, "width", items);
+            return;
+        }
+        if (directive == ".cpu" && before.Count == line.Start + 1)
+        {
+            AddWords([.. CpuNames.All.Select(CpuNames.Spell)], "processor", items);
             return;
         }
         if (directive == ".state")
@@ -99,17 +143,35 @@ internal static class Completion
                 return;
             }
         }
-        else if (directive is { } declaring && Declaring.Contains(declaring) && before.Count == line.Start + 1)
+        else if (AfterMark(line, directive) is { } written)
         {
+            AddWords(written.Words, written.Detail, items);
+            return;
+        }
+        else if (directive is { } declaring && Declaring.Contains(declaring)
+            && !before.Any(token => token.Kind is SyntaxKind.Colon or SyntaxKind.Equals))
+        {
+            // What a declaration names is a name being made up, and until the `:` or the `=`
+            // that it goes on with, nothing but the rest of that name may be written.
+            return;
+        }
+        else if (directive is ".repeat" or ".each" && before.Any(token => token.Kind == SyntaxKind.Comma))
+        {
+            // Past the comma a repetition declares the name it binds, and names nothing else.
             return;
         }
 
-        // A statement's first word is an instruction or a macro call.
+        // A statement's first word, which the place the line is in decides.
         if (before.Count == line.Start)
         {
-            foreach (var mnemonic in SyntaxFacts.Mnemonics)
-                items.TryAdd(mnemonic, (Protocol.CompletionItemKind.Text, "instruction", mnemonic));
-            AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro);
+            Starting(program, model, scope, line, cpu, items);
+            return;
+        }
+
+        // What follows a mnemonic is that instruction's operand, and nothing else.
+        if (before[line.Start].Kind == SyntaxKind.Mnemonic)
+        {
+            Operand(program, model, scope, line, cpu, items);
             return;
         }
 
@@ -122,22 +184,256 @@ internal static class Completion
                 items.TryAdd(parameter.Symbol.Name, (Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = "));
         }
 
-        AddInScope(program, model, scope, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
-        AddModules(program, "", items);
+        if (!Ends(before[^1].Kind))
+            AddExpression(program, model, scope, line, items);
     }
 
     /// <summary>
-    /// The macro or function a call names, written as the name or path that ends at
-    /// <paramref name="end"/>, exclusive.
+    /// Whether a token finishes an expression, so that what may follow it is an operator or a
+    /// separator and never a name of its own.
     /// </summary>
-    public static Symbol? Callee(ProgramModel program, SemanticModel model, Scope scope, LineContext line, int end)
+    private static bool Ends(SyntaxKind kind) =>
+        kind is SyntaxKind.NumberLiteral or SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.Register
+            or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral or SyntaxKind.CharacterLiteral
+            or SyntaxKind.CloseParen or SyntaxKind.CloseBracket;
+
+    /// <summary>What may begin a statement where the caret is.</summary>
+    private static void Starting(
+        ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
     {
-        var before = line.Before;
-        if (end < 1 || !LineContext.IsWord(before[end - 1].Kind))
+        foreach (var (name, detail) in Directives.At(line))
+            items.TryAdd(name, (Protocol.CompletionItemKind.Keyword, detail, name));
+
+        switch (line.Place)
+        {
+            // Code: the instructions this CPU has, the macros in scope, and a block a macro
+            // body splices in by naming its parameter.
+            case Place.Code or Place.Unknown:
+                foreach (var mnemonic in SyntaxFacts.Mnemonics)
+                {
+                    if (!Instructions.Writable(cpu, mnemonic))
+                        continue;
+                    var takes = ModesOf(cpu, mnemonic).Any(Takes);
+                    items.TryAdd(mnemonic, (Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic));
+                }
+                AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro
+                    || (symbol.Kind == SymbolKind.MacroParameter && symbol.Parameter is { IsBlock: true }));
+                Called(items);
+                break;
+
+            // A `.data` block holds data, the declarations that name it, and macro calls.
+            case Place.Data:
+                AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro);
+                Called(items);
+                break;
+
+            // A line of values, of a list or of a charmap starts with an expression.
+            case Place.Values:
+                AddExpression(program, model, scope, line, items);
+                break;
+
+            // A record initializer gives the type's members their values, one a line.
+            case Place.Record:
+                if (line.RecordType is { } path && Walk(program, model, scope, path, fromRoot: false) is { } found)
+                    AddMembers(program, model, found, modulesToo: false, items);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A macro is written where a statement goes with the <c>!(</c> that calls it, so that the
+    /// arguments it takes are what is offered next. Only a macro is listed as a snippet.
+    /// </summary>
+    private static void Called(Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        foreach (var name in items
+            .Where(item => item.Value.Kind == Protocol.CompletionItemKind.Snippet)
+            .Select(item => item.Key)
+            .ToList())
+        {
+            items[name] = (Protocol.CompletionItemKind.Snippet, items[name].Detail, name + "!(");
+        }
+    }
+
+    /// <summary>
+    /// What may follow a mnemonic: the forms the instruction has on this CPU, the registers
+    /// that index them, and the names an address or a value is written from.
+    /// </summary>
+    private static void Operand(
+        ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        var mnemonic = line.Before[line.Start].Text;
+        var modes = ModesOf(cpu, mnemonic);
+        if (modes.Count == 0)
+            return;
+
+        // The operand so far: whether it is written inside a `(` or a `[`, whether that has
+        // been closed again, and whether a `#` has made it a value.
+        var written = line.Before.Skip(line.Start + 1).ToList();
+        var opened = written.Count == 0 ? '\0' : written[0].Kind switch
+        {
+            SyntaxKind.OpenParen => '(',
+            SyntaxKind.OpenBracket => '[',
+            _ => '\0',
+        };
+        var depth = 0;
+        var value = false;
+        foreach (var token in written)
+        {
+            depth += token.Kind switch
+            {
+                SyntaxKind.OpenParen or SyntaxKind.OpenBracket => 1,
+                SyntaxKind.CloseParen or SyntaxKind.CloseBracket => -1,
+                _ => 0,
+            };
+            value |= token.Kind == SyntaxKind.Hash;
+        }
+
+        if (written.Count == 0)
+        {
+            Forms(modes, cpu, mnemonic, items);
+
+            // An instruction whose only operand is a value is written with the `#`, so a name
+            // on its own is not something that could go there.
+            if (modes.Any(mode => Takes(mode) && mode is not (AddressingMode.Immediate or AddressingMode.BlockMove)))
+                AddExpression(program, model, scope, line, items);
+            return;
+        }
+        if (written[^1].Kind == SyntaxKind.Comma)
+        {
+            Indexing(modes, opened, depth, value, items);
+
+            // `bbr0 flags, @skip` is the one operand whose comma is followed by a target.
+            if (modes.Contains(AddressingMode.DirectRelative))
+                AddExpression(program, model, scope, line, items);
+            return;
+        }
+        if (!Ends(written[^1].Kind))
+            AddExpression(program, model, scope, line, items);
+    }
+
+    /// <summary>Every form an instruction has, written as the mark that begins it.</summary>
+    private static void Forms(
+        IReadOnlySet<AddressingMode> modes, Cpu cpu, string mnemonic,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        if (modes.Contains(AddressingMode.Immediate))
+            AddWord("#", "a value", items);
+        else if (modes.Contains(AddressingMode.BlockMove))
+            AddWord("#", "the source bank", items);
+        if (modes.Contains(AddressingMode.Accumulator))
+            AddWord("a", "the accumulator", items);
+        if (modes.Any(mode => mode is AddressingMode.DirectIndirect or AddressingMode.DirectIndirectX
+                or AddressingMode.DirectIndirectY or AddressingMode.AbsoluteIndirect
+                or AddressingMode.AbsoluteIndirectX or AddressingMode.StackRelativeIndirectY))
+        {
+            AddWord("(", "through a pointer", items);
+        }
+        if (modes.Any(mode => mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY
+                or AddressingMode.AbsoluteIndirectLong))
+        {
+            AddWord("[", "through a long pointer", items);
+        }
+
+        // A control transfer takes a near or a far target, so no prefix sizes it.
+        if (Instructions.IsControlTransfer(mnemonic))
+            return;
+        foreach (var mode in modes)
+        {
+            if (Instructions.Prefix(mode) is { } prefix)
+                AddWord(prefix, Sized(prefix), items);
+        }
+        if (cpu == Cpu.Wdc65816 && modes.Contains(AddressingMode.Direct))
+            AddWord("d:", "a constant address in the direct page", items);
+    }
+
+    /// <summary>What may follow the comma of an operand: the register that indexes it, or a second value.</summary>
+    private static void Indexing(
+        IReadOnlySet<AddressingMode> modes, char opened, int depth, bool value,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        if (opened == '(' && depth > 0)
+        {
+            if (modes.Contains(AddressingMode.DirectIndirectX) || modes.Contains(AddressingMode.AbsoluteIndirectX))
+                AddWord("x", "a table of pointers", items);
+            if (modes.Contains(AddressingMode.StackRelativeIndirectY))
+                AddWord("s", "a pointer on the stack", items);
+            return;
+        }
+        if (opened == '(')
+        {
+            if (modes.Contains(AddressingMode.DirectIndirectY) || modes.Contains(AddressingMode.StackRelativeIndirectY))
+                AddWord("y", "indexed by Y", items);
+            return;
+        }
+        if (opened == '[')
+        {
+            if (modes.Contains(AddressingMode.DirectIndirectLongY))
+                AddWord("y", "indexed by Y", items);
+            return;
+        }
+        if (value)
+        {
+            if (modes.Contains(AddressingMode.BlockMove))
+                AddWord("#", "the destination bank", items);
+            return;
+        }
+        if (modes.Contains(AddressingMode.DirectX) || modes.Contains(AddressingMode.AbsoluteX)
+            || modes.Contains(AddressingMode.LongX))
+        {
+            AddWord("x", "indexed by X", items);
+        }
+        if (modes.Contains(AddressingMode.DirectY) || modes.Contains(AddressingMode.AbsoluteY))
+            AddWord("y", "indexed by Y", items);
+        if (modes.Contains(AddressingMode.StackRelative))
+            AddWord("s", "an offset from the stack pointer", items);
+    }
+
+    /// <summary>
+    /// The forms an instruction has here: the CPU's, or a near target for the long branches,
+    /// which nt65 writes on every CPU.
+    /// </summary>
+    private static IReadOnlySet<AddressingMode> ModesOf(Cpu cpu, string mnemonic) =>
+        SyntaxFacts.LongBranches.Contains(mnemonic)
+            ? new HashSet<AddressingMode> { AddressingMode.RelativeLong }
+            : Instructions.Modes(cpu, mnemonic);
+
+    /// <summary>Whether a form is written with an operand of its own.</summary>
+    private static bool Takes(AddressingMode mode) =>
+        mode is not (AddressingMode.Implied or AddressingMode.Accumulator);
+
+    /// <summary>What an address-size prefix makes of the address after it.</summary>
+    private static string Sized(string prefix) => prefix switch
+    {
+        "z:" => "the direct page",
+        "a:" => "an absolute address",
+        _ => "a long address",
+    };
+
+    /// <summary>
+    /// The words that follow a mark in a declaration: how wide a name is after a <c>:</c>,
+    /// what a declaration or a member holds, and what a segment says after a <c>,</c>.
+    /// </summary>
+    private static (IEnumerable<string> Words, string Detail)? AfterMark(LineContext line, string? directive)
+    {
+        if (directive == ".segment" && line.Before is [.., (SyntaxKind.Comma, _, _)])
+            return (SegmentAttributes, "where the segment lands");
+        if (line.Before is not [.., (SyntaxKind.Colon, _, _)])
             return null;
-        var path = line.PathBefore(end - 1) ?? [];
-        var found = Walk(program, model, scope, [.. path, before[end - 1].Text], fromRoot: false);
-        return found?.Symbol;
+        return directive switch
+        {
+            ".macro" when line.OpenCall() is not null => (ParameterKinds, "what the argument may be"),
+            ".import" => ([.. Directives.Sizes, "proc("], "how the name is reached"),
+            ".export" or ".segment" => (Directives.Sizes, "address size"),
+            ".data" => (Directives.Data, "what it holds"),
+            null when line.Place == Place.TypeMembers => ([.. Directives.Elements, ".res"], "what it holds"),
+            _ => null,
+        };
     }
 
     /// <summary>
@@ -220,6 +516,27 @@ internal static class Completion
     }
 
     /// <summary>
+    /// What an expression may be written from: the marks a number that is not plain digits
+    /// starts with, the names in scope, the modules a path may walk into, and the built-in
+    /// functions, the last three of which only a macro body has.
+    /// </summary>
+    private static void AddExpression(
+        ProgramModel program, SemanticModel model, Scope scope, LineContext line,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        AddWord("$", "a hexadecimal number", items);
+        AddWord("%", "a binary number", items);
+        AddWord("'", "a character", items);
+        AddInScope(program, model, scope, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
+        AddModules(program, "", items);
+        var builtins = line.InMacro
+            ? SyntaxFacts.BuiltinFunctions.Concat(SyntaxFacts.MacroBuiltinFunctions)
+            : SyntaxFacts.BuiltinFunctions;
+        foreach (var builtin in builtins)
+            items.TryAdd(builtin, (Protocol.CompletionItemKind.Function, "built-in function", builtin + "("));
+    }
+
+    /// <summary>
     /// Every name <paramref name="scope"/> can write alone that <paramref name="wanted"/> accepts:
     /// what the scopes out to the file declare, the nearest first, what <c>.use</c> brought in, and
     /// the defines.
@@ -249,12 +566,32 @@ internal static class Completion
             Add(define, items);
     }
 
+    private static void AddDirectives(
+        IEnumerable<string> names,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        foreach (var (name, detail) in Directives.Described(names))
+            items.TryAdd(name, (Protocol.CompletionItemKind.Keyword, detail, name));
+    }
+
     private static void AddWords(
         IEnumerable<string> words, string detail,
         Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
     {
         foreach (var word in words)
-            items.TryAdd(word.TrimEnd(' ', '='), (Protocol.CompletionItemKind.Keyword, detail, word));
+            AddWord(word, detail, items);
+    }
+
+    /// <summary>
+    /// A word, listed under itself and written with whatever it needs after it: a mark a word
+    /// only leads up to is not part of the name the client filters on.
+    /// </summary>
+    private static void AddWord(
+        string word, string detail,
+        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    {
+        var label = word.TrimEnd(' ', '=', '(');
+        items.TryAdd(label.Length > 0 ? label : word, (Protocol.CompletionItemKind.Keyword, detail, word));
     }
 
     private static void Add(Symbol symbol, Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items) =>
@@ -262,6 +599,12 @@ internal static class Completion
 
     private static string Detail(Symbol symbol) =>
         symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
+
+    /// <summary>
+    /// Whether what an item writes leaves the caret where something else goes, so the client is
+    /// asked for that list as soon as it has written it.
+    /// </summary>
+    private static bool Unfinished(string text) => text.Length > 0 && text[^1] is ' ' or ':' or '#' or '(' or '[';
 
     /// <summary>
     /// The signature a line is writing, by the directive that declares it, when the caret is past

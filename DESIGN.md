@@ -1299,9 +1299,33 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). Tooling shows the interval per
-instruction and per basic block. There are no cycle-count built-ins for `.assert`: a
-sum along one path silently undercounts any loop or call on it, so it could not be a
-true bound.
+instruction and per basic block on hover, and above each routine, and each inline `.scope`
+block of one, what one pass through it costs: the shortest and the longest path from where it
+is entered to where its path ends. A routine no path leaves is shown as never returning,
+rather than as one nothing could be worked out for.
+
+A path that can come back on itself has no longest, and the count is a fewest with a `+`,
+except where the loop counts itself: a register loaded with an immediate, brought down by a
+`dex` or a `dey` once a turn and branched on with `bne` or `bpl`, in a block that is the whole
+of the loop, with one way in and nothing else in it touching that register. That loop's turns
+are known, so its cost is a bound like any other. Every other loop keeps the `+`, because a
+loop counted wrongly is worse than one not counted.
+
+A routine is also shown what it costs **with what it calls**: a call costs the call and then
+whatever the routine it names costs, and a tail jump the same, since control comes back from it
+to this routine's caller. That is worked out across the program, so an edit to one file moves
+what another file's lenses say. A call to a routine with no body, one through a pointer, and a
+routine that can reach itself leave no total to give, and the lens says the calls are not in
+the count rather than quietly leaving them out.
+
+Control does not come back from a routine that never returns, so a call to one ends the pass
+where it is made and what that routine does is no part of this one's count. A routine every way
+out of which hands off like that does not come back either, which is worked out over the whole
+call graph and shown as what it takes to get there and then never returning: the shape of every
+program's entry point, which sets up and hands over to a loop that runs for ever.
+
+There are still no cycle-count built-ins for `.assert`: what tooling shows is a bound on one
+pass, and an `.assert` would be read as a bound on the program.
 
 ## 8. Data
 
@@ -2391,13 +2415,20 @@ alone and without an assembler:
   immediates reached with unknown width, every unannotated construct of §7.4, and
   direct-page and bank mismatches against declared segments and ranges (§7.5);
 - report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6), and
-  show them in the lines as they are written: each instruction's cycles, each block's, and on
-  the 65816 the state reaching each label;
-- complete what may be written at the caret: after `::` the names a path leads to, in a
-  `.use` the modules and what they export, in an operand the names in scope and what `.use`
-  brought in, in a signature or a `.state` its items and the signature sets, and in a macro
-  call its parameters as named arguments; and show, inside a macro call, a `.func` call or a
-  `.select`, what it takes and which argument the caret is in;
+  show above each routine, and each inline `.scope` block of one, as a lens on the line that
+  opens it, what one pass through it costs and what it costs with everything it calls;
+  an instruction's own cycles, its block's, and on the 65816 the state reaching it, are
+  on hover, so nothing stands in the lines as they are written;
+- complete what may be written at the caret, and only that: the statements the place the
+  caret is in accepts, so that a file's top level offers declarations and only code offers
+  instructions, labels and what they say about the processor; the forms an instruction has
+  on the program's CPU, and the registers that index them; after `::` the names a path leads
+  to; in a `.use` the modules and what they export; in an operand or an expression the names
+  in scope, what `.use` brought in, the built-in functions and how a number that is not plain
+  digits is written; in a signature or a `.state`
+  its items and the signature sets; in a macro call its parameters as named arguments; and
+  nothing at all inside a comment or a text. It also shows, inside a macro call, a `.func`
+  call or a `.select`, what it takes and which argument the caret is in;
 - find a declaration anywhere in the workspace by name;
 - fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
   transfer or a routine runs off its end, `jsl` for a `jsr` to a far routine and the other way,

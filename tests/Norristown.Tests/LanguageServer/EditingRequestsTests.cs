@@ -1,8 +1,5 @@
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one these tests mean.
-using Range = Norristown.LanguageServer.Protocol.Range;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -36,20 +33,33 @@ public sealed class EditingRequestsTests
 
     private const string Vic = ".module hw::vic\n.export BORDER = $d020\n";
 
-    /// <summary>The file completion is asked in; <c>|</c> is written where each test puts its own line.</summary>
+    /// <summary>
+    /// The file completion is asked in. Each <c>|name</c> marks a place a test may put its own
+    /// line, and the name it asks for it by; a test that asks for none writes its line at the
+    /// file's top level.
+    /// </summary>
     private const string Main = """
         .module main
         .use gfx::{clear}
         .use hw::vic
         .signature fast = a8, i8
         .func twice(n) = n * 2
+        .struct Point {
+            |struct
+        }
+        .data table: .byte[] {
+            |values
+        }
+        .scope loose {
+            |scope
+        }
         .segment CODE
         .macro poke(address: expr, value: const = 0) {
-            |
+            |macro
         }
         .proc main {
         @loop:
-            |
+            |body
             rts
         }
         """;
@@ -83,8 +93,62 @@ public sealed class EditingRequestsTests
         { "body", "    poke!(|", ["address", "value", "clear"], ["lda"] },
         { "body", "    poke!(1, |", ["value"], [] },
 
-        // A name being declared is not completed.
+        // A name being declared is not completed, and nothing stands between it and the `:`
+        // or the `{` the declaration goes on with.
         { "top", ".proc |", [], ["clear"] },
+        { "top", ".proc other |", [], ["clear", "lda", ".proc", "near"] },
+        { "top", ".macro m(|", [], ["clear", "expr"] },
+        { "top", ".macro m(a: |", ["expr", "const", "operand", "block", "one"], ["clear", "lda"] },
+
+        // Past what finishes an expression an operator goes, and never a name.
+        { "body", "    lda clear |", [], ["clear", "x", "#"] },
+        { "body", "    lda clear + |", ["clear", "twice"], ["x", "#"] },
+
+        // A statement is only what the place it is written in accepts: a file's top level
+        // declares things, and only code holds instructions and what they need.
+        { "top", "|", [".proc", ".data", ".export", ".cpu"], ["lda", "rts", "poke", ".state"] },
+        { "body", "|", [".data", ".scope", ".state", ".ensure", ".byte", "lda", "poke"], [".proc", ".macro", ".cpu", ".config", ".module"] },
+        { "macro", "|", ["lda", ".state", ".if"], [".proc", ".macro", ".export", ".import", ".segment"] },
+        { "struct", "|", [".struct", ".union"], ["lda", ".proc", ".byte", "clear"] },
+        { "values", "|", ["clear", "twice", ".sizeof"], ["lda", ".proc", ".byte"] },
+        { "scope", "|", [".proc", ".macro", ".data"], ["lda", "rts", ".state"] },
+        { "body", ".|", [".data", ".state", ".byte"], [".proc", ".config", "clear"] },
+
+        // What a `:` asks for: what a member holds, and how wide an imported name is.
+        { "struct", "    x: |", [".byte", ".word", ".res", ".type"], ["lda", "clear"] },
+        { "top", ".data d: |", [".byte", ".addr", ".res", ".incbin"], ["lda", ".proc"] },
+        { "top", ".import io: |", ["zp", "abs", "far", "proc"], ["clear"] },
+        { "top", ".cpu |", ["6502", "65816", "65c02"], ["clear", "lda"] },
+
+        // A `}` is followed by the next branch of a condition, and by nothing else.
+        { "top", "} |", [".else", ".elseif"], [".proc", "lda", "clear"] },
+
+        // An operand is the forms the instruction has, and the names an address is made of.
+        { "body", "    lda |", ["#", "z:", "a:", "(", "clear", "@loop"], ["x", "y", "a", "f:", "["] },
+        { "body", "    asl |", ["a", "z:", "clear"], ["#", "("] },
+        { "body", "    jsr |", ["clear", "main"], ["#", "z:", "a:", "("] },
+        { "body", "    inx |", [], ["#", "a", "clear", "lda"] },
+
+        // What indexes the address, which is what the form the operand is in allows.
+        { "body", "    lda table, |", ["x", "y"], ["s", "#", "clear"] },
+        { "body", "    lda (table), |", ["y"], ["x", "s"] },
+        { "body", "    lda (table, |", ["x"], ["y", "s"] },
+        { "body", "    sta table, |", ["x", "y"], ["s"] },
+
+        // A number is written in hex, in binary, as a character, or as the digits that need
+        // no mark at all.
+        { "body", "    lda #|", ["$", "%", "'"], ["x", "z:"] },
+        { "body", "    lda |", ["$", "%", "'"], ["x"] },
+        { "values", "|", ["$", "%", "'"], ["lda"] },
+        { "body", "    inx |", [], ["$", "%", "'"] },
+
+        // An expression may call a built-in function, and three of them only a macro body has.
+        { "body", "    lda #|", [".sizeof", ".lobyte", "clear"], [".mode", ".byteof", "x"] },
+        { "macro", "    lda #|", [".sizeof", ".mode", ".byteof", ".empty"], ["x"] },
+
+        // Nothing is written inside a comment or a text literal.
+        { "body", "    lda #1 ; load the |", [], ["lda", "clear", ".sizeof"] },
+        { "top", ".error \"what went |", [], ["clear", ".proc"] },
     };
 
     [Fact]
@@ -94,9 +158,10 @@ public sealed class EditingRequestsTests
         await using var client = await TestClient.StartAsync(timeout);
 
         var capabilities = client.Initialized.Capabilities;
-        Assert.Equal([":", "@", "!", "(", ","], capabilities.CompletionProvider?.TriggerCharacters);
+        Assert.Equal(
+            [" ", ".", ":", "@", "!", "#", "(", "[", ","], capabilities.CompletionProvider?.TriggerCharacters);
         Assert.Equal(["(", ",", "="], capabilities.SignatureHelpProvider?.TriggerCharacters);
-        Assert.True(capabilities.InlayHintProvider);
+        Assert.NotNull(capabilities.CodeLensProvider);
         Assert.True(capabilities.WorkspaceSymbolProvider);
         Assert.True(capabilities.CodeActionProvider);
     }
@@ -133,6 +198,61 @@ public sealed class EditingRequestsTests
         Assert.Equal("value = ", value.TextEdit.NewText);
         Assert.Equal(new Position(position.Line, position.Character - 3), value.TextEdit.Range.Start);
         Assert.Equal(position, value.TextEdit.Range.End);
+    }
+
+    /// <summary>
+    /// An instruction that takes an operand is written with the space before it and asks the
+    /// client for what may go there; one that takes none is written on its own.
+    /// </summary>
+    [Fact]
+    public async Task AnInstructionThatTakesAnOperandLeadsOnToIt()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        var (text, position) = Place("body", "|");
+        await using var client = await OpenAsync(text, timeout);
+
+        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+
+        var lda = Assert.Single(items, item => item.Label == "lda");
+        Assert.Equal("lda ", lda.TextEdit.NewText);
+        Assert.Equal("editor.action.triggerSuggest", lda.Command?.Name);
+        var inx = Assert.Single(items, item => item.Label == "inx");
+        Assert.Equal("inx", inx.TextEdit.NewText);
+        Assert.Null(inx.Command);
+        var poke = Assert.Single(items, item => item.Label == "poke");
+        Assert.Equal("poke!(", poke.TextEdit.NewText);
+        Assert.Equal("editor.action.triggerSuggest", poke.Command?.Name);
+    }
+
+    /// <summary>An operand is offered the forms the CPU the program is built for actually has.</summary>
+    [Theory]
+    [InlineData("    lda |", new[] { "#", "(", "[", "z:", "a:", "f:", "d:" }, new[] { "x", "y", "s" })]
+    [InlineData("    sta 3,|", new[] { "x", "y", "s" }, new[] { "#", "z:", "a:" })]
+    [InlineData("    sta (3,|", new[] { "x", "s" }, new[] { "y" })]
+    [InlineData("    sep |", new[] { "#" }, new[] { "main", "z:", "x" })]
+    [InlineData("    mvn |", new[] { "#" }, new[] { "main", "z:", "a:" })]
+    public async Task AnOperandOffersTheFormsTheCpuHas(string line, string[] offered, string[] notOffered)
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        var (text, position) = Caret("""
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc main {
+            @line
+            }
+            """.Replace("@line", line, StringComparison.Ordinal));
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, text);
+        await client.NextDiagnosticsAsync(timeout);
+
+        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+
+        var labels = items.Select(item => item.Label).ToHashSet();
+        Assert.All(offered, label => Assert.Contains(label, labels));
+        Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
     }
 
     public static TheoryData<string, string, string, int> Calls => new()
@@ -174,22 +294,237 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// Each instruction's cycles at the end of its line, each block's after them, and on the 65816
-    /// the state reaching a label beside its name.
+    /// Above each routine, what one pass through it costs: an interval where its paths have a
+    /// longest, the fewest and a <c>+</c> where it loops, and what the count does not follow.
     /// </summary>
     [Fact]
-    public async Task InlayHintsShowCyclesAndTheStateAtALabel()
+    public async Task ALensAboveEachRoutineSaysWhatOnePassThroughItCosts()
     {
         var timeout = TestContext.Current.CancellationToken;
         const string Source = """
             .module main
-            .cpu 65816
             .segment CODE
-            .proc main: a8, i16 {
-                lda #0      ; clear
-            @loop:
+            .proc straight {
+                lda #0
+                sta $10
+                rts
+            }
+            .proc branching {
+                lda $10
+                beq @skip
+                inx
+            @skip:
+                rts
+            }
+            .proc looping {
+            @turn:
+                lda $10
+                bne @turn
+                rts
+            }
+            .proc calling {
+                jsr straight
+                rts
+            }
+            .proc endless: none {
+            @turn:
+                lda $10
+                beq @turn
+                jmp @turn
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                (2, "11 cycles"),
+                (7, "11-15 cycles"),
+                (14, "11+ cycles, loops"),
+                (20, "12 cycles, 23 cycles with calls"),
+
+                // No path leaves it, so there is no pass through it to put a cost on.
+                (24, "never returns"),
+            ],
+            lenses.Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
+    /// What a routine costs with what it calls, worked out through the call graph: a call
+    /// costs the call and then the callee, a tail jump the same, and a routine that reaches
+    /// itself, one with no body, or one through a pointer leaves no total to give.
+    /// </summary>
+    [Fact]
+    public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 65c02
+            .segment CODE
+            .proc CHROUT = $ffd2
+            .proc leaf {
+                lda #0
+                rts
+            }
+            .proc middle {
+                jsr leaf
+                jsr leaf
+                rts
+            }
+            .proc onward {
+                jsr middle
+                rts
+            }
+            .proc tail {
+                jmp leaf
+            }
+            .proc recurse {
+                jsr recurse
+                rts
+            }
+            .proc hands_off {
+                jsr leaf
+                jmp endless
+            }
+            .proc may_return {
+                lda $10
+                beq @die
+                rts
+            @die:
+                jmp endless
+            }
+            .proc endless {
+            @turn:
+                jmp @turn
+            }
+            .proc external {
+                jsr CHROUT
+                rts
+            }
+            .data vector: .addr leaf
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                "8 cycles",
+                "18 cycles, 34 cycles with calls",
+                "12 cycles, 46 cycles with calls",
+                "3 cycles, 11 cycles with calls",
+                "12 cycles, not counting calls",
+
+                // It hands control to a routine that never comes back, so the count is what
+                // it takes to get there and not a call it could not follow.
+                "9 cycles, 17 cycles with calls, then never returns",
+
+                // One way out of it returns, so it is not a routine that never comes back.
+                "8-13 cycles",
+                "never returns",
+                "12 cycles, not counting calls",
+            ],
+            lenses.Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
+    /// An inline <c>.scope</c> is a part of its routine and costs what a pass through it
+    /// costs; one at file level holds declarations and no code, and has nothing to say.
+    /// </summary>
+    [Fact]
+    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineCosts()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc init {
+                lda #0
+                .scope {
+                    ldx #4
+                    stx $10
+                }
+                rts
+            }
+            .scope loose {
+                .proc other {
+                    rts
+                }
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [(2, "13 cycles"), (4, "5 cycles"), (11, "6 cycles")],
+            lenses.Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
+    /// A loop that counts a register down from an immediate says how many turns it takes, so
+    /// what it costs is a bound and not a floor. A loop that is any other shape keeps the
+    /// floor it had, because a loop counted wrongly is worse than one not counted.
+    /// </summary>
+    [Fact]
+    public async Task ALoopCountingARegisterDownFromAnImmediateIsCounted()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc counted {
+                ldx #16
+            @turn:
+                sta $0200,x
                 dex
-                bne @loop
+                bne @turn
+                rts
+            }
+            .proc past_zero {
+                ldy #3
+            @turn:
+                sty $10
+                dey
+                bpl @turn
+                rts
+            }
+            .proc touched {
+                ldx #16
+            @turn:
+                ldx $10
+                dex
+                bne @turn
+                rts
+            }
+            .proc from_memory {
+                ldx $10
+            @turn:
+                sta $0200,x
+                dex
+                bne @turn
+                rts
+            }
+            .proc calling {
+                ldx #4
+            @turn:
+                jsr leaf
+                dex
+                bne @turn
+                rts
+            }
+            .proc leaf {
                 rts
             }
             """;
@@ -197,18 +532,28 @@ public sealed class EditingRequestsTests
         await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
         await client.NextDiagnosticsAsync(timeout);
 
-        var hints = await client.RequestAsync<IReadOnlyList<InlayHint>>("textDocument/inlayHint",
-            new InlayHintParams(new TextDocumentIdentifier(MainUri), new Range(new Position(0, 0), new Position(10, 0))), timeout);
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
             [
-                (4, 10, "2 cycles"), (4, 10, "block: 2 cycles"),
-                (5, 5, "a8, i16, native"),
-                (6, 7, "2 cycles"), (6, 7, "block: 4-5 cycles"),
-                (7, 13, "2-3 cycles"),
-                (8, 7, "6 cycles"), (8, 7, "block: 6 cycles"),
+                // 16 turns of a 9-11 cycle block, the branch taken all but the last time.
+                "167-182 cycles",
+
+                // `bpl` runs one turn past zero, so `ldy #3` is four turns.
+                "39-42 cycles",
+
+                // The loop loads X itself, so where it has got to is not the immediate.
+                "15+ cycles, loops",
+
+                // The count does not start at an immediate.
+                "18+ cycles, loops",
+
+                // The call cuts the loop into blocks, and only a loop of one is read.
+                "18+ cycles, loops, 24+ cycles with calls",
+                "6 cycles",
             ],
-            hints.Select(hint => (hint.Position.Line, hint.Position.Character, hint.Label)));
+            lenses.Select(lens => lens.Command.Title));
     }
 
     /// <summary>A search finds declarations in files no one has open, by the letters of their names in order.</summary>
@@ -232,25 +577,42 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// The main file with <paramref name="line"/> in the place <paramref name="where"/> names —
-    /// the macro's body, the routine's, or the top level — and where its <c>|</c> is.
+    /// The main file with <paramref name="line"/> in the place <paramref name="where"/> marks,
+    /// the other marked places left empty, and where the line's own <c>|</c> is. A place the
+    /// file does not mark is its top level, past everything else.
     /// </summary>
     private static (string Text, Position Position) Place(string where, string line)
     {
         var text = Main.ReplaceLineEndings("\n");
         var lines = text.Split('\n').ToList();
-        var body = lines.FindLastIndex(l => l.Trim() == "|");
-        var macro = lines.FindIndex(l => l.Trim() == "|");
-        var at = where switch { "macro" => macro, "body" => body, _ => lines.Count };
-        lines[macro] = "";
-        lines[body] = "";
-        if (at == lines.Count)
+        var at = lines.FindIndex(l => l.Trim() == "|" + where);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].TrimStart().StartsWith('|'))
+                lines[i] = "";
+        }
+        if (at < 0)
+        {
+            at = lines.Count;
             lines.Add(line);
+        }
         else
+        {
             lines[at] = line;
+        }
         var column = lines[at].IndexOf('|', StringComparison.Ordinal);
         lines[at] = lines[at].Replace("|", "", StringComparison.Ordinal);
         return (string.Join('\n', lines), new Position(at, Math.Max(0, column)));
+    }
+
+    /// <summary>A source with its <c>|</c> taken out, and where that was.</summary>
+    private static (string Text, Position Position) Caret(string source)
+    {
+        var lines = source.ReplaceLineEndings("\n").Split('\n').ToList();
+        var at = lines.FindIndex(l => l.Contains('|', StringComparison.Ordinal));
+        var column = lines[at].IndexOf('|', StringComparison.Ordinal);
+        lines[at] = lines[at].Replace("|", "", StringComparison.Ordinal);
+        return (string.Join('\n', lines), new Position(at, column));
     }
 
     private static async Task<TestClient> OpenAsync(string main, CancellationToken timeout)
