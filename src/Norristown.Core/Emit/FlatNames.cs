@@ -24,6 +24,7 @@ namespace Norristown.Emit;
 /// </summary>
 public sealed class FlatNames
 {
+    private IReadOnlyList<Family> families = [];
     private readonly Dictionary<Symbol, string> names = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), string> perExpansion = [];
     private readonly Dictionary<string, Symbol?> taken = new(StringComparer.Ordinal);
@@ -33,7 +34,7 @@ public sealed class FlatNames
     /// <summary>Assigns every symbol in <paramref name="model"/> its output name.</summary>
     public static FlatNames Create(SemanticModel model, List<Diagnostic> diagnostics)
     {
-        var flat = new FlatNames();
+        var flat = new FlatNames { families = model.Families };
         var taken = flat.taken;
 
         // What another file exports keeps the spelling it was exported under, because that is
@@ -104,13 +105,28 @@ public sealed class FlatNames
         if (perExpansion.TryGetValue(at, out var already))
             return already;
 
-        var basis = symbol.FlatName;
+        var basis = Basis(symbol, at.Item2);
         var name = basis;
         for (var n = 2; taken.ContainsKey(name); n++)
             name = $"{basis}_{n}";
         taken[name] = symbol;
         perExpansion[at] = name;
         return name;
+    }
+
+    /// <summary>
+    /// What a name written out at <paramref name="owning"/> is derived from. Inside a family's
+    /// body it is the instance being written, so a cheap local of <c>play::triangle</c> is
+    /// <c>play__triangle__loop</c> rather than one spelling shared by every instance.
+    /// </summary>
+    private string Basis(Symbol symbol, Expansion owning)
+    {
+        foreach (var family in families)
+        {
+            if (family.Block == owning.Body && family.InstanceFor(owning.Member) is { } instance)
+                return $"{Of(instance)}__{symbol.Name}";
+        }
+        return symbol.FlatName;
     }
 
     /// <summary>What already has <paramref name="name"/> in the output, or null when nothing has.</summary>

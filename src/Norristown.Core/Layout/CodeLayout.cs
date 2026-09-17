@@ -344,11 +344,27 @@ public sealed class CodeLayout
             return;
         }
 
+        // `.multiproc` is a repetition whose body is one routine's: it is laid out once per
+        // member, as the `.each` around a `.proc` that it stands for would lay it out.
+        if (kind == BlockKind.MultiProc)
+        {
+            if (block.ChildNodes.Length == 0 || model.FamilyAt(block.ChildNodes[0].Statement!) is null)
+                return;
+            var outerFamily = expansion;
+            foreach (var turn in Repetitions.Of(model, block, outerFamily, diagnostics))
+            {
+                expansion = turn;
+                WalkBlock(block, BlockKind.Proc);
+            }
+            expansion = outerFamily;
+            return;
+        }
+
         var lines = block.ChildNodes;
         var outer = segment;
         var outerRoutine = routine;
         if (kind == BlockKind.Proc && lines.Length > 0
-            && lines[0].Statement is { Kind: SyntaxKind.ProcDeclaration } declaration)
+            && lines[0].Statement is { Kind: SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration } declaration)
         {
             routine = NameOf(declaration);
         }
@@ -511,8 +527,10 @@ public sealed class CodeLayout
                 break;
 
             // A routine's name stands where its first byte does, which is what a branch to
-            // it reaches.
+            // it reaches. One turn of a `.multiproc` is a routine, and the member it is named
+            // after stands there.
             case SyntaxKind.ProcDeclaration:
+            case SyntaxKind.MultiProcDeclaration:
                 Mark(statement);
                 break;
 
@@ -1136,7 +1154,8 @@ public sealed class CodeLayout
         // What has an address needs a segment to have one in. A routine or data outside every
         // segment is reported where it is declared, and what is inside them is not reported again.
         if (segment is null && inData == 0
-            && (declaration.Kind == SyntaxKind.ProcDeclaration || (routine is null && declaration.Kind == SyntaxKind.DataDeclaration)))
+            && (declaration.Kind is SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration
+                || (routine is null && declaration.Kind == SyntaxKind.DataDeclaration)))
         {
             Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is outside every segment: "
                 + "a `.segment NAME` region or block places it");
@@ -1155,18 +1174,11 @@ public sealed class CodeLayout
     }
 
     /// <summary>What a label or a routine declaration names.</summary>
-    private Symbol? NameOf(SyntaxNode declaration)
-    {
-        foreach (var token in declaration.ChildTokens)
-        {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
-                or SyntaxKind.Register or SyntaxKind.Mnemonic)
-            {
-                return model.SymbolAt(token);
-            }
-        }
-        return null;
-    }
+    /// <summary>
+    /// The symbol a declaration declares here: the one instance of a family the turn being
+    /// laid out writes, and the one name every other declaration has.
+    /// </summary>
+    private Symbol? NameOf(SyntaxNode declaration) => model.DeclaredBy(declaration, expansion);
 
     private static string Spell(AddressSize size) => size switch
     {

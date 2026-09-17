@@ -195,7 +195,8 @@ internal sealed class Requirements
 
         // The label may be in another file, so what routine it is in and whether it is
         // declared are read off the label itself.
-        if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null } && owner != region.Routine)
+        if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null }
+            && owner != region.Routine && !owner.IsSiblingOf(region.Routine))
         {
             Report(statement, $"`{symbol.DisplayName}` is inside `{owner.DisplayName}`, and a jump "
                 + "into another routine needs the label declared: a `.state` after it says what the state is there",

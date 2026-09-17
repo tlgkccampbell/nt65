@@ -477,6 +477,8 @@ marker file.
 | `.config NAME = expr` | a **setting**: a constant a condition may test, whose value the build may set (§10). |
 | `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
+| `.multiproc E, b [: signature] { ... }` | a **family**: one routine per member of the named enum `E`, each named after its member, in the scope around the line. It stands where `.proc` stands (§10). |
+| `.proc b [: signature] { ... }`, `.data b: element`, in an `.each E, b` body | the same family written out: a declaration in a repetition's body whose name is the name it binds declares one per member (§10). |
 | `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. An alias that writes a signature must write the routine's, and one that writes none takes it. |
 | `.scope [name] { ... }` | a scope. It is a namespace with no address of its own: its name is not an operand. |
 | `.enum [name] { ... }` | constants (§6.3). |
@@ -784,7 +786,10 @@ that depends on it, runs only on the 65816.
 }
 ```
 
-**Signatures.** A routine declares its state at entry and, after `->`, at exit. Exit
+**Signatures.** Every routine carries one: a `.proc`, an extern proc, a `proc(...)` import and
+each instance of a family (§10), whose signature is the family's read with the member that
+instance is named after, so `dbr = Bank::b` is that instance's bank. A routine declares its
+state at entry and, after `->`, at exit. Exit
 defaults to entry, item by item: `a16, i8 -> a8` returns with `i8`. `emu` makes both widths
 8, as it does in `.state`, and an exit that names a 16-bit width without naming the mode is
 in native mode, the only one that width holds in: `emu -> a16, i16` returns native. The
@@ -1713,6 +1718,7 @@ about.
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
 their lines are values (§8). `.if` is allowed in an `.enum` body too, where its lines are
 members (§6.3); a repetition is not, because a member's name is written, never computed.
+`.multiproc` is allowed where `.proc` is, and nowhere else.
 
 **Conditions test the configuration, not the program.** An `.if` condition may use
 literals, operators, built-in functions, defines (§5.3) and settings. Inside a macro body it may
@@ -1802,6 +1808,84 @@ what ca65 code uses `.ident` for.
 
 Over a list or a count the binding names no member, so a path ending in it is an error, and
 so is a scope with no member of the name the binding stands for on some turn.
+
+**A declaration named after the binding is a family**: one declaration per member of the enum,
+under the member's name, in the scope around the `.each`. It is the rule that lets
+`actions::c` *find* a member's declaration, run the other way to *make* one.
+
+```nt65
+.enum Channel {
+    pulse1
+    pulse2
+    triangle
+    noise
+}
+
+.scope level {
+    .each Channel, ch {                     ; the form `.multiproc` stands for
+        .data ch: .byte                     ; level::pulse1, level::pulse2, ...
+    }
+}
+
+.scope play {
+    .multiproc Channel, ch: a8, i8 {        ; play::pulse1, play::pulse2, ...
+        lda level::ch
+        .if ch == Channel::noise {          ; the enum's members may be named in a condition here
+            inc a
+        }
+        sta level::ch
+        rts
+    }
+}
+
+.data dispatch: .addr[] {
+    .each Channel, c {
+        play::c                             ; play::pulse1, play::pulse2, ...
+    }
+}
+
+    jsr play::triangle
+```
+
+`.multiproc E, b: signature { body }` is `.each E, b { .proc b: signature { body } }` with the
+two blocks folded into one line, for the case that is nearly every family: one routine per
+member and nothing else. It stands where `.proc` stands, and everything said here of a family
+holds of it.
+
+Which names a family declares comes from two headers — the repetition's line and the enum's
+member list — so nothing is concatenated and the set of declarations still follows from the
+configuration before anything is evaluated. Whether an instance exists never depends on a
+value: a binding-named declaration stands directly in the body, not under an `.if` in it,
+because a condition in a turn tests the member's *value*. Which instances there are varies by
+configuration where the enum does, under an `.if` in its body or around it (§6.3).
+
+The rules:
+
+- A family declares routines and data: `.proc`, `.multiproc` and `.data name: element`. A
+  `.scope` or a `.data` block named after the binding would declare everything inside it once
+  per member, which is not what a family is; two roles for one member are two families,
+  `note::pulse1` and `stop::pulse1`.
+- A binding-named declaration stands directly in the body of an `.each` over a named enum, at
+  item level: file level, a `.scope`, a segment region or block, or an `.if` around the
+  `.each`. Anywhere else it is an error that says why: inside a proc it would nest, and over a
+  list, a `list` parameter or a `.repeat` there are no names. `.multiproc` stands where `.proc`
+  stands, and is elsewhere the error `.proc` is there.
+- It is one declaration per member in the enclosing scope, so it collides with a hand-written
+  declaration of a member's name there, and two families over the same enum in one scope
+  collide too, as any duplicate does.
+- `.export` before a binding-named declaration, or before `.multiproc`, exports every instance;
+  the list form, `.export play::pulse1`, exports one. It is the one `.export` a repetition body
+  may hold, since the names it exports are the enum's. `.export .scope play { }` around a
+  family exports its instances by the ordinary rule.
+- A condition in the body may name the enum's members, `.if ch == Channel::noise`: the
+  binding's own value is one of them, so they are known where a turn's conditions are answered.
+- What the body declares is the turn's, as a repetition's always is, and is named after the
+  instance in the output (§13). An instance's name, kind and signature come from the headers,
+  so a file's interface is still derived from headers alone (§14).
+- An unused warning names a family only when nothing uses any instance, as an enum's members
+  are one of a set. A problem the body has is reported naming the instance it was found on,
+  and once, naming the binding, when every instance has it.
+
 
 None of these reaches the output. nt65 resolves every `.if` and unrolls every `.repeat`
 and `.each` itself; names declared inside a `.repeat` or `.each` body are distinct per
@@ -2328,7 +2412,10 @@ spelling, a scoped name `outer::inner` becomes `outer__inner`, and the end label
 other modules and hand-written ca65 refer to them. Cheap
 locals, labels from macro expansions and labels from `.repeat` iterations get names
 derived from the source, such as `draw__loop` and, for a second `@loop` in the same
-proc, `draw__loop_2`; the same source always yields the same names. An import keeps its
+proc, `draw__loop_2`; the same source always yields the same names. An instance of a family is
+an ordinary routine, `play__triangle`, written under a comment naming the line it came from and
+which instance it is, and what its body declares is named after the instance,
+`play__triangle__loop`. An import keeps its
 linker name, so a local name that would collide with one is renamed in the output;
 this happens when an exported macro expands in a module that has its own symbol of the
 same name. A fixed spelling (`outer__inner`, `f__end`) that collides with another name
@@ -2646,7 +2733,11 @@ a mistake only when no project has it.
 re-exports, and its exported declarations, each
 carrying everything a user of it needs (a constant's value, a label's address size, a
 data declaration's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
-body, a macro's kind and body and the exported symbols it uses). It also holds the names
+body, a macro's kind and body and the exported symbols it uses). A family's instances are among
+them, one per member: they are declarations of the file like any others, and which of them
+there are is read from the enum's member list before any name is resolved. Where the enum is
+another module's, its members are already part of that module's interface, so an edit there is
+news to exactly the modules this rule already names. It also holds the names
 of the declarations it does not export that a path can reach, because another module naming
 one is told that it exists and is not exported, and what any of them means that another
 module names anyway. A changed name is news only to the modules that looked that name up in
@@ -2671,7 +2762,7 @@ every caller depend on every callee's body.
 | `.set`, `.org` | positional state |
 | `.include`, `.macpack` | textual inclusion; nt65 never reads ca65 source, and shares with ca65 through symbols (§12) |
 | unnamed labels `:` `:+` `:-` | positional; use `@name` |
-| `.ident`, `.concat`, `.sprintf` for names | computed identifiers; `.each` over an enum builds the tables they were used for (§10) |
+| `.ident`, `.concat`, `.sprintf` for names | computed identifiers; `.each` over an enum builds the tables they were used for, and declares the routines they were used to name (§10) |
 | `.match`, `.xmatch`, `.tcount`, `.paramcount`, `.exitmacro` | token-stream macro programming; typed parameters (`const`, `one`, `list`, `operand` with `.mode`), named arguments and defaults replace the common uses (§11.2) |
 | recursive macros | a depth limit does not bound an expansion; `list` parameters and `.each` replace walking argument lists (§11.1) |
 | `.asize`, `.isize` in macros | expansion would depend on the flow analysis of its own output; macro state signatures and `.ensure` replace them (§7.3, §11.5) |
@@ -2993,6 +3084,29 @@ Recorded so the reasoning survives. None is open.
   follow, because a member with no value of its own is the member before it plus one. A
   `.repeat` or an `.each` there would need a computed name, which §2 and §15 rule out, so
   neither is allowed.
+- **A family is an `.each` over an enum that declares by its binding.** A program needs
+  several routines that differ only in a constant — one per sound channel, per sprite slot, per
+  bank — and the alternatives each break something the analysis rests on. Names are never
+  computed (§2, §15), so `play_0` from a `.repeat` index is out. Which declarations exist
+  follows from the configuration before anything is evaluated (§3.1), so a template
+  instantiated by its calls, `jsr play(2)`, would make the routines that exist depend on every
+  use in the program. A macro cannot declare a name in its caller (§11.1) and a file's
+  interface comes from headers alone (§14), so ca65's `proc_macro name` idiom would put a
+  routine's kind and signature in a macro body. Labels in a turn are private to it (§10), so
+  one proc with a `.repeat` of entry points cannot export them.
+  What is left is the enum, which nt65 already uses as a fixed set of names: `.each Cmd, c {
+  actions::c }` *finds* a member's declaration, and a family is the same rule *making* one.
+  Nothing is concatenated, the set of declarations still follows from the configuration, and
+  the whole construct is `.each`, `.proc` and `.data` composing as they compose everywhere
+  else. `.multiproc` is the two blocks folded into one line, because `.proc b` with `b` a
+  binding reads oddly until one knows the rule and because a keyword line says what the block
+  is from its opener: the parser knows the body is a routine's and the outline shows one block.
+  The name is not `.procs`, which is `.proc` with one letter more at a glance.
+- **A family declares routines and data, not scopes.** What a binding-named `.scope` or
+  `.data` block held would be reached through it, `pulse1::stop`, which is one declaration per
+  member of everything inside and so one identity per member for a body written once. Two
+  roles for one member are two families instead, `note::pulse1` and `stop::pulse1`, which says
+  the same thing with the names the program already has.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
@@ -3079,7 +3193,7 @@ is in the sections above.
 file        := module-decl item* (region item*)*
 module-decl := '.module' module-path                  ; first
 region      := '.segment' ident NL                    ; at file level only
-item        := const | config | data-decl | padding | proc | extern-proc | scope | macro
+item        := const | config | data-decl | padding | proc | multiproc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
              | warning | error
@@ -3117,6 +3231,7 @@ value-line  := values-list NL
              | if-block | repeat-block | each-block  ; their contents value lines too
 init        := member-name '=' value
 proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
+multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | keep-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
@@ -3182,7 +3297,7 @@ contents    := item*                                  ; at item level
              | value-line* | mixed*                   ; in a data body
              | enum-member*                           ; in an enum body
 export      := '.export' export-item (',' export-item)*
-             | '.export' (const | config | data-decl | proc | extern-proc | scope | macro | enum
+             | '.export' (const | config | data-decl | proc | multiproc | extern-proc | scope | macro | enum
                | struct | union | charmap | list | func | signature | import | use)
                                                       ; a re-exported use names what it
                                                       ; re-exports: no '::' '*'

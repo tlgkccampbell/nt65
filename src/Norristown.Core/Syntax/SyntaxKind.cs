@@ -255,6 +255,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.proc name = expr</c>: a routine with a signature and no body.</summary>
     ExternProcDeclaration,
 
+    /// <summary>The line opening a <c>.multiproc</c>: one routine per member of an enum.</summary>
+    MultiProcDeclaration,
+
     /// <summary>The line opening a <c>.scope</c>.</summary>
     ScopeDeclaration,
 

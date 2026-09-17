@@ -229,23 +229,11 @@ public sealed class Emitter
     /// <summary>Writes the end label of whatever <paramref name="declaration"/> names, if it has one.</summary>
     private void End(SyntaxNode? declaration)
     {
-        if (declaration is null)
+        if (declaration is null || model.DeclaredBy(declaration, expansion) is not { } symbol || !ends.Contains(symbol))
             return;
-        foreach (var token in declaration.ChildTokens)
-        {
-            if (token.Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
-                or SyntaxKind.Register or SyntaxKind.Mnemonic))
-            {
-                continue;
-            }
-            if (model.SymbolAt(token) is { } symbol && ends.Contains(symbol))
-            {
-                Segment();
-                Flush();
-                Line(LabelText(EndOf(symbol)));
-            }
-            return;
-        }
+        Segment();
+        Flush();
+        Line(LabelText(EndOf(symbol)));
     }
 
     /// <summary>
@@ -458,6 +446,22 @@ public sealed class Emitter
             return;
         }
 
+        // `.multiproc` writes its body out once per member, as the `.each` around a `.proc`
+        // that it stands for would write it.
+        if (kind == BlockKind.MultiProc)
+        {
+            if (opener is null || model.FamilyAt(opener) is null)
+                return;
+            var outerFamily = expansion;
+            foreach (var turn in Repetitions.Of(model, block, outerFamily, null))
+            {
+                expansion = turn;
+                WalkBlock(block, BlockKind.Proc);
+            }
+            expansion = outerFamily;
+            return;
+        }
+
         // A structure, a union, a list and a character mapping say what something means
         // without generating anything. An exported layout is the exception: its members
         // travel as flat constants, so the file that declares them has to define them.
@@ -469,14 +473,11 @@ public sealed class Emitter
             return;
         }
 
-        // An enum writes its members out as the constants they are.
+        // An enum writes its members out as the constants they are. A member may stand under
+        // an `.if` in the body, so the branches this build takes are read as well.
         if (kind == BlockKind.Enum)
         {
-            for (var i = 1; i < lines.Length; i++)
-            {
-                if (lines[i].Statement is { Kind: SyntaxKind.EnumMember } member)
-                    EnumMember(lines[i], member);
-            }
+            Members(lines, from: 1);
             pendingBlank = true;
             return;
         }
@@ -508,12 +509,18 @@ public sealed class Emitter
             }
             segment = name;
         }
-        else if (kind == BlockKind.Proc && opener is { Kind: SyntaxKind.ProcDeclaration })
+        else if (kind == BlockKind.Proc
+            && opener is { Kind: SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration })
         {
             Segment();
             Flush();
-            Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}");
             routine = ProcLabel(lines[0], opener);
+
+            // An instance of a family is written under the family's line and the member it is:
+            // one routine in the output, named as the source names it.
+            var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
+            Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
+            Label(lines[0], routine);
         }
         else if (opener is not null && kind != BlockKind.Scope)
         {
@@ -541,6 +548,28 @@ public sealed class Emitter
         else if (placing)
         {
             segment = outerSegment;
+        }
+    }
+
+    /// <summary>
+    /// The members of an enum, each written out as the constant it is. A member may stand under
+    /// an <c>.if</c> in the body, so a chain among the lines is resolved here as it is anywhere
+    /// else and the branches this build takes hold members like the body's own lines.
+    /// </summary>
+    private void Members(IReadOnlyList<SyntaxNode> lines, int from)
+    {
+        var chain = new ConditionChain();
+        for (var i = from; i < lines.Count; i++)
+        {
+            if (lines[i].Green is not GreenBlock block)
+            {
+                chain.Break();
+                if (lines[i].Statement is { Kind: SyntaxKind.EnumMember } member)
+                    EnumMember(lines[i], member);
+                continue;
+            }
+            if (chain.Includes(model, lines[i], expansion) && block.BlockKind == BlockKind.If)
+                Members(lines[i].ChildNodes, 1);
         }
     }
 
@@ -723,18 +752,14 @@ public sealed class Emitter
     }
 
     /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
-    private Symbol? ProcLabel(SyntaxNode line, SyntaxNode opener)
+    /// <summary>The routine a <c>.proc</c> or a turn of a <c>.multiproc</c> writes out here.</summary>
+    private Symbol? ProcLabel(SyntaxNode line, SyntaxNode opener) => model.DeclaredBy(opener, expansion);
+
+    /// <summary>The label a routine's first byte carries, where the routine has a name.</summary>
+    private void Label(SyntaxNode line, Symbol? routine)
     {
-        foreach (var token in opener.ChildTokens)
-        {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && model.SymbolAt(token) is { } reference)
-            {
-                Code(line, LabelText(Named(reference)), 0);
-                return reference;
-            }
-        }
-        return null;
+        if (routine is not null)
+            Code(line, LabelText(Named(routine)), 0);
     }
 
     /// <summary>
@@ -832,7 +857,7 @@ public sealed class Emitter
     /// </summary>
     private void Declared(SyntaxNode line, SyntaxNode declaration)
     {
-        if (DataSyntax.DeclaredName(declaration) is not { } name || model.SymbolAt(name) is not { } symbol)
+        if (DataSyntax.DeclaredName(declaration) is null || model.DeclaredBy(declaration, expansion) is not { } symbol)
             return;
         if (DataSyntax.ElementOf(declaration) is not { } element)
         {

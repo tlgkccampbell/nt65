@@ -18,6 +18,7 @@ public sealed class SemanticModel
     private readonly ILookup<Symbol, SymbolReference> bySymbol;
     private readonly Func<string, long?>? binaryLength;
     private readonly IReadOnlyList<(TextSpan Span, Scope Scope)> regions;
+    private readonly Dictionary<SyntaxNode, Family> byFamily;
 
     internal SemanticModel(
         SyntaxTree tree,
@@ -42,6 +43,8 @@ public sealed class SemanticModel
         regions = bound.Regions;
         Brought = bound.Brought;
         Globs = bound.Globs;
+        Families = bound.Families;
+        byFamily = bound.Families.ToDictionary(family => family.Declaration);
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
@@ -53,10 +56,29 @@ public sealed class SemanticModel
             .Where(reference => reference is { IsDeclaration: false, InUse: false, IsStep: false, InMacro: false })
             .Select(reference => reference.Symbol)
             .Concat(expanded)
+            .Concat(Namesakes(References))
             .Distinct()];
         ExternalSymbols = [.. Used
             .Where(symbol => symbol.Tree != tree && !symbol.IsDefine && !symbol.IsConfig
                 && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))];
+    }
+
+    /// <summary>
+    /// What a path ending in a repetition's name reaches: <c>reset::b</c>, where <c>b</c> walks
+    /// an enum, names a member of <c>reset</c> on every turn, so the output has to be able to
+    /// reach each of them and a member another module declares has to be imported.
+    /// </summary>
+    private static IEnumerable<Symbol> Namesakes(IReadOnlyList<SymbolReference> references)
+    {
+        for (var i = 1; i < references.Count; i++)
+        {
+            if (references[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding }
+                && references[i - 1].Symbol.Body is { } container)
+            {
+                foreach (var member in container.Symbols)
+                    yield return member;
+            }
+        }
     }
 
     /// <summary>The file this model is of.</summary>
@@ -102,6 +124,34 @@ public sealed class SemanticModel
 
     /// <summary>The modules everything of whose exports a <c>.use module::*</c> brings in.</summary>
     public IReadOnlyList<ProgramSymbols.Module> Globs { get; }
+
+    /// <summary>
+    /// The families the file declares: each is one declaration per member of the enum it
+    /// walks, written once and standing for all of them.
+    /// </summary>
+    public IReadOnlyList<Family> Families { get; }
+
+    /// <summary>The family <paramref name="declaration"/> stands for, or null when it stands for one name.</summary>
+    public Family? FamilyAt(SyntaxNode declaration) => byFamily.GetValueOrDefault(declaration);
+
+    /// <summary>
+    /// The declaration <paramref name="header"/> makes at <paramref name="on"/>: the one
+    /// instance of a family the turn writes out, or the one name it declares anywhere else.
+    /// </summary>
+    public Symbol? DeclaredBy(SyntaxNode header, Expansion? on)
+    {
+        if (byFamily.GetValueOrDefault(header) is { } family)
+            return family.InstanceAt(on);
+        foreach (var token in header.ChildTokens)
+        {
+            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+                or SyntaxKind.Register or SyntaxKind.Mnemonic)
+            {
+                return SymbolAt(token);
+            }
+        }
+        return null;
+    }
 
     /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
     public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>

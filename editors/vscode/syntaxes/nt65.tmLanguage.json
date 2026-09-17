@@ -170,6 +170,20 @@
           ]
         },
         {
+          "match": "(?i)(\\.multiproc)\\s+(?:[A-Za-z_][A-Za-z0-9_]*\\s*::\\s*)*([A-Za-z_][A-Za-z0-9_]*)\\s*,\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "variable.other.nt65"
+            },
+            "3": {
+              "name": "variable.other.constant.nt65"
+            }
+          }
+        },
+        {
           "begin": "(?i)(\\.func)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(\\()",
           "end": "\\)",
           "beginCaptures": {

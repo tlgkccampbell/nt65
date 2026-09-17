@@ -51,6 +51,13 @@ public static class Outline
                 var signature = opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature);
                 return new OutlineItem(OutlineKind.Proc, name.Text, signature?.GetText(), block.Span, name.Span, children);
 
+            // One block, however many routines it declares: the enum it walks and the
+            // signature they share are what a reader needs beside the name it binds.
+            case SyntaxKind.MultiProcDeclaration when NameToken(opener) is { } bound:
+                return new OutlineItem(OutlineKind.Proc, bound.Text,
+                    opener.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
+                    block.Span, bound.Span, children);
+
             case SyntaxKind.ScopeDeclaration:
                 // `.scope { }` is anonymous, and stands under its own directive.
                 var scope = NameToken(opener);

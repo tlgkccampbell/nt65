@@ -1,0 +1,45 @@
+; One routine per bank, written once. The names come from the enum's members and the line
+; that binds them, and nothing is concatenated.
+.module snd
+.use hw::Bank
+
+.segment ZEROPAGE
+; A family of data, reached through the scope it is declared in: `level::lo`, `level::hi`.
+.scope level {
+    .each Bank, b {
+        .data b: .byte
+    }
+}
+
+.segment CODE
+
+; The folded form: one routine per member and nothing else. Its signature names the binding,
+; so each instance declares the data bank it is called with.
+.scope play {
+    .export .multiproc Bank, b: a8, i8, dbr = Bank::b {
+        lda level::b
+
+        ; A condition in the body may name the enum's members: the binding's own value is one
+        ; of them, so they are known where a turn's conditions are answered.
+        .if b == Bank::hi {
+            inc a
+        }
+        sta level::b
+        rts
+    }
+}
+
+; The long form, which is what `.multiproc` stands for: an `.each` whose body declares under
+; the name it binds. A cheap local in the body is that instance's, as a turn's always is.
+.export .scope stop {
+    .each Bank, b {
+        .proc b: a8, i8 {
+            ldx #Bank::b + 1
+        @again:
+            stz level::b
+            dex
+            bne @again
+            rts
+        }
+    }
+}

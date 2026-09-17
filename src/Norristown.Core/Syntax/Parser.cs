@@ -269,6 +269,7 @@ internal sealed class Parser
             SyntaxKind.CpuDirective => Finish(ParseCpuDirective()),
             SyntaxKind.SegmentDeclaration => Finish(ParseSegment()),
             SyntaxKind.ProcDeclaration => Finish(ParseProc()),
+            SyntaxKind.MultiProcDeclaration => Finish(ParseMultiProc()),
             SyntaxKind.ScopeDeclaration => Finish(ParseScope()),
             SyntaxKind.ExportDirective => Finish(ParseExport()),
             SyntaxKind.ImportDirective => Finish(ParseImport()),
@@ -1099,6 +1100,35 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ProcDeclaration, children.ToImmutable());
     }
 
+    /// <summary>
+    /// <c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>, named
+    /// after the member. It folds a repetition and a routine into one line, so it is read as a
+    /// repetition's opener and then a routine's signature. The name to bind is what the
+    /// routines are named from, so it is not optional as a repetition's is.
+    /// </summary>
+    private GreenSyntax ParseMultiProc()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        if (Kind == SyntaxKind.Comma)
+        {
+            children.Add(Advance());
+            if (AtName)
+                children.Add(Advance());
+            else
+                Report("expected the name to bind, which each routine is named from");
+        }
+        else
+        {
+            ReportOnce("expected `,` and the name to bind: `.multiproc Channel, ch {`");
+        }
+        if (Kind == SyntaxKind.Colon)
+            children.Add(ParseSignature());
+        ExpectOpenBrace(children);
+        return new GreenSyntax(SyntaxKind.MultiProcDeclaration, children.ToImmutable());
+    }
+
     private GreenSyntax ParseScope()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -1224,6 +1254,7 @@ internal sealed class Parser
     {
         SyntaxKind.DataDeclaration => ParseDataDeclaration(),
         SyntaxKind.ProcDeclaration => ParseProc(),
+        SyntaxKind.MultiProcDeclaration => ParseMultiProc(),
         SyntaxKind.ScopeDeclaration => ParseScope(),
         SyntaxKind.ImportDirective => ParseImport(),
         SyntaxKind.UseDirective => ParseUse(),

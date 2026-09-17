@@ -1,0 +1,44 @@
+; The example from the design: a family of data and a family of routines over one enum, the
+; table beside them, and a call of one instance.
+.module voice
+
+.enum Channel {
+    pulse1
+    pulse2
+    triangle
+    noise
+}
+
+.segment ZEROPAGE
+.scope level {
+    .each Channel, ch {                     ; the form `.multiproc` stands for
+        .data ch: .byte                     ; level::pulse1, level::pulse2, ...
+    }
+}
+
+.segment CODE
+.scope play {
+    .multiproc Channel, ch: a8, i8 {        ; play::pulse1, play::pulse2, ...
+        lda level::ch
+        .if ch == Channel::noise {          ; the enum's members may be named in a condition here
+            inc a
+        }
+        sta level::ch
+        rts
+    }
+}
+
+.segment RODATA
+.data dispatch: .addr[] {
+    .each Channel, c {
+        play::c                             ; play::pulse1, play::pulse2, ...
+    }
+}
+
+.segment CODE
+.proc run: a8, i8 {
+    jsr play::triangle
+    rts
+}
+
+.export dispatch, run

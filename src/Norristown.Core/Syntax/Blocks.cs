@@ -105,7 +105,8 @@ internal static class Blocks
         return new GreenFile(root.ToImmutable());
     }
 
-    private static bool IsAnchor(GreenLine line) => line.OpensBlockKind is BlockKind.Proc or BlockKind.Macro;
+    private static bool IsAnchor(GreenLine line) =>
+        line.OpensBlockKind is BlockKind.Proc or BlockKind.MultiProc or BlockKind.Macro;
 
     private static bool IsBalanced(ImmutableArray<GreenLine> lines)
     {

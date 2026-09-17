@@ -213,7 +213,7 @@ internal static class TextMateGrammar
             SyntaxKind.MacroDeclaration when first => Macro,
             SyntaxKind.MacroParameter when first => Parameter,
             SyntaxKind.ImportItem when first => HasToken(parent, SyntaxKind.Equals) ? Constant : Variable,
-            SyntaxKind.RepeatDirective or SyntaxKind.EachDirective => Constant,
+            SyntaxKind.RepeatDirective or SyntaxKind.EachDirective or SyntaxKind.MultiProcDeclaration => Constant,
             SyntaxKind.ParameterList => Parameter,
             SyntaxKind.EnumDeclaration when first => Enum,
             SyntaxKind.StructDeclaration or SyntaxKind.UnionDeclaration when first => Struct,
@@ -334,6 +334,11 @@ internal static class TextMateGrammar
             // The name a repetition binds, last before its brace.
             Rule.Block($@"(?i)(\.(?:repeat|each))\b", @"(?=\{)|$", [Directive],
                 [Rule.Scoped($@",\s*({Word})(?=\s*\{{)", Constant), include]),
+
+            // The name a `.multiproc` binds is the one after its comma: a signature may follow
+            // it, so it is not the last name before the brace as a repetition's is.
+            Rule.Scoped($@"(?i)(\.multiproc)\s+(?:{Word}\s*::\s*)*({Word})\s*,\s*({Word})",
+                Directive, Identifier, Constant),
             Rule.Block($@"(?i)(\.func)\s+({Word})\s*(\()", @"\)", [Directive, Function],
                 [Rule.Scoped($@"\b({Word})", Parameter), include]),
 

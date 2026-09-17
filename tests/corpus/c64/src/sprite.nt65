@@ -3,7 +3,7 @@
 
 .cpu 6502
 
-.use hw::{vic, cia1, SPRITE_PTRS, Color, Joy}
+.use hw::{vic, cia1, SPRITE_PTRS, Color, Joy, Sprite}
 .use zp::{player_x, player_y, joy_prev}
 .use macros::*
 
@@ -118,17 +118,28 @@ SPEED        = 2
     rts
 }
 
-.proc write_position {
-    lda player_x
-    sta vic::SPR0_X
-    lda vic::SPR_MSB
-    and #%11111110
-    ldy player_x+1
-    if!(ne) {
-        ora #%00000001
+; One routine per sprite: X in A, Y in Y, and C holding the ninth bit of X. The registers
+; are two bytes apart per sprite and the high bits are one register of flags, so every
+; instance is these lines with its own sprite's number in them.
+.scope move {
+    .multiproc Sprite, n {
+        sta vic::SPR0_X + 2 * Sprite::n
+        sty vic::SPR0_Y + 2 * Sprite::n
+        lda vic::SPR_MSB
+        if!(cs) {
+            ora #(1 << Sprite::n)
+        } else {
+            and #((1 << Sprite::n) ^ $FF)
+        }
+        sta vic::SPR_MSB
+        rts
     }
-    sta vic::SPR_MSB
-    lda player_y
-    sta vic::SPR0_Y
-    rts
+}
+
+.proc write_position {
+    lda player_x+1
+    lsr a                       ; the ninth bit of X into C
+    ldy player_y
+    lda player_x
+    jmp move::s0
 }

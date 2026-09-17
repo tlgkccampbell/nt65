@@ -567,7 +567,7 @@ public sealed class StateAnalysis
     private ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
     {
         if (label is not { Kind: SymbolKind.Label, StateDeclaration: { } declared, Routine: { } owner }
-            || owner == routine)
+            || owner == routine || owner.IsSiblingOf(routine))
         {
             return null;
         }

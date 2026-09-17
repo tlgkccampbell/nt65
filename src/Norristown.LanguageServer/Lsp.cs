@@ -58,10 +58,26 @@ internal static class Lsp
         if (model.ReferenceAt(position) is { } reference)
         {
             return new Protocol.Hover(
-                Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree)),
+                Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree) + Declares(model, reference)),
                 ToRange(model.Tree, reference.Span));
         }
         return ToTiming(model, layout, flow, states, position);
+    }
+
+    /// <summary>
+    /// What a family declares, for the name its repetition binds: the instances it stands for,
+    /// which is what the line the caret is on is worth knowing.
+    /// </summary>
+    private static string Declares(SemanticModel model, SymbolReference reference)
+    {
+        if (reference is not { IsDeclaration: true, Symbol.Kind: SymbolKind.Binding })
+            return "";
+        var declared = model.Families
+            .Where(family => family.Binding == reference.Symbol)
+            .SelectMany(family => family.Instances)
+            .Select(instance => $"`{instance.QualifiedName}`")
+            .ToList();
+        return declared.Count == 0 ? "" : $"\n- declares: {string.Join(", ", declared)}";
     }
 
     /// <summary>
@@ -230,6 +246,8 @@ internal static class Lsp
         // A file kept from before an edit elsewhere names what the edited file declared then,
         // so the symbols are compared as what they stand for now.
         var symbol = program.Current(asked.Symbol);
+        if (renaming && symbol.Bound?.Value.Member is { } member)
+            symbol = member;
         if (renaming && asked.IsAlias)
         {
             var written = model.Tree.Text.Substring(asked.Span.Start, asked.Span.Length);
@@ -238,10 +256,19 @@ internal static class Lsp
                     && model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length) == written)
                 .Select(reference => (model, reference));
         }
+        // An instance of a family is named after an enum's member, so renaming either is
+        // renaming the member and every use of every instance named after it.
+        var renamed = new HashSet<Symbol> { symbol };
+        if (renaming && symbol.IsEnumMember)
+        {
+            foreach (var file in program.Files)
+                renamed.UnionWith(file.Symbols.Where(instance => instance.Bound?.Value.Member == symbol));
+        }
         return program.Files
             .OrderBy(file => file.Tree.Path, StringComparer.Ordinal)
             .SelectMany(file => file.References
-                .Where(reference => program.Current(reference.Symbol) == symbol && !(renaming && reference.IsAlias))
+                .Where(reference => renamed.Contains(program.Current(reference.Symbol))
+                    && !(renaming && reference.IsAlias))
                 .Select(reference => (file, reference)));
     }
 

@@ -28,8 +28,12 @@ public sealed class Scope
     /// <summary>The scope around this one, or null for a file.</summary>
     public Scope? Parent { get; }
 
-    /// <summary>The symbol this scope belongs to, or null for a file or an anonymous <c>.scope</c>.</summary>
-    public Symbol? Owner { get; }
+    /// <summary>
+    /// The symbol this scope belongs to, or null for a file or an anonymous <c>.scope</c>. A
+    /// family's body belongs to the first of its instances, which are declared after the body
+    /// is read.
+    /// </summary>
+    public Symbol? Owner { get; internal set; }
 
     /// <summary>For a file, the module its <c>.module</c> names; null for every other scope.</summary>
     public string? Module { get; internal set; }

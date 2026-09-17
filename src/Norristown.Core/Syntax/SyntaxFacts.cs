@@ -38,6 +38,7 @@ public static class SyntaxFacts
     private static readonly FrozenDictionary<string, BlockKind> blockDirectives = new Dictionary<string, BlockKind>
     {
         [".proc"] = BlockKind.Proc,
+        [".multiproc"] = BlockKind.MultiProc,
         [".scope"] = BlockKind.Scope,
         [".macro"] = BlockKind.Macro,
         [".enum"] = BlockKind.Enum,
@@ -63,6 +64,7 @@ public static class SyntaxFacts
         [".segment"] = SyntaxKind.SegmentDeclaration,
         [".data"] = SyntaxKind.DataDeclaration,
         [".proc"] = SyntaxKind.ProcDeclaration,
+        [".multiproc"] = SyntaxKind.MultiProcDeclaration,
         [".scope"] = SyntaxKind.ScopeDeclaration,
         [".export"] = SyntaxKind.ExportDirective,
         [".import"] = SyntaxKind.ImportDirective,

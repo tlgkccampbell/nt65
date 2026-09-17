@@ -14,17 +14,33 @@ internal static class CodeLenses
     /// <summary>The lenses for <paramref name="tree"/>, in position order.</summary>
     public static IReadOnlyList<Protocol.CodeLens> In(SyntaxTree tree, ControlFlow? flow)
     {
-        var lenses = new List<(int At, Protocol.CodeLens Lens)>();
+        var found = new List<(TextSpan At, string Routine, string Text)>();
         foreach (var region in flow?.Regions ?? [])
         {
             if (region.Routine.Tree != tree)
                 continue;
             if (Spell(region.Cost, region.Total, "never returns") is { } text)
-                Add(region.Routine.NameSpan, text);
+                found.Add((region.Routine.NameSpan, region.Routine.Name, text));
             foreach (var scope in region.Scopes)
             {
                 if (Spell(scope.Cost, null, null) is { } inline)
-                    Add(scope.Opener, inline);
+                    found.Add((scope.Opener, region.Routine.Name, inline));
+            }
+        }
+
+        // Every instance of a family is declared on one line and costs at it. Where a pass
+        // costs the same on each of them the line says it once; where it does not, each says
+        // which instance it is about.
+        var lenses = new List<(int At, Protocol.CodeLens Lens)>();
+        foreach (var at in found.GroupBy(lens => lens.At))
+        {
+            var texts = at.Select(lens => lens.Text).Distinct(StringComparer.Ordinal).ToList();
+            if (texts.Count == 1)
+                Add(at.Key, texts[0]);
+            else
+            {
+                foreach (var lens in at)
+                    Add(at.Key, $"{lens.Routine}: {lens.Text}");
             }
         }
 

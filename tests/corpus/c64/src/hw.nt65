@@ -64,6 +64,19 @@
     light_grey
 }
 
+; The eight sprites. Their position registers are two bytes apart and their high X bits are
+; one register of flags, so a routine that writes one differs from the next by a number.
+.export .enum Sprite {
+    s0
+    s1
+    s2
+    s3
+    s4
+    s5
+    s6
+    s7
+}
+
 ; Joystick bits in CIA1 port A, active low.
 .export .enum Joy {
     up    = %00001

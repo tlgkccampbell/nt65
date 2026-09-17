@@ -103,28 +103,20 @@ same rule *making* one.
 ```nt65
 .enum Channel { pulse1, pulse2, triangle, noise }
 
-.scope play {
-    .multiproc Channel, ch: a8, i8 {        ; play::pulse1, play::pulse2, ...
-        ldx #Channel::ch
-        lda period_lo,x
-        sta $4000 + 4 * Channel::ch
-        .if ch == Channel::noise {          ; the enum's members may be named in a condition here
-            lda #$30
-            sta $400c
-        }
-        rts
+.scope level {
+    .each Channel, ch {                     ; the form .multiproc stands for, composed further
+        .data ch: .byte                     ; level::pulse1, level::pulse2, ...
     }
 }
 
-.each Channel, ch {                         ; the form .multiproc stands for, composed further
-    .scope ch {                             ; pulse1::state, pulse1::play, pulse1::stop, ...
-        .data state: .type Voice
-        .proc play: a8, i8 {
-            ...
+.scope play {
+    .multiproc Channel, ch: a8, i8 {        ; play::pulse1, play::pulse2, ...
+        lda level::ch
+        .if ch == Channel::noise {          ; the enum's members may be named in a condition here
+            inc a
         }
-        .proc stop: a8, i8 {
-            ...
-        }
+        sta level::ch
+        rts
     }
 }
 
@@ -135,13 +127,12 @@ same rule *making* one.
 }
 
     jsr play::triangle
-    jsr triangle::stop
 ```
 
-In an `.each` over a named enum at item level, a `.proc`, a `.data` or a `.scope` whose name
-is the binding is declared **once per member, under the member's name, in the scope around
-the `.each`**. That is the whole construct, and `.each`, `.scope`, `.data` and `.proc`
-compose in it as they compose everywhere else.
+In an `.each` over a named enum at item level, a `.proc` or a `.data` whose name is the
+binding is declared **once per member, under the member's name, in the scope around the
+`.each`**. That is the whole construct, and `.each`, `.scope`, `.data` and `.proc` compose in
+it as they compose everywhere else.
 
 `.multiproc E, b: signature { body }` is `.each E, b { .proc b: signature { body } }` with
 the two blocks folded into one keyword line, for the case that is nearly every family: one
@@ -206,8 +197,12 @@ The name is not `.procs`, which is `.proc` with one letter more at a glance.
   declaration of a member's name there, and two families over the same enum in one scope
   collide too, as any duplicate does. Two roles for one member are two scopes, `note::pulse1`
   and `stop::pulse1`, or one binding-named scope, `pulse1::note` and `pulse1::stop`.
-- Everything inside a binding-named `.scope` or `.data` is reached through it, and a family
-  nested in a binding-named scope of another gives `bank0::pulse1`. A fixed-name declaration
+- A family declares routines and data: `.proc`, `.multiproc` and `.data name: element`. What a
+  binding-named `.scope` or `.data` block held would be reached through it, `pulse1::stop`,
+  which is one declaration per member of everything inside — one identity per member for a
+  body the binder reads once, which `SymbolMap`, `Step.Routine` and `FlatNames` have no room
+  for. Two roles for one member are two families instead, `note::pulse1` and `stop::pulse1`,
+  which says the same thing with the names the program already has. A fixed-name declaration
   directly in the body stays private to the turn.
 - `.export` before a binding-named declaration, or before `.multiproc`, exports every
   instance; the list form, `.export play::pulse1`, exports one. It is the one `.export`
@@ -236,13 +231,20 @@ reads `.multiproc` as the `.each` it stands for; the flow analysis and the emitt
 instance as they run per turn today. The server: definition, rename, references,
 completion, hover, outline, lens and unused warnings, for both forms.
 
-**Check.** Fixtures: a `.multiproc`; a family of procs, of data, of scopes in the long form;
-nested families; an exported family; one whose signature names the binding; one over an enum
-from another module; one over an enum with a member under `.if` built under both
-configurations; the `.if` in the body naming a member; every wrong place and every
-collision. All through the oracle, and a fixture that writes one family both ways and checks
-the output is byte-identical. The C64 corpus program gains a family where it repeats itself.
-Editor tests for definition, rename and completion through an instance of each form.
+**Check.** Fixtures: a `.multiproc`; a family of procs and of data in the long form; an
+exported family; one whose signature names the binding; one over an enum from another module;
+one over an enum with a member under `.if` built under both configurations; the `.if` in the
+body naming a member; every wrong place and every collision. All through the oracle, and a
+test that writes one family both ways and checks the output is byte-identical. The C64 corpus
+program gains a family where it repeats itself. Editor tests for definition, rename and
+completion through an instance of each form.
+
+**Done.** Both forms, over an enum in the file or in another module, with the exports, the
+per-instance signatures, the per-instance flow analysis and the editor. Two things the writing
+of it found: an enum member under an `.if` (Stage 25) was declared but never written out, which
+the oracle caught on the first exported one; and a path that ends in a binding names a member
+of a **scope**, never of a module, so `snd::b` is not the namesake of `b` and `snd::play::b`
+is. The second is how the rule has always been and is left as it is.
 
 ## Stage 27: Data conveniences
 

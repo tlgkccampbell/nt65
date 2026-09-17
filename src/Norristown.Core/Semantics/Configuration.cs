@@ -210,7 +210,7 @@ public sealed class Configuration
 
                 // A condition inside one of these may name what the expansion binds, so it
                 // has no answer until there is an expansion to answer it for.
-                if (block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each)
+                if (block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
                 {
                     chaining = false;
                     continue;

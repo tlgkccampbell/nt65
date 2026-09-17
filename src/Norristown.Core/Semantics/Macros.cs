@@ -262,6 +262,9 @@ public static class Macros
         SyntaxKind.SegmentDeclaration =>
             "a segment declaration belongs outside a macro body: a segment is declared exactly "
             + "once for the program, and this one would be declared once per call",
+        SyntaxKind.MultiProcDeclaration =>
+            "`.multiproc` belongs outside a macro body: a routine's name and signature are part of "
+            + "the file's interface, and a body declares nothing in its caller",
         SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
             "`.proc` belongs outside a macro body: a routine's name and signature are part of "
             + "the file's interface. Take a `block` parameter and let the caller declare the routine",

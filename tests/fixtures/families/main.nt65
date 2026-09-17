@@ -1,0 +1,23 @@
+; What a family is worth to the file that uses it: the instances are ordinary names, and a
+; path that ends in the binding builds the table beside them.
+.module main
+.use hw::Bank
+.use snd::stop
+
+.segment RODATA
+; `play` is not exported and each of its routines is, so they are reached through it.
+.data playing: .addr[] {
+    .each Bank, b {
+        snd::play::b
+    }
+}
+
+.segment CODE
+; `play::lo` declares `dbr = Bank::lo`, which is what B is here.
+.proc main: a8, i8, dbr = 0 {
+    jsr snd::play::lo
+    jsr stop::hi
+    rts
+}
+
+.export main, playing

@@ -105,6 +105,15 @@ internal sealed class Binder
     private CodeRun? codeRun;
     private bool inCodeRun;
 
+    // The declarations named by a repetition's binding, waiting for the enum walked to be
+    // known before each becomes one declaration per member, and what they became.
+    private readonly List<PendingFamily> pendingFamilies = [];
+    private readonly List<Family> families = [];
+
+    // The repetition whose body the walk is directly in, where a declaration named by the name
+    // it binds is a family; null everywhere else, including inside a block of the body.
+    private Repeated? repeated;
+
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
     {
         this.tree = tree;
@@ -146,9 +155,11 @@ internal sealed class Binder
         var binder = new Binder(tree, segments, configuration, cpu, isDefines);
         binder.WalkContainer(tree.Root);
         binder.EndCodeRun();
-        binder.Export();
         return binder;
     }
+
+    /// <summary>Whether the file holds any declaration named by a repetition's binding.</summary>
+    public bool HasFamilies => pendingFamilies.Count > 0;
 
     /// <summary>Resolves the names the file uses, with <paramref name="program"/> for the ones it does not declare.</summary>
     public Result Resolve(ProgramSymbols program)
@@ -192,6 +203,7 @@ internal sealed class Binder
         references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
         return new Result(fileScope, symbols, references, diagnostics, regions)
         {
+            Families = families,
             Brought = used.ToDictionary(
                 pair => pair.Key,
                 pair => new BroughtName(pair.Value.Symbol, pair.Value.Module,
@@ -257,10 +269,16 @@ internal sealed class Binder
     {
         var lines = block.ChildNodes;
         var opener = lines.Length > 0 ? lines[0].Statement : null;
-        if (opener is not null)
+        var outerRepeated = repeated;
+        var declaresInstances = NamedByBinding(opener, outerRepeated) is not null;
+        if (opener is not null && !declaresInstances)
             CheckAllowedHere(opener);
         var outerScope = scope;
         var outerSegment = segment;
+
+        // A family stands directly in the body of a repetition; a block inside the body is
+        // another place, and what it declares is private to the turn as it always was.
+        repeated = null;
 
         switch (kind)
         {
@@ -282,17 +300,26 @@ internal sealed class Binder
                 break;
 
             case BlockKind.Proc:
-                scope = OpenScope(ScopeKind.Proc, opener, SymbolKind.Proc);
+                scope = NamedByBinding(opener, outerRepeated) is { } familyProc
+                    ? OpenFamilyRoutine(familyProc, opener!)
+                    : OpenScope(ScopeKind.Proc, opener, SymbolKind.Proc);
+                break;
+            case BlockKind.MultiProc:
+                scope = OpenMultiProc(block, opener);
                 break;
             case BlockKind.Scope:
-                scope = OpenScope(ScopeKind.Scope, opener, SymbolKind.Scope);
+                scope = NamedByBinding(opener, outerRepeated) is { } familyScope
+                    ? RefuseScopeFamily(familyScope, opener!, ScopeKind.Scope)
+                    : OpenScope(ScopeKind.Scope, opener, SymbolKind.Scope);
                 break;
             case BlockKind.Segment:
             case BlockKind.Region:
                 segment = SegmentOf(opener) ?? segment;
                 break;
             case BlockKind.Data:
-                scope = OpenData(opener, block);
+                scope = NamedByBinding(opener, outerRepeated) is { } familyData
+                    ? RefuseScopeFamily(familyData, opener!, ScopeKind.Data)
+                    : OpenData(opener, block);
                 break;
             case BlockKind.Enum:
                 scope = OpenType(opener, SymbolKind.Enum);
@@ -338,6 +365,7 @@ internal sealed class Binder
             case BlockKind.Repeat:
             case BlockKind.Each:
                 scope = OpenRepetition(opener);
+                repeated = RepeatedIn(block, opener, outerScope, kind);
                 break;
             default:
                 if (opener is not null)
@@ -363,8 +391,282 @@ internal sealed class Binder
 
         scope = outerScope;
         segment = outerSegment;
+        repeated = outerRepeated;
         if (kind == BlockKind.Enum)
             previousEnumMember = null;
+    }
+
+
+    /// <summary>
+    /// What a repetition's body may declare by the name it binds: the block, the enum or list
+    /// it walks and the scope the instances would go in, or null for a repetition that binds
+    /// no name. The reason it carries is what is wrong with the place, for a declaration
+    /// written there anyway.
+    /// </summary>
+    private Repeated? RepeatedIn(SyntaxNode block, SyntaxNode? opener, Scope around, BlockKind kind)
+    {
+        if (opener is null || scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
+            return null;
+        var why = kind == BlockKind.Repeat
+            ? "a `.repeat` counts its turns, and a count is no name: a family is an `.each` over a named enum, "
+                + "whose members are the names it declares"
+            : around.Kind == ScopeKind.Repetition
+                ? "a family declares into the scope around its `.each`, and this one is inside another repetition, "
+                    + "where every name is a different one on every turn"
+                : Placement is ScopeKind.File
+                    ? null
+                    : "a family declares one routine per member into the scope around its `.each`, and this one is "
+                        + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
+                            ? "a body declares nothing in its caller"
+                            : "a routine belongs at file level or in a `.scope`");
+        return new Repeated(block, opener.ChildNodes.FirstOrDefault(), binding, around, segment, why);
+    }
+
+    /// <summary>What a place is called where a message says a declaration may not stand in it.</summary>
+    private static string Article(ScopeKind kind) => kind switch
+    {
+        ScopeKind.Proc => "a routine",
+        ScopeKind.Macro => "a macro body",
+        ScopeKind.BlockArgument => "a block argument",
+        ScopeKind.Data => "a `.data` block",
+        _ => "a type",
+    };
+
+    /// <summary>
+    /// The repetition around <paramref name="opener"/> when the declaration is named after the
+    /// name it binds, and so declares one per member rather than one private to each turn.
+    /// </summary>
+    private static Repeated? NamedByBinding(SyntaxNode? opener, Repeated? repeated) =>
+        repeated is { } found && opener is not null && NameToken(opener) is { } name && name.Text == found.Binding.Name
+            ? found
+            : null;
+
+    /// <summary>
+    /// The body of a <c>.proc</c> named after a repetition's binding: one routine per member,
+    /// declared once the enum is known. The body is read once, as every repetition body is.
+    /// </summary>
+    private Scope OpenFamilyRoutine(Repeated each, SyntaxNode opener)
+    {
+        CheckWidthsExist(opener);
+        var signature = opener.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ProcSignature);
+        CollectUses(signature);
+        var body = new Scope(ScopeKind.Proc, each.Binding.Name, scope, null);
+        AddFamily(each, opener, body, SymbolKind.Proc, signature, null, null);
+        return body;
+    }
+
+    /// <summary>
+    /// <c>.multiproc E, b: signature { }</c>: an <c>.each</c> over <c>E</c> whose body is one
+    /// routine's, folded into one line. It opens the repetition's scope and the routine's
+    /// inside it, exactly as the two blocks it stands for would.
+    /// </summary>
+    private Scope OpenMultiProc(SyntaxNode block, SyntaxNode? opener)
+    {
+        if (opener is not { Kind: SyntaxKind.MultiProcDeclaration })
+        {
+            if (opener is not null)
+                BindStatement(opener);
+            return new Scope(ScopeKind.Proc, null, scope, null);
+        }
+
+        // A macro body, a block argument and a repetition have already been told that a
+        // routine may not stand in them, by the rules that say so for `.proc` as well.
+        var around = scope;
+        var placement = Placement;
+        var why = placement is ScopeKind.Proc or ScopeKind.Data or ScopeKind.Type
+            ? $"`.multiproc` declares routines, and this one is inside {Article(placement)}: "
+                + "a routine belongs at file level or in a `.scope`"
+            : null;
+        if (why is not null)
+            Report(opener.ChildTokens[0].Span, why);
+
+        // One inside a macro body, a block argument or a repetition has been told so by the
+        // rule that holds `.proc` there; either way it declares nothing.
+        var declares = why is null && placement is ScopeKind.File && around.Kind != ScopeKind.Repetition;
+
+        CheckWidthsExist(opener);
+        var walked = opener.ChildNodes.FirstOrDefault(child => child.Kind != SyntaxKind.ProcSignature);
+        var signature = opener.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ProcSignature);
+
+        // The enum is named outside the repetition and the signature inside it, because a
+        // signature may name the binding: `dbr = Bank::b` is that bank on each instance.
+        CollectUses(walked);
+        var turns = new Scope(ScopeKind.Repetition, null, around, null);
+        var outer = scope;
+        scope = turns;
+        var binding = NameToken(opener) is { } name ? Declare(name, SymbolKind.Binding) : null;
+        CollectUses(signature);
+        var body = new Scope(ScopeKind.Proc, binding?.Name, turns, null);
+        if (binding is not null && declares)
+            AddFamily(new Repeated(block, walked, binding, around, segment, null), opener, body, SymbolKind.Proc, signature, null, null);
+        scope = outer;
+        return body;
+    }
+
+    /// <summary>
+    /// A <c>.scope</c> or a <c>.data</c> block named after a repetition's binding. What such a
+    /// block holds is reached through it, which is one declaration per member of everything
+    /// inside; a family declares routines and data, so this says what to write instead.
+    /// </summary>
+    private Scope RefuseScopeFamily(Repeated each, SyntaxNode opener, ScopeKind kind)
+    {
+        var what = kind == ScopeKind.Scope ? "scope" : "`.data` block";
+        Report(NameToken(opener)?.Span ?? opener.Span,
+            $"`{each.Binding.Name}` here would declare one {what} per member, and everything inside it once for "
+            + "each: a family declares routines and data, so write one family per role, "
+            + $"`note::{each.Binding.Name}` and `stop::{each.Binding.Name}`");
+
+        // The block still opens a scope of its own, so what it holds has somewhere to go and
+        // one refusal stays one.
+        return new Scope(kind, null, scope, null);
+    }
+
+    /// <summary>Records a declaration named by a repetition's binding, to be declared once the enum is known.</summary>
+    private void AddFamily(
+        Repeated each, SyntaxNode declaration, Scope body, SymbolKind kind,
+        SyntaxNode? signature, SyntaxNode? data, SyntaxNode? type)
+    {
+        if (each.Why is not null)
+        {
+            if (declaration.Kind != SyntaxKind.MultiProcDeclaration)
+                Report(NameToken(declaration)?.Span ?? declaration.Span, each.Why);
+            return;
+        }
+        pendingFamilies.Add(new PendingFamily(declaration, each, body, kind, signature, data, type));
+    }
+
+
+    /// <summary>
+    /// Declares what each family in the file stands for: one declaration per member of the
+    /// enum it walks, named after the member, in the scope around the repetition. It runs
+    /// once every file has been collected, because the enum may be another module's, and
+    /// before the modules' exports are read, because the instances are among them.
+    /// </summary>
+    public void DeclareFamilies(ProgramSymbols provisional)
+    {
+        if (pendingFamilies.Count == 0)
+            return;
+
+        // The `.use` items are read here only to find an enum one of them brought in: the
+        // program they are read against is not complete yet, so what they found is thrown
+        // away and `Resolve` reads them again against the one that is.
+        var referenced = references.Count;
+        var reported = diagnostics.Count;
+        program = provisional;
+        foreach (var directive in useDirectives)
+            ResolveUse(directive);
+        references.RemoveRange(referenced, references.Count - referenced);
+        diagnostics.RemoveRange(reported, diagnostics.Count - reported);
+        unexported.Clear();
+
+        foreach (var pending in pendingFamilies)
+            DeclareFamily(pending);
+        pendingFamilies.Clear();
+
+        used.Clear();
+        broughtAt.Clear();
+        globs.Clear();
+        reexports.Clear();
+        program = ProgramSymbols.Empty;
+    }
+
+    /// <summary>One family: the enum it walks, and the declaration it makes for each member.</summary>
+    private void DeclareFamily(PendingFamily pending)
+    {
+        var at = NameToken(pending.Declaration)?.Span ?? pending.Declaration.Span;
+        var walked = pending.Each.Walked;
+        var written = walked?.GetText().Trim();
+        var found = walked is null ? null : NamedByPath(walked, pending.Each.Around);
+        if (found is not { Kind: SymbolKind.Enum, Body: { } members })
+        {
+            Report(walked?.Span ?? at, found is null
+                ? $"a family declares one routine per member of a named enum, and `{written}` names none"
+                : $"a family declares one routine per member of a named enum, and `{written}` is {Named(found)}");
+            return;
+        }
+
+        var outerScope = scope;
+        var outerSegment = segment;
+        scope = pending.Each.Around;
+        segment = pending.Each.Segment;
+        var instances = new List<(Symbol Member, Symbol Instance)>();
+        foreach (var member in members.Symbols.Where(symbol => symbol.IsEnumMember))
+            instances.Add((member, DeclareInstance(pending, member, at)));
+        scope = outerScope;
+        segment = outerSegment;
+
+        // The family's line writes the name the repetition binds, and that is the name
+        // declared there; the instances are found by their own names, and their declaration is
+        // that line, which go to definition lands on. References do not overlap, so nothing of
+        // theirs is written at it.
+        if (instances.Count > 0)
+            pending.Body.Owner = instances[0].Instance;
+        families.Add(new Family(pending.Declaration, pending.Each.Block, pending.Each.Binding, found, instances));
+    }
+
+    /// <summary>One instance of a family, declared under its member's name.</summary>
+    private Symbol DeclareInstance(PendingFamily pending, Symbol member, TextSpan at)
+    {
+        var instance = new Symbol(member.Name, pending.Kind, scope, tree, at)
+        {
+            Segment = segment,
+            Data = pending.Data,
+            TypeExpression = pending.Type,
+        };
+        if (pending.Kind == SymbolKind.Proc)
+            instance.Signature = Signature.Read(pending.Signature);
+
+        // The signature may name the binding, `dbr = Bank::b`, and each instance's is that
+        // expression with its own member's value.
+        instance.Bound = (pending.Each.Binding, new Expansion.Bound(member.Value, null, Member: member));
+        if (scope.Declare(instance) is { } existing)
+        {
+            Report(at, $"`{member.Name}` is a member of `{pending.Each.Walked?.GetText().Trim()}` and is already "
+                + "declared in this scope: a family declares one name per member",
+                new RelatedSpan(existing.DeclarationSpan, "declared here"));
+        }
+        symbols.Add(instance);
+        if (pending.Declaration.ExportToken is { } export)
+            exportedDeclarations.Add((instance, export.Span));
+        return instance;
+    }
+
+    /// <summary>What a symbol is called where a message says it is not what was wanted.</summary>
+    private static string Named(Symbol symbol) =>
+        symbol.Kind == SymbolKind.Enum ? "an anonymous enum, whose members are ordinary names" : $"a {symbol.KindText}";
+
+    /// <summary>
+    /// The symbol a path names, resolved from <paramref name="at"/> and reporting nothing. It
+    /// is how a family finds the enum it walks, which has to be known before the file's names
+    /// are resolved, because the declarations it makes are among them.
+    /// </summary>
+    private Symbol? NamedByPath(SyntaxNode expression, Scope at)
+    {
+        if (expression.Kind != SyntaxKind.NameExpression)
+            return null;
+        Place? part = null;
+        var path = false;
+        var tokens = expression.ChildTokens;
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            var token = tokens[i];
+            if (token.Kind == SyntaxKind.ColonColon)
+            {
+                path = true;
+                continue;
+            }
+            var last = i == tokens.Length - 1;
+            part = !path
+                ? at.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null)
+                : part is null ? ModuleRoot(token, null)
+                : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
+                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Place(member)
+                : null;
+            path = true;
+            if (part is null or { IsReported: true })
+                return null;
+        }
+        return part?.Symbol;
     }
 
     /// <summary>
@@ -814,7 +1116,8 @@ internal sealed class Binder
     {
         if (line.Statement is not { } statement)
             return;
-        CheckAllowedHere(statement);
+        if (NamedByBinding(statement, repeated) is null)
+            CheckAllowedHere(statement);
         if (statement.Kind is not (SyntaxKind.BlankLine or SyntaxKind.ModuleDirective))
             pastFirstItem = true;
         CheckAnnotation(line, statement);
@@ -1060,7 +1363,11 @@ internal sealed class Binder
     private void BindData(SyntaxNode statement)
     {
         var element = DataSyntax.ElementOf(statement);
-        if (NameToken(statement) is { } name && element is not null)
+        if (NamedByBinding(statement, repeated) is { } each && element is not null)
+        {
+            AddFamily(each, statement, scope, SymbolKind.Data, null, element, DataSyntax.TypeOf(element));
+        }
+        else if (NameToken(statement) is { } name && element is not null)
         {
             Declare(name, SymbolKind.Data, data: element, type: DataSyntax.TypeOf(element));
         }
@@ -2018,7 +2325,12 @@ internal sealed class Binder
     /// <c>.export</c> and each name an <c>.export</c> list gives, and what exporting those
     /// spreads to. Only what the file declares is looked for, so this needs no other module.
     /// </summary>
-    private void Export()
+    /// <summary>
+    /// Reads what the file exports. It runs after the families are declared, because their
+    /// instances are declarations of the file like any others and an <c>.export</c> before one
+    /// exports every instance.
+    /// </summary>
+    public void Export()
     {
         if (moduleName is null && !isDefines)
         {
@@ -2116,6 +2428,9 @@ internal sealed class Binder
 
         /// <summary>The modules whose exports a <c>.use module::*</c> brings in.</summary>
         public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];
+
+        /// <summary>The families the file declares, each standing for one declaration per member.</summary>
+        public IReadOnlyList<Family> Families { get; init; } = [];
     }
 
     /// <summary>One written name, waiting for the whole file to be read before it is resolved.</summary>
@@ -2136,6 +2451,25 @@ internal sealed class Binder
 
     /// <summary>Instructions written one after another outside a routine, which are one mistake.</summary>
     private sealed record CodeRun(TextSpan At, ScopeKind Placement, int Lines);
+
+    /// <summary>
+    /// A repetition whose body is being read, as far as a declaration named after the name it
+    /// binds needs to know: what it walks, where the declarations would go, and what is wrong
+    /// with the place when something is.
+    /// </summary>
+    /// <param name="Block">The block the turns are written out from.</param>
+    /// <param name="Walked">The enum or list the repetition walks.</param>
+    /// <param name="Binding">The name it binds, which the declarations are named from.</param>
+    /// <param name="Around">The scope the declarations go in, which is the one around the repetition.</param>
+    /// <param name="Segment">The segment that scope is placing things in.</param>
+    /// <param name="Why">Why a declaration named after the binding may not stand here, or null when it may.</param>
+    private sealed record Repeated(
+        SyntaxNode Block, SyntaxNode? Walked, Symbol Binding, Scope Around, string? Segment, string? Why);
+
+    /// <summary>A declaration named by a repetition's binding, waiting for the enum it walks to be known.</summary>
+    private sealed record PendingFamily(
+        SyntaxNode Declaration, Repeated Each, Scope Body, SymbolKind Kind,
+        SyntaxNode? Signature, SyntaxNode? Data, SyntaxNode? Type);
 
     /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
     /// <param name="Call">The call.</param>

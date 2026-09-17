@@ -100,6 +100,18 @@ public sealed class ProgramModel
         foreach (var symbol in defined)
             symbol.IsDefine = true;
 
+        // A family declares one name per member of the enum it walks, and the enum may be
+        // another module's, so the instances are declared once every file has been read and
+        // before the modules' exports are: what a file exports includes them.
+        if (binders.Any(binder => binder.HasFamilies))
+        {
+            var provisional = ProgramSymbols.Build(modules, defined, []);
+            foreach (var binder in binders)
+                binder.DeclareFamilies(provisional);
+        }
+        foreach (var binder in binders)
+            binder.Export();
+
         var symbols = ProgramSymbols.Build(modules, defined, tables);
         var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
         var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
@@ -205,6 +217,19 @@ public sealed class ProgramModel
             path => path, path => Binder.Collect(trees[path], Segments, configuration, cpu, trees[path] == defines), StringComparer.Ordinal);
         List<ProgramSymbols.Module> replaced = [.. modules.Select(module =>
             binders.TryGetValue(module.Tree.Path, out var binder) ? binder.Module : module)];
+
+        // A family declares one name per member of the enum it walks, which may be another
+        // module's, so the instances are declared before what each module exports is read.
+        if (binders.Values.Any(binder => binder.HasFamilies))
+        {
+            var provisional = ProgramSymbols.Build(
+                replaced, replaced.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [], []);
+            foreach (var binder in binders.Values)
+                binder.DeclareFamilies(provisional);
+        }
+        foreach (var binder in binders.Values)
+            binder.Export();
+
         var tables = new List<Diagnostic>();
         var symbols = ProgramSymbols.Build(
             replaced, replaced.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [], tables);
@@ -346,10 +371,15 @@ public sealed class ProgramModel
     private static void Value(
         IEnumerable<Symbol> symbols, SegmentTable segments, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
     {
-        long? ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, segments, resolved).AsNumber();
         Symbol? SetOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
         foreach (var symbol in symbols)
         {
+            // An instance of a family reads its signature with what the binding is worth there,
+            // so `dbr = Bank::b` is that bank on each of them.
+            var bound = symbol.Bound is { } held
+                ? new Dictionary<Symbol, Expansion.Bound> { [held.Binding] = held.Value }
+                : null;
+            long? ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, segments, resolved, bound).AsNumber();
             void Report(TextSpan span, string message) =>
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
             if (symbol.Kind == SymbolKind.SignatureSet)

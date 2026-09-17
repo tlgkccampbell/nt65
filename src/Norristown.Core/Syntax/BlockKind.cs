@@ -12,6 +12,12 @@ public enum BlockKind
     /// <summary><c>.proc</c>.</summary>
     Proc,
 
+    /// <summary>
+    /// <c>.multiproc</c>: a repetition over an enum whose body is one routine's, written out
+    /// once per member.
+    /// </summary>
+    MultiProc,
+
     /// <summary><c>.scope</c>.</summary>
     Scope,
 

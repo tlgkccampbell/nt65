@@ -658,6 +658,13 @@ public sealed class ControlFlow
     }
 
     /// <summary>
+    /// Whether anything names <paramref name="symbol"/>. An instance of a family is one of a
+    /// set, as an enum's members are, so a family something calls is reached in every instance.
+    /// </summary>
+    private bool IsNamed(Symbol symbol) =>
+        model.ReferencesTo(symbol).Any(reference => !reference.IsDeclaration);
+
+    /// <summary>
     /// Data the instruction above runs into, which is the <c>.byte $2c</c> skip and the
     /// opcodes ca65 has not got. A <c>.next</c> on the data says where flow goes instead of
     /// through it.

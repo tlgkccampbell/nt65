@@ -1,0 +1,12 @@
+; The enum a family is declared once per member of. Which members it has follows the
+; configuration where they are listed, so the families follow it too.
+.module hw
+.export Bank
+
+.enum Bank {
+    lo
+    hi
+    .if EXTRA {
+        extra
+    }
+}

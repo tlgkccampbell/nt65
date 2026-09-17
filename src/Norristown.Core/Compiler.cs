@@ -339,11 +339,15 @@ public static class Compiler
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
+
+        // A family's body is written out once per instance, so a mistake in it is found once
+        // for each: what every instance says is one thing to say.
+        var collapsed = new List<Diagnostic>(Family.Collapsed(model.Families, found));
         var entries = flow.Regions.SelectMany(region => region.Blocks)
             .Where(block => block.IsDeclared)
             .Select(block => block.Label!);
-        found.AddRange(UnusedSymbols.Of(model, found, entries).ToList());
-        return (layout, flow, state, found);
+        collapsed.AddRange(UnusedSymbols.Of(model, collapsed, entries).ToList());
+        return (layout, flow, state, collapsed);
     }
 
     /// <summary>Everything wrong with the program, from what each part of the analysis found.</summary>

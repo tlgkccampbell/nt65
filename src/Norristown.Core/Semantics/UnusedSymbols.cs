@@ -44,6 +44,11 @@ public static class UnusedSymbols
             }
         }
 
+        // A family declares one name per member of an enum, and a member is one of a set: it
+        // is worth saying only when nothing names any instance, and then only once.
+        foreach (var family in model.Families)
+            named.UnionWith(family.Instances.Any(named.Contains) ? family.Instances : family.Instances.Skip(1));
+
         var reported = found.Where(d => d.Severity == Severity.Warning).Select(d => d.Span).ToHashSet();
         var omitted = model.Configuration.Omitted(model.Tree)
             .Select(span => model.Tree.Text.Substring(span.Start, span.Length))

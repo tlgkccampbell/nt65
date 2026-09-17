@@ -70,6 +70,12 @@ public sealed class Symbol
     /// <summary>The segment the declaration sits in, for an address; null for a constant.</summary>
     public string? Segment { get; internal set; }
 
+    /// <summary>
+    /// For one instance of a family, the name its repetition binds and what that name is worth
+    /// here, which is what a signature naming the binding is read with. Null for everything else.
+    /// </summary>
+    public (Symbol Binding, Expansion.Bound Value)? Bound { get; internal set; }
+
     /// <summary>The expression after <c>=</c>, or null for a label, proc body or scope.</summary>
     public SyntaxNode? ValueExpression { get; internal init; }
 
@@ -182,6 +188,14 @@ public sealed class Symbol
             return null;
         }
     }
+
+    /// <summary>
+    /// Whether this and <paramref name="other"/> are instances of one family: one body written
+    /// once and declared under every member's name, so a label inside it belongs to whichever
+    /// of them is being read rather than to the first.
+    /// </summary>
+    public bool IsSiblingOf(Symbol other) =>
+        Bound is not null && other.Bound is not null && Scope == other.Scope && NameSpan == other.NameSpan;
 
     /// <summary>The address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set; }

@@ -28,7 +28,8 @@ public static class Repetitions
 
         return opener.Kind == SyntaxKind.RepeatDirective
             ? Counted(model, block, counted, binding, outer, diagnostics)
-            : Walked(model, block, counted, binding, outer, diagnostics);
+            : Walked(model, block, counted, binding, outer, diagnostics,
+                folded: opener.Kind == SyntaxKind.MultiProcDeclaration);
     }
 
     /// <summary>The name a repetition binds, or null when it names none.</summary>
@@ -73,8 +74,18 @@ public static class Repetitions
     /// </summary>
     private static IReadOnlyList<Expansion> Walked(
         SemanticModel model, SyntaxNode block, SyntaxNode walked, Symbol? binding, Expansion? outer,
-        List<Diagnostic>? diagnostics)
+        List<Diagnostic>? diagnostics, bool folded = false)
     {
+        // `.multiproc` names its routines after an enum's members, so a list is no answer: the
+        // binder has already said so where the family is declared.
+        if (folded)
+        {
+            return model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } enumerated }
+                ? [.. enumerated.Symbols.Where(member => member.IsEnumMember).Select(
+                    (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))]
+                : [];
+        }
+
         // A `list` parameter walks whatever the call gave it. Where its items are words, the
         // binding is the word itself, which is all a condition can do with one.
         if (model.SymbolOf(walked) is { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }
@@ -93,7 +104,7 @@ public static class Repetitions
             return [.. items.Select((item, i) => Expansion.Turn(outer, block, binding, Value.Unknown, item, i))];
 
         if (model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } members })
-            return [.. members.Symbols.Select(
+            return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
                 (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))];
 
         Report(model, diagnostics, walked, outer, "`.each` walks a list or an enum, and this is neither");
@@ -114,6 +125,9 @@ public static class Repetitions
         SyntaxKind.SegmentDeclaration =>
             "a segment declaration belongs outside a repetition: a segment is declared exactly "
             + "once for the program, and this one would be declared once per turn",
+        SyntaxKind.MultiProcDeclaration =>
+            "`.multiproc` belongs outside a repetition: it declares one routine per member of an enum, "
+            + "and this one would declare them again on every turn",
         SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
             "`.proc` belongs outside a repetition: a routine's name and signature are part of the "
             + "file's interface, and this one would be a different routine on every turn",

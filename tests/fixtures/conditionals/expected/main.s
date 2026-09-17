@@ -43,6 +43,7 @@ trace:
 
 Cmd__move = $00
 Cmd__fire = $01
+Cmd__dump = $02
 Cmd__wait = $03
 
 .segment "RODATA": absolute
