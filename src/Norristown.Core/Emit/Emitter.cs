@@ -1623,7 +1623,7 @@ public sealed class Emitter
                 if (!edits.Joined.Contains(tokens[i - 1].Position))
                     text.Length -= Width(tokens[i - 1].Green.TrailingTrivia);
                 text.Append(edits.Before.GetValueOrDefault(token.Position, ""))
-                    .Append(edits.Replace.GetValueOrDefault(token.Position, token.Text))
+                    .Append(edits.Replace.GetValueOrDefault(token.Position, Spelt(token)))
                     .Append(edits.After.GetValueOrDefault(token.Position, ""));
                 if (i + 1 == tokens.Count || !edits.Joined.Contains(tokens[i + 1].Position))
                     Whitespace(text, token.Green.TrailingTrivia);
@@ -1647,11 +1647,16 @@ public sealed class Emitter
     /// spelt it. Everything nt65 works out for itself is written in lower case
     /// (<see cref="Hex"/>), so a number the source wrote in upper case is brought down to it:
     /// one file with <c>$FFD2</c> in one line and <c>$d020</c> in the next reads as two hands.
+    /// The <c>_</c> that separates a number's digits is nt65's own, and the header switches
+    /// ca65's <c>underline_in_numbers</c> off, so it is dropped on the way out.
     /// </summary>
-    private static string Spelt(SyntaxToken token) =>
-        token.Kind == SyntaxKind.NumberLiteral && token.Text.StartsWith('$')
-            ? token.Text.ToLowerInvariant()
-            : token.Text;
+    private static string Spelt(SyntaxToken token)
+    {
+        if (token.Kind != SyntaxKind.NumberLiteral)
+            return token.Text;
+        var written = token.Text.Replace("_", "", StringComparison.Ordinal);
+        return written.StartsWith('$') ? written.ToLowerInvariant() : written;
+    }
 
     private static int Width(IEnumerable<GreenTrivia> trivia) =>
         trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);

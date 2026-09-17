@@ -1,0 +1,33 @@
+; `_` between the digits of a number, in any base. nt65 works out every number it can and
+; writes the rest without the separators, and the output header switches ca65's own
+; `underline_in_numbers` off, so nothing downstream ever sees one.
+.module main
+
+BYTES   = $7f_ff
+BITS    = %1010_1010
+COUNT   = 1_000
+LONG    = $01_23_45
+
+; What a separated number is worth, decided by nt65 rather than by the assembler.
+    .assert BYTES == 32767, "a separator counts for nothing"
+    .assert BITS == 170, "in binary too"
+    .assert COUNT == 1000, "and in decimal"
+    .assert LONG == 74565, "however many there are"
+
+.segment RODATA
+.data masks: .byte[] {
+    %0000_1111
+    %1111_0000
+}
+.data words: .word BYTES, COUNT
+.data third: .byte >LONG
+
+.segment CODE
+.proc main {
+    lda #%1010_1010
+    ldx #BITS
+    ldy #<BYTES
+    rts
+}
+
+.export masks, words, third

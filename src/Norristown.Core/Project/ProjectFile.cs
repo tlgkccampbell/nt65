@@ -22,6 +22,12 @@ public static class ProjectFile
     private static readonly string[] known = ["cpu", "files", "out", "defines", "segments", "ranges", "configurations"];
 
     /// <summary>
+    /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
+    /// validates the file against, which is the editor's business and not the build's.
+    /// </summary>
+    private static readonly string[] ignored = ["$schema"];
+
+    /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
     /// logical path diagnostics name it by; what is wrong with it comes back in the settings.
     /// </summary>
@@ -58,8 +64,12 @@ public static class ProjectFile
 
             foreach (var property in document.RootElement.EnumerateObject())
             {
-                if (!known.Contains(property.Name, StringComparer.Ordinal))
-                    reader.Report(property.Name, $"`{property.Name}` is not a {Name} key");
+                if (known.Contains(property.Name, StringComparer.Ordinal)
+                    || ignored.Contains(property.Name, StringComparer.Ordinal))
+                {
+                    continue;
+                }
+                reader.Report(property.Name, Unknown(property.Name));
             }
 
             return new ProjectSettings(
@@ -99,6 +109,16 @@ public static class ProjectFile
             return null;
         }
         return new Define(name, value, span);
+    }
+
+    /// <summary>
+    /// What a key nt65 does not know is reported as, with the key it is nearly when there is
+    /// one: a typo is one letter from the key it was meant to be.
+    /// </summary>
+    private static string Unknown(string key)
+    {
+        var message = $"`{key}` is not a {Name} key";
+        return Spelling.Nearest(key, known) is { } nearest ? $"{message}; `{nearest}` is" : message;
     }
 
     /// <summary>A JSON number, or a string in nt65's number syntax.</summary>

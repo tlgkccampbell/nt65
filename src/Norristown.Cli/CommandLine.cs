@@ -45,6 +45,12 @@ public sealed record CommandLine(
         """;
 
     /// <summary>
+    /// What follows a message about a command or an option nt65 does not have. The whole usage
+    /// text after one line of news buries it; this points at where the text is.
+    /// </summary>
+    public const string SeeHelp = "see `nt65 --help`";
+
+    /// <summary>
     /// Reads the arguments after <c>build</c>, or returns null with <paramref name="problem"/>
     /// saying what is wrong with them.
     /// </summary>

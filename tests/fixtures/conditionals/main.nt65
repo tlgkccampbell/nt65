@@ -68,9 +68,16 @@ TRACE = 0
     main, trace
 }
 
+; A member may stand under an `.if` in the enum, so one set of names varies by configuration
+; where the names are listed. The condition tests the configuration, as every `.if` outside a
+; turn does, and a member with no value of its own is still the one before it taken plus one:
+; `wait` is 3 with `dump` and 2 without.
 .enum Cmd {
 move
 fire
+.if DEBUG {
+dump
+}
 wait
 }
 
@@ -135,6 +142,11 @@ wait
 }
 .proc fire {
     jmp move
+}
+.if DEBUG {
+.proc dump {
+    rts
+}
 }
 .proc wait {
     rts

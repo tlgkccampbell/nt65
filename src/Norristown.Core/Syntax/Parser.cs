@@ -109,6 +109,18 @@ internal sealed class Parser
         if (kind == LineKind.Blank)
             return Finish(SyntaxKind.BlankLine, []);
 
+        // An unnamed label needs a name rather than a spelling, so it is the whole news about
+        // its line: `:` where a name belongs and `:+` in an operand are read no further, and
+        // what the rest of the line would otherwise be reported for is this same mistake.
+        if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
+        {
+            Report(colon, "an unnamed label is written `@name`: a cheap local, private to the routine around it");
+            var line = ImmutableArray.CreateBuilder<GreenNode>();
+            line.AddRange(TakeRest());
+            line.Add(Advance());
+            return new GreenSyntax(SyntaxKind.ErrorLine, line.ToImmutable());
+        }
+
         // Blocks with a line grammar of their own. A struct or union member
         // is written like a labelled data declaration and needs no rule of its own.
         //
@@ -155,8 +167,16 @@ internal sealed class Parser
         {
             // One diagnostic per line is enough: where the parser has already said what it
             // wanted, the tokens it then walks past are the same problem said twice.
+            //
+            // A block written on one line, `.data name { .byte 1 }`, is that one thing: the
+            // `{` was read as the opener it is, and what follows it is the body, on the wrong
+            // line rather than unexpected.
             if (errors.Count == 0)
-                Report($"unexpected {Describe(Current)}");
+            {
+                Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
+                    ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
+                    : $"unexpected {Describe(Current)}");
+            }
             all.Add(new GreenSyntax(SyntaxKind.SkippedTokens, TakeRest()));
         }
         all.Add(Advance());

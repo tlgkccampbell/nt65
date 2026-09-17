@@ -38,6 +38,28 @@ internal static class Lines
     }
 
     /// <summary>
+    /// Where a line writes one of ca65's unnamed labels, or -1. One is defined by a <c>:</c>
+    /// at the start of a line and named by <c>:+</c> or <c>:-</c> where an operand begins.
+    /// A <c>:</c> after a name is a label or an address-size prefix, which is what <c>z:foo</c>
+    /// and <c>a:-1</c> stay.
+    /// </summary>
+    public static int UnnamedLabel(ImmutableArray<GreenToken> tokens)
+    {
+        if (tokens[0].Kind == SyntaxKind.Colon)
+            return 0;
+        for (var i = 1; i < tokens.Length - 1; i++)
+        {
+            if (tokens[i].Kind == SyntaxKind.Colon
+                && tokens[i + 1].Kind is SyntaxKind.Plus or SyntaxKind.Minus
+                && tokens[i - 1].Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.CheapLocal))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
     /// Whether the line opens and closes a block. A <c>{</c> inside a parenthesis still
     /// open on the line does not open one, so a half-typed <c>m!({</c> swallows nothing.
     /// </summary>

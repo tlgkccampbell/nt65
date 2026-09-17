@@ -100,6 +100,11 @@ internal sealed class Binder
     // `.state` here is that label's declaration.
     private Symbol? bareLabel;
 
+    // The run of misplaced instructions the walk is in the middle of, reported when it ends,
+    // and whether the line being walked is one of them.
+    private CodeRun? codeRun;
+    private bool inCodeRun;
+
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
     {
         this.tree = tree;
@@ -140,6 +145,7 @@ internal sealed class Binder
     {
         var binder = new Binder(tree, segments, configuration, cpu, isDefines);
         binder.WalkContainer(tree.Root);
+        binder.EndCodeRun();
         binder.Export();
         return binder;
     }
@@ -231,6 +237,7 @@ internal sealed class Binder
             if (child.Green is GreenBlock block)
             {
                 bareLabel = null;
+                EndCodeRun();
                 WalkBlock(child, block.BlockKind);
                 pastFirstItem = true;
             }
@@ -343,10 +350,16 @@ internal sealed class Binder
         for (var i = 1; i < lines.Length; i++)
         {
             if (lines[i].Green is GreenBlock inner)
+            {
+                EndCodeRun();
                 WalkBlock(lines[i], inner.BlockKind);
+            }
             else
+            {
                 WalkLine(lines[i]);
+            }
         }
+        EndCodeRun();
 
         scope = outerScope;
         segment = outerSegment;
@@ -808,7 +821,13 @@ internal sealed class Binder
         var label = bareLabel;
         if (statement.Kind != SyntaxKind.BlankLine)
             bareLabel = null;
+        inCodeRun = false;
         BindStatement(statement);
+
+        // A run of misplaced instructions reads through the blank and comment lines among
+        // them and ends at the first line that is anything else.
+        if (!inCodeRun && statement.Kind != SyntaxKind.BlankLine)
+            EndCodeRun();
 
         // Recorded on the label rather than found in the flow, so a jump from another file
         // can be checked against it too.
@@ -1070,14 +1089,33 @@ internal sealed class Binder
         }
     }
 
-    /// <summary>An instruction belongs in a routine: outside one, nothing calls it or runs into it.</summary>
+    /// <summary>
+    /// An instruction belongs in a routine: outside one, nothing calls it or runs into it.
+    /// A run of them is one mistake, so it is counted here and reported once, on its first
+    /// line, when the run ends: a routine's worth of ca65 pasted in says so once.
+    /// </summary>
     private void CheckCodePlacement(SyntaxNode instruction)
     {
-        if (Placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument || instruction.ChildTokens.Length == 0)
+        var placement = Placement;
+        if (placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument || instruction.ChildTokens.Length == 0)
             return;
-        Report(instruction.ChildTokens[0].Span, Placement == ScopeKind.Data
-            ? "an instruction belongs in a `.proc`, and `.data` holds only data"
-            : "an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow");
+        inCodeRun = true;
+        if (codeRun is { } run && run.Placement == placement)
+            codeRun = run with { Lines = run.Lines + 1 };
+        else
+            codeRun = new CodeRun(instruction.ChildTokens[0].Span, placement, 1);
+    }
+
+    /// <summary>Reports the run of misplaced instructions that has just ended, if there was one.</summary>
+    private void EndCodeRun()
+    {
+        if (codeRun is not { } run)
+            return;
+        codeRun = null;
+        var many = run.Lines > 1 ? $"these {run.Lines} instructions belong" : "an instruction belongs";
+        Report(run.At, run.Placement == ScopeKind.Data
+            ? $"{many} in a `.proc`, and `.data` holds only data"
+            : $"{many} in a `.proc`: code outside one is reached by nothing nt65 can follow");
     }
 
     /// <summary>
@@ -1549,8 +1587,9 @@ internal sealed class Binder
             var local = at.LookupCheapLocal(token.Text[1..]);
             if (local is null)
             {
-                Report(token.Span, $"`{token.Text}` is not declared");
-                if (NearestName(at, token.Text[1..], cheap: true) is { } near)
+                var near = NearestName(at, token.Text[1..], cheap: true);
+                Report(token.Span, $"`{token.Text}` is not declared" + (near is null ? "" : $"; `@{near}` is"));
+                if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
             }
             return local is null ? null : new Place(local);
@@ -1647,46 +1686,25 @@ internal sealed class Binder
     {
         lookedUp.Add("name:" + token.Text);
         var exporting = program.ModulesExporting(token.Text).ToList();
+        var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
             ? $"`{token.Text}` is not declared here, and module `{exporting[0]}` exports it: "
                 + $"write `{exporting[0]}::{token.Text}`, or bring it in with `.use {exporting[0]}::{token.Text}`"
             : last
-                ? $"`{token.Text}` is not declared"
+                ? $"`{token.Text}` is not declared" + (nearest is null ? "" : $"; `{nearest}` is")
                 : $"`{token.Text}` is not declared, and no module `{token.Text}` is in this build");
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
-        else if (last && NearestName(at, token.Text, cheap: false) is { } nearest)
+        else if (nearest is not null)
             Fixed(new DiagnosticFix(FixKind.NearestName, nearest));
     }
 
     /// <summary>
     /// The declared name a written one is nearly: one in scope, or one a <c>.use</c> brought in,
-    /// that differs from it by a letter or two. A short name has to match more closely than a
-    /// long one, because two letters apart is most of the short names there are. Where two are
-    /// equally near, the earlier by ordinal is the suggestion, so the same file always suggests
-    /// the same name.
+    /// that differs from it by a letter or two.
     /// </summary>
-    private string? NearestName(Scope at, string written, bool cheap)
-    {
-        // How many single-letter changes still count as nearly the same name.
-        var allowed = written.Length <= 4 ? 1 : 2;
-        string? nearest = null;
-        var best = allowed + 1;
-        foreach (var name in Candidates(at, cheap))
-        {
-            if (name == written)
-                continue;
-            var distance = Distance(written, name, allowed + 1);
-            if (distance > allowed || distance > best)
-                continue;
-            if (distance < best || string.CompareOrdinal(name, nearest) < 0)
-            {
-                nearest = name;
-                best = distance;
-            }
-        }
-        return nearest;
-    }
+    private string? NearestName(Scope at, string written, bool cheap) =>
+        Spelling.Nearest(written, Candidates(at, cheap));
 
     /// <summary>The names a misspelling could have meant: what the scopes around it hold, and what a <c>.use</c> named.</summary>
     private IEnumerable<string> Candidates(Scope at, bool cheap)
@@ -1704,36 +1722,6 @@ internal sealed class Binder
             foreach (var name in used.Keys)
                 yield return name;
         }
-    }
-
-    /// <summary>
-    /// How many single-letter changes apart two names are, counted no further than
-    /// <paramref name="bound"/>: past that they are not near each other, and how far past
-    /// makes no difference.
-    /// </summary>
-    private static int Distance(string a, string b, int bound)
-    {
-        if (Math.Abs(a.Length - b.Length) >= bound)
-            return bound;
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++)
-            previous[j] = j;
-        for (var i = 1; i <= a.Length; i++)
-        {
-            current[0] = i;
-            var least = current[0];
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var substitute = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
-                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), substitute);
-                least = Math.Min(least, current[j]);
-            }
-            if (least >= bound)
-                return bound;
-            (previous, current) = (current, previous);
-        }
-        return Math.Min(previous[b.Length], bound);
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
@@ -2145,6 +2133,9 @@ internal sealed class Binder
     private readonly record struct Use(
         SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last,
         bool Splice = false, bool Word = false, bool Chosen = false);
+
+    /// <summary>Instructions written one after another outside a routine, which are one mistake.</summary>
+    private sealed record CodeRun(TextSpan At, ScopeKind Placement, int Lines);
 
     /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
     /// <param name="Call">The call.</param>

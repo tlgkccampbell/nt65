@@ -185,6 +185,30 @@ public sealed class BuildCommandTests : IDisposable
         Assert.StartsWith("nt65: `--bogus` is not an option", said);
     }
 
+    /// <summary>
+    /// A command or an option nt65 does not have is one line of news and where to read the rest.
+    /// The usage text answers <c>nt65</c> on its own and <c>--help</c>, which asked for it.
+    /// </summary>
+    [Fact]
+    public void WhatIsNotACommandSaysSoAndPointsAtTheHelp()
+    {
+        var (code, said) = Run(root.FullName, "check");
+        Assert.Equal(2, code);
+        Assert.Equal("nt65: `check` is not a command\nsee `nt65 --help`\n", said);
+
+        (code, said) = Run(root.FullName, "--watch");
+        Assert.Equal(2, code);
+        Assert.Equal("nt65: `--watch` is not an option\nsee `nt65 --help`\n", said);
+
+        (code, said) = Run(root.FullName, "build", "--watch");
+        Assert.Equal(2, code);
+        Assert.Equal("nt65: `--watch` is not an option\nsee `nt65 --help`\n", said);
+
+        (code, said) = Run(root.FullName);
+        Assert.Equal(2, code);
+        Assert.StartsWith("usage: nt65 build", said);
+    }
+
     private (int Code, string Said) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };

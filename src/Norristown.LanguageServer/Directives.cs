@@ -108,6 +108,7 @@ internal static class Directives
             Place.Data => [.. Data, ".data", ".if", ".repeat", ".each"],
             Place.Values => [".if", ".repeat", ".each"],
             Place.TypeMembers => [".struct", ".union"],
+            Place.EnumMembers => [".if"],
             _ => [],
         };
         return Described(Without(names, line));

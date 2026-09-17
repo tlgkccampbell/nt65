@@ -4,6 +4,7 @@
   "cpu": "6809",          // ;! error: `6809` is not a processor nt65 knows: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
   "files": "*.nt65",      // ;! error: `files` is a list of strings
   "outputs": "build",     // ;! error: `outputs` is not a nt65.json key
+  "define": {},           // ;! error: `define` is not a nt65.json key; `defines` is
   "defines": {
     "SIZE": "twelve"      // ;! error: `SIZE` is not a number, and a define is a number
   },

@@ -39,6 +39,9 @@
           },
           "patterns": [
             {
+              "include": "#members"
+            },
+            {
               "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)",
               "captures": {
                 "1": {
@@ -371,6 +374,35 @@
               "captures": {
                 "1": {
                   "name": "variable.other.property.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        }
+      ]
+    },
+    "members": {
+      "patterns": [
+        {
+          "begin": "(?i)(\\.(?:if|elseif|else))\\b",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#members"
+            },
+            {
+              "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.enummember.nt65"
                 }
               }
             },

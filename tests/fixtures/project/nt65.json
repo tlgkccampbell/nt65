@@ -1,4 +1,5 @@
 {
+  "$schema": "https://nt65.dev/nt65.schema.json",
   "cpu": "65c02",
   "files": ["*.nt65"],
   "out": "build",

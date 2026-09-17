@@ -23,12 +23,28 @@ public static class Commands
             case ["build", .. var rest]:
                 if (CommandLine.Parse(rest, out var problem) is { } command)
                     return BuildCommand.Build(command, Path.GetFullPath(directory), error);
-                error.WriteLine($"nt65: {problem}");
-                break;
+                return Wrong(error, problem!);
             case ["remap-dbg", .. var given]:
                 return RemapCommand.Run(given, Path.GetFullPath(directory), error);
+
+            // A first argument nt65 has no meaning for: one line of news and where to read the
+            // rest, rather than the usage text, which asked for nothing and buries the news.
+            case [var word, ..]:
+                return Wrong(error, word.StartsWith('-')
+                    ? $"`{word}` is not an option"
+                    : $"`{word}` is not a command");
         }
+
+        // Nothing was asked for, so the usage text is the answer.
         error.WriteLine(CommandLine.Usage);
+        return 2;
+    }
+
+    /// <summary>Says what is wrong with the command line, and where its usage text is.</summary>
+    private static int Wrong(TextWriter error, string problem)
+    {
+        error.WriteLine($"nt65: {problem}");
+        error.WriteLine(CommandLine.SeeHelp);
         return 2;
     }
 

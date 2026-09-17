@@ -18,6 +18,9 @@ score:  .word
 .data title:        .byte TITLE, 0
 .data title_screen: .strz screen(TITLE)
 .data prompt:       .strz PROMPT
+; `\0` is `\x00` written short, and stands wherever the other escapes do.
+.data padded:       .byte "OK\0\0"
+.data nul:          .byte '\0'
 .data first:        .byte .strat(PROMPT, 0), .strlen(PROMPT)
 .data best:         .type Entry { name = TITLE, score = 100 }
 .data labels {

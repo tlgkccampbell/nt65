@@ -292,6 +292,13 @@ internal static class TextMateGrammar
         rules["record"] = [new Rule(Begin: @"\{", End: @"\}",
             Patterns: [record, Rule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Property), include])];
 
+        // A conditional inside an enum body holds members too, so its `}` closes the
+        // conditional rather than the enum. `} .else {` opens the next one on the line whose
+        // `}` closed the last.
+        var members = Rule.Including("members");
+        rules["members"] = [Rule.Block($@"(?i)(\.(?:if|elseif|else))\b", @"\}", [Directive],
+            [members, Rule.Scoped($@"^\s*({Word})", EnumMember), include])];
+
         // A struct or union body, which may hold anonymous ones.
         var layout = Rule.Including("layout");
         rules["layout"] = [Rule.Block($@"(?i)(\.(?:struct|union))(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Struct],
@@ -310,7 +317,7 @@ internal static class TextMateGrammar
 
             // Blocks, each opened by a directive on its line.
             Rule.Block($@"(?i)(\.enum)(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Enum],
-                [Rule.Scoped($@"^\s*({Word})", EnumMember), include]),
+                [members, Rule.Scoped($@"^\s*({Word})", EnumMember), include]),
             layout,
             Rule.Block($@"(?i)(\.type)\b", "$", [Directive], [record, include]),
             Rule.Block($@"(?i)(\.macro)\s+({Word})\s*(\()", @"\)", [Directive, Macro],

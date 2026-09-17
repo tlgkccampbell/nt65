@@ -194,9 +194,13 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   spellings are not warned about, since they are reserved in no nt65 program at all.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` and
   `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
-  a CPU is named (§5.1) and mean nothing anywhere else.
-- **Strings:** `"..."` with fixed escapes `\n \r \t \\ \" \' \xHH`, which character
-  literals share. Outside a charmap
+  a CPU is named (§5.1) and mean nothing anywhere else. A `_` between two of a number's digits
+  separates them and is worth nothing, in any base: `$7f_ff`, `%1010_1010`, `1_000`. It stands
+  between two digits, so it may not begin or end a number or stand beside another `_`. The
+  output writes every number without separators, and switches ca65's own
+  `underline_in_numbers` off (§13).
+- **Strings:** `"..."` with fixed escapes `\n \r \t \0 \\ \" \' \xHH`, which character
+  literals share; `\0` is `\x00` written short. Outside a charmap
   (§8), character and string literals are ASCII: a non-ASCII character is an error, and
   `\xHH` writes any byte.
 - **Address-size prefixes:** `z:`, `a:`, `f:` (as in ca65), and `d:` for a constant
@@ -430,6 +434,8 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   by name, and an `out` in place of the project's; `--config name` chooses one, `-D`
   overrides on top of it, and with none chosen the project's own settings build. The editor's
   setting for the active configuration chooses the one a language server analyzes.
+- `$schema`: accepted and ignored, so that a project file may name the schema an editor
+  validates it against. Every other key nt65 does not know is an error.
 
 Numbers are JSON numbers or strings in nt65 number syntax.
 
@@ -568,7 +574,21 @@ declare constants and sizes and never generate code.
 **Enumerations.** Members are constants in the scope `Color`, referenced as
 `Color::red`. A member without a value is the previous member plus one, starting at 0;
 explicit values must be constant. An anonymous `.enum { }` declares its members into
-the enclosing scope.
+the enclosing scope. A member may stand under an `.if` in the body (§10), so that which
+members an enum has follows the configuration where the members are listed rather than by
+writing out two whole enums under exclusive conditions; a member after one, with no value
+of its own, is still the member before it plus one.
+
+```nt65
+.enum Cmd {
+    move                ; 0
+    fire                ; 1
+    .if DEBUG {
+        dump            ; 2
+    }
+    wait                ; 3 with DEBUG, 2 without
+}
+```
 
 **Structures.** Members use the element types of data declarations (§8), but reserve
 space instead of emitting it: `x: .byte` reserves one element, `colors: .word[16]` sixteen,
@@ -1691,7 +1711,8 @@ file refuses to be built in, and `.warning "text"` one it builds in and has some
 about.
 
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
-their lines are values (§8).
+their lines are values (§8). `.if` is allowed in an `.enum` body too, where its lines are
+members (§6.3); a repetition is not, because a member's name is written, never computed.
 
 **Conditions test the configuration, not the program.** An `.if` condition may use
 literals, operators, built-in functions, defines (§5.3) and settings. Inside a macro body it may
@@ -1750,7 +1771,9 @@ may be declared under several `.if`s, in one chain or in separate ones:
 
 Two declarations of one name in taken branches are a duplicate, and a use of a name
 with none is undefined. Both are reported for the configuration being built, as with
-`#if` in C or `#[cfg]` in Rust.
+`#if` in C or `#[cfg]` in Rust. A member under an `.if` in an enum body belongs to the enum
+the same way, and the members of the branches taken are the enum's, in the order they are
+written.
 
 `.repeat` counts may be any constant (no addresses).
 
@@ -2953,6 +2976,23 @@ Recorded so the reasoning survives. None is open.
   keystroke; a name that would go into the file's interface, such as the linker name an `as`
   gives, is not written at all, because a placeholder another program links against is worse
   than writing the line by hand.
+- **`_` between a number's digits, and `\0`.** Both are what every language a programmer comes
+  from spells this way, and neither can mean anything else: `_` is not a digit in any base
+  nt65 writes, so the only question is where one may stand, and it stands between two digits;
+  `\0` was an unknown escape. ca65 has an `underline_in_numbers` feature, which the output
+  switches off, because nt65 writes every number itself and so never needs it.
+- **`$schema` in the project file.** A project file that names its schema gets completion,
+  hover and validation in every editor that reads one, and the key is the convention for
+  saying so. nt65 reads nothing from it. It is the one key nt65 accepts and ignores: every
+  other unknown key stays an error, because a misspelt key that is quietly accepted is a
+  setting that silently does nothing.
+- **`.if` in an enum body, and no repetition there.** The alternative is two whole enums under
+  exclusive conditions, which says twice what differs once and splits the type a program is
+  written against. A member is a name written on its own line, so an `.if` around one changes
+  only whether that line is read, which is what an `.if` does everywhere else; the values
+  follow, because a member with no value of its own is the member before it plus one. A
+  `.repeat` or an `.each` there would need a computed name, which §2 and §15 rule out, so
+  neither is allowed.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
@@ -3085,7 +3125,8 @@ signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'
              | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr?'
-enum        := '.enum' ident? '{' NL (member-name ('=' expr)? NL)* '}'
+enum        := '.enum' ident? '{' NL (enum-member | if-block)* '}'
+enum-member := member-name ('=' expr)? NL
 struct      := '.struct' ident? '{' NL member* '}'
 union       := '.union' ident? '{' NL member* '}'
 member      := member-name ':' (element ('[' expr ']')? | '.res' expr (',' expr)?) NL
@@ -3139,6 +3180,7 @@ each-block  := '.each' expr (',' ident)? '{' NL contents '}'   ; a list, a named
 contents    := item*                                  ; at item level
              | body                                   ; inside a proc
              | value-line* | mixed*                   ; in a data body
+             | enum-member*                           ; in an enum body
 export      := '.export' export-item (',' export-item)*
              | '.export' (const | config | data-decl | proc | extern-proc | scope | macro | enum
                | struct | union | charmap | list | func | signature | import | use)

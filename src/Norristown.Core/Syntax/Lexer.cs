@@ -80,19 +80,21 @@ public static class Lexer
             pos += word.Length;
             if (word.Equals("65c02", StringComparison.OrdinalIgnoreCase) || word.Equals("65sc02", StringComparison.OrdinalIgnoreCase))
                 return (SyntaxKind.CpuName, null);
-            return (SyntaxKind.NumberLiteral, word.ContainsAnyExceptInRange('0', '9') ? $"invalid decimal number `{word}`" : null);
+            return (SyntaxKind.NumberLiteral, Digits(word, '\0', "decimal", char.IsAsciiDigit));
         }
         if (c is '$' or '%')
         {
             var word = text[(pos + 1)..SkipWord(text, pos + 1)];
             pos += 1 + word.Length;
             var hex = c == '$';
-            string? error = null;
             if (word.IsEmpty)
-                error = hex ? "expected hexadecimal digits after `$`" : "expected binary digits after `%` (the remainder operator is `.mod`)";
-            else if (hex ? !IsAll(word, char.IsAsciiHexDigit) : word.ContainsAnyExcept('0', '1'))
-                error = $"invalid {(hex ? "hexadecimal" : "binary")} number `{c}{word}`";
-            return (SyntaxKind.NumberLiteral, error);
+            {
+                return (SyntaxKind.NumberLiteral, hex
+                    ? "expected hexadecimal digits after `$`"
+                    : "expected binary digits after `%` (the remainder operator is `.mod`)");
+            }
+            return (SyntaxKind.NumberLiteral, Digits(
+                word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1'));
         }
 
         switch (c)
@@ -180,19 +182,35 @@ public static class Lexer
         return pos;
     }
 
-    private static bool IsAll(ReadOnlySpan<char> text, Func<char, bool> predicate)
+    /// <summary>
+    /// What is wrong with the digits of a number, or null when nothing is. <c>_</c> between two
+    /// digits is a separator, in any base: <c>$7f_ff</c>, <c>%1010_1010</c> and <c>1_000</c>
+    /// are the numbers their digits spell. <paramref name="prefix"/> is the <c>$</c> or <c>%</c>
+    /// the digits follow, or <c>\0</c> for a decimal number, so that a message names the number
+    /// as it was written; nothing is put together until there is something to say.
+    /// </summary>
+    private static string? Digits(ReadOnlySpan<char> digits, char prefix, string radix, Func<char, bool> isDigit)
     {
-        foreach (var c in text)
+        for (var i = 0; i < digits.Length; i++)
         {
-            if (!predicate(c))
-                return false;
+            if (digits[i] == '_')
+            {
+                if (i == 0 || i == digits.Length - 1 || digits[i - 1] == '_')
+                    return $"`{Written(digits, prefix)}` has a `_` that separates no digits: a separator stands between two of them";
+                continue;
+            }
+            if (!isDigit(digits[i]))
+                return $"invalid {radix} number `{Written(digits, prefix)}`";
         }
-        return true;
+        return null;
+
+        static string Written(ReadOnlySpan<char> digits, char prefix) =>
+            prefix == '\0' ? digits.ToString() : prefix + digits.ToString();
     }
 
     /// <summary>
     /// A character or string literal, up to its closing quote or the end of the line. The
-    /// escapes are <c>\n \r \t \\ \" \' \xHH</c> in both. Returns the first error.
+    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Returns the first error.
     /// </summary>
     private static string? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {
@@ -220,7 +238,7 @@ public static class Lexer
             var escape = pos + 1 < text.Length ? text[pos + 1] : '\0';
             switch (escape)
             {
-                case 'n' or 'r' or 't' or '\\' or '"' or '\'':
+                case 'n' or 'r' or 't' or '0' or '\\' or '"' or '\'':
                     pos += 2;
                     break;
                 case 'x' when pos + 3 < text.Length && char.IsAsciiHexDigit(text[pos + 2]) && char.IsAsciiHexDigit(text[pos + 3]):

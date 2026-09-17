@@ -80,26 +80,26 @@ main__grid:
 COLUMNS = 40
 
 .segment "CODE": absolute
-; .proc indented  main.nt65:121
+; .proc indented  main.nt65:128
 indented:
     lda #1
     rts
 ; end of indented
 
-; .proc move  main.nt65:133
+; .proc move  main.nt65:140
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:136
+; .proc fire  main.nt65:143
 actions__fire:
     jmp actions__move
 ; end of fire
-; .proc wait  main.nt65:139
+; .proc wait  main.nt65:151
 actions__wait:
     rts
 ; end of wait
 
-; .proc slow  main.nt65:146
+; .proc slow  main.nt65:158
 slow:
     ldx #$00 + 1
 slow__delay:
@@ -125,7 +125,7 @@ slow__skip_3:
     rts
 ; end of slow
 
-; .proc run_all  main.nt65:160
+; .proc run_all  main.nt65:172
 run_all:
     jsr actions__move
     jsr actions__fire

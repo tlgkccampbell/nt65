@@ -25,7 +25,7 @@ main:
 main__again:
     jsr trace
     bne main__again
-    ldy #$03
+    ldy #$04
     lda #<LINES
     ldx #>LINES
     rts
@@ -43,7 +43,7 @@ trace:
 
 Cmd__move = $00
 Cmd__fire = $01
-Cmd__wait = $02
+Cmd__wait = $03
 
 .segment "RODATA": absolute
 main__bits:
@@ -64,10 +64,12 @@ main__commands:
     .byte $00
     .byte $01
     .byte $02
+    .byte $03
 
 main__actions_table:
     .addr actions__move
     .addr actions__fire
+    .addr actions__dump
     .addr actions__wait
 
 main__grid:
@@ -81,26 +83,30 @@ main__grid:
 COLUMNS = 80
 
 .segment "CODE": absolute
-; .proc indented  main.nt65:121
+; .proc indented  main.nt65:128
 indented:
     lda #COLUMNS
     rts
 ; end of indented
 
-; .proc move  main.nt65:133
+; .proc move  main.nt65:140
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:136
+; .proc fire  main.nt65:143
 actions__fire:
     jmp actions__move
 ; end of fire
-; .proc wait  main.nt65:139
+; .proc dump  main.nt65:147
+actions__dump:
+    rts
+; end of dump
+; .proc wait  main.nt65:151
 actions__wait:
     rts
 ; end of wait
 
-; .proc slow  main.nt65:146
+; .proc slow  main.nt65:158
 slow:
     ldx #$00 + 1
 slow__delay:
@@ -126,10 +132,11 @@ slow__skip_3:
     rts
 ; end of slow
 
-; .proc run_all  main.nt65:160
+; .proc run_all  main.nt65:172
 run_all:
     jsr actions__move
     jsr actions__fire
+    jsr actions__dump
     jsr actions__wait
     rts
 ; end of run_all

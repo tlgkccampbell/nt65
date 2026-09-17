@@ -29,6 +29,18 @@ lda = 5                     ;! error: `lda` is a mnemonic of the 6502 and cannot
     rts
 }
 
+; A name a letter or two from a declared one says which, so what the editor offers as a fix
+; is what a build at the command line is told.
+.proc spelling {
+    COUNTER = 0
+    ldx #COUNTER
+    lda #COUNTR             ;! error: `COUNTR` is not declared; `COUNTER` is
+@loop:
+    dex
+    bne @lop                ;! error: `@lop` is not declared; `@loop` is
+    rts
+}
+
 .proc reach {
     lda ::@loop             ;! error: `@loop` is a cheap local and cannot be reached with `::`
     lda ::nothing           ;! error: no module `nothing` is in this build

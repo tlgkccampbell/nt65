@@ -10,7 +10,10 @@ namespace Norristown.Semantics;
 /// </summary>
 public static class Literals
 {
-    /// <summary>The value of a number token: <c>$1F</c>, <c>%1010</c> or <c>255</c>.</summary>
+    /// <summary>
+    /// The value of a number token: <c>$1F</c>, <c>%1010</c> or <c>255</c>, with a <c>_</c>
+    /// between digits counting for nothing.
+    /// </summary>
     public static long? Number(string text) => text.Length switch
     {
         0 => null,
@@ -48,6 +51,7 @@ public static class Literals
                 case 'n': text.Append('\n'); break;
                 case 'r': text.Append('\r'); break;
                 case 't': text.Append('\t'); break;
+                case '0': text.Append('\0'); break;
                 case '\\': text.Append('\\'); break;
                 case '"': text.Append('"'); break;
                 case '\'': text.Append('\''); break;
@@ -73,6 +77,10 @@ public static class Literals
         long value = 0;
         foreach (var c in digits)
         {
+            // `_` between digits is a separator and counts for nothing; the lexer has already
+            // said whether it stands where one may.
+            if (c == '_')
+                continue;
             var digit = char.IsAsciiDigit(c) ? c - '0'
                 : char.IsAsciiHexDigit(c) ? char.ToLowerInvariant(c) - 'a' + 10
                 : -1;

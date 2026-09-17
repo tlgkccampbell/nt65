@@ -189,7 +189,7 @@ public static class DataLengths
         Report(operand, model, diagnostics, on,
             operand.Kind == SyntaxKind.CallExpression && at < text.Length
                 ? $"`{operand.ChildNodes[0].GetText().Trim()}` maps `{text[at]}` to $00, which would end the text early: `.strz` writes the zero that ends it"
-                : "the text holds `\\x00`, which would end it early: `.strz` writes the zero that ends it");
+                : "the text holds a zero, which would end it early: `.strz` writes the zero that ends it");
     }
 
     /// <summary>

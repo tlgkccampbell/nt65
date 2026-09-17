@@ -172,20 +172,26 @@ public sealed class SyntaxTree
             // A block's opener and closer lines sit inside it, so they are parsed in its own
             // kind: `}` is the one line a block with a grammar of its own still reads the
             // ordinary way.
-            // A conditional or a repetition inside a data body holds values too, so its lines
-            // read the way the body's own do.
+            // A conditional or a repetition inside a data body holds values too, and a
+            // conditional inside an enum holds members, so their lines read the way the body's
+            // own do.
             if (node.GetSlot(i) is GreenBlock block)
-            {
-                var kind = context == BlockKind.DataBody
-                    && block.BlockKind is BlockKind.If or BlockKind.Repeat or BlockKind.Each
-                    ? BlockKind.DataBody
-                    : block.BlockKind;
-                ParseLines(block, kind, parsed, ref line);
-            }
+                ParseLines(block, Within(context, block.BlockKind), parsed, ref line);
             else
                 parsed[line++] = ((GreenLine)node.GetSlot(i)).Parse(context);
         }
     }
+
+    /// <summary>
+    /// The kind a block's lines read in: its own, unless it is a conditional or a repetition
+    /// inside a body with a line grammar of its own, whose lines are that body's.
+    /// </summary>
+    private static BlockKind Within(BlockKind context, BlockKind block) => (context, block) switch
+    {
+        (BlockKind.DataBody, BlockKind.If or BlockKind.Repeat or BlockKind.Each) => BlockKind.DataBody,
+        (BlockKind.Enum, BlockKind.If) => BlockKind.Enum,
+        _ => block,
+    };
 
     private static int LineEnd(string text, ImmutableArray<int> starts, int line) =>
         line + 1 < starts.Length ? starts[line + 1] : text.Length;
