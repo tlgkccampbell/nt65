@@ -11,8 +11,10 @@
 hw__LINES = $0138
 
 .segment "CODE": absolute
+; .proc main  src/main.nt65:5
 main:
-        lda #50
+    lda #50
     ldx #$01                        ; CHANNELS
     ldy #<hw__LINES
     rts
+; end of main

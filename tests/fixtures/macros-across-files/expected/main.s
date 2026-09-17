@@ -12,28 +12,35 @@ lib__SCREEN = $0400
 .import lib__tiles
 
 .segment "ZEROPAGE": zeropage
-ptr:    .res 2
+ptr: .res 2
 
 .segment "CODE": absolute
+; .proc delay__loop  main.nt65:13
 delay__loop:
     rts
+; end of delay__loop
 
+; .proc main  main.nt65:17
 main:
     ; set16!(ptr, lib::SCREEN)  main.nt65:18
     lda #<lib__SCREEN
     sta z:ptr
     lda #>lib__SCREEN
     sta z:ptr+1
+    ; end of set16!
     ; delay!(4)  main.nt65:19
     ldx #4
 delay__loop_2:
     lda a:lib__tiles
     dex
     bne delay__loop_2
+    ; end of delay!
     ; delay!(8)  main.nt65:20
     ldx #8
 delay__loop_3:
     lda a:lib__tiles
     dex
     bne delay__loop_3
+    ; end of delay!
     rts
+; end of main

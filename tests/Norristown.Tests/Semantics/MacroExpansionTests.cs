@@ -37,13 +37,16 @@ public sealed class MacroExpansionTests
             ptr = $10
 
             .segment "CODE": absolute
+            ; .proc main  main.nt65:13
             main:
                 ; set16!(ptr, SCREEN)  main.nt65:14
                 lda #<SCREEN
                 sta z:ptr
                 lda #>SCREEN
                 sta z:ptr+1
+                ; end of set16!
                 rts
+            ; end of main
             """, Body("""
             .macro set16(dest: operand, value) {
                 lda #<value
@@ -132,16 +135,19 @@ public sealed class MacroExpansionTests
             ptr = $10
 
             .segment "CODE": absolute
+            ; .proc main  main.nt65:13
             main:
                 ldy #0
                 ; times_x!(8)  main.nt65:15
                 ldx #8
             times_x__loop:
-                    sta (ptr),y
-                    iny
+                sta (ptr),y
+                iny
                 dex
                 bne times_x__loop
+                ; end of times_x!
                 rts
+            ; end of main
             """, Body("""
             .macro times_x(count, body: block) {
                 ldx #count
@@ -202,12 +208,15 @@ public sealed class MacroExpansionTests
     {
         Assert.Equal("""
             .segment "CODE": absolute
+            ; .proc main  main.nt65:17
             main:
                 ; push!(a, x, y)  main.nt65:18
-                        pha
-                        phx
-                        phy
+                pha
+                phx
+                phy
+                ; end of push!
                 rts
+            ; end of main
             """, Body("""
             .cpu 65c02
 

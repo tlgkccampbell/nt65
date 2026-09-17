@@ -54,7 +54,7 @@ public sealed class DesignCorpusTests
 
     /// <summary>
     /// Every ca65 example is what nt65 writes: its lines, one after another, in a fixture's
-    /// expected output. The design leaves out blank lines and the <c>.dbg line</c> directives.
+    /// expected output. The design leaves out blank lines.
     /// </summary>
     [Fact]
     public void EveryCa65CodeBlockIsFixtureOutput()
@@ -62,7 +62,7 @@ public sealed class DesignCorpusTests
         static List<string> Lines(string text) =>
             [.. text.ReplaceLineEndings("\n").Split('\n')
                 .Select(line => line.TrimEnd())
-                .Where(line => line.Length > 0 && !line.StartsWith(".dbg line", StringComparison.Ordinal))];
+                .Where(line => line.Length > 0)];
 
         var outputs = Directory.GetFiles(Repo.Path("tests", "fixtures"), "*.s", SearchOption.AllDirectories)
             .Select(path => Lines(Repo.ReadText(path)))

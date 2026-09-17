@@ -11,24 +11,29 @@
 .export macros__copy_twice
 
 .segment "ZEROPAGE": zeropage
-ptr: .res 2
+ptr:   .res 2
 other: .res 2
 
 .segment "CODE": absolute
+; .proc copy_twice  macros.nt65:27
 macros__copy_twice:
     ; mov16!(ptr, {#$0400})  macros.nt65:28
     lda #$00
     sta z:ptr
     lda #$04
     sta z:ptr+1
+    ; end of mov16!
     ; times_x!(2)  macros.nt65:29
     ldx #2
 times_x__loop:
-        ; mov16!(ptr, other)  macros.nt65:30
+    ; mov16!(ptr, other)  macros.nt65:30
     lda z:other
     sta z:ptr
     lda z:other+1
     sta z:ptr+1
+    ; end of mov16!
     dex
     bne times_x__loop
+    ; end of times_x!
     rts
+; end of copy_twice

@@ -26,29 +26,30 @@
 .export gfx__init
 
 .segment "ZEROPAGE": zeropage
-gfx__ptr:    .res 2
+gfx__ptr: .res 2
 
 gfx__SCREEN = $0400
 rows   = 25
 
-    gfx__Color__black = $00
-    gfx__Color__white = $01
+gfx__Color__black = $00
+gfx__Color__white = $01
 
 gfx__Sprite__x = $00
 gfx__Sprite__y = $01
 gfx__Sprite__sizeof = $02
 
-    gfx__palette__border = $0f
-    gfx__palette__ink    = rows - 24
+gfx__palette__border = $0f
+gfx__palette__ink    = rows - 24
 
 .segment "RODATA": absolute
 gfx__tables:
-    gfx__tables__lo: .byte 1, 2
+gfx__tables__lo: .byte 1, 2
 tables__middle:
-    gfx_high_bytes: .byte 3, 4
+gfx_high_bytes: .byte 3, 4
     .addr tables__middle
 
 .segment "CODE": absolute
+; .proc clear  gfx.nt65:56
 gfx__clear:
 
     ldy #0
@@ -58,7 +59,10 @@ gfx__clear__again:
     bne gfx__clear__again
     rts
 gfx__clear__end:
+; end of clear
 
+; .proc init  gfx.nt65:69
 gfx__init:
     lda #gfx__palette__border
     jmp gfx__clear
+; end of init

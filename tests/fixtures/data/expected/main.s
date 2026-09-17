@@ -21,35 +21,22 @@
 SCREEN = $0400
 
 .segment "RODATA": absolute
-table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-main__words: .word $1234, table
-main__wide: .dword $12345678
-main__here: .addr table
-main__there: .faraddr table
+table:          .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
+main__words:    .word $1234, table
+main__wide:     .dword $12345678
+main__here:     .addr table
+main__there:    .faraddr table
 main__greeting: .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
 main__padding:
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
+    .res 16, $ff
 main__escaped: .byte $61, $0a, $62, $7f  ; "a\nb", '\x7f'
-main__bytes: .byte <SCREEN, >SCREEN, SCREEN .mod 256
-main__sums: .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
+main__bytes:   .byte <SCREEN, >SCREEN, SCREEN .mod 256
+main__sums:    .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
 
 .segment "CODE": absolute
+; .proc use  main.nt65:27
 use:
     lda #$20                        ; ' '
     lda a:table+1
     rts
+; end of use

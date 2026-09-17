@@ -30,45 +30,31 @@
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what main.nt65 was built against"
 .import raw
 
-CHROUT = $FFD2
+CHROUT = $ffd2
 alias = main__fill_page
 
 main__SCREEN       = $0400
 main__SCREEN_PAGES = 4
 
 .segment "ZEROPAGE": zeropage
-ptr:        .res 2
+ptr:         .res 2
 main__frame: .res 1
 
 .segment "RODATA": absolute
-table:      .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
-main__words: .word $1234, table
-main__wide: .dword $12345678
-main__here: .addr table
-main__there: .faraddr table
+table:          .byte 1, 2, $ff, $41, $74, $65, $78, $74  ; 'A', "text"
+main__words:    .word $1234, table
+main__wide:     .dword $12345678
+main__here:     .addr table
+main__there:    .faraddr table
 main__greeting: .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
 
-main__imported: .addr _printf, tick, reset, raw, $d020, zp_scratch  ; VIC_BORDER
+main__imported:   .addr _printf, tick, reset, raw, $d020, zp_scratch  ; VIC_BORDER
 main__far_import: .faraddr far_table
 main__padding:
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
-        .byte $ff
+    .res 16, $ff
 
 .segment "CODE": absolute
+; .proc fill_page: a8, i16 -> a8, i16  main.nt65:45
 main__fill_page:
     .i16
     ldy #0
@@ -77,32 +63,43 @@ fill_page__loop:
     iny
     bne fill_page__loop
     rts
+; end of fill_page
 
+; .proc render: a16, i8 -> a8, i8  main.nt65:55
 render:
-        .i8
-        ldx #0
-    render__loop:
-        stz a:$0200,x
-        inx
-        bne render__loop
+    .i8
+    ldx #0
+render__loop:
+    stz a:$0200,x
+    inx
+    bne render__loop
 
 .pushseg
 .segment "RODATA": absolute
-    render__shifts: .byte 1, 2, 4, 8
+render__shifts: .byte 1, 2, 4, 8
 .popseg
 
     ldx a:render__shifts
     sep #$20
     rts
+; end of render
 
+; .proc hud: a8, i16, dp = $2100, dbr = $7e  main.nt65:71
 hud:
     rts
+; end of hud
 
+; .proc show: a*, i*, e*, near, inline .strz  main.nt65:75
 show:
     rts
+; end of show
 
+; .proc skip2: far, inline 2  main.nt65:79
 skip2:
     rtl
+; end of skip2
 
-    gfx__init:
-        rts
+; .proc init: a8, i8  main.nt65:85
+gfx__init:
+    rts
+; end of init

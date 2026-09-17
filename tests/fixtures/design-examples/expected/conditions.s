@@ -19,46 +19,58 @@
 conditions__table: .res 32
 
 .segment "CODE": absolute
+; .proc trace: a8, i8  conditions.nt65:12
 trace:
     rts
+; end of trace
 
+; .proc run: a8, i8  conditions.nt65:16
 conditions__run:
     jsr trace
     rts
+; end of run
 
 .segment "RODATA": absolute
 conditions__bits:
-        .byte 1 << $00              ; i
-        .byte 1 << $01              ; i
-        .byte 1 << $02              ; i
-        .byte 1 << $03              ; i
-        .byte 1 << $04              ; i
-        .byte 1 << $05              ; i
-        .byte 1 << $06              ; i
-        .byte 1 << $07              ; i
+    .byte 1 << $00
+    .byte 1 << $01
+    .byte 1 << $02
+    .byte 1 << $03
+    .byte 1 << $04
+    .byte 1 << $05
+    .byte 1 << $06
+    .byte 1 << $07
 
-    conditions__LINES = 262
+conditions__LINES = 262
 
 .segment "CODE": absolute
+; .proc move: a8, i8  conditions.nt65:50
 move:
     rts
+; end of move
 
+; .proc fire: a8, i8  conditions.nt65:54
 fire:
     rts
+; end of fire
 
-    Cmd__move = $00
-    Cmd__fire = $01
+Cmd__move = $00
+Cmd__fire = $01
 
-    actions__move:
-        rts
-    actions__fire:
-        rts
+; .proc move: a8, i8  conditions.nt65:68
+actions__move:
+    rts
+; end of move
+; .proc fire: a8, i8  conditions.nt65:71
+actions__fire:
+    rts
+; end of fire
 
 .segment "RODATA": absolute
 conditions__dispatch:
-        .addr move - 1              ; h
-        .addr fire - 1              ; h
+    .addr move - 1
+    .addr fire - 1
 
 conditions__actions_table:
-        .addr actions__move
-        .addr actions__fire
+    .addr actions__move
+    .addr actions__fire

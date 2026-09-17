@@ -12,6 +12,7 @@
 .export state__long_work
 
 .segment "CODE": absolute
+; .proc clear_line: std  state.nt65:10
 state__clear_line:
     rep #$20
     .a16
@@ -26,9 +27,12 @@ clear_line__loop:
     bne clear_line__loop
     sep #$20
     rts
+; end of clear_line
 
+; .proc long_work: std, far  state.nt65:24
 state__long_work:
     rep #$20
     lda #$1234
     sep #$20
     rtl
+; end of long_work

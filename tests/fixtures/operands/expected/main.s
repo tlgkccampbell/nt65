@@ -9,11 +9,11 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "ZEROPAGE": zeropage
-ptr:        .res 2
-vector:     .res 2
+ptr:    .res 2
+vector: .res 2
 
 .segment "BSS": absolute
-buf:        .res 256
+buf: .res 256
 
 hi = $12
 lo = $34
@@ -21,6 +21,7 @@ lo = $34
 CHROUT = $ffd2
 
 .segment "CODE": absolute
+; .proc forms  main.nt65:22
 forms:
     inx
     asl
@@ -46,3 +47,4 @@ forms:
     jsr CHROUT
 forms__loop:
     rts
+; end of forms

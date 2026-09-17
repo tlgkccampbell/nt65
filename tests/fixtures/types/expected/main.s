@@ -23,13 +23,13 @@
 .export main__as_byte
 .export main__as_nothing
 
-    Color__red = $00
-    Color__green = $05
-    Color__blue = $06
+Color__red = $00
+Color__green = $05
+Color__blue = $06
 
-    Reg__a = $00
-    Reg__x = $01
-    Reg__y = $02
+Reg__a = $00
+Reg__x = $01
+Reg__y = $02
 
 MAX_ACTORS = 3
 
@@ -38,29 +38,30 @@ player: .res 13                     ; Player
 actors: .res 39                     ; Player
 
 .segment "RODATA": absolute
-main__sizes: .byte $0d, $04, $02
+main__sizes:  .byte $0d, $04, $02
 main__counts: .byte $03, $03
-main__offs: .byte $02, $04, $02     ; Player::pos::y, Player::hp, Point::y
+main__offs:   .byte $02, $04, $02   ; Player::pos::y, Player::hp, Point::y
 
-main__plain: .byte $48, $49         ; "HI"
+main__plain:  .byte $48, $49        ; "HI"
 main__mapped: .byte $08, $09, $00   ; screen("HI@")
-main__one: .byte $1a                ; screen('Z')
+main__one:    .byte $1a             ; screen('Z')
 
 main__color: .word $1f              ; rgb15(31, 0, 0)
 main__table: .byte $00, $05, $06    ; handlers
-main__lo: .lobytes $00, $05, $06    ; handlers
+main__lo:    .lobytes $00, $05, $06  ; handlers
 
 boss:
     .word $64                       ; pos::x
     .word $28                       ; pos::y
     .byte $63                       ; hp
-    .byte $00, $00, $00, $00, $00, $00, $00, $00  ; name
+    .res 8, $00                     ; name
 
 hero:
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $03                       ; hp
-    .byte $5a, $49, $50, $00, $00, $00, $00, $00  ; name
+    .byte $5a, $49, $50             ; name
+    .res 5, $00                     ; name
 
 main__blob: .incbin "sprites.bin"
 main__part: .incbin "sprites.bin", 6, 4
@@ -71,6 +72,7 @@ main__part: .incbin "sprites.bin", 6, 4
 cursor: .res 13                     ; Player
 
 .segment "CODE": absolute
+; .proc main  main.nt65:91
 main:
 
     lda a:player+4                  ; player::hp
@@ -82,6 +84,7 @@ main:
     ldx #Reg__x
     lda #$0d
     rts
+; end of main
 
 .segment "RODATA": absolute
 main__as_word:

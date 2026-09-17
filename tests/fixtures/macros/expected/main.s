@@ -12,115 +12,139 @@
 .export main__greeting
 
 .segment "ZEROPAGE": zeropage
-ptr:        .res 2
-other:      .res 2
-pair:       .res 2                  ; Pair
+ptr:   .res 2
+other: .res 2
+pair:  .res 2                       ; Pair
 
 SCREEN = $0400
 C4     = 60
 E4     = 64
 
 .segment "CODE": absolute
+; .proc main  main.nt65:100
 main:
     ; set16!(ptr, SCREEN)  main.nt65:101
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
     sta z:ptr+1
+    ; end of set16!
     ; set16!({buf,x}, $1234)  main.nt65:102
     lda #<$1234
     sta a:buf,x
     lda #>$1234
     sta a:buf+1,x
+    ; end of set16!
     ; mov16!(ptr, {#SCREEN})  main.nt65:103
     lda #$00
     sta z:ptr
     lda #$04
     sta z:ptr+1
+    ; end of mov16!
     ; mov16!(ptr, other)  main.nt65:104
     lda z:other
     sta z:ptr
     lda z:other+1
     sta z:ptr+1
+    ; end of mov16!
     ; mov16!(ptr, pair::lo)  main.nt65:105
     lda z:pair                      ; pair::lo
     sta z:ptr
     lda z:pair+1                    ; pair::lo
     sta z:ptr+1
+    ; end of mov16!
 
     ; push!(a, x, y)  main.nt65:107
-            pha
-            phx
-            phy
+    pha
+    phx
+    phy
+    ; end of push!
 
     ldy #0
     ; times_x!(8)  main.nt65:110
     ldx #8
 times_x__loop:
-        sta (ptr),y
-        iny
+    sta (ptr),y
+    iny
     dex
     bne times_x__loop
+    ; end of times_x!
 
     ; times_x!(2)  main.nt65:116
     ldx #2
 times_x__loop_2:
-        ; set16!(ptr, SCREEN)  main.nt65:117
+    ; set16!(ptr, SCREEN)  main.nt65:117
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
     sta z:ptr+1
+    ; end of set16!
     dex
     bne times_x__loop_2
+    ; end of times_x!
 
     lda a:count
     cmp #10
     ; if!(cs)  main.nt65:122
     ; branch_unless!(c, @skip)  main.nt65:89
-        bcc if__skip
-        lda #0
-        jmp if__done
+    bcc if__skip
+    ; end of branch_unless!
+    lda #0
+    jmp if__done
 if__skip:
-        inx
+    inx
 if__done:
+    ; end of if!
 
     ; if!(eq)  main.nt65:128
     ; branch_unless!(c, @skip)  main.nt65:89
-        bne if__skip_2
-        nop
+    bne if__skip_2
+    ; end of branch_unless!
+    nop
 if__skip_2:
 if__done_2:
+    ; end of if!
 
     ; if!(ne)  main.nt65:134
     ; branch_unless!(c, @skip)  main.nt65:89
-        beq if__skip_3
-        ; if!(cc)  main.nt65:135
+    beq if__skip_3
+    ; end of branch_unless!
+    ; if!(cc)  main.nt65:135
     ; branch_unless!(c, @skip)  main.nt65:89
-        bcs if__skip_4
-            iny
-        jmp if__done_3
+    bcs if__skip_4
+    ; end of branch_unless!
+    iny
+    jmp if__done_3
 if__skip_4:
-            ; if!(eq)  main.nt65:138
+    ; if!(eq)  main.nt65:138
     ; branch_unless!(c, @skip)  main.nt65:89
-        bne if__skip_5
-                dey
+    bne if__skip_5
+    ; end of branch_unless!
+    dey
 if__skip_5:
 if__done_4:
+    ; end of if!
 if__done_3:
+    ; end of if!
 if__skip_3:
 if__done_5:
+    ; end of if!
     rts
+; end of main
 
 .segment "BSS": absolute
-buf:    .res 256
-count:  .res 1
+buf:   .res 256
+count: .res 1
 
 .segment "RODATA": absolute
 main__tune:
     ; note!(C4, frames = 8)  main.nt65:152
     .byte C4, 8
+    ; end of note!
     ; note!(E4)  main.nt65:153
     .byte E4, 1
+    ; end of note!
 main__greeting:
     ; message!("HI")  main.nt65:156
     .byte $48, $49, $00             ; "HI"
+    ; end of message!

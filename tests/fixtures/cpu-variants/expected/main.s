@@ -9,19 +9,22 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "ZEROPAGE": zeropage
-flags:    .res 1
+flags: .res 1
 
 .segment "CODE": absolute
+; .proc main  main.nt65:22
 main:
     phx
     stz z:flags
     ; set_ready!(flags)  main.nt65:25
-        lda z:flags
-        ora #%00001000
-        sta z:flags
-        bbs3 flags, main__done
+    lda z:flags
+    ora #%00001000
+    sta z:flags
+    ; end of set_ready!
+    bbs3 flags, main__done
     nop
 main__done:
     plx
-        wai
+    wai
     rts
+; end of main

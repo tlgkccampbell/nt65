@@ -16,10 +16,11 @@ main__WIDTH = 40
 
 DEPTH = 3
 
-    Mode__idle = $00
-    Mode__busy = $01
+Mode__idle = $00
+Mode__busy = $01
 
 .segment "CODE": absolute
+; .proc main: a8, i8  main.nt65:33
 main:
     .a8
     lda #Mode__busy
@@ -33,17 +34,20 @@ main__dead:
 
 main__hook:
     rts
+; end of main
 
 .segment "RODATA": absolute
-table:  .res 3
+table: .res 3
 
 .segment "CODE": absolute
+; .proc detour: a8, i8  main.nt65:53
 main__detour:
 
 .pushseg
 .segment "RODATA": absolute
-        nop
-        rts
+    nop
+    rts
 .popseg
 
     rts
+; end of detour

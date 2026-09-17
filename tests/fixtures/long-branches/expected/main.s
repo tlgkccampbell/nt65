@@ -9,69 +9,75 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "CODE": absolute
+; .proc close_by  main.nt65:12
 close_by:
     lda a:count
     beq close_by__out
     inc a:count
 close_by__out:
     rts
+; end of close_by
 
+; .proc way_off  main.nt65:21
 way_off:
     lda a:count
     bne way_off__over
     jmp way_off__out
 way_off__over:
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
-        sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
+    sta a:count
 way_off__out:
     rts
+; end of way_off
 
+; .proc looping  main.nt65:33
 looping:
 looping__top:
     dec a:count
     bne looping__top
     rts
+; end of looping
 
 .segment "BSS": absolute
-count:  .res 1
+count: .res 1

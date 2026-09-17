@@ -8,8 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
-    Cmd__move = $00
-    Cmd__fire = $01
+Cmd__move = $00
+Cmd__fire = $01
 
 .segment "ZEROPAGE": zeropage
 cursor: .res 2
@@ -27,17 +27,17 @@ gradient__end:
 lut: .byte 1, 2, 4, 8
 lut__end:
 row_lo:
-        .byte $00 * 40              ; i
-        .byte $01 * 40              ; i
-        .byte $02 * 40              ; i
-        .byte $03 * 40              ; i
-        .byte $04 * 40              ; i
+    .byte $00 * 40
+    .byte $01 * 40
+    .byte $02 * 40
+    .byte $03 * 40
+    .byte $04 * 40
 row_lo__end:
 text: .byte $68, $69, $00           ; "hi"
 text__end:
 handlers:
-        .addr actions__move
-        .addr actions__fire
+    .addr actions__move
+    .addr actions__fire
 handlers__end:
 hero:
     .byte $01                       ; pos::x
@@ -47,35 +47,36 @@ hero:
     .byte $48, $45, $52, $4f        ; name
 hero__end:
 sprites:
-        .byte $0a                   ; pos::x
-        .byte $00                   ; pos::y
-        .word $00                   ; tile
-        .res 3                      ; colors
-        .byte $41, $20, $20, $20    ; name
-        .byte $14                   ; pos::x
-        .byte $1e                   ; pos::y
-        .word $00                   ; tile
-        .res 3                      ; colors
-        .byte $20, $20, $20, $20    ; name
-        .byte $00                   ; pos::x
-        .byte $00                   ; pos::y
-        .word $0300                 ; tile
-        .res 3                      ; colors
-        .byte $20, $20, $20, $20    ; name
+    .byte $0a                       ; pos::x
+    .byte $00                       ; pos::y
+    .word $00                       ; tile
+    .res 3                          ; colors
+    .byte $41                       ; name
+    .res 3, $20                     ; name
+    .byte $14                       ; pos::x
+    .byte $1e                       ; pos::y
+    .word $00                       ; tile
+    .res 3                          ; colors
+    .res 4, $20                     ; name
+    .byte $00                       ; pos::x
+    .byte $00                       ; pos::y
+    .word $0300                     ; tile
+    .res 3                          ; colors
+    .res 4, $20                     ; name
 sprites__end:
 blank:
     .byte $00                       ; pos::x
     .byte $00                       ; pos::y
     .word $00                       ; tile
     .res 3                          ; colors
-    .byte $20, $20, $20, $20        ; name
+    .res 4, $20                     ; name
 blank__end:
 vectors:
-    vectors__native: .addr 0, main
+vectors__native: .addr 0, main
     .byte $ff
 vectors__middle:
-    vectors__emulation:
-        .addr main, vectors__middle
+vectors__emulation:
+    .addr main, vectors__middle
 vectors__end:
 
 .assert (cursor__end - cursor) = $02, lderror, "cursor"
@@ -93,11 +94,16 @@ vectors__end:
 .assert (vectors__emulation - vectors) = ($04 + 1), lderror, "vectors::emulation"
 
 .segment "CODE": absolute
-    actions__move:
-        rts
-    actions__fire:
-        rts
+; .proc move  main.nt65:94
+actions__move:
+    rts
+; end of move
+; .proc fire  main.nt65:97
+actions__fire:
+    rts
+; end of fire
 
+; .proc main  main.nt65:102
 main:
 
     ldx #2 * $0b
@@ -108,3 +114,4 @@ main:
     lda z:cursor
     sta a:buffer
     jmp (handlers)
+; end of main

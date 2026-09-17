@@ -9,13 +9,14 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "ZEROPAGE": zeropage
-ptr:        .res 2
-flags:      .res 1
+ptr:   .res 2
+flags: .res 1
 
 .segment "RODATA": absolute
-table:      .byte 1, 2, 4, 8
+table: .byte 1, 2, 4, 8
 
 .segment "CODE": absolute
+; .proc forms  main.nt65:15
 forms:
     lda (ptr)
     sta (ptr)
@@ -37,3 +38,4 @@ forms:
     bbs7 flags, forms__skip
 forms__skip:
     rts
+; end of forms

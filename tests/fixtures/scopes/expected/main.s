@@ -9,52 +9,60 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "ZEROPAGE": zeropage
-palette:    .res 32
-frames:     .res 1
+palette: .res 32
+frames:  .res 1
 
-    gfx__COUNT = 32
+gfx__COUNT = 32
 
 .segment "CODE": absolute
-    gfx__init:
-        ldx #gfx__COUNT
-        dec z:frames
-    gfx__init__loop:
-        stz z:palette,x
-        dex
-        bpl gfx__init__loop
-        rts
+; .proc init  main.nt65:15
+gfx__init:
+    ldx #gfx__COUNT
+    dec z:frames
+gfx__init__loop:
+    stz z:palette,x
+    dex
+    bpl gfx__init__loop
+    rts
+; end of init
 
+; .proc reset  main.nt65:27
 reset:
-        ldx #0
-    reset__loop:
-        sta a:$0200,x
-        inx
-        bne reset__loop
-        ldx #31
-    reset__loop_2:
-        stz z:palette,x
-        dex
-        bpl reset__loop_2
+    ldx #0
+reset__loop:
+    sta a:$0200,x
+    inx
+    bne reset__loop
+    ldx #31
+reset__loop_2:
+    stz z:palette,x
+    dex
+    bpl reset__loop_2
     jmp reset__done
 reset__done:
     rts
+; end of reset
 
+; .proc draw  main.nt65:49
 draw:
     ldx #0
-        bne draw__done
+    bne draw__done
 draw__done:
     lda a:draw__table,x
 
 .pushseg
 .segment "RODATA": absolute
-    draw__table: .byte 1, 2, 4, 8
+draw__table: .byte 1, 2, 4, 8
 .popseg
 
     rts
+; end of draw
 
+; .proc main  main.nt65:62
 main:
     jsr gfx__init
     lda #gfx__COUNT
     lda a:draw__table
     jsr reset
     rts
+; end of main

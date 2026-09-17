@@ -11,6 +11,7 @@
 .export main__dispatch
 
 .segment "CODE": absolute
+; .proc dispatch  main.nt65:16
 main__dispatch:
     lda a:cmd
     asl a
@@ -25,7 +26,9 @@ dispatch__move:
 dispatch__fire:
     lda #2
     rts
+; end of dispatch
 
+; .proc set  main.nt65:35
 set:
     beq set__set_two
     lda #1
@@ -35,14 +38,17 @@ set__set_two:
 set__store:
     sta a:value
     rts
+; end of set
 
+; .proc patching  main.nt65:49
 patching:
     lda #$60
 patching__op:
     sta a:$0400
     sta a:patching__op+1
     rts
+; end of patching
 
 .segment "BSS": absolute
-cmd:    .res 1
-value:  .res 1
+cmd:   .res 1
+value: .res 1

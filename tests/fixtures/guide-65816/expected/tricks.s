@@ -14,6 +14,7 @@
 command: .res 1
 
 .segment "CODE": absolute
+; .proc dispatch: a8, i8  tricks.nt65:11
 tricks__dispatch:
     lda z:command
     asl a
@@ -26,3 +27,4 @@ dispatch__cmd_move:
     rts
 dispatch__cmd_fire:
     rts
+; end of dispatch

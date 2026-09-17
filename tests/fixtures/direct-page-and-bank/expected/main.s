@@ -24,22 +24,25 @@
 HUD_PAGE = $0300
 
 .segment "ZP2": zeropage
-ptr:    .res 2
+ptr: .res 2
 
 .segment "HUD": zeropage
-lives:  .res 1
+lives: .res 1
 
 .segment "WRAM": absolute
-score:  .res 2
+score: .res 2
 
 .segment "CODE": absolute
+; .proc hud: a8, i16, dp = $2100, dbr = $7e  main.nt65:24
 main__hud:
     lda z:ptr
     sta a:score
     ldy a:score,x
     lda f:score
     rts
+; end of hud
 
+; .proc setup: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:33
 main__setup:
     .a16
     lda #$2100
@@ -52,13 +55,17 @@ main__setup:
     rep #$20
     lda z:ptr
     rts
+; end of setup
 
+; .proc pushed: a8, i8 -> a8, i8, dp = $0300  main.nt65:46
 main__pushed:
     pea HUD_PAGE
     pld
     lda z:lives
     rts
+; end of pushed
 
+; .proc keep: a8, i8  main.nt65:55
 main__keep:
     phd
     phb
@@ -72,47 +79,64 @@ main__keep:
     plb
     pld
     rts
+; end of keep
 
+; .proc registers: a8, i8, dp = $2100  main.nt65:71
 main__registers:
     lda z:$05
     sta z:$00,x
     rts
+; end of registers
 
+; .proc ppu: a8, i8, dbr = $80  main.nt65:78
 main__ppu:
     sta a:$2100
     stz a:$4200
     sta f:$7e2100
     pea $2100
     rts
+; end of ppu
 
 .segment "BANK1": absolute
+; .proc from_k: a8, i8 -> a8, i8, dbr = $01  main.nt65:88
 main__from_k:
     phk
     plb
     rts
+; end of from_k
 
 .segment "CODE": absolute
+; .proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:96
 main__caller:
     jsr main__setup
     lda z:ptr
     sta a:score
     rts
+; end of caller
 
+; .proc move: a16, i16 -> a16, i16, dbr = $7e  main.nt65:104
 main__move:
     mvn #$00, #$7e
     sta a:score
     rts
+; end of move
 
+; .proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100  main.nt65:111
 main__relay:
     beq relay__skip
     lda #1
 relay__skip:
     lda z:ptr
     rts
+; end of relay
 
+; .proc fast: a8, i8, dp = $2180  main.nt65:120
 main__fast:
     lda z:$01
     rts
+; end of fast
 
+; .proc tail: a8, i16, dp = $2100, dbr = $7e  main.nt65:126
 main__tail:
     jmp main__hud
+; end of tail

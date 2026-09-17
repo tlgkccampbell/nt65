@@ -35,7 +35,8 @@ public sealed class ExtentTests
     {
         var written = Written(".proc f {\n    nop\n}\n\n.proc g {\n    rts\n}\n\n.data n: .word .spanof(f)\n");
 
-        Assert.Contains("    nop\nf__end:\n\ng:\n", written, StringComparison.Ordinal);
+        Assert.Contains("    nop\nf__end:\n; end of f\n", written, StringComparison.Ordinal);
+        Assert.Contains("; .proc g  main.nt65:7\ng:\n", written, StringComparison.Ordinal);
     }
 
     /// <summary>Data is measured the same way, whether it holds elements or is mixed.</summary>

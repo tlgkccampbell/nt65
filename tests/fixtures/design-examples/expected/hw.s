@@ -18,25 +18,33 @@
 .export hw__clear__again
 .export hw__set_border
 
-    hw__VOICES = 3
+hw__VOICES = 3
 
 hw__K = $1234
 
-hw__BORDER = $D020
+hw__BORDER = $d020
 .segment "CODE": absolute
+; .proc init  hw.nt65:19
 _init:
     rts
+; end of init
 hw__vectors:
-    hw__vectors__native: .res 16
+hw__vectors__native: .res 16
 
+; .proc fill_page: a8, i8  hw.nt65:27
 hw__fill_page:
     rts
+; end of fill_page
 
+; .proc clear: a8, i8  hw.nt65:31
 clear:
     rts
 hw__clear__again:
     rts
+; end of clear
 
+; .proc set_border: a8, i8  hw.nt65:38
 hw__set_border:
     sta a:hw__BORDER
     rts
+; end of set_border

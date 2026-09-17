@@ -15,6 +15,7 @@
 segments__scratch: .res 1
 
 .segment "CODE": absolute
+; .proc draw  segments.nt65:13
 segments__draw:
     ldx #3
 draw__loop:
@@ -25,5 +26,6 @@ draw__loop:
 
 .pushseg
 .segment "RODATA": absolute
-        draw__table: .byte 1, 2, 4, 8
+draw__table: .byte 1, 2, 4, 8
 .popseg
+; end of draw

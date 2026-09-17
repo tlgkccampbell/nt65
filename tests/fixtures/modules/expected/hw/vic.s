@@ -14,6 +14,8 @@
 hw__vic__BORDER = $d020
 
 .segment "CODE": absolute
+; .proc set_border  vic.nt65:10
 hw__vic__set_border:
     sta a:hw__vic__BORDER
     rts
+; end of set_border

@@ -12,11 +12,15 @@
 .export main__memcpy
 
 .segment "CODE": absolute
+; .proc putc: ?, near  main.nt65:21
 main__putc:
     sta a:$d000
     rts
+; end of putc
 
+; .proc memcpy: shared  main.nt65:27
 main__memcpy:
     lda z:$10
     sta z:$11
     rts
+; end of memcpy

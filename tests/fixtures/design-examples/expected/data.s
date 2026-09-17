@@ -24,60 +24,69 @@
 SCREEN = $0400
 
 .segment "CODE": absolute
+; .proc move: a8, i8  data.nt65:21
 move:
     rts
+; end of move
 
+; .proc fire: a8, i8  data.nt65:25
 fire:
     rts
+; end of fire
 
+; .proc jump: a8, i8  data.nt65:29
 jump:
     rts
+; end of jump
 
+; .proc quit: a8, i8  data.nt65:33
 quit:
     rts
+; end of quit
 
 .segment "RODATA": absolute
 data__player_x: .res 2
-data__buffer: .res 64
+data__buffer:   .res 64
 data__gradient: .byte 40, $e0, 0
 data__row_lo:
-        .byte <(SCREEN + ($00 * 40))  ; r
-        .byte <(SCREEN + ($01 * 40))  ; r
-        .byte <(SCREEN + ($02 * 40))  ; r
-        .byte <(SCREEN + ($03 * 40))  ; r
-        .byte <(SCREEN + ($04 * 40))  ; r
-        .byte <(SCREEN + ($05 * 40))  ; r
-        .byte <(SCREEN + ($06 * 40))  ; r
-        .byte <(SCREEN + ($07 * 40))  ; r
-        .byte <(SCREEN + ($08 * 40))  ; r
-        .byte <(SCREEN + ($09 * 40))  ; r
-        .byte <(SCREEN + ($0a * 40))  ; r
-        .byte <(SCREEN + ($0b * 40))  ; r
-        .byte <(SCREEN + ($0c * 40))  ; r
-        .byte <(SCREEN + ($0d * 40))  ; r
-        .byte <(SCREEN + ($0e * 40))  ; r
-        .byte <(SCREEN + ($0f * 40))  ; r
-        .byte <(SCREEN + ($10 * 40))  ; r
-        .byte <(SCREEN + ($11 * 40))  ; r
-        .byte <(SCREEN + ($12 * 40))  ; r
-        .byte <(SCREEN + ($13 * 40))  ; r
-        .byte <(SCREEN + ($14 * 40))  ; r
-        .byte <(SCREEN + ($15 * 40))  ; r
-        .byte <(SCREEN + ($16 * 40))  ; r
-        .byte <(SCREEN + ($17 * 40))  ; r
-        .byte <(SCREEN + ($18 * 40))  ; r
+    .byte <(SCREEN + ($00 * 40))
+    .byte <(SCREEN + ($01 * 40))
+    .byte <(SCREEN + ($02 * 40))
+    .byte <(SCREEN + ($03 * 40))
+    .byte <(SCREEN + ($04 * 40))
+    .byte <(SCREEN + ($05 * 40))
+    .byte <(SCREEN + ($06 * 40))
+    .byte <(SCREEN + ($07 * 40))
+    .byte <(SCREEN + ($08 * 40))
+    .byte <(SCREEN + ($09 * 40))
+    .byte <(SCREEN + ($0a * 40))
+    .byte <(SCREEN + ($0b * 40))
+    .byte <(SCREEN + ($0c * 40))
+    .byte <(SCREEN + ($0d * 40))
+    .byte <(SCREEN + ($0e * 40))
+    .byte <(SCREEN + ($0f * 40))
+    .byte <(SCREEN + ($10 * 40))
+    .byte <(SCREEN + ($11 * 40))
+    .byte <(SCREEN + ($12 * 40))
+    .byte <(SCREEN + ($13 * 40))
+    .byte <(SCREEN + ($14 * 40))
+    .byte <(SCREEN + ($15 * 40))
+    .byte <(SCREEN + ($16 * 40))
+    .byte <(SCREEN + ($17 * 40))
+    .byte <(SCREEN + ($18 * 40))
 data__handlers: .addr move, fire, jump, quit
 data__header:
-    .byte $4e, $54, $36, $35, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; title
+    .byte $4e, $54, $36, $35        ; title
+    .res 17, $20                    ; title
 data__sprites:
-        .byte $0a                   ; x
-        .byte $14                   ; y
-        .byte $1e                   ; x
-        .byte $28                   ; y
+    .byte $0a                       ; x
+    .byte $14                       ; y
+    .byte $1e                       ; x
+    .byte $28                       ; y
 data__tiles: .incbin "tiles.bin"
-data__msg: .byte $68, $69, $00      ; "hi"
-data__lo: .lobytes data__handlers
-data__id: .byte $4e, $54, $36, $35  ; $4e543635
+data__msg:   .byte $68, $69, $00    ; "hi"
+data__lo:    .lobytes data__handlers
+data__id:    .byte $4e, $54, $36, $35  ; $4e543635
 data__basic_stub:
     .word basic_stub__next, 10
     .byte $9e, $32, $30, $36, $31, 0  ; "2061"

@@ -20,14 +20,18 @@ hw__sid__VOLUME = $d418
 .import hw__set_border
 
 .segment "CODE": absolute
+; .proc main: a8, i8  main.nt65:14
 main__main:
     jsr gfx__init
     jsr snd__init
     lda z:very__long__path__thing
     rts
+; end of main
 
+; .proc other: a8, i8  main.nt65:21
 main__other:
     jsr _init
     lda a:hw__BORDER
     lda a:hw__sid__VOLUME
     jmp hw__set_border
+; end of other

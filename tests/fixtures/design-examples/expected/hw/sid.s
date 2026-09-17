@@ -10,4 +10,4 @@
 
 .export hw__sid__VOLUME
 
-hw__sid__VOLUME = $D418
+hw__sid__VOLUME = $d418

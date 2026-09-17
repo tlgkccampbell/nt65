@@ -16,9 +16,10 @@
 .export main__adder
 
 .segment "BSS": absolute
-total:  .res 2
+total: .res 2
 
 .segment "CODE": absolute
+; .proc copy: a16, i16  main.nt65:20
 main__copy:
     pea 0
     pea 0
@@ -34,14 +35,18 @@ main__copy:
     pla
     pla
     rts
+; end of copy
 
+; .proc setup: a8, i8 -> a16, i16  main.nt65:38
 main__setup:
     rep #$20
     lda #$1234
     rep #$10
     ldx #$1234
     rts
+; end of setup
 
+; .proc mixed: a16, i8 -> a8, i16  main.nt65:47
 main__mixed:
     rep #$10
     sep #$20
@@ -49,12 +54,16 @@ main__mixed:
     lda #$12
     ldx #$1234
     rts
+; end of mixed
 
+; .proc unknown: a?, i? -> a8, i8  main.nt65:55
 main__unknown:
     sep #$30
     lda #1
     rts
+; end of unknown
 
+; .proc entered: a16, i16  main.nt65:62
 main__entered:
     tsc
     sec
@@ -62,7 +71,9 @@ main__entered:
     sbc #4
     tcs
     lda 3,s                         ; locals::src
+; end of entered
 
+; .proc adder: a8, i16  main.nt65:84
 main__adder:
     ; add16!(total, {#$1234})  main.nt65:85
     clc
@@ -73,5 +84,7 @@ main__adder:
     lda a:total+1
     adc #$12
     sta a:total+1
+    ; end of add16!
     ldx #$1234
     rts
+; end of adder

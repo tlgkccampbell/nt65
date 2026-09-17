@@ -2243,7 +2243,24 @@ empty, because there is no state for it to declare. On the 65816 it may not (§7
 One module produces one `.s`, named after it: `.module gfx::sprite` is `gfx/sprite.s` under
 the project's `out` (§5.3), with its line map `gfx/sprite.s.lines` beside it. The output is
 readable ca65 with a header comment and source spellings preserved where possible: it is the
-program and nothing else, with everything a debugger needs in the map. It is deterministic: the same sources and
+program and nothing else, with everything a debugger needs in the map.
+
+**It is laid out as ca65 is written, not as the source was.** Names stand at the margin and
+what they hold is indented once, which is the two levels hand-written ca65 has. Keeping the
+source's own indentation would step the output in past `.proc`, `.scope`, `.enum` and
+`.struct` blocks that are no longer in it, leaving a run of constants indented under nothing.
+A run of named data lines is lined up on its directives — `ptr:` and `frame:` become `ptr:`
+and `main__frame:`, so what the source lined up no longer does — and a number is written in
+lower case whatever case the source wrote it in, because everything nt65 works out for itself
+is lower case and one file in two hands reads as two.
+
+**What a block was is a comment, because ca65 cannot hold it.** A routine is a label and its
+body: ca65's `.proc` is a scope as well as a label, and the output takes none (§13, flat
+names), so the `.proc` line is written above the label as a comment, with the file and line it
+came from. That is the only place a routine's signature appears at all — it emits nothing to
+ca65 — and `; end of f` after the body says where the routine stopped. A macro expansion is
+closed the same way: it opens with a comment naming the call and nothing else in the output
+says where the caller's own code starts again. It is deterministic: the same sources and
 configuration give byte-identical output, and `nt65 build` rewrites a file only when its
 contents change.
 
@@ -2346,7 +2363,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.segment X: zp` declaration | nothing by itself |
 | `.segment X` region, `.segment X { }` at file level | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
 | nested segment block | `.pushseg` / `.segment` ... `.popseg` |
-| `.proc f: a16, i8 -> a8, i8 { }` | `f:` and the body; the signature emits nothing by itself |
+| `.proc f: a16, i8 -> a8, i8 { }` | `; .proc f: a16, i8 -> a8, i8  file:line`, then `f:` and the body, then `; end of f`. The signature emits nothing to ca65, so the comment is the only place it appears |
 | `.proc CHROUT = $FFD2: ...` | `CHROUT = $FFD2` |
 | `.scope n { }` | its contents, with names flattened (`n__name`) |
 | `@name` | a generated name, unique in the file |
@@ -2362,12 +2379,12 @@ generated ca65, which is what ld65 wrote and is still true.
 | `wdm #n` | `.byte $42, n` |
 | `mvn #s, #d` | `mvn #s, #d` |
 | `.if c { } .else { }` | resolved at transpile time; only the chosen branch is emitted |
-| `.repeat n, i { }`, `.each l, v { }` | unrolled |
-| `m!(...)` | expanded inline, preceded by `; m!(...)  file:line`; its lines map to the call's line (debug information) |
+| `.repeat n, i { }`, `.each l, v { }` | unrolled; what the turn is worth is written into each line, and the name the turn is bound to is not repeated down them as a comment |
+| `m!(...)` | expanded inline, between `; m!(...)  file:line` and `; end of m!`; its lines map to the call's line (debug information) |
 | `.enum Color { }` | a constant per member, `Color__red = 0` |
 | `.struct`, `.union` | nothing by themselves |
-| `.data name: .word[16]`, `.type T[n]`, any element type with no values | `name:` and `.res` of the total size; a record whose type pads with something other than zero is written a member at a time |
-| `.data name: .byte 1, 2`, `.byte[] { … }` | `name:` and the element type's directive, a body a line at a time with its repetitions unrolled |
+| `.data name: .word[16]`, `.type T[n]`, any element type with no values | `name:` and `.res` of the total size; a record whose type pads with something other than zero is written a member at a time, and a member's padding as `.res n, fill` |
+| `.data name: .byte 1, 2`, `.byte[] { … }` | `name:` and the element type's directive, a body a line at a time with its repetitions unrolled, and a run of one repeated byte gathered back into the `.res n, value` that says the same thing |
 | `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
 | `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
@@ -2480,9 +2497,10 @@ SCREEN_PAGES = 4
 SCREEN       = $0400
 SCREEN_PAGES = 4
 .segment "ZEROPAGE": zeropage
-ptr:    .res 2
-frame:  .res 1
+ptr:   .res 2
+frame: .res 1
 .segment "CODE": absolute
+; .proc fill_page  main.nt65:17
 main__fill_page:
     ldy #0
 fill_page__loop:
@@ -2490,12 +2508,15 @@ fill_page__loop:
     iny
     bne fill_page__loop
     rts
+; end of fill_page
+; .proc main  main.nt65:33
 main:
     ; set16!(ptr, SCREEN)  main.nt65:34
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
     sta z:ptr+1
+    ; end of set16!
     ldx #SCREEN_PAGES
 main__page:
     lda #$20                        ; ' '
@@ -2505,6 +2526,7 @@ main__page:
     bne main__page
     inc z:frame
     jmp main
+; end of main
 ```
 
 ## 14. What tooling gets

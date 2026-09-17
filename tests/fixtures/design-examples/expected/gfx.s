@@ -11,5 +11,7 @@
 .export gfx__init
 
 .segment "CODE": absolute
+; .proc init  gfx.nt65:6
 gfx__init:
     rts
+; end of init

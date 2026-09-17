@@ -9,9 +9,10 @@ using Norristown.Syntax;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Writes one file's ca65. The output is readable, with the source's own spacing kept
-/// and its comments dropped, and it is deterministic: the same source always gives the same
-/// bytes.
+/// Writes one file's ca65. The output is readable: the source's own spacing between the tokens
+/// of a line, its comments dropped, and two levels of indentation of the output's own, because
+/// the output is flat and nothing in it opens a block the source's would stand for. It is
+/// deterministic: the same source always gives the same bytes.
 /// <para>
 /// Everything the output depends on is written into it. The header fixes the CPU and
 /// switches off every ca65 option that changes syntax; every segment carries its address
@@ -29,6 +30,18 @@ public sealed class Emitter
     /// <summary>Where a generated comment starts, so that a column of them lines up.</summary>
     private const int CommentColumn = 36;
 
+    /// <summary>
+    /// What a line that is not a label, a definition or a file-level directive starts with.
+    /// <para>
+    /// The output is flat: it holds no ca65 <c>.proc</c>, <c>.scope</c>, <c>.enum</c> or
+    /// <c>.struct</c>, so nothing in it opens a block that indentation could stand for. It has
+    /// two levels, as hand-written ca65 does — names at the margin and what they hold indented
+    /// once — rather than the source's own, which would step in past constructs that are no
+    /// longer there.
+    /// </para>
+    /// </summary>
+    private const string Body = "    ";
+
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly FlatNames names;
@@ -38,6 +51,9 @@ public sealed class Emitter
     private readonly StringBuilder generated = new();
     private readonly List<int> lineBytes = [];
     private readonly List<int> lineSources = [];
+
+    // The named data lines, by the line they were written on, in the parts they line up by.
+    private readonly Dictionary<int, (string Label, string Text, string? Comment)> columns = [];
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
@@ -100,6 +116,8 @@ public sealed class Emitter
         emitter.Exports();
         emitter.Imports();
         emitter.WalkContainer(model.Tree.Root);
+        emitter.Columns();
+        emitter.Filled();
         return new OutputFile(path, emitter.generated.ToString(), emitter.lineBytes)
         {
             Source = model.Tree.Path,
@@ -492,6 +510,9 @@ public sealed class Emitter
         }
         else if (kind == BlockKind.Proc && opener is { Kind: SyntaxKind.ProcDeclaration })
         {
+            Segment();
+            Flush();
+            Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}");
             routine = ProcLabel(lines[0], opener);
         }
         else if (opener is not null && kind != BlockKind.Scope)
@@ -505,6 +526,8 @@ public sealed class Emitter
         depth--;
         if (kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody)
             End(opener);
+        if (kind == BlockKind.Proc && routine is { } named)
+            Line($"; end of {named.Name}");
         routine = outerRoutine;
 
         if (pushed)
@@ -645,15 +668,12 @@ public sealed class Emitter
         Segment();
         Flush();
 
-        // The comment sits where the call was written. A call after a label starts at column
-        // zero, where a comment would read as belonging to nothing, so it takes the body's
-        // own indentation instead.
-        var indent = Indent(line.Statement ?? call);
-
         // The `{` of a trailing block belongs to the block rather than to the call, and the
-        // comment names the call.
+        // comment names the call. The one that closes it names the macro alone, because the
+        // arguments are above it and saying them twice would only make the block harder to see.
         var written = call.GetText().Trim().TrimEnd('{').TrimEnd();
-        Line($"{(indent.Length == 0 ? "    " : indent)}; {written}  {Where(call)}");
+        var called = written.IndexOf('!') is var bang && bang > 0 ? written[..(bang + 1)] : written;
+        Line($"{Body}; {written}  {Where(call)}");
 
         var outerCall = callLine;
         var outer = expansion;
@@ -665,6 +685,11 @@ public sealed class Emitter
         Walk(definition.ChildNodes, from: 1);
         expansion = outer;
         callLine = outerCall;
+
+        // An expansion has no end of its own in the output: what follows it is the caller's
+        // own code, on the same level and under no label, so the comment is what says so.
+        Flush();
+        Line($"{Body}; end of {called}");
     }
 
     /// <summary>
@@ -705,7 +730,7 @@ public sealed class Emitter
             if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
                 && model.SymbolAt(token) is { } reference)
             {
-                Code(line, Indent(opener) + LabelText(Named(reference)), 0);
+                Code(line, LabelText(Named(reference)), 0);
                 return reference;
             }
         }
@@ -728,14 +753,14 @@ public sealed class Emitter
         if (!laid.Inverted)
         {
             edits.Replace[mnemonic.Position] = taken;
-            Code(line, Render(statement, edits), laid.Length);
+            Code(line, Render(statement, edits, Body), laid.Length);
             return;
         }
 
         var over = names.Generated((routine is null ? "" : Named(routine) + "__") + "over");
         edits.Replace[mnemonic.Position] = "jmp";
-        var jump = Render(statement, edits);
-        Code(line, $"{Indent(statement)}{skipped} {over}", Instructions.Length(AddressingMode.Relative));
+        var jump = Render(statement, edits, Body);
+        Code(line, $"{Body}{skipped} {over}", Instructions.Length(AddressingMode.Relative));
         Line(jump, Instructions.Length(AddressingMode.Absolute));
         Line($"{over}:");
     }
@@ -779,7 +804,7 @@ public sealed class Emitter
         if (label is not { ChildTokens.Length: > 0 }
             || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
         {
-            Code(line, Render(statement, edits), bytes);
+            Code(line, Render(statement, edits, label is null ? Body : ""), bytes);
             return;
         }
 
@@ -789,8 +814,8 @@ public sealed class Emitter
         var text = LabelText(Named(reference));
         if (rest is not null && !text.EndsWith(':'))
         {
-            Code(line, Indent(statement) + text, 0);
-            Code(line, Indent(statement) + Render(rest, edits).TrimStart(), bytes);
+            Code(line, text, 0);
+            Code(line, Render(rest, edits, Body), bytes);
             return;
         }
 
@@ -811,7 +836,7 @@ public sealed class Emitter
             return;
         if (DataSyntax.ElementOf(declaration) is not { } element)
         {
-            Code(line, Indent(declaration) + LabelText(Named(symbol)), 0);
+            Code(line, LabelText(Named(symbol)), 0);
             return;
         }
         if (DataSyntax.IsElementType(element))
@@ -840,7 +865,7 @@ public sealed class Emitter
         if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.DataBody } })
         {
             if (symbol is not null)
-                Code(line, Indent(statement) + LabelText(Named(symbol)), 0);
+                Code(line, LabelText(Named(symbol)), 0);
             return;
         }
         if (DataSyntax.TypeOf(directive) is { } named)
@@ -903,7 +928,7 @@ public sealed class Emitter
             if (model.SymbolOf(named) is not { IsLayout: true } type)
                 return;
             foreach (var record in values.ChildNodes)
-                Fields(line, Indent(values), type, ValuesIn(record), path: "");
+                Fields(line, type, ValuesIn(record), path: "");
             return;
         }
         if (layout.Of(values, expansion) is not { } laid)
@@ -913,42 +938,132 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(values, edits, nested: false);
-        var text = $"{Indent(values)}{ForCa65(directive.ChildTokens[0].Text)} {Bare(values, edits, out var comment)}";
+        var text = $"{Body}{ForCa65(directive.ChildTokens[0].Text)} {Bare(values, edits, out var comment)}";
         if (comment is not null)
             text += new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
         Code(line, text, laid.Length);
     }
 
     /// <summary>
-    /// A line of data with its name in front, where it has one: on the same line, lined up
-    /// where the source wrote the directive, or on a line of its own where ca65 would read
-    /// the name as a prefix.
+    /// A line of data with its name in front, where it has one: on the same line, or on a line
+    /// of its own where ca65 would read the name as a prefix. Where it shares the line, the
+    /// directive is lined up with those of the lines around it rather than where the source
+    /// wrote it, because the name in front is rarely the one the source used.
     /// </summary>
     private void WithName(
         SyntaxNode line, SyntaxNode statement, SyntaxNode directive, Symbol? symbol, string text, int bytes,
         string? comment = null)
     {
-        var indent = Indent(statement);
-        string written;
         if (symbol is null)
         {
-            written = indent + text;
+            Code(line, Commented(Body + text, comment), bytes);
+            return;
         }
-        else if (LabelText(Named(symbol)) is var label && !label.EndsWith(':'))
+        if (LabelText(Named(symbol)) is var label && !label.EndsWith(':'))
         {
-            Code(line, indent + label, 0);
-            written = indent + "    " + text;
+            Code(line, label, 0);
+            Code(line, Commented(Body + text, comment), bytes);
+            return;
         }
-        else
+        Code(line, Commented($"{label} {text}", comment), bytes);
+        columns[lineBytes.Count - 1] = (label, text, comment);
+    }
+
+    /// <summary>The line with its generated comment at the column those line up in.</summary>
+    private static string Commented(string text, string? comment) =>
+        comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
+
+    /// <summary>
+    /// Lines up the directives of each run of named data lines, so that a run reads as a column
+    /// the way hand-written ca65 does. The names are nt65's, not the source's, so what the
+    /// source lined up no longer lines up, and only the whole run says where the column goes.
+    /// </summary>
+    private void Columns()
+    {
+        var lines = generated.ToString().Split('\n');
+        foreach (var run in Runs())
         {
-            var column = directive.Span.Start - line.Tree.LineStarts[line.LineIndex]
-                - (statement.Kind == SyntaxKind.DataDeclaration ? ".data ".Length : 0);
-            var start = indent + label;
-            written = start + new string(' ', Math.Max(column - start.Length, 1)) + text;
+            var column = run.Max(at => columns[at].Label.Length) + 1;
+            foreach (var at in run)
+            {
+                var (label, text, comment) = columns[at];
+                lines[at] = Commented(label + new string(' ', column - label.Length) + text, comment);
+            }
         }
-        if (comment is not null)
-            written += new string(' ', Math.Max(CommentColumn - written.Length, 2)) + "; " + comment;
-        Code(line, written, bytes);
+        generated.Clear().Append(string.Join('\n', lines));
+    }
+
+    /// <summary>
+    /// Runs of one repeated byte, written as the one <c>.res</c> that says the same thing. A
+    /// repetition of a single value unrolls to a row of equal lines, which is a fill however it
+    /// was written, and ca65 spells a fill <c>.res n, value</c>.
+    /// <para>
+    /// This is the last thing done, because it takes lines away: what a line assembles to and
+    /// where it came from go with it, the count and the source of the first of the run.
+    /// </para>
+    /// </summary>
+    private void Filled()
+    {
+        var lines = generated.ToString().Split('\n');
+        var kept = new List<string>(lines.Length);
+        var bytes = new List<int>(lineBytes.Count);
+        var sources = new List<int>(lineSources.Count);
+
+        // The split leaves an empty last element for the newline every line ends with, which is
+        // no line and has no length of its own.
+        var end = lines.Length - 1;
+        for (var i = 0; i < end; i++)
+        {
+            var run = 1;
+            while (i + run < end && lines[i + run] == lines[i] && Repeated(lines[i]) is not null)
+                run++;
+            if (run >= 3 && Repeated(lines[i]) is var (indent, value))
+            {
+                kept.Add($"{indent}.res {run}, {value}");
+                bytes.Add(run * (i < lineBytes.Count ? lineBytes[i] : 1));
+                sources.Add(i < lineSources.Count ? lineSources[i] : 0);
+                i += run - 1;
+                continue;
+            }
+            kept.Add(lines[i]);
+            bytes.Add(i < lineBytes.Count ? lineBytes[i] : 0);
+            sources.Add(i < lineSources.Count ? lineSources[i] : 0);
+        }
+        kept.Add("");
+        generated.Clear().Append(string.Join('\n', kept));
+        lineBytes.Clear();
+        lineBytes.AddRange(bytes);
+        lineSources.Clear();
+        lineSources.AddRange(sources);
+    }
+
+    /// <summary>
+    /// The indentation and the value of a line that is one byte and nothing else, or null for a
+    /// line that is anything more: only such a line stands for one byte of a fill.
+    /// </summary>
+    private static (string Indent, string Value)? Repeated(string line)
+    {
+        var text = line.TrimStart();
+        if (!text.StartsWith(".byte ", StringComparison.Ordinal))
+            return null;
+        var value = text[".byte ".Length..].Trim();
+        return value.Length == 0 || value.Contains(',') || value.Contains(';')
+            ? null
+            : (line[..(line.Length - text.Length)], value);
+    }
+
+    /// <summary>The runs of lines to line up: named data lines with nothing in between.</summary>
+    private List<List<int>> Runs()
+    {
+        var runs = new List<List<int>>();
+        foreach (var at in columns.Keys.Order())
+        {
+            if (runs.Count > 0 && runs[^1][^1] == at - 1)
+                runs[^1].Add(at);
+            else
+                runs.Add([at]);
+        }
+        return runs;
     }
 
     /// <summary>
@@ -964,7 +1079,6 @@ public sealed class Emitter
             NotTranspiled(directive);
             return;
         }
-        var indent = Indent(statement);
         IReadOnlyList<IReadOnlyDictionary<string, SyntaxNode>> records;
         if (DataSyntax.BracedOf(directive) is { } braced)
         {
@@ -985,10 +1099,10 @@ public sealed class Emitter
         }
 
         if (symbol is not null)
-            Code(line, indent + LabelText(Named(symbol)), 0);
+            Code(line, LabelText(Named(symbol)), 0);
         long bytes = 0;
         foreach (var record in records)
-            bytes += Fields(line, indent, type, record, path: "");
+            bytes += Fields(line, type, record, path: "");
         if (bytes != room.Bytes)
             NotTranspiled(directive);
     }
@@ -1013,7 +1127,7 @@ public sealed class Emitter
         {
             return;
         }
-        Code(line, Indent(statement) + LabelText(Named(reference)), 0);
+        Code(line, LabelText(Named(reference)), 0);
     }
 
     /// <summary>
@@ -1032,10 +1146,10 @@ public sealed class Emitter
         foreach (var member in reference.Body?.Symbols ?? [])
         {
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
-                Definition($"{Indent(opener)}{Named(member)} = {Constant(offset)}");
+                Definition($"{Named(member)} = {Constant(offset)}");
         }
         if (IsSized(reference))
-            Definition($"{Indent(opener)}{SizeOf(reference)} = {Constant(reference.Size!.Value)}");
+            Definition($"{SizeOf(reference)} = {Constant(reference.Size!.Value)}");
     }
 
     /// <summary>One enum member, which is a constant like any other.</summary>
@@ -1047,7 +1161,7 @@ public sealed class Emitter
         {
             return;
         }
-        Definition($"{Indent(statement)}{Named(reference)} = {Constant(value)}");
+        Definition($"{Named(reference)} = {Constant(value)}");
     }
 
     /// <summary>
@@ -1056,7 +1170,7 @@ public sealed class Emitter
     /// nested value reaches the fields inside it.
     /// </summary>
     private long Fields(
-        SyntaxNode line, string indent, Symbol type, IReadOnlyDictionary<string, SyntaxNode> written, string path)
+        SyntaxNode line, Symbol type, IReadOnlyDictionary<string, SyntaxNode> written, string path)
     {
         long bytes = 0;
         var members = (type.Body?.Symbols ?? []).Where(member => member.Kind == SymbolKind.Member).ToList();
@@ -1080,11 +1194,11 @@ public sealed class Emitter
                 if (member.Type is { IsLayout: true } records)
                 {
                     for (var i = 0; i < member.Count; i++)
-                        bytes += Fields(line, indent, records, ValuesIn(i < items.Length ? items[i] : null), $"{named}[{i}]");
+                        bytes += Fields(line, records, ValuesIn(i < items.Length ? items[i] : null), $"{named}[{i}]");
                     continue;
                 }
                 var (width, bigEndian) = Slot(element);
-                Field(line, indent, items.Length == 0
+                Field(line, items.Length == 0
                     ? $".res {size}"
                     : $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
                     named, size);
@@ -1095,27 +1209,25 @@ public sealed class Emitter
             // A nested record takes a braced list of its own members; anything else is a value.
             if (member.Type is { IsLayout: true } inner)
             {
-                bytes += Fields(line, indent, inner, ValuesIn(given), named);
+                bytes += Fields(line, inner, ValuesIn(given), named);
                 continue;
             }
-            Field(line, indent, Member(member, element, given), named, size);
+            foreach (var (text, part) in Member(member, element, given))
+                Field(line, text, named, part);
             bytes += size;
         }
 
         if (type.Kind == SymbolKind.Union && type.Size is { } whole && whole > bytes)
         {
-            Field(line, indent, $".res {whole - bytes}, $00", path.Length == 0 ? type.Name : path, whole - bytes);
+            Field(line, $".res {whole - bytes}, $00", path.Length == 0 ? type.Name : path, whole - bytes);
             bytes = whole;
         }
         return bytes;
     }
 
     /// <summary>One member's directive, with the path it fills in a comment.</summary>
-    private void Field(SyntaxNode line, string indent, string directive, string path, long size)
-    {
-        var text = $"{indent}    {directive}";
-        Code(line, text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + path, (int)size);
-    }
+    private void Field(SyntaxNode line, string directive, string path, long size) =>
+        Code(line, Commented(Body + directive, path), (int)size);
 
     /// <summary>The <c>member = value</c>s of a record, by member name: a braced record, or the lines of one.</summary>
     private static IReadOnlyDictionary<string, SyntaxNode> ValuesIn(SyntaxNode? record) =>
@@ -1137,25 +1249,29 @@ public sealed class Emitter
     /// names is zero, and a member reserved by <c>.res</c> takes text, padded to the room it
     /// has with the byte it pads with.
     /// </summary>
-    private string Member(Symbol member, SyntaxNode? element, SyntaxNode? given)
+    private IEnumerable<(string Text, long Size)> Member(Symbol member, SyntaxNode? element, SyntaxNode? given)
     {
         var size = member.Size ?? 0;
         var directive = element is null ? ".res" : DataSyntax.NameOf(element);
+
+        // Room with a fill is what `.res n, fill` says in both languages, so the room a value
+        // does not reach is written as the one directive rather than as a row of equal bytes.
         if (directive == ".res")
-            return $".byte {string.Join(", ", Padded(given, size, Fill(member)))}";
+        {
+            var values = given is null ? [] : model.BytesOf(given, expansion)?.ToList() ?? [];
+            var used = Math.Min(values.Count, size);
+            if (used > 0)
+                yield return ($".byte {string.Join(", ", values.Take((int)used).Select(b => Hex(b & 0xff, 2)))}", used);
+            if (size > used)
+                yield return ($".res {size - used}, {Hex(Fill(member), 2)}", size - used);
+            yield break;
+        }
         var (width, bigEndian) = Slot(element!);
         var value = given is null ? Constant(0) : Datum(given, width, bigEndian, []) ?? Rendered(given);
-        return $"{ForCa65(directive)} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}";
+        yield return ($"{ForCa65(directive)} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
     }
 
     /// <summary>The bytes a reserved member takes: the text it was given, then the byte it pads with.</summary>
-    private IEnumerable<string> Padded(SyntaxNode? value, long size, long fill)
-    {
-        var bytes = value is null ? [] : model.BytesOf(value, expansion)?.ToList() ?? [];
-        for (var i = 0; i < size; i++)
-            yield return Hex(i < bytes.Count ? bytes[i] & 0xff : fill, 2);
-    }
-
     /// <summary>
     /// An expression written out rather than edited in place: a call becomes what it stands
     /// for, and every nested operation is parenthesized, so nothing depends on how ca65
@@ -1274,7 +1390,7 @@ public sealed class Emitter
 
         var edits = new Edits();
         Substitute(address, edits, nested: false);
-        Definition($"{Indent(statement)}{Named(reference)} = {Render(address, edits).TrimStart()}");
+        Definition($"{Named(reference)} = {Render(address, edits)}");
     }
 
     private void Source(SyntaxNode line, SyntaxNode statement, int bytes, bool located = false)
@@ -1285,7 +1401,7 @@ public sealed class Emitter
         Immediate(statement, bytes, edits);
         Slot(statement, edits);
         Direct(statement, edits);
-        Code(line, Render(statement, edits), bytes, located);
+        Code(line, Render(statement, edits, Body), bytes, located);
     }
 
     /// <summary>
@@ -1319,11 +1435,10 @@ public sealed class Emitter
     {
         if (layout.Of(directive, expansion)?.Ensured is not { } ensured)
             return;
-        var indent = Indent(directive);
         if (ensured.Reset != 0)
-            Code(line, $"{indent}rep #{Hex(ensured.Reset, 2)}", 2);
+            Code(line, $"{Body}rep #{Hex(ensured.Reset, 2)}", 2);
         if (ensured.Set != 0)
-            Code(line, $"{indent}sep #{Hex(ensured.Set, 2)}", 2);
+            Code(line, $"{Body}sep #{Hex(ensured.Set, 2)}", 2);
     }
 
     /// <summary>
@@ -1393,7 +1508,7 @@ public sealed class Emitter
         widths[register] = bits;
         Segment();
         Flush();
-        Line($"{Indent(statement)}.{(register == WidthRegister.A ? "a" : "i")}{bits}");
+        Line($"{Body}.{(register == WidthRegister.A ? "a" : "i")}{bits}");
     }
 
     /// <summary>
@@ -1488,27 +1603,13 @@ public sealed class Emitter
         lineSources.Add(line);
     }
 
-    /// <summary>The whitespace a line starts with, which the output keeps.</summary>
-    private static string Indent(SyntaxNode statement)
-    {
-        var tokens = Tokens(statement);
-        if (tokens.Count == 0)
-            return "";
-        var indent = new StringBuilder();
-        foreach (var trivia in tokens[0].Green.LeadingTrivia)
-        {
-            if (trivia.Kind == SyntaxKind.WhitespaceTrivia)
-                indent.Append(trivia.Text);
-        }
-        return indent.ToString();
-    }
-
     /// <summary>
-    /// The statement's own text with the edits applied: the source's spacing, its comments
-    /// dropped, and names, prefixes and byte values written where the source had something
-    /// else.
+    /// The statement's own text with the edits applied: the source's spacing between its
+    /// tokens, its comments dropped, and names, prefixes and byte values written where the
+    /// source had something else. What the source indented it by is not kept; where the line
+    /// goes is the caller's to say (<see cref="Body"/>).
     /// </summary>
-    private string Render(SyntaxNode statement, Edits edits)
+    private string Render(SyntaxNode statement, Edits edits, string indent = "")
     {
         var text = new StringBuilder();
         var tokens = Tokens(statement);
@@ -1531,18 +1632,26 @@ public sealed class Emitter
             Whitespace(text, token.Green.LeadingTrivia);
             if (edits.Before.TryGetValue(token.Position, out var before))
                 text.Append(before);
-            text.Append(edits.Replace.TryGetValue(token.Position, out var replacement) ? replacement : token.Text);
+            text.Append(edits.Replace.TryGetValue(token.Position, out var replacement) ? replacement : Spelt(token));
             if (edits.After.TryGetValue(token.Position, out var after))
                 text.Append(after);
             Whitespace(text, token.Green.TrailingTrivia);
         }
 
-        var line = text.ToString().TrimEnd();
-        if (edits.Comments.Count == 0)
-            return line;
-        var padding = Math.Max(CommentColumn - line.Length, 2);
-        return line + new string(' ', padding) + "; " + string.Join(", ", edits.Comments);
+        var line = indent + text.ToString().Trim();
+        return edits.Comments.Count == 0 ? line : Commented(line, string.Join(", ", edits.Comments));
     }
+
+    /// <summary>
+    /// A token as the output spells it, which for every token but a number is as the source
+    /// spelt it. Everything nt65 works out for itself is written in lower case
+    /// (<see cref="Hex"/>), so a number the source wrote in upper case is brought down to it:
+    /// one file with <c>$FFD2</c> in one line and <c>$d020</c> in the next reads as two hands.
+    /// </summary>
+    private static string Spelt(SyntaxToken token) =>
+        token.Kind == SyntaxKind.NumberLiteral && token.Text.StartsWith('$')
+            ? token.Text.ToLowerInvariant()
+            : token.Text;
 
     private static int Width(IEnumerable<GreenTrivia> trivia) =>
         trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);
@@ -1854,7 +1963,9 @@ public sealed class Emitter
             edits.Replace[tokens[0].Position] = written;
             for (var i = 1; i < tokens.Length; i++)
                 edits.Replace[tokens[i].Position] = "";
-            edits.Comments.Add(symbol.Name);
+
+            // What the turn is worth is written into the line, so naming the binding as well
+            // would only repeat it down every line an unrolled body writes.
             return;
         }
 

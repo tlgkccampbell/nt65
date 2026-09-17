@@ -11,16 +11,16 @@
 DELTA = -2
 
 .segment "RODATA": absolute
-bytes:        .byte $80, $ff, 0, 255, $fe  ; -128, -1, DELTA
-words:        .word $8000, $fffe, $ffff  ; -32768, DELTA
-longs:        .faraddr $ffffff, $123456, handler  ; -1
-dwords:       .dword $ffffffff, $12345678  ; -1
-be_words:     .dbyt $1234, $fffe, handler  ; DELTA
-be_longs:     .byte $12, $34, $56, $ff, $ff, $ff, .bankbyte(handler), .hibyte(handler), .lobyte(handler)  ; $123456, -1
-be_dwords:    .byte $12, $34, $56, $78, $ff, $ff, $ff, $fe, .lobyte((handler) >> 24), .bankbyte(handler), .hibyte(handler), .lobyte(handler)  ; $12345678, DELTA
+bytes:     .byte $80, $ff, 0, 255, $fe  ; -128, -1, DELTA
+words:     .word $8000, $fffe, $ffff  ; -32768, DELTA
+longs:     .faraddr $ffffff, $123456, handler  ; -1
+dwords:    .dword $ffffffff, $12345678  ; -1
+be_words:  .dbyt $1234, $fffe, handler  ; DELTA
+be_longs:  .byte $12, $34, $56, $ff, $ff, $ff, .bankbyte(handler), .hibyte(handler), .lobyte(handler)  ; $123456, -1
+be_dwords: .byte $12, $34, $56, $78, $ff, $ff, $ff, $fe, .lobyte((handler) >> 24), .bankbyte(handler), .hibyte(handler), .lobyte(handler)  ; $12345678, DELTA
 be_table:
     .dbyt 1, $ffff                  ; -1
-banks:        .bankbytes handler, far_away
+banks: .bankbytes handler, far_away
 step:
     .byte $ff                       ; dx
     .word $fffe                     ; dy
@@ -28,12 +28,14 @@ padding:
     .res 3, $ff                     ; -1
 
 .segment "FAR": far
-far_away:     .byte 0
+far_away: .byte 0
 
 .segment "CODE": absolute
+; .proc handler: a8, i16  main.nt65:38
 handler:
     .a8
     lda #$ff                        ; -1
     .i16
     ldx #$fffe                      ; DELTA
     rts
+; end of handler

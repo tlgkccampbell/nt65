@@ -16,25 +16,31 @@ z := *
     .res 1
 f := *
     .res 1
-main__ptr:  .res 2
+main__ptr: .res 2
 
 .segment "CODE": absolute
+; .proc top  main.nt65:19
 main__top:
     rts
+; end of top
 
-    outer__inner:
-        lda z:z
-        lda z:f
-        rts
+; .proc inner  main.nt65:24
+outer__inner:
+    lda z:z
+    lda z:f
+    rts
+; end of inner
 
+; .proc draw  main.nt65:31
 draw:
     ldx #0
-    draw__loop:
-        dex
-        bne draw__loop
-    draw__loop_2:
-        dex
-        bne draw__loop_2
-    draw__reused:
-        jmp draw__reused
+draw__loop:
+    dex
+    bne draw__loop
+draw__loop_2:
+    dex
+    bne draw__loop_2
+draw__reused:
+    jmp draw__reused
     jmp outer__inner
+; end of draw

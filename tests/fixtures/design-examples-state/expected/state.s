@@ -21,17 +21,18 @@
 .export state__skip
 
 .segment "ZEROPAGE": zeropage
-ptr: .res 2
+ptr:        .res 2
 state__cmd: .res 1
-nmi_flag: .res 1
-saved_p: .res 1
-value: .res 1
+nmi_flag:   .res 1
+saved_p:    .res 1
+value:      .res 1
 
 .segment "BSS": absolute
-buf: .res 16
+buf:    .res 16
 vector: .res 2
 
 .segment "CODE": absolute
+; .proc operands: a8, i8, dp = $2100  state.nt65:25
 state__operands:
 operands__loop:
     inx
@@ -49,7 +50,9 @@ operands__loop:
     jmp (vector)
 operands__far:
     rts
+; end of operands
 
+; .proc render: a16, i8 -> a8, i8  state.nt65:44
 state__render:
     .a16
     lda #$1234
@@ -57,14 +60,20 @@ state__render:
     .a8
     lda #$12
     rts
+; end of render
 
+; .proc main: std  state.nt65:53
 state__main:
     rts
+; end of main
 
+; .proc step: std, a16 -> std  state.nt65:57
 state__step:
     sep #$20
     rts
+; end of step
 
+; .proc copy: a16, i16  state.nt65:67
 state__copy:
     pea 0
     pea 0
@@ -77,13 +86,17 @@ state__copy:
     pla
     pla
     rts
+; end of copy
 
+; .proc div16: a16, i16, args 4  state.nt65:88
 state__div16:
     pea 0
     lda 7,s                         ; f::dividend
     plx
     rts
+; end of div16
 
+; .proc dispatch: a8, i16  state.nt65:96
 state__dispatch:
     lda z:state__cmd
     asl a
@@ -99,7 +112,9 @@ dispatch__move:
 dispatch__fire:
     lda #2
     rts
+; end of dispatch
 
+; .proc nmi: interrupt, native  state.nt65:113
 state__nmi:
     rep #$30
     pha
@@ -109,7 +124,9 @@ state__nmi:
     rep #$20
     pla
     rti
+; end of nmi
 
+; .proc restore: a8, i8  state.nt65:124
 state__restore:
     lda z:saved_p
     pha
@@ -118,7 +135,9 @@ state__restore:
     lda #$1234
     sep #$30
     rts
+; end of restore
 
+; .proc skip: a8, i8  state.nt65:134
 state__skip:
     lda z:value
     beq skip__set_two
@@ -132,3 +151,4 @@ skip__set_two:
 skip__store:
     sta z:value
     rts
+; end of skip

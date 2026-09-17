@@ -12,11 +12,13 @@
 .export main__count
 
 .segment "CODE": absolute
+; .proc reloc  main.nt65:10
 reloc:
     lda a:source
     sta a:dest
     rts
 reloc__end:
+; end of reloc
 
 .segment "RODATA": absolute
 main__header:
@@ -24,11 +26,12 @@ main__header:
     .word (reloc__end - reloc)
     .addr reloc__end
 
-table:  .byte 1, 2, 4, 8
+table: .byte 1, 2, 4, 8
 table__end:
 main__count: .byte (table__end - table)
 
 .segment "CODE": absolute
+; .proc copy  main.nt65:29
 copy:
     ldx #(reloc__end - reloc)
 copy__loop:
@@ -37,6 +40,7 @@ copy__loop:
     dex
     bne copy__loop
     rts
+; end of copy
 
 .segment "BSS": absolute
 source: .res 1

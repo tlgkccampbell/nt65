@@ -14,7 +14,9 @@ hw__sid__VOLUME = $0f
 hw__sid__volume = $d418
 
 .segment "CODE": absolute
+; .proc init  snd.nt65:7
 snd__init:
     lda #hw__sid__VOLUME
     sta a:hw__sid__volume
     rts
+; end of init

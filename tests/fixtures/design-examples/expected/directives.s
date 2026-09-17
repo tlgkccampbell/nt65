@@ -21,31 +21,43 @@
 WIDE = 1
 
 .segment "CODE": absolute
+; .proc reloc: a8, i8  directives.nt65:16
 directives__reloc:
     .i8
     ldx #(directives__reloc__end - directives__reloc)
     rts
 directives__reloc__end:
+; end of reloc
 
+; .proc irq: a8, i8  directives.nt65:21
 directives__irq:
     rti
 directives__irq__end:
+; end of irq
 
+; .proc label: a8, i8  directives.nt65:25
 label:
     rts
+; end of label
 
+; .proc first: a8, i8  directives.nt65:29
 first:
     rts
+; end of first
 
+; .proc second: a8, i8  directives.nt65:33
 second:
     rts
+; end of second
 
+; .proc third: a8, i8  directives.nt65:37
 third:
     rts
+; end of third
 
 .segment "RODATA": absolute
 directives__module:
-    directives__module__header: .word (directives__module__end - directives__module)
+directives__module__header: .word (directives__module__end - directives__module)
 directives__module__end:
 
 directives__mixed:
@@ -66,11 +78,11 @@ directives__mixed:
     .hibytes first, second, third
     .bankbytes first, second, third
     .res 1                          ; Player
-        .byte $05                   ; hp
+    .byte $05                       ; hp
     .addr first, second, third      ; handlers
 
 directives__greeting: .byte $08, $05, $0c, $0c, $0f, $20, $17, $0f, $12, $0c, $04  ; screen("HELLO WORLD")
-directives__letter: .byte $01       ; screen('A')
+directives__letter:   .byte $01     ; screen('A')
 
 directives__COLUMNS = $50
 

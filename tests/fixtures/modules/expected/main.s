@@ -36,6 +36,7 @@ REP: .res 1
 per: .res 1
 
 .segment "CODE": absolute
+; .proc main  main.nt65:20
 main__main:
     lda #<gfx__SCREEN
     sta z:gfx__ptr
@@ -62,10 +63,11 @@ main__main:
     sta a:hw__sid__volume
     sta a:hw__sid__volume
     rts
+; end of main
 
 .segment "RODATA": absolute
-main__shape:   .byte $3c, $42, $3c  ; gfx::glyphs
+main__shape: .byte $3c, $42, $3c    ; gfx::glyphs
 
-main__clear_extent:   .addr gfx__clear__end, (gfx__clear__end - gfx__clear)
+main__clear_extent: .addr gfx__clear__end, (gfx__clear__end - gfx__clear)
 
 .assert ((main__main = main__main) && (main__main <> gfx__clear)) && (!(main__main .xor main__main)), lderror, "an operator reached ld65 misspelled"

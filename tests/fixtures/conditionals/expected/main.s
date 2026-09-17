@@ -19,6 +19,7 @@ LINES = 312
 TRACE = 1
 
 .segment "CODE": absolute
+; .proc main  main.nt65:35
 main:
 
 main__again:
@@ -28,14 +29,17 @@ main__again:
     lda #<LINES
     ldx #>LINES
     rts
+; end of main
 
+; .proc trace  main.nt65:49
 trace:
     phx
     plx
     rts
+; end of trace
 
-    .assert main >= $0200, lderror, "main must be past the zero page"
-    .assert (main <> trace) && (main = main), lderror, "ca65 spells these operators its own way"
+.assert main >= $0200, lderror, "main must be past the zero page"
+.assert (main <> trace) && (main = main), lderror, "ca65 spells these operators its own way"
 
 Cmd__move = $00
 Cmd__fire = $01
@@ -43,67 +47,76 @@ Cmd__wait = $02
 
 .segment "RODATA": absolute
 main__bits:
-        .byte 1 << $00              ; i
-        .byte 1 << $01              ; i
-        .byte 1 << $02              ; i
-        .byte 1 << $03              ; i
-        .byte 1 << $04              ; i
-        .byte 1 << $05              ; i
-        .byte 1 << $06              ; i
-        .byte 1 << $07              ; i
+    .byte 1 << $00
+    .byte 1 << $01
+    .byte 1 << $02
+    .byte 1 << $03
+    .byte 1 << $04
+    .byte 1 << $05
+    .byte 1 << $06
+    .byte 1 << $07
 
 main__dispatch:
-        .addr main - 1              ; h
-        .addr trace - 1             ; h
+    .addr main - 1
+    .addr trace - 1
 
 main__commands:
-        .byte $00                   ; c
-        .byte $01                   ; c
-        .byte $02                   ; c
+    .byte $00
+    .byte $01
+    .byte $02
 
 main__actions_table:
-        .addr actions__move
-        .addr actions__fire
-        .addr actions__wait
+    .addr actions__move
+    .addr actions__fire
+    .addr actions__wait
 
 main__grid:
-            .byte ($00 * 3) + $00   ; row, col
-            .byte ($00 * 3) + $01   ; row, col
-            .byte ($00 * 3) + $02   ; row, col
-            .byte ($01 * 3) + $00   ; row, col
-            .byte ($01 * 3) + $01   ; row, col
-            .byte ($01 * 3) + $02   ; row, col
+    .byte ($00 * 3) + $00
+    .byte ($00 * 3) + $01
+    .byte ($00 * 3) + $02
+    .byte ($01 * 3) + $00
+    .byte ($01 * 3) + $01
+    .byte ($01 * 3) + $02
 
-    COLUMNS = 80
+COLUMNS = 80
 
 .segment "CODE": absolute
+; .proc indented  main.nt65:121
 indented:
-        lda #COLUMNS
+    lda #COLUMNS
     rts
+; end of indented
 
+; .proc move  main.nt65:133
 actions__move:
     rts
+; end of move
+; .proc fire  main.nt65:136
 actions__fire:
     jmp actions__move
+; end of fire
+; .proc wait  main.nt65:139
 actions__wait:
     rts
+; end of wait
 
+; .proc slow  main.nt65:146
 slow:
-    ldx #$00 + 1                    ; i
+    ldx #$00 + 1
 slow__delay:
     dex
     bne slow__delay
     bcc slow__skip
     nop
 slow__skip:
-    ldx #$01 + 1                    ; i
+    ldx #$01 + 1
 slow__delay_2:
     dex
     bne slow__delay_2
     bcc slow__skip_2
     nop
 slow__skip_2:
-    ldx #$02 + 1                    ; i
+    ldx #$02 + 1
 slow__delay_3:
     dex
     bne slow__delay_3
@@ -111,9 +124,12 @@ slow__delay_3:
     nop
 slow__skip_3:
     rts
+; end of slow
 
+; .proc run_all  main.nt65:160
 run_all:
     jsr actions__move
     jsr actions__fire
     jsr actions__wait
     rts
+; end of run_all

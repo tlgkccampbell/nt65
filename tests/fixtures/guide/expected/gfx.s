@@ -12,13 +12,17 @@
 .export gfx__clear
 .export _gfx_fill
 
-gfx__BORDER = $D020
+gfx__BORDER = $d020
 
 .segment "CODE": absolute
+; .proc clear  gfx.nt65:8
 gfx__clear:
     lda #0
     sta a:gfx__BORDER
     rts
+; end of clear
 
+; .proc fill  gfx.nt65:14
 _gfx_fill:
     rts
+; end of fill

@@ -25,12 +25,13 @@
 .import beep
 
 .segment "BSS": absolute
-cmd:        .res 1
-value:      .res 1
-nmi_flag:   .res 1
-saved_p:    .res 1
+cmd:      .res 1
+value:    .res 1
+nmi_flag: .res 1
+saved_p:  .res 1
 
 .segment "CODE": absolute
+; .proc dispatch: a8, i16  main.nt65:22
 main__dispatch:
     lda a:cmd
     asl a
@@ -46,7 +47,9 @@ dispatch__move:
 dispatch__fire:
     lda #2
     rts
+; end of dispatch
 
+; .proc nmi: a?, i?  main.nt65:41
 main__nmi:
     rep #$30
     pha
@@ -56,13 +59,17 @@ main__nmi:
     rep #$20
     pla
     rti
+; end of nmi
 
+; .proc restore: a8, i8 -> a16  main.nt65:54
 main__restore:
     lda a:saved_p
     pha
     plp
     rts
+; end of restore
 
+; .proc set: a8, i8  main.nt65:63
 main__set:
     beq set__set_two
     lda #1
@@ -72,7 +79,9 @@ set__set_two:
 set__store:
     sta a:value
     rts
+; end of set
 
+; .proc table_jump: a16, i16  main.nt65:77
 main__table_jump:
     lda a:cmd
     .a16
@@ -89,45 +98,61 @@ table_jump__one:
     rts
 table_jump__two:
     rts
+; end of table_jump
 
+; .proc talk: a8, i8  main.nt65:96
 talk:
     jsr print
     .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
     jsr beep
     .byte 10, 20
     rts
+; end of talk
 
+; .proc relative: a8, i8  main.nt65:106
 main__relative:
     per relative__back - 1
     brl talk
 relative__back:
     rts
+; end of relative
 
+; .proc far_relative: far  main.nt65:113
 main__far_relative:
     phk
     per far_relative__back - 1
     brl far_target
 far_relative__back:
     rtl
+; end of far_relative
 
+; .proc far_target: far  main.nt65:121
 far_target:
     rtl
+; end of far_target
 
+; .proc first: a16 -> a8  main.nt65:127
 main__first:
     lda #$1234
     sep #$20
+; end of first
+; .proc second: a8  main.nt65:132
 main__second:
     .a8
     lda #$12
     rts
+; end of second
 
+; .proc patching: a8, i8  main.nt65:138
 main__patching:
     lda #$60
 patching__op:
     sta a:$0400
     sta a:patching__op+1
     rts
+; end of patching
 
+; .proc enter: a16 -> a8  main.nt65:148
 main__enter:
     .a16
     lda #$1234
@@ -136,6 +161,9 @@ enter__into:
     .a8
     lda #$12
     rts
+; end of enter
 
+; .proc jumper: a8, i8  main.nt65:157
 main__jumper:
     jmp enter__into
+; end of jumper

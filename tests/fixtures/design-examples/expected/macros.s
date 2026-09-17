@@ -22,15 +22,16 @@ C4 = 60
 E4 = 64
 
 .segment "ZEROPAGE": zeropage
-ptr: .res 2
+ptr:       .res 2
 other_ptr: .res 2
-value: .res 1
-total: .res 2
+value:     .res 1
+total:     .res 2
 
 .segment "BSS": absolute
 buf: .res 16
 
 .segment "CODE": absolute
+; .proc clear: a8, i8  macros.nt65:34
 macros__clear:
     ; set16!(ptr, SCREEN)  macros.nt65:35
     .a8
@@ -38,44 +39,57 @@ macros__clear:
     sta z:ptr
     lda #>SCREEN
     sta z:ptr+1
+    ; end of set16!
     ; set16!({buf,x}, $1234)  macros.nt65:36
     lda #<$1234
     sta a:buf,x
     lda #>$1234
     sta a:buf+1,x
+    ; end of set16!
     rts
+; end of clear
 
 .segment "RODATA": absolute
 macros__tune:
     ; note!(C4, frames = 8)  macros.nt65:42
     .byte C4, 8
+    ; end of note!
     ; note!(E4)  macros.nt65:43
     .byte E4, 1
+    ; end of note!
 
 .segment "CODE": absolute
+; .proc pointers: a8, i8  macros.nt65:54
 macros__pointers:
     ; mov16!(ptr, {#SCREEN})  macros.nt65:55
     lda #$00
     sta z:ptr
     lda #$04
     sta z:ptr+1
+    ; end of mov16!
     ; mov16!(ptr, other_ptr)  macros.nt65:56
     lda z:other_ptr
     sta z:ptr
     lda z:other_ptr+1
     sta z:ptr+1
+    ; end of mov16!
     rts
+; end of pointers
 
+; .proc saves: a8, i8  macros.nt65:72
 macros__saves:
     ; push!(a, x, y)  macros.nt65:73
-            pha
-            phx
-            phy
+    pha
+    phx
+    phy
+    ; end of push!
     ply
     plx
     pla
     rts
+; end of saves
 
+; .proc skip: a8, i8  macros.nt65:84
 macros__skip:
     lda z:value
     beq skip__set_two
@@ -84,36 +98,46 @@ skip__set_one:
     lda #1
     ; skip2!()  macros.nt65:90
     .byte $2c
+    ; end of skip2!
 skip__set_two:
     lda #2
 skip__store:
     sta z:value
     rts
+; end of skip
 
+; .proc loop: a8, i8  macros.nt65:107
 macros__loop:
     .i8
     ldy #0
     ; times_x!(8)  macros.nt65:109
     ldx #8
 times_x__loop:
-        sta (ptr),y
-        iny
+    sta (ptr),y
+    iny
     dex
     bne times_x__loop
+    ; end of times_x!
     rts
+; end of loop
 
+; .proc choose: a8, i8  macros.nt65:139
 macros__choose:
     cmp #10
     ; if!(cs)  macros.nt65:141
     ; branch_unless!(c, @skip)  macros.nt65:129
-        bcc if__skip
-        lda #0
-        jmp if__done
+    bcc if__skip
+    ; end of branch_unless!
+    lda #0
+    jmp if__done
 if__skip:
-        inx
+    inx
 if__done:
+    ; end of if!
     rts
+; end of choose
 
+; .proc sum: a8, i8  macros.nt65:159
 macros__sum:
     ; add16!(total, {#1000})  macros.nt65:160
     clc
@@ -123,4 +147,6 @@ macros__sum:
     lda z:total+1
     adc #$03
     sta z:total+1
+    ; end of add16!
     rts
+; end of sum

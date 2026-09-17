@@ -34,10 +34,13 @@ saved: .res 2
 table: .byte 1, 2, 3, 4
 
 .segment "STUBS": absolute
+; .proc reset_stub: emu, dp?, dbr?, noreturn  main.nt65:28
 main__reset_stub:
     sei
     jml +(sys__CODE_BANK << 16) | .loword(main__reset)
+; end of reset_stub
 
+; .proc nmi: isr  main.nt65:34
 main__nmi:
     rep #$30
     pha
@@ -46,14 +49,20 @@ main__nmi:
     sta f:counter
     pla
     rti
+; end of nmi
 
+; .proc irq: interrupt, native  main.nt65:45
 main__irq:
     jmp main__nmi
+; end of irq
 
+; .proc stop: interrupt  main.nt65:49
 main__stop:
     stp
+; end of stop
 
 .segment "CODE0": absolute
+; .proc reset: emu, dp?, dbr?, noreturn  main.nt65:57
 main__reset:
     clc
     xce
@@ -69,7 +78,9 @@ main__reset:
     sep #$20
     lda a:counter
     jsr main__main
+; end of reset
 
+; .proc main: std, noreturn  main.nt65:73
 main__main:
     rep #$20
     pea 3
@@ -81,13 +92,17 @@ main__main:
     jsr main__copy
     jsl main__load
     jmp main__main
+; end of main
 
+; .proc add: std, a16, args 4  main.nt65:94
 main__add:
     lda 5,s                         ; f::left
     clc
     adc 3,s                         ; f::right
     rts
+; end of add
 
+; .proc copy: std  main.nt65:103
 main__copy:
     rep #$20
     lda #3
@@ -99,7 +114,9 @@ main__copy:
     plb
     sep #$20
     rts
+; end of copy
 
+; .proc restore: std  main.nt65:117
 main__restore:
     .a8
     lda #$71
@@ -109,8 +126,10 @@ main__restore:
     phk
     plb
     rts
+; end of restore
 
 .segment "BANK1": absolute
+; .proc load: far_std  main.nt65:129
 main__load:
     phb
     phk
@@ -118,13 +137,18 @@ main__load:
     lda a:table
     plb
     rtl
+; end of load
 
-main__TOOLBOX = $E10000
+main__TOOLBOX = $e10000
 
 .segment "CODE0": absolute
+; .proc bail: trap  main.nt65:145
 main__bail:
     jmp main__bail
+; end of bail
 
+; .proc poke: ?, a8  main.nt65:151
 main__poke:
     sta a:$2100
     rts
+; end of poke

@@ -11,5 +11,7 @@
 .export snd__init
 
 .segment "CODE": absolute
+; .proc init  snd.nt65:6
 snd__init:
     rts
+; end of init

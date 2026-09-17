@@ -14,10 +14,11 @@ SCREEN       = $0400
 SCREEN_PAGES = 4
 
 .segment "ZEROPAGE": zeropage
-ptr:    .res 2
-frame:  .res 1
+ptr:   .res 2
+frame: .res 1
 
 .segment "CODE": absolute
+; .proc fill_page  main.nt65:17
 main__fill_page:
     ldy #0
 fill_page__loop:
@@ -25,13 +26,16 @@ fill_page__loop:
     iny
     bne fill_page__loop
     rts
+; end of fill_page
 
+; .proc main  main.nt65:33
 main:
     ; set16!(ptr, SCREEN)  main.nt65:34
     lda #<SCREEN
     sta z:ptr
     lda #>SCREEN
     sta z:ptr+1
+    ; end of set16!
     ldx #SCREEN_PAGES
 main__page:
     lda #$20                        ; ' '
@@ -41,3 +45,4 @@ main__page:
     bne main__page
     inc z:frame
     jmp main
+; end of main

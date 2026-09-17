@@ -18,9 +18,12 @@ segments__ptr: .res 2
 segments__tmp: .res 1
 
 .segment "CODE": absolute
+; .proc main: a8, i8  segments.nt65:16
 segments__main:
     rts
+; end of main
 
+; .proc draw: a8, i8  segments.nt65:20
 segments__draw:
     .i8
     ldx #0
@@ -33,5 +36,6 @@ draw__loop:
 
 .pushseg
 .segment "RODATA": absolute
-        draw__table: .byte 1, 2, 4, 8
+draw__table: .byte 1, 2, 4, 8
 .popseg
+; end of draw

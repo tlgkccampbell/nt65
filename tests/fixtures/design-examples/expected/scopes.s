@@ -37,23 +37,25 @@ MAX_ACTORS = 8
 palette: .res 32
 
 .segment "CODE": absolute
+; .proc init: a8, i8  scopes.nt65:15
 scopes__init:
-        .i8
-        ldx #0
-    init__loop:
-        sta a:$0200,x
-        inx
-        bne init__loop
-        ldx #31
-    init__loop_2:
-        stz a:palette,x
-        dex
-        bpl init__loop_2
+    .i8
+    ldx #0
+init__loop:
+    sta a:$0200,x
+    inx
+    bne init__loop
+    ldx #31
+init__loop_2:
+    stz a:palette,x
+    dex
+    bpl init__loop_2
     rts
+; end of init
 
-    scopes__Color__red = $00
-    scopes__Color__green = $05
-    scopes__Color__blue = $06
+scopes__Color__red = $00
+scopes__Color__green = $05
+scopes__Color__blue = $06
 
 scopes__Point__x = $00
 scopes__Point__y = $02
@@ -74,48 +76,48 @@ scopes__player:
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
 scopes__actors:
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
     .word $00                       ; pos::x
     .word $00                       ; pos::y
     .byte $00                       ; hp
-    .byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20  ; name
+    .res 16, $20                    ; name
     .res 8                          ; colors
 
 .segment "RODATA": absolute
@@ -132,30 +134,40 @@ scopes__hero:
     .addr player_input              ; ai
 
 scopes__wave:
-        .word $20                   ; x
-        .word $00                   ; y
-        .byte $00                   ; hp
-        .addr chase                 ; ai
-        .word $40                   ; x
-        .word $00                   ; y
-        .byte $00                   ; hp
-        .addr chase                 ; ai
+    .word $20                       ; x
+    .word $00                       ; y
+    .byte $00                       ; hp
+    .addr chase                     ; ai
+    .word $40                       ; x
+    .word $00                       ; y
+    .byte $00                       ; hp
+    .addr chase                     ; ai
 
 .segment "CODE": absolute
+; .proc chase: a8, i8  scopes.nt65:82
 chase:
     rts
+; end of chase
 
+; .proc player_input: a8, i8  scopes.nt65:86
 player_input:
     rts
+; end of player_input
 
+; .proc cmd_move: a8, i8  scopes.nt65:90
 cmd_move:
     rts
+; end of cmd_move
 
+; .proc cmd_fire: a8, i8  scopes.nt65:94
 cmd_fire:
     rts
+; end of cmd_fire
 
+; .proc cmd_quit: a8, i8  scopes.nt65:98
 cmd_quit:
     rts
+; end of cmd_quit
 
 .segment "RODATA": absolute
 scopes__lo: .lobytes cmd_move, cmd_fire, cmd_quit  ; handlers

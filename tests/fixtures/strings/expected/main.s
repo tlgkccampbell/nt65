@@ -14,15 +14,20 @@ title_screen: .byte $0e, $14, $36, $35, $00  ; screen(TITLE)
 prompt:       .byte $50, $52, $45, $53, $53, $20, $53, $54, $41, $52, $54, $00  ; PROMPT
 first:        .byte $50, $0b
 best:
-    .byte $4e, $54, $36, $35, $00, $00, $00, $00  ; name
+    .byte $4e, $54, $36, $35        ; name
+    .res 4, $00                     ; name
     .word $64                       ; score
 labels:
     ; label!(PROMPT)  main.nt65:24
     .byte $50, $52, $45, $53, $53, $20, $53, $54, $41, $52, $54, $00  ; PROMPT
+    ; end of label!
     ; label!("GO")  main.nt65:25
     .byte $47, $4f, $00             ; "GO"
+    ; end of label!
 
 .segment "CODE": absolute
+; .proc length  main.nt65:29
 length:
     lda #$04
     rts
+; end of length

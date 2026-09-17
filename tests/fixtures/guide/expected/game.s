@@ -13,8 +13,10 @@
 gfx__BORDER = $d020
 
 .segment "CODE": absolute
+; .proc start  game.nt65:8
 start:
     jsr gfx__clear
     jsr _gfx_fill
     lda a:gfx__BORDER
     rts
+; end of start

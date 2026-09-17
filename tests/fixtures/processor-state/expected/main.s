@@ -17,9 +17,10 @@
 .export main__command
 
 .segment "BSS": absolute
-value:  .res 2
+value: .res 2
 
 .segment "CODE": absolute
+; .proc render: a16, i8 -> a8, i8  main.nt65:15
 main__render:
     .a16
     lda #$1234
@@ -27,7 +28,9 @@ main__render:
     .a8
     lda #$12
     rts
+; end of render
 
+; .proc fill: a16  main.nt65:24
 main__fill:
     sep #$20
     bra fill__b
@@ -38,7 +41,9 @@ fill__a:
 fill__b:
     rep #$20
     bra fill__a
+; end of fill
 
+; .proc reset: emu -> native, a16, i16  main.nt65:36
 main__reset:
     clc
     xce
@@ -50,7 +55,9 @@ main__reset:
     txs
     lda #0
     rts
+; end of reset
 
+; .proc hooked: emu, a? -> a8, i16  main.nt65:49
 hooked:
     .a8
     lda #1
@@ -59,7 +66,9 @@ hooked:
     rep #$10
     ldx #$1234
     rts
+; end of hooked
 
+; .proc save: a8, i8  main.nt65:60
 main__save:
     php
     rep #$30
@@ -70,12 +79,16 @@ main__save:
     .a8
     lda #$12
     rts
+; end of save
 
+; .proc keep: a*, i*  main.nt65:71
 main__keep:
     pha
     pla
     rts
+; end of keep
 
+; .proc merge: a8  main.nt65:79
 merge:
     lda a:value
     beq merge__done
@@ -84,15 +97,21 @@ merge__done:
     sep #$20
     lda #1
     rts
+; end of merge
 
+; .proc tail: a16 -> a8  main.nt65:90
 main__tail:
     sep #$20
     jmp render_again
+; end of tail
 
+; .proc render_again: a8  main.nt65:95
 render_again:
     lda #1
     rts
+; end of render_again
 
+; .proc handler: a?, i?  main.nt65:101
 handler:
     rep #$30
     .a16
@@ -101,14 +120,18 @@ handler:
 handler__vector:
     ldx #$1234
     rti
+; end of handler
 
+; .proc command: a8, i8  main.nt65:122
 main__command:
     ; dispatch!(@load, @save)  main.nt65:123
     jmp (dispatch__table,x)
 dispatch__table:
-    .addr command__load             ; t
-    .addr command__save             ; t
+    .addr command__load
+    .addr command__save
+    ; end of dispatch!
 command__load:
     rts
 command__save:
     rts
+; end of command

@@ -8,24 +8,26 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
-    ROWS = 25
+ROWS = 25
 
 COLUMNS = $50
 BORDER = $00
 
 .segment "ZEROPAGE": zeropage
-narrow:   .res 2
+narrow: .res 2
 
 .segment "BSS": absolute
-wide:     .res 2
+wide: .res 2
 
 BUFFER = wide
 
 .segment "RODATA": absolute
-sizes:    .byte COLUMNS, ROWS, BORDER, $ff, $07  ; clamp(300), clamp(7)
+sizes: .byte COLUMNS, ROWS, BORDER, $ff, $07  ; clamp(300), clamp(7)
 
 .segment "CODE": absolute
+; .proc main  main.nt65:30
 main:
     lda a:BUFFER
     sta a:wide + 1
     rts
+; end of main

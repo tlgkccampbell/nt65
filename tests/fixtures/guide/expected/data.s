@@ -42,6 +42,8 @@ data__exe_header:
 exe_header__end:
 
 .segment "CODE": absolute
+; .proc hp  data.nt65:28
 data__hp:
     lda a:data__player+4            ; player::hp
     rts
+; end of hp

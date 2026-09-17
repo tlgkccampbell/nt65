@@ -17,11 +17,13 @@
 .import VIC_BORDER
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what imports.nt65 was built against"
 
-imports__CHROUT = $FFD2
+imports__CHROUT = $ffd2
 
 .segment "CODE": absolute
+; .proc print: a8, i16  imports.nt65:15
 imports__print:
     lda z:zp_scratch
     sta a:$d020                     ; VIC_BORDER
     lda f:far_table
     jmp _printf
+; end of print

@@ -9,12 +9,13 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .segment "FAST": zeropage
-scratch:    .res 2
+scratch: .res 2
 
 .segment "VRAM": absolute
-tiles:      .res 64
+tiles: .res 64
 
 .segment "CODE": absolute
+; .proc start  main.nt65:13
 start:
     stz z:scratch
     lda #$01                        ; DEBUG
@@ -22,3 +23,4 @@ start:
     ldy #>$0102                     ; VERSION
     lda a:tiles
     rts
+; end of start

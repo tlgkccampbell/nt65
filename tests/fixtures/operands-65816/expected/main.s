@@ -11,15 +11,16 @@
 .import far_routine: far
 
 .segment "ZEROPAGE": zeropage
-ptr:        .res 3
+ptr: .res 3
 
 .segment "FARDATA": far
-far_table:  .res 16
+far_table: .res 16
 
 .segment "RODATA": absolute
-vector:     .addr forms
+vector: .addr forms
 
 .segment "CODE": absolute
+; .proc forms: a16, i8  main.nt65:22
 forms:
     lda f:far_table
     sta f:far_table,x
@@ -67,9 +68,14 @@ forms__here:
     brl forms__out
 forms__out:
     jsr (vector,x)
+; end of forms
 
+; .proc long_jumps: far  main.nt65:69
 long_jumps:
     jml [vector]
+; end of long_jumps
 
+; .proc tail: far  main.nt65:74
 tail:
     jml far_routine
+; end of tail
