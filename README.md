@@ -31,6 +31,11 @@ nt65 build [--config name] [-D NAME=value] [--depfile nt65.d] [--c-header nt65.h
 writes one ca65 source per module. `nt65 --help` lists every option; §5.3 of the design
 describes the project file and the command line.
 
+## Examples
+
+[`examples/snes-hello`](examples/snes-hello) is a small SNES program: a backdrop colour mixed
+with the joypad.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

@@ -12,5 +12,6 @@ editors/vscode/server/
 tests/fixtures/*/*.s
 tests/fixtures/*/.nt65-outputs
 
-# Corpus build outputs.
+# Corpus and example build outputs.
 tests/corpus/*/build/
+examples/*/build/

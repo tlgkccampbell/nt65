@@ -1,0 +1,46 @@
+; The internal ROM header at $00:ffc0 and the interrupt vectors after it.
+.module header
+
+.cpu 65816
+
+.use main::{reset, nmi, ignore}
+
+.struct RomHeader {
+    title:     .res 21, ' '
+    map_mode:  .byte
+    cart_type: .byte
+    rom_size:  .byte
+    ram_size:  .byte
+    region:    .byte
+    developer: .byte
+    version:   .byte
+    checksum_complement: .word
+    checksum:  .word
+}
+
+.segment HEADER
+.data header: .type RomHeader {
+    title = "NT65 HELLO"
+    map_mode = $20              ; LoROM, SlowROM
+    cart_type = $00             ; ROM only
+    rom_size = $05              ; 32 KiB
+    ram_size = $00
+    region = $01                ; North America
+    developer = $00
+    version = 0
+    checksum_complement = $ffff ; not computed: emulators only warn
+    checksum = $0000
+}
+.assert .sizeof(RomHeader) == 32
+
+.segment VECTORS
+.data vectors {
+    ; unused, unused, COP, BRK, ABORT, NMI, unused, IRQ
+    .data native: .addr[8] {
+        0, 0, ignore, ignore, ignore, nmi, 0, ignore
+    }
+    ; unused, unused, COP, unused, ABORT, NMI, RESET, IRQ and BRK
+    .data emulation: .addr[8] {
+        0, 0, ignore, 0, ignore, ignore, reset, ignore
+    }
+}

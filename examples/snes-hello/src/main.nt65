@@ -1,0 +1,170 @@
+; Hello, SNES: a backdrop colour the joypad mixes. Right and left brighten and darken red,
+; up and down green, A and B blue.
+.module main
+
+.cpu 65816
+
+.use snes::*
+
+.export reset, nmi, ignore
+
+.segment DIRECT
+.data levels:      .word[3]     ; red, green and blue, 0-31
+.data color:       .word        ; the colour the NMI uploads
+.data color_ready: .byte        ; set by the main loop, cleared by the NMI once uploaded
+.data frame_count: .word
+
+.segment ROM
+
+; The buttons that move each level, in the order of `levels`.
+.data brighter: .word Joy::right, Joy::up, Joy::A
+.data darker:   .word Joy::left, Joy::down, Joy::B
+
+
+; Power-on: native mode, the stack, D and B, the PPU cleared and the screen on.
+.proc reset: emu, dp?, dbr? -> none {
+    sei
+    clc
+    xce                         ; native, both widths 8
+    rep #$38                    ; a16, i16, binary mode
+    ldx #$1fff
+    txs
+    lda #$0000
+    tcd                         ; D = $0000
+    phk
+    plb                         ; B = $00
+    sep #$20
+    lda #$80
+    sta INIDISP                 ; forced blank while the registers are cleared
+    ldx #$0032
+@clear:
+    stz INIDISP + 1,x           ; $2101-$2133
+    dex
+    bpl @clear
+    stz NMITIMEN
+
+    rep #$20
+    stz frame_count
+    lda #12
+    sta levels                  ; a dark purple to start
+    stz levels + 2
+    lda #16
+    sta levels + 4
+    sep #$20
+    jsr mix
+
+    lda #$0f
+    sta INIDISP                 ; full brightness
+    lda #$81
+    sta NMITIMEN                ; NMI and joypad auto-read
+    cli
+    jmp main
+}
+
+; Each frame: wait for the NMI, read the joypad, and every fourth frame move the levels.
+.proc main: std -> none {
+@frame:
+    jsr wait_frame
+    lda frame_count
+    and #$03
+    bne @frame
+    jsr read_buttons
+    jsr mix
+    bra @frame
+}
+
+; Wait for the next NMI, then for the joypad auto-read that starts with it to finish.
+.proc wait_frame: std {
+    rep #$20
+    lda frame_count
+@vblank:
+    cmp frame_count
+    beq @vblank
+    sep #$20
+@joypad:
+    lda HVBJOY
+    and #$01
+    bne @joypad
+    rts
+}
+
+; Move each level up or down by one while its button is held.
+.proc read_buttons: std {
+    rep #$20
+    ldx #4                      ; blue, green, then red: a word each
+@level:
+    lda JOY1L
+    and brighter,x
+    beq @dimmer
+    lda levels,x
+    cmp #31
+    beq @next
+    inc levels,x
+    bra @next
+@dimmer:
+    lda JOY1L
+    and darker,x
+    beq @next
+    lda levels,x
+    beq @next
+    dec levels,x
+@next:
+    dex
+    dex
+    bpl @level
+    sep #$20
+    rts
+}
+
+; Mix the levels into a BGR555 colour, and hand it to the NMI.
+.proc mix: std {
+    rep #$20
+    lda levels + 4              ; blue
+    .repeat 5 {
+        asl a
+    }
+    ora levels + 2              ; green
+    .repeat 5 {
+        asl a
+    }
+    ora levels                  ; red
+    sta color
+    sep #$20
+    lda #1
+    sta color_ready
+    rts
+}
+
+; Vertical blank: upload a colour the main loop has finished mixing, and count the frame.
+.proc nmi: interrupt, native {
+    rep #$30
+    pha
+    phd
+    phb
+    phk
+    plb
+    lda #$0000
+    tcd
+    sep #$20
+    lda RDNMI                   ; acknowledge
+    lda color_ready
+    beq @count
+    stz CGADD                   ; colour 0, the backdrop
+    lda color
+    sta CGDATA
+    lda color + 1
+    sta CGDATA
+    stz color_ready
+@count:
+    rep #$20
+    inc frame_count
+    plb
+    pld
+    pla
+    rti
+}
+
+; COP, BRK, ABORT and IRQ, none of which this program uses.
+.proc ignore: interrupt {
+    rti
+}

@@ -3,7 +3,7 @@ using Norristown.Project;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// The corpus: realistic programs, built, assembled and linked as their own build scripts
+/// The corpus and the examples: realistic programs, built, assembled and linked as their own build scripts
 /// do. Fixtures test each construct in its own form; these catch the combinations real code
 /// uses. They are part of the oracle suite, not the edit loop.
 /// </summary>

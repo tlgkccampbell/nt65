@@ -4,7 +4,7 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// A realistic program under <c>tests/corpus</c>, built the way its <c>build.sh</c> builds it:
+/// A realistic program under <c>tests/corpus</c> or <c>examples</c>, built the way its <c>build.sh</c> builds it:
 /// its <c>nt65.json</c>, the sources its globs name, which may be outside it, one linker
 /// configuration, and whatever hand-written ca65, include files and binaries sit beside them.
 /// Its <c>build/</c> directory is output and is never read, and a directory with no
@@ -27,13 +27,14 @@ internal sealed record CorpusProgram(
     IReadOnlyList<(string Name, byte[] Content)> Other)
 {
     /// <summary>
-    /// Every corpus program, or those whose name contains NT65_FIXTURE
+    /// Every corpus program and example, or those whose name contains NT65_FIXTURE
     /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>).
     /// </summary>
     public static IReadOnlyList<CorpusProgram> All()
     {
         var filter = Repo.Selection;
-        return [.. System.IO.Directory.GetDirectories(Repo.Path("tests", "corpus"))
+        return [.. new[] { Repo.Path("tests", "corpus"), Repo.Path("examples") }
+            .SelectMany(System.IO.Directory.GetDirectories)
             .Where(dir => File.Exists(Path.Combine(dir, ProjectFile.Name)))
             .Where(dir => string.IsNullOrEmpty(filter)
                 || Path.GetFileName(dir).Contains(filter, StringComparison.OrdinalIgnoreCase))
