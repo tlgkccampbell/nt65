@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Norristown.LanguageServer.Protocol;
 
 namespace Norristown.Tests.LanguageServer;
@@ -36,6 +37,25 @@ public sealed class ProjectsTests : IDisposable
             await DiagnosticsAsync(client, "tools/src/main.nt65", timeout));
         Assert.Equal(["`gfx` is not declared, and no module `gfx` is in this build"],
             await DiagnosticsAsync(client, "scratch.nt65", timeout));
+    }
+
+    /// <summary>
+    /// VS Code spells a Windows drive in lower case with its colon escaped,
+    /// <c>file:///c%3A/...</c>, and the project beneath the folder is found all the same.
+    /// </summary>
+    [Fact]
+    public async Task AFolderWithAnEscapedDriveFindsItsProject()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
+        Write("src/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
+        Write("src/main.nt65", Caller);
+        static string AsVsCode(string uri) =>
+            Regex.Replace(uri, "^file:///([A-Za-z]):", m => $"file:///{m.Groups[1].Value.ToLowerInvariant()}%3A");
+        await using var client = await TestClient.StartAsync(AsVsCode(Uri("")), null, timeout);
+
+        await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), Read("src/main.nt65"));
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
     }
 
     /// <summary>

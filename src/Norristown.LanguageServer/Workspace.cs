@@ -33,10 +33,15 @@ internal sealed class Workspace
     /// The logical path a URI names, with <c>/</c> separators, which is what diagnostics and
     /// output carry. A URI that is not a file keeps its own spelling.
     /// </summary>
-    public static string PathOf(string uri) =>
-        Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile
-            ? parsed.LocalPath.Replace('\\', '/')
-            : uri;
+    public static string PathOf(string uri)
+    {
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile)
+            return uri;
+        // VS Code escapes a drive's colon, `file:///c%3A/src`, which .NET does not take for a
+        // drive and gives back as `/c:/src`.
+        var path = parsed.LocalPath.Replace('\\', '/');
+        return path.Length >= 3 && path[0] == '/' && char.IsAsciiLetter(path[1]) && path[2] == ':' ? path[1..] : path;
+    }
 
     /// <summary>A file's text, or null when it cannot be read.</summary>
     public static string? Read(string path)
