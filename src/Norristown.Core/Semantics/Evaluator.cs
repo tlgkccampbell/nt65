@@ -454,7 +454,7 @@ internal sealed class Evaluator
     private Value ValueOfName(SyntaxNode name)
     {
         if (BoundItem(name) is { } item)
-            return Evaluate(item);
+            return Indexed(name, Evaluate(item));
         if (SymbolOf(name) is not { } symbol)
         {
             // Binding left a name in a value `.select` chooses between to whichever evaluation
@@ -464,8 +464,73 @@ internal sealed class Evaluator
             return Value.Unknown;
         }
         if (arguments.TryGetValue(symbol, out var argument))
-            return argument;
-        return symbol.Kind == SymbolKind.Member ? OffsetAlong(name) : ValueOfSymbol(symbol);
+            return Indexed(name, argument);
+        return Indexed(name, symbol.Kind == SymbolKind.Member ? OffsetAlong(name) : ValueOfSymbol(symbol));
+    }
+
+    /// <summary>
+    /// <paramref name="value"/> with the elements any <c>[i]</c> along the path steps over:
+    /// on a member's offset when the path runs through a type, and on an address when it
+    /// starts at data. Every name a path can end in comes through here, so an index on one
+    /// that reaches no declaration is refused rather than quietly dropped.
+    /// </summary>
+    private Value Indexed(SyntaxNode name, Value value)
+    {
+        if (!ElementIndexes.In(name))
+            return value;
+        return IndexOffset(name) is { } stepped && value.AsNumber() is { } at
+            ? Value.Of(at + stepped)
+            : Value.Unknown;
+    }
+
+    /// <summary>
+    /// How many bytes the indexes along a path come to, or null when one of them is wrong,
+    /// which is reported here. An index is worked out before the program runs, so it is a
+    /// constant and has to be an element the declaration holds.
+    /// </summary>
+    private long? IndexOffset(SyntaxNode name)
+    {
+        long offset = 0;
+        foreach (var (part, index) in ElementIndexes.Of(name))
+        {
+            if (!resolved.TryGetValue((name.Tree, part.Span.Start), out var symbol))
+                return null;
+            if (symbol.Kind is not (SymbolKind.Data or SymbolKind.Member) || symbol is { Kind: SymbolKind.Data, Data: null })
+            {
+                Report(index, symbol is { Kind: SymbolKind.Data, Data: null }
+                    ? $"`{symbol.DisplayName}` is mixed data, which has bytes and no elements"
+                    : $"`{symbol.DisplayName}` is {symbol.KindPhrase}, and `[i]` reaches an element of data");
+                return null;
+            }
+
+            // A count nt65 cannot work out has already been reported where it is written.
+            EvaluateSymbol(symbol);
+            if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
+                return null;
+            if (ElementIndexes.WrittenIn(index) is not { } written)
+                return null;
+            if (Evaluate(written).AsNumber() is not { } at)
+            {
+                // A name in it that means nothing has been reported where it is written, and
+                // the index is no constant only because of it.
+                if (Names(written))
+                {
+                    Report(written, "an element index is a constant: an index worked out as the program runs "
+                        + $"is what `{symbol.DisplayName},x` is for");
+                }
+                return null;
+            }
+            if (at < 0 || at >= count)
+            {
+                Report(written, at < 0
+                    ? $"an element index is never negative, and this one is {at}"
+                    : $"`{symbol.DisplayName}` holds {count} {(count == 1 ? "element" : "elements")}, "
+                        + $"and the last of them is {count - 1}");
+                return null;
+            }
+            offset += at * stride;
+        }
+        return offset;
     }
 
     /// <summary>
@@ -491,6 +556,11 @@ internal sealed class Evaluator
         }
         return Value.Of(offset);
     }
+
+    /// <summary>Whether every name an expression writes names something, declared or bound.</summary>
+    private bool Names(SyntaxNode node) =>
+        (node.Kind != SyntaxKind.NameExpression || SymbolOf(node) is not null || BoundItem(node) is not null)
+        && node.ChildNodes.All(Names);
 
     /// <summary>The address a path of members starts from, such as the instance of <c>pos::y</c>, or null.</summary>
     private Symbol? AddressAlong(SyntaxNode name)
@@ -610,7 +680,7 @@ internal sealed class Evaluator
                 return Value.Unknown;
             if (!HasBytesOfItsOwn(laid))
             {
-                Report(arguments[0], $"`{laid.Name}` is a {laid.KindText} and takes no bytes of its own, "
+                Report(arguments[0], $"`{laid.Name}` is {laid.KindPhrase} and takes no bytes of its own, "
                     + $"so `{name}` has nothing to measure");
                 return Value.Unknown;
             }
@@ -751,6 +821,11 @@ internal sealed class Evaluator
     /// </summary>
     private bool NotAnExtent(Symbol symbol, string function, SyntaxNode at)
     {
+        if (ElementIndexes.In(at))
+        {
+            Report(at, $"`{function}` measures a declaration, and `{at.GetText().Trim()}` is a place in one");
+            return true;
+        }
         var what = symbol.Kind switch
         {
             SymbolKind.Label => "a label, which is only a position",

@@ -618,7 +618,9 @@ address symbol in the declaration's segment with the member's size: `player::hp`
 `player + Player::hp`, and `player::pos::y` is `player + 2`. For an array,
 `.countof(actors)` is `MAX_ACTORS`, `.sizeof(actors)` is `MAX_ACTORS * .sizeof(Player)`,
 and `.sizeof(Player)` is the stride, so with X holding an element's offset
-`lda actors::hp,x` reads that element's `hp`. Nothing else changes: these are ordinary
+`lda actors::hp,x` reads that element's `hp`. An element the program does not have to work
+out is written `actors[1]::hp` (§8), which is the same address arrived at before it runs.
+Nothing else changes: these are ordinary
 indexed operands that nt65 sizes from the segment of the declaration. `.type` is dotted
 like the built-in element types, because a bare type name inside a proc would read like an
 instruction.
@@ -1497,7 +1499,12 @@ confused; a record is `.type T { … }` and an array of records `.type T[] { …
 - **Counts.** `[n]` with values checks the count exactly. A body shorter or longer than its
   count is an error that names both, rather than padding with zeros, because a short jump
   table is exactly the mistake a count is there to catch; padding is written with a
-  `.repeat` in the body. `[]` with no values at all is an error.
+  `.repeat` in the body. `[]` with no values at all is an error. One text is the exception:
+  a counted `.byte` array whose only value is one string, a text constant or a charmap
+  applied to one, `.data title: .byte[21] { "NT65" }`, is filled out with zero to its count,
+  as `char title[21] = "..."` is in C. A text is not a table, so nothing else is padded: two
+  texts, or one character, are a list again and a short one is the error it always was, and a
+  pad other than zero is what a structure's `.res n, pad` member is for (§6.3).
 - **Mixed data.** `.data name { }` holds unnamed data directives of any kind, nested `.data`
   declarations, `@` positions, unnamed `.align` and `.res`, `.repeat`, `.each` and `.if`, and
   macro calls that expand to those. It holds no instructions. A nested declaration is a
@@ -1545,6 +1552,29 @@ bits, which ca65 would keep in an `.addr` without a word; `.loword(x)` says thos
 is meant. In the same way an absolute or far address in a `.byte` or a one-byte immediate,
 and a far one in a two-byte immediate, is an error that ca65 would otherwise report as a
 range error: `<x` and `.loword(x)` say which part is meant.
+
+**Elements.** `name[i]` is the element at `i` of a declaration that has a count:
+`buffer[3]`, `handlers[2]`, `actors[1]`. It is `name` plus `i` times the size of one element
+— a record's being its type's size — and is as wide an address as `name` is. A member path
+may follow, `actors[1]::hp`, and a member that is itself an array takes one of its own,
+`player::colors[2]`.
+
+An index is a constant, worked out before the program runs; one worked out as it runs is
+what `actors::hp,x` is for. An index at or past the count, or below zero, is an error, and so
+is an index on something with no elements: a routine, a constant, mixed data, or a name that
+stands for what a call or a repetition gave it. A declaration's `[n]` and an expression's
+`[i]` never meet — a count follows an element type, an index follows a name — and `.sizeof`
+and the rest measure a declaration, not a place in one. The output writes the sum with the
+path it came from in a comment, as `player::hp` is written.
+
+```nt65
+.data actors: .type Actor[8]
+
+    lda actors[1]::hp
+    .repeat 8, i {
+        lda actors[i]::hp           ; a turn's name is a constant, so it indexes as one
+    }
+```
 
 A data declaration's `.sizeof` is its bytes and its `.countof` its elements (§7.6):
 `.byte[16]` gives 16 and 16, `.word a, b` gives 4 and 2, `.type Player[8]` gives
@@ -1634,6 +1664,10 @@ covers a byte operator that reads as if it applied to the whole expression.
 
 ca65's precedence differs, which does not matter: the output is parenthesized wherever
 precedence could, so nothing depends on ca65's table.
+
+A name may be followed by `[i]`, the element at `i` of a declaration with a count (§8).
+It binds tighter than every operator, as a parenthesis does, and what is inside the brackets
+is an expression like any other.
 
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
@@ -3107,6 +3141,17 @@ Recorded so the reasoning survives. None is open.
   member of everything inside and so one identity per member for a body written once. Two
   roles for one member are two families instead, `note::pulse1` and `stop::pulse1`, which says
   the same thing with the names the program already has.
+- **An element is `name[i]`, and one short text is padded out.** Reaching the second entry
+  of a table meant writing `actors + .sizeof(Actor)`, which repeats what the declaration
+  already says and quietly goes wrong when the type grows a member. `[i]` says the same thing
+  in the words the declaration is written in, and is checked against the count, which is the
+  whole reason the count is written down. It is deliberately a constant: names are never
+  computed (§15), and an index worked out as the program runs is a register, `actors::hp,x`,
+  which the language already has. The brackets cannot be confused with a declaration's `[n]`
+  because a count follows an element type and an index follows a name. Padding is the other
+  half of the same complaint: `char title[21] = "..."` is how a fixed field of text is
+  declared in C, and writing the zeros out by hand hides what the count was for. Only one
+  text is padded, never a list, because a short table is exactly the mistake a count catches.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
@@ -3266,7 +3311,8 @@ annotation  := '.next' (target (',' target)* | '?')
 target      := path                                   ; or an ident parameter, in macros;
                                                       ; a list, or data declared as addresses,
                                                       ; stands for its labels
-path        := '::'? (ident | local) ('::' member-name)*
+path        := '::'? (ident | local) index? ('::' member-name index?)*
+index       := '[' expr ']'                           ; an element of a counted declaration
 module-path := ident ('::' member-name)*              ; always from the modules' root
 instr       := mnemonic operand?                      ; mnemonics include jeq ... jvc (§7.6)
 operand     := '#' expr

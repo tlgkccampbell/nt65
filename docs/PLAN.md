@@ -265,6 +265,14 @@ is. The second is how the rule has always been and is left as it is.
 **Check.** Fixtures for both through the oracle; the C header for an indexed export is
 unchanged, since indexing is a use, not a declaration.
 
+**Done.** Both, with an index allowed after any component of a path, so a member that is
+itself an array takes one too, `player::colors[2]`. Two things the writing of it found: a
+name that stands for what a call or a repetition gave it — a macro parameter, an `.each`
+item — has to refuse an index rather than quietly drop it, since what it stands for is not
+the declaration the index reaches into; and eight messages named a symbol's kind with `a` in
+front, which said `a enumeration` for the kinds that start with a vowel, so the article is
+decided once beside the kind now.
+
 ## Stage 28: The project file in the editor, and the build in VS Code
 
 **Build.**

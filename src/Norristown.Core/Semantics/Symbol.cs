@@ -307,6 +307,13 @@ public sealed class Symbol
     };
 
     /// <summary>
+    /// The same with its article, <c>a routine</c> or <c>an enumeration</c>. The kinds are a
+    /// fixed list, so which article each takes is decided here rather than at every message
+    /// that names one.
+    /// </summary>
+    public string KindPhrase => $"{(KindText[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an" : "a")} {KindText}";
+
+    /// <summary>
     /// How wide an address it is to code in <paramref name="tree"/>. Another module sees the
     /// size its export gives it, which may be wider than the size it has.
     /// </summary>

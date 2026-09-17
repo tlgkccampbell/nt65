@@ -236,8 +236,11 @@ A label is only a position in code, never a size. Every name for data is a decla
 ```
 
 `.sizeof(player)` is 5, and `player::hp` is the address `player + 4`, so `lda player::hp`
-needs no offset table. A count in brackets is checked: `.byte[4] { 1, 2, 4 }` is an error,
-not three bytes and a zero. `.res` is left for padding between declarations.
+needs no offset table; `actors[1]::hp` reaches an element of an array without the arithmetic.
+A count in brackets is checked: `.byte[4] { 1, 2, 4 }` is an error, not three bytes and a
+zero. One text is the exception, `.byte[21] { "NT65" }`, which is filled out with zero the way
+`char title[21] = "..."` is in C; a pad other than zero is a structure's `.res n, pad` member,
+and `.res` is otherwise left for padding between declarations.
 
 ## Constants, functions and configuration
 

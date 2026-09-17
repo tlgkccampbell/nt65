@@ -531,6 +531,11 @@ public sealed class Emitter
         depth++;
         Walk(lines, from: 1);
         depth--;
+        if (kind == BlockKind.DataBody && opener is not null
+            && (opener.Kind == SyntaxKind.DataDirective ? opener : DataSyntax.ElementOf(opener)) is { } declared)
+        {
+            Padding(lines[0], declared);
+        }
         if (kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody)
             End(opener);
         if (kind == BlockKind.Proc && routine is { } named)
@@ -929,7 +934,20 @@ public sealed class Emitter
         {
             text = $".res {laid.Length}";
         }
-        WithName(line, statement, directive, symbol, text, laid.Length, comment);
+
+        // One text in a counted `.byte` array is padded with zero to the count, so the line
+        // holds the text and the line below it the zeros that fill the array out.
+        var zeros = (int)(PaddedText.Padding(directive, model, expansion)?.Zeros ?? 0);
+        WithName(line, statement, directive, symbol, text, laid.Length - zeros, comment);
+        Padding(line, directive);
+    }
+
+    /// <summary>The zeros a padded text is filled out with, where a declaration writes any.</summary>
+    private void Padding(SyntaxNode line, SyntaxNode directive)
+    {
+        if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
+            return;
+        Code(line, Commented($"{Body}.res {zeros}, $00", $"padded to {count}"), (int)zeros);
     }
 
     /// <summary>
@@ -1955,10 +1973,11 @@ public sealed class Emitter
         }
 
         // A member is an offset: the offsets along the path added up, on the address the
-        // path starts from when it starts at an instance rather than at a type.
-        if (reference.Kind == SymbolKind.Member)
+        // path starts from when it starts at an instance rather than at a type. An index along
+        // the path is whole elements of the same sum.
+        if (reference.Kind == SymbolKind.Member || (ElementIndexes.In(name) && reference.IsAddress))
         {
-            MemberPath(name, tokens, edits);
+            MemberPath(name, edits);
             return;
         }
 
@@ -2040,15 +2059,16 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A path through a type or an instance. Through a type it is a number; through an
-    /// instance it is that instance plus the offset, which is what ca65 and ld65 resolve.
-    /// Either way the path it came from is kept in a comment.
+    /// A path through a type or an instance, with the elements any <c>[i]</c> along it steps
+    /// over. Through a type it is a number; through an instance it is that instance plus the
+    /// offset, which is what ca65 and ld65 resolve. Either way the path it came from is kept
+    /// in a comment.
     /// </summary>
-    private void MemberPath(SyntaxNode name, IReadOnlyList<SyntaxToken> tokens, Edits edits)
+    private void MemberPath(SyntaxNode name, Edits edits)
     {
         Symbol? start = null;
         long offset = 0;
-        foreach (var token in tokens)
+        foreach (var token in name.ChildTokens)
         {
             if (token.Kind == SyntaxKind.ColonColon || model.SymbolAt(token) is not { } part)
                 continue;
@@ -2057,13 +2077,19 @@ public sealed class Emitter
             else if (part.IsAddress)
                 start ??= part;
         }
+        foreach (var (part, index) in ElementIndexes.Of(name))
+        {
+            if (model.SymbolAt(part) is { } indexed && ElementIndexes.Stride(indexed) is { } stride
+                && ElementIndexes.WrittenIn(index) is { } written
+                && model.ValueOf(written, expansion).AsNumber() is { } element)
+            {
+                offset += element * stride;
+            }
+        }
 
-        var text = start is null
+        Replace(name, start is null
             ? Constant(offset)
-            : offset == 0 ? Named(start) : $"{Named(start)}+{offset}";
-        edits.Replace[tokens[0].Position] = text;
-        for (var i = 1; i < tokens.Count; i++)
-            edits.Replace[tokens[i].Position] = "";
+            : offset == 0 ? Named(start) : $"{Named(start)}+{offset}", edits);
         edits.Comments.Add(name.GetText().Trim());
     }
 

@@ -1735,7 +1735,7 @@ internal sealed class Parser
                 return ParseBuiltinCall();
             case SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.ColonColon
                 or SyntaxKind.Register or SyntaxKind.Mnemonic:
-                var name = ParseName();
+                var name = ParseName(indexed: true);
                 return Kind == SyntaxKind.OpenParen
                     ? new GreenSyntax(SyntaxKind.CallExpression, [name, ParseArgumentList()])
                     : name;
@@ -1784,8 +1784,12 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ArgumentList, children.ToImmutable());
     }
 
-    /// <summary><c>::</c>-separated, as in <c>gfx::init</c>, <c>::top_level</c> and <c>Point::x</c>.</summary>
-    private GreenNode ParseName()
+    /// <summary>
+    /// <c>::</c>-separated, as in <c>gfx::init</c>, <c>::top_level</c> and <c>Point::x</c>.
+    /// <paramref name="indexed"/> allows <c>[i]</c> after a component, which only an expression
+    /// does: after the <c>T</c> of a <c>.type T[n]</c> the brackets are the declaration's count.
+    /// </summary>
+    private GreenNode ParseName(bool indexed = false)
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         if (Kind == SyntaxKind.ColonColon)
@@ -1803,6 +1807,8 @@ internal sealed class Parser
             Report("expected a name");
             return new GreenSyntax(SyntaxKind.NameExpression, children.ToImmutable());
         }
+        if (indexed && Kind == SyntaxKind.OpenBracket)
+            children.Add(ParseElementIndex());
 
         while (Kind == SyntaxKind.ColonColon)
         {
@@ -1819,8 +1825,26 @@ internal sealed class Parser
                 Report("expected a name after `::`");
                 break;
             }
+            if (indexed && Kind == SyntaxKind.OpenBracket)
+                children.Add(ParseElementIndex());
         }
         return new GreenSyntax(SyntaxKind.NameExpression, children.ToImmutable());
+    }
+
+    /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
+    private GreenNode ParseElementIndex()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseBracket && !AtEnd)
+            children.Add(ParseExpression());
+        else
+            Report("expected the element: `name[i]` is the i-th of what `name` declares");
+        if (Kind == SyntaxKind.CloseBracket)
+            children.Add(Advance());
+        else
+            Report("expected `]`");
+        return new GreenSyntax(SyntaxKind.ElementIndex, children.ToImmutable());
     }
 
     /// <summary>

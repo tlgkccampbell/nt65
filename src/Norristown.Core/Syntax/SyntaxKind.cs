@@ -195,6 +195,9 @@ public enum SyntaxKind : byte
     /// <summary><c>[16]</c> or <c>[]</c> after an element type: how many elements there are.</summary>
     ElementCount,
 
+    /// <summary><c>[1]</c> after a name in a path: which element of a counted declaration it is.</summary>
+    ElementIndex,
+
     /// <summary>One line of a data body: values separated by commas, one element each.</summary>
     DataValues,
 

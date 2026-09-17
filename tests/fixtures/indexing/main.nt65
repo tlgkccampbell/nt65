@@ -1,0 +1,58 @@
+; An element of a counted declaration, `name[i]`, and a counted `.byte` array whose one text
+; is padded with zero to the count it declares.
+.module main
+
+.cpu 6502
+
+.struct Point {
+x:      .word
+y:      .word
+}
+
+.struct Actor {
+pos:    .type Point
+hp:     .byte
+tiles:  .byte[4]
+}
+
+.charmap screen {
+    'A'..'Z' = $01
+    ' '      = $20
+}
+
+.segment BSS
+.data actors: .type Actor[8]
+.data buffer:   .byte[64]
+.data handlers: .addr[4]
+
+.segment RODATA
+; An index through a type is a number, as every path through one is.
+.data offsets:  .byte Actor::tiles[2], Actor::pos::y
+
+; One text is padded with zero to the count, written on the line or in the body.
+.data title:    .byte[8] { "NT65" }
+.data mapped:   .byte[4] { screen("AB") }
+.data banner:   .byte[6] {
+    "hi"
+}
+
+; A text as long as its count is the array, with nothing to pad.
+.data exact:    .byte[2] { "hi" }
+
+.segment CODE
+.proc main {
+    ; An index on data is that data plus the elements it steps over.
+    lda buffer[3]
+    lda handlers[2]
+    ldy actors[2]::pos::y
+    lda actors[0]::tiles[3]
+    lda hw::slots[2]::id
+
+    lda actors[1]::hp
+    .repeat 8, i {
+        lda actors[i]::hp           ; a turn's name is a constant, so it indexes as one
+    }
+    rts
+}
+
+.export actors, buffer, handlers, offsets, title, mapped, banner, exact

@@ -184,7 +184,7 @@ internal sealed class Requirements
         {
             if (!calls)
             {
-                Report(statement, $"{Quoted(statement)} goes to `{symbol.DisplayName}`, a {symbol.KindText} rather "
+                Report(statement, $"{Quoted(statement)} goes to `{symbol.DisplayName}`, {symbol.KindPhrase} rather "
                     + "than a label, which the analysis cannot follow: `.next` names the labels it reaches, or "
                     + "`.next ?` ends the path", EndPath(step));
             }

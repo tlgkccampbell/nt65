@@ -1,0 +1,11 @@
+; The array another module indexes into. Its count and its layout are part of what the
+; module exports, so an index needs nothing the file that writes it cannot already read.
+.module hw
+
+.export .struct Slot {
+id:     .byte
+addr:   .addr
+}
+
+.segment BSS
+.export .data slots: .type Slot[4]

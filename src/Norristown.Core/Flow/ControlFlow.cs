@@ -615,7 +615,7 @@ public sealed class ControlFlow
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
                     continue;
                 diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
-                    $"`{target.Symbol.DisplayName}` is a {target.Symbol.KindText}, and "
+                    $"`{target.Symbol.DisplayName}` is {target.Symbol.KindPhrase}, and "
                     + $"`{Annotations.Spell(annotation.a)}` names somewhere code is"));
             }
         }

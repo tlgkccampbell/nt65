@@ -334,7 +334,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (Here(reference))
                 {
-                    report(reference.Node.Span, $"`{reference.Text}` is a {set.KindText}, and a name among a "
+                    report(reference.Node.Span, $"`{reference.Text}` is {set.KindPhrase}, and a name among a "
                         + "signature's items is a signature set");
                 }
                 return items;

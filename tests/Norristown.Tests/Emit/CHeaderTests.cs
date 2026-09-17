@@ -102,6 +102,21 @@ public sealed class CHeaderTests
             """.ReplaceLineEndings("\n"), header);
     }
 
+    /// <summary>
+    /// An index is a use rather than a declaration, so a program that reaches into an exported
+    /// array declares exactly what one that does not declares.
+    /// </summary>
+    [Fact]
+    public void IndexingAnExportLeavesTheHeaderAsItIs()
+    {
+        var (plain, _) = Header(("tables.nt65", Tables));
+        var (indexed, problems) = Header(("tables.nt65",
+            Tables.Replace("    rts", "    lda sprites[1]::x\n    rts", StringComparison.Ordinal)));
+
+        Assert.Empty(problems);
+        Assert.Equal(plain, indexed);
+    }
+
     /// <summary>The struct decides the layout, so reordering its members changes the header.</summary>
     [Fact]
     public void AReorderedMemberChangesTheHeader()

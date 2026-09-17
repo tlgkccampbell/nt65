@@ -209,7 +209,7 @@ public static class DataLengths
     /// <summary>
     /// An array's count: a constant, and the number its values come to when it has values. A
     /// short table is exactly the mistake a count is there to catch, so values are never padded
-    /// out to it.
+    /// out to it — except one text, which is padded with zero to the count it declares.
     /// </summary>
     private static void CheckCount(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
@@ -229,7 +229,7 @@ public static class DataLengths
             Report(written, model, diagnostics, on, "an array's count is a constant");
         else if (declared < 0)
             Report(written, model, diagnostics, on, $"an array's count cannot be negative, and this one is {declared}");
-        else if (given is { } values && values != declared)
+        else if (given is { } values && values != declared && PaddedText.Padding(directive, model, on) is null)
             Report(count, model, diagnostics, on, $"this array holds {declared} {Elements(declared.Value)}, and its values come to {values}");
     }
 

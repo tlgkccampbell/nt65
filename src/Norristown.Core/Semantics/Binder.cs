@@ -1579,7 +1579,7 @@ internal sealed class Binder
             references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
             if (symbol.Kind != SymbolKind.Macro)
             {
-                Report(callee.Span, $"`{callee.Text}` is a {symbol.KindText}, and `!` calls a macro");
+                Report(callee.Span, $"`{callee.Text}` is {symbol.KindPhrase}, and `!` calls a macro");
                 continue;
             }
             if (inside is not null)
@@ -1659,6 +1659,11 @@ internal sealed class Binder
             // have exported the `inner` of `outer::inner`, not the `outer` that leads to it.
             if (!first)
                 into[^1] = into[^1] with { Last = true };
+
+            // An `[i]` along the path is an expression of its own, whose names are looked up
+            // where the path is written rather than inside whatever it leads to.
+            foreach (var index in node.ChildNodes)
+                CollectUses(index, into, words, chosen);
             return;
         }
         foreach (var child in node.ChildNodes)
@@ -1838,7 +1843,7 @@ internal sealed class Binder
             }
             if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
-                Report(token.Span, $"`{token.Text}` is a {symbol.KindText}; a name written on its "
+                Report(token.Span, $"`{token.Text}` is {symbol.KindPhrase}; a name written on its "
                     + "own splices a `block` parameter, and nothing else belongs on a line alone");
             }
         }
@@ -1932,7 +1937,7 @@ internal sealed class Binder
         var container = BodyOf(before.Symbol!);
         if (container is null)
         {
-            Report(token.Span, $"`{before.Symbol!.DisplayName}` is a {before.Symbol.KindText}, not a scope");
+            Report(token.Span, $"`{before.Symbol!.DisplayName}` is {before.Symbol.KindPhrase}, not a scope");
             return null;
         }
 
@@ -2291,7 +2296,7 @@ internal sealed class Binder
     private Place? NotIn(SyntaxToken token, Symbol container)
     {
         Report(token.Span, container.Body is null && container.TypeExpression is null
-            ? $"`{container.DisplayName}` is a {container.KindText}, not a scope"
+            ? $"`{container.DisplayName}` is {container.KindPhrase}, not a scope"
             : $"`{token.Text}` is not declared in `{container.DisplayName}`");
         return null;
     }
