@@ -16,8 +16,9 @@ namespace Norristown.Semantics;
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
-    // What the signature was read from, and whether as a macro's, so the values of its
-    // `dp = e` and `dbr = e` items can be read again once the program's constants are known.
+    // What the signature was read from, and whether as a macro's, so it can be read again once
+    // the signature sets it names are resolved and the values of its `dp = e`, `dbr = e` and
+    // `args n` items are known.
     private SyntaxNode? syntax;
     private bool forMacro;
 
@@ -30,41 +31,103 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
         false);
 
+    /// <summary>
+    /// Whether it is an interrupt handler: entered by the processor from anywhere, knowing
+    /// nothing but perhaps its mode, and left by <c>rti</c>. It is neither near nor far.
+    /// </summary>
+    public bool IsInterrupt { get; init; }
+
+    /// <summary>Whether it never returns, <c>-&gt; none</c>, so a call to it is where a path ends.</summary>
+    public bool NeverReturns { get; init; }
+
+    /// <summary>How many bytes the caller pushes before a call, <c>args n</c>; 0 for a routine that says nothing.</summary>
+    public int Arguments { get; init; }
+
     /// <summary>How the routine is called and left, as the item that says so.</summary>
-    public string Distance => IsFar ? "far" : "near";
+    public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
+
+    /// <summary>
+    /// Whether nothing waits for the routine to return: it never does, or it returns by
+    /// <c>rti</c> to wherever the interrupt came. A jump from such a routine is checked against
+    /// the target's entry only.
+    /// </summary>
+    public bool HasNoCaller => IsInterrupt || NeverReturns;
 
     /// <summary>The signature as it would be written in full.</summary>
-    public override string ToString() =>
-        $"{Entry}, {Distance}" + (Exit == Entry ? "" : $" -> {Exit}");
+    public override string ToString()
+    {
+        var entry = IsInterrupt ? $"interrupt, {ProcessorState.Spell(Entry.E)}" : $"{Entry}, {Distance}";
+        if (Arguments > 0)
+            entry += $", args {Arguments}";
+        return entry + (NeverReturns ? " -> none" : Exit == Entry || IsInterrupt ? "" : $" -> {Exit}");
+    }
 
     /// <summary>
-    /// Reads the signature a proc, an extern proc or an import writes, reporting what is
-    /// wrong with it. <paramref name="syntax"/> is the <c>: entry -&gt; exit</c> of a proc or
-    /// the <c>proc(...)</c> of an import, or null where nothing was written.
+    /// What a proc, an extern proc or an import writes, as far as it can be read from its
+    /// syntax alone: the signature sets it names count for nothing, and the values of its items
+    /// are unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is
+    /// the <c>: entry -&gt; exit</c> of a proc or the <c>proc(...)</c> of an import, or null
+    /// where nothing was written.
     /// </summary>
-    public static Signature Read(SyntaxNode? syntax, Action<TextSpan, string> report) =>
-        Read(syntax, report, forMacro: false);
+    public static Signature Read(SyntaxNode? syntax) => Read(syntax, forMacro: false, null, null, (_, _) => { });
 
     /// <summary>
-    /// Reads the signature a macro writes. A macro's items default to <c>*</c>, because a
-    /// macro assumes and changes nothing it does not declare, and <c>near</c>, <c>far</c>
-    /// and <c>inline</c> describe how a routine is called, which a macro is not.
+    /// What a macro writes. A macro's items default to <c>*</c>, because a macro assumes and
+    /// changes nothing it does not declare, and <c>near</c>, <c>far</c>, <c>inline</c>,
+    /// <c>args</c>, <c>interrupt</c> and <c>none</c> describe how a routine is called, entered
+    /// or left, which a macro is not.
     /// </summary>
-    public static Signature ReadMacro(SyntaxNode? syntax, Action<TextSpan, string> report) =>
-        Read(syntax, report, forMacro: true);
+    public static Signature ReadMacro(SyntaxNode? syntax) => Read(syntax, forMacro: true, null, null, (_, _) => { });
 
     /// <summary>
-    /// The signature with the values of its <c>dp = e</c> and <c>dbr = e</c> items, which
-    /// are expressions and so can be worked out only once the program's constants are.
-    /// Until then those parts read as unknown. What is wrong with a value is reported to
-    /// <paramref name="report"/>; everything else was reported when the signature was first read.
+    /// Reports what is wrong with the items a signature set declares, reading them as a proc's
+    /// entry would: once here, where the set is declared, rather than at every signature that
+    /// names it.
     /// </summary>
-    public Signature Valued(Func<SyntaxNode, long?> valueOf, Action<TextSpan, string> report) =>
-        syntax is null ? this : Read(syntax, (_, _) => { }, forMacro, valueOf, report);
+    public static void CheckSet(
+        Symbol set, Func<SyntaxNode, long?> valueOf, Func<SyntaxNode, Symbol?> setOf, Action<TextSpan, string> report)
+    {
+        if (set.Definition is not { Parent: { } declaration } list)
+            return;
+        foreach (var item in StateItem.Read(list))
+        {
+            if (item.Part == StatePart.None)
+                report(item.Node.Span, "`none` says a routine never returns, and is written after `->` on its own");
+            if (item.Part == StatePart.Set && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
+                && Reaches(named, set, setOf, []))
+            {
+                report(item.Node.Span, $"`{set.Name}` names `{item.Text}`, which stands for `{set.Name}` again: "
+                    + "a signature set cannot stand for itself");
+            }
+        }
+        Read(declaration, forMacro: false, valueOf, setOf, report);
+    }
+
+    /// <summary>
+    /// The signature with the signature sets it names read, and the values of its <c>dp = e</c>,
+    /// <c>dbr = e</c> and <c>args n</c> items, which are expressions and so can be worked out
+    /// only once the program's constants are. What is wrong with it is reported to
+    /// <paramref name="report"/>.
+    /// </summary>
+    public Signature Resolved(
+        Func<SyntaxNode, long?> valueOf, Func<SyntaxNode, Symbol?> setOf, Action<TextSpan, string> report) =>
+        syntax is null ? this : Read(syntax, forMacro, valueOf, setOf, report);
+
+    /// <summary>Whether the sets <paramref name="from"/> names come, however indirectly, to <paramref name="to"/>.</summary>
+    private static bool Reaches(Symbol from, Symbol to, Func<SyntaxNode, Symbol?> setOf, HashSet<Symbol> seen)
+    {
+        if (from == to)
+            return true;
+        if (!seen.Add(from) || from.Definition is not { } list)
+            return false;
+        return StateItem.Read(list).Any(item => item.Part == StatePart.Set
+            && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
+            && Reaches(named, to, setOf, seen));
+    }
 
     private static Signature Read(
-        SyntaxNode? syntax, Action<TextSpan, string> report, bool forMacro,
-        Func<SyntaxNode, long?>? valueOf = null, Action<TextSpan, string>? reportValue = null)
+        SyntaxNode? syntax, bool forMacro,
+        Func<SyntaxNode, long?>? valueOf, Func<SyntaxNode, Symbol?>? setOf, Action<TextSpan, string> report)
     {
         var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
         if (syntax is null)
@@ -75,14 +138,42 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var entryList = lists.FirstOrDefault(list => arrow.Parent is null || list.Position < arrow.Position);
         var exitList = arrow.Parent is null ? null : lists.FirstOrDefault(list => list.Position > arrow.Position);
 
-        bool? far = null;
-        StateItem? inline = null;
-        var entry = Take(entryList);
-        var exit = Take(exitList);
+        // The items the signature sets it names give, which are reported where each set is declared.
+        var fromSets = new HashSet<(SyntaxTree Tree, int Position)>();
+        var entry = Take(entryList, isExit: false);
+        var exit = Take(exitList, isExit: true);
+
+        var arguments = 0;
+        if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
+        {
+            if (valueOf(count) is not { } bytes)
+                report(count.Span, $"`{args.Text}` needs a constant: it counts the bytes the caller pushes");
+            else if (bytes < 0 || bytes > 0xffff)
+                report(count.Span, $"`{args.Text}` is out of range: it counts the bytes the caller pushes");
+            else
+                arguments = (int)bytes;
+        }
+
+        if (entry.Interrupt is not null)
+            return Interrupt();
 
         var entryState = new ProcessorState(
             entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
             ValueOf(entry.D, 0xffff) ?? defaults.D, ValueOf(entry.B, 0xff) ?? defaults.B);
+        CheckEmulation(entry, entryState);
+        entryState = Pinned(entryState);
+
+        // A routine that never returns has no exit state to give.
+        if (exit.None is not null)
+        {
+            foreach (var other in new[] { exit.A, exit.Index, exit.E, exit.D, exit.B })
+            {
+                if (other is { } given)
+                    report(At(exit, given), $"`{given.Text}`: `-> none` stands alone, because a routine that never returns has no exit state");
+            }
+            return Made(entryState, entryState) with { NeverReturns = true };
+        }
+
         // An exit that names a 16-bit width and not the mode is in native mode, the only one
         // that width can hold in, whatever the entry's mode.
         var exitMode = exit.E?.Mode
@@ -105,14 +196,56 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exitState = exitState with { D = entryState.D };
         if (!Kept(exit.B, entryState.B.Kind == StateValueKind.Unchanged))
             exitState = exitState with { B = entryState.B };
-        CheckEmulation(entry, entryState);
         CheckEmulation(exit, exitState);
-        entryState = Pinned(entryState);
-        exitState = Pinned(exitState);
-        return new Signature(entryState, exitState, far ?? false, inline) { syntax = syntax, forMacro = forMacro };
+        return Made(entryState, Pinned(exitState));
+
+        Signature Made(ProcessorState entered, ProcessorState exited) =>
+            new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
+            {
+                Arguments = arguments,
+                syntax = syntax,
+                forMacro = forMacro,
+            };
+
+        // An interrupt handler is entered from anywhere, so all it may say is which mode the
+        // processor is in, and it leaves by `rti`, so it says nothing after `->`.
+        Signature Interrupt()
+        {
+            foreach (var other in new[] { entry.A, entry.Index, entry.D, entry.B })
+            {
+                if (other is { } given)
+                {
+                    report(At(entry, given), $"`{given.Text}`: an interrupt handler is entered from anywhere, and "
+                        + "assumes nothing but its mode: `interrupt, native` or `interrupt, emu`");
+                }
+            }
+            foreach (var other in new[] { entry.Far, entry.Inline, entry.Arguments })
+            {
+                if (other is { } given)
+                {
+                    report(At(entry, given), $"`{given.Text}` describes how a routine is called, and an interrupt "
+                        + "handler is entered by the processor, which makes it neither near nor far");
+                }
+            }
+            if (entry.E is { IsUnchanged: true } kept)
+                report(At(entry, kept), $"`{kept.Text}`: an interrupt handler says which mode it is entered in, or nothing");
+            if (exitList is not null)
+                report(exitList.Span, "an interrupt handler leaves by `rti`, and declares nothing after `->`");
+
+            var mode = entry.E is { IsUnchanged: false } stated ? stated.Mode : ProcessorMode.Unknown;
+            var state = Pinned(new ProcessorState(Width.Unknown, Width.Unknown, mode, StateValue.Unknown, StateValue.Unknown));
+            return new Signature(state, state, false) { IsInterrupt = true, syntax = syntax, forMacro = forMacro };
+        }
+
+        // Whether an item is written in the signature itself rather than given by a set it names.
+        bool Here(StateItem item) => !fromSets.Contains((item.Node.Tree, item.Node.Position));
+
+        // Where a mistake about an item is reported: at the item, or at the set that gave it.
+        TextSpan At(Parts parts, StateItem item) =>
+            Here(item) || parts.SetReference is not { } reference ? item.Node.Span : reference.Span;
 
         // `dp = e` is worth e once the constants are known, and unknown before; `dp?` is
-        // unknown and `dp*` unchanged.
+        // unknown and `dp*` unchanged. A value a set gives is reported where the set is declared.
         StateValue? ValueOf(StateItem? item, long largest)
         {
             if (item is not { } given)
@@ -123,70 +256,156 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 return StateValue.Unknown;
             if (valueOf(expression) is not { } value)
             {
-                reportValue?.Invoke(expression.Span, $"`{given.Text}` needs a constant: the analysis follows D and B by value");
+                if (Here(given))
+                    report(expression.Span, $"`{given.Text}` needs a constant: the analysis follows D and B by value");
                 return StateValue.Unknown;
             }
             if (value < 0 || value > largest)
             {
-                reportValue?.Invoke(expression.Span, $"`{given.Text}` is out of range: "
-                    + (largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
+                if (Here(given))
+                {
+                    report(expression.Span, $"`{given.Text}` is out of range: "
+                        + (largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
+                }
                 return StateValue.Unknown;
             }
             return StateValue.Of(value);
         }
 
-        Parts Take(SyntaxNode? list)
+        // The items of one list by part. A signature set comes first, and what the list writes
+        // after it takes the place of what the set gives for the same part.
+        Parts Take(SyntaxNode? list, bool isExit)
         {
-            var parts = default(Parts);
+            var parts = new Parts();
+            var first = true;
             foreach (var item in StateItem.Read(list))
             {
-                switch (item.Part)
+                if (item.Part != StatePart.Set)
                 {
-                    case StatePart.A:
-                        parts.A = Once(parts.A, item);
-                        break;
-                    case StatePart.Index:
-                        parts.Index = Once(parts.Index, item);
-                        break;
-                    case StatePart.E:
-                        parts.E = Once(parts.E, item);
-                        break;
-                    case StatePart.Distance when forMacro:
-                    case StatePart.Inline when forMacro:
-                        report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and a macro is expanded");
-                        break;
-                    case StatePart.Inline:
-                        if (list != entryList)
-                            report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and belongs before `->`");
-                        else
-                            inline = Once(inline, item);
-                        break;
-                    case StatePart.Distance:
-                        if (far is { } said && said != item.IsFar)
-                        {
-                            report(item.Node.Span,
-                                $"`{item.Text}` disagrees with `{(said ? "far" : "near")}`: a routine is called one way");
-                        }
-                        far = item.IsFar;
-                        break;
+                    Assign(parts, item, isExit, fromSet: false);
+                    first = false;
+                    continue;
+                }
+                if (!first)
+                {
+                    report(item.Node.Span, $"`{item.Text}` is a signature set, and comes first in its list: "
+                        + "the items after it change what it gives");
+                    continue;
+                }
+                first = false;
+                parts.SetReference = item.Node;
+                foreach (var setItem in Expand(item, []))
+                {
+                    fromSets.Add((setItem.Node.Tree, setItem.Node.Position));
 
-                    case StatePart.DirectPage:
-                        parts.D = Once(parts.D, item);
-                        break;
-                    case StatePart.DataBank:
-                        parts.B = Once(parts.B, item);
-                        break;
-                    default:
-                        break;
+                    // An exit, and a macro, take a set's state and not how a routine is called or entered.
+                    if ((isExit || forMacro) && setItem.Part is StatePart.Distance or StatePart.Inline
+                        or StatePart.Arguments or StatePart.Interrupt)
+                    {
+                        continue;
+                    }
+                    Assign(parts, setItem, isExit, fromSet: true);
                 }
             }
             return parts;
         }
 
-        StateItem? Once(StateItem? earlier, StateItem item)
+        // The items a set stands for, the sets it names spread out in place. Before the program's
+        // names are resolved a set stands for nothing.
+        List<StateItem> Expand(StateItem reference, HashSet<Symbol> seen)
         {
-            if (earlier is { } first)
+            var items = new List<StateItem>();
+            if (setOf?.Invoke(reference.SetName!) is not { } set)
+                return items;
+            if (set.Kind != SymbolKind.SignatureSet)
+            {
+                if (Here(reference))
+                {
+                    report(reference.Node.Span, $"`{reference.Text}` is a {set.KindText}, and a name among a "
+                        + "signature's items is a signature set");
+                }
+                return items;
+            }
+            if (!seen.Add(set) || set.Definition is not { } list)
+                return items;
+            foreach (var item in StateItem.Read(list))
+            {
+                if (item.Part == StatePart.Set)
+                    items.AddRange(Expand(item, seen));
+                else if (item.Part != StatePart.None)
+                    items.Add(item);
+            }
+            return items;
+        }
+
+        void Assign(Parts parts, StateItem item, bool isExit, bool fromSet)
+        {
+            switch (item.Part)
+            {
+                case StatePart.A:
+                    parts.A = Once(parts, parts.A, item, fromSet);
+                    break;
+                case StatePart.Index:
+                    parts.Index = Once(parts, parts.Index, item, fromSet);
+                    break;
+                case StatePart.E:
+                    parts.E = Once(parts, parts.E, item, fromSet);
+                    break;
+                case StatePart.DirectPage:
+                    parts.D = Once(parts, parts.D, item, fromSet);
+                    break;
+                case StatePart.DataBank:
+                    parts.B = Once(parts, parts.B, item, fromSet);
+                    break;
+
+                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when forMacro:
+                    report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and a macro is expanded");
+                    break;
+                case StatePart.None when forMacro:
+                    report(item.Node.Span, "`none` says a routine never returns, and a macro is expanded, ending where its body does");
+                    break;
+                case StatePart.None when !isExit && syntax.Kind != SyntaxKind.SignatureDeclaration:
+                    report(item.Node.Span, "`none` says a routine never returns, and belongs after `->`");
+                    break;
+                case StatePart.None:
+                    parts.None = item;
+                    break;
+                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when isExit:
+                    report(item.Node.Span, $"`{item.Text}` describes how a routine is called or entered, and belongs before `->`");
+                    break;
+                case StatePart.Inline:
+                    parts.Inline = Once(parts, parts.Inline, item, fromSet);
+                    break;
+                case StatePart.Arguments:
+                    parts.Arguments = Once(parts, parts.Arguments, item, fromSet);
+                    break;
+                case StatePart.Interrupt:
+                    parts.Interrupt = Once(parts, parts.Interrupt, item, fromSet);
+                    break;
+                case StatePart.Distance:
+                    if (!fromSet && parts.Written.Contains(StatePart.Distance) && parts.Far is { } said && said.IsFar != item.IsFar)
+                    {
+                        report(item.Node.Span,
+                            $"`{item.Text}` disagrees with `{(said.IsFar ? "far" : "near")}`: a routine is called one way");
+                    }
+                    if (!fromSet)
+                        parts.Written.Add(StatePart.Distance);
+                    parts.Far = item;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // Two items a list writes for one part are a mistake; an item written after a set takes
+        // the place of what the set gives.
+        StateItem? Once(Parts parts, StateItem? earlier, StateItem item, bool fromSet)
+        {
+            if (fromSet)
+                return item;
+            if (earlier is { } first && !parts.Written.Add(item.Part))
                 report(item.Node.Span, $"`{first.Text}` and `{item.Text}` both describe the same part of the state");
+            parts.Written.Add(item.Part);
             return item;
         }
 
@@ -195,7 +414,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         {
             if (exitItem is not { IsUnchanged: true } kept || keptAtEntry)
                 return true;
-            report(kept.Node.Span, $"`{kept.Text}` after `->` needs `{kept.Text}` at entry too: a routine "
+            report(At(exit, kept), $"`{kept.Text}` after `->` needs `{kept.Text}` at entry too: a routine "
                 + "hands back unchanged only what it assumed nothing about");
             return false;
         }
@@ -211,18 +430,27 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             foreach (var wide in new[] { parts.A, parts.Index })
             {
                 if (wide is { Width: Width.Sixteen } item)
-                    report(item.Node.Span, $"`{item.Text}` cannot hold in emulation mode, where both widths are 8 bits");
+                    report(At(parts, item), $"`{item.Text}` cannot hold in emulation mode, where both widths are 8 bits");
             }
         }
     }
 
-    /// <summary>The items one list gives, by part.</summary>
-    private struct Parts
+    /// <summary>The items one list gives, by part, and the signature set it names, if it names one.</summary>
+    private sealed class Parts
     {
         public StateItem? A;
         public StateItem? Index;
         public StateItem? E;
         public StateItem? D;
         public StateItem? B;
+        public StateItem? Far;
+        public StateItem? Inline;
+        public StateItem? Arguments;
+        public StateItem? Interrupt;
+        public StateItem? None;
+        public SyntaxNode? SetReference;
+
+        // The parts the list writes itself, rather than takes from the set.
+        public readonly HashSet<StatePart> Written = [];
     }
 }

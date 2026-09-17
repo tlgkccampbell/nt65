@@ -181,10 +181,15 @@ public static class ProjectFile
                 {
                     if (attribute.Name == "size")
                         continue;
+                    if (attribute.Name == "mirrors")
+                    {
+                        segment = segment with { Mirrors = Banks(property.Name, attribute.Value) };
+                        continue;
+                    }
                     if (attribute.Name is not ("dp" or "bank"))
                     {
                         Report(property.Name, $"segment \"{property.Name}\": `{attribute.Name}` is not a segment key: "
-                            + "a segment has a `size`, a `dp` and a `bank`");
+                            + "a segment has a `size`, a `dp`, a `bank` and `mirrors`");
                         continue;
                     }
                     var value = Number(attribute.Value);
@@ -195,6 +200,8 @@ public static class ProjectFile
                     }
                     segment = attribute.Name == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
                 }
+                if (segment is { Mirrors.Count: > 0, Bank: null })
+                    Report(property.Name, SegmentTable.MirrorsNeedABank(property.Name));
                 read.Add(segment);
             }
             return [.. read.OrderBy(segment => segment.Name, StringComparer.Ordinal)];
@@ -223,18 +230,7 @@ public static class ProjectFile
                     Report(property.Name, $"`{property.Name}` is a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]");
                     continue;
                 }
-                var banks = new List<(long First, long Last)>();
-                foreach (var item in property.Value.EnumerateArray())
-                {
-                    var bank = item.ValueKind == JsonValueKind.String ? Interval(item.GetString() ?? "", 0xff)
-                        : Number(item) is { } one and >= 0 and <= 0xff ? (one, one)
-                        : null;
-                    if (bank is { } valid)
-                        banks.Add(valid);
-                    else
-                        Report(property.Name, $"`{property.Name}`: {item.GetRawText()} is not a bank or a range of banks");
-                }
-                var range = new AccessRange(addresses.First, addresses.Last, banks);
+                var range = new AccessRange(addresses.First, addresses.Last, Banks(property.Name, property.Value));
                 if (read.FirstOrDefault(other => other.First <= range.Last && range.First <= other.Last) is { } overlapping)
                 {
                     Report(property.Name, $"`{property.Name}` overlaps `{StateValue.Hex(overlapping.First, 4)}-"
@@ -244,6 +240,28 @@ public static class ProjectFile
                 read.Add(range);
             }
             return [.. read.OrderBy(range => range.First)];
+        }
+
+        /// <summary><c>["$00-$3f", "$80-$bf"]</c>: banks, each one bank or a range of them.</summary>
+        public List<(long First, long Last)> Banks(string key, JsonElement value)
+        {
+            var banks = new List<(long First, long Last)>();
+            if (value.ValueKind != JsonValueKind.Array)
+            {
+                Report(key, $"`{key}` is a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]");
+                return banks;
+            }
+            foreach (var item in value.EnumerateArray())
+            {
+                var bank = item.ValueKind == JsonValueKind.String ? Interval(item.GetString() ?? "", 0xff)
+                    : Number(item) is { } one and >= 0 and <= 0xff ? (one, one)
+                    : null;
+                if (bank is { } valid)
+                    banks.Add(valid);
+                else
+                    Report(key, $"`{key}`: {item.GetRawText()} is not a bank or a range of banks");
+            }
+            return banks;
         }
 
         public IReadOnlyList<string> Strings(JsonElement root, string key)

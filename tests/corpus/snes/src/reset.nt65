@@ -7,40 +7,35 @@
 
 .export reset_stub, nmi_stub, irq_stub, cop_stub, brk_stub
 
-; The vectors point into bank $00. Each stub jumps into the FastROM mirror at $80.
+; The vectors point into bank $00. Each stub jumps long into bank $80, where the code runs
+; from FastROM: nothing returns to a stub, so the jump is checked against the entry alone.
 .segment STUBS
-.proc reset_stub: emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK {
+.proc reset_stub: emu, dp?, dbr? -> none {
     sei
-    jml reset_long
+    jml reset
 }
 
-.proc nmi_stub: native, a?, i?, dp?, dbr?, far {
-    jml nmi_long
+.proc nmi_stub: interrupt, native {
+    jml nmi
 }
 
-.proc irq_stub: native, a?, i?, dp?, dbr? {
+.proc irq_stub: interrupt, native {
     rti
 }
 
-.proc cop_stub: native, a?, i?, dp?, dbr? {
+.proc cop_stub: interrupt, native {
     rti
 }
 
-.proc brk_stub: e?, a?, i?, dp?, dbr? {
+.proc brk_stub: interrupt {
     stp
 }
 
 .segment CODE0
 
-; The stubs run in bank $00 and jump long into these, at $80. A jump from one bank into a
-; near routine in another has no checked spelling yet, so these name the addresses rather
-; than the routines, and nothing checks them against `reset` and `nmi`.
-.proc reset_long = (CODE_BANK << 16) | .loword(reset): emu, dp?, dbr?, far -> native, a8, i16, dp = 0, dbr = CODE_BANK
-.proc nmi_long = (CODE_BANK << 16) | .loword(nmi): native, a?, i?, dp?, dbr?, far
-
 ; Reset: leave emulation mode, set up the stack, D and B, clear memory and the PPU, then
-; run the game.
-.proc reset: emu, dp?, dbr? -> native, a8, i16, dp = 0, dbr = CODE_BANK {
+; run the game, which never returns.
+.proc reset: emu, dp?, dbr? -> none {
     clc
     xce                         ; native, both widths 8
     rep #$38                    ; a16, i16, binary mode
@@ -50,7 +45,6 @@
     tcd                         ; D = $0000
     phk
     plb                         ; B = $80
-    .state dbr = CODE_BANK      ; the txs above made the stack unknown
     sep #$20
     ppu_off!()
     stz NMITIMEN
@@ -69,7 +63,7 @@
 }
 
 ; Zero low RAM and all of bank $7e with block moves.
-.proc clear_ram: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc clear_ram: std {
     rep #$20
     stz $0000
     ldx #$0000
@@ -81,7 +75,7 @@
     ldx #$0000
     ldy #$0001
     lda #$fffe
-    mvn #WRAM_BANK, #WRAM_BANK
+    mvn #^oam_shadow, #^oam_shadow
     phk
     plb
     sep #$20
@@ -89,7 +83,7 @@
 }
 
 ; Write every PPU register through the direct page at $2100.
-.proc init_ppu: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc init_ppu: std {
     phd
     pea $2100
     pld
@@ -114,7 +108,7 @@
 }
 
 ; NMI, entered in native mode from anywhere in the program.
-.proc nmi: native, a?, i?, dp?, dbr? {
+.proc nmi: interrupt, native {
     rep #$30
     pha
     phx
@@ -144,7 +138,7 @@
     rti
 }
 
-.proc upload_oam: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc upload_oam: std {
     phd
     pea $4300
     pld

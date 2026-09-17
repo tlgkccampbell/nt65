@@ -231,8 +231,8 @@ items after a missing `}` are still found.
 A program is the set of `.nt65` files handed to the transpiler. Each file is a module, and
 begins by saying which, `.module name` (§12). After that it is a sequence of **items**:
 constants, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
-`.charmap`, `.list`, `.func`, `.export`, `.import`, `.use`, `.if`, `.repeat` and `.each` at
-item level, unnamed `.res` and `.align` padding, segment declarations, segment regions and
+`.charmap`, `.list`, `.func`, `.signature`, `.export`, `.import`, `.use`, `.if`, `.repeat` and
+`.each` at item level, unnamed `.res` and `.align` padding, segment declarations, segment regions and
 segment blocks.
 
 Outside a proc there are no instructions and no labels. Code lives in a `.proc`, and every
@@ -301,9 +301,17 @@ has, and ca65 rejects a far address size outright when its CPU setting is a 6502
 for those processors that declares a far segment, or imports a far symbol, is an error
 where it is written rather than output ca65 refuses (§3.2).
 
-On the 65816 a segment declaration may also carry `dp = expr` and `bank = expr`, which
-§7.5 uses to check direct-page and data-bank assumptions. Both are constants, each given
-at most once; `dp` is for a `zp` segment, the only kind reached through the direct page.
+On the 65816 a segment declaration may also carry `dp = expr`, `bank = expr` and
+`mirrors = [...]`, which §7.5 uses to check direct-page and data-bank assumptions. `dp` and
+`bank` are constants, each given at most once; `dp` is for a `zp` segment, the only kind
+reached through the direct page. `bank` is the segment's **home bank**, where it lives, and
+`mirrors` lists the other banks the same memory is seen in, each a constant bank or a range
+of them, and needs a `bank`:
+
+```nt65
+.segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
+```
+
 On the other processors they are accepted and nothing reads them.
 
 These declarations restate facts that live in the ld65 configuration, which nt65 does
@@ -349,6 +357,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   "segments": {
     "ZP2":   { "size": "zp",  "dp": "$2100" },
     "WRAM":  { "size": "abs", "bank": "$7e" },
+    "LORAM": { "size": "abs", "bank": "$7e", "mirrors": ["$00-$3f", "$80-$bf"] },
     "BANK1": { "size": "abs", "bank": 1 }
   },
   "ranges": {
@@ -369,7 +378,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   to declare a define in a source file. The output always writes a define as its value,
   never by name, so a `-D` given to ca65 cannot collide with it.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
-  be declared in a file.
+  be declared in a file. Its `mirrors` are written as `ranges` writes banks.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
@@ -395,6 +404,7 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
+| `.signature name = items` | a **signature set**: signature items a routine names instead of writing them out (§7.3). |
 | `.macro name(...) { ... }` | a macro (§11). |
 | `.module path` | the module the file is, once, before its other items (§12). |
 | `.use path`, `.use path::{a, b}`, `.use path::*`, `.use path as name` | names another module declares, or a module, brought in under their own names or `as` ones (§12). |
@@ -692,15 +702,64 @@ items are:
 | `native` `emu` `e?` `e*` | emulation flag | `native` |
 | `near` `far` | entered by `jsr`/`jmp` and left by `rts`, or by `jsl`/`jml` and `rtl` | `near` |
 | `inline n`, `inline .asciiz` | the routine returns past data written after each call: n bytes, or one `.asciiz` (§7.4) | none |
+| `args n` | the caller pushes n bytes before the call (below) | none |
+| `interrupt` | an interrupt handler (below) | none |
+| `none`, after `->` only | the routine never returns (below) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
+| a signature set's name | the items the set declares (below) | none |
 
-`?` means unknown, for interrupt handlers and entry points reached from outside nt65.
+`?` means unknown, for entry points reached from outside nt65.
 `*` means unchanged: the routine assumes nothing about that part of the state and
 returns it as it found it, so a caller keeps what it knew across the call. In the body a
 `*` value counts as unknown wherever a known one is needed, and at every `rts` or `rtl`
 it must still hold the entry value: nothing changed it, or a pull restored it from the
 analysis stack (below). In an exit list, `*` is allowed only for an item that is `*` at
 entry.
+
+**Signature sets.** Most routines of a program run in the same state, so a signature may
+name a set of items declared once, and write only what differs from it:
+
+```nt65
+.signature std = a8, i16, dp = 0, dbr = $80
+
+.proc main: std {
+    rts
+}
+
+.proc step: std, a16 -> std {
+    sep #$20
+    rts
+}
+```
+
+A set's name comes first in its list, and the items after it take the place of the set's own
+for the same part. A set may start from another set, but not reach itself. It is declared
+where a constant may be, is exported and brought in with `.use` like one, and writes nothing.
+After `->`, and in a macro's signature, a set gives only its state: `near`, `far`, `inline`,
+`args` and `interrupt` describe how a routine is called or entered, and are left out there.
+`none` is never in a set. There are no defaults per file or per segment: the built-in
+defaults above stay what a signature that says nothing means.
+
+**Routines that never return.** `-> none`, alone after the arrow, says a routine never
+returns: a reset handler, a main loop, a routine that jumps away for good. An `rts` or `rtl`
+in it is an error, a call to it ends the path, so nothing after the call needs `.next ?` and
+a proc that ends with one does not run off its end, and a jump from it checks only the
+target's entry. The last three hold on every CPU.
+
+**Interrupt handlers.** `interrupt` says the processor enters the routine from anywhere:
+the widths, D and B are unknown at entry, and so is the mode unless `native` or `emu` is
+written with it, which is all it may be written with. It leaves by `rti`, so it says nothing
+after `->`, and an `rts` or `rtl` in it is an error. It is neither near nor far: a call to it,
+`jsr`, `jsl` or a relative call, is an error, while its address in data, a vector, is what it
+is for. A jump from it checks only the target's entry, and a jump to it is allowed only from
+another interrupt handler or a routine that never returns. On the 6502 and 65C02 it is
+accepted with the same `rti` and call checks.
+
+**Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
+the analysis stack starts with those bytes and the return address above them, two bytes near
+and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
+pushed is known, it must be at least n bytes. The call leaves the stack as it found it: the
+caller removes the arguments.
 
 Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.proc CHROUT = $FFD2: a8, i8`, §6.1) and an imported routine
@@ -723,11 +782,11 @@ these.
 | `php`, and every other push or pull | moves the analysis stack (below) |
 | `plp` that pulls a P saved by `php` | the widths saved at the `php` |
 | any other `plp` | both widths unknown; E unchanged |
-| `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value |
+| `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `-> none` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
-| `jmp f`, `jml f`, or a branch or `.next` edge to f, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. An unconditional transfer ends the path |
+| `jmp f`, `jml f`, or a branch or `.next` edge to f, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
 | `jsr (t,x)` with `.next` naming routines | state must match every entry; becomes the merge of their exits |
-| `rts`, `rtl` | state must match the proc's exit; path ends |
+| `rts`, `rtl` | state must match the proc's exit; path ends. An error in a proc that says `-> none` or `interrupt` |
 | `rti`, `stp` | path ends, nothing checked |
 | `brk #s`, `cop #s`, `wdm #n`, `wai` | no change |
 | indirect jumps | path ends; targets come from `.next` (§7.4) |
@@ -745,10 +804,15 @@ byte: part of a saved P, D or B, or a byte of unknown content. Every push and pu
 moves it by its size (`pha` by A's width, `phx` and `phy` by the index width, `pea`,
 `pei` and `per` by two), and a call leaves it as it was, since a routine returns with
 the stack as it found it. A pull that finds the matching saved value restores it: `plp`
-a P, `pld` a D and `plb` a B (§7.5). The stack becomes unknown after `txs` or `tcs`,
-after a push or pull whose size is unknown, and at a merge where the incoming stacks
-differ. So `php` … `jsr` … `plp`, and a save and restore on either side of a label, need
-no annotation.
+a P, `pld` a D and `plb` a B (§7.5). So `php` … `jsr` … `plp`, and a save and restore on
+either side of a label, need no annotation.
+
+The analysis stack is **a known top over a base**. At entry the base is where the routine
+was entered. After `txs` or `tcs`, and after a pull of more than is known, the base is
+unknown, but what is pushed from there on is still tracked on top of it, and a pull still
+finds it: `txs` then `phk`, `plb` sets B, and `tcs` then `pea c`, `pld` sets D. A pull past
+the known top gets a value nothing is known of. The whole stack becomes unknown after a push
+or pull whose size is unknown, and at a merge where the incoming stacks differ in depth.
 
 **Assertions.** `.state` takes the same items as a signature, except `near`, `far` and
 the `*` items, which describe a routine rather than a point in it:
@@ -769,8 +833,9 @@ control flow.
 
 **Stack frames.** `.frame name: T` names the top `.sizeof(T)` bytes of the analysis stack
 as a frame laid out as the struct `T`, usually directly after the instructions that make
-room for it. If the analysis stack is unknown there, as it is after `tcs`, it becomes
-those bytes with nothing known beneath them. In a stack-relative operand, `name::member,s`
+room for it. If the analysis stack is unknown there, it becomes those bytes with nothing
+known beneath them; over an unknown base, as after `tcs`, the frame may reach beneath what is
+known. In a stack-relative operand, `name::member,s`
 and `(name::member,s),y` are that member's offset from the current stack pointer,
 computed from the pushes and pulls since the `.frame`, so a push between two reads cannot
 silently shift them:
@@ -799,7 +864,27 @@ silently shift them:
 
 A slot is an error where the stack depth is unknown, once the analysis stack no longer
 contains the frame, and anywhere other than a stack-relative operand. A `.frame` larger than
-what the proc has pushed is an error. A frame ends with its proc.
+what the proc has pushed since it was entered is an error. A frame ends with its proc.
+
+A routine that takes `args n` starts with its arguments and return address on the
+analysis stack, so a frame reaches them:
+
+```nt65
+.struct DivFrame {
+    remainder: .word
+    ret:       .res 2
+    divisor:   .word
+    dividend:  .word
+}
+
+.proc div16: a16, i16, args 4 {
+    pea 0
+    .frame f: DivFrame          ; the local, the return address, the caller's two words
+    lda f::dividend,s
+    plx
+    rts
+}
+```
 
 **Checks.** After the analysis converges:
 
@@ -812,7 +897,11 @@ what the proc has pushed is an error. A frame ends with its proc.
   the stack depth is known;
 - every `jsr`/`jmp` targets a `near` routine and every `jsl`/`jml` a `far` one;
 - every tail call matches the target's entry, and the target's exit and `near`/`far`
-  match this proc's, because the target returns to this proc's caller;
+  match this proc's, because the target returns to this proc's caller, unless nothing
+  returns: this proc never does or is an interrupt handler, or the target never returns;
+- every call to a routine that takes `args n` has n bytes pushed, where that is known;
+- no interrupt handler is called, and no routine that says `-> none` or `interrupt` returns
+  with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
   import). A local subroutine is a separate proc, grouped with its callers in a
   `.scope` when a shared namespace helps; procs do not nest (§6.1). A routine with
@@ -910,7 +999,8 @@ label:
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
-| handler or external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
+| interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
+| other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
 | self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`; widths of `@op` are analyzed as written |
 
 Examples. A jump table inside a proc: the targets need no declarations because the
@@ -943,7 +1033,7 @@ An interrupt handler, and a `plp` that restores a status byte saved elsewhere, s
 analysis stack holds no saved P for it:
 
 ```nt65
-.proc nmi: a?, i? {
+.proc nmi: interrupt, native {
     rep #$30
     pha
     sep #$20
@@ -994,7 +1084,12 @@ through and which bank it lives in, in the segment table (§5.2, §5.3):
 ```nt65
 .segment ZP2: zp, dp = $2100
 .segment WRAM: abs, bank = $7e
+.segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
 ```
+
+`bank` and `dbr` are different words for different things: `bank` is where a segment lives,
+its home bank, and `dbr` is the value of the data bank register at a point in a routine. Code
+is taken to run in the home bank of its segment, even where a mirror maps it elsewhere too.
 
 A routine's signature may carry the D and B values it assumes at entry and, after
 `->`, at exit: `.proc hud: a8, i16, dp = $2100, dbr = $7e {`. `dp?` and `dbr?` mean
@@ -1013,9 +1108,9 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const` then `tcd`, with A 16-bit | D = const |
 | `pea const` then `pld` | D = const |
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
-| `phk` then `plb` | B = the declared bank of the enclosing segment |
+| `phk` then `plb` | B = the home bank of the enclosing segment |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
-| `mvn #s, #d`, `mvp #s, #d` | B = d |
+| `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
 | any other `tcd`, `pld`, `plb` | unknown |
 
@@ -1029,15 +1124,24 @@ values, the merged stack keeps its depth and forgets the values.
 - a direct operand naming a symbol in a segment with a declared `dp` is an error if D
   differs;
 - an absolute operand of an instruction that reads or writes data, naming a symbol in a
-  segment with a declared `bank`, is an error if B differs;
+  segment with a declared `bank`, is an error if B is neither that home bank nor one of its
+  `mirrors`;
 - the same kind of operand, when it is a constant address covered by the project's
   `ranges` table (§5.3), is an error if B is not one of the permitted banks, which is
   how `sta $2100` with B at `$7e` is caught;
 - operands that do not use B are exempt: long operands (`f:`), `jmp` and `jsr` (the
   program bank K), `jmp (abs)` and `jml [abs]` (a pointer in bank 0), `jmp (abs,x)` and
   `jsr (abs,x)` (K), and `pea` and `per` (no memory access);
-- `jsr`, `jmp` and branches to a routine or a label whose segment declares a bank
-  different from the caller's segment bank are an error, with `jsl`/`jml` as the fix;
+- `jsr`, `jmp` and branches to a routine or a label whose segment declares a home bank
+  different from the caller's segment's are an error, with `jsl`/`jml` as the fix;
+- `jml` to a near routine is an error unless it lands in a bank other than the home bank of
+  the code making it. A long jump into another bank is how a FastROM reset stub in bank `$00`
+  reaches code in bank `$80`, and since the routine's `rts` then stays in its own bank, it is
+  allowed only where nothing returns: from a routine that never returns or an interrupt
+  handler, or to a routine that never returns;
+- a long jump or call may reach a routine at its address in a mirror bank, written
+  `(bank << 16) | .loword(f)`. It is checked as a transfer to `f`, and `bank` must be `f`'s
+  home bank or one of its mirrors;
 - immediates such as `#<sym` are never checked.
 
 When either side is undeclared or unknown, nothing is reported. Signatures are the
@@ -1676,7 +1780,8 @@ condition may test it:
 ### 11.5 State signatures
 
 On the 65816 a macro may declare the processor state it expects and leaves, with
-the items of a proc signature other than `near`, `far` and `inline` (§7.3). Unlike a
+the items of a proc signature other than `near`, `far`, `inline`, `args`, `interrupt` and
+`none` (§7.3), and it may name a signature set, whose state it takes. Unlike a
 proc's, a macro's items default to `*`: a macro assumes and changes nothing it does not
 declare.
 
@@ -1812,9 +1917,10 @@ What another module's output does with a name depends on its kind:
 - **constants** whose value nt65 knows are emitted by value (`gfx__SCREEN = $0400`) in every
   module that uses them, because ca65 cannot use an imported symbol where it needs a
   constant (`.res`, `.if`, `.repeat`, `.sizeof`);
-- **enums, structs, unions, charmaps, lists and functions** are used by value: an enum member becomes a
-  constant, a member offset or type size a number, mapped text bytes, a list its items and a function
-  call its body; **macros** are expanded in the referencing module.
+- **enums, structs, unions, charmaps, lists, functions and signature sets** are used by value: an
+  enum member becomes a constant, a member offset or type size a number, mapped text bytes, a list
+  its items, a function call its body and a set the items it stands for; **macros** are expanded
+  in the referencing module.
 
 **Re-exports.** A module may make names it did not declare part of itself:
 
@@ -2307,6 +2413,27 @@ Recorded so the reasoning survives. None is open.
   follows control flow, and `.ensure` emits from its result.
 - **Stack frames are checked against the analysis stack.** Stack-relative offsets written
   by hand shift silently with every push, and the analysis already counts pushes.
+- **Signature sets, not defaults per file or segment.** Most routines of a real 65816 program
+  repeat one state, `a8, i16, dp = 0, dbr = $80`. A named set says it once and keeps each
+  signature readable where it stands: a routine's signature is its set plus what differs,
+  with nothing inherited from where the routine happens to be written. A set is a symbol like
+  a constant, so it crosses modules the way constants do.
+- **`-> none` and `interrupt` are items, not conventions.** A routine that never returns used
+  to invent an exit state, and a handler to spell out every unknown item and pick `near` or
+  `far`, neither of which it is. Saying what they are lets the analysis check what matters
+  for them — no `rts`, no call to a handler — and stop checking what does not.
+- **A segment has one home bank and mirrors.** Low WRAM, hardware registers and FastROM code
+  are each seen in several banks. Data is reached from any of them; code is taken to run in
+  its home bank, which is what `phk` and the cross-bank checks use. `bank` stays the word for
+  where a segment lives and `dbr` for the register's value at a point: two things, two words.
+- **The analysis stack has an unknown base with a known top.** Forgetting the whole stack at
+  `txs` lost `phk`, `plb` straight after it. Tracking pushes over a base nothing is known of
+  keeps every idiom that pushes and pulls its own values, and is the model `.frame` already
+  used after `tcs`.
+- **`args n` for arguments the caller pushes.** A frame could not reach past the return
+  address, so routines forgot their stack with `tsc`, `tcs` to reach their arguments. The
+  item puts the arguments and the return address on the analysis stack at entry and checks
+  callers push them. Arguments the callee removes are not in version 1.
 
 ## Appendix A. Grammar sketch
 
@@ -2315,10 +2442,11 @@ file        := module-decl item* (region item*)*
 module-decl := '.module' path
 region      := '.segment' ident NL                    ; at file level only
 item        := const | data-decl | padding | proc | extern-proc | scope | macro
-             | enum | struct | union | charmap | list | func | export | import | use | cpu
-             | segment-decl | segment | if-block | repeat-block | each-block | assert
+             | enum | struct | union | charmap | list | func | signature | export | import | use
+             | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
-seg-attr    := 'dp' '=' expr | 'bank' '=' expr
+seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
+banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
 padding     := '.res' expr (',' expr)? | '.align' expr
 label-line  := (ident | '@' ident) ':' (instr | data | macro-call)?   ; inside a proc
 const       := (ident | '@' ident) '=' expr
@@ -2344,6 +2472,8 @@ proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | keep-item | 'near' | 'far' | 'inline' (expr | '.asciiz')
+             | 'args' expr | 'interrupt' | 'none' | path   ; a path names a signature set, first
+signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'
              | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr?'
@@ -2399,7 +2529,7 @@ contents    := item*                                  ; at item level
              | value-line* | mixed*                   ; in a data body
 export      := '.export' export-item (',' export-item)*
              | '.export' (const | data-decl | proc | extern-proc | scope | macro | enum
-               | struct | union | charmap | list | func | import | use)
+               | struct | union | charmap | list | func | signature | import | use)
 export-item := path (':' size)? ('as' string)?
 use         := '.use' path (('::' '*') | ('::' '{' use-item (',' use-item)* '}') | ('as' ident))?
 use-item    := ident ('as' ident)?                   ; a path always starts at the modules' root

@@ -256,6 +256,7 @@ internal sealed class Parser
             SyntaxKind.CharmapDeclaration => Finish(ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true)),
             SyntaxKind.ListDeclaration => Finish(ParseTypeBlock(SyntaxKind.ListDeclaration, named: true)),
             SyntaxKind.FuncDeclaration => Finish(ParseFunc()),
+            SyntaxKind.SignatureDeclaration => Finish(ParseSignatureDeclaration()),
             SyntaxKind.MacroDeclaration => Finish(ParseMacro()),
             SyntaxKind.IfDirective => Finish(ParseIf(SyntaxKind.IfDirective)),
             SyntaxKind.RepeatDirective => Finish(ParseRepetition(SyntaxKind.RepeatDirective)),
@@ -543,6 +544,27 @@ internal sealed class Parser
             Report("expected `=` and the body");
         children.Add(ParseExpression());
         return new GreenSyntax(SyntaxKind.FuncDeclaration, children.ToImmutable());
+    }
+
+    /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
+    private GreenSyntax ParseSignatureDeclaration()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (!AtName)
+        {
+            Report("expected a name for the signature set");
+            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (Kind != SyntaxKind.Equals)
+        {
+            Report("expected `=` and the items: `.signature std = a8, i16`");
+            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
+        }
+        children.Add(Advance());
+        children.Add(ParseStateList());
+        return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
     }
 
     private GreenNode ParseParameterList()
@@ -906,15 +928,16 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.SegmentDeclaration, children.ToImmutable());
     }
 
-    /// <summary><c>dp = expr</c> or <c>bank = expr</c>.</summary>
+    /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
     private GreenNode ParseSegmentAttribute()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
-        if (!AtWord("dp") && !AtWord("bank"))
+        if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors"))
         {
-            Report("expected `dp` or `bank`");
+            Report("expected `dp`, `bank` or `mirrors`");
             return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
         }
+        var mirrors = AtWord("mirrors");
         children.Add(Advance());
         if (Kind != SyntaxKind.Equals)
         {
@@ -922,8 +945,38 @@ internal sealed class Parser
             return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
         }
         children.Add(Advance());
-        children.Add(ParseExpression());
+        if (!mirrors)
+        {
+            children.Add(ParseExpression());
+            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+        }
+
+        if (Kind != SyntaxKind.OpenBracket)
+        {
+            Report("expected `[` and the banks: `mirrors = [$00..$3f, $80..$bf]`");
+            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (Kind != SyntaxKind.CloseBracket)
+            ParseCommaSeparated(children, ParseBankRange);
+        if (Kind == SyntaxKind.CloseBracket)
+            children.Add(Advance());
+        else
+            Report("expected `]`");
         return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+    }
+
+    /// <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>
+    private GreenNode ParseBankRange()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(ParseExpression());
+        if (Kind == SyntaxKind.DotDot)
+        {
+            children.Add(Advance());
+            children.Add(ParseExpression());
+        }
+        return new GreenSyntax(SyntaxKind.BankRange, children.ToImmutable());
     }
 
     private GreenSyntax ParseProc()
@@ -1091,6 +1144,7 @@ internal sealed class Parser
         SyntaxKind.CharmapDeclaration => ParseTypeBlock(SyntaxKind.CharmapDeclaration, named: true),
         SyntaxKind.ListDeclaration => ParseTypeBlock(SyntaxKind.ListDeclaration, named: true),
         SyntaxKind.FuncDeclaration => ParseFunc(),
+        SyntaxKind.SignatureDeclaration => ParseSignatureDeclaration(),
         SyntaxKind.MacroDeclaration => ParseMacro(),
         _ => null,
     };
@@ -1301,6 +1355,14 @@ internal sealed class Parser
 
     private GreenNode? ParseStateItem()
     {
+        // A name that is no item's word names a signature set, which stands for its items. One
+        // spelled like a width, `a9`, is a width misspelled.
+        if (Kind == SyntaxKind.ColonColon
+            || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)))
+        {
+            return new GreenSyntax(SyntaxKind.StateItem, [ParseName()]);
+        }
+
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {
@@ -1329,6 +1391,11 @@ internal sealed class Parser
         {
             Report(nameIndex, $"`{name.Text}` is not a processor-state item");
         }
+        else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
+        {
+            // `args n`: how many bytes the caller pushes before the call.
+            children.Add(ParseExpression());
+        }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
             // `inline n` or `inline .asciiz`: how much data follows each call.
@@ -1340,6 +1407,9 @@ internal sealed class Parser
         }
         return new GreenSyntax(SyntaxKind.StateItem, children.ToImmutable());
     }
+
+    private static bool LooksLikeAWidth(string text) =>
+        text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 
     /// <summary>
     /// One or more items separated by commas, with the commas kept. A parse that yields

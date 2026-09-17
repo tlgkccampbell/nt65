@@ -573,6 +573,7 @@ public sealed class Emitter
             // A function, and the lines of the blocks above, exist for the analysis: a call is
             // written as its body, and a type as the constants it names.
             case SyntaxKind.FuncDeclaration:
+            case SyntaxKind.SignatureDeclaration:
             case SyntaxKind.EnumMember:
             case SyntaxKind.CharmapEntry:
             case SyntaxKind.ListItems:
@@ -1865,16 +1866,21 @@ public sealed class Emitter
     private void Prefix(SyntaxNode operand, Edits edits)
     {
         var instruction = operand.Parent;
-        if (instruction is null || layout.Of(instruction, expansion) is not { Prefix: { } prefix })
+        if (instruction is null)
             return;
+        var chosen = layout.Of(instruction, expansion)?.Prefix;
+        var prefix = chosen ?? "";
         var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
+        if (chosen is null && written is not null)
+            return;
         var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
         var tokens = expression is null ? [] : Tokens(expression);
 
-        // ca65 reads a `(` straight after a prefix as an indirect operand, so an expression
-        // that starts with one — `lda (hi + lo) * 2`, which the language allows, or one written
-        // out with parentheses around its first operation — gets a unary `+` in front of it. It
-        // changes nothing and keeps the operand an expression.
+        // ca65 reads a `(` at the head of an operand, or straight after a prefix, as indirect
+        // addressing, so an expression that starts with one — `lda (hi + lo) * 2`, which the
+        // language allows, `jml (bank << 16) | .loword(f)`, or one written out with parentheses
+        // around its first operation — gets a unary `+` in front of it. It changes nothing and
+        // keeps the operand an expression.
         var opens = tokens is [{ Kind: SyntaxKind.OpenParen }, ..]
             || (tokens.Count > 0 && edits.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
         var text = opens ? prefix + "+" : prefix;

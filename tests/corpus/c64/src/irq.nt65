@@ -61,7 +61,9 @@ SPLITS = 3
     rts
 }
 
-.proc raster_irq {
+; An interrupt handler, entered through the vector and left through the KERNAL's own exit,
+; so nothing ever calls it.
+.proc raster_irq: interrupt {
     lda vic::IRQ_FLAG
     and #1
     bne @ours

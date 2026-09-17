@@ -17,7 +17,7 @@ gfx::init               ;! error: expected a label, a constant, an instruction o
     rts
 }
 
-.proc p: bogus {        ;! error: `bogus` is not a processor-state item
+.proc p: a9 {           ;! error: `a9` is not a processor-state item
     lda #1 junk         ;! error: unexpected `junk`
     rts
 }

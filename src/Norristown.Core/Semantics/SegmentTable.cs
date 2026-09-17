@@ -120,8 +120,12 @@ public sealed class SegmentTable
         return null;
     }
 
+    /// <summary>What is said of a segment that declares mirrors and no home bank for them to mirror.</summary>
+    public static string MirrorsNeedABank(string segment) =>
+        $"segment \"{segment}\" gives `mirrors` and no `bank`: a mirror shows a segment's home bank in another bank";
+
     /// <summary>
-    /// Works out the <c>dp = e</c> and <c>bank = e</c> the files' declarations write, now that
+    /// Works out the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> the files' declarations write, now that
     /// <paramref name="valueOf"/> can answer what an expression is worth.
     /// </summary>
     public void Evaluate(Func<SyntaxNode, long?> valueOf, List<Diagnostic> diagnostics)
@@ -129,16 +133,35 @@ public sealed class SegmentTable
         foreach (var (name, written) in attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             var segment = segments[name];
+            SyntaxNode? mirrors = null;
             foreach (var attribute in written)
             {
-                if (attribute.ChildTokens.Length == 0 || attribute.ChildNodes.FirstOrDefault() is not { } expression)
+                if (attribute.ChildTokens.Length == 0)
                     continue;
                 var word = attribute.ChildTokens[0].Text.ToLowerInvariant();
                 var at = attribute.Tree.GetSpan(attribute.Span);
+                if (word == "mirrors")
+                {
+                    if (mirrors is not null)
+                    {
+                        diagnostics.Add(new Diagnostic(at, Severity.Error, $"segment \"{name}\" already gives its `mirrors`"));
+                        continue;
+                    }
+                    mirrors = attribute;
+                    segment = segment with { Mirrors = Mirrors(attribute, valueOf, diagnostics) };
+                    continue;
+                }
+                if (attribute.ChildNodes.FirstOrDefault() is not { } expression)
+                    continue;
                 var value = valueOf(expression);
                 if (Check(name, segment.Size, word, value, at, (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
                     continue;
                 segment = word == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
+            }
+            if (mirrors is not null && segment.Bank is null)
+            {
+                diagnostics.Add(new Diagnostic(mirrors.Tree.GetSpan(mirrors.Span), Severity.Error, MirrorsNeedABank(name)));
+                segment = segment with { Mirrors = [] };
             }
             segments[name] = segment;
         }
@@ -149,6 +172,26 @@ public sealed class SegmentTable
 
     /// <summary>Whether <paramref name="tree"/> declares a segment, taken or not by the build.</summary>
     internal static bool Declares(SyntaxTree tree) => Declarations(tree).Count > 0;
+
+    /// <summary>The banks a <c>mirrors = [$00..$3f, $80]</c> gives, each checked to be a constant bank.</summary>
+    private static List<(long First, long Last)> Mirrors(
+        SyntaxNode attribute, Func<SyntaxNode, long?> valueOf, List<Diagnostic> diagnostics)
+    {
+        var banks = new List<(long First, long Last)>();
+        foreach (var range in attribute.ChildNodes.Where(child => child.Kind == SyntaxKind.BankRange))
+        {
+            var ends = range.ChildNodes.Select(valueOf).ToList();
+            if (ends is not [{ } first, ..] || ends[^1] is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
+                || first > last)
+            {
+                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Severity.Error,
+                    "a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`"));
+                continue;
+            }
+            banks.Add((first, last));
+        }
+        return banks;
+    }
 
     private static Dictionary<string, Segment> Predeclared() =>
         standard.ToDictionary(pair => pair.Key, pair => new Segment(pair.Key, pair.Value, null), StringComparer.Ordinal);

@@ -18,6 +18,10 @@
 CODE_BANK = $80
 WRAM_BANK = $7e
 
+; The state nearly every routine is called in and returns in: a signature names it and says
+; what differs.
+.export .signature std = a8, i16, dp = 0, dbr = CODE_BANK
+
 ; A BGR555 colour from 5-bit components.
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 

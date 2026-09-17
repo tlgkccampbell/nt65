@@ -117,7 +117,7 @@ public static class Repetitions
         SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
             "`.proc` belongs outside a repetition: a routine's name and signature are part of the "
             + "file's interface, and this one would be a different routine on every turn",
-        SyntaxKind.MacroDeclaration or SyntaxKind.FuncDeclaration =>
+        SyntaxKind.MacroDeclaration or SyntaxKind.FuncDeclaration or SyntaxKind.SignatureDeclaration =>
             "a definition belongs outside a repetition: it would be a different one on every turn, "
             + "and nothing outside the body could name any of them",
         _ => null,

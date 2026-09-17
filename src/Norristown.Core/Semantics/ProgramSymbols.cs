@@ -105,14 +105,14 @@ public sealed class ProgramSymbols
     }
 
     /// <summary>
-    /// Whether an export is a symbol to the linker. A macro, a charmap, a function and a list
-    /// are used by value, a scope and a type are only the way to their members, and an import
+    /// Whether an export is a symbol to the linker. A macro, a charmap, a function, a list and a
+    /// signature set are used by value, a scope and a type are only the way to their members, and an import
     /// is defined by somebody else.
     /// </summary>
     internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
         or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
         or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
-        or SymbolKind.Binding or SymbolKind.MacroParameter) && !symbol.IsDefine;
+        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine;
 
     /// <summary>The module named <paramref name="name"/>, or null when no file is.</summary>
     public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);

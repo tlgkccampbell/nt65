@@ -11,7 +11,7 @@
     "VRAM": { "size": "word" },  // ;! error: segment "VRAM" needs a `size` of "zp", "abs" or "far"
     "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
     "WIDE": { "size": "abs", "bank": 256 },    // ;! error: a bank is one byte
-    "ODD":  { "size": "abs", "base": 1 }       // ;! error: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp` and a `bank`
+    "ODD":  { "size": "abs", "base": 1 }       // ;! error: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],

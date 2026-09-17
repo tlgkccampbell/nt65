@@ -43,11 +43,18 @@ public readonly record struct StateItem(
         }
     }
 
+    /// <summary>The name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
+    public SyntaxNode? SetName => Part == StatePart.Set ? Node.ChildNodes.FirstOrDefault() : null;
+
     /// <summary>One item, or null when its line did not parse into one.</summary>
     private static StateItem? Of(SyntaxNode node)
     {
         if (node.ChildTokens.Length == 0)
-            return null;
+        {
+            return node.ChildNodes is [{ Kind: SyntaxKind.NameExpression }]
+                ? new StateItem(node, StatePart.Set, Width.Unknown, ProcessorMode.Unknown, false, false)
+                : null;
+        }
         var name = node.ChildTokens[0].Text.ToLowerInvariant();
         var suffix = node.ChildTokens.Length > 1 ? node.ChildTokens[1].Kind : SyntaxKind.None;
         var width = suffix switch
@@ -69,6 +76,9 @@ public readonly record struct StateItem(
             "e" or "native" or "emu" => StatePart.E,
             "near" or "far" => StatePart.Distance,
             "inline" => StatePart.Inline,
+            "args" => StatePart.Arguments,
+            "interrupt" => StatePart.Interrupt,
+            "none" => StatePart.None,
             "dp" => StatePart.DirectPage,
             "dbr" => StatePart.DataBank,
             _ => null,

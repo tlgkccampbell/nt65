@@ -130,13 +130,16 @@ public sealed class StateAnalysisTests
             + "that no `php` in this routine pushed: an `.ensure` after it sets it"], Problems(Text));
     }
 
-    /// <summary>A routine that pulls what its caller pushed knows nothing about its stack any more.</summary>
+    /// <summary>
+    /// A routine that pulls what its caller pushed knows nothing about what is beneath its stack
+    /// any more, and goes on tracking what it pushes from there.
+    /// </summary>
     [Fact]
-    public void PullingMoreThanWasPushedForgetsTheStack()
+    public void PullingMoreThanWasPushedForgetsTheBase()
     {
         var state = StateAt(".proc p {\n    php\n    pla\n    pla\n    nop\n    rts\n}\n", "nop");
 
-        Assert.Null(state.Stack);
+        Assert.Equal(AnalysisStack.Unanchored, state.Stack);
     }
 
     /// <summary>A push of a register whose width is not known moves the stack by an amount nobody knows.</summary>

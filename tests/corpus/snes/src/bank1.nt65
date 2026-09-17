@@ -30,7 +30,7 @@
 .data speeds: .byte 1, 2, 3, 4
 
 ; Called far from bank $80: upload the palette that sits beside it in bank $81.
-.proc load_palette: far, a8, i16, dp = 0 {
+.proc load_palette: std, far {
     phb
     phk
     plb                         ; B = $81
@@ -46,7 +46,7 @@
 }
 
 ; Put the player at spawn point X (0-2).
-.proc spawn_player: far, a8, i16, dp = 0 {
+.proc spawn_player: std, far {
     phb
     phk
     plb
@@ -56,16 +56,16 @@
     asl a
     tax
     lda spawn_points,x
-    sta f:player_x
+    sta player_x                ; low RAM is seen from bank $81 too
     lda spawn_points+2,x
-    sta f:player_y
+    sta player_y
     sep #$20
     plb
     rtl
 }
 
 ; A = speed for level A (0-3), read with a long operand so B does not matter.
-.proc level_speed: far, a8, i16 {
+.proc level_speed: std, far {
     rep #$20
     and #$0003
     tax

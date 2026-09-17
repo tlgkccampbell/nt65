@@ -28,7 +28,7 @@
     pla
     lda locals::src,s       ;! error: `locals::src` is in `locals`, which is no longer on the stack here
     txs
-    lda short::src,s        ;! error: `short::src` is counted from the stack pointer, and how much is pushed is not known here
+    lda short::src,s        ;! error: `short::src` is in `short`, which is no longer on the stack here
     rts
 }
 

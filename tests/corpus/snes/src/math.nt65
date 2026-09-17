@@ -66,10 +66,8 @@
 
 ; Unsigned 16/16. The caller pushes the dividend, then the divisor, and pulls both after.
 ; Quotient in A, remainder in X.
-.proc div16: a16, i16 {
+.proc div16: a16, i16, args 4 {
     pea 0
-    tsc                         ; forget the stack so the frame may reach past
-    tcs                         ; the return address into the arguments
     .frame f: DivFrame
     ldx #16
 @loop:

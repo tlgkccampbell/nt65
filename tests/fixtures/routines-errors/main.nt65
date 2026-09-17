@@ -1,0 +1,113 @@
+; What is wrong with signature sets, routines that never return, interrupt handlers, mirrors
+; and arguments, each where it can be fixed.
+.module main
+
+.cpu 65816
+
+.export late, wrong, stop, crowded, early, handler, closed, calls, tail, takes, short, pointed
+.export near_std, far_jump, wrong_mirror, far_near, reads
+
+LIMIT = 3
+
+; A set is declared once and checked there.
+.signature std = a8, i16, dp = 0
+.signature a8 = i16             ;! error: `a8` is a signature item, and cannot name a signature set
+.signature loop = again         ;! error: `loop` names `again`, which stands for `loop` again: a signature set cannot stand for itself
+.signature again = loop         ;! error: `again` names `loop`, which stands for `again` again: a signature set cannot stand for itself
+.signature never = std, none    ;! error: `none` says a routine never returns, and is written after `->` on its own
+.signature noisy = interrupt, a8 ;! error: `a8`: an interrupt handler is entered from anywhere, and assumes nothing but its mode: `interrupt, native` or `interrupt, emu`
+
+; A set comes first in its list, and names a set.
+.segment CODE0
+.proc late: a8, std {           ;! error: `std` is a signature set, and comes first in its list: the items after it change what it gives
+    rts
+}
+
+.proc wrong: LIMIT {            ;! error: `LIMIT` is a constant, and a name among a signature's items is a signature set
+    rts
+}
+
+; A routine that never returns does not return, and has no exit state.
+.proc stop: std -> none {
+    rts                         ;! error: `stop` never returns, as its `-> none` says, and `rts` returns
+}
+
+.proc crowded: a8 -> none, a16 { ;! error: `a16`: `-> none` stands alone, because a routine that never returns has no exit state
+    stp
+}
+
+.proc early: none {             ;! error: `none` says a routine never returns, and belongs after `->`
+    rts
+}
+
+; An interrupt handler leaves by `rti`, declares no exit, and is never called.
+.proc handler: interrupt, native {
+    rts                         ;! error: `handler` is an interrupt handler, and leaves by `rti` rather than `rts`
+}
+
+.proc closed: interrupt -> a8 { ;! error: an interrupt handler leaves by `rti`, and declares nothing after `->`
+    rti
+}
+
+.proc calls: std {
+    jsr handler                 ;! error: `handler` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back
+    .state std                  ;! error: `std` describes a routine rather than a point in it, and belongs in a signature
+    rts
+}
+
+.proc tail: std {
+    jmp handler                 ;! error: `jmp handler` is a tail call, and `handler` is an interrupt handler, which leaves by `rti`: only a routine that never returns, or another interrupt handler, may jump to one
+}
+
+.macro entered(): interrupt {   ;! error: `interrupt` describes how a routine is called, and a macro is expanded
+    nop
+}
+
+; The caller pushes what `args` counts.
+.proc takes: std, a16, args 4 {
+    rts
+}
+
+.proc short: std, a16 {
+    pea 1
+    jsr takes                   ;! error: `takes` takes `args 4`, pushed before the call, and only 2 bytes are pushed here
+    pla
+    rts
+}
+
+.proc pointed: std, args LIMIT + counter { ;! error: `args LIMIT + counter` needs a constant: it counts the bytes the caller pushes
+    rts
+}
+
+.proc near_std: std {
+    rts
+}
+
+; A long jump to a near routine enters another bank, which only a routine nothing returns
+; to may do; and a routine's address in a bank is in its home bank or a mirror.
+.segment STUBS
+.proc far_jump: std {
+    jml near_std                ;! error: `near_std` is near and in another bank, and would return with `rts` in its own bank to `far_jump`'s caller: only a routine that never returns, or an interrupt handler, enters another bank this way
+}
+
+.proc wrong_mirror: std -> none {
+    jml ($81 << 16) | .loword(near_std) ;! error: `near_std` is in "CODE0", in bank $80 and mirrored in banks $00-$3f, and this reaches it in bank $81
+}
+
+.segment CODE0
+.proc far_near: std -> none {
+    jml near_std                ;! error: `near_std` is near: a jump to it is `jmp near_std`
+}
+
+; Data in a mirrored segment is reached from its home bank and its mirrors only.
+.segment LORAM
+.data counter: .word
+
+.segment CODE0
+.proc reads: a8, dbr = $c0 {
+    lda counter                 ;! error: `counter` is in "LORAM", which is in bank $7e and mirrored in banks $00-$3f, $80-$bf, and B is $c0 here
+    rts
+}
+
+; A mirror is a bank, or a range from the lower to the higher.
+.segment SRAM: abs, bank = $70, mirrors = [$7d..$71] ;! error: a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`

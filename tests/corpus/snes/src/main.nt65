@@ -14,7 +14,7 @@
 
 .segment CODE0
 
-.proc main: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc main: std -> none {
 @frame:
     lda #1
     sta nmi_ready
@@ -34,7 +34,7 @@
 }
 
 ; Wait for auto-read to finish, then latch held and newly pressed buttons.
-.proc read_pads: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc read_pads: std {
 @busy:
     lda HVBJOY
     and #$01
@@ -52,7 +52,7 @@
     rts
 }
 
-.proc state_title: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc state_title: std {
     rep #$20
     lda pad_pressed
     and #Joy::start
@@ -71,7 +71,7 @@
     rts
 }
 
-.proc state_play: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc state_play: std {
     rep #$20
     lda pad_pressed
     bit #Joy::start
@@ -106,7 +106,7 @@
 }
 
 ; Move right by the level's speed, scaled by a fixed factor.
-.proc step_right: a16, i16, dp = 0, dbr = CODE_BANK {
+.proc step_right: std, a16 {
     sep #$20
     lda #0
     jsl bank1::level_speed
@@ -123,7 +123,7 @@
     rts
 }
 
-.proc state_pause: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc state_pause: std {
     rep #$20
     lda pad_pressed
     and #Joy::start
@@ -136,7 +136,7 @@
 }
 
 ; Put the player back at the left edge, relative-call style.
-.proc reset_player: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc reset_player: std {
     rep #$20
     mov16!(player_y, {#96})
     sep #$20
@@ -149,7 +149,7 @@
     rts
 }
 
-.proc respawn: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc respawn: std {
     rep #$20
     mov16!(player_x, {#16})
     sep #$20
@@ -157,7 +157,7 @@
 }
 
 ; Copy the player into OAM slot 0 in the WRAM shadow, and centre the camera with div16.
-.proc update_sprite: a16, i16, dp = 0, dbr = CODE_BANK -> a8, i16, dp = 0, dbr = CODE_BANK {
+.proc update_sprite: std, a16 -> std {
     lda player_x
     pha                         ; dividend
     pea 2                       ; divisor

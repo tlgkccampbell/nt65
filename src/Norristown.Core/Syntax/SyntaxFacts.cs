@@ -75,6 +75,7 @@ public static class SyntaxFacts
         [".charmap"] = SyntaxKind.CharmapDeclaration,
         [".list"] = SyntaxKind.ListDeclaration,
         [".func"] = SyntaxKind.FuncDeclaration,
+        [".signature"] = SyntaxKind.SignatureDeclaration,
         [".if"] = SyntaxKind.IfDirective,
         [".elseif"] = SyntaxKind.ElseIfDirective,
         [".else"] = SyntaxKind.ElseDirective,
@@ -112,7 +113,7 @@ public static class SyntaxFacts
     // The processor-state items, by the suffix that follows the name: a point item stands
     // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
     private static readonly FrozenSet<string> pointStateItems =
-        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline" }
+        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt", "none" }
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =
@@ -131,6 +132,12 @@ public static class SyntaxFacts
 
     /// <summary>Whether <paramref name="text"/> is a register name, whatever its case.</summary>
     public static bool IsRegister(ReadOnlySpan<char> text) => registerSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
+
+    /// <summary>
+    /// Whether <paramref name="text"/> is a word a state item is spelled with, whatever
+    /// follows it, and so cannot name a signature set.
+    /// </summary>
+    public static bool IsStateWord(string text) => pointStateItems.Contains(text) || trackedStateParts.Contains(text);
 
     /// <summary>Whether <paramref name="text"/> names a kind of macro parameter.</summary>
     public static bool IsParameterKind(string text) => parameterKinds.Contains(text);

@@ -100,15 +100,23 @@ public sealed class StateAnalysis
             .Select(pair => pair.Value)
             .FirstOrDefault();
 
-    /// <summary>What a routine's state is when it is entered: its declared entry, with nothing pushed.</summary>
-    private static FlowState Entry(Signature signature, Symbol routine) => new(signature.Entry, AnalysisStack.Empty)
+    /// <summary>
+    /// What a routine's state is when it is entered: its declared entry, with nothing pushed but,
+    /// for a routine that takes <c>args n</c>, the arguments and the return address above them.
+    /// </summary>
+    private static FlowState Entry(Signature signature, Symbol routine) => new(
+        signature.Entry,
+        signature.Arguments > 0
+            ? AnalysisStack.Empty.Push(StackEntry.Opaque, signature.Arguments + (signature.IsFar ? 3 : 2))
+            : AnalysisStack.Empty)
     {
-        WhyA = signature.Entry.A == Width.Unknown ? EntryCause(routine, "a?") : null,
-        WhyIndex = signature.Entry.Index == Width.Unknown ? EntryCause(routine, "i?") : null,
+        WhyA = signature.Entry.A == Width.Unknown ? EntryCause(signature, routine, "a?") : null,
+        WhyIndex = signature.Entry.Index == Width.Unknown ? EntryCause(signature, routine, "i?") : null,
     };
 
-    private static WidthCause EntryCause(Symbol routine, string item) =>
-        new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
+    private static WidthCause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
+        ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
+        : new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
 
     /// <summary>The register an immediate's width comes from, as a message names it.</summary>
     private static string Spell(WidthRegister register) => register == WidthRegister.A ? "A" : "X and Y";
@@ -417,16 +425,19 @@ public sealed class StateAnalysis
                     : processor with { A = Width.Unknown, Index = Width.Unknown };
                 return new FlowState(restored, Pull(stack, 1));
 
+            // The stack pointer is somewhere nothing is known of, and what is pushed from
+            // here on is tracked on top of it.
             case "txs":
             case "tcs":
-                return state with { Stack = null };
+                return state with { Stack = AnalysisStack.Unanchored };
 
             // A return with a `.next` is a jump to the address the routine pushed, and pulls it.
             case "rts":
             case "rtl":
                 if (next is not null)
                     return state with { Stack = Pull(stack, mnemonic == "rts" ? 2 : 3) };
-                CheckReturn(step, mnemonic, processor, routine);
+                if (routine.Signature is not { HasNoCaller: true })
+                    CheckReturn(step, mnemonic, processor, routine);
                 return state;
 
             default:
@@ -444,12 +455,17 @@ public sealed class StateAnalysis
         var target = Targets.Of(model, Transfers.TargetOf(statement, mode), step.On)?.Symbol;
 
         if (transfer == Transfer.Call)
+        {
+            CheckMirror(step, mode);
+            CheckArguments(step, target, state.Stack, 0);
             return state with { Processor = Called(step, mnemonic, target, state.Processor) };
+        }
 
         // A relative call comes back to the label after it, having pulled what the `per` and
         // any `phk` pushed.
         if (flow.RelativeCallAt(step) is { } relative)
         {
+            CheckArguments(step, relative.Routine, state.Stack, relative.Pushed);
             return new FlowState(
                 RelativelyCalled(step, mnemonic, relative, state.Processor), Pull(state.Stack, relative.Pushed));
         }
@@ -472,7 +488,10 @@ public sealed class StateAnalysis
         }
 
         if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee })
+        {
+            CheckMirror(step, mode);
             CheckTailCall(step, mnemonic, target, callee, state.Processor, routine);
+        }
         else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && DeclaredElsewhere(target, routine) is { } declared)
             CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
         if (next is not null)
@@ -511,6 +530,8 @@ public sealed class StateAnalysis
             return state;
         }
 
+        if (callee.IsInterrupt)
+            return state;
         if (mnemonic == "jsr" && callee.IsFar)
             Report(step, $"`{target.DisplayName}` is far, and is called with `jsl`");
         else if (mnemonic == "jsl" && !callee.IsFar)
@@ -527,6 +548,8 @@ public sealed class StateAnalysis
     {
         var target = call.Routine;
         var callee = target.Signature!;
+        if (callee.IsInterrupt)
+            return state;
         if (callee.IsFar && !call.IsFar)
             Report(step, $"`{target.DisplayName}` is far, and a relative call to it pushes the bank with `phk` before the `per`");
         else if (!callee.IsFar && call.IsFar)
@@ -567,7 +590,8 @@ public sealed class StateAnalysis
     /// <summary>
     /// A jump to a routine's entry. The routine returns to this routine's caller, so it has to
     /// take the state here, return the way this routine returns, and hand back what this
-    /// routine promises.
+    /// routine promises. Where nothing returns — this routine never does, or leaves by
+    /// <c>rti</c>, or the target never returns — only the target's entry is checked.
     /// </summary>
     private void CheckTailCall(
         Step step, string mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
@@ -576,12 +600,35 @@ public sealed class StateAnalysis
         var what = mnemonic == ".next"
             ? $"`.next {target.DisplayName}`"
             : $"`{mnemonic} {target.DisplayName}`";
-        if (mnemonic == "jml" && !callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is near: a jump to it is `jmp {target.DisplayName}`");
-        else if (mnemonic is not ("jml" or ".next") && callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is far: a jump to it is `jml {target.DisplayName}`");
-        CheckEntry(step, what, callee, state);
+        var returns = !own.HasNoCaller && !callee.NeverReturns;
 
+        // A long jump to a near routine is how code enters another bank, which is where the
+        // routine's own `rts` then stays: that is somewhere to go only when nothing returns.
+        if (mnemonic == "jml" && !callee.IsFar && !callee.IsInterrupt)
+        {
+            if (!EntersAnotherBank(step, target))
+                Report(step, $"`{target.DisplayName}` is near: a jump to it is `jmp {target.DisplayName}`");
+            else if (returns)
+            {
+                Report(step, $"`{target.DisplayName}` is near and in another bank, and would return with `rts` in its own bank "
+                    + $"to `{routine.DisplayName}`'s caller: only a routine that never returns, or an interrupt handler, "
+                    + "enters another bank this way");
+            }
+        }
+        else if (mnemonic is not ("jml" or ".next") && callee.IsFar)
+        {
+            Report(step, $"`{target.DisplayName}` is far: a jump to it is `jml {target.DisplayName}`");
+        }
+        CheckEntry(step, what, callee, state);
+        if (!returns)
+            return;
+
+        if (callee.IsInterrupt)
+        {
+            Report(step, $"{what} is a tail call, and `{target.DisplayName}` is an interrupt handler, which leaves by `rti`: "
+                + "only a routine that never returns, or another interrupt handler, may jump to one");
+            return;
+        }
         if (callee.IsFar != own.IsFar)
         {
             Report(step, $"{what} is a tail call, and `{target.DisplayName}` is {callee.Distance} while "
@@ -589,6 +636,51 @@ public sealed class StateAnalysis
         }
         CheckExit(step, $"{what} is a tail call:", $"when `{target.DisplayName}` returns",
             own.Exit, Exited(callee, state), routine.DisplayName);
+    }
+
+    /// <summary>
+    /// Whether a long jump lands in a bank other than the one the code making it is taken to run
+    /// in: the routine's home bank, or the mirror bank its address is written in. Both have to
+    /// be declared.
+    /// </summary>
+    private bool EntersAnotherBank(Step step, Symbol target)
+    {
+        var mode = layout.Of(step.Statement, step.On)?.Mode;
+        var landing = Targets.MirrorOf(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Bank
+            ?? SegmentOf(target)?.Bank;
+        return BankOf(step.Segment) is { IsKnown: true } here && landing is { } there && there != here.Value;
+    }
+
+    /// <summary>
+    /// A long transfer to a routine's address in a bank of its choosing, which has to be the bank
+    /// the routine's segment lives in or one of its mirrors.
+    /// </summary>
+    private void CheckMirror(Step step, AddressingMode? mode)
+    {
+        if (Targets.MirrorOf(model, Transfers.TargetOf(step.Statement, mode), step.On) is not { } mirror
+            || SegmentOf(mirror.Routine) is not { Bank: not null } segment || segment.IsSeenFrom(mirror.Bank))
+        {
+            return;
+        }
+        Report(step, $"`{mirror.Routine.DisplayName}` is in \"{segment.Name}\", {segment.SpellBanks()}, and this "
+            + $"reaches it in bank {StateValue.Hex(mirror.Bank, 2)}");
+    }
+
+    /// <summary>
+    /// A call to a routine that takes <c>args n</c>: the caller pushes those bytes first, so where
+    /// what this routine pushed is known there have to be at least that many, beneath the
+    /// <paramref name="pushed"/> bytes a relative call pushes for itself.
+    /// </summary>
+    private void CheckArguments(Step step, Symbol? target, AnalysisStack? stack, int pushed)
+    {
+        if (target?.Signature is not { Arguments: > 0 and var needed } || stack is not { IsAnchored: true } known
+            || known.Depth - pushed >= needed)
+        {
+            return;
+        }
+        var have = known.Depth - pushed;
+        Report(step, $"`{target.DisplayName}` takes `args {needed}`, pushed before the call, and "
+            + (have == 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here"));
     }
 
     /// <summary>That the state here is what a routine's entry declares.</summary>
@@ -781,12 +873,21 @@ public sealed class StateAnalysis
             ? Constant(step)
             : null;
 
-    /// <summary>The destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data bank.</summary>
-    private StateValue MovedTo(Step step) =>
-        OperandOf(step) is { Kind: SyntaxKind.ImmediateOperand, ChildNodes: [_, var destination, ..] }
-        && model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff
-            ? StateValue.Of(bank)
-            : StateValue.Unknown;
+    /// <summary>
+    /// The destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data bank: a
+    /// constant, or <c>^sym</c>, the bank of a symbol whose segment declares one.
+    /// </summary>
+    private StateValue MovedTo(Step step)
+    {
+        if (OperandOf(step) is not { Kind: SyntaxKind.ImmediateOperand, ChildNodes: [_, var destination, ..] })
+            return StateValue.Unknown;
+        if (model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff)
+            return StateValue.Of(bank);
+        return destination is { Kind: SyntaxKind.UnaryExpression, ChildTokens: [{ Kind: SyntaxKind.Caret }], ChildNodes: [var named] }
+            && Targets.Of(model, named, step.On)?.Symbol is { } symbol && SegmentOf(symbol)?.Bank is { } home
+                ? StateValue.Of(home)
+                : StateValue.Unknown;
+    }
 
     /// <summary>The bank a segment declares it lives in, which is the program bank for code in it.</summary>
     private StateValue BankOf(string? segment) =>
@@ -845,9 +946,9 @@ public sealed class StateAnalysis
         var bank = state.B.Value;
         foreach (var symbol in AddressSymbols.In(model, expression, step.On))
         {
-            if (SegmentOf(symbol) is { Bank: { } declared } segment && declared != bank)
+            if (SegmentOf(symbol) is { Bank: not null } segment && !segment.IsSeenFrom(bank))
             {
-                Report(step, $"`{symbol.DisplayName}` is in \"{segment.Name}\", which is in bank {StateValue.Hex(declared, 2)}, "
+                Report(step, $"`{symbol.DisplayName}` is in \"{segment.Name}\", which is {segment.SpellBanks()}, "
                     + $"and B is {StateValue.Hex(bank, 2)} here");
             }
         }
@@ -912,7 +1013,8 @@ public sealed class StateAnalysis
         var processor = state.Processor;
         foreach (var item in StateItem.Read(step.Statement))
         {
-            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline)
+            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
+                or StatePart.Interrupt or StatePart.None or StatePart.Set)
             {
                 ReportAt(item.Node, step, $"`{item.Text}` describes a routine rather than a point in it, "
                     + "and belongs in a signature");

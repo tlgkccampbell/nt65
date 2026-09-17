@@ -65,4 +65,7 @@ public enum SymbolKind
 
     /// <summary><c>.frame name: T</c>: the top bytes of the stack, laid out as a struct.</summary>
     Frame,
+
+    /// <summary><c>.signature name = items</c>: items a signature names the set of.</summary>
+    SignatureSet,
 }

@@ -1,0 +1,10 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "segments": {
+    "STUBS": { "size": "abs", "bank": 0 },
+    "CODE0": { "size": "abs", "bank": "$80", "mirrors": ["$00-$3f"] },
+    "LORAM": { "size": "abs", "bank": "$7e", "mirrors": ["$00-$3f", "$80-$bf"] },
+    "BANK1": { "size": "abs", "bank": "$81" }
+  }
+}

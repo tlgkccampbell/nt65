@@ -1,0 +1,135 @@
+; 65816 routines with less ceremony: signature sets, routines that never return, interrupt
+; handlers, mirrored segments, and arguments the caller pushes.
+.module main
+
+.cpu 65816
+
+.use sys::{CODE_BANK, std, far_std, isr}
+
+.export reset_stub, nmi, irq, stop, reset, main, add, copy, restore, load
+
+; A segment declared in a file gives its mirrors as banks and ranges of them.
+.segment SRAM: abs, bank = $70, mirrors = [$71..$7d, $f0]
+
+.segment LORAM
+.data counter: .word
+
+.segment SRAM
+.data saved: .word
+
+.segment BANK1
+.data table: .byte 1, 2, 3, 4
+
+; The vectors point into bank $00. The stub enters `reset` in bank $80 with a long jump to its
+; address there: nothing returns from a routine that says `-> none`, so the jump is checked
+; against `reset`'s entry alone.
+.segment STUBS
+.proc reset_stub: emu, dp?, dbr? -> none {
+    sei
+    jml (CODE_BANK << 16) | .loword(reset)
+}
+
+; An interrupt handler knows nothing at entry but, here, its mode, and leaves by `rti`.
+.proc nmi: isr {
+    rep #$30
+    pha
+    lda f:counter
+    inc a
+    sta f:counter
+    pla
+    rti
+}
+
+; One interrupt handler may jump into another.
+.proc irq: interrupt, native {
+    jmp nmi
+}
+
+.proc stop: interrupt {
+    stp
+}
+
+.segment CODE0
+
+; `reset` never returns, so the call it ends with is where its path ends. After `txs` the
+; stack is tracked again from what is pushed, so `phk` and `plb` still set B.
+.proc reset: emu, dp?, dbr? -> none {
+    clc
+    xce
+    rep #$30
+    ldx #$1fff
+    txs
+    lda #$0000
+    tcd
+    phk
+    plb
+    sep #$20
+    lda counter                 ; low WRAM is seen in bank $80 too
+    jsr main
+}
+
+; A signature set, and what differs from it.
+.proc main: std -> none {
+    rep #$20
+    pea 3
+    pea 4
+    jsr add
+    pla
+    pla
+    sep #$20
+    jsr copy
+    jsl load
+    jmp main
+}
+
+; The caller pushes two words before the call, and a frame lays them out past the return
+; address.
+.struct AddFrame {
+    ret:    .res 2
+    right:  .word
+    left:   .word
+}
+
+.proc add: std, a16, args 4 {
+    .frame f: AddFrame
+    lda f::left,s
+    clc
+    adc f::right,s
+    rts
+}
+
+; A block move leaves B at the bank of its destination's segment.
+.proc copy: std {
+    rep #$20
+    lda #3
+    ldx #.loword(table)
+    ldy #.loword(counter)
+    mvn #^table, #^counter
+    lda counter
+    phk
+    plb
+    sep #$20
+    rts
+}
+
+; Static RAM read through one of its mirrors.
+.proc restore: std {
+    lda #$71
+    pha
+    plb
+    lda saved
+    phk
+    plb
+    rts
+}
+
+; A far routine in bank $81 that reads its own bank's data.
+.segment BANK1
+.proc load: far_std {
+    phb
+    phk
+    plb
+    lda table
+    plb
+    rtl
+}

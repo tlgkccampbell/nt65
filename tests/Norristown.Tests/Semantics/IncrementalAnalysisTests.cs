@@ -49,6 +49,8 @@ public sealed class IncrementalAnalysisTests
             ("defs.nt65", "; Calls a macro", "; It calls a macro", null, 1),                         // gfx's `relay` goes on holding the old `ping`
             ("defs.nt65", "; It calls", "; Here.\n; It calls", null, 3),                             // `ping` moves, and callers write its calls' lines
             ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
+            ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the set, and errors calls `clear`
+            ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
         ];
 
         var replay = new ProgramReplay();

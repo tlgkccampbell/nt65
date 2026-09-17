@@ -32,7 +32,7 @@
 .segment CODE0
 
 ; Upload the BG tiles and the first row of the tilemap. Forced blank must be on.
-.proc upload_graphics: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc upload_graphics: std {
     ; tiles to VRAM $2000
     ldx #.loword(tiles)
     stx dma_src
@@ -61,7 +61,7 @@
 }
 
 ; Copy dma_len bytes from the far pointer dma_src to VRAM at dma_dst.
-.proc vram_copy: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc vram_copy: std {
     ldx dma_dst
     stx VMADDL
     ldx dma_src
@@ -81,7 +81,7 @@
 }
 
 ; Copy dma_len bytes from the far pointer dma_src to CGRAM from colour 0.
-.proc cgram_copy: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc cgram_copy: std {
     stz CGADD
     ldx dma_src
     ldy dma_len
@@ -100,7 +100,7 @@
 }
 
 ; cgram_copy for callers in other banks.
-.proc cgram_copy_far: far, a8, i16, dp = 0 {
+.proc cgram_copy_far: std, far, dbr* {
     phb
     phk
     plb
@@ -110,7 +110,7 @@
 }
 
 ; Start a COLDATA gradient on HDMA channel 1 from the far table.
-.proc setup_hdma: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc setup_hdma: std {
     phd
     pea $4300
     pld
@@ -128,7 +128,7 @@
 }
 
 ; Hide all 128 sprites in the WRAM shadow, with B moved to $7e for short operands.
-.proc clear_oam: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc clear_oam: std {
     phb
     lda #WRAM_BANK
     pha
@@ -150,7 +150,7 @@
 ; Print the $ff-terminated text that follows the call at the tile given by the two
 ; bytes before it: `jsr print_inline` then `.word tile` then the text... here fixed at
 ; two bytes of tile index, as the signature says.
-.proc print_inline: a8, i16, dp = 0, dbr = CODE_BANK, inline 2 {
+.proc print_inline: std, inline 2 {
     rep #$20
     lda 1,s                     ; return address - 1
     inc a
@@ -167,7 +167,7 @@
 
 ; Write a $ff-terminated string at CODE_BANK:Y to the tilemap at tile X, one byte at a
 ; time through the VRAM port.
-.proc print_text: a8, i16, dp = 0, dbr = CODE_BANK {
+.proc print_text: std {
     rep #$20
     txa
     sta VMADDL

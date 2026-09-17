@@ -23,4 +23,16 @@ public enum StatePart
 
     /// <summary>The data bank: <c>dbr = e</c>, <c>dbr?</c>, <c>dbr*</c>.</summary>
     DataBank,
+
+    /// <summary>What the caller pushes before the call: <c>args n</c>.</summary>
+    Arguments,
+
+    /// <summary>A routine the processor enters on an interrupt, and that leaves by <c>rti</c>: <c>interrupt</c>.</summary>
+    Interrupt,
+
+    /// <summary>A routine that never returns: <c>-&gt; none</c>.</summary>
+    None,
+
+    /// <summary>A signature set, which stands for the items it was declared with: <c>std</c>.</summary>
+    Set,
 }

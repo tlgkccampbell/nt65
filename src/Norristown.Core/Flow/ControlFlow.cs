@@ -60,6 +60,7 @@ public sealed class ControlFlow
             flow.CheckUnreachableLabels(region, diagnostics);
             flow.CheckDataReachedByFallingThrough(units, flow.CheckInlineData(units, diagnostics), diagnostics);
             flow.CheckRunningOn(units, diagnostics);
+            flow.CheckReturnsAndCalls(routine, units, diagnostics);
         }
 
         // On the 65816 the analysis consumes what flow it cannot see, so each construct that
@@ -74,6 +75,16 @@ public sealed class ControlFlow
     /// <summary>The annotations written under <paramref name="step"/>'s statement, in order.</summary>
     internal IReadOnlyList<SyntaxNode> AnnotationsOf(Step step) =>
         annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
+
+    /// <summary>Whether a statement calls a routine that never returns, which is where its path ends.</summary>
+    internal bool CallsWhatNeverReturns(Step step)
+    {
+        if (RelativeCallAt(step) is { } relative)
+            return relative.Routine.Signature is { NeverReturns: true };
+        var mode = layout.Of(step.Statement, step.On)?.Mode;
+        return Transfers.Of(step.Statement, mode) == Transfer.Call
+            && Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol.Signature is { NeverReturns: true };
+    }
 
     /// <summary>The call a branch makes, for a branch written as a relative call; null for every other statement.</summary>
     internal RelativeCall? RelativeCallAt(Step step) =>
@@ -574,6 +585,35 @@ public sealed class ControlFlow
         static string Bytes(long count) => count == 1 ? "1 byte" : $"{count} bytes";
     }
 
+    /// <summary>
+    /// How a routine that never returns and an interrupt handler may be left and reached, which
+    /// holds on every CPU: neither returns with <c>rts</c> or <c>rtl</c>, and an interrupt handler,
+    /// which leaves by <c>rti</c>, is never called.
+    /// </summary>
+    private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    {
+        foreach (var unit in units)
+        {
+            var statement = unit.Step.Statement;
+            if (unit.Next is null && routine.Signature is { HasNoCaller: true } own
+                && (IsInstruction(statement, "rts") || IsInstruction(statement, "rtl")))
+            {
+                var returned = statement.ChildTokens[0].Text.ToLowerInvariant();
+                Report(statement, own.IsInterrupt
+                    ? $"`{routine.DisplayName}` is an interrupt handler, and leaves by `rti` rather than `{returned}`"
+                    : $"`{routine.DisplayName}` never returns, as its `-> none` says, and `{returned}` returns");
+            }
+            if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
+            {
+                Report(statement, $"`{handler.DisplayName}` is an interrupt handler, which the processor enters and `rti` "
+                    + "leaves: a call to it would not come back");
+            }
+        }
+
+        void Report(SyntaxNode node, string message) =>
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+    }
+
     /// <summary>The routine a statement calls, directly or as a relative call; null for anything else.</summary>
     private Symbol? CalledAt(Unit unit)
     {
@@ -630,11 +670,13 @@ public sealed class ControlFlow
 
     /// <summary>
     /// Whether control carries on into whatever follows. A call does however it is written,
-    /// because it comes back; a <c>.next</c> on anything else says where flow goes, and past
-    /// the statement is not it.
+    /// because it comes back, unless it calls a routine that never returns; a <c>.next</c> on
+    /// anything else says where flow goes, and past the statement is not it.
     /// </summary>
     private bool RunsOn(Unit unit)
     {
+        if (CalledAt(unit) is { Signature.NeverReturns: true })
+            return false;
         var transfer = Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode);
         if (transfer is Transfer.Call or Transfer.Elsewhere && IsCall(unit.Step.Statement))
             return true;

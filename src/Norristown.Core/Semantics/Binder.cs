@@ -364,7 +364,7 @@ internal sealed class Binder
     {
         var written = declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature);
         CollectUses(written);
-        return Signature.Read(written, (span, message) => Report(span, message));
+        return Signature.Read(written);
     }
 
     /// <summary>
@@ -447,7 +447,7 @@ internal sealed class Binder
             symbol.Body = body;
         if (symbol is not null && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature) is { } signature)
         {
-            symbol.MacroSignature = Signature.ReadMacro(signature, (span, message) => Report(span, message));
+            symbol.MacroSignature = Signature.ReadMacro(signature);
             CollectUses(signature);
         }
 
@@ -717,6 +717,20 @@ internal sealed class Binder
                 BindFunc(statement);
                 break;
 
+            // A signature set names its items, whose values and sets are read once the
+            // program's names and constants are.
+            case SyntaxKind.SignatureDeclaration:
+                var items = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.StateList);
+                if (NameToken(statement) is { } set)
+                {
+                    if (SyntaxFacts.IsStateWord(set.Text))
+                        Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
+                    else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
+                        declared.Definition = items;
+                }
+                CollectUses(items);
+                break;
+
             case SyntaxKind.ConstantDeclaration:
                 // A constant or an address alias: which one depends on the expression, so the
                 // kind is settled once the names in it resolve.
@@ -845,7 +859,7 @@ internal sealed class Binder
             }
             if (item.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ImportSignature) is { } signature)
             {
-                symbol.Signature = Signature.Read(signature, (span, message) => Report(span, message));
+                symbol.Signature = Signature.Read(signature);
                 CollectUses(signature);
                 if (symbol.Signature.IsFar)
                     symbol.AddressSize = AddressSize.Far;

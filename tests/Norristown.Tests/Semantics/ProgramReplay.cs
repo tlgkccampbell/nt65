@@ -36,7 +36,7 @@ internal sealed class ProgramReplay
             .use main::BASE
             .use gfx::{relay, COLORS}
 
-            .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL, ping
+            .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL, ping, std
 
             SCREEN = $2000
             WIDTH  = 32
@@ -45,6 +45,9 @@ internal sealed class ProgramReplay
             PRIVATE_K = 7
             SCALE  = 3
             FILL   = $20
+
+            ; The state gfx.nt65's routines take.
+            .signature std = a8, i8
 
             .struct Point {
             x:      .word
@@ -120,7 +123,7 @@ internal sealed class ProgramReplay
         ["gfx.nt65"] = """
             .module gfx
             .cpu 65816
-            .use defs::{rgb, scaled, SCREEN, WIDTH, ping}
+            .use defs::{rgb, scaled, SCREEN, WIDTH, ping, std}
 
             .export draw, clear, COLORS, relay
 
@@ -148,7 +151,7 @@ internal sealed class ProgramReplay
                 nop
             }
 
-            .proc clear: a8, i8 {
+            .proc clear: std {
                 lda #0
                 ldx #WIDTH - 1
             @wipe:

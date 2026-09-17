@@ -280,6 +280,49 @@ public sealed class FlowTests
         Assert.Empty(Problems(".proc p {\n    lda @table\n    rts\n@table: .byte 1\n    .byte 2\n}\n"));
     }
 
+    /// <summary>
+    /// A call to a routine that never returns is where the path ends, on every CPU: what follows
+    /// it is not run into, and a routine that ends with one does not run off its end.
+    /// </summary>
+    [Fact]
+    public void ACallToARoutineThatNeverReturnsEndsThePath()
+    {
+        const string Text = """
+            .proc halt: a8 -> none {
+                jmp halt
+            }
+
+            .proc p {
+                jsr halt
+                .byte 1
+            }
+            """;
+
+        Assert.Empty(Problems(Text));
+        var p = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + Text)).Flows.Single().Regions
+            .Single(region => region.Routine.Name == "p");
+        Assert.All(p.Blocks.Skip(1), block => Assert.False(block.IsFallenInto));
+    }
+
+    /// <summary>
+    /// On the 6502, as on the 65816, an interrupt handler leaves by <c>rti</c> and is never
+    /// called, and a routine that never returns does not return.
+    /// </summary>
+    [Fact]
+    public void OnThe6502InterruptHandlersAndRoutinesThatNeverReturnAreChecked()
+    {
+        var problems = Problems(
+            ".proc irq: interrupt {\n    rts\n}\n.proc stop: a8 -> none {\n    rts\n}\n.proc p {\n    jsr irq\n    rts\n}\n");
+
+        Assert.Equal(
+            [
+                "main.nt65:4: `irq` is an interrupt handler, and leaves by `rti` rather than `rts`",
+                "main.nt65:7: `stop` never returns, as its `-> none` says, and `rts` returns",
+                "main.nt65:10: `irq` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back",
+            ],
+            problems);
+    }
+
     /// <summary>What is wrong with <paramref name="text"/>, placed in the code segment on a line before it.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();

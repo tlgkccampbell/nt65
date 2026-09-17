@@ -234,8 +234,11 @@ public enum SyntaxKind : byte
     /// <summary><c>.segment NAME: size</c>, with its attributes.</summary>
     SegmentDeclaration,
 
-    /// <summary><c>dp = expr</c> or <c>bank = expr</c> in a segment declaration.</summary>
+    /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [...]</c> in a segment declaration.</summary>
     SegmentAttribute,
+
+    /// <summary>One bank, <c>$80</c>, or a range of them, <c>$00..$3f</c>, in a segment's <c>mirrors</c>.</summary>
+    BankRange,
 
     /// <summary><c>.segment NAME {</c>: the line opening a segment block.</summary>
     SegmentBlock,
@@ -272,6 +275,9 @@ public enum SyntaxKind : byte
 
     /// <summary>The parenthesized parameter names of a <c>.func</c>.</summary>
     ParameterList,
+
+    /// <summary><c>.signature std = a8, i16, dp = 0</c>: a named set of signature items.</summary>
+    SignatureDeclaration,
 
     /// <summary>One member of an <c>.enum</c>: <c>name</c> or <c>name = expr</c>.</summary>
     EnumMember,
@@ -365,7 +371,10 @@ public enum SyntaxKind : byte
     /// <summary>Comma-separated state items.</summary>
     StateList,
 
-    /// <summary>One state item, such as <c>a16</c>, <c>i*</c> or <c>dp = $2100</c>.</summary>
+    /// <summary>
+    /// One state item, such as <c>a16</c>, <c>i*</c> or <c>dp = $2100</c>, or the name of a
+    /// signature set, such as <c>std</c> or <c>snes::std</c>.
+    /// </summary>
     StateItem,
 
     // Expressions.

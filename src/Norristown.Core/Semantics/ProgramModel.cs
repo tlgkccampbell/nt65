@@ -330,17 +330,28 @@ public sealed class ProgramModel
         return (resolved, declared);
     }
 
-    /// <summary>Works out the values a signature's items write, now that the constants are known.</summary>
+    /// <summary>
+    /// Reads each signature again with the signature sets it names and the values its items
+    /// write, now that the names and the constants are known, and reports what is wrong with
+    /// it; and what is wrong with each signature set, once, where it is declared.
+    /// </summary>
     private static void Value(
         IEnumerable<Symbol> symbols, SegmentTable segments, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
     {
         long? ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, segments, resolved).AsNumber();
+        Symbol? SetOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
         foreach (var symbol in symbols)
         {
             void Report(TextSpan span, string message) =>
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
-            symbol.Signature = symbol.Signature?.Valued(ValueOf, Report);
-            symbol.MacroSignature = symbol.MacroSignature?.Valued(ValueOf, Report);
+            if (symbol.Kind == SymbolKind.SignatureSet)
+                Signature.CheckSet(symbol, ValueOf, SetOf, Report);
+            symbol.Signature = symbol.Signature?.Resolved(ValueOf, SetOf, Report);
+            symbol.MacroSignature = symbol.MacroSignature?.Resolved(ValueOf, SetOf, Report);
+
+            // A routine is imported as far when its signature says so, which a set it names may.
+            if (symbol is { Kind: SymbolKind.ImportedAddress, Signature.IsFar: true })
+                symbol.AddressSize = AddressSize.Far;
         }
     }
 
@@ -370,6 +381,8 @@ public sealed class ProgramModel
             var said = declared.IsFar != actual.IsFar
                 ? $"`{alias.Name}` is declared {declared.Distance}, and `{routine.DisplayName}` is {actual.Distance}"
                 : declared.Entry != actual.Entry || declared.Exit != actual.Exit || declared.Inline != actual.Inline
+                    || declared.IsInterrupt != actual.IsInterrupt || declared.NeverReturns != actual.NeverReturns
+                    || declared.Arguments != actual.Arguments
                     ? $"`{alias.Name}` is declared `{declared}`, and `{routine.DisplayName}` is `{actual}`: "
                         + "another name for a routine declares what the routine does"
                     : null;

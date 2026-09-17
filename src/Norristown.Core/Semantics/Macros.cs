@@ -271,6 +271,9 @@ public static class Macros
         SyntaxKind.FuncDeclaration =>
             "`.func` belongs outside a macro body: a definition there could capture the "
             + "enclosing macro's parameters",
+        SyntaxKind.SignatureDeclaration =>
+            "`.signature` belongs outside a macro body: a signature set is used in signatures, which "
+            + "are part of the file's interface",
         _ => null,
     };
 }

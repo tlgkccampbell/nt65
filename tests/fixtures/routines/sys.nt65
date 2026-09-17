@@ -1,0 +1,18 @@
+; Signature sets: the items most routines repeat, declared once and used in other modules the
+; way a constant is. They write nothing.
+.module sys
+
+.cpu 65816
+
+.export CODE_BANK
+
+CODE_BANK = $80
+
+; The state most of the program runs in.
+.export .signature std = a8, i16, dp = 0, dbr = CODE_BANK
+
+; A set may start from another, and change what it gives.
+.export .signature far_std = std, far
+
+; An interrupt handler entered in native mode.
+.export .signature isr = interrupt, native

@@ -267,9 +267,10 @@ internal sealed class Requirements
         if (last.Next is not null)
             return;
         var transfer = Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode);
-        var runsOn = transfer is Transfer.Through or Transfer.Branch or Transfer.Call
+        var runsOn = (transfer is Transfer.Through or Transfer.Branch or Transfer.Call
             || flow.RelativeCallAt(step) is not null
-            || transfer == Transfer.Elsewhere && Is(step.Statement, "jsr", "jsl");
+            || transfer == Transfer.Elsewhere && Is(step.Statement, "jsr", "jsl"))
+            && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
             Report(step.Statement, message);
     }

@@ -180,6 +180,35 @@ public sealed class WorkspaceRequestsTests
         Assert.Equal([GfxUri, GfxUri, MainUri, MainUri], references.Select(r => r.Uri));
     }
 
+    /// <summary>A signature set named in a signature is a name like any other: hover and definition find it in its module.</summary>
+    [Fact]
+    public async Task ASignatureSetInASignatureLeadsToItsDeclaration()
+    {
+        const string Sys = """
+            .module sys
+            .export .signature std = a8
+            """;
+        const string User = """
+            .module main
+            .use sys::std
+            .segment CODE
+            .proc main: std {
+                rts
+            }
+            """;
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(Sys, User, timeout);
+
+        var definition = await client.DefinitionAsync(MainUri, new Position(3, 13), timeout);
+        var hover = await client.HoverAsync(MainUri, new Position(3, 13), timeout);
+
+        Assert.NotNull(definition);
+        Assert.Equal(GfxUri, definition.Uri);
+        Assert.Equal(new Range(new Position(1, 19), new Position(1, 22)), definition.Range);
+        Assert.NotNull(hover);
+        Assert.Contains("**signature set** `sys::std`", hover.Contents.Value);
+    }
+
     /// <summary>The next diagnostics published for one file, skipping the others.</summary>
     private static async Task<PublishDiagnosticsParams> NextForAsync(
         TestClient client, string uri, CancellationToken cancellation)
@@ -193,12 +222,15 @@ public sealed class WorkspaceRequestsTests
         throw new InvalidOperationException($"nothing was published for {uri}");
     }
 
-    private static async Task<TestClient> OpenAsync(CancellationToken cancellation)
+    private static Task<TestClient> OpenAsync(CancellationToken cancellation) => OpenAsync(Gfx, Main, cancellation);
+
+    /// <summary>Opens <paramref name="gfx"/> as gfx.nt65 and <paramref name="main"/> as main.nt65.</summary>
+    private static async Task<TestClient> OpenAsync(string gfx, string main, CancellationToken cancellation)
     {
         var client = await TestClient.StartAsync(cancellation);
-        await client.OpenAsync(GfxUri, Gfx);
+        await client.OpenAsync(GfxUri, gfx);
         await client.NextDiagnosticsAsync(cancellation);
-        await client.OpenAsync(MainUri, Main);
+        await client.OpenAsync(MainUri, main);
         await NextForAsync(client, MainUri, cancellation);
         return client;
     }
