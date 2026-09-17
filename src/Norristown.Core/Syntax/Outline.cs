@@ -73,6 +73,10 @@ public static class Outline
                 return new OutlineItem(OutlineKind.Data, data.Text, TextAfter(opener, data)?.TrimStart(':').Trim().TrimEnd('{').TrimEnd() is { Length: > 0 } detail ? detail : null,
                     block.Span, data.Span, children);
 
+            case SyntaxKind.EnumDeclaration or SyntaxKind.StructDeclaration or SyntaxKind.UnionDeclaration
+                when NameToken(opener) is { } type:
+                return new OutlineItem(OutlineKind.Type, type.Text, opener.ChildTokens[0].Text, block.Span, type.Span, children);
+
             default:
                 return null;
         }
@@ -103,6 +107,11 @@ public static class Outline
             case SyntaxKind.DataDeclaration when NameToken(statement) is { } data:
                 items.Add(new OutlineItem(OutlineKind.Data, data.Text, TextAfter(statement, data)?.TrimStart(':').Trim(),
                     line.Span, data.Span, []));
+                break;
+
+            case SyntaxKind.FuncDeclaration when NameToken(statement) is { } function:
+                items.Add(new OutlineItem(OutlineKind.Function, function.Text, TextAfter(statement, function),
+                    line.Span, function.Span, []));
                 break;
 
             case SyntaxKind.ExternProcDeclaration when NameToken(statement) is { } name:

@@ -25,7 +25,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             workspace.Open(new TextDocumentItem(GeneratedProject.Uri(i), "nt65", 1, GeneratedProject.Text(i, Files)));
 
         var watch = Stopwatch.StartNew();
-        var first = workspace.Analysis();
+        var first = workspace.AnalysisFor(Workspace.PathOf(GeneratedProject.Uri(0)));
         output.WriteLine($"{Files} files, first analysis: {watch.Elapsed.TotalMilliseconds:0} ms");
         Assert.Empty(first.Diagnostics);
 
@@ -67,7 +67,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var uri = GeneratedProject.Uri(0);
         workspace.Open(new TextDocumentItem(uri, "nt65", 1, text));
         output.WriteLine($"{text.Count(c => c == '\n')} lines in one file");
-        Assert.Empty(workspace.Analysis().Diagnostics);
+        Assert.Empty(workspace.AnalysisFor(Workspace.PathOf(uri)).Diagnostics);
 
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "cpx #8"), 9, 10, "9", "8");
@@ -99,7 +99,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             var watch = Stopwatch.StartNew();
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
                 [new TextDocumentContentChangeEvent(range, written)]);
-            var analysis = workspace.Analysis();
+            var analysis = workspace.AnalysisFor(Workspace.PathOf(uri));
             _ = analysis.DiagnosticsFor(workspace.Find(uri)!.Tree.Path);
             times.Add(watch.Elapsed.TotalMilliseconds);
             analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");

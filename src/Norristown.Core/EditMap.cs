@@ -63,8 +63,11 @@ internal sealed class EditMap
     /// </summary>
     public Diagnostic? Moved(Diagnostic diagnostic)
     {
-        if (diagnostic.Span.File != before.Path && diagnostic.Related.All(related => related.Span.File != before.Path))
+        if (diagnostic.Span.File != before.Path && diagnostic.Related.All(related => related.Span.File != before.Path)
+            && diagnostic.Fix?.At?.File != before.Path)
+        {
             return diagnostic;
+        }
         if (Moved(diagnostic.Span) is not { } span)
             return null;
         var related = new List<RelatedSpan>();
@@ -74,7 +77,14 @@ internal sealed class EditMap
                 return null;
             related.Add(other with { Span = moved });
         }
-        return diagnostic with { Span = span, Related = related };
+        var fix = diagnostic.Fix;
+        if (fix?.At is { } at)
+        {
+            if (Moved(at) is not { } movedAt)
+                return null;
+            fix = fix with { At = movedAt };
+        }
+        return diagnostic with { Span = span, Related = related, Fix = fix };
     }
 
     private Span? Moved(Span span)

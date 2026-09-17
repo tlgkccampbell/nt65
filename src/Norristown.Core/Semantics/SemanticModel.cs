@@ -17,6 +17,7 @@ public sealed class SemanticModel
     private readonly IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> declared;
     private readonly ILookup<Symbol, SymbolReference> bySymbol;
     private readonly Func<string, long?>? binaryLength;
+    private readonly IReadOnlyList<(TextSpan Span, Scope Scope)> regions;
 
     internal SemanticModel(
         SyntaxTree tree,
@@ -38,6 +39,9 @@ public sealed class SemanticModel
         Symbols = bound.Symbols;
         References = bound.References;
         this.resolved = resolved;
+        regions = bound.Regions;
+        Brought = bound.Brought;
+        Globs = bound.Globs;
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
@@ -90,6 +94,15 @@ public sealed class SemanticModel
     /// </summary>
     public IReadOnlyList<Symbol> Used { get; }
 
+    /// <summary>
+    /// The names the file's <c>.use</c> items bring in, as it writes them: each stands for a
+    /// symbol, or for a module path it may write <c>::</c> after.
+    /// </summary>
+    public IReadOnlyDictionary<string, (Symbol? Symbol, string? Module)> Brought { get; }
+
+    /// <summary>The modules everything of whose exports a <c>.use module::*</c> brings in.</summary>
+    public IReadOnlyList<ProgramSymbols.Module> Globs { get; }
+
     /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
     public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>
         ProgramModel.Create([tree], segments).Files[0];
@@ -125,6 +138,28 @@ public sealed class SemanticModel
                 return References[middle];
         }
         return null;
+    }
+
+    /// <summary>
+    /// The innermost scope <paramref name="position"/> is in: the file's, or that of the routine,
+    /// scope, type, macro or repetition whose block holds it. A block's first line is its
+    /// opener, which is written in the scope around it, so a position there is outside it.
+    /// </summary>
+    public Scope ScopeAt(int position)
+    {
+        var found = FileScope;
+        foreach (var (span, scope) in regions)
+        {
+            if (position >= LineAfter(span.Start) && position <= span.End)
+                found = scope;
+        }
+        return found;
+
+        int LineAfter(int start)
+        {
+            var line = Tree.GetLineIndex(start) + 1;
+            return line < Tree.LineStarts.Length ? Tree.LineStarts[line] : Tree.Text.Length;
+        }
     }
 
     /// <summary>Every place <paramref name="symbol"/> is written, its declaration included.</summary>

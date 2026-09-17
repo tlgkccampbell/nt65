@@ -9,7 +9,17 @@
     "vscode": "^1.82.0"
   },
   "main": "./extension.js",
+  "activationEvents": [
+    "workspaceContains:**/nt65.json"
+  ],
   "contributes": {
+    "commands": [
+      {
+        "command": "nt65.selectConfiguration",
+        "title": "Select Configuration",
+        "category": "nt65"
+      }
+    ],
     "languages": [
       {
         "id": "nt65",

@@ -23,4 +23,7 @@ internal enum SymbolKind
 
     /// <summary>A constant or address alias.</summary>
     Constant = 14,
+
+    /// <summary>An enum, a struct or a union.</summary>
+    Struct = 23,
 }

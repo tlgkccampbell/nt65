@@ -48,6 +48,12 @@ public sealed record ProgramAnalysis(
     /// <summary>What a later analysis of the same program, one edit on, needs to keep the rest of this one.</summary>
     internal Reuse? Reused { get; init; }
 
+    /// <summary>
+    /// The files an <c>.incbin</c> was measured from, as logical paths: an editor that sees one
+    /// change on disk analyzes the program again.
+    /// </summary>
+    public IEnumerable<string> Binaries => Reused?.Lengths.Keys ?? [];
+
     /// <summary>What is wrong with one file, for an editor that shows a file at a time.</summary>
     public IReadOnlyList<Diagnostic> DiagnosticsFor(string path) =>
         [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];

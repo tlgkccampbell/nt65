@@ -1,4 +1,3 @@
-using Norristown.Cli;
 using Norristown.Project;
 using Norristown.Tests.Fixtures;
 

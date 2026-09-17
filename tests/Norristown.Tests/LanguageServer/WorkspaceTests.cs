@@ -44,16 +44,17 @@ public sealed class WorkspaceTests
                 """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
             File.WriteAllText(Path.Combine(root.FullName, "main.nt65"), ".module main\n.if DEBUG {\n    .error \"built for debugging\"\n}\n");
             var uri = new Uri(root.FullName).AbsoluteUri;
+            var main = Workspace.PathOf(new Uri(Path.Combine(root.FullName, "main.nt65")).AbsoluteUri);
             var workspace = new Workspace();
 
             workspace.Load(uri);
-            Assert.Empty(workspace.Analysis().Diagnostics);
+            Assert.Empty(workspace.AnalysisFor(main).Diagnostics);
 
             workspace.Load(uri, "debug");
-            Assert.Equal(["built for debugging"], workspace.Analysis().Diagnostics.Select(d => d.Message));
+            Assert.Equal(["built for debugging"], workspace.AnalysisFor(main).Diagnostics.Select(d => d.Message));
 
             workspace.Load(uri, "ntsc");
-            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], workspace.Analysis().Diagnostics.Select(d => d.Message));
+            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], workspace.AnalysisFor(main).Diagnostics.Select(d => d.Message));
         }
         finally
         {

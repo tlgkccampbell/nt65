@@ -9,6 +9,11 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="ReferencesProvider">Whether the server answers <c>textDocument/references</c>.</param>
 /// <param name="DocumentHighlightProvider">Whether the server answers <c>textDocument/documentHighlight</c>.</param>
 /// <param name="RenameProvider">How the server renames, or null when it does not.</param>
+/// <param name="CompletionProvider">How the server completes, or null when it does not.</param>
+/// <param name="SignatureHelpProvider">How the server helps with calls, or null when it does not.</param>
+/// <param name="InlayHintProvider">Whether the server answers <c>textDocument/inlayHint</c>.</param>
+/// <param name="WorkspaceSymbolProvider">Whether the server answers <c>workspace/symbol</c>.</param>
+/// <param name="CodeActionProvider">Whether the server answers <c>textDocument/codeAction</c>.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
     bool DocumentSymbolProvider,
@@ -17,4 +22,9 @@ internal sealed record ServerCapabilities(
     bool DefinitionProvider,
     bool ReferencesProvider,
     bool DocumentHighlightProvider,
-    RenameOptions? RenameProvider);
+    RenameOptions? RenameProvider,
+    CompletionOptions? CompletionProvider = null,
+    SignatureHelpOptions? SignatureHelpProvider = null,
+    bool InlayHintProvider = false,
+    bool WorkspaceSymbolProvider = false,
+    bool CodeActionProvider = false);

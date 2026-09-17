@@ -200,14 +200,15 @@ public static class Compiler
         var written = reuse.Trees.Where(tree => tree != previous.Defines).ToList();
         if (sources.Count != written.Count || written.Any(tree => !sources.ContainsKey(tree.Path)))
             return null;
-        var changed = written.Where(tree => sources[tree.Path] != tree).ToList();
-        if (changed.Count == 0)
-            return previous;
 
-        // An `.incbin` file that changed on disk changes every file that includes it.
+        // An `.incbin` file that changed on disk changes every file that includes it, whether or
+        // not any source changed with it.
         reason = WholeProgramReason.BinaryFileChanged;
         if (reuse.Lengths.Any(pair => binaryLength(pair.Key) != pair.Value))
             return null;
+        var changed = written.Where(tree => sources[tree.Path] != tree).ToList();
+        if (changed.Count == 0)
+            return previous;
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
         long? Length(string path) => lengths.GetOrAdd(path, binaryLength);
 

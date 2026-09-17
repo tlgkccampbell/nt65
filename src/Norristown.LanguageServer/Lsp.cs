@@ -128,7 +128,7 @@ internal static class Lsp
                 step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
 
     /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
-    private static string Spell(CycleCount cycles) =>
+    internal static string Spell(CycleCount cycles) =>
         cycles is { IsExact: true, Least: 1 } ? "1 cycle" : $"{cycles} cycles";
 
     /// <summary>
@@ -287,7 +287,7 @@ internal static class Lsp
         _ => "far",
     };
 
-    private static Protocol.Diagnostic ToDiagnostic(Diagnostic diagnostic) => new(
+    internal static Protocol.Diagnostic ToDiagnostic(Diagnostic diagnostic) => new(
         ToRange(diagnostic.Span),
         ToSeverity(diagnostic.Severity),
         SourceName,
@@ -311,10 +311,10 @@ internal static class Lsp
         new Protocol.Position(span.Line - 1, span.StartColumn - 1),
         new Protocol.Position(span.Line - 1, span.EndColumn - 1));
 
-    private static Protocol.Range ToRange(SyntaxTree tree, TextSpan span) =>
+    internal static Protocol.Range ToRange(SyntaxTree tree, TextSpan span) =>
         new(ToPosition(tree, span.Start), ToPosition(tree, span.End));
 
-    private static Protocol.Position ToPosition(SyntaxTree tree, int position)
+    internal static Protocol.Position ToPosition(SyntaxTree tree, int position)
     {
         var line = tree.GetLineIndex(position);
         return new Protocol.Position(line, position - tree.LineStarts[line]);
@@ -327,7 +327,7 @@ internal static class Lsp
         _ => Protocol.DiagnosticSeverity.Information,
     };
 
-    private static Protocol.SymbolKind ToSymbolKind(OutlineKind kind) => kind switch
+    internal static Protocol.SymbolKind ToSymbolKind(OutlineKind kind) => kind switch
     {
         OutlineKind.Proc => Protocol.SymbolKind.Function,
         OutlineKind.Scope => Protocol.SymbolKind.Namespace,
@@ -335,10 +335,12 @@ internal static class Lsp
         OutlineKind.Macro => Protocol.SymbolKind.Function,
         OutlineKind.Constant => Protocol.SymbolKind.Constant,
         OutlineKind.Data => Protocol.SymbolKind.Variable,
+        OutlineKind.Type => Protocol.SymbolKind.Struct,
+        OutlineKind.Function => Protocol.SymbolKind.Function,
         _ => Protocol.SymbolKind.Field,
     };
 
     /// <summary>A logical path back as a URI, for a diagnostic that points into another file.</summary>
-    private static string ToUri(string path) =>
+    internal static string ToUri(string path) =>
         Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri : path;
 }

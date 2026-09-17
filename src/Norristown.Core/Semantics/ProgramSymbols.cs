@@ -124,6 +124,12 @@ public sealed class ProgramSymbols
         or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine
         && !symbol.IsConfig && !symbol.Value.IsString;
 
+    /// <summary>Every module of the program, by name.</summary>
+    public IEnumerable<Module> Modules => modules.Values;
+
+    /// <summary>Every define, which every file sees.</summary>
+    public IEnumerable<Symbol> Defines => defines.Values;
+
     /// <summary>The module named <paramref name="name"/>, or null when no file is.</summary>
     public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);
 

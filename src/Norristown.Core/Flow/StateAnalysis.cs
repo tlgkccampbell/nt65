@@ -533,9 +533,9 @@ public sealed class StateAnalysis
         if (callee.IsInterrupt)
             return state;
         if (mnemonic == "jsr" && callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is far, and is called with `jsl`");
+            Report(step, $"`{target.DisplayName}` is far, and is called with `jsl`", Mnemonic(step, "jsl"));
         else if (mnemonic == "jsl" && !callee.IsFar)
-            Report(step, $"`{target.DisplayName}` is near, and is called with `jsr`");
+            Report(step, $"`{target.DisplayName}` is near, and is called with `jsr`", Mnemonic(step, "jsr"));
         CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", callee, state);
         return Exited(callee, state);
     }
@@ -1261,6 +1261,19 @@ public sealed class StateAnalysis
     }
 
     private void Report(Step step, string message) => ReportAt(step.Statement, step, message);
+
+    /// <summary>The same, with the fix its message names.</summary>
+    private void Report(Step step, string message, DiagnosticFix? fix)
+    {
+        var count = diagnostics.Count;
+        Report(step, message);
+        if (fix is not null && diagnostics.Count > count)
+            diagnostics[^1] = diagnostics[^1] with { Fix = fix };
+    }
+
+    /// <summary>The statement's mnemonic written as <paramref name="mnemonic"/>, where it is written in this file.</summary>
+    private DiagnosticFix? Mnemonic(Step step, string mnemonic) =>
+        step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.Mnemonic, mnemonic) : null;
 
     /// <summary>
     /// Reports what is wrong with <paramref name="node"/> on the writing <paramref name="step"/>

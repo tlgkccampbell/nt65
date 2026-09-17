@@ -61,6 +61,9 @@ internal sealed class Binder
     // What the file exports: the declarations written after `.export`, the items of its
     // `.export` lists with the scope each was written in, and everything exporting those spreads to.
     private readonly List<(Symbol Symbol, TextSpan At)> exportedDeclarations = [];
+
+    // The blocks that open a scope, with the scope each opens, in the order they are opened.
+    private readonly List<(TextSpan Span, Scope Scope)> regions = [];
     private readonly List<(SyntaxNode Item, Scope Scope)> exportItems = [];
     private readonly List<Symbol> exported = [];
 
@@ -172,7 +175,11 @@ internal sealed class Binder
         // word, and words are never looked up.
         ResolveCalls();
         references.Sort((a, b) => a.Span.Start.CompareTo(b.Span.Start));
-        return new Result(fileScope, symbols, references, diagnostics);
+        return new Result(fileScope, symbols, references, diagnostics, regions)
+        {
+            Brought = used.ToDictionary(pair => pair.Key, pair => (pair.Value.Symbol, pair.Value.Module), StringComparer.Ordinal),
+            Globs = globs,
+        };
     }
 
     /// <summary>The macros this file declares, which is what the recursion check reads.</summary>
@@ -317,6 +324,8 @@ internal sealed class Binder
                 break;
         }
 
+        if (scope != outerScope)
+            regions.Add((block.Span, scope));
         for (var i = 1; i < lines.Length; i++)
         {
             if (lines[i].Green is GreenBlock inner)
@@ -980,6 +989,8 @@ internal sealed class Binder
         }
         Report(name.Span, $"`{name.Text}` is a label outside a `.proc`: a label is only a position in code, "
             + $"and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`");
+        if (name.Kind == SyntaxKind.Identifier)
+            Fixed(new DiagnosticFix(FixKind.DataDeclaration));
     }
 
     /// <summary>
@@ -1499,6 +1510,8 @@ internal sealed class Binder
             : last
                 ? $"`{token.Text}` is not declared"
                 : $"`{token.Text}` is not declared, and no module `{token.Text}` is in this build");
+        if (exporting.Count > 0)
+            Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
@@ -1551,6 +1564,7 @@ internal sealed class Binder
             return symbol;
         Report(token.Span, $"`{symbol.PathName}` is not exported by module `{symbol.Module}`",
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
+        Fixed(new DiagnosticFix(FixKind.Export, symbol.QualifiedName, symbol.DeclarationSpan));
         return symbol;
     }
 
@@ -1863,16 +1877,29 @@ internal sealed class Binder
     private void Report(TextSpan span, string message, params RelatedSpan[] related) =>
         diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, related));
 
+    /// <summary>Gives the diagnostic just reported the fix its message names.</summary>
+    private void Fixed(DiagnosticFix fix) => diagnostics[^1] = diagnostics[^1] with { Fix = fix };
+
     /// <summary>What binding one file produced.</summary>
     /// <param name="FileScope">The file's top-level scope.</param>
     /// <param name="Symbols">Every symbol declared in the file, in source order.</param>
     /// <param name="References">Declarations and uses, ordered by position.</param>
     /// <param name="Diagnostics">What binding found wrong.</param>
+    /// <param name="Regions">Each block that opens a scope, with the scope, outer blocks before the blocks inside them.</param>
     public sealed record Result(
         Scope FileScope,
         IReadOnlyList<Symbol> Symbols,
         IReadOnlyList<SymbolReference> References,
-        List<Diagnostic> Diagnostics);
+        List<Diagnostic> Diagnostics,
+        IReadOnlyList<(TextSpan Span, Scope Scope)> Regions)
+    {
+        /// <summary>The names the file's <c>.use</c> items bring in, each a symbol or a module path.</summary>
+        public IReadOnlyDictionary<string, (Symbol? Symbol, string? Module)> Brought { get; init; } =
+            new Dictionary<string, (Symbol?, string?)>();
+
+        /// <summary>The modules whose exports a <c>.use module::*</c> brings in.</summary>
+        public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];
+    }
 
     /// <summary>One written name, waiting for the whole file to be read before it is resolved.</summary>
     /// <param name="Token">The name.</param>

@@ -40,11 +40,26 @@ internal sealed class TestClient : IAsyncDisposable
     public string Log => logText.ToString();
 
     /// <summary>Connects and completes the initialize handshake.</summary>
-    public static async Task<TestClient> StartAsync(CancellationToken cancellation, string name = "test-client")
+    public static Task<TestClient> StartAsync(CancellationToken cancellation, string name = "test-client") =>
+        StartAsync(null, null, cancellation, name);
+
+    /// <summary>
+    /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
+    /// <paramref name="configuration"/> as the configuration its settings choose.
+    /// </summary>
+    public static async Task<TestClient> StartAsync(
+        string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client")
     {
         var client = new TestClient();
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
-            new { processId = (int?)null, clientInfo = new { name, version = "1.0" }, capabilities = new { } },
+            new
+            {
+                processId = (int?)null,
+                clientInfo = new { name, version = "1.0" },
+                capabilities = new { },
+                rootUri,
+                initializationOptions = new { configuration },
+            },
             cancellation);
         await client.rpc.NotifyWithParameterObjectAsync("initialized", new { });
         return client;
@@ -64,6 +79,20 @@ internal sealed class TestClient : IAsyncDisposable
     public Task CloseAsync(string uri) =>
         rpc.NotifyWithParameterObjectAsync("textDocument/didClose",
             new DidCloseTextDocumentParams(new TextDocumentIdentifier(uri)));
+
+    /// <summary>Says that files changed on disk.</summary>
+    public Task ChangedOnDiskAsync(params string[] uris) =>
+        rpc.NotifyWithParameterObjectAsync("workspace/didChangeWatchedFiles",
+            new DidChangeWatchedFilesParams([.. uris.Select(uri => new FileEvent(uri, FileChangeType.Changed))]));
+
+    /// <summary>Says that the client's <c>nt65</c> settings now choose <paramref name="configuration"/>.</summary>
+    public Task ConfigureAsync(string? configuration) =>
+        rpc.NotifyWithParameterObjectAsync("workspace/didChangeConfiguration",
+            new { settings = new { nt65 = new { configuration } } });
+
+    /// <summary>Sends any request, for the ones with no method of their own here.</summary>
+    public Task<T> RequestAsync<T>(string method, object? parameters, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<T>(method, parameters, cancellation);
 
     /// <summary>
     /// The next set of diagnostics the server publishes. Opening and changing a document each

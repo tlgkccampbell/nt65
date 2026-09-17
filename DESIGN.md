@@ -2380,8 +2380,29 @@ alone and without an assembler:
 - on the 65816, diagnose width, mode and near/far mismatches at calls and returns,
   immediates reached with unknown width, every unannotated construct of §7.4, and
   direct-page and bank mismatches against declared segments and ranges (§7.5);
-- report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6);
+- report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6), and
+  show them in the lines as they are written: each instruction's cycles, each block's, and on
+  the 65816 the state reaching each label;
+- complete what may be written at the caret: after `::` the names a path leads to, in a
+  `.use` the modules and what they export, in an operand the names in scope and what `.use`
+  brought in, in a signature or a `.state` its items and the signature sets, and in a macro
+  call its parameters as named arguments; and show, inside a macro call, a `.func` call or a
+  `.select`, what it takes and which argument the caret is in;
+- find a declaration anywhere in the workspace by name;
+- fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
+  transfer or a routine runs off its end, `jsl` for a `jsr` to a far routine and the other way,
+  the missing `.export` in the module that declares a name or the `.use` that brings it in,
+  a `.state` after a label flow may reach unseen, saying what the analysis finds reaching it,
+  and a label outside a routine, with the data under it, as a `.data` declaration;
 - run incrementally: editing one file re-parses one file; only resolution is global.
+
+**Projects in the editor.** Every `nt65.json` in the folders the editor opened, and in the
+folders beneath them, is a project, and each is its own program. A file belongs to the
+project whose `files` name it, whether or not it is saved yet; a library two projects share
+belongs to both, and is shown as the nearest one analyzes it; a file no project names is part
+of a program of the other such open files. A project file, a source nobody has open, or a
+file an `.incbin` measured changing on disk is read again, and what is wrong is published
+again.
 
 **Unused symbols** are warnings: a label, constant, macro, struct, union, enum or data
 declaration that nothing names and the file does not export, since an export is what another
@@ -2393,8 +2414,10 @@ and holds no values is reported. A name written in a branch the configuration le
 counts as used, because the other build uses it, and a file with errors gets none.
 
 Analysis is of one configuration at a time, as with `#if` in C or `#[cfg]` in Rust:
-lines in a branch that is not taken still parse, but are not resolved or analyzed. The editor
-has a setting for which named configuration (§5.3) that is.
+lines in a branch that is not taken still parse, but are not resolved or analyzed, and the
+editor shows them faded. The editor has a setting for which named configuration (§5.3) that
+is; a project that has no configuration of that name builds its own settings, and the name is
+a mistake only when no project has it.
 
 **The incremental boundary is the file's interface**: its module's name, what it
 re-exports, and its exported declarations, each
@@ -2636,6 +2659,14 @@ Recorded so the reasoning survives. None is open.
   `txs` lost `phk`, `plb` straight after it. Tracking pushes over a base nothing is known of
   keeps every idiom that pushes and pulls its own values, and is the model `.frame` already
   used after `tcs`.
+- **Code actions only for diagnostics that name their fix.** The message already says what to
+  write, so the fix writes it; a diagnostic that asks the programmer to choose, such as which
+  labels a `.next` names or what width an immediate needs, is offered nothing, because a guess
+  would compile and be wrong. A fix is part of the diagnostic as what to change, not as an
+  edit, and is worked out against the files when it is asked for.
+- **Each project in a workspace is its own program.** A folder of several games, or a library
+  with its test programs, holds projects that declare the same modules; one program of all
+  of them would report every module twice.
 - **`args n` for arguments the caller pushes.** A frame could not reach past the return
   address, so routines forgot their stack with `tsc`, `tcs` to reach their arguments. The
   item puts the arguments and the return address on the analysis stack at entry and checks

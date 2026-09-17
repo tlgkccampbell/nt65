@@ -10,4 +10,7 @@ public sealed record Diagnostic(Span Span, Severity Severity, string Message, IR
     /// <summary>A diagnostic with no related spans.</summary>
     public Diagnostic(Span span, Severity severity, string message)
         : this(span, severity, message, []) { }
+
+    /// <summary>The change its message names as the fix, for an editor to offer, or null.</summary>
+    public DiagnosticFix? Fix { get; init; }
 }

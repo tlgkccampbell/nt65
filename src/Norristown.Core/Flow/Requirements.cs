@@ -139,7 +139,7 @@ internal sealed class Requirements
 
             case Transfer.Elsewhere:
                 Report(statement, $"{Quoted(statement)} goes where its operand points, which the analysis cannot "
-                    + "see: `.next` names the labels it reaches, or `.next ?` ends the path");
+                    + "see: `.next` names the labels it reaches, or `.next ?` ends the path", EndPath(step));
                 break;
 
             case Transfer.Return when Is(statement, "rts", "rtl") && PushesCode(block):
@@ -175,7 +175,7 @@ internal sealed class Requirements
             {
                 Report(statement, $"{Quoted(statement)} goes to a computed address, which the analysis cannot "
                     + "follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not "
-                    + "an instruction boundary");
+                    + "an instruction boundary", EndPath(step));
             }
             return;
         }
@@ -186,7 +186,7 @@ internal sealed class Requirements
             {
                 Report(statement, $"{Quoted(statement)} goes to `{symbol.DisplayName}`, a {symbol.KindText} rather "
                     + "than a label, which the analysis cannot follow: `.next` names the labels it reaches, or "
-                    + "`.next ?` ends the path");
+                    + "`.next ?` ends the path", EndPath(step));
             }
             return;
         }
@@ -198,7 +198,8 @@ internal sealed class Requirements
         if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null } && owner != region.Routine)
         {
             Report(statement, $"`{symbol.DisplayName}` is inside `{owner.DisplayName}`, and a jump "
-                + "into another routine needs the label declared: a `.state` after it says what the state is there");
+                + "into another routine needs the label declared: a `.state` after it says what the state is there",
+                new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
         }
         if (!labels.TryGetValue(symbol, out var labelled))
             return;
@@ -290,7 +291,7 @@ internal sealed class Requirements
             || transfer == Transfer.Elsewhere && Is(step.Statement, "jsr", "jsl"))
             && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
-            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message));
+            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message) { Fix = EndPath(step) });
     }
 
     /// <summary>
@@ -341,7 +342,8 @@ internal sealed class Requirements
                     continue;
                 Report(name, $"`{symbol.DisplayName}` labels code and is used here as data, so flow may reach it "
                     + "where the analysis cannot see: a `.state` after the label says what the state is there, "
-                    + $"or a `.next` in `{labelled.Region.Routine.DisplayName}` naming it carries the state to it");
+                    + $"or a `.next` in `{labelled.Region.Routine.DisplayName}` naming it carries the state to it",
+                    new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
         }
     }
@@ -383,12 +385,22 @@ internal sealed class Requirements
             }
             diagnostics.Add(new Diagnostic(model.Tree.GetSpan(at), Severity.Error,
                 $"`{symbol.DisplayName}` is inside `{labelled.Region.Routine.DisplayName}`, and exporting it lets "
-                + "other modules jump into the routine: a `.state` after the label says what the state is there"));
+                + "other modules jump into the routine: a `.state` after the label says what the state is there")
+            {
+                Fix = new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan),
+            });
         }
     }
 
-    private void Report(SyntaxNode node, string message) =>
-        diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
+    private void Report(SyntaxNode node, string message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
+
+    /// <summary>
+    /// A <c>.next ?</c> after the step's statement, where the programmer writes it: in this file,
+    /// and not in a macro body, where one would end the path of every call.
+    /// </summary>
+    private DiagnosticFix? EndPath(Step step) =>
+        step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.EndPath) : null;
 
     /// <summary>A label that starts a block: the region and block it starts, and whether it stands on code.</summary>
     private readonly record struct Labelled(FlowRegion Region, BasicBlock Block, bool IsCode);

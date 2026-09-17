@@ -23,4 +23,10 @@ public enum OutlineKind
 
     /// <summary>A data declaration, <c>.data name: ...</c> or <c>.data name { }</c>.</summary>
     Data,
+
+    /// <summary>A named <c>.enum</c>, <c>.struct</c> or <c>.union</c>.</summary>
+    Type,
+
+    /// <summary>A <c>.func</c>, with its parameters and body.</summary>
+    Function,
 }

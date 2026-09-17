@@ -14,7 +14,6 @@ internal sealed class Server
     private readonly ServerLog log;
     private readonly Workspace workspace = new();
     private JsonRpc? rpc;
-    private string? rootUri;
 
     private Server(ServerLog log) => this.log = log;
 
@@ -42,10 +41,12 @@ internal sealed class Server
         var client = request.ClientInfo is { } info ? $"{info.Name} {info.Version}".TrimEnd() : "unknown client";
         log.Write($"connected: {client}");
 
-        // The project is read at the folder the client opened, as the configuration the client's
-        // settings choose: its files are the program a name is resolved against.
-        rootUri = request.RootUri;
-        workspace.Load(rootUri, ActiveConfiguration(request.InitializationOptions));
+        // The projects are found in the folders the client opened, and built as the configuration
+        // the client's settings choose: a project's files are the program a name is resolved against.
+        IReadOnlyList<string> roots = request.WorkspaceFolders is { Count: > 0 } folders
+            ? [.. folders.Select(folder => folder.Uri)]
+            : request.RootUri is { } root ? [root] : [];
+        workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
         var capabilities = new ServerCapabilities(
             new TextDocumentSyncOptions(OpenClose: true, TextDocumentSyncKind.Incremental),
             DocumentSymbolProvider: true,
@@ -54,7 +55,12 @@ internal sealed class Server
             DefinitionProvider: true,
             ReferencesProvider: true,
             DocumentHighlightProvider: true,
-            RenameProvider: new RenameOptions(PrepareProvider: true));
+            RenameProvider: new RenameOptions(PrepareProvider: true),
+            CompletionProvider: new CompletionOptions([":", "@", "!", "(", ","]),
+            SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
+            InlayHintProvider: true,
+            WorkspaceSymbolProvider: true,
+            CodeActionProvider: true);
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
 
@@ -73,9 +79,26 @@ internal sealed class Server
             : (JsonElement?)null;
         var configuration = ActiveConfiguration(settings);
         log.Write($"configuration: {configuration ?? "the project's own"}");
-        workspace.Load(rootUri, configuration);
+        workspace.Configure(configuration);
         return PublishDiagnosticsAsync();
     }
+
+    /// <summary>
+    /// Files changed on disk: a project file, a source no one has open, or a file an <c>.incbin</c>
+    /// measured. What is wrong is published again when any of them is one a program reads.
+    /// </summary>
+    [JsonRpcMethod("workspace/didChangeWatchedFiles")]
+    public Task DidChangeWatchedFilesAsync(DidChangeWatchedFilesParams request)
+    {
+        if (!workspace.ChangedOnDisk(request.Changes.Select(change => change.Uri)))
+            return Task.CompletedTask;
+        log.Write($"changed on disk: {string.Join(", ", request.Changes.Select(change => change.Uri))}");
+        return PublishDiagnosticsAsync();
+    }
+
+    /// <summary>The named configurations the workspace's projects have, for the client to offer.</summary>
+    [JsonRpcMethod("nt65/configurations")]
+    public IReadOnlyList<string> Configurations(JsonElement _) => workspace.Configurations();
 
     [JsonRpcMethod("textDocument/didOpen")]
     public Task DidOpenAsync(DidOpenTextDocumentParams request)
@@ -161,6 +184,41 @@ internal sealed class Server
         return problem is null ? edit : throw new LocalRpcException(problem);
     }
 
+    [JsonRpcMethod("textDocument/completion")]
+    public IReadOnlyList<CompletionItem> Completion(TextDocumentPositionParams request) =>
+        At(request) is { } asked ? LanguageServer.Completion.At(asked.Program, asked.Model, asked.Position) : [];
+
+    [JsonRpcMethod("textDocument/signatureHelp")]
+    public SignatureHelp? SignatureHelp(TextDocumentPositionParams request) =>
+        At(request) is { } asked ? CallHelp.At(asked.Program, asked.Model, asked.Position) : null;
+
+    [JsonRpcMethod("textDocument/inlayHint")]
+    public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request)
+    {
+        if (At(new TextDocumentPositionParams(request.TextDocument, request.Range.Start)) is not { } asked)
+            return [];
+        var tree = asked.Model.Tree;
+        var end = tree.GetPosition(request.Range.End.Line, request.Range.End.Character);
+        return LanguageServer.InlayHints.In(
+            asked.Model,
+            asked.Analysis.LayoutFor(tree.Path),
+            asked.Analysis.FlowFor(tree.Path),
+            asked.Analysis.StatesFor(tree.Path),
+            new Syntax.TextSpan(asked.Position, Math.Max(0, end - asked.Position)));
+    }
+
+    [JsonRpcMethod("textDocument/codeAction")]
+    public IReadOnlyList<CodeAction> CodeActions(CodeActionParams request)
+    {
+        if (At(new TextDocumentPositionParams(request.TextDocument, request.Range.Start)) is not { } asked)
+            return [];
+        return LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range);
+    }
+
+    [JsonRpcMethod("workspace/symbol")]
+    public IReadOnlyList<SymbolInformation> WorkspaceSymbols(WorkspaceSymbolParams request) =>
+        LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query);
+
     [JsonRpcMethod("shutdown")]
     public object? Shutdown() => null;
 
@@ -186,9 +244,9 @@ internal sealed class Server
     /// <summary>Publishes what is wrong with every open document, after anything changes.</summary>
     private async Task PublishDiagnosticsAsync()
     {
-        var analysis = workspace.Analysis();
         foreach (var document in workspace.Open())
         {
+            var analysis = workspace.AnalysisFor(document.Tree.Path);
             await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
                 new PublishDiagnosticsParams(document.Uri, document.Version,
                     Lsp.ToDiagnostics(
@@ -204,7 +262,7 @@ internal sealed class Server
     {
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return null;
-        var analysis = workspace.Analysis();
+        var analysis = workspace.AnalysisFor(document.Tree.Path);
         if (analysis.ModelFor(document.Tree.Path) is not { } model)
             return null;
         return new Asked(

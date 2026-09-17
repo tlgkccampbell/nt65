@@ -5,27 +5,29 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The program the editor is working on: the project file, every source file it names, and
-/// the documents the client has open. An open document's text lives here rather than on
-/// disk, and an edit re-parses it incrementally, so the lines a change did not touch keep
-/// the green nodes they already had.
+/// What the editor is working on: every <c>nt65.json</c> in the folders the client opened, the
+/// program each describes, and the documents the client has open. An open document's text lives
+/// here rather than on disk, and an edit re-parses it incrementally, so the lines a change did
+/// not touch keep the green nodes they already had.
 /// <para>
 /// A file is not analyzed on its own, because a name it uses may be one another file exports.
-/// The program is analyzed the first time anything asks, and again after an edit, starting
-/// from the analysis before it: an edit that leaves what other files see of a file alone
-/// analyzes only that file.
+/// A document belongs to the project whose <c>files</c> name it; one no project names is part of
+/// a program of every such document. A program is analyzed the first time anything asks, and
+/// again after a change, starting from the analysis before it: an edit that leaves what other
+/// files see of a file alone analyzes only that file.
 /// </para>
 /// </summary>
 internal sealed class Workspace
 {
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
-    private ProjectSettings project = ProjectSettings.None;
-    private IReadOnlyList<SyntaxTree> onDisk = [];
-    private ProgramAnalysis? analysis;
+    private readonly List<WorkspaceProject> projects = [];
+    private IReadOnlyList<string> roots = [];
+    private string? configuration;
 
-    // The last analysis, kept past the edit that made it stale so the next one can start from it.
-    private ProgramAnalysis? previous;
+    // The program of the open documents no project names, and the analysis before it.
+    private ProgramAnalysis? loose;
+    private ProgramAnalysis? loosePrevious;
 
     /// <summary>
     /// The logical path a URI names, with <c>/</c> separators, which is what diagnostics and
@@ -36,37 +38,61 @@ internal sealed class Workspace
             ? parsed.LocalPath.Replace('\\', '/')
             : uri;
 
+    /// <summary>A file's text, or null when it cannot be read.</summary>
+    public static string? Read(string path)
+    {
+        // A file that moved or is being written while the editor asks is not a crash; the
+        // next analysis will find it.
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
-    /// Reads the project the client opened, if there is one, built as the named
-    /// <paramref name="configuration"/> when one is given, as the editor's setting chooses. Its
-    /// files are read from disk; open documents replace them as the client sends them.
+    /// Finds the projects in the folders the client opened, the folders themselves and every
+    /// folder beneath them, built as the named <paramref name="active"/> configuration where a
+    /// project has one, as the editor's setting chooses. Their files are read from disk when
+    /// first needed; open documents replace them as the client sends them.
     /// </summary>
-    public void Load(string? rootUri, string? configuration = null)
+    public void Load(IReadOnlyList<string> rootUris, string? active = null)
     {
         lock (gate)
         {
-            project = ProjectSettings.None;
-            onDisk = [];
-            analysis = null;
-            previous = null;
-            if (rootUri is null || PathOf(rootUri) is not { Length: > 0 } root)
-                return;
+            roots = [.. rootUris.Select(PathOf).Where(root => root.Length > 0)];
+            configuration = active;
+            projects.Clear();
+            foreach (var root in roots)
+                projects.AddRange(ProjectFiles(root).Select(file => new WorkspaceProject(file)));
+            projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
+            ConfigureAll();
+        }
+    }
 
-            var file = Path.Combine(root, ProjectFile.Name);
-            if (!File.Exists(file))
-                return;
+    /// <summary>The same, for a client that opened one folder, or none.</summary>
+    public void Load(string? rootUri, string? active = null) => Load(rootUri is null ? [] : [rootUri], active);
 
-            // What is wrong with the project file travels with the settings, and is reported
-            // when the program is analyzed.
-            var path = PathOf(new Uri(file).AbsoluteUri);
-            project = ProjectFile.Read(path, Read(file) ?? "");
-            if (configuration is { Length: > 0 })
-                project = project.Configured(configuration, new Span(path, 1, 1, 2));
-            onDisk = [.. project.Files
-                .SelectMany(glob => Matching(root, glob))
-                .Distinct(StringComparer.Ordinal)
-                .Select(path => Read(path) is { } text ? SyntaxTree.Parse(path, text) : null)
-                .OfType<SyntaxTree>()];
+    /// <summary>Builds every project as the named configuration from here on, or as its own settings for null.</summary>
+    public void Configure(string? active)
+    {
+        lock (gate)
+        {
+            configuration = active;
+            ConfigureAll();
+        }
+    }
+
+    /// <summary>The named configurations the projects have, for a client to offer.</summary>
+    public IReadOnlyList<string> Configurations()
+    {
+        lock (gate)
+        {
+            return [.. projects.SelectMany(project => project.Own.Configurations.Select(c => c.Name))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
         }
     }
 
@@ -77,7 +103,7 @@ internal sealed class Workspace
         lock (gate)
         {
             open[item.Uri] = document;
-            analysis = null;
+            Invalidate(document.Tree.Path);
         }
         return document;
     }
@@ -95,7 +121,7 @@ internal sealed class Workspace
             var tree = document.Tree;
             foreach (var change in changes)
                 tree = Apply(tree, change);
-            analysis = null;
+            Invalidate(tree.Path);
             return open[id.Uri] = new Document(id.Uri, id.Version, tree);
         }
     }
@@ -105,8 +131,8 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            open.Remove(uri);
-            analysis = null;
+            if (open.Remove(uri, out var document))
+                Invalidate(document.Tree.Path);
         }
     }
 
@@ -129,58 +155,172 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// What the program means, built once and kept until something changes. Files the client
-    /// has open stand in for whatever is on disk.
+    /// Files that changed on disk: a project file, a source, or a file an <c>.incbin</c> measured.
+    /// Whether any of them is one the workspace reads, and so whether what is wrong may have
+    /// changed.
     /// </summary>
-    public ProgramAnalysis Analysis()
+    public bool ChangedOnDisk(IEnumerable<string> uris)
     {
         lock (gate)
         {
-            if (analysis is not null)
-                return analysis;
+            var changed = false;
+            foreach (var path in uris.Select(PathOf))
+            {
+                if (Paths.Normalized(path).Split('/')[^1] == ProjectFile.Name)
+                {
+                    changed |= projects.RemoveAll(project => SamePath(project.File, path)) > 0;
+                    if (File.Exists(path) && roots.Any(root => Within(root, path)))
+                    {
+                        var added = new WorkspaceProject(path);
+                        added.Configure(Named(added, configuration, AnyNames()));
+                        projects.Add(added);
+                        projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
+                        changed = true;
+                    }
+                    ConfigureAll();
+                    loose = null;
+                    continue;
+                }
+
+                foreach (var project in projects.Where(project => project.Owns(path)))
+                {
+                    project.Reread(path);
+                    changed = true;
+                }
+                foreach (var project in projects.Where(project => project.Measured(path)))
+                {
+                    project.Invalidate();
+                    changed = true;
+                }
+                if (loose?.Binaries.Contains(path) == true)
+                {
+                    loose = null;
+                    changed = true;
+                }
+            }
+            return changed;
+        }
+    }
+
+    /// <summary>
+    /// What the program <paramref name="path"/> belongs to means, built once and kept until
+    /// something changes. Files the client has open stand in for whatever is on disk.
+    /// </summary>
+    public ProgramAnalysis AnalysisFor(string path)
+    {
+        lock (gate)
+        {
+            if (Owner(path) is { } project)
+                return project.Analysis(open.Values);
+            if (loose is not null)
+                return loose;
 
             // An open document stands in for whatever is on disk, and brings its own tree,
             // which an edit re-parsed only in the lines it touched.
-            var sources = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
-            foreach (var tree in onDisk)
-                sources[tree.Path] = tree;
+            var sources = open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree);
+            return loose = loosePrevious = Compiler.Analyze([.. sources], ProjectSettings.None, loosePrevious);
+        }
+    }
+
+    /// <summary>
+    /// Every file of every program, as the editor has it: open documents, and the files the
+    /// projects name, for a search across the workspace.
+    /// </summary>
+    public IReadOnlyList<SyntaxTree> Files()
+    {
+        lock (gate)
+        {
+            var trees = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
+            foreach (var tree in projects.SelectMany(project => project.OnDisk()))
+                trees[tree.Path] = tree;
             foreach (var document in open.Values)
-                sources[document.Tree.Path] = document.Tree;
-            return analysis = previous = Compiler.Analyze([.. sources.Values], project, previous);
+                trees[document.Tree.Path] = document.Tree;
+            return [.. trees.Values.OrderBy(tree => tree.Path, StringComparer.Ordinal)];
         }
     }
 
-    private static string? Read(string path)
+    /// <summary>
+    /// The project a file belongs to, or null for none. A library two projects share is part of
+    /// both, and belongs, for what the editor shows of it, to the one nearest it.
+    /// </summary>
+    private WorkspaceProject? Owner(string path) =>
+        projects.Where(project => project.Owns(path))
+            .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
+            .FirstOrDefault();
+
+    /// <summary>A file changed, so every program that names it is analyzed again.</summary>
+    private void Invalidate(string path)
     {
-        // A file that moved or is being written while the editor asks is not a crash; the
-        // next analysis will find it.
-        try
+        var owned = false;
+        foreach (var project in projects.Where(project => project.Owns(path)))
         {
-            return File.ReadAllText(path);
+            project.Invalidate();
+            owned = true;
         }
-        catch (IOException)
-        {
-            return null;
-        }
+        if (!owned)
+            loose = null;
     }
 
-    /// <summary>The files one <c>files</c> glob names, as logical paths.</summary>
-    private static IEnumerable<string> Matching(string root, string glob)
+    /// <summary>
+    /// Builds each project as the active configuration. A project without it builds its own
+    /// settings, unless no project has it, when it is a mistake each project reports.
+    /// </summary>
+    private void ConfigureAll()
     {
-        var normalized = glob.Replace('\\', '/');
-        var at = normalized.IndexOf("**/", StringComparison.Ordinal);
-        var (under, pattern, search) = at >= 0
-            ? (normalized[..at], normalized[(at + 3)..], SearchOption.AllDirectories)
-            : (Folder(normalized), Leaf(normalized), SearchOption.TopDirectoryOnly);
-
-        var from = Path.GetFullPath(Path.Combine(root, under.Replace('/', Path.DirectorySeparatorChar)));
-        if (!Directory.Exists(from) || pattern.Contains('/'))
-            return [];
-        return Directory.EnumerateFiles(from, pattern, search).Select(path => path.Replace('\\', '/'));
-
-        static string Folder(string path) => path.LastIndexOf('/') is var i && i >= 0 ? path[..i] : "";
-        static string Leaf(string path) => path.LastIndexOf('/') is var i && i >= 0 ? path[(i + 1)..] : path;
+        var anyNames = AnyNames();
+        foreach (var project in projects)
+            project.Configure(Named(project, configuration, anyNames));
+        loose = null;
     }
+
+    private bool AnyNames() =>
+        projects.Any(project => project.Own.Configurations.Any(c => c.Name == configuration));
+
+    private static string? Named(WorkspaceProject project, string? configuration, bool anyNames) =>
+        configuration is { Length: > 0 } && (!anyNames || project.Own.Configurations.Any(c => c.Name == configuration))
+            ? configuration
+            : null;
+
+    /// <summary>
+    /// Every project file in <paramref name="root"/> and the folders beneath it, as logical paths.
+    /// A folder whose name starts with <c>.</c>, and <c>node_modules</c>, hold no projects of the
+    /// programmer's.
+    /// </summary>
+    private static IEnumerable<string> ProjectFiles(string root)
+    {
+        var pending = new Stack<string>([root]);
+        while (pending.TryPop(out var directory))
+        {
+            if (!Directory.Exists(directory))
+                continue;
+            var file = Path.Combine(directory, ProjectFile.Name);
+            if (File.Exists(file))
+                yield return Paths.Normalized(file);
+            IEnumerable<string> inner;
+            try
+            {
+                inner = Directory.EnumerateDirectories(directory).ToList();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+            foreach (var folder in inner)
+            {
+                var name = Path.GetFileName(folder);
+                if (!name.StartsWith('.') && name != "node_modules")
+                    pending.Push(folder);
+            }
+        }
+    }
+
+    private static bool SamePath(string a, string b) =>
+        string.Equals(Paths.Normalized(a), Paths.Normalized(b),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static bool Within(string directory, string path) =>
+        Paths.Normalized(path).StartsWith(Paths.Normalized(directory) + "/",
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static SyntaxTree Apply(SyntaxTree tree, TextDocumentContentChangeEvent change)
     {
