@@ -4,7 +4,7 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// A realistic program under <c>tests/corpus</c> or <c>examples</c>, built the way its <c>build.sh</c> builds it:
+/// A realistic program under <c>tests/corpus</c> or <c>examples</c>, built the way its build script builds it:
 /// its <c>nt65.json</c>, the sources its globs name, which may be outside it, one linker
 /// configuration, and whatever hand-written ca65, include files and binaries sit beside them.
 /// Its <c>build/</c> directory is output and is never read, and a directory with no

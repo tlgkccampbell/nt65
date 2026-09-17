@@ -11,17 +11,18 @@ darken red, up and down green, A and B blue.
 - `nt65.json` gives the segments' banks and the hardware ranges, which is what lets nt65 check
   every `jsr` and register access against D and B. `snes.cfg` places them for ld65.
 
-With `nt65`, `ca65` and `ld65` on the path:
+With `nt65`, `ca65` and `ld65` on the path, in PowerShell:
 
 ```text
-sh build.sh
+./build.ps1
 ```
 
-`build/hello.sfc` runs in any SNES emulator. `NT65`, `CA65` and `LD65` name the tools when they
-are not on the path. From a build of this repository, with the pinned cc65 in `.cache/cc65`:
+`build/hello.sfc` runs in any SNES emulator. `-Nt65`, `-Ca65` and `-Ld65` name the tools when
+they are not on the path. From a build of this repository, with the pinned cc65 in
+`.cache/cc65`, run from the repository's root:
 
 ```text
-NT65=../../src/Norristown.Cli/bin/Debug/net10.0/nt65.exe CA65=../../.cache/cc65/bin/ca65.exe LD65=../../.cache/cc65/bin/ld65.exe sh build.sh
+examples/snes-hello/build.ps1 -Nt65 src/Norristown.Cli/bin/Debug/net10.0/nt65.exe -Ca65 .cache/cc65/bin/ca65.exe -Ld65 .cache/cc65/bin/ld65.exe
 ```
 
 The header's checksum is left unset, which emulators report and run anyway.
