@@ -332,6 +332,10 @@ public sealed class EditingRequestsTests
                 beq @turn
                 jmp @turn
             }
+            .proc unlaid {
+                stz $10
+                rts
+            }
             """;
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
@@ -349,6 +353,9 @@ public sealed class EditingRequestsTests
 
                 // No path leaves it, so there is no pass through it to put a cost on.
                 (24, "never returns"),
+
+                // `stz` is not on the 6502, so the line is left out of the stream and what
+                // is left of the routine is not what it would cost. It gets no lens at all.
             ],
             lenses.Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
     }
@@ -527,6 +534,32 @@ public sealed class EditingRequestsTests
             .proc leaf {
                 rts
             }
+            .proc by_twos {
+                ldx #4
+            @turn:
+                sta $0200,x
+                dex
+                dex
+                bpl @turn
+                rts
+            }
+            .proc uneven {
+                ldx #5
+            @turn:
+                sta $0200,x
+                dex
+                dex
+                bne @turn
+                rts
+            }
+            .proc starts_negative {
+                ldx #200
+            @turn:
+                sta $0200,x
+                dex
+                bpl @turn
+                rts
+            }
             """;
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
@@ -549,9 +582,19 @@ public sealed class EditingRequestsTests
                 // The count does not start at an immediate.
                 "18+ cycles, loops",
 
-                // The call cuts the loop into blocks, and only a loop of one is read.
-                "18+ cycles, loops, 24+ cycles with calls",
+                // The call cuts the turn into two blocks, and the loop is read all the same;
+                // the call is made once a turn, so it counts four times over.
+                "51-54 cycles, 75-78 cycles with calls",
                 "6 cycles",
+
+                // Two `dex` a turn walk an array of words: `ldx #4` is three turns of `bpl`.
+                "43-45 cycles",
+
+                // A stride of two does not bring five down to zero, so `bne` never sees it.
+                "19+ cycles, loops",
+
+                // `bpl` reads the sign, and 200 has it set before the loop starts.
+                "17+ cycles, loops",
             ],
             lenses.Select(lens => lens.Command.Title));
     }

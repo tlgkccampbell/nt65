@@ -192,6 +192,8 @@ public static class Instructions
     /// <summary>WDC's 65C02 adds <c>wai</c> and <c>stp</c> to Rockwell's.</summary>
     private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65C02()
     {
+        // WDC's own 65C02 also has `jsr (abs,x)` at $fc, and ca65 does not take it before the
+        // 65816, so neither does nt65: what nt65 writes has to be what ca65 assembles.
         var table = Copy(rockwell65C02);
         Add(table, "stp wai", AddressingMode.Implied);
         return Freeze(table);

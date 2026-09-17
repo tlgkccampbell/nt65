@@ -1305,11 +1305,18 @@ is entered to where its path ends. A routine no path leaves is shown as never re
 rather than as one nothing could be worked out for.
 
 A path that can come back on itself has no longest, and the count is a fewest with a `+`,
-except where the loop counts itself: a register loaded with an immediate, brought down by a
-`dex` or a `dey` once a turn and branched on with `bne` or `bpl`, in a block that is the whole
-of the loop, with one way in and nothing else in it touching that register. That loop's turns
-are known, so its cost is a bound like any other. Every other loop keeps the `+`, because a
-loop counted wrongly is worse than one not counted.
+except where the loop counts itself: a register loaded with an immediate, brought down by one
+or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the turn round
+again, with one way into the loop, one way out of it, and nothing else in it touching that
+register. The loop is found from the back edge and the blocks that dominate it, so a turn may
+branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
+the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
+counting down from that immediate at all. Every other loop keeps the `+`, because a loop
+counted wrongly is worse than one not counted.
+
+A routine holding an instruction the CPU does not have, or does not take that operand for,
+gets no count: the line is reported and left out of the byte stream, so counting the rest
+would say the routine is quicker than anything it could be built as.
 
 A routine is also shown what it costs **with what it calls**: a call costs the call and then
 whatever the routine it names costs, and a tail jump the same, since control comes back from it

@@ -37,6 +37,11 @@ public sealed class CodeLayout
     // reads: it is this walk that expands the macros and unrolls the repetitions.
     private readonly List<Step> steps = [];
 
+    // The routines holding an instruction this CPU does not have, or does not take that
+    // operand for. Such a line is reported and left out of the stream, so nothing downstream
+    // sees it at all, and a count of what the routine costs would be a count of the rest.
+    private readonly HashSet<Symbol> unlaid = [];
+
     // The long branches already found out of reach, which is what carries between walks:
     // lengthening one moves everything after it, so the file is laid out again.
     private readonly HashSet<(int Position, Expansion? On)> lengthened;
@@ -110,6 +115,13 @@ public sealed class CodeLayout
 
     /// <summary>Every statement of the file, in the order its bytes are written.</summary>
     public IReadOnlyList<Step> Steps => steps;
+
+    /// <summary>
+    /// The routines an instruction of which could not be laid out. What such a routine costs
+    /// is not known: the line is not in the stream, so counting the rest would say the
+    /// routine is quicker than anything it could be built as.
+    /// </summary>
+    public IReadOnlySet<Symbol> Unlaid => unlaid;
 
     /// <summary>The modes a plain address can be: sized by its width, or a branch target.</summary>
     private static AddressingMode[] Unindexed =>
@@ -526,6 +538,13 @@ public sealed class CodeLayout
     /// wide as the operand, with the choice written into the output as a prefix when the
     /// instruction offers more than one width for that shape.
     /// </summary>
+    /// <summary>Marks the routine being walked as one an instruction could not be laid out in.</summary>
+    private void Unlayable()
+    {
+        if (routine is not null)
+            unlaid.Add(routine);
+    }
+
     private void Instruction(SyntaxNode statement)
     {
         if (statement.ChildTokens.Length == 0)
@@ -557,6 +576,7 @@ public sealed class CodeLayout
                 ? $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}"
                 : $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}, and is on the "
                     + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1]));
+            Unlayable();
             return;
         }
 
@@ -576,12 +596,14 @@ public sealed class CodeLayout
         if (candidates.Length == 0 && operand is null)
         {
             Report(mnemonic, $"`{mnemonic.Text}` needs an operand");
+            Unlayable();
             return;
         }
         if (candidates.Length == 0)
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
                 $"`{mnemonic.Text}` does not take this operand on the {CpuNames.Spell(cpu)}");
+            Unlayable();
             return;
         }
 

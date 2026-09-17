@@ -92,6 +92,12 @@ public sealed class BasicBlock
     /// <summary>What running it every one of those turns costs, or null where they are not known.</summary>
     public CycleCount? LoopCycles { get; internal set; }
 
+    /// <summary>
+    /// The block a counted loop this one closes comes back to, so that a walk stops at the
+    /// latch rather than going round again; null for every other block.
+    /// </summary>
+    public int? Repeats { get; internal set; }
+
     internal void Add(Step step) => steps.Add(step);
 
     internal void Called(Symbol routine) => calls.Add(routine);

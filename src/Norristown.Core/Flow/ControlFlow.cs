@@ -56,7 +56,12 @@ public sealed class ControlFlow
             // The routine is entered where its own name stands.
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
             CountedLoops.Find(model, layout, blocks);
-            var (least, most, ends) = Paths.Through(blocks);
+
+            // A routine holding a line layout could not read is not one to put a count on:
+            // the line is not in the stream, so what is left would count as the whole.
+            var (least, most, ends) = layout.Unlaid.Contains(routine)
+                ? (null, null, true)
+                : Paths.Through(blocks);
             var region = new FlowRegion(
                 routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends), flow.Costed(blocks, inline));
             flow.regions.Add(region);

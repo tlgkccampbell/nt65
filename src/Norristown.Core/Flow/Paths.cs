@@ -78,8 +78,7 @@ internal static class Paths
     /// <summary>The blocks a path may run after this one, its calls and what it leaves aside.</summary>
     private static IEnumerable<int> Onward(BasicBlock block, Func<int, bool> inside) =>
         block.Successors
-            .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To)
-                && !(edge.To == block.Index && block.Turns is not null))
+            .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To) && edge.To != block.Repeats)
             .Select(edge => edge.To)
             .Distinct();
 
