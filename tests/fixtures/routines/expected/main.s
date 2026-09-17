@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "main.nt65", 2616, 0
+.dbg file, "main.nt65", 3418, 0
 
 .export main__reset_stub
 .export main__nmi
@@ -19,163 +19,179 @@
 .export main__copy
 .export main__restore
 .export main__load
+.export main__TOOLBOX: far
+.export main__bail
+.export main__poke
 
 sys__CODE_BANK = $80
 
 .segment "LORAM": absolute
-.dbg line, "main.nt65", 15
+.dbg line, "main.nt65", 16
 counter: .res 2
 
 .segment "SRAM": absolute
-.dbg line, "main.nt65", 18
+.dbg line, "main.nt65", 19
 saved: .res 2
 
 .segment "BANK1": absolute
-.dbg line, "main.nt65", 21
+.dbg line, "main.nt65", 22
 table: .byte 1, 2, 3, 4
 
 .segment "STUBS": absolute
 main__reset_stub:
-.dbg line, "main.nt65", 28
-    sei
 .dbg line, "main.nt65", 29
+    sei
+.dbg line, "main.nt65", 30
     jml +(sys__CODE_BANK << 16) | .loword(main__reset)
 
 main__nmi:
-.dbg line, "main.nt65", 34
-    rep #$30
 .dbg line, "main.nt65", 35
-    pha
+    rep #$30
 .dbg line, "main.nt65", 36
-    lda f:counter
+    pha
 .dbg line, "main.nt65", 37
-    inc a
+    lda f:counter
 .dbg line, "main.nt65", 38
-    sta f:counter
+    inc a
 .dbg line, "main.nt65", 39
-    pla
+    sta f:counter
 .dbg line, "main.nt65", 40
+    pla
+.dbg line, "main.nt65", 41
     rti
 
 main__irq:
-.dbg line, "main.nt65", 45
+.dbg line, "main.nt65", 46
     jmp main__nmi
 
 main__stop:
-.dbg line, "main.nt65", 49
+.dbg line, "main.nt65", 50
     stp
 
 .segment "CODE0": absolute
 main__reset:
-.dbg line, "main.nt65", 57
-    clc
 .dbg line, "main.nt65", 58
-    xce
+    clc
 .dbg line, "main.nt65", 59
+    xce
+.dbg line, "main.nt65", 60
     rep #$30
     .i16
-.dbg line, "main.nt65", 60
-    ldx #$1fff
 .dbg line, "main.nt65", 61
+    ldx #$1fff
+.dbg line, "main.nt65", 62
     txs
     .a16
-.dbg line, "main.nt65", 62
-    lda #$0000
 .dbg line, "main.nt65", 63
-    tcd
+    lda #$0000
 .dbg line, "main.nt65", 64
-    phk
+    tcd
 .dbg line, "main.nt65", 65
-    plb
+    phk
 .dbg line, "main.nt65", 66
-    sep #$20
+    plb
 .dbg line, "main.nt65", 67
-    lda a:counter
+    sep #$20
 .dbg line, "main.nt65", 68
+    lda a:counter
+.dbg line, "main.nt65", 69
     jsr main__main
 
 main__main:
-.dbg line, "main.nt65", 73
-    rep #$20
 .dbg line, "main.nt65", 74
-    pea 3
+    rep #$20
 .dbg line, "main.nt65", 75
-    pea 4
+    pea 3
 .dbg line, "main.nt65", 76
-    jsr main__add
+    pea 4
 .dbg line, "main.nt65", 77
-    pla
+    jsr main__add
 .dbg line, "main.nt65", 78
     pla
 .dbg line, "main.nt65", 79
-    sep #$20
+    pla
 .dbg line, "main.nt65", 80
-    jsr main__copy
+    sep #$20
 .dbg line, "main.nt65", 81
-    jsl main__load
+    jsr main__copy
 .dbg line, "main.nt65", 82
+    jsl main__load
+.dbg line, "main.nt65", 83
     jmp main__main
 
 main__add:
-.dbg line, "main.nt65", 95
-    lda 5,s                         ; f::left
 .dbg line, "main.nt65", 96
-    clc
+    lda 5,s                         ; f::left
 .dbg line, "main.nt65", 97
-    adc 3,s                         ; f::right
+    clc
 .dbg line, "main.nt65", 98
+    adc 3,s                         ; f::right
+.dbg line, "main.nt65", 99
     rts
 
 main__copy:
-.dbg line, "main.nt65", 103
-    rep #$20
 .dbg line, "main.nt65", 104
-    lda #3
+    rep #$20
 .dbg line, "main.nt65", 105
-    ldx #.loword(table)
+    lda #3
 .dbg line, "main.nt65", 106
-    ldy #.loword(counter)
+    ldx #.loword(table)
 .dbg line, "main.nt65", 107
-    mvn #^table, #^counter
+    ldy #.loword(counter)
 .dbg line, "main.nt65", 108
-    lda a:counter
+    mvn #^table, #^counter
 .dbg line, "main.nt65", 109
-    phk
+    lda a:counter
 .dbg line, "main.nt65", 110
-    plb
+    phk
 .dbg line, "main.nt65", 111
-    sep #$20
+    plb
 .dbg line, "main.nt65", 112
+    sep #$20
+.dbg line, "main.nt65", 113
     rts
 
 main__restore:
     .a8
-.dbg line, "main.nt65", 117
-    lda #$71
 .dbg line, "main.nt65", 118
-    pha
+    lda #$71
 .dbg line, "main.nt65", 119
-    plb
+    pha
 .dbg line, "main.nt65", 120
-    lda a:saved
-.dbg line, "main.nt65", 121
-    phk
-.dbg line, "main.nt65", 122
     plb
+.dbg line, "main.nt65", 121
+    lda a:saved
+.dbg line, "main.nt65", 122
+    phk
 .dbg line, "main.nt65", 123
+    plb
+.dbg line, "main.nt65", 124
     rts
 
 .segment "BANK1": absolute
 main__load:
-.dbg line, "main.nt65", 129
-    phb
 .dbg line, "main.nt65", 130
-    phk
+    phb
 .dbg line, "main.nt65", 131
-    plb
+    phk
 .dbg line, "main.nt65", 132
-    lda a:table
-.dbg line, "main.nt65", 133
     plb
+.dbg line, "main.nt65", 133
+    lda a:table
 .dbg line, "main.nt65", 134
+    plb
+.dbg line, "main.nt65", 135
     rtl
+
+main__TOOLBOX = $E10000
+
+.segment "CODE0": absolute
+main__bail:
+.dbg line, "main.nt65", 146
+    jmp main__bail
+
+main__poke:
+.dbg line, "main.nt65", 152
+    sta a:$2100
+.dbg line, "main.nt65", 153
+    rts

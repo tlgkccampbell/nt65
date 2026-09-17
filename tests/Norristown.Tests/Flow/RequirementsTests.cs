@@ -21,13 +21,13 @@ public sealed class RequirementsTests
             .cpu 65c02
             .segment BSS
             .data vec: .byte[2]
-            .proc p {
+            .proc p: a8, i8 {
                 jmp (vec)
             }
-            .proc q {
+            .proc q: a8, i8 {
                 jmp q+3
             }
-            .proc r {
+            .proc r: a8, i8 {
             @op:
                 lda $0400
                 sta @op+1
@@ -50,14 +50,14 @@ public sealed class RequirementsTests
             .module main
             .cpu 6502
             .segment CODE
-            .proc first {
+            .proc first: a8, i8 {
                 lda #1
             }
-            .proc second {
+            .proc second: a8, i8 {
                 lda #2
                 .next third
             }
-            .proc third {
+            .proc third: a8, i8 {
                 tax
                 .next ?
             }
@@ -80,7 +80,7 @@ public sealed class RequirementsTests
             .cpu 6502
             .import print: proc(inline .strz)
             .segment CODE
-            .proc p {
+            .proc p: a8, i8 {
                 jsr print
                 .strz "hi"
                 jsr print
@@ -139,7 +139,7 @@ public sealed class RequirementsTests
     public void AReturnUsedAsAJumpPullsTheAddress()
     {
         const string Text = """
-            .proc p {
+            .proc p: a8, i8 {
                 pea @there - 1
                 rts
                 .next @there
@@ -201,7 +201,7 @@ public sealed class RequirementsTests
     public void AJumpIntoANestedSegmentBlockCarriesTheState()
     {
         const string Text = """
-            .proc p: a16 {
+            .proc p: a16, i8 {
                 jmp @away
             @back:
                 lda #$1234
@@ -227,7 +227,7 @@ public sealed class RequirementsTests
     public void ANestedSegmentBlockThatRunsOffItsEndNeedsANext()
     {
         const string Text = """
-            .proc p {
+            .proc p: a8, i8 {
                 jmp @away
                 .segment DATA {
             @away:
@@ -254,7 +254,7 @@ public sealed class RequirementsTests
                 rts
                 .next ?
             }
-            .proc p {
+            .proc p: a8, i8 {
                 jmp owner::inner
             }
             """;

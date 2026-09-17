@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "data.nt65", 1387, 0
+.dbg file, "data.nt65", 1480, 0
 
 .export data__player_x
 .export data__buffer

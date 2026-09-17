@@ -147,6 +147,10 @@ public sealed class ProgramModel
             CheckAliases(result.Symbols, resolved, byFile);
             CheckExportSizes(result.Symbols, byFile);
         }
+
+        // After the aliases, because one that writes nothing has taken the routine's by now.
+        foreach (var result in bound)
+            CheckDeclaredSignatures(result.Symbols, byFile, target);
         CheckDefineNames(modules, defines, tables);
 
         var all = byFile.Values.SelectMany(file => file).Concat(tables).Concat(segmentValues).ToList();
@@ -252,6 +256,10 @@ public sealed class ProgramModel
             CheckAliases(result.Symbols, resolved, found);
             CheckExportSizes(result.Symbols, found);
         }
+
+        // After the aliases, because one that writes nothing has taken the routine's by now.
+        foreach (var result in bound.Values)
+            CheckDeclaredSignatures(result.Symbols, found, cpu);
         CheckDefineNames(replaced, defines, tables);
 
         // A name whose meaning changed is news to every file that looked it up in its module. A
@@ -469,6 +477,32 @@ public sealed class ProgramModel
     /// what imports it is sized to what it may later become; a narrower one would tell the
     /// linker, and every other module, something that is not so.
     /// </summary>
+    /// <summary>
+    /// On the 65816 a routine with no body declares what every call through it is checked
+    /// against, and has no body to check that declaration itself. So it has to say something: an
+    /// extern proc at a constant address and an imported routine write their state rather than
+    /// take a default that is only a guess. An extern proc that names another routine and writes
+    /// nothing takes that routine's, which is a declaration too.
+    /// </summary>
+    private static void CheckDeclaredSignatures(
+        IEnumerable<Symbol> symbols, Dictionary<string, List<Diagnostic>> byFile, Cpu cpu)
+    {
+        if (cpu != Cpu.Wdc65816)
+            return;
+        foreach (var symbol in symbols)
+        {
+            if (symbol.Kind is not (SymbolKind.ExternProc or SymbolKind.ImportedAddress)
+                || symbol.Signature is not { DeclaresState: false })
+            {
+                continue;
+            }
+            var kind = symbol.Kind == SymbolKind.ExternProc ? "an extern proc" : "an imported routine";
+            byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
+                $"`{symbol.Name}` declares no processor state, and {kind} has no body to check one against: "
+                + "say what a caller must hold to, or `?` where nothing is known"));
+        }
+    }
+
     private static void CheckExportSizes(IEnumerable<Symbol> symbols, Dictionary<string, List<Diagnostic>> byFile)
     {
         foreach (var symbol in symbols)

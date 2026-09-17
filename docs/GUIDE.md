@@ -317,7 +317,7 @@ a `jmp` where it is not. There is no `.macpack longbranch` to include.
 nt65 follows control flow through each proc, and asks you to say what it cannot see:
 
 ```nt65
-.proc dispatch {
+.proc dispatch: a8, i8 {
     lda command
     asl a
     tax

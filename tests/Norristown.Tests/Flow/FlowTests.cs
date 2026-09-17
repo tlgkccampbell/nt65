@@ -288,7 +288,7 @@ public sealed class FlowTests
     public void ACallToARoutineThatNeverReturnsEndsThePath()
     {
         const string Text = """
-            .proc halt: a8 -> none {
+            .proc halt: a8, noreturn {
                 jmp halt
             }
 
@@ -312,12 +312,12 @@ public sealed class FlowTests
     public void OnThe6502InterruptHandlersAndRoutinesThatNeverReturnAreChecked()
     {
         var problems = Problems(
-            ".proc irq: interrupt {\n    rts\n}\n.proc stop: a8 -> none {\n    rts\n}\n.proc p {\n    jsr irq\n    rts\n}\n");
+            ".proc irq: interrupt {\n    rts\n}\n.proc stop: a8, noreturn {\n    rts\n}\n.proc p {\n    jsr irq\n    rts\n}\n");
 
         Assert.Equal(
             [
                 "main.nt65:4: `irq` is an interrupt handler, and leaves by `rti` rather than `rts`",
-                "main.nt65:7: `stop` never returns, as its `-> none` says, and `rts` returns",
+                "main.nt65:7: `stop` never returns, as its `noreturn` says, and `rts` returns",
                 "main.nt65:10: `irq` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back",
             ],
             problems);

@@ -16,3 +16,11 @@ CODE_BANK = $80
 
 ; An interrupt handler entered in native mode.
 .export .signature isr = interrupt, native
+
+; A set may carry `noreturn`, as it carries `far`: the routines of this family jump away and
+; do not come back.
+.export .signature trap = std, noreturn
+
+; `?` on its own is every tracked part of the state unknown, which is what a routine reached
+; from outside nt65 assumes. An extern proc at a fixed address usually declares just that.
+.export .signature foreign = ?

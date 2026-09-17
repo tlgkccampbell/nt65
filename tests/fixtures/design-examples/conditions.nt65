@@ -9,11 +9,11 @@
 .data table: .byte[32]
 
 .segment CODE
-.proc trace {
+.proc trace: a8, i8 {
     rts
 }
 
-.proc run {
+.proc run: a8, i8 {
 .if DEBUG {
     jsr trace
 } .elseif LEVEL > 2 {
@@ -47,11 +47,11 @@
 }
 
 .segment CODE
-.proc move {
+.proc move: a8, i8 {
     rts
 }
 
-.proc fire {
+.proc fire: a8, i8 {
     rts
 }
 
@@ -65,10 +65,10 @@
 }
 
 .scope actions {
-    .proc move {
+    .proc move: a8, i8 {
         rts
     }
-    .proc fire {
+    .proc fire: a8, i8 {
         rts
     }
 }

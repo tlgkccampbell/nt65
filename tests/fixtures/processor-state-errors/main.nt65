@@ -25,7 +25,7 @@
 }
 
 ; Two paths that disagree meet at a label, and the use after it is what is reported.
-.proc merged {
+.proc merged: a8, i8 {
     lda value
     beq @done
     rep #$20
@@ -55,7 +55,7 @@
     rts
 }
 
-.proc calls {
+.proc calls: a8, i8 {
     jsr far_away            ;! error: `far_away` is far, and is called with `jsl`
     jsl calls               ;! error: `calls` is near, and is called with `jsr`
     jsr plain               ;! error: `plain` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
@@ -66,7 +66,7 @@
 }
 
 ; A tail call returns for the routine that makes it.
-.proc tail: a16 -> a8 {
+.proc tail: a16, i8 -> a8 {
     jmp wrong_entry         ;! error: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
 }
 
@@ -78,7 +78,7 @@
 }
 
 ; A label nothing reaches has no state to size an immediate with.
-.proc orphan {
+.proc orphan: a8, i8 {
     rts
 @lost:                      ;! warning: `@lost` is never reached: nothing runs into it and nothing names it
     lda #1                  ;! error: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
@@ -102,7 +102,7 @@
     .state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.
-.proc long_to_near {
+.proc long_to_near: a8, i8 {
     jml @near               ;! error: `jml` takes a far target, and this one is absolute: `jmp` reaches it
 @near:
     jml $008000
@@ -120,7 +120,7 @@
 .proc worker_same = worker: a8, i16
 
 ; What made a width unknown is named where the width is needed.
-.proc pulled {
+.proc pulled: a8, i8 {
     plp
     lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
     sep #$30

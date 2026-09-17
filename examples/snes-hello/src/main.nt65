@@ -22,7 +22,7 @@
 
 
 ; Power-on: native mode, the stack, D and B, the PPU cleared and the screen on.
-.proc reset: emu, dp?, dbr? -> none {
+.proc reset: emu, dp?, dbr?, noreturn {
     sei
     clc
     xce                         ; native, both widths 8
@@ -62,7 +62,7 @@
 }
 
 ; Each frame: wait for the NMI, read the joypad, and every fourth frame move the levels.
-.proc main: std -> none {
+.proc main: std, noreturn {
 @frame:
     jsr wait_frame
     lda frame_count

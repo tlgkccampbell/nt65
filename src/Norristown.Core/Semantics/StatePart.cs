@@ -30,8 +30,14 @@ public enum StatePart
     /// <summary>A routine the processor enters on an interrupt, and that leaves by <c>rti</c>: <c>interrupt</c>.</summary>
     Interrupt,
 
-    /// <summary>A routine that never returns: <c>-&gt; none</c>.</summary>
-    None,
+    /// <summary>A routine that never returns: <c>noreturn</c>.</summary>
+    NoReturn,
+
+    /// <summary>
+    /// Every tracked part of the state unknown, written <c>?</c> on its own: what a routine
+    /// reached from outside nt65 assumes, and what an extern proc or an import usually declares.
+    /// </summary>
+    AllUnknown,
 
     /// <summary>A signature set, which stands for the items it was declared with: <c>std</c>.</summary>
     Set,

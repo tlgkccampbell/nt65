@@ -326,7 +326,7 @@ public sealed class EditingRequestsTests
                 jsr straight
                 rts
             }
-            .proc endless: none {
+            .proc endless: noreturn {
             @turn:
                 lda $10
                 beq @turn

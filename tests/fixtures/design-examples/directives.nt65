@@ -13,28 +13,28 @@ WIDE = 1
 }
 
 .segment CODE
-.proc reloc {
+.proc reloc: a8, i8 {
     ldx #.spanof(reloc)             ; bytes to copy
     rts
 }
 
-.proc irq {
+.proc irq: a8, i8 {
     rti
 }
 
-.proc label {
+.proc label: a8, i8 {
     rts
 }
 
-.proc first {
+.proc first: a8, i8 {
     rts
 }
 
-.proc second {
+.proc second: a8, i8 {
     rts
 }
 
-.proc third {
+.proc third: a8, i8 {
     rts
 }
 

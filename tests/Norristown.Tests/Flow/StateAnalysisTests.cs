@@ -42,7 +42,7 @@ public sealed class StateAnalysisTests
     [Fact]
     public void ARepOfAnUnknownValueForgetsBothWidths()
     {
-        var state = StateAt(".import flags: zp\n.proc p {\n    rep #<flags\n    nop\n    .state a8, i8\n    rts\n}\n", "nop");
+        var state = StateAt(".import flags: zp\n.proc p: a8, i8 {\n    rep #<flags\n    nop\n    .state a8, i8\n    rts\n}\n", "nop");
 
         Assert.Equal(Width.Unknown, state.Processor.A);
         Assert.Equal(Width.Unknown, state.Processor.Index);
@@ -51,7 +51,7 @@ public sealed class StateAnalysisTests
     [Theory]
     // `clc` then `xce` enters native mode: from emulation mode the widths are 8 bits there.
     [InlineData("emu", "clc", "a8, i8, native")]
-    [InlineData("native", "clc", "a8, i8, native")]
+    [InlineData("a8, i8, native", "clc", "a8, i8, native")]
     [InlineData("e?", "clc", "a?, i?, native")]
 
     // `sec` then `xce` enters emulation mode, where both widths are 8 bits.
@@ -91,7 +91,7 @@ public sealed class StateAnalysisTests
                 rts
             }
 
-            .proc p {
+            .proc p: a8, i8 {
                 php
                 rep #$20
                 jsr helper
@@ -115,7 +115,7 @@ public sealed class StateAnalysisTests
             .data saved_p: .byte
             .segment CODE
 
-            .proc p {
+            .proc p: a8, i8 {
                 lda saved_p
                 pha
                 plp
@@ -137,7 +137,7 @@ public sealed class StateAnalysisTests
     [Fact]
     public void PullingMoreThanWasPushedForgetsTheBase()
     {
-        var state = StateAt(".proc p {\n    php\n    pla\n    pla\n    nop\n    rts\n}\n", "nop");
+        var state = StateAt(".proc p: a8, i8 {\n    php\n    pla\n    pla\n    nop\n    rts\n}\n", "nop");
 
         Assert.Equal(AnalysisStack.Unanchored, state.Stack);
     }
@@ -172,7 +172,7 @@ public sealed class StateAnalysisTests
             .data table: .addr wide, narrow
             .segment CODE
 
-            .proc p {
+            .proc p: a8, i8 {
                 jsr (table,x)
                 .next wide, narrow
                 nop
@@ -193,7 +193,7 @@ public sealed class StateAnalysisTests
                 rts
             }
 
-            .proc p {
+            .proc p: a8, i8 {
                 lda #0
                 beq wide
                 lda #1
@@ -217,7 +217,7 @@ public sealed class StateAnalysisTests
     public void AJumpToTheRoutinesOwnEntryIsChecked()
     {
         Assert.Equal(["main.nt65:3: `jmp p` needs `a8`, and A is 16-bit here"],
-            Problems(".proc p {\n    rep #$20\n    jmp p\n}\n"));
+            Problems(".proc p: a8, i8 {\n    rep #$20\n    jmp p\n}\n"));
     }
 
     /// <summary>
@@ -255,7 +255,7 @@ public sealed class StateAnalysisTests
     public void AMergeReportsNothing()
     {
         const string Text = """
-            .proc p: a16 {
+            .proc p: a16, i8 {
                 lda #1
                 beq @done
                 sep #$20
@@ -276,7 +276,7 @@ public sealed class StateAnalysisTests
     public void AStateDeclaresALabelAndIsCheckedWhereItIsReached()
     {
         const string Text = """
-            .proc p {
+            .proc p: a8, i8 {
                 bra @entry
                 rts
             @entry:
@@ -299,12 +299,12 @@ public sealed class StateAnalysisTests
     [Fact]
     public void TheAnalysisSettlesInAFewWalksPerBlock()
     {
-        Assert.Equal(1, MostWalks(".proc p {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
+        Assert.Equal(1, MostWalks(".proc p: a8, i8 {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
 
         // A loop whose body does not change the state: what its back edge carries is what the
         // head already has, so the head is not walked again.
         Assert.Equal(1, MostWalks("""
-            .proc p {
+            .proc p: a8, i8 {
                 ldx #8
             @loop:
                 dex
@@ -316,7 +316,7 @@ public sealed class StateAnalysisTests
         // A loop that changes a width: the head learns on the back edge that A may be either,
         // and is walked once more with that.
         Assert.Equal(2, MostWalks("""
-            .proc p {
+            .proc p: a8, i8 {
             @loop:
                 rep #$20
                 bne @loop
@@ -328,7 +328,7 @@ public sealed class StateAnalysisTests
         // Two nested loops, each pushing: the stack at each head is forgotten on the first
         // round, and nothing is left to change after that.
         Assert.Equal(2, MostWalks("""
-            .proc p {
+            .proc p: a8, i8 {
                 php
             @outer:
                 pha
@@ -350,7 +350,7 @@ public sealed class StateAnalysisTests
         // the head learns only on a third walk. Each part can change at most twice, so the
         // bound is one walk more than the number of parts, not two.
         Assert.Equal(3, MostWalks("""
-            .proc p {
+            .proc p: a8, i8 {
                 php
             @loop:
                 plp
@@ -366,21 +366,21 @@ public sealed class StateAnalysisTests
 
     [Theory]
     // The idioms that load D and B from constants.
-    [InlineData(".proc p: a16 {\n    lda #$2100\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp = $2100")]
-    [InlineData(".proc p {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
-    [InlineData(".proc p {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
+    [InlineData(".proc p: a16, i8 {\n    lda #$2100\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp = $2100")]
+    [InlineData(".proc p: a8, i8 {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
+    [InlineData(".proc p: a8, i8 {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
 
     // `lda #c`, `tcd` with A 8 bits transfers a high byte nobody knows.
-    [InlineData(".proc p {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+    [InlineData(".proc p: a8, i8 {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
 
     // Anything between the load and the transfer loses it.
-    [InlineData(".proc p: a16 {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
+    [InlineData(".proc p: a16, i8 {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
 
     // A pull of something other than a pushed value loads what nobody knows.
-    [InlineData(".proc p {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
+    [InlineData(".proc p: a8, i8 {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
 
     // Two paths that pushed different constants agree on the depth, not on the value.
-    [InlineData(".proc p {\n    beq @a\n    pea 1\n    bra @b\n@a:\n    pea 2\n@b:\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+    [InlineData(".proc p: a8, i8 {\n    beq @a\n    pea 1\n    bra @b\n@a:\n    pea 2\n@b:\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
     public void DAndBAreLoadedOnlyByTheIdiomsThatLoadThemFromConstants(string text, string state)
     {
         Assert.Equal(state, StateAt(text, "nop").Processor.ToString());
@@ -390,7 +390,7 @@ public sealed class StateAnalysisTests
     [Fact]
     public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
     {
-        Assert.Empty(Problems(".proc p {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
+        Assert.Empty(Problems(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
         Assert.Contains("main.nt65:5: `rts`: `p` returns with `dp = $2100`, and D is not known here",
             Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
     }

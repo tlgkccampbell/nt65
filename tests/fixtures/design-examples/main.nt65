@@ -11,14 +11,14 @@
 .export main, other
 
 .segment CODE
-.proc main {
+.proc main: a8, i8 {
     jsr gfx::init                   ; qualified
     jsr snd_init
     lda p::thing
     rts
 }
 
-.proc other {
+.proc other: a8, i8 {
     jsr init
     lda BORDER
     lda VOLUME

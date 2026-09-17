@@ -24,7 +24,7 @@ internal static class Completion
     private static readonly string[] KeepItems = ["a*", "i*", "e*", "dp*", "dbr*"];
 
     /// <summary>What only a routine's signature says: how it is called and left.</summary>
-    private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "none"];
+    private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn"];
 
     /// <summary>What an <c>.ensure</c> makes hold.</summary>
     private static readonly string[] Widths = ["a8", "a16", "i8", "i16"];

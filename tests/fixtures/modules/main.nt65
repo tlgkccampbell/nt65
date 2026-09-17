@@ -10,10 +10,11 @@
 .use hw::*
 .use rt::host_tick
 
-; A name another CPU calls a mnemonic is a name on this one.
+; A name another CPU calls a mnemonic is a name on this one, with a warning: a program built
+; for that CPU cannot use it, so a module shared with one would stop building.
 .segment ZEROPAGE
-.data REP: .byte
-.data per: .byte
+.data REP: .byte                ;! warning: `REP` is a mnemonic on the 65816, and cannot name a symbol in a program built for one of those: a module shared with one will not build
+.data per: .byte                ;! warning: `per` is a mnemonic on the 65816, and cannot name a symbol in a program built for one of those: a module shared with one will not build
 
 .segment CODE
 .export .proc main {

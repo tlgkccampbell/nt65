@@ -5,7 +5,7 @@
 .cpu 65816
 
 .segment CODE
-.proc owner: a16 -> a8 {
+.proc owner: a16, i8 -> a8 {
     lda #$1234
     sep #$20
 .export entry

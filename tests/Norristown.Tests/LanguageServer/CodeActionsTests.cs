@@ -31,13 +31,13 @@ public sealed class CodeActionsTests
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".proc main {\n    lda #<@here\n@here:\n    rts\n}\n",
-            ".proc main {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    rts\n}\n",
+            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".proc main {\n    lda #<@here\n@here: rts\n}\n",
-            ".proc main {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".proc main: a8, i8 {\n    lda #<@here\n@here: rts\n}\n",
+            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Make `table` a `.data` declaration",

@@ -13,11 +13,11 @@
 .data tmp: .byte
 
 .segment CODE
-.proc main {
+.proc main: a8, i8 {
     rts
 }
 
-.proc draw {
+.proc draw: a8, i8 {
     ldx #0
 @loop:
     lda table,x

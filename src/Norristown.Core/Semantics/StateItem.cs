@@ -55,6 +55,9 @@ public readonly record struct StateItem(
                 ? new StateItem(node, StatePart.Set, Width.Unknown, ProcessorMode.Unknown, false, false)
                 : null;
         }
+        if (node.ChildTokens[0].Kind == SyntaxKind.Question)
+            return new StateItem(node, StatePart.AllUnknown, Width.Unknown, ProcessorMode.Unknown, false, false);
+
         var name = node.ChildTokens[0].Text.ToLowerInvariant();
         var suffix = node.ChildTokens.Length > 1 ? node.ChildTokens[1].Kind : SyntaxKind.None;
         var width = suffix switch
@@ -78,7 +81,7 @@ public readonly record struct StateItem(
             "inline" => StatePart.Inline,
             "args" => StatePart.Arguments,
             "interrupt" => StatePart.Interrupt,
-            "none" => StatePart.None,
+            "noreturn" => StatePart.NoReturn,
             "dp" => StatePart.DirectPage,
             "dbr" => StatePart.DataBank,
             _ => null,

@@ -24,18 +24,18 @@ K = $1234
 }
 .export fill_page, clear::again, K: abs, init as "_init"
 
-.proc fill_page {
+.proc fill_page: a8, i8 {
     rts
 }
 
-.proc clear {
+.proc clear: a8, i8 {
     rts
 again:
     .state a8, i8, native
     rts
 }
 
-.proc set_border {
+.proc set_border: a8, i8 {
     sta BORDER
     rts
 }

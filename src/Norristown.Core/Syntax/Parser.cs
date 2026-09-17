@@ -1392,6 +1392,11 @@ internal sealed class Parser
             return new GreenSyntax(SyntaxKind.StateItem, [ParseName()]);
         }
 
+        // `?` on its own is every tracked part of the state unknown, the state a routine
+        // reached from outside nt65 is entered in.
+        if (Kind == SyntaxKind.Question)
+            return new GreenSyntax(SyntaxKind.StateItem, [Advance()]);
+
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {

@@ -1,0 +1,31 @@
+; A module written to serve a 6502 program and a 65816 one. Built here for the 6502, where the
+; analysis does not run: the state items are inert, `.ensure` emits nothing, and the signature
+; the routines name is the one the `.else` branch declares.
+.module main
+
+.cpu 6502
+
+.export putc, memcpy
+
+; A signature cannot be varied by CPU in place, so the set it names is varied instead.
+.if .target(65816) {
+    .signature shared = a16, i16, dbr = $7e
+} .else {
+    .signature shared = a8, i8
+}
+
+.segment CODE
+
+; `?` assumes nothing, and the `.ensure` makes the widths hold on the 65816 and writes nothing
+; here. `sep` means the same in either mode, so a caller in emulation mode is served too.
+.proc putc: ?, near {
+    .ensure a8, i8          ; `sep` on the 65816; nothing on the 6502
+    sta $d000
+    rts
+}
+
+.proc memcpy: shared {
+    lda $10
+    sta $11
+    rts
+}

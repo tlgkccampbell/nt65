@@ -779,7 +779,7 @@ public sealed class ControlFlow
                 var returned = statement.ChildTokens[0].Text.ToLowerInvariant();
                 Report(statement, own.IsInterrupt
                     ? $"`{routine.DisplayName}` is an interrupt handler, and leaves by `rti` rather than `{returned}`"
-                    : $"`{routine.DisplayName}` never returns, as its `-> none` says, and `{returned}` returns");
+                    : $"`{routine.DisplayName}` never returns, as its `noreturn` says, and `{returned}` returns");
             }
             if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
             {

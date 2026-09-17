@@ -12,7 +12,7 @@ MAX_ACTORS = 8
 .data palette: .byte[32]
 
 .segment CODE
-.proc init {
+.proc init: a8, i8 {
     .scope {                ; clear RAM
         ldx #0
     @loop:
@@ -79,23 +79,23 @@ MAX_ACTORS = 8
 }
 
 .segment CODE
-.proc chase {
+.proc chase: a8, i8 {
     rts
 }
 
-.proc player_input {
+.proc player_input: a8, i8 {
     rts
 }
 
-.proc cmd_move {
+.proc cmd_move: a8, i8 {
     rts
 }
 
-.proc cmd_fire {
+.proc cmd_fire: a8, i8 {
     rts
 }
 
-.proc cmd_quit {
+.proc cmd_quit: a8, i8 {
     rts
 }
 

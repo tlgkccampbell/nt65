@@ -58,3 +58,25 @@ label: .word 4                          ;! error: `label` is a label outside a `
 .scope place {
     .segment BSS                        ;! error: a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME { }` places what it holds
 }
+
+; A 16-bit width cannot hold where the registers are eight bits, wherever it is written. The
+; items about registers the 6502 does not have are inert instead, so a module shared with a
+; 65816 program still builds here.
+.signature wide = a16                   ;! error: `a16` cannot hold on the 6502, whose registers are eight bits
+.proc sixteen: i16 {                    ;! error: `i16` cannot hold on the 6502, whose registers are eight bits
+    .state a16                          ;! error: `a16` cannot hold on the 6502, whose registers are eight bits
+    .ensure i16                         ;! error: `i16` cannot hold on the 6502, whose registers are eight bits
+    rts
+}
+
+.proc inert: native, dp = 0, dbr = $80 {
+    rts
+}
+
+; A routine with no body and a macro are held to it too.
+.proc WIDE = $FFD2: a16                 ;! error: `a16` cannot hold on the 6502, whose registers are eight bits
+.import wider: proc(i16)                ;! error: `i16` cannot hold on the 6502, whose registers are eight bits
+
+.macro widen(): a16 {                   ;! error: `a16` cannot hold on the 6502, whose registers are eight bits
+    nop
+}

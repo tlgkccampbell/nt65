@@ -14,7 +14,7 @@
 
 .segment CODE0
 
-.proc main: std -> none {
+.proc main: std, noreturn {
 @frame:
     lda #1
     sta nmi_ready

@@ -5,14 +5,14 @@
 .cpu 65816
 
 .segment CODE
-.proc right {
+.proc right: a8, i8 {
     jmp owner::owner::entry
 }
 
-.proc wrong: a16 {
+.proc wrong: a16, i8 {
     jmp owner::owner::entry     ;! error: `jmp entry` needs `a8`, and A is 16-bit here
 }
 
-.proc undeclared {
+.proc undeclared: a8, i8 {
     jmp owner::owner::plain     ;! error: `plain` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
 }

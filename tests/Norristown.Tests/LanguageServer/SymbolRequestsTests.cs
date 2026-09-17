@@ -197,7 +197,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a16 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a16, i8 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         var hover = await client.HoverAsync(Uri, new Position(5, 5), timeout);

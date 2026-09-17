@@ -18,19 +18,19 @@ SCREEN = $0400
 }
 
 .segment CODE
-.proc move {
+.proc move: a8, i8 {
     rts
 }
 
-.proc fire {
+.proc fire: a8, i8 {
     rts
 }
 
-.proc jump {
+.proc jump: a8, i8 {
     rts
 }
 
-.proc quit {
+.proc quit: a8, i8 {
     rts
 }
 

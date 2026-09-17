@@ -4,9 +4,10 @@
 
 .cpu 65816
 
-.use sys::{CODE_BANK, std, far_std, isr}
+.use sys::{CODE_BANK, std, far_std, isr, trap, foreign}
 
 .export reset_stub, nmi, irq, stop, reset, main, add, copy, restore, load
+.export bail, poke, TOOLBOX
 
 ; A segment declared in a file gives its mirrors as banks and ranges of them.
 .segment SRAM: abs, bank = $70, mirrors = [$71..$7d, $f0]
@@ -21,10 +22,10 @@
 .data table: .byte 1, 2, 3, 4
 
 ; The vectors point into bank $00. The stub enters `reset` in bank $80 with a long jump to its
-; address there: nothing returns from a routine that says `-> none`, so the jump is checked
+; address there: nothing returns from a routine that says `noreturn`, so the jump is checked
 ; against `reset`'s entry alone.
 .segment STUBS
-.proc reset_stub: emu, dp?, dbr? -> none {
+.proc reset_stub: emu, dp?, dbr?, noreturn {
     sei
     jml (CODE_BANK << 16) | .loword(reset)
 }
@@ -53,7 +54,7 @@
 
 ; `reset` never returns, so the call it ends with is where its path ends. After `txs` the
 ; stack is tracked again from what is pushed, so `phk` and `plb` still set B.
-.proc reset: emu, dp?, dbr? -> none {
+.proc reset: emu, dp?, dbr?, noreturn {
     clc
     xce
     rep #$30
@@ -69,7 +70,7 @@
 }
 
 ; A signature set, and what differs from it.
-.proc main: std -> none {
+.proc main: std, noreturn {
     rep #$20
     pea 3
     pea 4
@@ -132,4 +133,22 @@
     lda table
     plb
     rtl
+}
+
+; An extern proc has no body, so on the 65816 it declares its state rather than take a default
+; nothing checks. A set that says `?` is what a ROM entry usually wants.
+.proc TOOLBOX = $E10000: foreign, far
+
+; A set that carries `noreturn` gives it like any other item, so this routine never returns
+; and needs no exit state of its own.
+.segment CODE0
+.proc bail: trap {
+    jmp bail
+}
+
+; `?` stands for every tracked part unknown, and an item after it takes the place of what it
+; gives for that part. Here A is known to be 8 bits and the rest is not.
+.proc poke: ?, a8 {
+    sta $2100
+    rts
 }

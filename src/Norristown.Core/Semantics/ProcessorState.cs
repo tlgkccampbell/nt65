@@ -13,8 +13,13 @@ namespace Norristown.Semantics;
 public readonly record struct ProcessorState(
     Width A, Width Index, ProcessorMode E, StateValue D = default, StateValue B = default)
 {
-    /// <summary>What a signature that says nothing declares: <c>a8, i8, native, dp*, dbr*</c>.</summary>
-    public static ProcessorState Default => new(Width.Eight, Width.Eight, ProcessorMode.Native);
+    /// <summary>
+    /// What a signature that says nothing declares: <c>a*, i*, native, dp*, dbr*</c>. The widths
+    /// are unchanged rather than 8 because a known width answers a question the author never
+    /// asked: a body that depends on one must say which, and one that does not is callable
+    /// whatever the caller's widths are.
+    /// </summary>
+    public static ProcessorState Default => new(Width.Unchanged, Width.Unchanged, ProcessorMode.Native);
 
     /// <summary>Nothing known about any part.</summary>
     public static ProcessorState Unknown => new(

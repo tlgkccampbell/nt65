@@ -182,7 +182,12 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   and one the CPU lacks is an error there. But a name that is not a mnemonic of the
   program's CPU may be declared, so a 6502 program may call something `per` or `REP`, and
   `ident :` is always a label. Changing a program's CPU can therefore make an existing name
-  reserved, and adding a CPU to the language reserves new words for its programs.
+  reserved, and adding a CPU to the language reserves new words for its programs. **nt65 warns**
+  where a declared name is a mnemonic of a CPU this program is not built for, because a library
+  reached by a glob above the project root belongs to every project that takes it (§5.3): the
+  name that builds here fails in the program built for the CPU that has it, and finding that out
+  then costs a rename across a library. The name is still declared. ca65's alternative 65816
+  spellings are not warned about, since they are reserved in no nt65 program at all.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` and
   `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
   a CPU is named (§5.1) and mean nothing anywhere else.
@@ -287,7 +292,7 @@ configuration, like a define.
 .data tmp: .byte
 
 .segment CODE
-.proc main {
+.proc main: a8, i8 {
     ...
 }
 ```
@@ -348,7 +353,7 @@ Inside a `.proc`, a segment block changes the segment of its contents, not their
 which is the structured form of the `.pushseg` / `.popseg` idiom:
 
 ```nt65
-.proc draw {
+.proc draw: a8, i8 {
     ldx #0
 @loop:
     lda table,x
@@ -507,7 +512,7 @@ address size (from its value, or from its segment), and for data its size in byt
   modules may each export the same name: the linker sees each under its module's (§12).
 
 ```nt65
-.proc init {
+.proc init: a8, i8 {
     .scope {                ; clear RAM
         ldx #0
     @loop:
@@ -763,18 +768,34 @@ items are:
 
 | item | meaning | default |
 |---|---|---|
-| `a8` `a16` `a?` `a*` | accumulator width | `a8` |
-| `i8` `i16` `i?` `i*` | index width | `i8` |
+| `a8` `a16` `a?` `a*` | accumulator width | `a*` |
+| `i8` `i16` `i?` `i*` | index width | `i*` |
 | `native` `emu` `e?` `e*` | emulation flag | `native` |
 | `near` `far` | entered by `jsr`/`jmp` and left by `rts`, or by `jsl`/`jml` and `rtl` | `near` |
 | `inline n`, `inline .strz` | the routine returns past data written after each call: n bytes, or one `.strz` (§7.4) | none |
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
-| `none`, after `->` only | the routine never returns (below) | none |
+| `noreturn` | the routine never returns (below) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
+| `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
 
-`?` means unknown, for entry points reached from outside nt65.
+**The widths default to `*`.** A proc that writes no width assumes nothing about one: it is
+callable whatever the caller's widths are, and must hand them back as it found them. That is
+what a routine which never touches a width-dependent immediate — a wait loop, zero-page
+bookkeeping, a poll of a hardware register — actually promises, and it is now what such a
+routine says by writing nothing. A body that does depend on a width gets `A's width is not
+known here` and says which it means. The old default of `a8, i8` was a known value, so it
+answered a question the author had not asked: `.proc f { lda #$12 }`, meant as 16-bit, assembled
+silently as an 8-bit immediate, which is the ca65 failure §2 exists to remove. This is also why
+a macro's items default to `*` (§11.5); procs now agree with them.
+
+`?` means unknown, for entry points reached from outside nt65. Written on its own, as an item,
+`?` is every one of those parts unknown at once — `a?, i?, e?, dp?, dbr?` — which is what a
+routine reached from outside nt65 assumes and what an extern proc or an imported routine
+usually declares: `.proc CHROUT = $FFD2: ?, far`. An item after it takes the place of what it
+gives for that part, as a signature set's items are taken over, so `?, a8` is 8-bit A and
+nothing else known.
 `*` means unchanged: the routine assumes nothing about that part of the state and
 returns it as it found it, so a caller keeps what it knew across the call. In the body a
 `*` value counts as unknown wherever a known one is needed, and at every `rts` or `rtl`
@@ -802,15 +823,18 @@ A set's name comes first in its list, and the items after it take the place of t
 for the same part. A set may start from another set, but not reach itself. It is declared
 where a constant may be, is exported and brought in with `.use` like one, and writes nothing.
 After `->`, and in a macro's signature, a set gives only its state: `near`, `far`, `inline`,
-`args` and `interrupt` describe how a routine is called or entered, and are left out there.
-`none` is never in a set. There are no defaults per file or per segment: the built-in
-defaults above stay what a signature that says nothing means.
+`args`, `interrupt` and `noreturn` describe how a routine is called, entered or left, and are
+left out there. There are no defaults per file or per segment: the built-in defaults above stay
+what a signature that says nothing means.
 
-**Routines that never return.** `-> none`, alone after the arrow, says a routine never
-returns: a reset handler, a main loop, a routine that jumps away for good. An `rts` or `rtl`
-in it is an error, a call to it ends the path, so nothing after the call needs `.next ?` and
-a proc that ends with one does not run off its end, and a jump from it checks only the
-target's entry. The last three hold on every CPU.
+**Routines that never return.** `noreturn` says a routine never returns: a reset handler, a
+main loop, a routine that jumps away for good. It is written with `near`, `far` and
+`interrupt`, before the arrow, because it describes how a routine relates to its caller rather
+than what its state becomes, and a routine that never returns declares nothing after `->`. An
+`rts` or `rtl` in it is an error, a call to it ends the path, so nothing after the call needs
+`.next ?` and a proc that ends with one does not run off its end, and a jump from it checks
+only the target's entry. The last three hold on every CPU. An interrupt handler leaves by
+`rti` and never returns to a caller in any case, so `interrupt` does not take it.
 
 **Interrupt handlers.** `interrupt` says the processor enters the routine from anywhere:
 the widths, D and B are unknown at entry, and so is the mode unless `native` or `emu` is
@@ -832,6 +856,14 @@ Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.import _printf: proc(a8, i16)`, §12). On the 65816 anything called must be one of
 these.
 
+**A routine with no body declares its state.** On the 65816 an extern proc at a constant
+address and an imported routine must write at least one item, because the declaration is all
+there is: no body will ever contradict it, so a default there is a guess nothing checks. `?` is
+what to write where nothing is known, which is the usual answer for a ROM or toolbox entry:
+`.proc CHROUT = $FFD2: ?, near`. An extern proc that names another routine and writes nothing
+takes that routine's signature, which is a declaration too. A proc with a body is not held to
+this: its body is checked against whatever it declares, defaults included.
+
 **Transfer functions.** Every instruction has a fixed effect on the state:
 
 | instruction | effect |
@@ -848,11 +880,11 @@ these.
 | `php`, and every other push or pull | moves the analysis stack (below) |
 | `plp` that pulls a P saved by `php` | the widths saved at the `php` |
 | any other `plp` | both widths unknown; E unchanged |
-| `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `-> none` ends the path |
+| `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
 | `jmp f`, `jml f`, or a branch or `.next` edge to f, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
 | `jsr (t,x)` with `.next` naming routines | state must match every entry; becomes the merge of their exits |
-| `rts`, `rtl` | state must match the proc's exit; path ends. An error in a proc that says `-> none` or `interrupt` |
+| `rts`, `rtl` | state must match the proc's exit; path ends. An error in a proc that says `noreturn` or `interrupt` |
 | `rti`, `stp` | path ends, nothing checked |
 | `brk #s`, `cop #s`, `wdm #n`, `wai` | no change |
 | indirect jumps | path ends; targets come from `.next` (§7.4) |
@@ -966,7 +998,7 @@ analysis stack, so a frame reaches them:
   match this proc's, because the target returns to this proc's caller, unless nothing
   returns: this proc never does or is an interrupt handler, or the target never returns;
 - every call to a routine that takes `args n` has n bytes pushed, where that is known;
-- no interrupt handler is called, and no routine that says `-> none` or `interrupt` returns
+- no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
   import). A local subroutine is a separate proc, grouped with its callers in a
@@ -978,6 +1010,55 @@ analysis stack, so a frame reaches them:
 Outside any `.proc` there is no processor state: on the 65816 `rep`, `sep`, `xce`,
 `plp`, `.state`, `.ensure`, `.frame` and any width-dependent immediate are errors, since code that touches processor
 state belongs in a proc, and the checks of §7.5 do not apply.
+
+**Code shared between CPUs.** A library reached by a glob above the project root is part of
+each program that takes it (§5.3), compiled under that program's `.cpu`, so one source has to
+mean something on both. On the 6502 and its CMOS variants the analysis does not run, and a
+signature's items divide in two:
+
+- `a16` and `i16` are an **error**: no code on those CPUs ever runs with a 16-bit register, so
+  the item is false rather than merely idle. The same holds wherever a width is written — a
+  signature, a set, a macro's signature, a `.state`, an `.ensure`.
+- `native`, `emu`, `dp = e` and `dbr = e` are **accepted and inert**. They are about registers
+  the CPU does not have rather than false of the ones it does, so a shared module may carry
+  `dbr = $80` for the 65816's benefit and still build for a 6502. `near` and `far` need no rule
+  of their own: `jsl` and `rtl` do not assemble there, so a far routine gives itself away.
+
+`.state` and `.ensure` are likewise accepted, their names checked, and neither emits anything
+nor checks anything, as the annotations of §7.4 are. That is what makes one routine callable
+from either CPU:
+
+```nt65
+.proc putc: ?, near {
+    .ensure a8, i8          ; `sep` on the 65816; nothing on the 6502
+    sta $d000
+    rts
+}
+```
+
+`sep` means the same in either mode, so an `.ensure` of 8-bit widths holds even where the
+emulation flag is unknown, and a caller in emulation mode is served too.
+
+A signature cannot be varied by CPU in place, because it is part of the `.proc` line and `.if`
+is a line-level block. The **signature set** is what varies instead, which is better style in
+any case and the only form that scales past one routine:
+
+```nt65
+.if .target(65816) {
+    .signature shared = a16, i16, dbr = $7e
+} .else {
+    .signature shared = a8, i8
+}
+
+.proc memcpy: shared {
+    ...
+}
+```
+
+Which declarations exist follows from the configuration alone (§10), so two declarations of one
+name in exclusive branches are one declaration, not a clash. A module shared between CPUs should
+name a set or write its widths, rather than lean on the defaults above, which are only correct
+for it by coincidence.
 
 **Implementation.** Split the body into basic blocks at labels and after transfers of
 control; run a worklist over a lattice of `{unreached, known value, unknown}` per item.
@@ -1725,7 +1806,7 @@ analyze.
     .byte pitch, frames
 }
 
-.proc clear {
+.proc clear: a8, i8 {
     set16!(ptr, SCREEN)
     set16!({buf,x}, $1234)
     rts
@@ -1951,7 +2032,7 @@ condition may test it:
 
 On the 65816 a macro may declare the processor state it expects and leaves, with
 the items of a proc signature other than `near`, `far`, `inline`, `args`, `interrupt` and
-`none` (§7.3), and it may name a signature set, whose state it takes. Unlike a
+`noreturn` (§7.3), and it may name a signature set, whose state it takes. Unlike a
 proc's, a macro's items default to `*`: a macro assumes and changes nothing it does not
 declare.
 
@@ -2048,7 +2129,7 @@ and are never visible any other way:
 .use snd::init as snd_init          ; a name of this module's choosing
 .use very::long::path as p          ; a module, named p::thing
 
-.proc main {
+.proc main: a8, i8 {
     jsr gfx::init                   ; qualified
     jsr snd_init
     lda p::thing
@@ -2126,7 +2207,7 @@ points) are declared explicitly:
 ```
 
 On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
-empty.
+empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
 
 - **ca65 modules** export symbols in the usual way. cc65's runtime library already
   exports its zero-page variables, so `.import sp: zp` needs nothing more. An import keeps
@@ -2696,7 +2777,7 @@ Recorded so the reasoning survives. None is open.
   signature readable where it stands: a routine's signature is its set plus what differs,
   with nothing inherited from where the routine happens to be written. A set is a symbol like
   a constant, so it crosses modules the way constants do.
-- **`-> none` and `interrupt` are items, not conventions.** A routine that never returns used
+- **`noreturn` and `interrupt` are items, not conventions.** A routine that never returns used
   to invent an exit state, and a handler to spell out every unknown item and pick `near` or
   `far`, neither of which it is. Saying what they are lets the analysis check what matters
   for them — no `rts`, no call to a handler — and stop checking what does not.
@@ -2843,7 +2924,8 @@ different ca65. Breaking changes wait for version 2. These are not breaking:
 - a new warning, a better message, and anything the editor does;
 - a new directive, built-in function, project file key or command-line option, because every
   `.word` already lexes as a directive and an unknown key or option is already an error;
-- a new CPU, because its mnemonics are reserved only in programs built for it (§4).
+- a new CPU, because its mnemonics are reserved only in programs built for it (§4). It does
+  widen the warning of §4 for every other program, which a new warning is allowed to do.
 
 Adding an instruction to a CPU nt65 already has reserves its mnemonic in that CPU's programs,
 where it may name a symbol today, so the instruction set of each CPU is part of the language
@@ -2909,8 +2991,8 @@ init        := member-name '=' value
 proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
-state-item  := point-item | keep-item | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'none' | path   ; a path names a signature set, first
+state-item  := point-item | keep-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
+             | 'args' expr | 'interrupt' | 'noreturn' | path  ; a path names a signature set, first
 signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'

@@ -16,13 +16,17 @@ namespace Norristown.Semantics;
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
+    // The parts of the state a bare `?` stands for, each of them unknown.
+    private static readonly StatePart[] trackedParts =
+        [StatePart.A, StatePart.Index, StatePart.E, StatePart.DirectPage, StatePart.DataBank];
+
     // What the signature was read from, and whether as a macro's, so it can be read again once
     // the signature sets it names are resolved and the values of its `dp = e`, `dbr = e` and
     // `args n` items are known.
     private SyntaxNode? syntax;
     private bool forMacro;
 
-    /// <summary>What a routine that writes no signature declares: <c>a8, i8, native, near</c>.</summary>
+    /// <summary>What a routine that writes no signature declares: <c>a*, i*, native, near</c>.</summary>
     public static Signature Default { get; } = new(ProcessorState.Default, ProcessorState.Default, false);
 
     /// <summary>What a macro that writes no signature declares: that it assumes and changes nothing.</summary>
@@ -37,7 +41,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// </summary>
     public bool IsInterrupt { get; init; }
 
-    /// <summary>Whether it never returns, <c>-&gt; none</c>, so a call to it is where a path ends.</summary>
+    /// <summary>Whether it never returns, <c>noreturn</c>, so a call to it is where a path ends.</summary>
     public bool NeverReturns { get; init; }
 
     /// <summary>How many bytes the caller pushes before a call, <c>args n</c>; 0 for a routine that says nothing.</summary>
@@ -45,6 +49,13 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     /// <summary>How the routine is called and left, as the item that says so.</summary>
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
+
+    /// <summary>
+    /// Whether the routine wrote a signature with at least one item in it, rather than taking the
+    /// default or writing an empty <c>proc()</c>. A routine with no body is held to this on the
+    /// 65816, because nothing else says what a caller must hold to.
+    /// </summary>
+    public bool DeclaresState => syntax is not null && StateItem.Read(syntax).Any();
 
     /// <summary>
     /// Whether nothing waits for the routine to return: it never does, or it returns by
@@ -59,7 +70,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var entry = IsInterrupt ? $"interrupt, {ProcessorState.Spell(Entry.E)}" : $"{Entry}, {Distance}";
         if (Arguments > 0)
             entry += $", args {Arguments}";
-        return entry + (NeverReturns ? " -> none" : Exit == Entry || IsInterrupt ? "" : $" -> {Exit}");
+        if (NeverReturns)
+            entry += ", noreturn";
+        return entry + (NeverReturns || IsInterrupt || Exit == Entry ? "" : $" -> {Exit}");
     }
 
     /// <summary>
@@ -74,8 +87,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <summary>
     /// What a macro writes. A macro's items default to <c>*</c>, because a macro assumes and
     /// changes nothing it does not declare, and <c>near</c>, <c>far</c>, <c>inline</c>,
-    /// <c>args</c>, <c>interrupt</c> and <c>none</c> describe how a routine is called, entered
-    /// or left, which a macro is not.
+    /// <c>args</c>, <c>interrupt</c> and <c>noreturn</c> describe how a routine is called,
+    /// entered or left, which a macro is not.
     /// </summary>
     public static Signature ReadMacro(SyntaxNode? syntax) => Read(syntax, forMacro: true, null, null, (_, _) => { });
 
@@ -91,8 +104,6 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return;
         foreach (var item in StateItem.Read(list))
         {
-            if (item.Part == StatePart.None)
-                report(item.Node.Span, "`none` says a routine never returns, and is written after `->` on its own");
             if (item.Part == StatePart.Set && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
                 && Reaches(named, set, setOf, []))
             {
@@ -163,14 +174,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         CheckEmulation(entry, entryState);
         entryState = Pinned(entryState);
 
-        // A routine that never returns has no exit state to give.
-        if (exit.None is not null)
+        // A routine that never returns has no exit state to declare.
+        if (entry.NoReturn is not null)
         {
-            foreach (var other in new[] { exit.A, exit.Index, exit.E, exit.D, exit.B })
-            {
-                if (other is { } given)
-                    report(At(exit, given), $"`{given.Text}`: `-> none` stands alone, because a routine that never returns has no exit state");
-            }
+            if (exitList is not null)
+                report(exitList.Span, "a routine that says `noreturn` never returns, and declares nothing after `->`");
             return Made(entryState, entryState) with { NeverReturns = true };
         }
 
@@ -226,6 +234,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     report(At(entry, given), $"`{given.Text}` describes how a routine is called, and an interrupt "
                         + "handler is entered by the processor, which makes it neither near nor far");
                 }
+            }
+            if (entry.NoReturn is { } never)
+            {
+                report(At(entry, never), $"`{never.Text}`: an interrupt handler leaves by `rti`, "
+                    + "and never returns to a caller in any case");
             }
             if (entry.E is { IsUnchanged: true } kept)
                 report(At(entry, kept), $"`{kept.Text}`: an interrupt handler says which mode it is entered in, or nothing");
@@ -300,7 +313,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
                     // An exit, and a macro, take a set's state and not how a routine is called or entered.
                     if ((isExit || forMacro) && setItem.Part is StatePart.Distance or StatePart.Inline
-                        or StatePart.Arguments or StatePart.Interrupt)
+                        or StatePart.Arguments or StatePart.Interrupt or StatePart.NoReturn)
                     {
                         continue;
                     }
@@ -332,7 +345,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (item.Part == StatePart.Set)
                     items.AddRange(Expand(item, seen));
-                else if (item.Part != StatePart.None)
+                else
                     items.Add(item);
             }
             return items;
@@ -342,6 +355,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         {
             switch (item.Part)
             {
+                case StatePart.AllUnknown:
+                    foreach (var part in trackedParts)
+                        Assign(parts, item with { Part = part }, isExit, fromSet: true);
+                    break;
                 case StatePart.A:
                     parts.A = Once(parts, parts.A, item, fromSet);
                     break;
@@ -358,20 +375,20 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     parts.B = Once(parts, parts.B, item, fromSet);
                     break;
 
+                case StatePart.NoReturn when forMacro:
+                    report(item.Node.Span, "`noreturn` says a routine never returns, and a macro is expanded, "
+                        + "ending where its body does");
+                    break;
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when forMacro:
                     report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and a macro is expanded");
                     break;
-                case StatePart.None when forMacro:
-                    report(item.Node.Span, "`none` says a routine never returns, and a macro is expanded, ending where its body does");
+                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt
+                    or StatePart.NoReturn when isExit:
+                    report(item.Node.Span,
+                        $"`{item.Text}` describes how a routine is called, entered or left, and belongs before `->`");
                     break;
-                case StatePart.None when !isExit && syntax.Kind != SyntaxKind.SignatureDeclaration:
-                    report(item.Node.Span, "`none` says a routine never returns, and belongs after `->`");
-                    break;
-                case StatePart.None:
-                    parts.None = item;
-                    break;
-                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when isExit:
-                    report(item.Node.Span, $"`{item.Text}` describes how a routine is called or entered, and belongs before `->`");
+                case StatePart.NoReturn:
+                    parts.NoReturn = Once(parts, parts.NoReturn, item, fromSet);
                     break;
                 case StatePart.Inline:
                     parts.Inline = Once(parts, parts.Inline, item, fromSet);
@@ -447,7 +464,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? Inline;
         public StateItem? Arguments;
         public StateItem? Interrupt;
-        public StateItem? None;
+        public StateItem? NoReturn;
         public SyntaxNode? SetReference;
 
         // The parts the list writes itself, rather than takes from the set.

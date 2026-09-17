@@ -22,7 +22,7 @@
 .data vector: .addr
 
 .segment CODE
-.proc operands: dp = $2100 {
+.proc operands: a8, i8, dp = $2100 {
 @loop:
     inx                 ; implied
     asl a               ; accumulator (bare "asl" also accepted)
@@ -121,7 +121,7 @@
     rti
 }
 
-.proc restore {
+.proc restore: a8, i8 {
     lda saved_p
     pha
     plp
@@ -131,7 +131,7 @@
     rts
 }
 
-.proc skip {
+.proc skip: a8, i8 {
     lda value
     beq @set_two
     bne @set_one

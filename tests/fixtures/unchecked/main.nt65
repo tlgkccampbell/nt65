@@ -51,7 +51,7 @@
 
 ; A `plp` that restores a status byte saved elsewhere: the analysis stack holds no saved P
 ; for it, so a `.state` says what it holds.
-.proc restore: a8 -> a16 {
+.proc restore: a8, i8 -> a16 {
     lda saved_p
     pha
     plp
@@ -60,7 +60,7 @@
 }
 
 ; The `bit` skip trick.
-.proc set {
+.proc set: a8, i8 {
     beq @set_two
     lda #1
     .byte $2c           ; bit abs: swallows the next instruction
@@ -93,7 +93,7 @@
 }
 
 ; A routine that returns past the data written after each call.
-.proc talk {
+.proc talk: a8, i8 {
     jsr print
     .strz "hello"
     jsr beep
@@ -103,7 +103,7 @@
 
 ; Relative calls: `per` pushes the return address and a branch goes to the routine. With
 ; `phk` before them, the bank is pushed too, and the call is far.
-.proc relative {
+.proc relative: a8, i8 {
     per @back - 1
     brl talk
 @back:
@@ -135,7 +135,7 @@
 }
 
 ; Self-modifying code: the store writes into the operand of the instruction at `@op`.
-.proc patching {
+.proc patching: a8, i8 {
     lda #$60
 @op:
     sta $0400
@@ -154,6 +154,6 @@ into:
     rts
 }
 
-.proc jumper {
+.proc jumper: a8, i8 {
     jmp enter::into
 }

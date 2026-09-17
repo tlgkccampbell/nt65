@@ -7,7 +7,7 @@
 .feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
-.dbg file, "segments.nt65", 614, 0
+.dbg file, "segments.nt65", 661, 0
 
 .exportzp segments__ptr
 .exportzp segments__tmp

@@ -131,7 +131,7 @@ public static class SyntaxFacts
     // The processor-state items, by the suffix that follows the name: a point item stands
     // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
     private static readonly FrozenSet<string> pointStateItems =
-        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt", "none" }
+        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt", "noreturn" }
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =

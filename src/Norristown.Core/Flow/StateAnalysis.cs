@@ -1014,7 +1014,7 @@ public sealed class StateAnalysis
         foreach (var item in StateItem.Read(step.Statement))
         {
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
-                or StatePart.Interrupt or StatePart.None or StatePart.Set)
+                or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set)
             {
                 ReportAt(item.Node, step, $"`{item.Text}` describes a routine rather than a point in it, "
                     + "and belongs in a signature");
@@ -1042,6 +1042,10 @@ public sealed class StateAnalysis
                     break;
                 case StatePart.DataBank:
                     processor = processor with { B = SetValue("B", processor.B, item) };
+                    break;
+                case StatePart.AllUnknown:
+                    processor = new ProcessorState(
+                        Width.Unknown, Width.Unknown, ProcessorMode.Unknown, StateValue.Unknown, StateValue.Unknown);
                     break;
                 default:
                     break;

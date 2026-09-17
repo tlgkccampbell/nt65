@@ -8,7 +8,7 @@
 .data command: .byte
 
 .segment CODE
-.proc dispatch {
+.proc dispatch: a8, i8 {
     lda command
     asl a
     tax

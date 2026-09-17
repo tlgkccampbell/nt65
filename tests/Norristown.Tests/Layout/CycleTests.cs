@@ -193,7 +193,8 @@ public sealed class CycleTests
         var d = page == "unchanged"
             ? StateValue.Unchanged
             : StateValue.Of(Convert.ToInt64(page[1..], 16));
-        var processor = ProcessorState.Default with { D = d };
+        // This is about D, so the widths are given rather than left to the default, which is `a*`.
+        var processor = ProcessorState.Default with { A = Width.Eight, Index = Width.Eight, D = d };
 
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.ToString());
     }
@@ -220,7 +221,7 @@ public sealed class CycleTests
             .segment CODE
             .data far:    .byte 0
 
-            .proc p {
+            .proc p: a8, i8 {
                 lda near
                 lda far,x
                 rts
@@ -253,7 +254,7 @@ public sealed class CycleTests
     [Fact]
     public void ABlockCostsWhatItsStatementsCost()
     {
-        var analysis = Analysis.Program(("main.nt65", ".module main\n.proc p {\n    ldx #0\n    inx\n    rts\n}\n"));
+        var analysis = Analysis.Program(("main.nt65", ".module main\n.proc p: a8, i8 {\n    ldx #0\n    inx\n    rts\n}\n"));
         var block = analysis.Flows.Single().Regions.Single().Blocks.Single();
 
         Assert.Equal("10", block.Cycles?.ToString());

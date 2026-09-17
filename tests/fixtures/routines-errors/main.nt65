@@ -4,17 +4,24 @@
 
 .cpu 65816
 
-.export late, wrong, stop, crowded, early, handler, closed, calls, tail, takes, short, pointed
+.export late, wrong, stop, crowded, late_never, doubly, handler, closed, calls, tail, takes, short, pointed
 .export near_std, far_jump, wrong_mirror, far_near, reads
 
 LIMIT = 3
+
+; A routine with no body declares what calls through it are checked against, and has nothing
+; else to say it.
+.proc TOOLBOX = $E10000         ;! error: `TOOLBOX` declares no processor state, and an extern proc has no body to check one against: say what a caller must hold to, or `?` where nothing is known
+.import blind: proc()           ;! error: `blind` declares no processor state, and an imported routine has no body to check one against: say what a caller must hold to, or `?` where nothing is known
+
+; One that names another routine and writes nothing takes that routine's, which is a declaration.
+.proc also_stop = stop
 
 ; A set is declared once and checked there.
 .signature std = a8, i16, dp = 0
 .signature a8 = i16             ;! error: `a8` is a signature item, and cannot name a signature set
 .signature loop = again         ;! error: `loop` names `again`, which stands for `loop` again: a signature set cannot stand for itself
 .signature again = loop         ;! error: `again` names `loop`, which stands for `again` again: a signature set cannot stand for itself
-.signature never = std, none    ;! error: `none` says a routine never returns, and is written after `->` on its own
 .signature noisy = interrupt, a8 ;! error: `a8`: an interrupt handler is entered from anywhere, and assumes nothing but its mode: `interrupt, native` or `interrupt, emu`
 
 ; A set comes first in its list, and names a set.
@@ -28,16 +35,20 @@ LIMIT = 3
 }
 
 ; A routine that never returns does not return, and has no exit state.
-.proc stop: std -> none {
-    rts                         ;! error: `stop` never returns, as its `-> none` says, and `rts` returns
+.proc stop: std, noreturn {
+    rts                         ;! error: `stop` never returns, as its `noreturn` says, and `rts` returns
 }
 
-.proc crowded: a8 -> none, a16 { ;! error: `a16`: `-> none` stands alone, because a routine that never returns has no exit state
+.proc crowded: a8, noreturn -> a16 { ;! error: a routine that says `noreturn` never returns, and declares nothing after `->`
     stp
 }
 
-.proc early: none {             ;! error: `none` says a routine never returns, and belongs after `->`
+.proc late_never: a8 -> noreturn { ;! error: `noreturn` describes how a routine is called, entered or left, and belongs before `->`
     rts
+}
+
+.proc doubly: interrupt, native, noreturn { ;! error: `noreturn`: an interrupt handler leaves by `rti`, and never returns to a caller in any case
+    rti
 }
 
 ; An interrupt handler leaves by `rti`, declares no exit, and is never called.
@@ -90,12 +101,12 @@ LIMIT = 3
     jml near_std                ;! error: `near_std` is near and in another bank, and would return with `rts` in its own bank to `far_jump`'s caller: only a routine that never returns, or an interrupt handler, enters another bank this way
 }
 
-.proc wrong_mirror: std -> none {
+.proc wrong_mirror: std, noreturn {
     jml ($81 << 16) | .loword(near_std) ;! error: `near_std` is in "CODE0", in bank $80 and mirrored in banks $00-$3f, and this reaches it in bank $81
 }
 
 .segment CODE0
-.proc far_near: std -> none {
+.proc far_near: std, noreturn {
     jml near_std                ;! error: `near_std` is near: a jump to it is `jmp near_std`
 }
 

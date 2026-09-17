@@ -31,7 +31,7 @@ E4 = 64
 }
 
 .segment CODE
-.proc clear {
+.proc clear: a8, i8 {
     set16!(ptr, SCREEN)
     set16!({buf,x}, $1234)
     rts
@@ -51,7 +51,7 @@ E4 = 64
 }
 
 .segment CODE
-.proc pointers {
+.proc pointers: a8, i8 {
     mov16!(ptr, {#SCREEN})
     mov16!(ptr, other_ptr)
     rts
@@ -69,7 +69,7 @@ E4 = 64
     }
 }
 
-.proc saves {
+.proc saves: a8, i8 {
     push!(a, x, y)
     ply
     plx
@@ -81,7 +81,7 @@ E4 = 64
     .byte $2c           ; bit abs: swallows the next two bytes
 }
 
-.proc skip {
+.proc skip: a8, i8 {
     lda value
     beq @set_two
     bne @set_one
@@ -104,7 +104,7 @@ E4 = 64
     bne @loop
 }
 
-.proc loop {
+.proc loop: a8, i8 {
     ldy #0
     times_x!(8) {
         sta (ptr),y
@@ -136,7 +136,7 @@ E4 = 64
 @done:
 }
 
-.proc choose {
+.proc choose: a8, i8 {
     cmp #10
     if!(cs) {
         lda #0
@@ -156,7 +156,7 @@ E4 = 64
     sta dest+1
 }
 
-.proc sum {
+.proc sum: a8, i8 {
     add16!(total, {#1000})
     rts
 }

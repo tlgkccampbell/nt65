@@ -1043,7 +1043,11 @@ public sealed class CodeLayout
     private void Ensure(SyntaxNode directive)
     {
         var state = states?.Before(directive, expansion)?.Processor;
-        var ensured = Ensured.Of(directive, state);
+
+        // On the 6502 and its CMOS variants there is no processor state to set, and no `rep` or
+        // `sep` to set it with, so an `.ensure` is accepted and writes nothing (§7.3). That is
+        // what lets one routine be written for both CPUs.
+        var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
         var cycles = new CycleCount(0);
         foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
             cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state) ?? new CycleCount(3);

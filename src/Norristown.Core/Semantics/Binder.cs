@@ -366,11 +366,48 @@ internal sealed class Binder
 
         var symbol = Declare(name, symbolKind);
         if (symbol is not null && kind == ScopeKind.Proc)
+        {
+            CheckWidthsExist(opener);
             symbol.Signature = ReadSignature(opener);
+        }
         var body = new Scope(kind, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         return body;
+    }
+
+    /// <summary>
+    /// A 16-bit width cannot hold on a CPU whose registers are eight bits, so <c>a16</c> and
+    /// <c>i16</c> are refused there wherever they are written: a signature, a set, a macro's
+    /// signature, a <c>.state</c> or an <c>.ensure</c>. The other items are about registers the
+    /// CPU does not have rather than false of the ones it does, so they are simply inert (§7.3),
+    /// which is what lets one module serve a 6502 program and a 65816 one.
+    /// </summary>
+    private void CheckWidthsExist(SyntaxNode statement)
+    {
+        if (cpu == Cpu.Wdc65816)
+            return;
+        Walk(statement);
+
+        // A signature's items sit under a `proc(...)` or a `: ... -> ...` rather than directly
+        // under the line, so this looks the whole statement over. A state list is left to
+        // StateItem.Read, which has already walked into it.
+        void Walk(SyntaxNode node)
+        {
+            foreach (var item in StateItem.Read(node))
+            {
+                if (item is { Width: Width.Sixteen, Part: StatePart.A or StatePart.Index })
+                {
+                    Report(item.Node.Span, $"`{item.Text}` cannot hold on the {CpuNames.Spell(cpu)}, "
+                        + "whose registers are eight bits");
+                }
+            }
+            foreach (var child in node.ChildNodes)
+            {
+                if (child.Kind != SyntaxKind.StateList)
+                    Walk(child);
+            }
+        }
     }
 
     /// <summary>The signature a proc or an extern proc writes after its name, or the default.</summary>
@@ -461,6 +498,7 @@ internal sealed class Binder
             symbol.Body = body;
         if (symbol is not null && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature) is { } signature)
         {
+            CheckWidthsExist(signature);
             symbol.MacroSignature = Signature.ReadMacro(signature);
             CollectUses(signature);
         }
@@ -771,6 +809,7 @@ internal sealed class Binder
 
     private void BindStatement(SyntaxNode statement)
     {
+        CheckWidthsExist(statement);
         switch (statement.Kind)
         {
             case SyntaxKind.LabeledLine:
@@ -1359,9 +1398,32 @@ internal sealed class Binder
             _ => null,
         };
         if (what is null)
+        {
+            WarnAboutOtherCpusMnemonic(name);
             return true;
+        }
         Report(name.Span, $"`{name.Text}` is {what} and cannot be used as a name");
         return false;
+    }
+
+    /// <summary>
+    /// A mnemonic of a CPU this program is not built for may name a symbol here, and the same
+    /// name in a program built for that CPU cannot (§4). A module reached by a glob above the
+    /// project root belongs to every project that takes it, so the name that builds here fails
+    /// there. Saying so where the name is declared costs nothing; finding out when the module is
+    /// shared costs a rename across a library.
+    /// </summary>
+    private void WarnAboutOtherCpusMnemonic(SyntaxToken name)
+    {
+        if (name.Kind != SyntaxKind.Mnemonic)
+            return;
+        var having = CpuNames.All.Where(other => Instructions.Has(other, name.Text)).Select(CpuNames.Spell).ToList();
+        if (having.Count == 0)
+            return;
+        Warn(name.Span, $"`{name.Text}` is a mnemonic on the "
+            + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1])
+            + ", and cannot name a symbol in a program built for one of those: "
+            + "a module shared with one will not build");
     }
 
     private void ResolveUses(IReadOnlyList<Use> list)
@@ -1943,6 +2005,9 @@ internal sealed class Binder
 
     private void Report(TextSpan span, string message, params RelatedSpan[] related) =>
         diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, related));
+
+    private void Warn(TextSpan span, string message) =>
+        diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Warning, message));
 
     /// <summary>Gives the diagnostic just reported the fix its message names.</summary>
     private void Fixed(DiagnosticFix fix) => diagnostics[^1] = diagnostics[^1] with { Fix = fix };

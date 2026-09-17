@@ -29,7 +29,7 @@ public sealed class PlantedMistakesTests
         ("src/reset.nt65", "    jsr init_ppu", "    jsr nmi\n    jsr init_ppu",
             "`nmi` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back"),
         ("src/reset.nt65", "    cli\n    jmp main::main", "    cli\n    rts",
-            "`reset` never returns, as its `-> none` says, and `rts` returns"),
+            "`reset` never returns, as its `noreturn` says, and `rts` returns"),
         ("src/bank1.nt65", "    phb\n    phk\n    plb\n    rep #$20", "    phb\n    rep #$20",
             "`spawn_points` is in \"BANK1\", which is in bank $81, and B is $80 here"),
         ("src/bank1.nt65", "    lda f:speeds,x\n    rtl", "    lda f:speeds,x\n    rts",

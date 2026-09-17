@@ -11,7 +11,7 @@
 .import zp_scratch: zp, far_table: far
 .import _printf: proc(a8, i16)
 .import tick: proc(-> a8)
-.import reset: proc()
+.import reset: proc(?, noreturn)
 .import VIC_BORDER = $D020
 .import raw
 
@@ -82,7 +82,7 @@ SCREEN_PAGES = 4
 
 ; Procs do not nest, but a `.scope` may hold them.
 .scope gfx {
-    .proc init {
+    .proc init: a8, i8 {
         rts
     }
 }

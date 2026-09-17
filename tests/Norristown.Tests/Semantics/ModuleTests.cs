@@ -319,14 +319,25 @@ public sealed class ModuleTests
         Assert.Contains("jsr gfx__clear\n", main);
     }
 
-    /// <summary>Only the program's CPU reserves its mnemonics, so a 6502 program may name something `per`.</summary>
+    /// <summary>
+    /// Only the program's CPU reserves its mnemonics, so a 6502 program may name something
+    /// `per` — with a warning, because a program built for the CPU that has it cannot, and a
+    /// module shared with one would stop building.
+    /// </summary>
     [Fact]
-    public void AnotherCpusMnemonicIsAName()
+    public void AnotherCpusMnemonicIsANameWithAWarning()
     {
         var program = Analysis.Program(
             ("main.nt65", ".module main\n.cpu 6502\nREP = 1\n.export REP\n.segment ZEROPAGE\n.export .data per: .byte\n"));
 
-        Assert.Empty(program.Problems());
+        Assert.Equal(
+            [
+                "main.nt65:3: `REP` is a mnemonic on the 65816, and cannot name a symbol in a program built "
+                    + "for one of those: a module shared with one will not build",
+                "main.nt65:6: `per` is a mnemonic on the 65816, and cannot name a symbol in a program built "
+                    + "for one of those: a module shared with one will not build",
+            ],
+            program.Problems());
         Assert.Equal(
             ["main.nt65:3: `REP` is a mnemonic of the 65816 and cannot be used as a name"],
             Analysis.Program(("main.nt65", ".module main\n.cpu 65816\nREP = 1\n.export REP\n")).Problems());
