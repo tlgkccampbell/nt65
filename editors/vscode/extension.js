@@ -48,6 +48,18 @@ async function selectConfiguration() {
     .update('configuration', picked === own ? '' : picked, vscode.ConfigurationTarget.Workspace);
 }
 
+// Starts a rename on a name the server had to write and the programmer has to give, such as
+// the routine a few lines were lifted into. The server sends where the name is once its change
+// has been applied, which is the file as the editor now holds it.
+async function renameAt(uri, line, character) {
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
+  const editor = await vscode.window.showTextDocument(document, { preserveFocus: false });
+  const position = new vscode.Position(line, character);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position));
+  await vscode.commands.executeCommand('editor.action.rename', [document.uri, position]);
+}
+
 async function activate(context) {
   // The active configuration goes to the server when it starts, and again whenever the `nt65`
   // settings change. Every file change is sent: a project file, a source no one has open, or a
@@ -62,7 +74,11 @@ async function activate(context) {
         fileEvents: vscode.workspace.createFileSystemWatcher('**/*'),
       },
     });
-  context.subscriptions.push(vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration));
+  // `nt65.rename` is the server's to run and nobody's to type, so it is registered without
+  // being contributed: the command palette has nothing to offer for it.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
+    vscode.commands.registerCommand('nt65.rename', renameAt));
   statusItem(context);
   await client.start();
 }

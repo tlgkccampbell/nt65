@@ -42,20 +42,41 @@ internal static class ExtractProc
         if (!IsSelfContained(model, tree, lines, first, last))
             yield break;
 
-        var name = Edits.UnusedName(model, "extracted");
+        var name = Edits.UnusedName(model, Called(tree, first) ?? "extracted");
         var indent = Edits.IndentOf(tree, block.LineIndex);
         var body = Edits.BodyIndent(tree, block.LineIndex);
-        var written = string.Join("\n", lines.Select(line => Reindented(tree, line, body)));
+        var written = string.Join("\n", lines.Select(line => Written(tree, line)));
         var signature = Signature(analysis, model, lines, last);
         var declaration = $"\n{indent}.proc {name}{signature} {{\n{written}\n{body}rts\n{indent}}}\n";
 
+        // The call stands where the lines did, indented as they were — unless they started
+        // with a label at the margin, which is no indent for an instruction to take.
+        var call = Edits.IndentOf(tree, first) is { Length: > 0 } own ? own : body;
+        var declared = Edits.InsertAfter(tree, Edits.BlockEnd(tree, block.LineIndex), declaration.TrimEnd('\n'));
         var edits = new List<Edit>
         {
-            Edits.RemoveLines(tree, first, last) with { Text = $"{Edits.IndentOf(tree, first)}jsr {name}\n" },
-            Edits.InsertAfter(tree, Edits.BlockEnd(tree, block.LineIndex), declaration.TrimEnd('\n')),
+            Edits.RemoveLines(tree, first, last) with { Text = $"{call}jsr {name}\n" },
+            declared,
         };
-        yield return new Change($"Extract into a `.proc`", CodeActionKinds.Extract, edits);
+
+        // What the routine is called is the programmer's to say, so the editor is asked to
+        // start a rename on the name it was given to be going on with.
+        var at = declared.Text.IndexOf($".proc {name}", StringComparison.Ordinal) + ".proc ".Length;
+        yield return new Change("Extract into a `.proc`", CodeActionKinds.Extract, edits,
+            Names: new Change.Placeholder(declared, at));
     }
+
+    /// <summary>
+    /// What to call the routine before the programmer says: the label the selection starts
+    /// with, which is the one word about these lines that the file already has, and null where
+    /// it starts with none.
+    /// </summary>
+    private static string? Called(SyntaxTree tree, int first) =>
+        StatementOn(tree, first) is { Kind: SyntaxKind.LabeledLine } labelled
+            && labelled.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.Label } label
+            && label.ChildTokens is [var name, ..]
+            ? name.Text.TrimStart('@')
+            : null;
 
     /// <summary>
     /// The lines of the selection, where every one of them is code a call can stand for: an
@@ -147,12 +168,12 @@ internal static class ExtractProc
             : $": {items}";
     }
 
-    /// <summary>A line written at <paramref name="indent"/>, keeping how much deeper than its own it was.</summary>
-    private static string Reindented(SyntaxTree tree, int line, string indent)
-    {
-        var code = tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd('\r', '\n');
-        return code.Trim().Length == 0 ? "" : indent + code.TrimStart();
-    }
+    /// <summary>
+    /// A line as it was written. The new routine stands where the old one does, so its body is
+    /// indented the way that one's was, and a label at the margin stays at the margin.
+    /// </summary>
+    private static string Written(SyntaxTree tree, int line) =>
+        tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();
 
     /// <summary>The instruction statements of the selected lines, in order.</summary>
     private static IEnumerable<SyntaxNode> Statements(SyntaxTree tree, IReadOnlyList<int> lines)

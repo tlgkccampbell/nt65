@@ -162,6 +162,32 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
+    /// <summary>
+    /// The new routine is named after the label the selection starts with, which is the one
+    /// word the file already has about those lines, and the client is asked to rename it: the
+    /// position is where the name lands once the change has been applied.
+    /// </summary>
+    [Fact]
+    public void AnExtractedRoutineIsNamedAfterItsLabelAndOfferedForRenaming()
+    {
+        const string Main = ".module main\n.segment CODE\n.proc main {\n@wait:\n    lda $d012\n    cmp #100\n    rts\n}\n";
+
+        var action = Single(Main, new Range(new Position(3, 0), new Position(6, 0)), "Extract into a `.proc`");
+
+        var written = Editing.Apply(Main, action.Edit.Changes[Uri]);
+        Assert.Equal(
+            ".module main\n.segment CODE\n.proc main {\n    jsr wait\n    rts\n}\n"
+                + "\n.proc wait {\n@wait:\n    lda $d012\n    cmp #100\n    rts\n}\n",
+            written);
+
+        Assert.NotNull(action.Command);
+        Assert.Equal("nt65.rename", action.Command.Name);
+        var line = (int)action.Command.Arguments![1];
+        var character = (int)action.Command.Arguments[2];
+        Assert.Equal(Uri, action.Command.Arguments[0]);
+        Assert.Equal("wait {", written.Split('\n')[line][character..]);
+    }
+
     /// <summary>A selection that leaves its routine part way through is no routine of its own.</summary>
     [Fact]
     public void ASelectionThatReturnsIsNotExtracted()

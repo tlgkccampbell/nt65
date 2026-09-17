@@ -2583,8 +2583,9 @@ alone and without an assembler:
   only changes the widths written as the `.ensure` that says what it is for and back, a
   number given a name, a label given a name of its own or made cheap, a declaration a routine
   owns put in a segment block, selected instructions lifted into a routine of their own with
-  a call left where they were and the state they were written under declared, and ca65 in a
-  selection read as nt65 as far as one line at a time can say it;
+  a call left where they were, the state they were written under declared and the label they
+  start with as the name to be going on with, and ca65 in a selection read as nt65 as far as
+  one line at a time can say it;
 - run incrementally: editing one file re-parses one file; only resolution is global.
 
 **Projects in the editor.** Every `nt65.json` in the folders the editor opened, and in the
@@ -2944,9 +2945,14 @@ Recorded so the reasoning survives. None is open.
   what is written at the caret has a way of being written that the analysis can work out, such
   as a path brought in with a `.use` or the routine a few lines would make. Those are offered
   only where they would change something, and each is worked out from the analysis, so that a
-  rewrite means what the lines meant. A rewrite that would need a name nt65 cannot know, such
-  as the linker name an `as` gives, is not among them: the editor has no way to ask, and a
-  placeholder in a file's interface is worse than writing the line.
+  rewrite means what the lines meant. Where a rewrite has to write a name, it writes one and
+  asks the editor to rename it: a routine lifted out of another is called after the label the
+  selection starts with, or `extracted` where it starts with none, and the change carries a
+  command that puts the caret on that name and starts a rename, which is what every other
+  language's extraction does. The name is the routine's own, so a placeholder there costs a
+  keystroke; a name that would go into the file's interface, such as the linker name an `as`
+  gives, is not written at all, because a placeholder another program links against is worse
+  than writing the line by hand.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.

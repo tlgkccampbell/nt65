@@ -409,7 +409,7 @@ Selecting code offers rewrites nothing reported:
 | a number in an operand | a name for it at the top of the file |
 | a label | a name of its own for a `@cheap` one, or `@cheap` for a name only its routine writes |
 | a `.data` in a routine | it moved into a `.segment NAME { }` block |
-| a few lines of a routine | a `.proc` of their own, a `jsr` where they were, and the state they ran under declared |
+| a few lines of a routine | a `.proc` of their own, a `jsr` where they were, and the state they ran under declared; it is named after the label the lines start with, and the editor opens a rename on the name so you can type your own |
 | pasted ca65 | as much of it as one line at a time can be read as nt65 |
 
 A name brought in and never written is faded, as a declaration nothing names is, and both offer

@@ -48,6 +48,34 @@ internal static class CodeActions
             change.Kind,
             change.For is { } diagnostic ? [Lsp.ToDiagnostic(diagnostic)] : [],
             new Protocol.WorkspaceEdit(edits),
-            change.Preferred);
+            change.Preferred,
+            Renaming(change));
+    }
+
+    /// <summary>
+    /// The command that starts a rename on the name a change had to write, or null for a change
+    /// that wrote none. The position is in the file as the change leaves it, which is the file
+    /// the client is looking at by the time it runs the command.
+    /// </summary>
+    private static Protocol.Command? Renaming(Change change)
+    {
+        if (change.Names is not { } placeholder)
+            return null;
+        var tree = placeholder.In.Tree;
+        var edits = change.Edits.Where(edit => edit.Tree == tree).ToList();
+
+        // Where the name lands: where its own edit writes, moved by what the edits before it
+        // add or take away, and then along to the name itself.
+        var at = placeholder.In.Span.Start + placeholder.At;
+        foreach (var edit in edits.Where(edit => edit.Span.Start < placeholder.In.Span.Start))
+            at += edit.Text.Length - edit.Span.Length;
+
+        var text = tree.Text;
+        foreach (var edit in edits.OrderByDescending(edit => edit.Span.Start))
+            text = text[..edit.Span.Start] + edit.Text + text[edit.Span.End..];
+
+        var line = text[..at].Count(c => c == '\n');
+        var character = at - (text[..at].LastIndexOf('\n') + 1);
+        return new Protocol.Command("Rename", "nt65.rename", [Lsp.ToUri(tree.Path), line, character]);
     }
 }
