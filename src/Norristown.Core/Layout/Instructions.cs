@@ -12,6 +12,10 @@ public static class Instructions
 {
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> mos6502 = Build6502();
 
+    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> cmos65SC02 = Build65SC02();
+
+    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> rockwell65C02 = BuildRockwell();
+
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65C02 = Build65C02();
 
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65816 = Build65816();
@@ -19,12 +23,21 @@ public static class Instructions
     /// <summary>Whether <paramref name="cpu"/> has <paramref name="mnemonic"/> at all.</summary>
     public static bool Has(Cpu cpu, string mnemonic) => Modes(cpu, mnemonic).Count > 0;
 
+    /// <summary>
+    /// Whether a program built for <paramref name="cpu"/> may write <paramref name="mnemonic"/>:
+    /// the CPU's own instructions, and the long branches, which nt65 writes on every CPU.
+    /// </summary>
+    public static bool Writable(Cpu cpu, string mnemonic) =>
+        Has(cpu, mnemonic) || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic);
+
     /// <summary>The modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, empty if it has none.</summary>
     public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, string mnemonic)
     {
         var table = cpu switch
         {
             Cpu.Mos6502 => mos6502,
+            Cpu.Cmos65SC02 => cmos65SC02,
+            Cpu.Rockwell65C02 => rockwell65C02,
             Cpu.Wdc65C02 => wdc65C02,
             _ => wdc65816,
         };
@@ -149,21 +162,25 @@ public static class Instructions
         return Freeze(table);
     }
 
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65C02()
+    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65SC02()
     {
-        var table = mos6502.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value),
-            StringComparer.Ordinal);
+        var table = Copy(mos6502);
         Add(table, "adc and cmp eor lda ora sbc sta", AddressingMode.DirectIndirect);
         Add(table, "bit", AddressingMode.Immediate, AddressingMode.DirectX, AddressingMode.AbsoluteX);
         Add(table, "inc dec", AddressingMode.Accumulator);
         Add(table, "jmp", AddressingMode.AbsoluteIndirectX);
         Add(table, "bra", AddressingMode.Relative);
-        Add(table, "phx phy plx ply stp wai", AddressingMode.Implied);
+        Add(table, "phx phy plx ply", AddressingMode.Implied);
         Add(table, "stz",
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX);
         Add(table, "trb tsb", AddressingMode.Direct, AddressingMode.Absolute);
+        return Freeze(table);
+    }
 
-        // The Rockwell bit instructions, which the 65816 does not have.
+    /// <summary>The Rockwell bit instructions, which the 65SC02 and the 65816 do not have.</summary>
+    private static FrozenDictionary<string, FrozenSet<AddressingMode>> BuildRockwell()
+    {
+        var table = Copy(cmos65SC02);
         for (var bit = 0; bit < 8; bit++)
         {
             Add(table, $"rmb{bit} smb{bit}", AddressingMode.Direct);
@@ -172,12 +189,19 @@ public static class Instructions
         return Freeze(table);
     }
 
+    /// <summary>WDC's 65C02 adds <c>wai</c> and <c>stp</c> to Rockwell's.</summary>
+    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65C02()
+    {
+        var table = Copy(rockwell65C02);
+        Add(table, "stp wai", AddressingMode.Implied);
+        return Freeze(table);
+    }
+
     private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65816()
     {
         // The Rockwell bit instructions are the one part of the 65C02 the 65816 left out.
-        var table = wdc65C02
-            .Where(pair => !(pair.Key.Length == 4 && pair.Key[..3] is "bbr" or "bbs" or "rmb" or "smb"))
-            .ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value), StringComparer.Ordinal);
+        var table = Copy(wdc65C02
+            .Where(pair => !(pair.Key.Length == 4 && pair.Key[..3] is "bbr" or "bbs" or "rmb" or "smb")));
         Add(table, "adc and cmp eor lda ora sbc sta",
             AddressingMode.Long, AddressingMode.LongX, AddressingMode.DirectIndirectLong,
             AddressingMode.DirectIndirectLongY, AddressingMode.StackRelative, AddressingMode.StackRelativeIndirectY);
@@ -194,6 +218,10 @@ public static class Instructions
         Add(table, "phb phd phk plb pld rtl tcd tcs tdc tsc txy tyx xba xce", AddressingMode.Implied);
         return Freeze(table);
     }
+
+    private static Dictionary<string, HashSet<AddressingMode>> Copy(
+        IEnumerable<KeyValuePair<string, FrozenSet<AddressingMode>>> table) =>
+        table.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value), StringComparer.Ordinal);
 
     private static void Add(Dictionary<string, HashSet<AddressingMode>> table, string mnemonics,
         params ReadOnlySpan<AddressingMode> modes)

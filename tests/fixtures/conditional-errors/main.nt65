@@ -4,7 +4,7 @@
 
 SIZE = 4
 
-.if SIZE > 2 {                  ;! error: `SIZE` is not a define. A condition tests the build configuration, and a check on the program is an `.assert`
+.if SIZE > 2 {                  ;! error: `SIZE` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
 NOPE = 1
 }
 
@@ -29,8 +29,8 @@ NOPE = 3
 } .else {                       ;! error: `.else` continues an `.if`, and there is none to continue
 }
 
-    .assert SIZE == 8, error, "SIZE must be 8"      ;! error: SIZE must be 8
-    .assert SIZE == 8, warning, "SIZE is usually 8" ;! warning: SIZE is usually 8
+    .assert SIZE == 8, "SIZE must be 8"      ;! error: SIZE must be 8
+    .assert SIZE == 8, error, "SIZE must be 8"  ;! error: SIZE must be 8 ;! error: `error` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 can and otherwise at link time, so `.assert` takes only the condition and the message
 
 .if 0 {
     .error "this branch is not taken, so nothing is said"

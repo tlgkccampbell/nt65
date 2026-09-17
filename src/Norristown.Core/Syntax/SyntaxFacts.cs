@@ -59,16 +59,21 @@ public static class SyntaxFacts
         [".use"] = SyntaxKind.UseDirective,
         [".byte"] = SyntaxKind.DataDirective,
         [".word"] = SyntaxKind.DataDirective,
+        [".long"] = SyntaxKind.DataDirective,
         [".dword"] = SyntaxKind.DataDirective,
+        [".beword"] = SyntaxKind.DataDirective,
+        [".belong"] = SyntaxKind.DataDirective,
+        [".bedword"] = SyntaxKind.DataDirective,
         [".addr"] = SyntaxKind.DataDirective,
         [".faraddr"] = SyntaxKind.DataDirective,
         [".res"] = SyntaxKind.DataDirective,
-        [".asciiz"] = SyntaxKind.DataDirective,
+        [".strz"] = SyntaxKind.DataDirective,
         [".type"] = SyntaxKind.DataDirective,
         [".align"] = SyntaxKind.DataDirective,
         [".incbin"] = SyntaxKind.DataDirective,
         [".lobytes"] = SyntaxKind.DataDirective,
         [".hibytes"] = SyntaxKind.DataDirective,
+        [".bankbytes"] = SyntaxKind.DataDirective,
         [".enum"] = SyntaxKind.EnumDeclaration,
         [".struct"] = SyntaxKind.StructDeclaration,
         [".union"] = SyntaxKind.UnionDeclaration,
@@ -76,6 +81,7 @@ public static class SyntaxFacts
         [".list"] = SyntaxKind.ListDeclaration,
         [".func"] = SyntaxKind.FuncDeclaration,
         [".signature"] = SyntaxKind.SignatureDeclaration,
+        [".config"] = SyntaxKind.ConfigDeclaration,
         [".if"] = SyntaxKind.IfDirective,
         [".elseif"] = SyntaxKind.ElseIfDirective,
         [".else"] = SyntaxKind.ElseDirective,
@@ -83,6 +89,7 @@ public static class SyntaxFacts
         [".each"] = SyntaxKind.EachDirective,
         [".assert"] = SyntaxKind.AssertDirective,
         [".error"] = SyntaxKind.ErrorDirective,
+        [".warning"] = SyntaxKind.ErrorDirective,
         [".macro"] = SyntaxKind.MacroDeclaration,
         [".next"] = SyntaxKind.NextDirective,
         [".patch"] = SyntaxKind.PatchDirective,
@@ -92,14 +99,19 @@ public static class SyntaxFacts
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // The element types a data declaration or a struct member is an array of, by the size of
-    // one element. `.type T` is the other, whose size is its type's.
+    // one element. `.type T` is the other, whose size is its type's. Every width has a
+    // big-endian partner, so nobody wonders which widths have one.
     private static readonly FrozenDictionary<string, int> elementTypes = new Dictionary<string, int>
     {
         [".byte"] = 1,
         [".word"] = 2,
         [".addr"] = 2,
+        [".long"] = 3,
         [".faraddr"] = 3,
         [".dword"] = 4,
+        [".beword"] = 2,
+        [".belong"] = 3,
+        [".bedword"] = 4,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The built-in functions, and the three a macro body adds.</summary>
@@ -107,7 +119,7 @@ public static class SyntaxFacts
     {
         ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
         ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
-        ".defined", ".mode", ".byteof", ".empty",
+        ".defined", ".has", ".select", ".mode", ".byteof", ".empty",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // The processor-state items, by the suffix that follows the name: a point item stands
@@ -158,7 +170,9 @@ public static class SyntaxFacts
 
     /// <summary>
     /// The size of one element of <paramref name="directive"/>, when it is an element type:
-    /// <c>.byte</c>, <c>.word</c>, <c>.addr</c>, <c>.faraddr</c> or <c>.dword</c>.
+    /// <c>.byte</c>, <c>.word</c>, <c>.long</c>, <c>.dword</c>, their big-endian partners
+    /// <c>.beword</c>, <c>.belong</c> and <c>.bedword</c>, and the addresses <c>.addr</c> and
+    /// <c>.faraddr</c>.
     /// </summary>
     public static int? ElementSize(string directive) =>
         elementTypes.TryGetValue(directive, out var size) ? size : null;
@@ -167,8 +181,8 @@ public static class SyntaxFacts
     public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);
 
     /// <summary>
-    /// Whether <paramref name="text"/> is a level an <c>.assert</c> may report at. The two
-    /// <c>ld</c> levels are the linker's, for a check nothing earlier can make.
+    /// Whether <paramref name="text"/> is a level a ca65 <c>.assert</c> reports at, which an nt65
+    /// one does not take: nt65 decides when a check can be made.
     /// </summary>
     public static bool IsAssertLevel(string text) =>
         text.Equals("warning", StringComparison.OrdinalIgnoreCase)
@@ -176,9 +190,8 @@ public static class SyntaxFacts
         || text.Equals("ldwarning", StringComparison.OrdinalIgnoreCase)
         || text.Equals("lderror", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Whether <paramref name="text"/> is one of the three CPU names.</summary>
-    public static bool IsCpuName(string text) =>
-        text is "6502" or "65816" || text.Equals("65c02", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Whether <paramref name="text"/> is one of the CPU names.</summary>
+    public static bool IsCpuName(string text) => Project.CpuNames.Parse(text) is not null;
 
     /// <summary>Whether <paramref name="text"/> is an address size: <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
     public static bool IsAddressSize(string text) =>

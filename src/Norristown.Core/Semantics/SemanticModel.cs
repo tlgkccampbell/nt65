@@ -49,7 +49,7 @@ public sealed class SemanticModel
             .Where(reference => !reference.IsDeclaration && !reference.InUse)
             .Select(reference => reference.Symbol)
             .Concat(expanded)
-            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine
+            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine && !symbol.IsConfig
                 && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))
             .Distinct()];
     }

@@ -74,7 +74,7 @@ public sealed class LayoutTests
     [InlineData(".addr ptr", 2)]
     [InlineData(".faraddr ptr", 3)]
     [InlineData(".dword $12345678", 4)]
-    [InlineData(".asciiz \"hello\"", 6)]
+    [InlineData(".strz \"hello\"", 6)]
     [InlineData(".res 16", 16)]
     [InlineData(".res 16, $ff", 16)]
     [InlineData(".res SIXTEEN", 16)]
@@ -87,8 +87,8 @@ public sealed class LayoutTests
     }
 
     [Theory]
-    [InlineData("stz ptr", "`stz` is a 65C02 instruction, and this program is built for the 6502")]
-    [InlineData("jml (ptr)", "`jml` is not available on the 6502")]
+    [InlineData("stz ptr", "`stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816")]
+    [InlineData("jml (ptr)", "`jml` is not available on the 6502, and is on the 65816")]
     [InlineData("lda (ptr)", "`lda` does not take this operand on the 6502")]
     [InlineData("lda 3,s", "`lda` does not take this operand on the 6502")]
     [InlineData("stx ptr,x", "`stx` does not take this operand on the 6502")]
@@ -118,6 +118,28 @@ public sealed class LayoutTests
 
         Assert.Empty(layout.Diagnostics);
         Assert.Equal(mode, layout.Of(statement)?.Mode);
+    }
+
+    /// <summary>
+    /// The CMOS variants differ only in whole instructions: the 65SC02 has neither the Rockwell
+    /// bit instructions nor <c>wai</c> and <c>stp</c>, the R65C02 adds the bit instructions,
+    /// the WDC 65C02 has both, and the 65816 keeps <c>wai</c> and drops the bit instructions.
+    /// </summary>
+    [Theory]
+    [InlineData(Cpu.Cmos65SC02, "phx", true)]
+    [InlineData(Cpu.Cmos65SC02, "smb1 ptr", false)]
+    [InlineData(Cpu.Cmos65SC02, "wai", false)]
+    [InlineData(Cpu.Rockwell65C02, "smb1 ptr", true)]
+    [InlineData(Cpu.Rockwell65C02, "stp", false)]
+    [InlineData(Cpu.Wdc65C02, "smb1 ptr", true)]
+    [InlineData(Cpu.Wdc65C02, "wai", true)]
+    [InlineData(Cpu.Wdc65816, "wai", true)]
+    [InlineData(Cpu.Wdc65816, "smb1 ptr", false)]
+    public void EachCmosVariantHasExactlyItsOwnInstructions(Cpu cpu, string instruction, bool has)
+    {
+        var (layout, _) = Layout(instruction, cpu);
+
+        Assert.Equal(has, layout.Diagnostics.Count == 0);
     }
 
     /// <summary>A far target is an error on a CPU whose control transfers are all near.</summary>

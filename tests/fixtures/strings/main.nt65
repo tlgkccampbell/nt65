@@ -1,0 +1,32 @@
+; A string constant is usable wherever a string literal is: data, `.strz`, a charmap applied
+; to it, `.strlen` and `.strat`, a `.type` member and a macro argument.
+.module main
+.use text::{TITLE, screen}
+
+PROMPT = "PRESS START"
+
+.struct Entry {
+name:   .res 8
+score:  .word
+}
+
+.macro label(words) {
+    .strz words
+}
+
+.segment RODATA
+.data title:        .byte TITLE, 0
+.data title_screen: .strz screen(TITLE)
+.data prompt:       .strz PROMPT
+.data first:        .byte .strat(PROMPT, 0), .strlen(PROMPT)
+.data best:         .type Entry { name = TITLE, score = 100 }
+.data labels {
+    label!(PROMPT)
+    label!("GO")
+}
+
+.segment CODE
+.proc length {
+    lda #.strlen(TITLE)
+    rts
+}

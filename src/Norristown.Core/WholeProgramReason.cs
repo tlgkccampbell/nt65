@@ -20,6 +20,12 @@ public enum WholeProgramReason
     /// <summary>The changed file declares a segment, before or after the edit.</summary>
     SegmentsDeclared,
 
+    /// <summary>
+    /// The changed file writes a <c>.config</c>, before or after the edit, which any file's
+    /// conditions may read.
+    /// </summary>
+    SettingsDeclared,
+
     /// <summary>The program's CPU changed.</summary>
     CpuChanged,
 

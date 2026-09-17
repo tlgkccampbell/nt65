@@ -44,7 +44,7 @@ E4     = 64
 
 ; Text given to a parameter is written as bytes, and what the body writes after it follows it.
 .macro message(text) {
-    .asciiz text
+    .strz text
 }
 
 ; A `list` of words, walked with `.each`. A condition in a body may compare them.

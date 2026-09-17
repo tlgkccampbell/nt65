@@ -54,6 +54,11 @@ internal sealed class Evaluator
     private readonly Configuration? configuration;
     private Symbol? owner;
 
+    // How deep evaluation is inside values `.select` chose, whose names have to mean something,
+    // and whether a function body is being read with nothing given, when no choice is known.
+    private int choosing;
+    private bool readingBody;
+
     private Evaluator(
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
@@ -158,14 +163,7 @@ internal sealed class Evaluator
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.ChildTokens[^1].Text == scope.Name)
                 Report(name, $"`{scope.Name}` is a scope, which has no address: a routine or data inside it does");
         }
-
-        // A constant holding text has no spelling in the output: text is written where it is
-        // a literal, and a constant's is used through `.strlen` and `.strat`.
-        if (Evaluate(operand).IsString && operand.Kind != SyntaxKind.StringExpression)
-        {
-            Report(operand, $"`{operand.GetText().Trim()}` is text, which is written out only as a literal: "
-                + "a text constant is used through `.strlen` and `.strat`");
-        }
+        Evaluate(operand);
     }
 
     private static bool InsideCall(SyntaxNode node, SyntaxNode top)
@@ -305,7 +303,10 @@ internal sealed class Evaluator
             // anything calls them.
             case SymbolKind.Func when symbol.Items.Count > 0 && diagnostics is not null:
                 evaluating.Add(symbol);
+                var outer = readingBody;
+                readingBody = true;
                 Evaluate(symbol.Items[0]);
+                readingBody = outer;
                 evaluating.RemoveAt(evaluating.Count - 1);
                 return;
             case SymbolKind.Constant when symbol.FollowsPrevious:
@@ -455,7 +456,13 @@ internal sealed class Evaluator
         if (BoundItem(name) is { } item)
             return Evaluate(item);
         if (SymbolOf(name) is not { } symbol)
+        {
+            // Binding left a name in a value `.select` chooses between to whichever evaluation
+            // chooses it.
+            if (choosing > 0 && name.ChildTokens is [{ Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone])
+                Report(alone, $"`{alone.Text}` is not declared");
             return Value.Unknown;
+        }
         if (arguments.TryGetValue(symbol, out var argument))
             return argument;
         return symbol.Kind == SymbolKind.Member ? OffsetAlong(name) : ValueOfSymbol(symbol);
@@ -577,6 +584,9 @@ internal sealed class Evaluator
         var name = call.ChildTokens[0].Text.ToLowerInvariant();
         var arguments = given;
 
+        if (name == ".select")
+            return Select(call, arguments);
+
         // What a macro body adds asks about an argument rather than about a value, so each
         // reads the binding rather than evaluating what is written.
         if (name is ".mode" or ".empty")
@@ -652,6 +662,14 @@ internal sealed class Evaluator
                 : Value.Unknown;
         }
 
+        // A condition in an expansion asks about the CPU as the build's conditions do.
+        if (configuration is not null
+            && Configuration.AboutTheCpu(name, call.ChildTokens[0], arguments, configuration.Cpu,
+                (_, message) => Report(call.ChildTokens[0], message)) is { } answer)
+        {
+            return answer;
+        }
+
         var values = arguments.Select(Evaluate).ToArray();
         return name switch
         {
@@ -668,11 +686,58 @@ internal sealed class Evaluator
                 ? Value.Of(t[(int)at.Number])
                 : Value.Unknown,
 
-            // `.target`, `.defined` and the three a macro body adds are answered before this
-            // point, each by the pass that knows what they ask about.
+            // `.target`, `.has`, `.defined` and the three a macro body adds are answered before
+            // this point, each by the pass that knows what they ask about.
             _ => Value.Unknown,
         };
     }
+
+    /// <summary>
+    /// <c>.select(c, a, b)</c>: <c>a</c> when the constant <c>c</c> holds, and <c>b</c> when it
+    /// does not. Only the chosen value is evaluated.
+    /// </summary>
+    private Value Select(SyntaxNode call, IReadOnlyList<SyntaxNode> arguments)
+    {
+        if (arguments.Count != 3)
+        {
+            Report(call.ChildTokens[0], "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
+            return Value.Unknown;
+        }
+        var condition = Evaluate(arguments[0]);
+        if (condition.AsNumber() is not { } holds)
+        {
+            // A function's body is read once with nothing given, when its parameters decide
+            // nothing yet; both values are read then, for the cycles either might close.
+            if (readingBody)
+            {
+                Evaluate(arguments[1]);
+                Evaluate(arguments[2]);
+            }
+            else if (condition.IsString)
+            {
+                Report(arguments[0], "a `.select` condition is a number, and this is text");
+            }
+            else
+            {
+                Report(arguments[0], "a `.select` condition is a constant, and this is not one");
+            }
+            return Value.Unknown;
+        }
+        choosing++;
+        var chosen = Evaluate(arguments[holds != 0 ? 1 : 2]);
+        choosing--;
+        return chosen;
+    }
+
+    /// <summary>
+    /// The value a <c>.select</c> call chooses, or null when <paramref name="node"/> is no
+    /// <c>.select</c> or its condition is no constant.
+    /// </summary>
+    private SyntaxNode? ChosenBy(SyntaxNode node) =>
+        SelectArguments(node) is [var condition, var ifHolds, var otherwise]
+            && Evaluate(condition).AsNumber() is { } holds
+            ? holds != 0 ? ifHolds : otherwise
+            : null;
 
     /// <summary>
     /// Whether a symbol has bytes of its own in the output, which is what an end and a span
@@ -821,6 +886,12 @@ internal sealed class Evaluator
                 widest = Widest(widest, SegmentSize(segment));
                 return;
             }
+            if (SelectArguments(node) is not null)
+            {
+                if (ChosenBy(node) is { } chosen)
+                    Walk(chosen);
+                return;
+            }
             if (node.Kind == SyntaxKind.NameExpression)
             {
                 // A member reached through an instance, `pos::y`, is a place in the instance,
@@ -844,6 +915,8 @@ internal sealed class Evaluator
             return true;
         if (node.Kind == SyntaxKind.NameExpression)
             return SymbolOf(node) is { IsAddress: true };
+        if (SelectArguments(node) is not null)
+            return ChosenBy(node) is { } chosen && NamesAnAddress(chosen);
         foreach (var child in node.ChildNodes)
         {
             if (NamesAnAddress(child))
@@ -851,6 +924,15 @@ internal sealed class Evaluator
         }
         return false;
     }
+
+    /// <summary>
+    /// The arguments of a <c>.select</c> call, or null when <paramref name="node"/> is not one.
+    /// </summary>
+    internal static IReadOnlyList<SyntaxNode>? SelectArguments(SyntaxNode node) =>
+        node is { Kind: SyntaxKind.CallExpression, ChildTokens: [{ Kind: SyntaxKind.Directive } function, ..] }
+            && function.Text.Equals(".select", StringComparison.OrdinalIgnoreCase)
+            ? node.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? []
+            : null;
 
     /// <summary>
     /// How much room a data directive takes: the bytes it generates, and how many elements
@@ -877,10 +959,11 @@ internal sealed class Evaluator
         {
             case ".lobytes":
             case ".hibytes":
+            case ".bankbytes":
                 return Spread(operands, width: 1);
 
-            // `.asciiz` is the text and the zero byte that ends it.
-            case ".asciiz":
+            // `.strz` is the text and the zero byte that ends it.
+            case ".strz":
                 return Spread(operands, width: 1) is { } text
                     ? new DataSize(text.Bytes + 1, text.Elements + 1)
                     : null;
@@ -1176,6 +1259,11 @@ internal sealed class Evaluator
         // A macro parameter given text is that text, as many bytes as it has.
         if (operand.Kind == SyntaxKind.NameExpression && BoundItem(operand) is { } item)
             return BytesIn(item);
+
+        // A string constant is its text wherever it is named, as a literal would be.
+        if (operand.Kind == SyntaxKind.NameExpression && SymbolOf(operand) is { Kind: SymbolKind.Constant }
+            && Evaluate(operand) is { Kind: ValueKind.String, Text: { } named })
+            return [.. named.Select(c => (long)c)];
 
         if (operand.Kind is SyntaxKind.StringExpression or SyntaxKind.CharacterExpression)
         {

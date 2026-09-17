@@ -13,7 +13,7 @@ SCREEN = $0400
 .data wide:       .dword $12345678
 .data here:       .addr table
 .data there:      .faraddr table
-.data greeting:   .asciiz "hello"
+.data greeting:   .strz "hello"
 .data padding:    .byte[16] {
     .repeat 16 {
         $ff

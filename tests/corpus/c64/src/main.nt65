@@ -25,7 +25,7 @@
     state_game_over
 }
 
-.assert .countof(state_handlers) == State::game_over + 1, error, "one handler per state"
+.assert .countof(state_handlers) == State::game_over + 1, "one handler per state"
 
 .segment RODATA
 .data handler_lo: .lobytes state_handlers
@@ -90,7 +90,7 @@
     ldy #11
     jsr set_cursor
     jsr print_at
-    .asciiz screen("PRESS FIRE TO START")
+    .strz screen("PRESS FIRE TO START")
     jsr player_update
     if!(cs) {
         lda #0
@@ -167,7 +167,7 @@
     ldy #15
     jsr set_cursor
     jsr print_at
-    .asciiz screen("GAME OVER")
+    .strz screen("GAME OVER")
     jsr player_update
     if!(cs) {
         jsr clear_screen

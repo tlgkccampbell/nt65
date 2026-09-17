@@ -12,7 +12,7 @@ namespace Norristown.Flow;
 /// Assembly's tricks are all allowed, and each has a syntactic fingerprint. Where the
 /// operand does not say where flow goes — an indirect jump, a computed target — the edge
 /// comes from a <c>.next</c> instead, and where there is none the path simply ends. On the
-/// 6502 and the 65C02 nothing consumes processor state, so no annotation is required.
+/// 6502 and its CMOS variants nothing consumes processor state, so no annotation is required.
 /// </para>
 /// </summary>
 public sealed class ControlFlow
@@ -67,6 +67,8 @@ public sealed class ControlFlow
         // hides some has to say what it hides.
         if (layout.Cpu == Project.Cpu.Wdc65816)
             Requirements.Check(model, layout, flow, diagnostics);
+        else
+            Requirements.CheckEnds(model, layout, flow, diagnostics);
 
         flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
         return flow;
@@ -523,7 +525,7 @@ public sealed class ControlFlow
 
     /// <summary>
     /// The data after each call to a routine that returns past it, which has to be what the
-    /// routine's <c>inline</c> item says: <c>n</c> bytes of data, or one <c>.asciiz</c>. This
+    /// routine's <c>inline</c> item says: <c>n</c> bytes of data, or one <c>.strz</c>. This
     /// holds on every CPU, because the call returns past it whatever the processor.
     /// </summary>
     private HashSet<Unit> CheckInlineData(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
@@ -536,19 +538,19 @@ public sealed class ControlFlow
             var call = units[i].Step.Statement;
             var name = routine.DisplayName;
 
-            if (inline.IsAsciiz)
+            if (inline.IsStrz)
             {
                 if (i + 1 < units.Count && units[i + 1].Step.Label is null
                     && units[i + 1].Step.Stream == units[i].Step.Stream
                     && units[i + 1].Step.Statement is { Kind: SyntaxKind.DataDirective } text
                     && text.ChildTokens.Length > 0
-                    && text.ChildTokens[0].Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
+                    && text.ChildTokens[0].Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
                 {
                     skipped.Add(units[i + 1]);
                 }
                 else
                 {
-                    Report(call, $"`{name}` returns past one `.asciiz` written after each call, and none follows this one");
+                    Report(call, $"`{name}` returns past one `.strz` written after each call, and none follows this one");
                 }
                 continue;
             }

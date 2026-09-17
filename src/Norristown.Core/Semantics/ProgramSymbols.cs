@@ -112,7 +112,8 @@ public sealed class ProgramSymbols
     internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
         or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
         or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
-        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine;
+        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine
+        && !symbol.IsConfig && !symbol.Value.IsString;
 
     /// <summary>The module named <paramref name="name"/>, or null when no file is.</summary>
     public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);

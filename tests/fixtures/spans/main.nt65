@@ -36,8 +36,8 @@
     rts
 }
 
-.assert .spanof(reloc) == 7, error, "reloc is seven bytes"
-.assert .spanof(table) == 4, error, "the table is four bytes"
+.assert .spanof(reloc) == 7, "reloc is seven bytes"
+.assert .spanof(table) == 4, "the table is four bytes"
 
 .segment BSS
 .data source: .byte

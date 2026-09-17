@@ -731,6 +731,19 @@ internal sealed class Binder
                 CollectUses(items);
                 break;
 
+            // A setting is a constant whose value the build decided before anything was declared.
+            // One written anywhere but at file level has been reported, and declares nothing.
+            case SyntaxKind.ConfigDeclaration:
+                var setting = statement.ChildNodes.FirstOrDefault();
+                if (NameToken(statement) is { } configured && Configuration.AtFileLevel(statement)
+                    && Declare(configured, SymbolKind.Constant) is { } config)
+                {
+                    config.IsConfig = true;
+                    config.Value = configuration.SettingOf(tree, configured.Text) is { } given ? Value.Of(given) : Value.Unknown;
+                }
+                CollectUses(setting, uses, words: true);
+                break;
+
             case SyntaxKind.ConstantDeclaration:
                 // A constant or an address alias: which one depends on the expression, so the
                 // kind is settled once the names in it resolve.
@@ -1131,7 +1144,7 @@ internal sealed class Binder
     /// <summary>Records every name written inside <paramref name="node"/>, to resolve once the file is read.</summary>
     private void CollectUses(SyntaxNode? node) => CollectUses(node, uses);
 
-    private void CollectUses(SyntaxNode? node, List<Use> into, bool words = false)
+    private void CollectUses(SyntaxNode? node, List<Use> into, bool words = false, bool chosen = false)
     {
         if (node is null)
             return;
@@ -1139,6 +1152,16 @@ internal sealed class Binder
         // anything: one that is not declared is what the question is for.
         if (IsDefinedCall(node))
             return;
+
+        // `.select` evaluates only the value its condition chooses, and only that one's names
+        // have to mean something, which evaluation says.
+        if (Evaluator.SelectArguments(node) is { Count: > 0 } selected)
+        {
+            CollectUses(selected[0], into, words, chosen);
+            foreach (var value in selected.Skip(1))
+                CollectUses(value, into, words, chosen: true);
+            return;
+        }
         if (node.Kind == SyntaxKind.NameExpression)
         {
             // A leading `::` starts the path at file scope, which the first name sees by
@@ -1154,7 +1177,7 @@ internal sealed class Binder
                 else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                     or SyntaxKind.Register or SyntaxKind.Mnemonic)
                 {
-                    into.Add(new Use(token, scope, path, first, Last: false, Word: words));
+                    into.Add(new Use(token, scope, path, first, Last: false, Word: words, Chosen: chosen));
                     path = true;
                     first = false;
                 }
@@ -1167,7 +1190,7 @@ internal sealed class Binder
             return;
         }
         foreach (var child in node.ChildNodes)
-            CollectUses(child, into, words);
+            CollectUses(child, into, words, chosen);
     }
 
     private Symbol? Declare(
@@ -1269,7 +1292,7 @@ internal sealed class Binder
         var broken = false;
         foreach (var use in list)
         {
-            var (token, at, _, first, last, splice, _) = use;
+            var (token, at, _, first, last, splice, _, _) = use;
             if (first)
             {
                 previous = null;
@@ -1282,7 +1305,11 @@ internal sealed class Binder
                 continue;
             }
 
+            // A name in a value `.select` may leave out means something only if it is chosen.
+            var reported = diagnostics.Count;
             previous = Resolve(use, previous);
+            if (use.Chosen)
+                diagnostics.RemoveRange(reported, diagnostics.Count - reported);
             if (previous is not { IsReported: false } place)
             {
                 broken = true;
@@ -1343,7 +1370,7 @@ internal sealed class Binder
     /// </summary>
     private Place? Resolve(Use use, Place? previous)
     {
-        var (token, at, path, _, last, _, word) = use;
+        var (token, at, path, _, last, _, word, _) = use;
         if (token.Kind == SyntaxKind.CheapLocal)
         {
             if (path)
@@ -1831,9 +1858,13 @@ internal sealed class Binder
     /// <param name="Last">Whether it is the last part, and so the symbol the whole name stands for.</param>
     /// <param name="Splice">Whether the name stands alone on a line, and so splices a block.</param>
     /// <param name="Word">Whether it is written where a bare word may stand, and so may be one.</param>
+    /// <param name="Chosen">
+    /// Whether it is in a value a <c>.select</c> chooses between, so that what is wrong with it
+    /// matters only if the value is chosen.
+    /// </param>
     private readonly record struct Use(
         SyntaxToken Token, Scope Scope, bool Path, bool First, bool Last,
-        bool Splice = false, bool Word = false);
+        bool Splice = false, bool Word = false, bool Chosen = false);
 
     /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
     /// <param name="Call">The call.</param>

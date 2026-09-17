@@ -9,4 +9,11 @@ namespace Norristown.Project;
 /// <param name="Name">The name the source writes.</param>
 /// <param name="Value">What it is worth.</param>
 /// <param name="Declaration">Where it was given: the project file, or the command line.</param>
-public sealed record Define(string Name, long Value, Span Declaration);
+public sealed record Define(string Name, long Value, Span Declaration)
+{
+    /// <summary>
+    /// Whether this sets a <c>.config</c> a module exports, written with the module's path as in
+    /// <c>hw::SOUND_CHANNELS</c>, rather than defining a name of its own.
+    /// </summary>
+    public bool IsSetting => Name.Contains("::", StringComparison.Ordinal);
+}

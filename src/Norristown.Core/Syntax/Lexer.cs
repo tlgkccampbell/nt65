@@ -78,7 +78,7 @@ public static class Lexer
         {
             var word = text[pos..SkipWord(text, pos)];
             pos += word.Length;
-            if (word.Equals("65c02", StringComparison.OrdinalIgnoreCase))
+            if (word.Equals("65c02", StringComparison.OrdinalIgnoreCase) || word.Equals("65sc02", StringComparison.OrdinalIgnoreCase))
                 return (SyntaxKind.CpuName, null);
             return (SyntaxKind.NumberLiteral, word.ContainsAnyExceptInRange('0', '9') ? $"invalid decimal number `{word}`" : null);
         }

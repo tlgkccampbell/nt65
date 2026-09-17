@@ -34,7 +34,7 @@ public enum AddressingMode
     /// <summary>Absolute, indexed by Y: <c>lda a:table,y</c>.</summary>
     AbsoluteY,
 
-    /// <summary>Through a direct-page pointer: <c>lda (ptr)</c>, on the 65C02 and up.</summary>
+    /// <summary>Through a direct-page pointer: <c>lda (ptr)</c>, on the CMOS 6502s and up.</summary>
     DirectIndirect,
 
     /// <summary>Indexed indirect: <c>lda (ptr,x)</c>.</summary>
@@ -46,7 +46,7 @@ public enum AddressingMode
     /// <summary>Through an absolute pointer: <c>jmp (vector)</c>.</summary>
     AbsoluteIndirect,
 
-    /// <summary>Through a table of pointers: <c>jmp (vector,x)</c>, on the 65C02 and up.</summary>
+    /// <summary>Through a table of pointers: <c>jmp (vector,x)</c>, on the CMOS 6502s and up.</summary>
     AbsoluteIndirectX,
 
     /// <summary>A branch target, one signed byte away: <c>bne @loop</c>.</summary>

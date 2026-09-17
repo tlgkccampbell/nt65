@@ -14,7 +14,7 @@ BLOB_ADDR = $0300
     rts
 }
 
-.assert .spanof(blob) < 256, error, "blob must fit in one page"
+.assert .spanof(blob) < 256, "blob must fit in one page"
 
 ; void install_blob(void)
 .segment CODE

@@ -47,7 +47,7 @@ public sealed class ProjectFileTests
     /// <summary>A value of the wrong shape is reported where it is written, and the rest is still read.</summary>
     [Theory]
     [InlineData("""{ "cpu": 6502 }""", "`cpu` is a string")]
-    [InlineData("""{ "cpu": "z80" }""", "`z80` is not a processor nt65 knows: 6502, 65c02 or 65816")]
+    [InlineData("""{ "cpu": "z80" }""", "`z80` is not a processor nt65 knows: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     [InlineData("""{ "files": "main.nt65" }""", "`files` is a list of strings")]
     [InlineData("""{ "defines": [] }""", "`defines` is an object")]
     [InlineData("""{ "defines": { "N": true } }""", "`N` is not a number, and a define is a number")]

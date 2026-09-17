@@ -37,8 +37,8 @@ name:   .addr
 }
 .data sprite_count: .byte .countof(sprites)
 
-.data name_hero: .asciiz "HERO"
-.data name_boss: .asciiz "BOSS"
+.data name_hero: .strz "HERO"
+.data name_boss: .strz "BOSS"
 
 .data message:  .byte apple("HELLO, WORLD"), 0
 

@@ -5,7 +5,7 @@
 
 .cpu 65816
 
-.import print: proc(inline .asciiz)
+.import print: proc(inline .strz)
 .import beep: proc(inline 2)
 .export dispatch, nmi, restore, set, table_jump, relative, far_relative, first, second
 .export patching, enter, jumper
@@ -95,7 +95,7 @@
 ; A routine that returns past the data written after each call.
 .proc talk {
     jsr print
-    .asciiz "hello"
+    .strz "hello"
     jsr beep
     .byte 10, 20
     rts

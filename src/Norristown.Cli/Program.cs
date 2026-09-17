@@ -1,7 +1,7 @@
 using Norristown;
 using Norristown.Project;
 
-const string Usage = "usage: nt65 build [--cpu 6502|65c02|65816] [-D NAME[=value]]... [<file.nt65>...]";
+const string Usage = "usage: nt65 build [--cpu 6502|65sc02|r65c02|65c02|65816] [-D NAME[=value]]... [<file.nt65>...]";
 
 if (args is not ["build", .. var rest])
 {
@@ -25,7 +25,7 @@ for (var i = 0; i < rest.Length; i++)
             i++;
             break;
         case "--cpu":
-            Console.Error.WriteLine("nt65: --cpu takes 6502, 65c02 or 65816");
+            Console.Error.WriteLine("nt65: --cpu takes 6502, 65sc02, r65c02, 65c02 or 65816");
             return 2;
         case "-D" when i + 1 < rest.Length:
             if (ProjectFile.Definition(rest[++i], arguments) is { } define)

@@ -257,6 +257,7 @@ internal sealed class Parser
             SyntaxKind.ListDeclaration => Finish(ParseTypeBlock(SyntaxKind.ListDeclaration, named: true)),
             SyntaxKind.FuncDeclaration => Finish(ParseFunc()),
             SyntaxKind.SignatureDeclaration => Finish(ParseSignatureDeclaration()),
+            SyntaxKind.ConfigDeclaration => Finish(ParseConfig()),
             SyntaxKind.MacroDeclaration => Finish(ParseMacro()),
             SyntaxKind.IfDirective => Finish(ParseIf(SyntaxKind.IfDirective)),
             SyntaxKind.RepeatDirective => Finish(ParseRepetition(SyntaxKind.RepeatDirective)),
@@ -280,6 +281,7 @@ internal sealed class Parser
         ".zeropage" or ".code" or ".bss" or ".rodata" =>
             $"`{directive}` is written `.segment {directive[1..].ToUpperInvariant()}`",
         ".tag" => "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`",
+        ".asciiz" => "`.asciiz` is written `.strz`",
         _ => null,
     };
 
@@ -383,8 +385,9 @@ internal sealed class Parser
             }
             else
             {
-                ReportOnce("expected what the data is: `.byte`, `.word`, `.addr`, `.faraddr`, `.dword`, "
-                    + "`.type T`, or bytes such as `.incbin`");
+                ReportOnce((Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null)
+                    ?? "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
+                        + "`.type T`, or bytes such as `.incbin`");
             }
         }
         else if (Kind == SyntaxKind.OpenBrace)
@@ -565,6 +568,27 @@ internal sealed class Parser
         children.Add(Advance());
         children.Add(ParseStateList());
         return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
+    }
+
+    /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
+    private GreenSyntax ParseConfig()
+    {
+        var children = ImmutableArray.CreateBuilder<GreenNode>();
+        children.Add(Advance());
+        if (Kind != SyntaxKind.Identifier)
+        {
+            Report("expected the setting's name: `.config NAME = value`");
+            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+        }
+        children.Add(Advance());
+        if (Kind != SyntaxKind.Equals)
+        {
+            Report("expected `=` and the setting's value: `.config NAME = value`");
+            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+        }
+        children.Add(Advance());
+        children.Add(ParseExpression());
+        return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
     }
 
     private GreenNode ParseParameterList()
@@ -813,34 +837,39 @@ internal sealed class Parser
         return new GreenSyntax(kind, children.ToImmutable());
     }
 
-    /// <summary><c>.assert expr, level, "message"</c>, whose message may be left out.</summary>
+    /// <summary>
+    /// <c>.assert expr, "message"</c>, whose message may be left out. There is no level: a
+    /// failed assertion is an error, and nt65 decides when it can be checked.
+    /// </summary>
     private GreenSyntax ParseAssert()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         children.Add(ParseExpression());
         if (Kind != SyntaxKind.Comma)
-        {
-            Report("expected `,` and the level to report at");
             return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
-        }
         children.Add(Advance());
+        // ca65's level is reported, and the message after it still read.
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
+        {
+            Report($"`{Current.Text}` is ca65's: an nt65 assertion that fails is always an error, checked as soon as "
+                + "nt65 can and otherwise at link time, so `.assert` takes only the condition and the message");
+            children.Add(Advance());
+            if (Kind != SyntaxKind.Comma)
+                return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
+            children.Add(Advance());
+        }
+        if (Kind == SyntaxKind.StringLiteral)
             children.Add(Advance());
         else
-            Report("expected `warning`, `error`, `ldwarning` or `lderror`");
-        if (Kind == SyntaxKind.Comma)
-        {
-            children.Add(Advance());
-            if (Kind == SyntaxKind.StringLiteral)
-                children.Add(Advance());
-            else
-                Report("expected the message, in quotes");
-        }
+            Report("expected the message, in quotes");
         return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
     }
 
-    /// <summary><c>.error "message"</c>: a configuration this file refuses to be built in.</summary>
+    /// <summary>
+    /// <c>.error "message"</c>, a configuration this file refuses to be built in, or
+    /// <c>.warning "message"</c>, one it builds in and has something to say about.
+    /// </summary>
     private GreenSyntax ParseError()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -864,10 +893,10 @@ internal sealed class Parser
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
-        if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral && SyntaxFacts.IsCpuName(Current.Text))
+        if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier && SyntaxFacts.IsCpuName(Current.Text))
             children.Add(Advance());
         else
-            Report("expected `6502`, `65c02` or `65816`");
+            Report($"expected {Project.CpuNames.Listed}");
         return new GreenSyntax(SyntaxKind.CpuDirective, children.ToImmutable());
     }
 
@@ -1145,6 +1174,7 @@ internal sealed class Parser
         SyntaxKind.ListDeclaration => ParseTypeBlock(SyntaxKind.ListDeclaration, named: true),
         SyntaxKind.FuncDeclaration => ParseFunc(),
         SyntaxKind.SignatureDeclaration => ParseSignatureDeclaration(),
+        SyntaxKind.ConfigDeclaration => ParseConfig(),
         SyntaxKind.MacroDeclaration => ParseMacro(),
         _ => null,
     };
@@ -1316,7 +1346,7 @@ internal sealed class Parser
         }
         children.Add(Advance());
 
-        // Both halves are optional: on the 6502 and 65C02 a routine's signature may be empty.
+        // Both halves are optional: on the 6502 and its CMOS variants a routine's signature may be empty.
         if (Kind is not (SyntaxKind.CloseParen or SyntaxKind.Arrow))
             children.Add(ParseStateList());
         if (Kind == SyntaxKind.Arrow)
@@ -1398,9 +1428,9 @@ internal sealed class Parser
         }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
-            // `inline n` or `inline .asciiz`: how much data follows each call.
+            // `inline n` or `inline .strz`: how much data follows each call.
             if (Kind == SyntaxKind.Directive
-                && Current.Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
+                && Current.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
                 children.Add(Advance());
             else
                 children.Add(ParseExpression());

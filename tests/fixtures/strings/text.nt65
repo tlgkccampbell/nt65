@@ -1,0 +1,12 @@
+; Text shared between modules: a string constant crosses modules by value, and never reaches
+; ca65 as a symbol.
+.module text
+.export TITLE, screen
+
+TITLE = "NT65"
+
+.charmap screen {
+    'A'..'Z' = $01
+    '0'..'9' = $30
+    ' '      = $20
+}

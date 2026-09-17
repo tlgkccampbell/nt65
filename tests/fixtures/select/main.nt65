@@ -1,0 +1,34 @@
+; `.select(c, a, b)` is `a` when the constant `c` holds and `b` when it does not. Only the
+; chosen value is evaluated, so the other may name what this build does not declare.
+.module main
+
+.cpu 6502
+
+.config WIDE = 1
+
+.if .select(WIDE, 1, 0) {
+    ROWS = 25
+}
+
+COLUMNS = .select(WIDE, 80, 40)
+BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
+.func clamp(value) = .select(value > 255, 255, value)
+
+.segment ZEROPAGE
+.data narrow:   .word
+
+.segment BSS
+.data wide:     .word
+
+; An address expression: the chosen address, with its own width.
+BUFFER = .select(WIDE, wide, narrow)
+
+.segment RODATA
+.data sizes:    .byte COLUMNS, ROWS, BORDER, clamp(300), clamp(7)
+
+.segment CODE
+.proc main {
+    lda BUFFER
+    sta .select(WIDE, wide, narrow) + 1
+    rts
+}

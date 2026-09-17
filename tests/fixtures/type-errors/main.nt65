@@ -14,7 +14,7 @@
 .struct Point {
 x:      .word
 y:      .word
-bad:    .asciiz "no"    ;! error: `bad` reserves no room a member may take
+bad:    .strz "no"    ;! error: `bad` reserves no room a member may take
 colors: .word 16        ;! error: `colors` is a member, which reserves room and holds no value: several are `.word[n]`
 }
 

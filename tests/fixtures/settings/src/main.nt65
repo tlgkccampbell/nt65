@@ -1,0 +1,17 @@
+.module main
+.use hw::{CHANNELS as VOICES_USED, LINES}
+
+.segment CODE
+.proc main {
+    .if hw::PAL {
+        lda #50                     ; frames a second
+    } .else {
+        lda #60
+    }
+    ldx #VOICES_USED
+    ldy #<LINES
+    .if VOICES_USED > 1 {
+        nop
+    }
+    rts
+}

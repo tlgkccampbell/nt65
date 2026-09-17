@@ -61,6 +61,22 @@ public static class DataLengths
                 ? list.ChildNodes
                 : DataSyntax.ValuesOf(directive);
 
+    /// <summary>
+    /// What one element of a data directive holds, or null for one that is not an element type.
+    /// A number slot takes a signed or an unsigned value of its width, and is written as the
+    /// two's complement; an address slot takes only an address, which is not negative.
+    /// </summary>
+    public static (long Low, long High)? Holds(string directive) => directive.ToLowerInvariant() switch
+    {
+        ".byte" => (-0x80, 0xff),
+        ".word" or ".beword" => (-0x8000, 0xffff),
+        ".long" or ".belong" => (-0x800000, 0xffffff),
+        ".dword" or ".bedword" => (-0x80000000L, 0xffffffffL),
+        ".addr" => (0, 0xffff),
+        ".faraddr" => (0, 0xffffff),
+        _ => null,
+    };
+
     /// <summary>What the assembler would refuse about a directive's values.</summary>
     private static void Check(
         SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -96,36 +112,38 @@ public static class DataLengths
 
         switch (name)
         {
+            case ".strz":
+                Terminated(directive, operands, model, diagnostics, on);
+                break;
             case ".byte":
-            case ".asciiz":
-                Values(operands, model, diagnostics, (0, 255), on);
+                Values(operands, model, diagnostics, Holds(name), on);
                 foreach (var operand in operands)
                 {
                     if (TooWide(operand, 1, "`.byte` holds 8 bits", model, on) is { } message)
                         Report(operand, model, diagnostics, on, message);
                 }
                 break;
-            case ".word":
-                Values(operands, model, diagnostics, (0, 65535), on);
-                NoFarAddresses(name, operands, model, diagnostics, on);
-                break;
-            case ".dword":
-                Values(operands, model, diagnostics, (-2147483648, 4294967295), on);
-                break;
 
-            // An address is unsigned, and one that does not fit is not the address meant: ca65
-            // would keep the low bits of it without a word.
+            // A far address in a 16-bit slot is not the address meant: ca65 would keep the low
+            // bits of it in an `.addr` without a word.
+            case ".word":
+            case ".beword":
             case ".addr":
-                Values(operands, model, diagnostics, (0, 0xffff), on);
+                Values(operands, model, diagnostics, Holds(name), on);
                 NoFarAddresses(name, operands, model, diagnostics, on);
                 break;
+            case ".long":
+            case ".belong":
             case ".faraddr":
-                Values(operands, model, diagnostics, (0, 0xffffff), on);
+            case ".dword":
+            case ".bedword":
+                Values(operands, model, diagnostics, Holds(name), on);
                 break;
 
             // The byte directives take an address and keep one byte of it, so they limit nothing.
             case ".lobytes":
             case ".hibytes":
+            case ".bankbytes":
                 Values(operands, model, diagnostics, null, on);
                 break;
 
@@ -140,6 +158,46 @@ public static class DataLengths
             default:
                 break;
         }
+    }
+
+    /// <summary>
+    /// <c>.strz</c> writes one text and the zero that ends it, so it takes exactly one text,
+    /// and a zero inside the text would end it early: whatever reads the text, a routine
+    /// declared <c>inline .strz</c> among them, would stop there.
+    /// </summary>
+    private static void Terminated(
+        SyntaxNode directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        Expansion? on)
+    {
+        if (operands.Count != 1 || TextOf(operands[0], model, on) is not { } text)
+        {
+            Report(operands.Count > 0 ? operands[^1] : directive, model, diagnostics, on,
+                "`.strz` takes one text: a string, a string constant, or a charmap applied to one");
+            return;
+        }
+        var operand = operands[0];
+        Values(operands, model, diagnostics, null, on);
+        var at = Bytes(operand, model, on)?.ToList().IndexOf(0) ?? -1;
+        if (at < 0)
+            return;
+        Report(operand, model, diagnostics, on,
+            operand.Kind == SyntaxKind.CallExpression && at < text.Length
+                ? $"`{operand.ChildNodes[0].GetText().Trim()}` maps `{text[at]}` to $00, which would end the text early: `.strz` writes the zero that ends it"
+                : "the text holds `\\x00`, which would end it early: `.strz` writes the zero that ends it");
+    }
+
+    /// <summary>
+    /// The text an operand is: a string or a string constant, or the text a charmap is applied
+    /// to. Null for anything else, a character among them, which is a number.
+    /// </summary>
+    private static string? TextOf(SyntaxNode operand, SemanticModel model, Expansion? on)
+    {
+        if (operand is { Kind: SyntaxKind.CallExpression, ChildNodes: [{ Kind: SyntaxKind.NameExpression } callee, var arguments] }
+            && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap })
+        {
+            return arguments.ChildNodes is [var given] ? TextOf(given, model, on) : null;
+        }
+        return model.ValueOf(operand, on) is { Kind: ValueKind.String, Text: { } text } ? text : null;
     }
 
     /// <summary>
@@ -331,13 +389,7 @@ public static class DataLengths
                 $"`{name}` is one `{element}`, and this text is {bytes.Count} bytes: text takes a member reserved with `.res`");
             return;
         }
-        if (bytes is null && element switch
-        {
-            ".byte" => (-128L, 255L),
-            ".word" => (-32768L, 65535L),
-            ".dword" => (-2147483648L, 4294967295L),
-            _ => ((long, long)?)null,
-        } is { } range)
+        if (bytes is null && Holds(element) is { } range)
         {
             CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{element}`");
         }
@@ -403,7 +455,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, (0, 255), on);
+            CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
 
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
@@ -450,21 +502,11 @@ public static class DataLengths
     {
         if (model.ValueOf(argument, on).AsNumber() is not { } value)
             return;
-        if (value < 0 && limit.Low == 0 && Negative(value, limit.High) is { } negative)
-            Report(argument, model, diagnostics, on, negative);
+        if (value < 0 && limit.Low == 0)
+            Report(argument, model, diagnostics, on, $"{value} is negative, and an address is not");
         else if (value < limit.Low || value > limit.High)
             Report(argument, model, diagnostics, on, $"{Value.Of(value)} does not fit in {slot}");
     }
-
-    /// <summary>
-    /// What to say about a negative value in a slot that holds 0 to <paramref name="high"/>,
-    /// or null when it does not fit even as a two's complement. ca65 refuses a negative
-    /// value in a byte or a word, so the unsigned value is what has to be written.
-    /// </summary>
-    public static string? Negative(long value, long high) =>
-        value >= -(high + 1) / 2
-            ? $"{value} is negative, and ca65 takes no negative value here: its two's complement is {Value.Of(value & high)}"
-            : null;
 
     private static void Report(
         SyntaxNode node, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on, string message) =>

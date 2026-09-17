@@ -3,7 +3,6 @@
 
 .cpu 65816
 
-; A value ca65 takes only unsigned.
 TEXT = "hello"
 
 .segment CODE
@@ -16,17 +15,13 @@ TEXT = "hello"
 
 .segment RODATA
 .data values {
-    .byte -1                ;! error: -1 is negative, and ca65 takes no negative value here: its two's complement is $ff
-    .word -2                ;! error: -2 is negative, and ca65 takes no negative value here: its two's complement is $fffe
-    .res 2, -1              ;! error: -1 is negative, and ca65 takes no negative value here: its two's complement is $ff
-    .byte TEXT              ;! error: `TEXT` is text, which is written out only as a literal: a text constant is used through `.strlen` and `.strat`
+    .byte TEXT
     .byte .strlen(TEXT)
     .addr things            ;! error: `things` is a scope, which has no address: a routine or data inside it does
 }
 
 .segment CODE
 .proc main: a8, i16 {
-    lda #-1                 ;! error: -1 is negative, and ca65 takes no negative value here: its two's complement is $ff
     lda things              ;! error: `things` is a scope, which has no address: a routine or data inside it does
     pei (buffer)            ;! error: `pei` has only a direct-page form of this operand, and `buffer` is absolute
     lda (buffer),y          ;! error: `lda` has only a direct-page form of this operand, and `buffer` is absolute

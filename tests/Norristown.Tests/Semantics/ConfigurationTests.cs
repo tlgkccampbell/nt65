@@ -103,15 +103,55 @@ public sealed class ConfigurationTests
                 txa
                 pha
             }
+                rts
             }
             """));
 
         Assert.Empty(program.Problems());
     }
 
+    /// <summary>
+    /// <c>.has</c> asks whether the CPU has an instruction, whichever CPU it is, and
+    /// <c>.target</c> names one exactly.
+    /// </summary>
+    [Theory]
+    [InlineData(Cpu.Mos6502, ".has(phx)", false)]
+    [InlineData(Cpu.Cmos65SC02, ".has(phx)", true)]
+    [InlineData(Cpu.Cmos65SC02, ".has(rmb0)", false)]
+    [InlineData(Cpu.Rockwell65C02, ".has(rmb0) && !.has(wai)", true)]
+    [InlineData(Cpu.Wdc65816, ".has(wai) && !.has(rmb0)", true)]
+    [InlineData(Cpu.Mos6502, ".has(jeq)", true)]
+    [InlineData(Cpu.Rockwell65C02, ".target(r65c02)", true)]
+    [InlineData(Cpu.Wdc65C02, ".target(65sc02)", false)]
+    public void HasAsksWhetherTheCpuHasAnInstruction(Cpu cpu, string condition, bool holds)
+    {
+        var project = ProjectSettings.None with { Cpu = cpu };
+        var program = Analysis.Program(project, ("main.nt65", $$"""
+            .module main
+            .if {{condition}} {
+            AT_FILE = 1
+            .export AT_FILE
+            }
+            """));
+
+        Assert.Empty(program.Problems());
+        Assert.Equal(holds, program.File("main.nt65").Symbols.Any(symbol => symbol.Name == "AT_FILE"));
+    }
+
+    /// <summary><c>.has</c> takes a mnemonic, and <c>.target</c> a CPU.</summary>
+    [Theory]
+    [InlineData(".if .has(LIMIT) {", "`.has` takes a mnemonic, such as `.has(phx)`")]
+    [InlineData(".if .target(z80) {", "`.target` takes `6502`, `65sc02`, `r65c02`, `65c02` or `65816`")]
+    public void WhatTheCpuQuestionsTakeIsChecked(string opener, string message)
+    {
+        var program = Built(opener + "\nON = 1\n}\n");
+
+        Assert.Equal([$"main.nt65:2: {message}"], program.Problems());
+    }
+
     /// <summary>A condition tests the configuration; a check on the program is an assertion.</summary>
     [Theory]
-    [InlineData(".if SIZE > 2 {", "`SIZE` is not a define. A condition tests the build configuration, "
+    [InlineData(".if SIZE > 2 {", "`SIZE` is not a define or a `.config`. A condition tests the build configuration, "
         + "and a check on the program is an `.assert`")]
     [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program. A condition tests the "
         + "build configuration, and a check on the program is an `.assert`")]

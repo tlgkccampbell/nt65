@@ -7,7 +7,7 @@ something.
 
 ## 1. What nt65 is
 
-nt65 is an assembly language for the 6502, 65C02 and 65816 that **transpiles to ca65**.
+nt65 is an assembly language for the 6502, its CMOS variants and the 65816 that **transpiles to ca65**.
 Every nt65 program becomes an ordinary ca65 source file that assembles with ca65 and
 links with ld65, using whatever linker configuration the project already has.
 nt65 is to ca65 as TypeScript is to JavaScript: a stricter, more analyzable language
@@ -76,6 +76,9 @@ nt65 does not promise:
   declared signature, and checking stops at the boundary;
 - a calling convention: signatures describe processor state only, and cc65's C calling
   convention (the software stack, return values in A/X) is the programmer's job;
+- cc65's start-up registration: nt65 has no `.constructor`, `.destructor` or `.interruptor`,
+  so a routine cc65's runtime runs at start-up is registered by a ca65 stub that calls the
+  nt65 routine;
 - stable generated names across edits: only linker names and the fixed spellings
   `outer__inner` and `f__end` are stable;
 - that a debugger shows scopes: debuggers see flat names such as `draw__loop`.
@@ -175,8 +178,9 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   program's CPU may be declared, so a 6502 program may call something `per` or `REP`, and
   `ident :` is always a label. Changing a program's CPU can therefore make an existing name
   reserved, and adding a CPU to the language reserves new words for its programs.
-- **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` is a
-  CPU name, one token, valid only where a CPU is named (§5.1).
+- **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` and
+  `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
+  a CPU is named (§5.1) and mean nothing anywhere else.
 - **Strings:** `"..."` with fixed escapes `\n \r \t \\ \" \' \xHH`, which character
   literals share. Outside a charmap
   (§8), character and string literals are ASCII: a non-ASCII character is an error, and
@@ -230,7 +234,7 @@ items after a missing `}` are still found.
 
 A program is the set of `.nt65` files handed to the transpiler. Each file is a module, and
 begins by saying which, `.module name` (§12). After that it is a sequence of **items**:
-constants, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
+constants, `.config` settings, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
 `.charmap`, `.list`, `.func`, `.signature`, `.export`, `.import`, `.use`, `.if`, `.repeat` and
 `.each` at item level, unnamed `.res` and `.align` padding, segment declarations, segment regions and
 segment blocks.
@@ -249,10 +253,24 @@ point. A label is only ever a location, and never has a size (§8).
 ```
 
 One CPU per program. It may be given on the command line or by a `.cpu` item; every
-file that states it must agree. The CPU does not affect parsing: all mnemonics and
-addressing modes always lex and parse, and using one the target lacks is a semantic
-diagnostic ("`stz` is not available on the 6502"). Code that differs between CPUs tests
-`.target(65c02)` in an `.if` (§9, §10); the CPU is configuration, like a define.
+file that states it must agree. The CPUs are:
+
+| CPU | instructions | ca65 |
+|---|---|---|
+| `6502` | the NMOS 6502 | `6502` |
+| `65sc02` | the original CMOS set: `phx`, `stz`, `bra`, `(zp)` and the rest, without the bit instructions or `wai` and `stp` | `65SC02` |
+| `r65c02` | Rockwell's: the 65SC02 and the bit instructions `bbr`, `bbs`, `rmb` and `smb` | `65C02` |
+| `65c02` | WDC's: Rockwell's, and `wai` and `stp` | `W65C02` |
+| `65816` | the 65C02 without the bit instructions, and the 65816's own | `65816` |
+
+Each checks exactly its own instructions, and the output sets the matching ca65 CPU (§13).
+The CPU does not affect parsing: all mnemonics and addressing modes always lex and parse,
+and using one the target lacks is a semantic diagnostic that says which CPUs have it
+("`stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816").
+
+Code that differs between CPUs tests what the CPU has, `.if .has(phx)`, which holds on every
+CPU with the instruction; `.target(65c02)` names one CPU exactly (§9, §10). The CPU is
+configuration, like a define.
 
 ### 5.2 Segments
 
@@ -296,8 +314,8 @@ The address size is what nt65 uses to size references to symbols in that segment
 a fold over every file.
 
 `far` needs the 65816. A far address is a bank and an offset, which no earlier processor
-has, and ca65 rejects a far address size outright when its CPU setting is a 6502 or a
-65C02 — for a segment declaration, an `.export` and an `.import` alike. A program built
+has, and ca65 rejects a far address size outright when its CPU setting is a 6502 or one of
+its CMOS variants — for a segment declaration, an `.export` and an `.import` alike. A program built
 for those processors that declares a far segment, or imports a far symbol, is an error
 where it is written rather than output ca65 refuses (§3.2).
 
@@ -367,15 +385,17 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 }
 ```
 
-- `cpu`: `6502`, `65c02` or `65816`. A `.cpu` item in a file must agree.
+- `cpu`: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`. A `.cpu` item in a file must agree.
 - `files`: globs. Order is not significant.
 - `out`: where each `foo.s` goes, mirroring the source tree.
 - `defines`: the build configuration. Each define is a constant visible in every file,
   as if every module had brought it in, and defines are the only symbols an `.if` condition
   may test (§10). `-D NAME=value` on the command line adds a define or overrides one
   given here, and `-D NAME` on its own defines it as 1, for a define a condition only
-  tests. A declaration in a file may not reuse a define's name. There is no way
-  to declare a define in a source file. The output always writes a define as its value,
+  tests. A declaration in a file may not reuse a define's name. A name with a module's
+  path, `"hw::SOUND_CHANNELS": 2` or `-D hw::SOUND_CHANNELS=2`, is no define: it sets the
+  `.config` that module exports (§10), and setting one the module does not export, or one
+  no module declares, is an error. The output always writes a define as its value,
   never by name, so a `-D` given to ca65 cannot collide with it.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
   be declared in a file. Its `mirrors` are written as `ranges` writes banks.
@@ -393,7 +413,8 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 | form | declares |
 |---|---|
 | `name:` | a position in code, inside a proc: an address and nothing else. It may be followed by an instruction, data directive or macro call on the same line, and has no size whatever follows it. |
-| `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. A constant holding text is used through `.strlen` and `.strat`, and cannot be written as data. |
+| `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. A constant may hold text, and is then usable wherever a string literal is (§8). |
+| `.config NAME = expr` | a **setting**: a constant a condition may test, whose value the build may set (§10). |
 | `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
 | `.proc name = expr [: signature]` | an **extern proc**: a routine with a signature and no body, at a constant address (a ROM or toolbox entry, §12) or naming another routine, which is how a routine is aliased. An alias that writes a signature must write the routine's, and one that writes none takes it. |
@@ -618,7 +639,7 @@ An operand that begins with `(` is indirect only when the parentheses hold the w
 operand: `lda (ptr)` and `lda (ptr),y` are indirect, and `lda (hi + lo) * 2` is an
 ordinary expression that happens to start with one, as it is in ca65.
 
-65C02 adds `(zp)`, `(abs,x)`, and the `bbr`/`bbs`/`rmb`/`smb` forms, of which `bbr` and
+The CMOS 6502s add `(zp)` and `(abs,x)`, and the R65C02 and WDC 65C02 the `bbr`/`bbs`/`rmb`/`smb` forms, of which `bbr` and
 `bbs` take two operands, a zero-page address and a branch target: `bbr0 flags, @skip`.
 65816 adds
 `[dp]`, `[dp],y`, `sr,s`, `(sr,s),y`, `[abs]`, long forms, and `mvn #src, #dst` /
@@ -701,7 +722,7 @@ items are:
 | `i8` `i16` `i?` `i*` | index width | `i8` |
 | `native` `emu` `e?` `e*` | emulation flag | `native` |
 | `near` `far` | entered by `jsr`/`jmp` and left by `rts`, or by `jsl`/`jml` and `rtl` | `near` |
-| `inline n`, `inline .asciiz` | the routine returns past data written after each call: n bytes, or one `.asciiz` (§7.4) | none |
+| `inline n`, `inline .strz` | the routine returns past data written after each call: n bytes, or one `.strz` (§7.4) | none |
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `none`, after `->` only | the routine never returns (below) | none |
@@ -752,7 +773,7 @@ written with it, which is all it may be written with. It leaves by `rti`, so it 
 after `->`, and an `rts` or `rtl` in it is an error. It is neither near nor far: a call to it,
 `jsr`, `jsl` or a relative call, is an error, while its address in data, a vector, is what it
 is for. A jump from it checks only the target's entry, and a jump to it is allowed only from
-another interrupt handler or a routine that never returns. On the 6502 and 65C02 it is
+another interrupt handler or a routine that never returns. On the 6502 and its CMOS variants it is
 accepted with the same `rti` and call checks.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
@@ -906,7 +927,7 @@ analysis stack, so a frame reaches them:
   import). A local subroutine is a separate proc, grouped with its callers in a
   `.scope` when a shared namespace helps; procs do not nest (§6.1). A routine with
   several entry points is written as adjacent procs joined by `.next` (§7.4). On the
-  6502 and 65C02, where there is no state to contract, a call may target any address
+  6502 and its CMOS variants, where there is no state to contract, a call may target any address
   expression.
 
 Outside any `.proc` there is no processor state: on the 65816 `rep`, `sep`, `xce`,
@@ -952,7 +973,7 @@ above it:
 }                                   bra fill__a
 ```
 
-On the 6502 and 65C02 the output contains no width directives. nt65's own tests
+On the 6502 and its CMOS variants the output contains no width directives. nt65's own tests
 assemble its output with `ca65 -l` and compare each line's length with the length nt65
 computed (§7.6), which catches any disagreement about widths or addressing modes.
 
@@ -963,9 +984,10 @@ data in the instruction stream, self-modifying code) are all allowed. Each has a
 syntactic fingerprint, so nt65 finds it in one pass and requires an annotation that
 tells the analysis what it cannot see. The annotations are claims: nt65 checks that the
 claims and the code are consistent with each other, which is the same contract as the
-proc's own entry declaration. On the 6502 and 65C02 nothing consumes processor state, so
-the annotations are accepted and their names checked, but none is required; the
-unreachable-label warning applies on every CPU.
+proc's own entry declaration. On the 6502 and its CMOS variants nothing consumes processor
+state, so the annotations are accepted and their names checked, but none is required; the
+unreachable-label warning applies on every CPU, and so does falling off the end of a proc,
+which is a warning there and an error on the 65816.
 
 Two directives carry all of it. Each applies to the statement immediately above it (for
 a macro call, the last statement of its expansion, §11.3) and comes before any following
@@ -989,14 +1011,14 @@ label:
 | indirect jump: `jmp (t,x)`, `jml [t]` | addressing mode | `.next` listing the targets, or `.next ?` |
 | indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines; the call returns with the merge of their exits |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
-| a routine that returns past inline data: `jsr print` then `.asciiz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.asciiz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
+| a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives. Such a label may be a jump target, never a call target |
-| falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment |
+| falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816 |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
@@ -1187,7 +1209,7 @@ is only a namespace.
 | declared as | `.sizeof` | `.countof` |
 |---|---|---|
 | an element type, any form | elements × element size | elements |
-| `.incbin`, `.asciiz`, `.lobytes`, `.hibytes` | bytes | bytes |
+| `.incbin`, `.strz`, `.lobytes`, `.hibytes` | bytes | bytes |
 | `.data name { }`, mixed | bytes | error |
 | `.proc` | bytes in its body, its span | error |
 | a struct or union | bytes, which is an array's stride | members |
@@ -1198,7 +1220,7 @@ is only a namespace.
 ```nt65
     ldx #.spanof(reloc)             ; bytes to copy
 .data header: .word .spanof(module) ; length in a header
-.assert .spanof(irq) <= 64, error, "irq handler too big"
+.assert .spanof(irq) <= 64, "irq handler too big"
 ```
 
 No nt65 constant is derived from code, so no size can depend on itself, and an edit
@@ -1227,7 +1249,7 @@ for its addressing mode and, on the 65816, its widths. Where the count depends o
 something nt65 cannot know, the interval widens: a possible page crossing on an
 indexed or indirect-indexed read adds one to max (on the 65816 with a 16-bit index the
 extra cycle is always paid and the count is exact); a branch costs 2 not taken and 3
-taken, plus 1 when a taken branch crosses a page on the 6502, the 65C02 and in
+taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). Tooling shows the interval per
 instruction and per basic block. There are no cycle-count built-ins for `.assert`: a
@@ -1256,8 +1278,9 @@ changes what a name means.
     { x = 30, y = 40 }
 }
 .data tiles: .incbin "tiles.bin"                 ; bytes
-.data msg: .asciiz "hi"
+.data msg: .strz "hi"
 .data lo: .lobytes handlers
+.data id: .bedword $4e543635                      ; high byte first
 .data basic_stub {                               ; mixed data
     .word @next, 10
     .byte $9e, "2061", 0
@@ -1266,8 +1289,11 @@ changes what a name means.
 }
 ```
 
-The element types are `.byte`, `.word`, `.dword`, `.addr` and `.faraddr`, and `.type T` for
-a struct or union `T`, which is dotted as they are. An element type may take a count: `[n]`,
+The element types are the numbers `.byte`, `.word` (16 bits), `.long` (24) and `.dword` (32),
+their big-endian partners `.beword`, `.belong` and `.bedword`, the addresses `.addr` and
+`.faraddr`, and `.type T` for a struct or union `T`, which is dotted as they are. Every width
+has a big-endian partner, so nobody wonders which widths have one: ca65 has only `.dbyt`,
+which sits confusingly beside `.dword`, a little-endian 32-bit value. An element type may take a count: `[n]`,
 or `[]` for as many elements as its values come to. `.word[16]` is sixteen words and
 `.word 16` one word holding 16, and a value never starts with `[`, so the two cannot be
 confused; a record is `.type T { … }` and an array of records `.type T[] { … }`.
@@ -1300,24 +1326,33 @@ call, the `.byte $2c` skip) or in mixed data:
 ```nt65
     .byte 1, 2, $ff, 'A', "text"
     .word $1234, label
+    .long $123456                   ; 24-bit number
     .dword $12345678
+    .beword $1234                   ; $12 then $34
     .addr label                     ; 16-bit address
     .faraddr label                  ; 24-bit address (65816)
     .res 16                         ; 16 bytes of zero
     .res 16, $ff                    ; 16 bytes of $ff
-    .asciiz "hello"
+    .strz "hello"
     .align 256
     .incbin "sprites.bin"
     .incbin "sprites.bin", 64, 32   ; from offset 64, 32 bytes
     .lobytes first, second, third
     .hibytes first, second, third
+    .bankbytes first, second, third
     .type Player                    ; .sizeof(Player) bytes (§6.3)
     .type Player { hp = 5 }         ; a record with values (§6.3)
     .addr handlers                  ; a list's items (§6.4)
 ```
 
-An address slot holds an address of its width: `.addr` takes 0 to $FFFF and `.faraddr` 0
-to $FFFFFF. A far address in an `.addr` or a `.word` is an error rather than its low 16
+A number slot holds a signed or an unsigned value of its width: a `.byte`, an 8-bit
+immediate and a `.res` fill take -128 to 255, a `.word`, a `.beword` and a 16-bit immediate
+-32768 to 65535, a `.long` and a `.belong` -8388608 to 16777215, and a `.dword` and a
+`.bedword` the 32-bit equivalent. A negative constant is written as its two's complement,
+with the source in a comment, and a value out of range is an nt65 error; a value that is not
+a constant is written as it stands. An address slot holds an address of its width, which is
+never negative: `.addr` takes 0 to $FFFF and `.faraddr` 0 to $FFFFFF. `.long` holds a 24-bit
+number where `.faraddr` holds an address, which is the difference a C header generator tells. A far address in an `.addr` or a `.word` is an error rather than its low 16
 bits, which ca65 would keep in an `.addr` without a word; `.loword(x)` says those are what
 is meant. In the same way an absolute or far address in a `.byte` or a one-byte immediate,
 and a far one in a two-byte immediate, is an error that ca65 would otherwise report as a
@@ -1356,9 +1391,20 @@ error when the mapping is applied. A mapping is an ordinary declaration,
 exported and used across modules like a constant. `.strlen(s)` and `.strat(s, i)` remain
 for the cases a `.repeat` needs.
 
-A value in a `.byte`, a `.word`, a `.res` fill or an immediate is not negative: ca65
-refuses one, so nt65 reports it with its two's complement. `.countof` of an enum is how many
-members it has.
+**Text constants.** `TITLE = "NT65"` is usable wherever a string literal is: in data, in a
+`.strz`, as what a charmap is applied to, in `.strlen` and `.strat`, as a `.type` member's
+value and as a macro argument. It crosses modules by value, like any constant, and never
+reaches ca65 as a symbol. There is no arithmetic or concatenation on text, and a define is
+never text.
+
+**`.strz`** writes one text and the zero that ends it: a string literal, a text constant or a
+charmap applied to one. Numbers and further arguments are errors. A `$00` inside the text is
+an error that names the character, as with `screen("A@B")` when `screen` maps `@` to `$00`:
+the text would end early, and a routine declared `inline .strz` would return into the middle
+of it. The name is the terminator's: DEC's `.ASCIZ`, by way of ca65's `.asciiz`, said "ASCII",
+and nt65's text is ASCII only without a charmap.
+
+`.countof` of an enum is how many members it has.
 
 All character and string data, mapped or not, reaches the output as byte values (§13),
 so a ca65 target (`-t`) cannot translate it.
@@ -1406,10 +1452,23 @@ precedence could, so nothing depends on ca65's table.
 `.endof(x)` and `.spanof(x)` (§7.6), `.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
 `.max(a, b)`, `.addrsize(x)`, the address size in bytes (1, 2 or 3) that §7.2 gives a
 symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
-(`6502`, `65c02` or `65816`), and `.defined(NAME)`, which is true if NAME is a define (§5.3) and false
-otherwise. Naming a symbol the program declares is an error, since
+(§5.1), `.has(mnemonic)`, true when the program's CPU has that instruction,
+`.select(c, a, b)`, and `.defined(NAME)`, which is true if NAME is a define (§5.3) and false
+otherwise. Naming a symbol the program declares in `.defined` is an error, since
 conditions never test the program (§10). Macro bodies add `.mode`, `.byteof` and
 `.empty` (§11).
+
+**`.select(c, a, b)`** is `a` when `c` holds and `b` when it does not. The condition must be
+a constant, and only the chosen value is evaluated and has its names checked, so the other
+may name what this build does not declare. It is usable in constants, conditions, `.func`
+bodies and address expressions, where the output writes the chosen address. There is no
+`?:` operator: `:` already means an address prefix, a signature, and an import's or
+export's size.
+
+```nt65
+COLUMNS = .select(WIDE, 80, 40)
+.func clamp(v) = .select(v > 255, 255, v)
+```
 
 **Functions.** `.func` declares a pure expression function, which is what a function-like
 `.define` is used for in ca65:
@@ -1452,15 +1511,23 @@ symbolically for ca65 and ld65 to resolve.
     }
 }
 
-.assert .sizeof(table) == 32, error, "table must be 32 bytes"
+.assert .sizeof(table) == 32, "table must be 32 bytes"
+.warning "built without sound"
 .error "unsupported configuration"
 ```
+
+`.assert cond, "message"` takes no level. ca65's `error`, `warning`, `lderror` and
+`ldwarning` choose when a check runs, which nt65 decides itself: at edit time when it can,
+and otherwise at link time, which the output writes as ca65's `lderror`. A failed assertion
+is always an error, and the message may be left out. `.error "text"` is a configuration the
+file refuses to be built in, and `.warning "text"` one it builds in and has something to say
+about.
 
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
 their lines are values (§8).
 
 **Conditions test the configuration, not the program.** An `.if` condition may use
-literals, operators, built-in functions and defines (§5.3). Inside a macro body it may
+literals, operators, built-in functions, defines (§5.3) and settings. Inside a macro body it may
 also use the macro's `const` and `one(...)` parameters, `.mode(p)` (§11.2) and
 `.empty(p)` (§11.4), inside a `.repeat` body the repetition index, and inside an
 `.each` body a binding whose value is a constant or a word. It may not otherwise name a constant, label or any other symbol
@@ -1475,6 +1542,27 @@ declares still follows from the configuration. They do read program constants, t
 an argument such as `gen!(MAX_ACTORS)` or a list item, which is why expansion comes after
 constants are evaluated and nothing that decides a constant contains a macro call (§3.1,
 §11.1).
+
+**Settings.** `.config NAME = value` is a define a file declares:
+
+```nt65
+.module hw
+.export .config SOUND_CHANNELS = 3
+.config PAL = 0
+
+.if SOUND_CHANNELS > 2 {
+    ...
+}
+```
+
+A setting is written at file level, outside every block, so that which settings a program has
+depends on no condition, and its value may use only literals, built-ins, defines and other
+settings. Conditions anywhere may test it. It is private to its module and exported like a
+constant, reached as `hw::SOUND_CHANNELS` or brought in with `.use`. The build may set an
+exported one by its qualified name (§5.3), which makes the value in the file a default; a
+setting the module keeps to itself is not part of its configuration, and setting it is an
+error. The output writes a setting as its value, as it writes a define. The spelling is not
+ca65's `.define`, which substitutes text.
 
 In `&&` and `||` the right operand is evaluated, and its names checked, only when the
 left operand does not already decide the result, so `.if .defined(TRACE) && TRACE`
@@ -1803,7 +1891,7 @@ with errors reported at the body line and naming the call, so a caller in the wr
 state gets "`add16!` needs `a8`" at the call rather than an unknown width inside the
 body. A block spliced into a macro with a signature must leave the state as it found it.
 Without a signature, an expansion is analyzed inline as the code it contains. On the
-6502 and 65C02, signatures on macros are accepted and have no effect.
+6502 and its CMOS variants, signatures on macros are accepted and have no effect.
 
 This is the checked replacement for macros that test ca65's `.asize` and `.isize`. A macro
 cannot see the widths at its call, because the widths come from a flow analysis of
@@ -1953,7 +2041,7 @@ points) are declared explicitly:
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
 ```
 
-On the 6502 and 65C02 the signature of a `proc(...)` import or an extern proc may be
+On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
 empty.
 
 - **ca65 modules** export symbols in the usual way. cc65's runtime library already
@@ -1987,8 +2075,9 @@ turns smart mode off, makes symbols case-sensitive, and switches off every ca65
 `.feature` that changes syntax (`addrsize` is deprecated and always on, and resetting
 it would itself warn). Options such as `--feature bracket_as_indirect` (which would
 silently turn `lda [dp],y` into `lda (dp),y`), `--smart`, `-i` and `--cpu` then have no
-effect. A `65c02` program is set as ca65's `W65C02`, whose instruction set includes `wai`
-and `stp`:
+effect. Each CPU is set as the ca65 CPU with exactly its instructions (§5.1): a `65c02`
+program as `W65C02`, whose instruction set includes `wai` and `stp`, an `r65c02` one as
+`65C02` and a `65sc02` one as `65SC02`:
 
 ```ca65
 .setcpu "65816"
@@ -2086,7 +2175,14 @@ macros, and a comment naming the call precedes the expansion.
 | a `.func` call | its body, with each parameter replaced by its parenthesized argument |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |
-| `.asciiz "s"` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
+| `.strz "s"`, `.strz TEXT` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
+| a text constant | its bytes where it is used, and nothing where it is declared |
+| a negative constant in a number slot | its two's complement at the slot's width, with the source in a comment |
+| `.long`, `.beword` | `.faraddr`, `.dbyt` |
+| `.belong`, `.bedword` | `.byte` with the bytes high first: the values of a constant, or `.bankbyte(e)`, `.hibyte(e)`, `.lobyte(e)` |
+| `.select(c, a, b)` | the chosen value |
+| `.assert c, "m"` that nt65 cannot answer | `.assert c, lderror, "m"` |
+| `.config`, `.warning` | nothing; a setting is written as its value where it is used |
 | `.endof(f)`, `.spanof(f)` | `f__end`, `(f__end - f)`, with `f__end:` after the last byte of `f` |
 | `.export s`, `.export .proc s {` | `.export m__s`, `.exportzp m__s`, `.export m__s: far` or `.export m__s: abs`, in module `m`, with nt65's address size or the export's |
 | `.import N = v` | `.import N` and `.assert N = v, lderror, ...`; uses of `N` are emitted as `v` |
@@ -2247,7 +2343,8 @@ every caller depend on every callee's body.
 
 | ca65 feature | reason |
 |---|---|
-| `.define` | textual substitution; constants and `.func` replace it (§9) |
+| `.define` | textual substitution; constants, `.func` and `.config` replace it (§9, §10) |
+| `.constructor`, `.destructor`, `.interruptor` | cc65 start-up registration stays in a ca65 stub that calls the nt65 routine |
 | `.feature`, `.setcpu` mid-file | changes the grammar or mnemonic set |
 | `.set`, `.org` | positional state |
 | `.include`, `.macpack` | textual inclusion; nt65 never reads ca65 source, and shares with ca65 through symbols (§12) |
@@ -2351,8 +2448,29 @@ Recorded so the reasoning survives. None is open.
   that can test program constants (ca65's `.if`, D's `static if`) makes which
   declarations exist depend on evaluating those declarations. Checks on program values
   are `.assert`.
-- **Defines come only from the project file and the command line.** An in-file define
-  was considered and left out; in C# it is mostly a temporary per-file toggle.
+- **In-file defines are `.config` settings.** An in-file define was left out at first; in C#
+  it is mostly a temporary per-file toggle. A library needs somewhere to state its own
+  configuration and its defaults, though, and a program somewhere to change them. A setting
+  is a module's own, exported like a constant, written outside every block so that no
+  condition decides which settings exist, and set by the build through its qualified name.
+  It is spelled `.config` rather than ca65's `.define`, which means textual substitution.
+- **The CMOS variants are CPUs of their own.** The 65SC02, the R65C02 and the WDC 65C02
+  differ in whole instructions, and a program for one is wrong on another in exactly those,
+  so each checks its own set and sets ca65's matching CPU. `.has` asks about an instruction,
+  so code for several CPUs does not list them; `.target` stays exact.
+- **Running off the end of a proc warns off the 65816.** Nothing consumes the state there,
+  but a proc that runs into the next one is still usually a missing `rts`.
+- **Text constants are text wherever a literal is,** and cross modules by value. Nothing in
+  ca65 can hold one, so none reaches it, and without arithmetic or concatenation on text a
+  constant cannot build text a literal could not have written.
+- **Signed data.** A number slot takes a signed or an unsigned value of its width, as the
+  bytes are the same, and the output writes the two's complement ca65 needs; an address is
+  never negative.
+- **`.strz`, not `.asciiz`.** The terminator is what the directive promises, so it checks it:
+  one text, and no zero inside it.
+- **`.assert` takes no level.** When a check can run is nt65's to decide, and a failure is an
+  error whenever it is found.
+- **`.select`, not `?:`.** `:` already means an address prefix, a signature and a size.
 - **Macros do not declare names in their caller.** Otherwise the names a file declares
   would depend on expanding macros, whose conditions test their arguments.
 - **One `.state` directive, with the signature's items.** A signature and an assertion
@@ -2441,9 +2559,15 @@ Recorded so the reasoning survives. None is open.
 file        := module-decl item* (region item*)*
 module-decl := '.module' path
 region      := '.segment' ident NL                    ; at file level only
-item        := const | data-decl | padding | proc | extern-proc | scope | macro
+item        := const | config | data-decl | padding | proc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
+             | warning | error
+config      := '.config' ident '=' expr                ; at file level only
+assert      := '.assert' expr (',' string)?
+warning     := '.warning' string
+error       := '.error' string
+cpu         := '.cpu' ('6502' | '65sc02' | 'r65c02' | '65c02' | '65816')
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
 banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
@@ -2458,9 +2582,11 @@ data        := element count? values?
              | element count? '{' values-list? '}'
              | element count '{' NL value-line* '}'
              | '.type' path '{' NL (init NL)* '}'
-             | directive (expr (',' expr)*)?          ; `.res`, `.align`, `.incbin`, `.asciiz`,
-                                                      ; `.lobytes`, `.hibytes`
-element     := '.byte' | '.word' | '.dword' | '.addr' | '.faraddr' | '.type' path
+             | directive (expr (',' expr)*)?          ; `.res`, `.align`, `.incbin`,
+                                                      ; `.lobytes`, `.hibytes`, `.bankbytes`
+             | '.strz' expr                            ; one text
+element     := '.byte' | '.word' | '.long' | '.dword' | '.beword' | '.belong' | '.bedword'
+             | '.addr' | '.faraddr' | '.type' path
 count       := '[' expr? ']'
 values      := expr (',' expr)*                       ; with no count only
 values-list := value (',' value)*
@@ -2471,7 +2597,7 @@ init        := member-name '=' value
 proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
-state-item  := point-item | keep-item | 'near' | 'far' | 'inline' (expr | '.asciiz')
+state-item  := point-item | keep-item | 'near' | 'far' | 'inline' (expr | '.strz')
              | 'args' expr | 'interrupt' | 'none' | path   ; a path names a signature set, first
 signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
@@ -2528,7 +2654,7 @@ contents    := item*                                  ; at item level
              | body                                   ; inside a proc
              | value-line* | mixed*                   ; in a data body
 export      := '.export' export-item (',' export-item)*
-             | '.export' (const | data-decl | proc | extern-proc | scope | macro | enum
+             | '.export' (const | config | data-decl | proc | extern-proc | scope | macro | enum
                | struct | union | charmap | list | func | signature | import | use)
 export-item := path (':' size)? ('as' string)?
 use         := '.use' path (('::' '*') | ('::' '{' use-item (',' use-item)* '}') | ('as' ident))?

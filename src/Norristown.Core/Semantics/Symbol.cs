@@ -61,6 +61,12 @@ public sealed class Symbol
     /// </summary>
     public bool IsDefine { get; internal set; }
 
+    /// <summary>
+    /// Whether the symbol is a <c>.config</c> setting: a constant whose value the build may set,
+    /// which the output, as with a define, writes as its value rather than by name.
+    /// </summary>
+    public bool IsConfig { get; internal set; }
+
     /// <summary>The segment the declaration sits in, for an address; null for a constant.</summary>
     public string? Segment { get; internal set; }
 

@@ -50,7 +50,7 @@ public sealed class BranchTests
     [Fact]
     public void ATargetAtAnUnknownDistanceIsLong()
     {
-        var written = Written(".proc p {\n    jeq @out\n    .align 256\n@out:\n    rts\n}\n");
+        var written = Written(".proc p {\n    jeq @out\n    rts\n    .align 256\n@out:\n    rts\n}\n");
 
         Assert.Contains("    bne p__over\n    jmp p__out\n", written, StringComparison.Ordinal);
     }
@@ -84,7 +84,7 @@ public sealed class BranchTests
     /// addresses nt65 never does.
     /// </summary>
     [Theory]
-    [InlineData(".proc p {\n    beq @out\n    .align 256\n@out:\n    rts\n}\n")]
+    [InlineData(".proc p {\n    beq @out\n    rts\n    .align 256\n@out:\n    rts\n}\n")]
     [InlineData(".proc p {\n    beq elsewhere\n    rts\n}\n\n.proc elsewhere {\n    rts\n}\n")]
     public void ADistanceNt65DoesNotKnowIsNotReported(string text)
     {

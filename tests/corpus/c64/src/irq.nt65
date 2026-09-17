@@ -17,8 +17,8 @@ SPLITS = 3
 .data split_border: .byte Color::light_blue, Color::red, Color::black
 .data split_bg:     .byte Color::blue, Color::black, Color::dark_grey
 
-.assert .countof(split_line) == SPLITS, error, "split tables out of step"
-.assert .countof(split_border) == SPLITS, error, "split tables out of step"
+.assert .countof(split_line) == SPLITS, "split tables out of step"
+.assert .countof(split_border) == SPLITS, "split tables out of step"
 
 .segment BSS
 .data old_irq: .word

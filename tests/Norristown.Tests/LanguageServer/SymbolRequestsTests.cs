@@ -337,7 +337,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n}\n");
+        await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         // Rename the declaration alone, and the use no longer resolves.

@@ -16,29 +16,34 @@ public sealed class AssertionTests
             x:  .word
             y:  .word
             }
-                .assert .sizeof(Point) == 4, error, "Point must be 4 bytes"
-                .assert .sizeof(Point) == 8, error, "Point must be 8 bytes"
+                .assert .sizeof(Point) == 4, "Point must be 4 bytes"
+                .assert .sizeof(Point) == 8, "Point must be 8 bytes"
             """));
 
         Assert.Equal(["main.nt65:7: Point must be 8 bytes"], program.Problems());
     }
 
-    /// <summary>The level says how much a failure matters, and a warning still compiles.</summary>
+    /// <summary>
+    /// A failed assertion is always an error. ca65's levels choose when a check runs, which
+    /// nt65 decides itself, so writing one says so.
+    /// </summary>
     [Fact]
-    public void TheLevelDecidesTheSeverity()
+    public void AnAssertionTakesNoLevel()
     {
         var program = Analysis.Program(("main.nt65", ".module main\n    .assert 0, warning, \"only a warning\"\n"));
 
-        var diagnostic = Assert.Single(program.Diagnostics);
-        Assert.Equal(Severity.Warning, diagnostic.Severity);
-        Assert.Equal("only a warning", diagnostic.Message);
+        Assert.Equal(
+            ["main.nt65:2: only a warning",
+             "main.nt65:2: `warning` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 "
+                + "can and otherwise at link time, so `.assert` takes only the condition and the message"],
+            program.Problems());
     }
 
     /// <summary>An assertion with no message still says which line failed.</summary>
     [Fact]
     public void AnAssertionWithNoMessageSaysSomething()
     {
-        var program = Analysis.Program(("main.nt65", ".module main\n    .assert 1 == 2, error\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\n    .assert 1 == 2\n"));
 
         Assert.Equal(["main.nt65:2: this assertion does not hold"], program.Problems());
     }
@@ -53,11 +58,11 @@ public sealed class AssertionTests
         var main = Analysis.Outputs(("main.nt65", """
             .module main
             .segment CODE
-                .assert 4 == 4, error, "checked here"
+                .assert 4 == 4, "checked here"
             .proc irq {
                 rts
             }
-                .assert irq >= $8000, lderror, "irq must be in ROM"
+                .assert irq >= $8000, "irq must be in ROM"
             """))["main.s"];
 
         Assert.DoesNotContain("checked here", main);

@@ -53,6 +53,10 @@ public sealed class CodeLayout
     private readonly List<int> streams = [0];
     private int nextStream = 1;
 
+    // The stream each stream's distances are measured in since its last `.align`. Flow runs
+    // across an `.align`, so it ends a run of known distances and not the stream.
+    private readonly Dictionary<int, int> measuredIn = [];
+
     // The segment the walk is placing bytes in, or null before any region or block names one.
     private string? segment;
 
@@ -343,7 +347,7 @@ public sealed class CodeLayout
             && lines.Length > 0 && lines[0].Statement is { } header && NameOf(header) is { } named && measured.Contains(named)
             ? named
             : null;
-        var opened = (Stream, Offset: filled.GetValueOrDefault(Stream));
+        var opened = (Stream: Measured, Offset: filled.GetValueOrDefault(Measured));
         var placing = kind is BlockKind.Segment or BlockKind.Region;
         if (placing && lines.Length > 0 && lines[0].Statement is { } opener)
         {
@@ -369,8 +373,8 @@ public sealed class CodeLayout
         Walk(lines, from: 1);
         if (declaresData)
             inData--;
-        if (spanning is not null && Stream == opened.Stream)
-            extents[spanning] = filled.GetValueOrDefault(Stream) - opened.Offset;
+        if (spanning is not null && Measured == opened.Stream)
+            extents[spanning] = filled.GetValueOrDefault(Measured) - opened.Offset;
         routine = outerRoutine;
         if (placing)
             streams.RemoveAt(streams.Count - 1);
@@ -548,9 +552,11 @@ public sealed class CodeLayout
         var available = Instructions.Modes(cpu, mnemonic.Text);
         if (available.Count == 0)
         {
-            Report(mnemonic, Instructions.Has(Cpu.Wdc65C02, mnemonic.Text)
-                ? $"`{mnemonic.Text}` is a 65C02 instruction, and this program is built for the 6502"
-                : $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}");
+            var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.Text)).Select(CpuNames.Spell).ToList();
+            Report(mnemonic, having.Count == 0
+                ? $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}"
+                : $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}, and is on the "
+                    + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1]));
             return;
         }
 
@@ -858,6 +864,13 @@ public sealed class CodeLayout
         if (Expression(operand) is not { } expression)
             return;
 
+        // Text is what data is written from. An operand is a number or an address.
+        if (model.ValueOf(expression, expansion, SpanOf).IsString)
+        {
+            Report(expression, $"`{expression.GetText().Trim()}` is text, and an operand is a number or an address");
+            return;
+        }
+
         if (mode is AddressingMode.Relative or AddressingMode.RelativeLong or AddressingMode.Absolute
                 or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX or AddressingMode.Long
                 or AddressingMode.AbsoluteIndirectLong
@@ -891,12 +904,11 @@ public sealed class CodeLayout
             }
             return;
         }
-        var high = bits == 16 ? 0xffff : 0xff;
-        if (sizeUnknown && value is >= 0 and <= 0xffff)
+        // An immediate is a byte or a word slot, which takes a signed value as its two's complement.
+        var (low, high) = DataLengths.Holds(bits == 16 ? ".word" : ".byte")!.Value;
+        if (sizeUnknown && value is >= -0x8000 and <= 0xffff)
             return;
-        if (value < 0 && DataLengths.Negative(value, high) is { } negative)
-            Report(expression, negative);
-        else if (value < 0 || value > high)
+        if (value < low || value > high)
         {
             Report(expression, bits == 16
                 ? $"this immediate is two bytes, and {Value.Of(value)} does not fit"
@@ -999,7 +1011,7 @@ public sealed class CodeLayout
             return;
         }
         if (value == 0)
-            Report(directive, assertion.Message ?? "this assertion does not hold", assertion.Level);
+            Report(directive, assertion.Message ?? "this assertion does not hold");
     }
 
     /// <summary>
@@ -1018,10 +1030,16 @@ public sealed class CodeLayout
         steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
     }
 
-    /// <summary>An <c>.error</c> the build reached: a configuration the file refuses to be built in.</summary>
-
-    private void Refuse(SyntaxNode directive) =>
-        Report(directive, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported");
+    /// <summary>
+    /// An <c>.error</c> the build reached, a configuration the file refuses to be built in, or a
+    /// <c>.warning</c>, which is said and built.
+    /// </summary>
+    private void Refuse(SyntaxNode directive)
+    {
+        var warns = directive.ChildTokens[0].Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
+        Report(directive, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported",
+            warns ? Severity.Warning : Severity.Error);
+    }
 
     private void Data(SyntaxNode directive)
     {
@@ -1050,6 +1068,9 @@ public sealed class CodeLayout
     /// <summary>The stream the walk is writing into.</summary>
     private int Stream => streams[^1];
 
+    /// <summary>The run of the stream the walk is writing into whose distances are known.</summary>
+    private int Measured => measuredIn.GetValueOrDefault(Stream, Stream);
+
     /// <summary>Records what a line assembles to on this writing of it.</summary>
     private void Laid(SyntaxNode statement, LineLayout laid)
     {
@@ -1058,18 +1079,18 @@ public sealed class CodeLayout
     }
 
     /// <summary>
-    /// Records where a line's bytes land and moves the stream on. An <c>.align</c> ends the
-    /// stream instead: how many bytes it generates depends on an address, so nothing after
-    /// it stands at a distance nt65 knows from anything before it.
+    /// Records where a line's bytes land and moves the stream on. An <c>.align</c> starts a
+    /// new run of distances instead: how many bytes it generates depends on an address, so
+    /// nothing after it stands at a distance nt65 knows from anything before it.
     /// </summary>
     private void Place(SyntaxNode statement, int length)
     {
-        var offset = filled.GetValueOrDefault(Stream);
-        placements[(statement.Position, expansion)] = new Placement(Stream, offset, length);
+        var offset = filled.GetValueOrDefault(Measured);
+        placements[(statement.Position, expansion)] = new Placement(Measured, offset, length);
         if (length == DataLengths.Unpredictable)
-            streams[^1] = nextStream++;
+            measuredIn[Stream] = nextStream++;
         else
-            filled[Stream] = offset + length;
+            filled[Measured] = offset + length;
     }
 
     /// <summary>
@@ -1098,7 +1119,7 @@ public sealed class CodeLayout
                 + "a label is only a position in code");
         }
         labels[(symbol, Expansion.Owning(expansion, symbol))] =
-            new Placement(Stream, filled.GetValueOrDefault(Stream), 0);
+            new Placement(Measured, filled.GetValueOrDefault(Measured), 0);
         steps.Add(new Step(declaration, expansion, routine, Stream, segment, symbol));
     }
 

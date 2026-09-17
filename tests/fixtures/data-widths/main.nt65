@@ -1,0 +1,42 @@
+; A number slot takes a signed or an unsigned value of its width, and a negative constant is
+; written as its two's complement. Every width has a big-endian partner, and `.long` holds a
+; 24-bit number where `.faraddr` holds an address.
+.module main
+
+.cpu 65816
+
+DELTA = -2
+
+.struct Motion {
+dx:     .byte
+dy:     .word
+}
+
+.segment RODATA
+.data bytes:        .byte -128, -1, 0, 255, DELTA
+.data words:        .word -32768, DELTA, $ffff
+.data longs:        .long -1, $123456, handler
+.data dwords:       .dword -1, $12345678
+.data be_words:     .beword $1234, DELTA, handler
+.data be_longs:     .belong $123456, -1, handler
+.data be_dwords:    .bedword $12345678, DELTA, handler
+.data be_table:     .beword[] {
+    1, -1
+}
+.data banks:        .bankbytes handler, far_away
+.data step:         .type Motion { dx = -1, dy = DELTA }
+.data padding {
+    .res 3, -1
+}
+.warning "a warning is said, and the program is built" ;! warning: a warning is said, and the program is built
+
+.segment FAR: far, bank = 1
+.segment FAR
+.data far_away:     .byte 0
+
+.segment CODE
+.proc handler: a8, i16 {
+    lda #-1
+    ldx #DELTA
+    rts
+}

@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.import print: proc(inline .asciiz)
+.import print: proc(inline .strz)
 .import beep: proc(inline 2)
 .import far_away: proc(far)
 
@@ -46,7 +46,7 @@
 
 ; Inline data that does not match the declaration.
 .proc talk {
-    jsr print               ;! error: `print` returns past one `.asciiz` written after each call, and none follows this one
+    jsr print               ;! error: `print` returns past one `.strz` written after each call, and none follows this one
     jsr beep                ;! error: `beep` returns past 2 bytes of data written after each call, and 1 byte follows this one
     .byte 1
     rts

@@ -22,9 +22,9 @@ public readonly record struct StateItem(
     /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
     public SyntaxNode? Expression => Node.ChildNodes.FirstOrDefault();
 
-    /// <summary>Whether an <c>inline</c> item says <c>inline .asciiz</c>.</summary>
-    public bool IsAsciiz => Node.ChildTokens.Any(token =>
-        token.Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase));
+    /// <summary>Whether an <c>inline</c> item says <c>inline .strz</c>.</summary>
+    public bool IsStrz => Node.ChildTokens.Any(token =>
+        token.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The items of a state list, or of a <c>.state</c>, in the order they are written.</summary>
     public static IEnumerable<StateItem> Read(SyntaxNode? list)

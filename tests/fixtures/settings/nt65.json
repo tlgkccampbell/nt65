@@ -1,0 +1,5 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65"],
+  "defines": { "VOICES": 2 }
+}

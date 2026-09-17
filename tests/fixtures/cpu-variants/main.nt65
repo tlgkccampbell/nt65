@@ -1,0 +1,43 @@
+; One program for the three CMOS 6502s. `.has` asks whether the CPU has an instruction, so
+; the code uses what the CPU has, and each build checks exactly its own CPU's instructions:
+; the 65SC02 has neither the bit instructions nor `wai`, the R65C02 adds the bit
+; instructions, and the WDC 65C02 has both.
+.module main
+
+.segment ZEROPAGE
+.data flags:    .byte
+
+; A macro body asks the same way.
+.macro set_ready(at: operand) {
+    .if .has(smb3) {
+        smb3 at
+    } .else {
+        lda at
+        ora #%00001000
+        sta at
+    }
+}
+
+.segment CODE
+.proc main {
+    phx                         ; every CMOS part has these
+    stz flags
+    set_ready!(flags)
+    .if .has(bbs3) {
+        bbs3 flags, @done
+    } .else {
+        lda flags
+        and #%00001000
+        bne @done
+    }
+    nop
+@done:
+    plx
+    .if .has(wai) {
+        wai                     ; sleep until an interrupt, on the part that can
+    }
+    .if .target(r65c02) {
+        rmb3 flags              ; `.target` names one CPU exactly
+    }
+    rts
+}

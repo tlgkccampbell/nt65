@@ -121,7 +121,9 @@ public static class Compiler
 
         // The build configuration is read as a file of constants, so that defines are ordinary
         // symbols to scoping and evaluation; only emission treats them differently.
-        var defines = Defines.Source(project.Defines) is { } source ? SyntaxTree.Parse(source) : null;
+        var defines = Defines.Source([.. project.Defines.Where(define => !define.IsSetting)]) is { } source
+            ? SyntaxTree.Parse(source)
+            : null;
         if (defines is not null)
             trees.Add(defines);
 
@@ -198,6 +200,9 @@ public static class Compiler
 
         reason = WholeProgramReason.SegmentsDeclared;
         if (changed.Any(tree => SegmentTable.Declares(tree) || SegmentTable.Declares(sources[tree.Path])))
+            return null;
+        reason = WholeProgramReason.SettingsDeclared;
+        if (changed.Any(tree => Configuration.DeclaresSettings(tree) || Configuration.DeclaresSettings(sources[tree.Path])))
             return null;
         List<SyntaxTree> trees = [.. reuse.Trees.Select(tree => sources.GetValueOrDefault(tree.Path) ?? tree)];
         var cpu = new List<Diagnostic>();
@@ -363,7 +368,7 @@ public static class Compiler
     /// <summary>
     /// A far address is a bank and an offset, which only the 65816 has: ca65 refuses
     /// <c>far</c> on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug
-    ///. A segment or an import declared far on a 6502 or 65C02 is therefore reported
+    ///. A segment or an import declared far on a 6502 or a CMOS variant is therefore reported
     /// where it is written, rather than written out for ca65 to reject.
     /// </summary>
     private static IEnumerable<Diagnostic> FarNeedsA65816(SegmentTable segments, ProgramModel program)

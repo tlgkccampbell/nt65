@@ -17,4 +17,4 @@
     .word 0                     ; end of program
 }
 
-.assert main::start == $080D, error, "BASIC stub SYS address is out of date"
+.assert main::start == $080D, "BASIC stub SYS address is out of date"

@@ -9,8 +9,9 @@ namespace Norristown.Flow;
 /// trick has a syntactic fingerprint — an indirect jump, a computed target, a label used as
 /// data, a store into code — and each needs an annotation that says what the analysis cannot
 /// see: a <c>.next</c> saying where flow goes, a <c>.state</c> declaring the state at a label,
-/// or a <c>.patch</c> acknowledging a store. On the 6502 and the 65C02 nothing consumes the
-/// state, so none of this is required there.
+/// or a <c>.patch</c> acknowledging a store. On the 6502 and its CMOS variants nothing consumes
+/// the state, so none of this is required there, and a routine that runs off its end is only
+/// a warning.
 /// </summary>
 internal sealed class Requirements
 {
@@ -19,6 +20,10 @@ internal sealed class Requirements
     private readonly ControlFlow flow;
     private readonly List<Diagnostic> diagnostics = [];
 
+    // How much running off the end of a routine matters: on the 65816 the analysis would
+    // carry the state into whatever comes next, and elsewhere it is only likely a mistake.
+    private readonly Severity runningOff;
+
     // Every label that starts a block in some routine, with where it is and whether what it
     // labels is code rather than data.
     private readonly Dictionary<Symbol, Labelled> labels = [];
@@ -26,17 +31,18 @@ internal sealed class Requirements
     // The labels a `.next` names, by the routine the `.next` is written in.
     private readonly HashSet<(Symbol Routine, Symbol Label)> named = [];
 
-    private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow)
+    private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow, Severity runningOff)
     {
         this.model = model;
         this.layout = layout;
         this.flow = flow;
+        this.runningOff = runningOff;
     }
 
     /// <summary>Reports each construct in <paramref name="flow"/>'s file that lacks the annotation it needs.</summary>
     public static void Check(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
-        var requirements = new Requirements(model, layout, flow);
+        var requirements = new Requirements(model, layout, flow, Severity.Error);
         requirements.Collect();
         foreach (var region in flow.Regions)
         {
@@ -46,6 +52,18 @@ internal sealed class Requirements
         }
         requirements.CheckUses();
         requirements.CheckExports();
+        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Message)));
+    }
+
+    /// <summary>
+    /// Warns about each routine in <paramref name="flow"/>'s file that runs off its end, which is
+    /// all a CPU without the 65816's analysis asks for: <c>.next</c> says the routine meant it.
+    /// </summary>
+    public static void CheckEnds(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
+    {
+        var requirements = new Requirements(model, layout, flow, Severity.Warning);
+        foreach (var region in flow.Regions)
+            requirements.CheckEnd(region);
         diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Message)));
     }
 
@@ -260,7 +278,7 @@ internal sealed class Requirements
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;
-            diagnostics.Add(new Diagnostic(at.DeclarationSpan, Severity.Error, message));
+            diagnostics.Add(new Diagnostic(at.DeclarationSpan, runningOff, message));
             return;
         }
         var step = last.Steps[^1];
@@ -272,7 +290,7 @@ internal sealed class Requirements
             || transfer == Transfer.Elsewhere && Is(step.Statement, "jsr", "jsl"))
             && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
-            Report(step.Statement, message);
+            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message));
     }
 
     /// <summary>

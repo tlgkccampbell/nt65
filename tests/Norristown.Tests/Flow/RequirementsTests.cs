@@ -32,10 +32,43 @@ public sealed class RequirementsTests
                 lda $0400
                 sta @op+1
                 nop
+                rts
             }
             """;
 
         Assert.Empty(Analysis.Program(("main.nt65", Text)).Problems());
+    }
+
+    /// <summary>
+    /// Off the 65816 a routine that runs off its end is likely a mistake rather than something
+    /// the analysis cannot follow, so it is a warning, and <c>.next</c> says it was meant.
+    /// </summary>
+    [Fact]
+    public void RunningOffTheEndWarnsOnThe6502()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .segment CODE
+            .proc first {
+                lda #1
+            }
+            .proc second {
+                lda #2
+                .next third
+            }
+            .proc third {
+                tax
+                .next ?
+            }
+            """;
+
+        var analysis = Analysis.Program(("main.nt65", Text));
+
+        var only = Assert.Single(analysis.Diagnostics);
+        Assert.Equal(Severity.Warning, only.Severity);
+        Assert.Equal("`first` runs off its end into whatever is written after it: `.next` naming the routine it runs "
+            + "into says so, or `.next ?` ends the path", only.Message);
     }
 
     /// <summary>A routine returns past its inline data whatever the processor, so the data is checked on every CPU.</summary>
@@ -45,11 +78,11 @@ public sealed class RequirementsTests
         const string Text = """
             .module main
             .cpu 6502
-            .import print: proc(inline .asciiz)
+            .import print: proc(inline .strz)
             .segment CODE
             .proc p {
                 jsr print
-                .asciiz "hi"
+                .strz "hi"
                 jsr print
                 .byte 1
                 rts
@@ -58,7 +91,7 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:8: `print` returns past one `.asciiz` written after each call, and none follows this one",
+                "main.nt65:8: `print` returns past one `.strz` written after each call, and none follows this one",
                 "main.nt65:9: the instruction above runs into this data. `.next` on it says where flow goes instead",
             ],
             Analysis.Program(("main.nt65", Text)).Problems());

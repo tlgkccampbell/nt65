@@ -31,7 +31,7 @@ SCREEN_PAGES = 4
 .data wide:       .dword $12345678
 .data here:       .addr table
 .data there:      .faraddr table
-.data greeting:   .asciiz "hello"
+.data greeting:   .strz "hello"
 .data padding:    .byte[16] {
     .repeat 16 {
         $ff
@@ -69,7 +69,7 @@ SCREEN_PAGES = 4
     rts
 }
 
-.proc show: a*, i*, e*, near, inline .asciiz {
+.proc show: a*, i*, e*, near, inline .strz {
     rts
 }
 

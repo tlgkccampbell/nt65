@@ -36,7 +36,7 @@
         i * 40
     }
 }
-.data text: .asciiz "hi"
+.data text: .strz "hi"
 .data handlers: .addr[] {
     .each Cmd, c {
         actions::c
@@ -59,35 +59,35 @@
 }
 
 ; What nt65 answers as it is written.
-.assert .sizeof(cursor) == 2 && .countof(cursor) == 1, error, "cursor"
-.assert .sizeof(buffer) == 16 && .countof(buffer) == 16, error, "buffer"
-.assert .sizeof(points) == 8 && .countof(points) == 4, error, "points"
-.assert .sizeof(gradient) == 3 && .countof(gradient) == 3, error, "gradient"
-.assert .sizeof(lut) == 4 && .countof(lut) == 4, error, "lut"
-.assert .sizeof(row_lo) == 5 && .countof(row_lo) == 5, error, "row_lo"
-.assert .sizeof(text) == 3 && .countof(text) == 3, error, "text"
-.assert .sizeof(handlers) == 4 && .countof(handlers) == 2, error, "handlers"
-.assert .sizeof(Sprite) == 11, error, "Sprite"
-.assert .sizeof(hero) == 11 && .countof(hero) == 1, error, "hero"
-.assert .sizeof(sprites) == 33 && .countof(sprites) == 3, error, "sprites"
-.assert .sizeof(blank) == 11, error, "blank"
-.assert .sizeof(vectors) == 9 && .spanof(vectors) == 9, error, "vectors"
-.assert .sizeof(vectors::native) == 4 && .countof(vectors::emulation) == 2, error, "vectors members"
+.assert .sizeof(cursor) == 2 && .countof(cursor) == 1, "cursor"
+.assert .sizeof(buffer) == 16 && .countof(buffer) == 16, "buffer"
+.assert .sizeof(points) == 8 && .countof(points) == 4, "points"
+.assert .sizeof(gradient) == 3 && .countof(gradient) == 3, "gradient"
+.assert .sizeof(lut) == 4 && .countof(lut) == 4, "lut"
+.assert .sizeof(row_lo) == 5 && .countof(row_lo) == 5, "row_lo"
+.assert .sizeof(text) == 3 && .countof(text) == 3, "text"
+.assert .sizeof(handlers) == 4 && .countof(handlers) == 2, "handlers"
+.assert .sizeof(Sprite) == 11, "Sprite"
+.assert .sizeof(hero) == 11 && .countof(hero) == 1, "hero"
+.assert .sizeof(sprites) == 33 && .countof(sprites) == 3, "sprites"
+.assert .sizeof(blank) == 11, "blank"
+.assert .sizeof(vectors) == 9 && .spanof(vectors) == 9, "vectors"
+.assert .sizeof(vectors::native) == 4 && .countof(vectors::emulation) == 2, "vectors members"
 
 ; What ld65 checks against the bytes ca65 wrote: each declaration ends where its size says.
-.assert .endof(cursor) - cursor == .sizeof(cursor), lderror, "cursor"
-.assert .endof(buffer) - buffer == .sizeof(buffer), lderror, "buffer"
-.assert .endof(points) - points == .countof(points) * .sizeof(Point), lderror, "points"
-.assert .endof(gradient) - gradient == .sizeof(gradient), lderror, "gradient"
-.assert .endof(lut) - lut == .sizeof(lut), lderror, "lut"
-.assert .endof(row_lo) - row_lo == .sizeof(row_lo), lderror, "row_lo"
-.assert .endof(text) - text == .sizeof(text), lderror, "text"
-.assert .endof(handlers) - handlers == .sizeof(handlers), lderror, "handlers"
-.assert .endof(hero) - hero == .sizeof(hero), lderror, "hero"
-.assert .endof(sprites) - sprites == .countof(sprites) * .sizeof(Sprite), lderror, "sprites"
-.assert .endof(blank) - blank == .sizeof(blank), lderror, "blank"
-.assert .endof(vectors) - vectors == .sizeof(vectors), lderror, "vectors"
-.assert vectors::emulation - vectors == .sizeof(vectors::native) + 1, lderror, "vectors::emulation"
+.assert .endof(cursor) - cursor == .sizeof(cursor), "cursor"
+.assert .endof(buffer) - buffer == .sizeof(buffer), "buffer"
+.assert .endof(points) - points == .countof(points) * .sizeof(Point), "points"
+.assert .endof(gradient) - gradient == .sizeof(gradient), "gradient"
+.assert .endof(lut) - lut == .sizeof(lut), "lut"
+.assert .endof(row_lo) - row_lo == .sizeof(row_lo), "row_lo"
+.assert .endof(text) - text == .sizeof(text), "text"
+.assert .endof(handlers) - handlers == .sizeof(handlers), "handlers"
+.assert .endof(hero) - hero == .sizeof(hero), "hero"
+.assert .endof(sprites) - sprites == .countof(sprites) * .sizeof(Sprite), "sprites"
+.assert .endof(blank) - blank == .sizeof(blank), "blank"
+.assert .endof(vectors) - vectors == .sizeof(vectors), "vectors"
+.assert vectors::emulation - vectors == .sizeof(vectors::native) + 1, "vectors::emulation"
 
 .segment CODE
 .scope actions {

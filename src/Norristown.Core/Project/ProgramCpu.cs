@@ -52,7 +52,7 @@ public static class ProgramCpu
                 continue;
             foreach (var token in node.ChildTokens)
             {
-                if (token.Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral
+                if (token.Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier
                     && CpuNames.Parse(token.Text) is { } cpu)
                 {
                     yield return (cpu, token.Span);

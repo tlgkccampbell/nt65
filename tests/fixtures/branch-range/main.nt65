@@ -20,6 +20,7 @@
 ; an address, so nothing after it stands at a distance nt65 knows from anything before it.
 .proc across_a_boundary {
     beq @out
+    rts
     .align 256
 @out:
     rts

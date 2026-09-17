@@ -67,7 +67,7 @@ public sealed class ExtentTests
                 rts
             }
 
-            .assert .spanof(irq) <= 2, error, "irq handler too big"
+            .assert .spanof(irq) <= 2, "irq handler too big"
             """));
 
         Assert.Equal(["main.nt65:9: irq handler too big"], program.Problems());
@@ -79,7 +79,7 @@ public sealed class ExtentTests
     {
         var program = Analysis.Program(("main.nt65", """
             .module main
-            .assert .spanof(irq) == 3, error, "irq is not three bytes"
+            .assert .spanof(irq) == 3, "irq is not three bytes"
 
             .segment CODE
             .proc irq {
@@ -106,7 +106,7 @@ public sealed class ExtentTests
                 rts
             }
 
-            .assert .spanof(f) <= 256, lderror, "f too big"
+            .assert .spanof(f) <= 256, "f too big"
             """);
 
         Assert.Contains(".assert (f__end - f) <= 256, lderror", written, StringComparison.Ordinal);
@@ -120,7 +120,7 @@ public sealed class ExtentTests
     public void SizeofOfARoutineIsItsSpan()
     {
         var program = Analysis.Program(("main.nt65",
-            ".module main\n.segment CODE\n.proc f {\n    nop\n    rts\n}\n\n.assert .sizeof(f) == 2, error, \"f is not two bytes\"\n"
+            ".module main\n.segment CODE\n.proc f {\n    nop\n    rts\n}\n\n.assert .sizeof(f) == 2, \"f is not two bytes\"\n"
             + ".data n: .byte .countof(f)\n"));
 
         Assert.Equal(
@@ -130,7 +130,7 @@ public sealed class ExtentTests
 
     /// <summary>A label is only a position, and a scope only a namespace: neither has an extent.</summary>
     [Theory]
-    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1, error\n}\n", "main.nt65:6: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
+    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1\n}\n", "main.nt65:6: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
     [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:5: `s` is a scope, which is only a namespace: `.endof` measures a `.data` declaration, a routine or a type")]
     public void ALabelAndAScopeHaveNoExtent(string text, string problem)
     {

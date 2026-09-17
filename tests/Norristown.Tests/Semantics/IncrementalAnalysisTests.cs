@@ -51,6 +51,8 @@ public sealed class IncrementalAnalysisTests
             ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
             ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the set, and errors calls `clear`
             ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
+            ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.config TRIAL = 1", WholeProgramReason.SettingsDeclared, 8),
+            ("main.nt65", "TRIAL = 1", "TRIAL = 2", WholeProgramReason.SettingsDeclared, 8),                // any file's conditions may read it
         ];
 
         var replay = new ProgramReplay();

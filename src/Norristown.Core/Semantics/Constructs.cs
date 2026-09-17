@@ -14,29 +14,23 @@ public static class Constructs
 
     /// <summary>
     /// What an <c>.assert</c> or an <c>.error</c> says: the expression that has to hold (none,
-    /// for an <c>.error</c>), how much it matters, and the message written with it.
+    /// for an <c>.error</c>), and the message written with it.
     /// </summary>
     public static Assertion AssertionOf(SyntaxNode directive)
     {
-        var level = Severity.Error;
         string? message = null;
         foreach (var token in directive.ChildTokens)
         {
-            if (token.Kind == SyntaxKind.Identifier && SyntaxFacts.IsAssertLevel(token.Text))
-                level = token.Text.StartsWith('w') || token.Text.StartsWith("ldw", StringComparison.OrdinalIgnoreCase)
-                    ? Severity.Warning
-                    : Severity.Error;
-            else if (token.Kind == SyntaxKind.StringLiteral)
+            if (token.Kind == SyntaxKind.StringLiteral)
                 message ??= Literals.Text(token.Text);
         }
-        return new Assertion(directive.ChildNodes.FirstOrDefault(), level, message);
+        return new Assertion(directive.ChildNodes.FirstOrDefault(), message);
     }
 
     /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
     /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
-    /// <param name="Level">How much a failure matters.</param>
     /// <param name="Message">What to say about it, or null when none was written.</param>
-    public readonly record struct Assertion(SyntaxNode? Condition, Severity Level, string? Message);
+    public readonly record struct Assertion(SyntaxNode? Condition, string? Message);
 
     /// <summary>
     /// The segment a segment block or a region line names, or null when the line is neither or

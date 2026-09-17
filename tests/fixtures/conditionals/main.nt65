@@ -28,8 +28,8 @@ TRACE = 0
 }
 
 ; nt65 knows what these are worth whichever way the build goes, so neither reaches ca65.
-    .assert LINES > 200, error, "a platform has more than 200 lines"
-    .assert TRACE <= 2, error, "the trace level is 0, 1 or 2"
+    .assert LINES > 200, "a platform has more than 200 lines"
+    .assert TRACE <= 2, "the trace level is 0, 1 or 2"
 
 .segment CODE
 .proc main {
@@ -60,8 +60,8 @@ TRACE = 0
 }
 
 ; Where main lands is the linker's to say, so this one is written out for ld65.
-    .assert main >= $0200, lderror, "main must be past the zero page"
-    .assert main != trace && main == main, lderror, "ca65 spells these operators its own way"
+    .assert main >= $0200, "main must be past the zero page"
+    .assert main != trace && main == main, "ca65 spells these operators its own way"
 
 ; A repetition is unrolled by nt65, so none of it reaches ca65 either.
 .list handlers {

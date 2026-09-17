@@ -11,7 +11,7 @@ namespace Norristown.Semantics;
 /// <param name="Exit">The state it returns with. A part the exit does not give is the entry's.</param>
 /// <param name="IsFar">Whether it is entered by <c>jsl</c> and left by <c>rtl</c>.</param>
 /// <param name="Inline">
-/// The <c>inline n</c> or <c>inline .asciiz</c> item, for a routine that returns past data
+/// The <c>inline n</c> or <c>inline .strz</c> item, for a routine that returns past data
 /// written after each call; null for every other.
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)

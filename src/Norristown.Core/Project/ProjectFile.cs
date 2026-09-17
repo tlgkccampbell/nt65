@@ -114,9 +114,10 @@ public static class ProjectFile
         _ => null,
     };
 
-    private static bool IsName(string text) =>
-        text.Length > 0 && (char.IsAsciiLetter(text[0]) || text[0] == '_')
-        && text.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+    /// <summary>A define's name, or a <c>.config</c>'s written with its module's path, as <c>hw::SOUND</c>.</summary>
+    private static bool IsName(string text) => text.Split("::").All(part =>
+        part.Length > 0 && (char.IsAsciiLetter(part[0]) || part[0] == '_')
+        && part.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'));
 
     /// <summary>One project file being read, with the text kept so diagnostics can point into it.</summary>
     private sealed class Reader(string path, string text, List<Diagnostic> diagnostics)
@@ -127,7 +128,7 @@ public static class ProjectFile
                 return null;
             if (CpuNames.Parse(named) is { } cpu)
                 return cpu;
-            Report("cpu", $"`{named}` is not a processor nt65 knows: 6502, 65c02 or 65816");
+            Report("cpu", $"`{named}` is not a processor nt65 knows: {CpuNames.Listed}");
             return null;
         }
 

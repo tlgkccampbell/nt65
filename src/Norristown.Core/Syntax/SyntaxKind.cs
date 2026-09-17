@@ -36,7 +36,10 @@ public enum SyntaxKind : byte
     /// <summary>A string: <c>"text"</c>.</summary>
     StringLiteral,
 
-    /// <summary>The CPU name <c>65c02</c>, which is not a number. <c>6502</c> and <c>65816</c> are.</summary>
+    /// <summary>
+    /// The CPU names <c>65c02</c> and <c>65sc02</c>, which are not numbers. <c>6502</c> and
+    /// <c>65816</c> are, and <c>r65c02</c> is an identifier.
+    /// </summary>
     CpuName,
 
     /// <summary>A character that starts no token.</summary>
@@ -279,6 +282,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a named set of signature items.</summary>
     SignatureDeclaration,
 
+    /// <summary><c>.config NAME = value</c>: a define a module declares, which the build may set.</summary>
+    ConfigDeclaration,
+
     /// <summary>One member of an <c>.enum</c>: <c>name</c> or <c>name = expr</c>.</summary>
     EnumMember,
 
@@ -312,7 +318,7 @@ public enum SyntaxKind : byte
     /// <summary><c>.assert expr, level, "message"</c>.</summary>
     AssertDirective,
 
-    /// <summary><c>.error "message"</c>.</summary>
+    /// <summary><c>.error "message"</c> or <c>.warning "message"</c>.</summary>
     ErrorDirective,
 
     /// <summary>The line opening a <c>.macro</c>: its name, parameters and signature.</summary>

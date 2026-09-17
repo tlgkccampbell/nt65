@@ -557,13 +557,14 @@ public sealed class Emitter
                 ExternProc(line, statement);
                 break;
 
-            // An assertion nt65 answered has been answered; one it could not is written out
-            // for ca65 and ld65, which is the same directive with the same spelling. An
-            // `.error` the build reached has already been reported, and never reaches ca65.
+            // An assertion nt65 answered has been answered; one it could not depends on where
+            // things land, so it is written out for ld65 to check, with the level ca65 needs
+            // for that. An `.error` the build reached has already been reported, and never
+            // reaches ca65.
             case SyntaxKind.AssertDirective
                 when Constructs.AssertionOf(statement).Condition is { } condition
                     && model.ValueOf(condition, expansion, layout.SpanOf).AsNumber() is null:
-                Source(line, statement, 0, located: true);
+                Linked(line, statement, condition);
                 break;
 
             case SyntaxKind.AssertDirective:
@@ -844,11 +845,12 @@ public sealed class Emitter
         string? comment = null;
         if (DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.ValueList } list)
         {
+            var (width, bigEndian) = Slot(directive);
             foreach (var value in list.ChildNodes)
-                Substitute(value, edits, nested: false);
+                InPlace(value, width, bigEndian, edits);
             foreach (var brace in list.ChildTokens.Where(token => token.Kind is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace))
                 edits.Replace[brace.Position] = "";
-            text = $"{directive.ChildTokens[0].Text} {Bare(list, edits, out comment)}";
+            text = $"{ForCa65(directive.ChildTokens[0].Text)} {Bare(list, edits, out comment)}";
         }
         else if (DataSyntax.ValuesOf(directive).Count > 0)
         {
@@ -893,7 +895,7 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(values, edits, nested: false);
-        var text = $"{Indent(values)}{directive.ChildTokens[0].Text} {Bare(values, edits, out var comment)}";
+        var text = $"{Indent(values)}{ForCa65(directive.ChildTokens[0].Text)} {Bare(values, edits, out var comment)}";
         if (comment is not null)
             text += new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
         Code(line, text, laid.Length);
@@ -1061,9 +1063,11 @@ public sealed class Emitter
                         bytes += Fields(line, indent, records, ValuesIn(i < items.Length ? items[i] : null), $"{named}[{i}]");
                     continue;
                 }
+                var (width, bigEndian) = Slot(element);
                 Field(line, indent, items.Length == 0
                     ? $".res {size}"
-                    : $"{DataSyntax.NameOf(element)} {string.Join(", ", items.Select(item => Rendered(item)))}", named, size);
+                    : $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
+                    named, size);
                 bytes += size;
                 continue;
             }
@@ -1119,7 +1123,9 @@ public sealed class Emitter
         var directive = element is null ? ".res" : DataSyntax.NameOf(element);
         if (directive == ".res")
             return $".byte {string.Join(", ", Padded(given, size, Fill(member)))}";
-        return $"{directive} {(given is null ? Constant(0) : Rendered(given))}";
+        var (width, bigEndian) = Slot(element!);
+        var value = given is null ? Constant(0) : Datum(given, width, bigEndian, []) ?? Rendered(given);
+        return $"{ForCa65(directive)} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}";
     }
 
     /// <summary>The bytes a reserved member takes: the text it was given, then the byte it pads with.</summary>
@@ -1256,9 +1262,33 @@ public sealed class Emitter
         Width(statement);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
+        Immediate(statement, bytes, edits);
         Slot(statement, edits);
         Direct(statement, edits);
         Code(line, Render(statement, edits), bytes, located);
+    }
+
+    /// <summary>
+    /// An immediate is a byte or a word slot, as wide as the instruction makes it, so a negative
+    /// constant in one is written as its two's complement.
+    /// </summary>
+    private void Immediate(SyntaxNode statement, int bytes, Edits edits)
+    {
+        if (statement is { Kind: SyntaxKind.InstructionStatement, ChildNodes: [{ Kind: SyntaxKind.ImmediateOperand, ChildNodes: [var value] }] }
+            && bytes is 2 or 3 && Datum(value, bytes - 1, bigEndian: false, edits.Comments) is { } text)
+        {
+            Replace(value, text, edits, around: false);
+        }
+    }
+
+    /// <summary>An assertion the linker checks: ca65's <c>.assert</c> with the level that defers it to ld65.</summary>
+    private void Linked(SyntaxNode line, SyntaxNode statement, SyntaxNode condition)
+    {
+        var edits = new Edits();
+        Substitute(statement, edits, nested: false);
+        var last = Tokens(condition)[^1].Position;
+        edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", lderror";
+        Code(line, Render(statement, edits), 0, located: true);
     }
 
     /// <summary>
@@ -1460,10 +1490,23 @@ public sealed class Emitter
     private string Render(SyntaxNode statement, Edits edits)
     {
         var text = new StringBuilder();
-        foreach (var token in Tokens(statement))
+        var tokens = Tokens(statement);
+        for (var i = 0; i < tokens.Count; i++)
         {
+            var token = tokens[i];
             if (token.Kind == SyntaxKind.EndOfLine)
                 continue;
+            if (edits.Joined.Contains(token.Position))
+            {
+                if (!edits.Joined.Contains(tokens[i - 1].Position))
+                    text.Length -= Width(tokens[i - 1].Green.TrailingTrivia);
+                text.Append(edits.Before.GetValueOrDefault(token.Position, ""))
+                    .Append(edits.Replace.GetValueOrDefault(token.Position, token.Text))
+                    .Append(edits.After.GetValueOrDefault(token.Position, ""));
+                if (i + 1 == tokens.Count || !edits.Joined.Contains(tokens[i + 1].Position))
+                    Whitespace(text, token.Green.TrailingTrivia);
+                continue;
+            }
             Whitespace(text, token.Green.LeadingTrivia);
             if (edits.Before.TryGetValue(token.Position, out var before))
                 text.Append(before);
@@ -1479,6 +1522,9 @@ public sealed class Emitter
         var padding = Math.Max(CommentColumn - line.Length, 2);
         return line + new string(' ', padding) + "; " + string.Join(", ", edits.Comments);
     }
+
+    private static int Width(IEnumerable<GreenTrivia> trivia) =>
+        trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);
 
     private static void Whitespace(StringBuilder text, IEnumerable<GreenTrivia> trivia)
     {
@@ -1540,7 +1586,29 @@ public sealed class Emitter
                 // path — pointed at the file from wherever the output lands.
                 if (Included(node, edits))
                     return;
+
+                // An element type's values, and a `.res` fill, are slots of a width.
+                if (DataSyntax.IsElementType(node) && DataSyntax.BracedOf(node) is null && node.ChildTokens.Length > 0)
+                {
+                    edits.Replace[node.ChildTokens[0].Position] = ForCa65(node.ChildTokens[0].Text);
+                    var (width, bigEndian) = Slot(node);
+                    foreach (var value in DataSyntax.ValuesOf(node))
+                        InPlace(value, width, bigEndian, edits);
+                    return;
+                }
+                if (DataSyntax.NameOf(node) == ".res" && node.ChildNodes is [var count, var fill])
+                {
+                    Substitute(count, edits, nested: false);
+                    InPlace(fill, 1, bigEndian: false, edits);
+                    return;
+                }
                 break;
+
+            case SyntaxKind.DataValues when DataSyntax.DirectiveOfValues(node) is { } of && !DataSyntax.IsRecord(of):
+                var (valueWidth, valuesBigEndian) = Slot(of);
+                foreach (var value in node.ChildNodes)
+                    InPlace(value, valueWidth, valuesBigEndian, edits);
+                return;
 
             case SyntaxKind.BinaryExpression:
             case SyntaxKind.UnaryExpression:
@@ -1568,13 +1636,99 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Text reaches the output as bytes, so <c>.asciiz</c> becomes the bytes and
+    /// The directive ca65 writes for one of nt65's element types. ca65's 24-bit directive is
+    /// <c>.faraddr</c> and its one big-endian directive <c>.dbyt</c>; a wider big-endian value
+    /// is written as its bytes.
+    /// </summary>
+    private static string ForCa65(string directive) => directive.ToLowerInvariant() switch
+    {
+        ".long" => ".faraddr",
+        ".beword" => ".dbyt",
+        ".belong" or ".bedword" => ".byte",
+        _ => directive,
+    };
+
+    /// <summary>How wide one element of an element type is, and whether its bytes are written high first.</summary>
+    private static (int Width, bool BigEndian) Slot(SyntaxNode directive)
+    {
+        var name = DataSyntax.NameOf(directive);
+        return (SyntaxFacts.ElementSize(name) ?? 1, name is ".beword" or ".belong" or ".bedword");
+    }
+
+    /// <summary>One value of a slot, written as <see cref="Datum"/> says where it says anything, and as it stands otherwise.</summary>
+    private void InPlace(SyntaxNode value, int width, bool bigEndian, Edits edits)
+    {
+        if (Datum(value, width, bigEndian, edits.Comments) is { } text)
+            Replace(value, text, edits);
+        else
+            Substitute(value, edits, nested: false);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="text"/> in place of all of <paramref name="node"/>. What was written
+    /// around it stays, and what was already made of the inside goes; with
+    /// <paramref name="around"/> false, what was made of its ends goes too.
+    /// </summary>
+    private static void Replace(SyntaxNode node, string text, Edits edits, bool around = true)
+    {
+        var tokens = Tokens(node);
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            edits.Replace[tokens[i].Position] = "";
+            if (i > 0 || !around)
+                edits.Before.Remove(tokens[i].Position);
+            if (i < tokens.Count - 1 || !around)
+                edits.After.Remove(tokens[i].Position);
+        }
+        edits.Replace[tokens[0].Position] = text;
+
+        // The spaces between the tokens it replaces go with them, and the ones around it stay.
+        for (var i = 1; i < tokens.Count; i++)
+            edits.Joined.Add(tokens[i].Position);
+    }
+
+    /// <summary>
+    /// One value of a slot <paramref name="width"/> bytes wide where ca65 cannot take it as
+    /// written: a negative constant is its two's complement, and a big-endian value wider than
+    /// a word, which ca65 has no directive for, is its bytes, high first. Null for a value
+    /// written as it stands. What the source said goes to <paramref name="comments"/>.
+    /// </summary>
+    private string? Datum(SyntaxNode value, int width, bool bigEndian, List<string> comments)
+    {
+        var known = model.ValueOf(value, expansion).AsNumber();
+        if (bigEndian && width > 2)
+        {
+            if (model.BytesOf(value, expansion) is { Count: > 0 } text)
+            {
+                comments.Add(value.GetText().Trim());
+                return string.Join(", ", text.SelectMany(b => HighFirst(b, width)));
+            }
+            if (known is { } number)
+            {
+                comments.Add(value.GetText().Trim());
+                return string.Join(", ", HighFirst(number, width));
+            }
+            var written = Rendered(value, comments);
+            var low = $".bankbyte({written}), .hibyte({written}), .lobyte({written})";
+            return width == 3 ? low : $".lobyte(({written}) >> 24), {low}";
+        }
+        if (known is not (< 0 and var negative))
+            return null;
+        comments.Add(value.GetText().Trim());
+        return Hex(negative & (long)(ulong.MaxValue >> (64 - (8 * width))), 2 * width);
+
+        static IEnumerable<string> HighFirst(long number, int width) =>
+            Enumerable.Range(0, width).Select(i => Hex((number >> (8 * (width - 1 - i))) & 0xff, 2));
+    }
+
+    /// <summary>
+    /// Text reaches the output as bytes, so <c>.strz</c> becomes the bytes and
     /// the zero that ends them: ca65's own directive takes a string, and there is none left.
     /// </summary>
     private static void Terminated(SyntaxNode directive, Edits edits)
     {
         if (directive.ChildTokens.Length == 0
-            || !directive.ChildTokens[0].Text.Equals(".asciiz", StringComparison.OrdinalIgnoreCase))
+            || !directive.ChildTokens[0].Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -1597,14 +1751,14 @@ public sealed class Emitter
         {
             return false;
         }
-        if (directive.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.StringExpression } path
-            && path.ChildTokens.Length > 0
+        if (directive.ChildNodes.FirstOrDefault() is { } path
             && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
         {
             var at = source.LastIndexOf('/');
-            edits.Replace[path.ChildTokens[0].Position] =
-                "\"" + (at < 0 ? named : source[..(at + 1)] + named) + "\"";
+            Replace(path, "\"" + (at < 0 ? named : source[..(at + 1)] + named) + "\"", edits);
         }
+        foreach (var argument in directive.ChildNodes.Skip(1))
+            Substitute(argument, edits, nested: false);
         return true;
     }
 
@@ -1683,9 +1837,21 @@ public sealed class Emitter
             return;
         }
 
+        // A string constant has no ca65 spelling, in this module or any other: it is written
+        // as the bytes of its text, as a literal is.
+        if (symbol.Value.IsString)
+        {
+            if (model.BytesOf(name, expansion) is { Count: > 0 } bytes)
+            {
+                Replace(name, string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2))), edits);
+                edits.Comments.Add(name.GetText().Trim());
+            }
+            return;
+        }
+
         // A define and a checked import are written as their value, never by name: a `-D` given to ca65 then cannot collide with a define, and a checked import
         // is a value nt65 has already used in its own arithmetic.
-        var byValue = (symbol.IsDefine || symbol.Kind == SymbolKind.ImportedConstant)
+        var byValue = (symbol.IsDefine || symbol.IsConfig || symbol.Kind == SymbolKind.ImportedConstant)
             && symbol.Value.AsNumber() is not null;
         edits.Replace[tokens[0].Position] = byValue
             ? Constant(symbol.Value.Number)
@@ -1755,21 +1921,26 @@ public sealed class Emitter
         if (Extents.Is(call, model, out var span) && Extents.MeasuredBy(call) is { } named
             && model.SymbolOf(named) is { } measured && (ends.Contains(measured) || measured.Tree != model.Tree))
         {
-            edits.Replace[tokens[0].Position] =
-                span ? $"({EndOf(measured)} - {Named(measured)})" : EndOf(measured);
-            for (var i = 1; i < tokens.Count; i++)
-                edits.Replace[tokens[i].Position] = "";
+            Replace(call, span ? $"({EndOf(measured)} - {Named(measured)})" : EndOf(measured), edits);
             return;
         }
 
         // A built-in the analysis answers keeps the ordinary path.
         if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is null)
         {
+            // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
+            if (model.ValueOf(call, expansion).AsNumber() is null
+                && Evaluator.SelectArguments(call) is [var condition, var ifHolds, var otherwise]
+                && model.ValueOf(condition, expansion).AsNumber() is { } holds)
+            {
+                // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
+                var chosen = Rendered(holds != 0 ? ifHolds : otherwise, edits.Comments);
+                Replace(call, chosen.StartsWith('(') ? "+" + chosen : chosen, edits);
+                return;
+            }
             if (model.ValueOf(call, expansion).AsNumber() is { } builtin)
             {
-                edits.Replace[tokens[0].Position] = Constant(builtin);
-                for (var i = 1; i < tokens.Count; i++)
-                    edits.Replace[tokens[i].Position] = "";
+                Replace(call, Constant(builtin), edits);
                 return;
             }
             foreach (var child in call.ChildNodes)
@@ -1788,9 +1959,7 @@ public sealed class Emitter
             NotTranspiled(call);
             return;
         }
-        edits.Replace[tokens[0].Position] = text;
-        for (var i = 1; i < tokens.Count; i++)
-            edits.Replace[tokens[i].Position] = "";
+        Replace(call, text, edits);
         edits.Comments.Add(call.GetText().Trim());
     }
 
@@ -1912,5 +2081,8 @@ public sealed class Emitter
 
         /// <summary>Source spellings to keep in a comment at the end of the line.</summary>
         public List<string> Comments { get; } = [];
+
+        /// <summary>Tokens written as part of the one before them, with no whitespace between the two.</summary>
+        public HashSet<int> Joined { get; } = [];
     }
 }

@@ -50,7 +50,7 @@ COLS = 40
 }
 
 ; Print the zero-terminated screen-code string that follows the JSR, at the cursor.
-.proc print_at: inline .asciiz {
+.proc print_at: inline .strz {
     pla
     sta ptr2
     pla
@@ -104,7 +104,7 @@ COLS = 40
     ldy #30
     jsr set_cursor
     jsr print_at
-    .asciiz screen("SCORE ")
+    .strz screen("SCORE ")
     ldx #2
 @byte:
     lda score,x
