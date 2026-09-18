@@ -61,7 +61,7 @@ public sealed class CycleTests
     [InlineData("bcc", AddressingMode.Relative, "2-4")]
     public void The6502TakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
     {
-        Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502, mnemonic, mode)?.ToString());
+        Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502, mnemonic, mode)?.Count.ToString());
     }
 
     [Theory]
@@ -101,7 +101,7 @@ public sealed class CycleTests
     [InlineData("and", AddressingMode.Immediate, "2")]
     public void The65C02TakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
     {
-        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65C02, mnemonic, mode)?.ToString());
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65C02, mnemonic, mode)?.Count.ToString());
     }
 
     [Theory]
@@ -170,7 +170,7 @@ public sealed class CycleTests
             _ => ProcessorMode.Unknown,
         });
 
-        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, mnemonic, mode, processor)?.ToString());
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, mnemonic, mode, processor)?.Count.ToString());
 
         static Width Width(string item) => item[1..] switch
         {
@@ -196,7 +196,7 @@ public sealed class CycleTests
         // This is about D, so the widths are given rather than left to the default, which is `a*`.
         var processor = ProcessorState.Default with { A = Width.Eight, Index = Width.Eight, D = d };
 
-        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.ToString());
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.Count.ToString());
     }
 
     /// <summary>

@@ -646,9 +646,11 @@ public sealed class CodeLayout
         var direct = operand is not null && ThroughDirectPage(operand) ? DirectOffset(mnemonic, operand, mode, state) : null;
         if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
             CheckDirectPageSymbols(mnemonic, operand, mode);
+        var timing = Cycles.Of(cpu, mnemonic.Text, mode, state);
+        IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
         Laid(statement, new LineLayout(
-            length, mode, prefix, false, Cycles.Of(cpu, mnemonic.Text, mode, state), bits,
-            Slot: states?.SlotAt(statement, expansion), Direct: direct));
+            length, mode, prefix, false, timing?.Count, bits,
+            Slot: states?.SlotAt(statement, expansion), Direct: direct, Causes: causes));
         Place(statement, length);
         steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
 
@@ -1073,7 +1075,7 @@ public sealed class CodeLayout
         var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
         var cycles = new CycleCount(0);
         foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
-            cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state) ?? new CycleCount(3);
+            cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);
         Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
         Place(directive, ensured.Length);
         steps.Add(new Step(directive, expansion, routine, Stream, segment, null));

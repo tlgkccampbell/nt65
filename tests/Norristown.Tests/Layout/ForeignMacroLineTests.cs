@@ -58,7 +58,7 @@ public sealed class ForeignMacroLineTests
         var hover = Lsp.ToHover(analysis, main, sta);
 
         Assert.NotNull(hover);
-        Assert.StartsWith("```nt65\nsta $10\n```", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.StartsWith("```nt65\nsta $10  ; store accumulator\n```", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("cycles  3", hover.Contents.Value, StringComparison.Ordinal);
     }
 }

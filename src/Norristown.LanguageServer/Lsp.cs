@@ -24,6 +24,9 @@ internal static class Lsp
     /// <summary>Where the block's own count stands on the row the line's count starts.</summary>
     private const int BlockColumn = 10;
 
+    /// <summary>How wide the block's own count stands, so the reason after it starts in one place.</summary>
+    private const int ReasonColumn = 14;
+
     /// <summary>
     /// How many pushes a hover lists before it says how many more there are. A reader takes
     /// in the top of the stack, which is what the routine is about to pull back.
@@ -288,12 +291,20 @@ internal static class Lsp
             return null;
         }
 
-        // What the line takes and what the block around it takes answer the same question at
-        // two scales, so they are read across one row rather than down two.
-        var card = new Card(Written(model.Tree.Text[statement.Span.Start..statement.Span.End]));
-        card.Row("cycles", Around(flow, statement)?.Cycles is { } block
-            ? cycles.ToString().PadRight(BlockColumn) + $"block {block}"
-            : cycles.ToString());
+        // An instruction is read under the name its datasheet gives it, written as a comment
+        // is written here, since a reader who knows what `xba` stands for is not the one asking.
+        var mnemonic = statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
+            ? statement.ChildTokens[0].Text.ToLowerInvariant()
+            : null;
+        var line = Written(model.Tree.Text[statement.Span.Start..statement.Span.End]);
+        var card = new Card(mnemonic is { } named && Mnemonics.Name(named) is { } called
+            ? $"{line}  ; {called}"
+            : line);
+
+        // What the line takes, what the block around it takes and, where the count is an
+        // interval, what its top would be paid for: three scales of the one question, read
+        // across a row rather than down three.
+        card.Row("cycles", Cost(cycles, Around(flow, statement)?.Cycles, laid.Causes));
 
         // An `.ensure` writes what the analysis found it needs, which is worth seeing.
         if (laid.Ensured is { } ensured)
@@ -311,6 +322,11 @@ internal static class Lsp
         var state = analysis.StatesFor(model.Tree.Path)?.AnyBefore(statement);
         if (state is not null)
             card.Row("state", state.Processor.ToString());
+        if (mnemonic is { } flagged)
+        {
+            card.Row("flags", Mnemonics.Flags(
+                analysis.Cpu, flagged, laid.Mode ?? AddressingMode.Implied, Immediate(model, statement, laid)));
+        }
 
         // A column a reader's eye can run down beats a sentence they have to take apart, so
         // the registers are always all four wherever anything is known of them.
@@ -324,6 +340,32 @@ internal static class Lsp
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, statement.Span));
     }
+
+    /// <summary>
+    /// What the line costs, as the row reads it: its own count, the count of the block around
+    /// it, and the reason its own count is an interval. The reason belongs to the instruction,
+    /// so a line whose own count is exact shows none even where its block's is not.
+    /// </summary>
+    private static string Cost(CycleCount cycles, CycleCount? block, IReadOnlyList<string>? causes)
+    {
+        var row = cycles.ToString();
+        var reason = causes is { Count: > 0 } why && !cycles.IsExact ? string.Join(", ", why) : "";
+        if (block is null && reason.Length == 0)
+            return row;
+        row = row.PadRight(BlockColumn) + (block is { } around ? $"block {around}" : "");
+        return reason.Length == 0 ? row : row.PadRight(BlockColumn + ReasonColumn) + reason;
+    }
+
+    /// <summary>
+    /// The value of the immediate a line is written with, or null where it has none or none
+    /// nt65 can work out. It is what says which flags a <c>rep</c> or a <c>sep</c> writes.
+    /// </summary>
+    private static long? Immediate(SemanticModel model, SyntaxNode statement, LineLayout laid) =>
+        laid.Mode == AddressingMode.Immediate
+            && statement.ChildNodes.FirstOrDefault()?.ChildNodes
+                .FirstOrDefault(child => child.Kind != SyntaxKind.AddressPrefix) is { } expression
+            ? model.ValueOf(expression).AsNumber()
+            : null;
 
     /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>
     private static SyntaxNode? Statement(SyntaxTree tree, int position)

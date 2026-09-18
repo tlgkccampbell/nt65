@@ -1452,7 +1452,9 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). Tooling shows the interval per
-instruction and per basic block on hover, and above each routine, and each inline `.scope`
+instruction and per basic block on hover, and beside an interval what its top would be paid
+for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
+cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
 block of one, what one pass through it costs: the shortest and the longest path from where it
 is entered to where its path ends. A routine no path leaves is shown as never returning,
 rather than as one nothing could be worked out for.
@@ -2846,8 +2848,9 @@ alone and without an assembler:
   show above each routine, and each inline `.scope` block of one, as a lens on the line that
   opens it, what one pass through it costs and what it costs with everything it calls, and
   which registers the routine hands back as it was entered with them (§7.7);
-  an instruction's own cycles, its block's, and on the 65816 the state reaching it, are
-  on hover, so nothing stands in the lines as they are written;
+  an instruction's own cycles and why they are an interval, its block's, the name its
+  datasheet gives it, the flags it writes, and on the 65816 the state reaching it, are on
+  hover, so nothing stands in the lines as they are written;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has

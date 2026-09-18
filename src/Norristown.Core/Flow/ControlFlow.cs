@@ -378,7 +378,7 @@ public sealed class ControlFlow
         {
             blocks[i].IsFallenInto = fallenInto[i];
             blocks[i].Next = tails[i]?.Next;
-            blocks[i].Cycles = Timing(blocks[i]);
+            blocks[i].Cycles = Counted(blocks[i]);
         }
         return blocks;
 
@@ -459,7 +459,7 @@ public sealed class ControlFlow
     /// How long the whole block takes. A block runs all of it or none, so the counts add up;
     /// one statement nt65 has no count for leaves the block without one.
     /// </summary>
-    private CycleCount? Timing(BasicBlock block)
+    private CycleCount? Counted(BasicBlock block)
     {
         var total = new CycleCount(0);
         foreach (var step in block.Steps)

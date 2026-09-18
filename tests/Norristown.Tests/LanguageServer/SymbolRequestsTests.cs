@@ -203,7 +203,7 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(9, 8), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("```nt65\nlda #0\n```", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\nlda #0  ; load accumulator\n```", hover.Contents.Value, StringComparison.Ordinal);
 
         // `lda #0` and `sta z:ptr` come to five, and the block ends at the label after them.
         Assert.Contains("cycles  2         block 5", hover.Contents.Value, StringComparison.Ordinal);
@@ -238,6 +238,109 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(hover);
         Assert.Contains("cycles  3", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("state   a16, i8, native", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An instruction is read under the name its datasheet gives it, written where the
+    /// language writes a comment. A reader who already knows what `pea` stands for is not the
+    /// one asking.
+    /// </summary>
+    [Fact]
+    public async Task HoverNamesTheInstructionOnTheHeadline()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var load = await client.HoverAsync(Uri, new Position(9, 8), timeout);
+        Assert.Contains("```nt65\nlda #0  ; load accumulator\n```", load?.Contents.Value, StringComparison.Ordinal);
+
+        await using var wide = await TestClient.StartAsync(timeout);
+        await wide.OpenAsync(
+            Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8, i8 {\n    pea $1234\n    pld\n    rts\n}\n");
+        await wide.NextDiagnosticsAsync(timeout);
+
+        var push = await wide.HoverAsync(Uri, new Position(4, 4), timeout);
+        Assert.Contains(
+            "```nt65\npea $1234  ; push effective absolute address\n```",
+            push?.Contents.Value,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Which flags an instruction writes is the fact people misremember, so it is beside the
+    /// instruction rather than in a datasheet on the desk.
+    /// </summary>
+    [Fact]
+    public async Task HoverListsTheFlagsAnInstructionWrites()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(
+            Uri, ".module main\n.segment CODE\n.proc main {\n    lda #1\n    adc #2\n    sta $10\n    rts\n}\n");
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        var load = await client.HoverAsync(Uri, new Position(3, 4), timeout);
+        var add = await client.HoverAsync(Uri, new Position(4, 4), timeout);
+        var store = await client.HoverAsync(Uri, new Position(5, 4), timeout);
+
+        Assert.Contains("flags   N Z\n", load?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("flags   N V Z C\n", add?.Contents.Value, StringComparison.Ordinal);
+
+        // A store writes no flag at all, and a row saying none would say nothing.
+        Assert.DoesNotContain("flags", store?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A count that is an interval says what its top would be paid for. The reason is always
+    /// something the processor decides as it runs and the program does not say, and a reader
+    /// left to work out which of them it is has been told half an answer.
+    /// </summary>
+    [Fact]
+    public async Task HoverSaysWhyACountIsAnInterval()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Indexed = """
+            .module main
+            .segment CODE
+            .data table: .byte[300]
+            .proc main {
+                ldx #4
+            @loop:
+                lda table,x
+                dex
+                bne @loop
+                rts
+            }
+            .export table
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, Indexed.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var read = await client.HoverAsync(Uri, new Position(6, 4), timeout);
+        var branch = await client.HoverAsync(Uri, new Position(8, 4), timeout);
+
+        Assert.Contains(
+            "cycles  4-5       block 8-11    +1 when the read crosses a page\n",
+            read?.Contents.Value,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "cycles  2-4       block 8-11    +1 when taken, +1 when that crosses a page\n",
+            branch?.Contents.Value,
+            StringComparison.Ordinal);
+
+        // On the 65816 a direct operand costs one more where the low byte of D is not zero,
+        // and a routine that says nothing about D does not say whether it is.
+        await using var wide = await TestClient.StartAsync(timeout);
+        await wide.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8, i8 {\n    lda $10\n    rts\n}\n");
+        await wide.NextDiagnosticsAsync(timeout);
+
+        var direct = await wide.HoverAsync(Uri, new Position(4, 4), timeout);
+
+        Assert.Contains(
+            "cycles  3-4       block 9-10    +1 when the low byte of D is not zero\n",
+            direct?.Contents.Value,
+            StringComparison.Ordinal);
     }
 
     /// <summary>An <c>.ensure</c> shows what the analysis found it has to write.</summary>
