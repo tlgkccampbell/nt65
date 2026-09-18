@@ -1,3 +1,5 @@
+using Norristown.Syntax.InternalSyntax;
+
 namespace Norristown.Syntax;
 
 /// <summary>A token with its parent and absolute position.</summary>

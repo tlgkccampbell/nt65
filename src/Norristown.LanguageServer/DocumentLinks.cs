@@ -18,9 +18,9 @@ internal static class DocumentLinks
         {
             // Only a written path is a link. A path a constant names is a name, and a name is
             // already a link to where it is declared.
-            if (node is not { Kind: SyntaxKind.DataDirective, ChildTokens.Length: > 0 }
-                || !node.ChildTokens[0].Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
-                || node.ChildNodes.FirstOrDefault() is not { Kind: SyntaxKind.StringExpression } written
+            if (node is not DataDirectiveSyntax data
+                || !data.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
+                || data.Values.FirstOrDefault() is not StringExpressionSyntax written
                 || model.ValueOf(written) is not { Kind: ValueKind.String, Text: { Length: > 0 } path })
             {
                 continue;

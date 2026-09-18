@@ -77,13 +77,13 @@ internal static class WorkspaceSymbols
     /// <summary>The module a file's <c>.module</c> names, or null.</summary>
     private static string? ModuleOf(SyntaxTree tree)
     {
-        foreach (var line in tree.Root.DescendantNodes().Where(node => node.Green is GreenLine))
+        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
-            if (line.Statement is { Kind: SyntaxKind.ModuleDirective } directive)
+            if (line.Statement is ModuleDirectiveSyntax directive)
                 return directive.GetText().Split(';')[0].Trim() is var written && written.IndexOf(' ') is var space and > 0
                     ? written[space..].Trim()
                     : null;
-            if (line.Statement is not { Kind: SyntaxKind.BlankLine })
+            if (line.Statement is not BlankLineSyntax)
                 return null;
         }
         return null;

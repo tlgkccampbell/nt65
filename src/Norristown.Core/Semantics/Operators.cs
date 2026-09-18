@@ -31,7 +31,7 @@ internal static class Operators
     /// A binary operator applied to two numbers. <c>.mod</c> arrives as a directive token,
     /// because <c>%</c> begins a binary number.
     /// </summary>
-    public static long? Binary(GreenToken op, long a, long b) => op.Kind switch
+    public static long? Binary(SyntaxToken op, long a, long b) => op.Kind switch
     {
         SyntaxKind.Star => a * b,
         SyntaxKind.Slash => b == 0 ? null : a / b,
@@ -56,7 +56,7 @@ internal static class Operators
     };
 
     /// <summary>Whether <paramref name="op"/> divides, so that a zero on its right is an error.</summary>
-    public static bool Divides(GreenToken op) =>
+    public static bool Divides(SyntaxToken op) =>
         op.Kind == SyntaxKind.Slash
         || (op.Kind == SyntaxKind.Directive && op.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase));
 

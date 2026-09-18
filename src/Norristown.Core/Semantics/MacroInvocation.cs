@@ -15,7 +15,7 @@ public sealed class MacroInvocation
 {
     private readonly Dictionary<Symbol, MacroArgument> byParameter = [];
 
-    private MacroInvocation(Symbol macro, SyntaxNode call)
+    private MacroInvocation(Symbol macro, MacroCallSyntax call)
     {
         Macro = macro;
         Call = call;
@@ -25,7 +25,7 @@ public sealed class MacroInvocation
     public Symbol Macro { get; }
 
     /// <summary>The call itself.</summary>
-    public SyntaxNode Call { get; }
+    public MacroCallSyntax Call { get; }
 
     /// <summary>What each parameter was given, in the order the parameters are declared.</summary>
     public IReadOnlyList<MacroArgument> Arguments { get; private set; } = [];
@@ -39,7 +39,7 @@ public sealed class MacroInvocation
     /// wants to hear about it.
     /// </summary>
     public static MacroInvocation Of(
-        SyntaxNode call, Symbol macro, SyntaxTree tree, List<Diagnostic>? diagnostics,
+        MacroCallSyntax call, Symbol macro, SyntaxTree tree, List<Diagnostic>? diagnostics,
         Func<string, Symbol?>? lookup = null)
     {
         var invocation = new MacroInvocation(macro, call);
@@ -52,12 +52,12 @@ public sealed class MacroInvocation
         var next = 0;
         var named = false;
 
-        foreach (var argument in Macros.ArgumentsOf(call))
+        foreach (var argument in call.Arguments?.Arguments ?? [])
         {
-            if (argument.Kind == SyntaxKind.NamedArgument)
+            if (argument is NamedArgumentSyntax byName)
             {
                 named = true;
-                BindNamed(argument);
+                BindNamed(byName);
                 continue;
             }
             if (named)
@@ -75,11 +75,9 @@ public sealed class MacroInvocation
         Finish();
         return invocation;
 
-        void BindNamed(SyntaxNode argument)
+        void BindNamed(NamedArgumentSyntax argument)
         {
-            var name = argument.ChildTokens.Length > 0 ? argument.ChildTokens[0] : default;
-            if (name.Parent is null)
-                return;
+            var name = argument.Name;
             var parameter = macro.Parameters.FirstOrDefault(p => p.Name == name.Text);
             if (parameter is null)
             {
@@ -96,7 +94,7 @@ public sealed class MacroInvocation
                 Report(name.Span, $"`{parameter.Name}` is given twice");
                 return;
             }
-            Take(parameter, argument.ChildNodes.FirstOrDefault());
+            Take(parameter, argument.Value);
         }
 
         void BindPositional(SyntaxNode argument)
@@ -141,14 +139,12 @@ public sealed class MacroInvocation
             var parameters = macro.Parameters.Where(parameter => parameter.IsBlock).ToList();
             for (var i = 0; i < blocks.Count; i++)
             {
-                var opener = blocks[i].ChildNodes.Length > 0 ? blocks[i].ChildNodes[0].Statement : null;
-
                 // The first block binds by position; each `} name {` after it says which
                 // parameter it is, because a macro may take several and skip none silently.
                 MacroParameter? parameter;
-                if (opener is { Kind: SyntaxKind.BlockContinuation } && opener.ChildTokens.Length > 1)
+                if (blocks[i].Opener.Statement is BlockContinuationSyntax continuation)
                 {
-                    var name = opener.ChildTokens[1];
+                    var name = continuation.Name;
                     parameter = parameters.FirstOrDefault(p => p.Name == name.Text);
                     if (parameter is null)
                     {
@@ -167,7 +163,7 @@ public sealed class MacroInvocation
                 }
                 else
                 {
-                    Report(blocks[i].ChildNodes[0].Span,
+                    Report(blocks[i].Opener.Span,
                         $"`{macro.Name}` takes no block, and this call gives it one");
                     continue;
                 }
@@ -210,9 +206,7 @@ public sealed class MacroInvocation
 
         void Check(ArgumentKind accepts, MacroParameter parameter, SyntaxNode argument)
         {
-            var value = argument.Kind == SyntaxKind.NamedArgument
-                ? argument.ChildNodes.FirstOrDefault()
-                : argument;
+            var value = argument is NamedArgumentSyntax byName ? byName.Value : argument;
             if (value is null)
                 return;
 
@@ -221,7 +215,7 @@ public sealed class MacroInvocation
                 case ParameterKind.Operand:
                     // Only a braced argument is an operand; an unbraced `(ptr)` reads as
                     // indirect addressing and so can only be a mistake here.
-                    if (value.Kind == SyntaxKind.ParenthesizedExpression)
+                    if (value is ParenthesizedExpressionSyntax)
                     {
                         Report(value.Span, $"`{parameter.Name}` takes an operand, and `{value.GetText()}` "
                             + "reads as an expression in parentheses. Brace it to pass indirect addressing");
@@ -229,9 +223,7 @@ public sealed class MacroInvocation
                     break;
 
                 case ParameterKind.One:
-                    var word = value is { Kind: SyntaxKind.NameExpression, ChildTokens.Length: 1 }
-                        ? value.ChildTokens[0].Text
-                        : null;
+                    var word = value is NameExpressionSyntax { ChildTokens: [var only] } ? only.Text : null;
 
                     // A word may be passed on from a `one` parameter of the macro whose body
                     // writes the call, so long as this list holds everything that one allows
@@ -260,13 +252,13 @@ public sealed class MacroInvocation
                     break;
 
                 case ParameterKind.Ident:
-                    if (value.Kind != SyntaxKind.NameExpression)
+                    if (value is not NameExpressionSyntax)
                         Report(value.Span, $"`{parameter.Name}` takes a name, and this is not one");
                     break;
 
                 case ParameterKind.Expr:
                 case ParameterKind.Const:
-                    if (value.Kind == SyntaxKind.BracedOperand)
+                    if (value is BracedOperandSyntax)
                     {
                         Report(value.Span, $"`{parameter.Name}` takes an expression, and a braced "
                             + "argument is a whole operand");
@@ -290,6 +282,6 @@ public sealed class MacroInvocation
     }
 
     /// <summary>The name a call writes, which is where a diagnostic about the call as a whole goes.</summary>
-    private static TextSpan NameSpan(SyntaxNode call) =>
+    private static TextSpan NameSpan(MacroCallSyntax call) =>
         Macros.CalleeOf(call) is { } callee ? callee.Span : call.Span;
 }

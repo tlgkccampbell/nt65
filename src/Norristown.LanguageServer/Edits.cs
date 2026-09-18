@@ -67,14 +67,14 @@ internal static class Edits
         return own + Indent;
     }
 
-    /// <summary>The last line at the top level whose statement is of <paramref name="kind"/>, or -1.</summary>
-    public static int LastLine(SyntaxTree tree, SyntaxKind kind)
+    /// <summary>The last line at the top level whose statement is a <typeparamref name="T"/>, or -1.</summary>
+    public static int LastLine<T>(SyntaxTree tree) where T : StatementSyntax
     {
         var found = -1;
-        foreach (var child in tree.Root.ChildNodes)
+        foreach (var child in tree.Root.Members)
         {
-            if (child.Green is GreenLine && child.Statement?.Kind == kind)
-                found = child.LineIndex;
+            if (child is LineSyntax { Statement: T } line)
+                found = line.LineIndex;
         }
         return found;
     }
@@ -84,7 +84,7 @@ internal static class Edits
     {
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (node.Green is GreenBlock && node.LineIndex == line)
+            if (node is BlockSyntax && node.LineIndex == line)
                 return tree.GetLineIndex(node.FullSpan.End - 1);
         }
         return line;
@@ -95,22 +95,22 @@ internal static class Edits
     {
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (node.Green is GreenBlock && node.LineIndex == line)
+            if (node is BlockSyntax && node.LineIndex == line)
                 return node.FullSpan;
         }
         return null;
     }
 
     /// <summary>The block that holds <paramref name="line"/>, innermost first, or null at a file's top level.</summary>
-    public static SyntaxNode? BlockAround(SyntaxTree tree, int line)
+    public static BlockSyntax? BlockAround(SyntaxTree tree, int line)
     {
-        SyntaxNode? found = null;
-        foreach (var node in tree.Root.DescendantNodes())
+        BlockSyntax? found = null;
+        foreach (var block in tree.Root.DescendantNodes().OfType<BlockSyntax>())
         {
-            if (node.Green is GreenBlock && node.LineIndex < line && line <= tree.GetLineIndex(node.FullSpan.End - 1)
-                && (found is null || node.LineIndex > found.LineIndex))
+            if (block.LineIndex < line && line <= tree.GetLineIndex(block.FullSpan.End - 1)
+                && (found is null || block.LineIndex > found.LineIndex))
             {
-                found = node;
+                found = block;
             }
         }
         return found;

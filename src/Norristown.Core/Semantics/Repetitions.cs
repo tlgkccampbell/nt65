@@ -16,39 +16,42 @@ public static class Repetitions
     /// no turns at all.
     /// </summary>
     public static IReadOnlyList<Expansion> Of(
-        SemanticModel model, SyntaxNode block, Expansion? outer, List<Diagnostic>? diagnostics)
+        SemanticModel model, BlockSyntax block, Expansion? outer, List<Diagnostic>? diagnostics)
     {
-        if (block.ChildNodes.Length == 0 || block.ChildNodes[0].Statement is not { } opener)
-            return [];
-
+        var opener = block.Opener.Statement;
         var binding = BindingOf(model, opener);
-        var counted = opener.ChildNodes.FirstOrDefault();
-        if (counted is null)
-            return [];
+        return opener switch
+        {
+            RepeatDirectiveSyntax repeat => Counted(model, block, repeat.Expression, binding, outer, diagnostics),
+            EachDirectiveSyntax each => Walked(model, block, each.Expression, binding, outer, diagnostics),
+            MultiProcDeclarationSyntax family =>
+                Walked(model, block, family.Expression, binding, outer, diagnostics, folded: true),
 
-        return opener.Kind == SyntaxKind.RepeatDirective
-            ? Counted(model, block, counted, binding, outer, diagnostics)
-            : Walked(model, block, counted, binding, outer, diagnostics,
-                folded: opener.Kind == SyntaxKind.MultiProcDeclaration);
+            // An opener that is none of them is walked as an `.each` would be, by whatever it
+            // wrote first, which is where it is said to be neither a list nor an enum.
+            _ => opener.ChildNodes.FirstOrDefault() is { } walked
+                ? Walked(model, block, walked, binding, outer, diagnostics)
+                : [],
+        };
     }
 
     /// <summary>The name a repetition binds, or null when it names none.</summary>
-    public static Symbol? BindingOf(SemanticModel model, SyntaxNode opener)
+    public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
     {
-        foreach (var token in opener.ChildTokens)
+        var name = opener switch
         {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && model.ReferenceAt(token.Span.Start) is { IsDeclaration: true } declared)
-            {
-                return declared.Symbol;
-            }
-        }
-        return null;
+            RepetitionDirectiveSyntax repetition => repetition.Name,
+            MultiProcDeclarationSyntax family => family.Name,
+            _ => null,
+        };
+        return name is { } bound && model.ReferenceAt(bound.Span.Start) is { IsDeclaration: true } declared
+            ? declared.Symbol
+            : null;
     }
 
     /// <summary><c>.repeat count, i</c>: the name counts from zero, as an index does.</summary>
     private static IReadOnlyList<Expansion> Counted(
-        SemanticModel model, SyntaxNode block, SyntaxNode counted, Symbol? binding, Expansion? outer,
+        SemanticModel model, BlockSyntax block, SyntaxNode counted, Symbol? binding, Expansion? outer,
         List<Diagnostic>? diagnostics)
     {
         if (model.ValueOf(counted, outer).AsNumber() is not { } count)
@@ -73,7 +76,7 @@ public static class Repetitions
     /// the order they are written.
     /// </summary>
     private static IReadOnlyList<Expansion> Walked(
-        SemanticModel model, SyntaxNode block, SyntaxNode walked, Symbol? binding, Expansion? outer,
+        SemanticModel model, BlockSyntax block, SyntaxNode walked, Symbol? binding, Expansion? outer,
         List<Diagnostic>? diagnostics, bool folded = false)
     {
         // `.multiproc` names its routines after an enum's members, so a list is no answer: the
@@ -116,22 +119,22 @@ public static class Repetitions
     /// may. What the body declares is a different name on every turn, and each of these is
     /// one thing for the whole file.
     /// </summary>
-    public static string? Forbidden(SyntaxNode statement) => (statement.IsExported ? SyntaxKind.ExportDirective : statement.Kind) switch
+    public static string? Forbidden(StatementSyntax statement) => statement switch
     {
-        SyntaxKind.ExportDirective or SyntaxKind.ImportDirective =>
+        { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
             "an export or an import belongs outside a repetition: it names one symbol, and a "
             + "repetition's body is written out once per turn",
-        SyntaxKind.CpuDirective => "`.cpu` belongs outside a repetition: the CPU is program-wide",
-        SyntaxKind.SegmentDeclaration =>
+        CpuDirectiveSyntax => "`.cpu` belongs outside a repetition: the CPU is program-wide",
+        SegmentDeclarationSyntax =>
             "a segment declaration belongs outside a repetition: a segment is declared exactly "
             + "once for the program, and this one would be declared once per turn",
-        SyntaxKind.MultiProcDeclaration =>
+        MultiProcDeclarationSyntax =>
             "`.multiproc` belongs outside a repetition: it declares one routine per member of an enum, "
             + "and this one would declare them again on every turn",
-        SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
+        ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
             "`.proc` belongs outside a repetition: a routine's name and signature are part of the "
             + "file's interface, and this one would be a different routine on every turn",
-        SyntaxKind.MacroDeclaration or SyntaxKind.FuncDeclaration or SyntaxKind.SignatureDeclaration =>
+        MacroDeclarationSyntax or FuncDeclarationSyntax or SignatureDeclarationSyntax =>
             "a definition belongs outside a repetition: it would be a different one on every turn, "
             + "and nothing outside the body could name any of them",
         _ => null,
@@ -139,7 +142,7 @@ public static class Repetitions
 
     /// <summary>The word an item was written as, for a list of them.</summary>
     private static string Word(SyntaxNode item) =>
-        item.ChildTokens.Length > 0 ? item.ChildTokens[0].Text : item.GetText().Trim();
+        item.ChildTokens is [var first, ..] ? first.Text : item.GetText().Trim();
 
     private static void Report(
         SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, string message) =>

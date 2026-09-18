@@ -374,13 +374,12 @@ public static class RegisterKeeps
         /// <summary>What one statement does to the registers.</summary>
         private RegisterState Step(Step step, RegisterState state, List<Diagnostic>? report)
         {
-            var statement = step.Statement;
-            if (statement.Kind == SyntaxKind.StateDirective)
+            if (step.Statement is StateDirectiveSyntax)
                 return Asserted(step, state, report);
-            if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
+            if (step.Statement is not InstructionStatementSyntax statement)
                 return state;
 
-            var mnemonic = statement.ChildTokens[0].Text.ToLowerInvariant();
+            var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
             var mode = layout.Of(statement, step.On)?.Mode;
 
             // A software interrupt runs a handler that may not even be in this program.
@@ -515,9 +514,7 @@ public static class RegisterKeeps
             var statement = step.Statement;
             var mode = layout.Of(statement, step.On)?.Mode;
             var transfer = Transfers.Of(statement, mode);
-            var mnemonic = statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
-                ? statement.ChildTokens[0].Text.ToLowerInvariant()
-                : "";
+            var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() ?? "";
             var calls = transfer == Transfer.Call
                 || flow.RelativeCallAt(step) is not null
                 || (transfer == Transfer.Elsewhere && mnemonic is "jsr" or "jsl");
@@ -531,8 +528,8 @@ public static class RegisterKeeps
 
         /// <summary>The value of an immediate operand, where it is known.</summary>
         private long? Constant(Step step) =>
-            step.Statement.ChildNodes.FirstOrDefault()?.ChildNodes
-                .FirstOrDefault(child => child.Kind != SyntaxKind.AddressPrefix) is { } expression
+            (step.Statement as InstructionStatementSyntax)?.Operand?.ChildNodes
+                .OfType<ExpressionSyntax>().FirstOrDefault() is { } expression
                 ? model.ValueOf(expression, step.On).AsNumber()
                 : null;
     }

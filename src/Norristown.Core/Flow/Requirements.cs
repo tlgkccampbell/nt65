@@ -68,8 +68,8 @@ internal sealed class Requirements
     }
 
     private static bool Is(SyntaxNode statement, params string[] mnemonics) =>
-        statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
-        && mnemonics.Any(m => statement.ChildTokens[0].Text.Equals(m, StringComparison.OrdinalIgnoreCase));
+        statement is InstructionStatementSyntax instruction
+        && mnemonics.Any(m => instruction.Mnemonic.Text.Equals(m, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The statement as it is written, for a message that quotes it.</summary>
     private static string Quoted(SyntaxNode statement) => $"`{statement.GetText().Trim()}`";
@@ -88,9 +88,9 @@ internal sealed class Requirements
         }
         foreach (var step in layout.Steps)
         {
-            if (step is { Routine: { } routine, Statement.Kind: SyntaxKind.NextDirective })
+            if (step is { Routine: { } routine, Statement: NextDirectiveSyntax next })
             {
-                foreach (var target in flow.Named(step.Statement, step.On))
+                foreach (var target in flow.Named(next, step.On))
                     named.Add((routine, target.Symbol));
             }
         }
@@ -110,9 +110,9 @@ internal sealed class Requirements
             // nothing but `.state` lines has none.
             if (blocks[i].Steps
                     .Select(step => step.Statement)
-                    .FirstOrDefault(statement => statement.Kind != SyntaxKind.StateDirective) is { } first)
+                    .FirstOrDefault(statement => statement is not StateDirectiveSyntax) is { } first)
             {
-                return first.Kind == SyntaxKind.InstructionStatement;
+                return first is InstructionStatementSyntax;
             }
         }
         return false;
@@ -128,7 +128,8 @@ internal sealed class Requirements
         if (block.Steps.Count == 0 || block.Next is not null)
             return;
         var step = block.Steps[^1];
-        var statement = step.Statement;
+        if (step.Statement is not InstructionStatementSyntax statement)
+            return;
         var mode = layout.Of(statement, step.On)?.Mode;
         switch (Transfers.Of(statement, mode))
         {
@@ -143,7 +144,7 @@ internal sealed class Requirements
                 break;
 
             case Transfer.Return when Is(statement, "rts", "rtl") && PushesCode(block):
-                Report(statement, $"`{statement.ChildTokens[0].Text.ToLowerInvariant()}` here returns to an address "
+                Report(statement, $"`{statement.Mnemonic.Text.ToLowerInvariant()}` here returns to an address "
                     + "this block pushed, which makes it a jump: `.next` names where it goes");
                 break;
 
@@ -161,7 +162,7 @@ internal sealed class Requirements
     }
 
     /// <summary>What a direct transfer needs of the place it names.</summary>
-    private void CheckTarget(FlowRegion region, Step step, SyntaxNode statement, AddressingMode? mode, bool calls)
+    private void CheckTarget(FlowRegion region, Step step, InstructionStatementSyntax statement, AddressingMode? mode, bool calls)
     {
         if (Transfers.TargetOf(statement, mode) is not { } written)
             return;
@@ -171,7 +172,7 @@ internal sealed class Requirements
         // but a routine is the state analysis's to report, with the call's other checks.
         if (target is null)
         {
-            if (!calls && written.Kind != SyntaxKind.NameExpression)
+            if (!calls && written is not NameExpressionSyntax)
             {
                 Report(statement, $"{Quoted(statement)} goes to a computed address, which the analysis cannot "
                     + "follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not "
@@ -205,7 +206,7 @@ internal sealed class Requirements
         if (!labels.TryGetValue(symbol, out var labelled))
             return;
         if (!labelled.IsCode && DataAt(labelled) is { } data
-            && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a.Kind != SyntaxKind.NextDirective)))
+            && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
             Report(statement, $"`{symbol.DisplayName}` labels data, and this jumps to it: the label needs a `.state` "
                 + "after it saying what the state is there, and the data a `.next` saying where flow goes");
@@ -215,8 +216,8 @@ internal sealed class Requirements
     /// <summary>The first data a data label stands on, or null when it stands on none.</summary>
     private static Step? DataAt(Labelled labelled)
     {
-        var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement.Kind != SyntaxKind.StateDirective);
-        return first.Statement?.Kind is SyntaxKind.DataDirective or SyntaxKind.DataValues ? first : null;
+        var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
+        return first.Statement is DataDirectiveSyntax or DataValuesSyntax ? first : null;
     }
 
     /// <summary>
@@ -229,14 +230,13 @@ internal sealed class Requirements
         var names = false;
         foreach (var step in block.Steps.Take(block.Steps.Count - 1))
         {
-            var statement = step.Statement;
-            if (statement.Kind != SyntaxKind.InstructionStatement)
+            if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
             if (Is(statement, "pha", "phx", "phy", "pea", "pei", "per"))
                 pushes = true;
-            if (statement.ChildNodes.FirstOrDefault() is not { } operand)
+            if (statement.Operand is not { } operand)
                 continue;
-            foreach (var name in operand.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+            foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
             {
                 if (Targets.Of(model, name, step.On)?.Symbol is { } symbol
                     && (symbol.Signature is not null || labels.TryGetValue(symbol, out var labelled) && labelled.IsCode))
@@ -306,17 +306,17 @@ internal sealed class Requirements
         {
             var statement = step.Statement;
             if (step.Label is not null
-                || statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.DataDirective or SyntaxKind.DataValues))
+                || statement is not (InstructionStatementSyntax or DataDirectiveSyntax or DataValuesSyntax))
                 continue;
             if (flow.IsReturnAddress(step))
                 continue;
-            var mode = statement.Kind == SyntaxKind.InstructionStatement ? layout.Of(statement, step.On)?.Mode : null;
-            var direct = statement.Kind == SyntaxKind.InstructionStatement
+            var mode = statement is InstructionStatementSyntax ? layout.Of(statement, step.On)?.Mode : null;
+            var direct = statement is InstructionStatementSyntax
                 && Transfers.Of(statement, mode) is Transfer.Branch or Transfer.Jump or Transfer.Call
                 ? Transfers.TargetOf(statement, mode)
                 : null;
 
-            foreach (var name in statement.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+            foreach (var name in statement.DescendantNodes().OfType<NameExpressionSyntax>())
             {
                 if (name == direct || Measured(name, statement)
                     || Targets.Of(model, name, step.On)?.Symbol is not { } symbol
@@ -328,7 +328,7 @@ internal sealed class Requirements
                 if (Stores(statement, mode))
                 {
                     var patched = flow.AnnotationsOf(step)
-                        .Where(a => a.Kind == SyntaxKind.PatchDirective)
+                        .Where(a => a is PatchDirectiveSyntax)
                         .SelectMany(Annotations.TargetsOf)
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
                     if (!patched)
@@ -353,12 +353,12 @@ internal sealed class Requirements
     /// Whether a name is only measured rather than used as an address: inside <c>.sizeof</c>,
     /// <c>.endof</c> or <c>.spanof</c>.
     /// </summary>
-    private static bool Measured(SyntaxNode name, SyntaxNode statement)
+    private static bool Measured(NameExpressionSyntax name, SyntaxNode statement)
     {
         for (var node = name.Parent; node is not null && node != statement; node = node.Parent)
         {
-            if (node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
-                && node.ChildTokens[0].Text.ToLowerInvariant() is ".sizeof" or ".endof" or ".spanof")
+            if (node is CallExpressionSyntax { Function: { } function }
+                && function.Text.ToLowerInvariant() is ".sizeof" or ".endof" or ".spanof")
             {
                 return true;
             }

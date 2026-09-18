@@ -137,8 +137,8 @@ public sealed class StateAnalysis
     private static bool IsKnown(ProcessorMode mode) => mode is ProcessorMode.Native or ProcessorMode.Emulation;
 
     private static bool Is(SyntaxNode statement, string mnemonic) =>
-        statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
-        && statement.ChildTokens[0].Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
+        statement is InstructionStatementSyntax instruction
+        && instruction.Mnemonic.Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>What a routine hands back: its exit, with the parts it declares unchanged kept from <paramref name="state"/>.</summary>
     private static ProcessorState Exited(Signature callee, ProcessorState state) => new(
@@ -270,34 +270,33 @@ public sealed class StateAnalysis
     /// The state after <paramref name="step"/>, with a cause for each width it made unknown and
     /// the cause carried on for each it left unknown.
     /// </summary>
-    private FlowState Explained(Step step, SyntaxNode? next, FlowState before, FlowState after) => after with
+    private FlowState Explained(Step step, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
     {
         WhyA = Why(step, next, before.Processor.E, before.Processor.A, after.Processor.A, before.WhyA),
         WhyIndex = Why(step, next, before.Processor.E, before.Processor.Index, after.Processor.Index, before.WhyIndex),
     };
 
     private WidthCause? Why(
-        Step step, SyntaxNode? next, ProcessorMode mode, Width before, Width after, WidthCause? carried)
+        Step step, NextDirectiveSyntax? next, ProcessorMode mode, Width before, Width after, WidthCause? carried)
     {
         if (after != Width.Unknown)
             return null;
         if (before == Width.Unknown)
             return carried;
 
-        var statement = step.Statement;
-        if (statement.Kind == SyntaxKind.StateDirective)
+        if (step.Statement is StateDirectiveSyntax)
             return new("a `.state` says so", "the `.state` can say what it is");
-        if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
+        if (step.Statement is not InstructionStatementSyntax statement)
             return null;
         var written = $"`{statement.GetText().Trim()}`";
-        return statement.ChildTokens[0].Text.ToLowerInvariant() switch
+        return statement.Mnemonic.Text.ToLowerInvariant() switch
         {
             "plp" => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
             "xce" => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
             "rep" when mode != ProcessorMode.Native && Constant(step) is not null
                 => new($"{written} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
             "rep" or "sep" => new($"{written} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
-            "jsr" or "jsl" when next is not null && statement.ChildNodes.FirstOrDefault()?.Kind is not SyntaxKind.AbsoluteOperand
+            "jsr" or "jsl" when next is not null && statement.Operand is not AbsoluteOperandSyntax
                 => new($"{written} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
             "jsr" or "jsl" => new($"{written} returns with it unknown", "an `.ensure` after it sets it"),
             _ => new($"{written} makes it unknown", "a `.state` after it says what it is"),
@@ -305,21 +304,20 @@ public sealed class StateAnalysis
     }
 
     /// <summary>What one statement does to the state.</summary>
-    private FlowState Through(Step step, Step? previous, SyntaxNode? next, FlowState state, Symbol routine)
+    private FlowState Through(Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Symbol routine)
     {
-        var statement = step.Statement;
-        if (statement.Kind == SyntaxKind.StateDirective)
+        if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state);
-        if (statement.Kind == SyntaxKind.EnsureDirective)
+        if (step.Statement is EnsureDirectiveSyntax)
             return Ensured(step, state);
-        if (statement.Kind == SyntaxKind.FrameDirective)
-            return Framed(step, state);
+        if (step.Statement is FrameDirectiveSyntax frame)
+            return Framed(step, frame, state);
         if (step.IsMarker)
             return Marked(step, state);
-        if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
+        if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 
-        var mnemonic = statement.ChildTokens[0].Text.ToLowerInvariant();
+        var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
         var mode = layout.Of(statement, step.On)?.Mode;
         var processor = state.Processor;
         var stack = state.Stack;
@@ -447,7 +445,7 @@ public sealed class StateAnalysis
 
     /// <summary>What a call or a jump does: a call becomes its routine's exit, and a jump to a routine is checked as a tail call.</summary>
     private FlowState Transferred(
-        Step step, string mnemonic, AddressingMode? mode, SyntaxNode? next, FlowState state, Symbol routine)
+        Step step, string mnemonic, AddressingMode? mode, NextDirectiveSyntax? next, FlowState state, Symbol routine)
     {
         var statement = step.Statement;
         var transfer = Transfers.Of(statement, mode);
@@ -503,13 +501,12 @@ public sealed class StateAnalysis
     }
 
     /// <summary>The routines a <c>.next</c> names; the labels it names are edges of the routine's own.</summary>
-    private IEnumerable<Symbol> Routines(SyntaxNode next, Expansion? on) =>
+    private IEnumerable<Symbol> Routines(NextDirectiveSyntax next, Expansion? on) =>
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
 
     /// <summary>Whether a statement calls, directly or through a pointer.</summary>
     private bool IsCallOrIndirectCall(Step step) =>
-        step.Statement.Kind == SyntaxKind.InstructionStatement
-        && (Is(step.Statement, "jsr") || Is(step.Statement, "jsl"));
+        Is(step.Statement, "jsr") || Is(step.Statement, "jsl");
 
     /// <summary>
     /// A call: the state here must be what the routine expects, and becomes what it returns
@@ -813,21 +810,20 @@ public sealed class StateAnalysis
     {
         foreach (var step in block.Steps)
         {
-            var statement = step.Statement;
-            if (statement.Kind == SyntaxKind.InstructionStatement && OperandOf(step) is { } operand
-                && CodeLayout.ThroughDirectPage(operand))
+            if (step.Statement is not InstructionStatementSyntax statement)
+                continue;
+            if (OperandOf(step) is { } operand && CodeLayout.ThroughDirectPage(operand))
             {
                 Report(step, $"`d:` is reached through the direct page, and no path from `{region.Routine.DisplayName}`'s "
                     + "entry reaches it. A `.state` after its label declares what the state is there");
                 continue;
             }
-            if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0
-                || layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
-                || Instructions.SizedBy(statement.ChildTokens[0].Text) is not { } register)
+            if (layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
+                || Instructions.SizedBy(statement.Mnemonic.Text) is not { } register)
             {
                 continue;
             }
-            Report(step, $"`{statement.ChildTokens[0].Text.ToLowerInvariant()} #` needs the width of "
+            Report(step, $"`{statement.Mnemonic.Text.ToLowerInvariant()} #` needs the width of "
                 + $"{Spell(register)}, and no path from `{region.Routine.DisplayName}`'s entry reaches it. "
                 + "A `.state` after its label declares what the state is there");
         }
@@ -858,13 +854,13 @@ public sealed class StateAnalysis
     /// <summary>The operand an instruction has on this writing of it: what a call gave, where the body names an <c>operand</c> parameter.</summary>
     private SyntaxNode? OperandOf(Step step)
     {
-        var written = step.Statement.ChildNodes.FirstOrDefault();
+        var written = (step.Statement as InstructionStatementSyntax)?.Operand;
         return Operands.Substituted(model, written, step.On)?.Operand ?? written;
     }
 
     /// <summary>The value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the <c>c</c> of <c>pea c</c>, or null when it is not a constant.</summary>
     private long? Constant(Step step) =>
-        OperandOf(step)?.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix) is { } expression
+        OperandOf(step)?.ChildNodes.FirstOrDefault(c => c is not AddressPrefixSyntax) is { } expression
             ? model.ValueOf(expression, step.On).AsNumber()
             : null;
 
@@ -880,11 +876,11 @@ public sealed class StateAnalysis
     /// </summary>
     private StateValue MovedTo(Step step)
     {
-        if (OperandOf(step) is not { Kind: SyntaxKind.ImmediateOperand, ChildNodes: [_, var destination, ..] })
+        if (OperandOf(step) is not ImmediateOperandSyntax { SecondValue: { } destination })
             return StateValue.Unknown;
         if (model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff)
             return StateValue.Of(bank);
-        return destination is { Kind: SyntaxKind.UnaryExpression, ChildTokens: [{ Kind: SyntaxKind.Caret }], ChildNodes: [var named] }
+        return destination is UnaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Caret, Operand: var named }
             && Targets.Of(model, named, step.On)?.Symbol is { } symbol && SegmentOf(symbol)?.Bank is { } home
                 ? StateValue.Of(home)
                 : StateValue.Unknown;
@@ -902,7 +898,7 @@ public sealed class StateAnalysis
     private void CheckMemory(Step step, string mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
         if (mode is not { } chosen || OperandOf(step) is not { } operand
-            || operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix) is not { } expression)
+            || operand.ChildNodes.FirstOrDefault(c => c is not AddressPrefixSyntax) is not { } expression)
         {
             return;
         }
@@ -1144,12 +1140,11 @@ public sealed class StateAnalysis
     /// frame. Where the stack is not known, as after <c>tcs</c>, it becomes those bytes with
     /// nothing known beneath them.
     /// </summary>
-    private FlowState Framed(Step step, FlowState state)
+    private FlowState Framed(Step step, FrameDirectiveSyntax directive, FlowState state)
     {
-        var statement = step.Statement;
-        if (statement.ChildTokens.Length < 2 || model.SymbolAt(statement.ChildTokens[1]) is not { Kind: SymbolKind.Frame } frame)
+        if (directive.Name is not { } name || model.SymbolAt(name) is not { Kind: SymbolKind.Frame } frame)
             return state;
-        if (statement.ChildNodes.FirstOrDefault() is not { } type
+        if (directive.Type is not { } type
             || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })
         {
             Report(step, $"`.frame {frame.DisplayName}` is laid out as a struct or a union, whose size says how many bytes it names");
@@ -1169,16 +1164,18 @@ public sealed class StateAnalysis
     /// </summary>
     private void Slot(Step step, AddressingMode? mode, AnalysisStack? stack)
     {
-        if (step.Statement.ChildNodes.FirstOrDefault() is not { } operand)
+        if ((step.Statement as InstructionStatementSyntax)?.Operand is not { } operand)
             return;
-        foreach (var name in operand.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
         {
-            var tokens = name.ChildTokens;
-            if (tokens.Length == 0 || model.SymbolAt(tokens[0]) is not { Kind: SymbolKind.Frame } frame)
+            if (name.GlobalToken is not null || name.Names is not [var first, ..]
+                || model.SymbolAt(first) is not { Kind: SymbolKind.Frame } frame)
+            {
                 continue;
+            }
             var written = name.GetText().Trim();
             if (mode is not (AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
-                || !name.Parent!.Kind.ToString().EndsWith("Operand", StringComparison.Ordinal))
+                || name.Parent is not OperandSyntax)
             {
                 ReportAt(name, step, $"`{written}` is a place on the stack, and is named only on its own as a "
                     + $"stack-relative operand: `{written},s`");
@@ -1195,7 +1192,7 @@ public sealed class StateAnalysis
                 continue;
             }
             var size = frame.TypeExpression is { } type ? model.SymbolOf(type)?.Size ?? 0 : 0;
-            var offset = tokens.Length > 1 ? model.ValueOf(name, step.On).AsNumber() ?? 0 : 0;
+            var offset = name.Names.Length > 1 ? model.ValueOf(name, step.On).AsNumber() ?? 0 : 0;
 
             // The frame's lowest byte is its last member's, and `1,s` is the byte on top.
             if (final)
@@ -1214,7 +1211,7 @@ public sealed class StateAnalysis
     {
         var key = (step.Statement.Position, step.On);
         var processor = state.Processor;
-        if (step.Statement.Kind == SyntaxKind.BlockSplice)
+        if (step.Statement is BlockSpliceSyntax)
         {
             if (!step.Closes)
             {
@@ -1229,7 +1226,7 @@ public sealed class StateAnalysis
             return state;
         }
 
-        if (model.MacroAt(step.Statement) is not { MacroSignature: { } signature } macro)
+        if (step.Statement is not MacroCallSyntax expanded || model.MacroAt(expanded) is not { MacroSignature: { } signature } macro)
             return state;
         var name = macro.DisplayName + "!";
         if (!step.Closes)
@@ -1256,10 +1253,15 @@ public sealed class StateAnalysis
         {
             if (step.Routine is not null || step.Label is not null)
                 continue;
-            var statement = step.Statement;
-            if (statement.Kind is SyntaxKind.StateDirective or SyntaxKind.EnsureDirective or SyntaxKind.FrameDirective)
+            var keyword = step.Statement switch
             {
-                Report(step, $"`{statement.ChildTokens[0].Text.ToLowerInvariant()}` describes a point in a routine, "
+                StateListDirectiveSyntax list => list.Keyword,
+                FrameDirectiveSyntax frame => frame.Keyword,
+                _ => (SyntaxToken?)null,
+            };
+            if (keyword is { } directive)
+            {
+                Report(step, $"`{directive.Text.ToLowerInvariant()}` describes a point in a routine, "
                     + "and this is outside any `.proc`");
             }
         }
@@ -1311,14 +1313,14 @@ public sealed class StateAnalysis
             return;
 
         var inBody = node.Tree != model.Tree;
-        SyntaxNode? call = null;
+        MacroCallSyntax? call = null;
         for (var level = step.On; level is not null; level = level.Outer)
         {
             if (level.Call is null)
                 continue;
             call = level.Call;
             if (level.Body is { } body && body.Tree == node.Tree
-                && node.Position >= body.Position && node.Position < body.Position + body.Green.FullWidth)
+                && node.Position >= body.Position && node.Position < body.FullSpan.End)
             {
                 inBody = true;
             }

@@ -53,8 +53,9 @@ internal static class CallHelp
     private static Protocol.SignatureHelp ForMacro(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
-        var written = macro.Definition?.ChildNodes.FirstOrDefault()?.Statement is { } opener
-            ? Macros.ParametersOf(opener).Select(parameter => parameter.GetText().Trim()).ToList()
+        var written = macro.Definition is BlockSyntax definition
+            ? ((definition.Opener.Statement as MacroDeclarationSyntax)?.Parameters?.Parameters ?? [])
+                .Select(parameter => parameter.GetText().Trim()).ToList()
             : [.. macro.Parameters.Select(parameter => parameter.Name)];
 
         // The argument the caret is in starts after the last comma at this depth.

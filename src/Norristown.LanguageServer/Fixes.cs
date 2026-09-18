@@ -163,14 +163,14 @@ internal static class Fixes
 
     /// <summary>An <c>.export</c> of <paramref name="name"/>, under the <c>.module</c> of the file that declares it.</summary>
     private static Edit Exported(SemanticModel declaring, string name) =>
-        Edits.InsertAfter(declaring.Tree, Edits.LastLine(declaring.Tree, SyntaxKind.ModuleDirective), $".export {name}");
+        Edits.InsertAfter(declaring.Tree, Edits.LastLine<ModuleDirectiveSyntax>(declaring.Tree), $".export {name}");
 
     /// <summary>A <c>.use</c> of <paramref name="path"/>, under the last one, or under the <c>.module</c>.</summary>
     private static Edit Used(SyntaxTree tree, string path)
     {
-        var after = Edits.LastLine(tree, SyntaxKind.UseDirective) is var use and >= 0
+        var after = Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
             ? use
-            : Edits.LastLine(tree, SyntaxKind.ModuleDirective);
+            : Edits.LastLine<ModuleDirectiveSyntax>(tree);
         return Edits.InsertAfter(tree, after, $".use {path}");
     }
 
@@ -328,26 +328,26 @@ internal static class Fixes
     private static IEnumerable<Change> Parenthesized(SyntaxTree tree, Diagnostic diagnostic)
     {
         var at = Edits.SpanOf(tree, diagnostic.Span).Start;
-        var outer = tree.Root.DescendantNodes().FirstOrDefault(node =>
-            node.Kind == SyntaxKind.BinaryExpression && node.ChildTokens is [var op, ..] && op.Span.Start == at);
-        if (outer is null || outer.ChildNodes is not [var left, var right])
+        var outer = tree.Root.DescendantNodes().OfType<BinaryExpressionSyntax>()
+            .FirstOrDefault(binary => binary.OperatorToken.Span.Start == at);
+        if (outer is null)
             yield break;
 
         var readings = new List<(int Open, int Close)>();
-        if (right.Kind == SyntaxKind.BinaryExpression && right.ChildNodes is [var rightInner, _])
+        if (outer.Right is BinaryExpressionSyntax right)
         {
             readings.Add((right.Span.Start, right.Span.End));
-            readings.Add((outer.Span.Start, rightInner.Span.End));
+            readings.Add((outer.Span.Start, right.Left.Span.End));
         }
-        else if (left.Kind == SyntaxKind.BinaryExpression && left.ChildNodes is [_, var leftInner])
+        else if (outer.Left is BinaryExpressionSyntax left)
         {
             readings.Add((left.Span.Start, left.Span.End));
-            readings.Add((leftInner.Span.Start, outer.Span.End));
+            readings.Add((left.Right.Span.Start, outer.Span.End));
         }
-        else if (Rightmost(left) is { ChildNodes: [var operand] } unary)
+        else if (Rightmost(outer.Left) is { } unary)
         {
             readings.Add((unary.Span.Start, unary.Span.End));
-            readings.Add((operand.Span.Start, outer.Span.End));
+            readings.Add((unary.Operand.Span.Start, outer.Span.End));
         }
 
         foreach (var (open, close) in readings)
@@ -361,11 +361,11 @@ internal static class Fixes
     }
 
     /// <summary>The unary expression at the right edge of an operand, which is what a byte operator applies to.</summary>
-    private static SyntaxNode? Rightmost(SyntaxNode node)
+    private static UnaryExpressionSyntax? Rightmost(ExpressionSyntax node)
     {
-        while (node.Kind == SyntaxKind.BinaryExpression && node.ChildNodes is [_, var right])
-            node = right;
-        return node.Kind == SyntaxKind.UnaryExpression ? node : null;
+        while (node is BinaryExpressionSyntax binary)
+            node = binary.Right;
+        return node as UnaryExpressionSyntax;
     }
 
     /// <summary>

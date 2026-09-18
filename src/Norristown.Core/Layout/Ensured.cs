@@ -20,7 +20,7 @@ public readonly record struct Ensured(int Reset, int Set)
     /// What <paramref name="directive"/> writes where <paramref name="before"/> reaches it. A
     /// width that is not known there, or a directive nothing reaches, is set all the same.
     /// </summary>
-    public static Ensured Of(SyntaxNode directive, ProcessorState? before)
+    public static Ensured Of(EnsureDirectiveSyntax directive, ProcessorState? before)
     {
         var reset = 0;
         var set = 0;

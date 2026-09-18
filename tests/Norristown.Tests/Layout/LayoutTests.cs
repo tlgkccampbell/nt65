@@ -187,7 +187,7 @@ public sealed class LayoutTests
 
         var layout = CodeLayout.Create(model, cpu);
         var statement = tree.Root.DescendantNodes()
-            .Last(node => node.Kind is SyntaxKind.InstructionStatement or SyntaxKind.DataDirective);
+            .Last(node => node is InstructionStatementSyntax or DataDirectiveSyntax);
         return (layout, statement);
     }
 }

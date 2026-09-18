@@ -64,15 +64,15 @@ internal sealed class Binder
 
     // The blocks that open a scope, with the scope each opens, in the order they are opened.
     private readonly List<(TextSpan Span, Scope Scope)> regions = [];
-    private readonly List<(SyntaxNode Item, Scope Scope)> exportItems = [];
+    private readonly List<(ExportItemSyntax Item, Scope Scope)> exportItems = [];
     private readonly List<Symbol> exported = [];
 
     // The records `.type T` data gives values in, with the `T` each is of: the member names they
     // write are references to `T`'s members once `T` is resolved.
-    private readonly List<(SyntaxNode Type, IReadOnlyList<SyntaxNode> Values)> records = [];
+    private readonly List<(NameExpressionSyntax Type, IReadOnlyList<SyntaxNode> Values)> records = [];
 
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
-    private readonly List<SyntaxNode> useDirectives = [];
+    private readonly List<UseDirectiveSyntax> useDirectives = [];
     private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
 
     // Where each `.use` writes the name it brings in, so that an item nothing names can be
@@ -184,7 +184,8 @@ internal sealed class Binder
         // module's, and making it part of this one is a re-export, which says where it came from.
         foreach (var (item, _) in exportItems)
         {
-            if (item.ChildNodes.FirstOrDefault() is not { } name || name.ChildTokens.Length == 0)
+            var name = item.Name;
+            if (name.ChildTokens.Length == 0)
                 continue;
             var last = name.ChildTokens[^1];
             var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
@@ -225,11 +226,11 @@ internal sealed class Binder
 
     /// <summary>Whether <paramref name="node"/> is a call of <c>.defined</c>.</summary>
     private static bool IsDefinedCall(SyntaxNode node) =>
-        node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
-        && node.ChildTokens[0].Text.Equals(".defined", StringComparison.OrdinalIgnoreCase);
+        node is CallExpressionSyntax { Function: { } function }
+        && function.Text.Equals(".defined", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The first token of a statement that could be a declared name.</summary>
-    private static SyntaxToken? NameToken(SyntaxNode statement)
+    private static SyntaxToken? NameToken(StatementSyntax statement)
     {
         foreach (var token in statement.ChildTokens)
         {
@@ -242,20 +243,30 @@ internal sealed class Binder
         return null;
     }
 
-    private void WalkContainer(SyntaxNode container)
+    /// <summary>The signature a statement writes after its name, or null when it writes none or takes none.</summary>
+    private static ProcSignatureSyntax? SignatureOf(StatementSyntax declaration) => declaration switch
     {
-        foreach (var child in container.ChildNodes)
+        ProcDeclarationSyntax proc => proc.Signature,
+        ExternProcDeclarationSyntax externProc => externProc.Signature,
+        MultiProcDeclarationSyntax multiProc => multiProc.Signature,
+        MacroDeclarationSyntax macro => macro.Signature,
+        _ => null,
+    };
+
+    private void WalkContainer(FileSyntax file)
+    {
+        foreach (var member in file.Members)
         {
-            if (child.Green is GreenBlock block)
+            if (member is BlockSyntax block)
             {
                 bareLabel = null;
                 EndCodeRun();
-                WalkBlock(child, block.BlockKind);
+                WalkBlock(block);
                 pastFirstItem = true;
             }
-            else
+            else if (member is LineSyntax line)
             {
-                WalkLine(child);
+                WalkLine(line);
             }
         }
     }
@@ -265,13 +276,14 @@ internal sealed class Binder
     /// opener puts them. A segment block changes the segment of its contents, not their
     /// scope.
     /// </summary>
-    private void WalkBlock(SyntaxNode block, BlockKind kind)
+    private void WalkBlock(BlockSyntax block)
     {
-        var lines = block.ChildNodes;
-        var opener = lines.Length > 0 ? lines[0].Statement : null;
+        var kind = block.BlockKind;
+        var lines = block.Members;
+        var opener = block.Opener.Statement;
         var outerRepeated = repeated;
         var declaresInstances = NamedByBinding(opener, outerRepeated) is not null;
-        if (opener is not null && !declaresInstances)
+        if (!declaresInstances)
             CheckAllowedHere(opener);
         var outerScope = scope;
         var outerSegment = segment;
@@ -292,16 +304,16 @@ internal sealed class Binder
             // in the caller, and the cheap locals it declares are private to it, because the
             // same block may be spliced in more than one place.
             case BlockKind.MacroBlock:
-                if (opener is { Kind: SyntaxKind.MacroCall or SyntaxKind.LabeledLine })
+                if (opener is MacroCallSyntax or LabeledLineSyntax)
                     BindStatement(opener);
-                else if (opener is { Kind: SyntaxKind.BlockContinuation })
-                    CheckContinuation(block, opener);
+                else if (opener is BlockContinuationSyntax continuation)
+                    CheckContinuation(block, continuation);
                 scope = new Scope(ScopeKind.BlockArgument, null, scope, null);
                 break;
 
             case BlockKind.Proc:
                 scope = NamedByBinding(opener, outerRepeated) is { } familyProc
-                    ? OpenFamilyRoutine(familyProc, opener!)
+                    ? OpenFamilyRoutine(familyProc, opener)
                     : OpenScope(ScopeKind.Proc, opener, SymbolKind.Proc);
                 break;
             case BlockKind.MultiProc:
@@ -309,7 +321,7 @@ internal sealed class Binder
                 break;
             case BlockKind.Scope:
                 scope = NamedByBinding(opener, outerRepeated) is { } familyScope
-                    ? RefuseScopeFamily(familyScope, opener!, ScopeKind.Scope)
+                    ? RefuseScopeFamily(familyScope, opener, ScopeKind.Scope)
                     : OpenScope(ScopeKind.Scope, opener, SymbolKind.Scope);
                 break;
             case BlockKind.Segment:
@@ -318,7 +330,7 @@ internal sealed class Binder
                 break;
             case BlockKind.Data:
                 scope = NamedByBinding(opener, outerRepeated) is { } familyData
-                    ? RefuseScopeFamily(familyData, opener!, ScopeKind.Data)
+                    ? RefuseScopeFamily(familyData, opener, ScopeKind.Data)
                     : OpenData(opener, block);
                 break;
             case BlockKind.Enum:
@@ -346,9 +358,9 @@ internal sealed class Binder
                 // the configuration that gives it a value.
                 // A `.defined` is asked whichever way it was answered, and a false answer
                 // leaves the branch out.
-                foreach (var call in opener?.DescendantNodes().Where(IsDefinedCall) ?? [])
+                foreach (var call in opener.DescendantNodes().Where(IsDefinedCall))
                 {
-                    foreach (var argument in call.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+                    foreach (var argument in call.DescendantNodes().OfType<NameExpressionSyntax>())
                     {
                         if (argument.ChildTokens is [{ Kind: SyntaxKind.Identifier } name])
                             definedAsked.Add((name, scope));
@@ -359,8 +371,7 @@ internal sealed class Binder
                 // A condition may compare a `one` parameter or a repetition binding with a
                 // bare word, which is never looked up, so a name here that turns
                 // out to be no name is a word rather than a mistake.
-                if (opener is not null)
-                    CollectUses(opener, uses, words: true);
+                CollectUses(opener, uses, words: true);
                 break;
             case BlockKind.Repeat:
             case BlockKind.Each:
@@ -368,8 +379,7 @@ internal sealed class Binder
                 repeated = RepeatedIn(block, opener, outerScope, kind);
                 break;
             default:
-                if (opener is not null)
-                    BindStatement(opener);
+                BindStatement(opener);
                 break;
         }
 
@@ -377,14 +387,14 @@ internal sealed class Binder
             regions.Add((block.Span, scope));
         for (var i = 1; i < lines.Length; i++)
         {
-            if (lines[i].Green is GreenBlock inner)
+            if (lines[i] is BlockSyntax inner)
             {
                 EndCodeRun();
-                WalkBlock(lines[i], inner.BlockKind);
+                WalkBlock(inner);
             }
-            else
+            else if (lines[i] is LineSyntax line)
             {
-                WalkLine(lines[i]);
+                WalkLine(line);
             }
         }
         EndCodeRun();
@@ -403,9 +413,9 @@ internal sealed class Binder
     /// no name. The reason it carries is what is wrong with the place, for a declaration
     /// written there anyway.
     /// </summary>
-    private Repeated? RepeatedIn(SyntaxNode block, SyntaxNode? opener, Scope around, BlockKind kind)
+    private Repeated? RepeatedIn(BlockSyntax block, StatementSyntax opener, Scope around, BlockKind kind)
     {
-        if (opener is null || scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
+        if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
             return null;
         var why = kind == BlockKind.Repeat
             ? "a `.repeat` counts its turns, and a count is no name: a family is an `.each` over a named enum, "
@@ -419,7 +429,7 @@ internal sealed class Binder
                         + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
                             ? "a body declares nothing in its caller"
                             : "a routine belongs at file level or in a `.scope`");
-        return new Repeated(block, opener.ChildNodes.FirstOrDefault(), binding, around, segment, why);
+        return new Repeated(block, (opener as RepetitionDirectiveSyntax)?.Expression, binding, around, segment, why);
     }
 
     /// <summary>What a place is called where a message says a declaration may not stand in it.</summary>
@@ -436,8 +446,8 @@ internal sealed class Binder
     /// The repetition around <paramref name="opener"/> when the declaration is named after the
     /// name it binds, and so declares one per member rather than one private to each turn.
     /// </summary>
-    private static Repeated? NamedByBinding(SyntaxNode? opener, Repeated? repeated) =>
-        repeated is { } found && opener is not null && NameToken(opener) is { } name && name.Text == found.Binding.Name
+    private static Repeated? NamedByBinding(StatementSyntax opener, Repeated? repeated) =>
+        repeated is { } found && NameToken(opener) is { } name && name.Text == found.Binding.Name
             ? found
             : null;
 
@@ -445,10 +455,10 @@ internal sealed class Binder
     /// The body of a <c>.proc</c> named after a repetition's binding: one routine per member,
     /// declared once the enum is known. The body is read once, as every repetition body is.
     /// </summary>
-    private Scope OpenFamilyRoutine(Repeated each, SyntaxNode opener)
+    private Scope OpenFamilyRoutine(Repeated each, StatementSyntax opener)
     {
         CheckWidthsExist(opener);
-        var signature = opener.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ProcSignature);
+        var signature = SignatureOf(opener);
         CollectUses(signature);
         var body = new Scope(ScopeKind.Proc, each.Binding.Name, scope, null);
         AddFamily(each, opener, body, SymbolKind.Proc, signature, null, null);
@@ -460,12 +470,11 @@ internal sealed class Binder
     /// routine's, folded into one line. It opens the repetition's scope and the routine's
     /// inside it, exactly as the two blocks it stands for would.
     /// </summary>
-    private Scope OpenMultiProc(SyntaxNode block, SyntaxNode? opener)
+    private Scope OpenMultiProc(BlockSyntax block, StatementSyntax opener)
     {
-        if (opener is not { Kind: SyntaxKind.MultiProcDeclaration })
+        if (opener is not MultiProcDeclarationSyntax multiProc)
         {
-            if (opener is not null)
-                BindStatement(opener);
+            BindStatement(opener);
             return new Scope(ScopeKind.Proc, null, scope, null);
         }
 
@@ -478,15 +487,15 @@ internal sealed class Binder
                 + "a routine belongs at file level or in a `.scope`"
             : null;
         if (why is not null)
-            Report(opener.ChildTokens[0].Span, why);
+            Report(multiProc.Keyword.Span, why);
 
         // One inside a macro body, a block argument or a repetition has been told so by the
         // rule that holds `.proc` there; either way it declares nothing.
         var declares = why is null && placement is ScopeKind.File && around.Kind != ScopeKind.Repetition;
 
-        CheckWidthsExist(opener);
-        var walked = opener.ChildNodes.FirstOrDefault(child => child.Kind != SyntaxKind.ProcSignature);
-        var signature = opener.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ProcSignature);
+        CheckWidthsExist(multiProc);
+        var walked = multiProc.Expression;
+        var signature = multiProc.Signature;
 
         // The enum is named outside the repetition and the signature inside it, because a
         // signature may name the binding: `dbr = Bank::b` is that bank on each instance.
@@ -494,11 +503,11 @@ internal sealed class Binder
         var turns = new Scope(ScopeKind.Repetition, null, around, null);
         var outer = scope;
         scope = turns;
-        var binding = NameToken(opener) is { } name ? Declare(name, SymbolKind.Binding) : null;
+        var binding = multiProc.Name is { } name ? Declare(name, SymbolKind.Binding) : null;
         CollectUses(signature);
         var body = new Scope(ScopeKind.Proc, binding?.Name, turns, null);
         if (binding is not null && declares)
-            AddFamily(new Repeated(block, walked, binding, around, segment, null), opener, body, SymbolKind.Proc, signature, null, null);
+            AddFamily(new Repeated(block, walked, binding, around, segment, null), multiProc, body, SymbolKind.Proc, signature, null, null);
         scope = outer;
         return body;
     }
@@ -508,7 +517,7 @@ internal sealed class Binder
     /// block holds is reached through it, which is one declaration per member of everything
     /// inside; a family declares routines and data, so this says what to write instead.
     /// </summary>
-    private Scope RefuseScopeFamily(Repeated each, SyntaxNode opener, ScopeKind kind)
+    private Scope RefuseScopeFamily(Repeated each, StatementSyntax opener, ScopeKind kind)
     {
         var what = kind == ScopeKind.Scope ? "scope" : "`.data` block";
         Report(NameToken(opener)?.Span ?? opener.Span,
@@ -523,12 +532,12 @@ internal sealed class Binder
 
     /// <summary>Records a declaration named by a repetition's binding, to be declared once the enum is known.</summary>
     private void AddFamily(
-        Repeated each, SyntaxNode declaration, Scope body, SymbolKind kind,
-        SyntaxNode? signature, SyntaxNode? data, SyntaxNode? type)
+        Repeated each, StatementSyntax declaration, Scope body, SymbolKind kind,
+        ProcSignatureSyntax? signature, DataDirectiveSyntax? data, NameExpressionSyntax? type)
     {
         if (each.Why is not null)
         {
-            if (declaration.Kind != SyntaxKind.MultiProcDeclaration)
+            if (declaration is not MultiProcDeclarationSyntax)
                 Report(NameToken(declaration)?.Span ?? declaration.Span, each.Why);
             return;
         }
@@ -640,9 +649,9 @@ internal sealed class Binder
     /// is how a family finds the enum it walks, which has to be known before the file's names
     /// are resolved, because the declarations it makes are among them.
     /// </summary>
-    private Symbol? NamedByPath(SyntaxNode expression, Scope at)
+    private Symbol? NamedByPath(ExpressionSyntax expression, Scope at)
     {
-        if (expression.Kind != SyntaxKind.NameExpression)
+        if (expression is not NameExpressionSyntax)
             return null;
         Place? part = null;
         var path = false;
@@ -674,25 +683,29 @@ internal sealed class Binder
     /// missing name, or a <c>.proc</c> written after a label — still opens a scope, so the
     /// cheap locals inside it have an owner and one bad line stays one bad line.
     /// </summary>
-    private Scope OpenScope(ScopeKind kind, SyntaxNode? opener, SymbolKind symbolKind)
+    private Scope OpenScope(ScopeKind kind, StatementSyntax opener, SymbolKind symbolKind)
     {
-        var expected = kind == ScopeKind.Proc ? SyntaxKind.ProcDeclaration : SyntaxKind.ScopeDeclaration;
-        if (opener is null || opener.Kind != expected)
+        var (expected, written) = opener switch
         {
-            if (opener is not null)
-                BindStatement(opener);
+            ProcDeclarationSyntax proc when kind == ScopeKind.Proc => (true, proc.Name),
+            ScopeDeclarationSyntax named when kind != ScopeKind.Proc => (true, named.Name),
+            _ => (false, (SyntaxToken?)null),
+        };
+        if (!expected)
+        {
+            BindStatement(opener);
             return new Scope(kind, null, scope, null);
         }
 
         // `.scope { }` is anonymous, and declares nothing.
-        if (NameToken(opener) is not { } name)
+        if (written is not { } name)
             return new Scope(kind, null, scope, null);
 
         var symbol = Declare(name, symbolKind);
-        if (symbol is not null && kind == ScopeKind.Proc)
+        if (symbol is not null && opener is ProcDeclarationSyntax routine)
         {
-            CheckWidthsExist(opener);
-            symbol.Signature = ReadSignature(opener);
+            CheckWidthsExist(routine);
+            symbol.Signature = ReadSignature(routine);
         }
         var body = new Scope(kind, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
@@ -728,16 +741,16 @@ internal sealed class Binder
             }
             foreach (var child in node.ChildNodes)
             {
-                if (child.Kind != SyntaxKind.StateList)
+                if (child is not StateListSyntax)
                     Walk(child);
             }
         }
     }
 
     /// <summary>The signature a proc or an extern proc writes after its name, or the default.</summary>
-    private Signature ReadSignature(SyntaxNode declaration)
+    private Signature ReadSignature(StatementSyntax declaration)
     {
-        var written = declaration.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature);
+        var written = SignatureOf(declaration);
         CollectUses(written);
         return Signature.Read(written);
     }
@@ -747,9 +760,9 @@ internal sealed class Binder
     /// <c>@</c> positions private to it. A block whose opener is broken still opens one, so
     /// what is inside it has an owner.
     /// </summary>
-    private Scope OpenData(SyntaxNode? opener, SyntaxNode block)
+    private Scope OpenData(StatementSyntax opener, BlockSyntax block)
     {
-        if (opener is not { Kind: SyntaxKind.DataDeclaration } || NameToken(opener) is not { } name)
+        if (opener is not DataDeclarationSyntax { Name: { } name })
             return new Scope(ScopeKind.Data, null, scope, null);
         var symbol = Declare(name, SymbolKind.Data);
         var body = new Scope(ScopeKind.Data, symbol?.Name ?? name.Text, scope, symbol);
@@ -766,9 +779,9 @@ internal sealed class Binder
     /// opens nothing: its members are declared where it is written, which is how an
     /// anonymous enum names constants and an anonymous struct groups fields.
     /// </summary>
-    private Scope OpenType(SyntaxNode? opener, SymbolKind kind)
+    private Scope OpenType(StatementSyntax opener, SymbolKind kind)
     {
-        if (opener is null || NameToken(opener) is not { } name)
+        if (NameToken(opener) is not { } name)
             return scope;
         var symbol = Declare(name, kind);
         var body = new Scope(ScopeKind.Type, symbol?.Name ?? name.Text, scope, symbol);
@@ -782,12 +795,9 @@ internal sealed class Binder
     /// and nothing else. The body is read in it once: what the name is worth differs from
     /// turn to turn, but what it refers to does not, so one reading answers for every turn.
     /// </summary>
-    private Scope OpenRepetition(SyntaxNode? opener)
+    private Scope OpenRepetition(StatementSyntax opener)
     {
         var body = new Scope(ScopeKind.Repetition, null, scope, null);
-        if (opener is null)
-            return body;
-
         CollectUses(opener);
         if (NameToken(opener) is not { } name)
             return body;
@@ -805,22 +815,21 @@ internal sealed class Binder
     /// output, but nothing outside can reach into it, which is what makes each expansion's
     /// locals its own.
     /// </summary>
-    private Scope OpenMacro(SyntaxNode? opener)
+    private Scope OpenMacro(StatementSyntax opener)
     {
-        if (opener is not { Kind: SyntaxKind.MacroDeclaration })
+        if (opener is not MacroDeclarationSyntax declaration)
         {
-            if (opener is not null)
-                BindStatement(opener);
+            BindStatement(opener);
             return new Scope(ScopeKind.Macro, null, scope, null);
         }
 
-        CheckMacroPlacement(opener);
-        var written = NameToken(opener);
+        CheckMacroPlacement(declaration);
+        var written = declaration.Name;
         var symbol = written is { } name ? Declare(name, SymbolKind.Macro) : null;
         var body = new Scope(ScopeKind.Macro, symbol?.Name ?? written?.Text, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
-        if (symbol is not null && opener.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ProcSignature) is { } signature)
+        if (symbol is not null && declaration.Signature is { } signature)
         {
             CheckWidthsExist(signature);
             symbol.MacroSignature = Signature.ReadMacro(signature);
@@ -829,7 +838,7 @@ internal sealed class Binder
 
         // A default is written in the header, so it resolves where the macro is declared
         // rather than in the body it is used in.
-        var declarations = Macros.ParametersOf(opener);
+        var declarations = declaration.Parameters?.Parameters ?? [];
         foreach (var parameter in declarations)
             CollectUses(Macros.DefaultOf(parameter));
 
@@ -838,11 +847,8 @@ internal sealed class Binder
         var parameters = new List<MacroParameter>();
         foreach (var parameter in declarations)
         {
-            if (Macros.NameOf(parameter) is not { } spelled
-                || Declare(spelled, SymbolKind.MacroParameter) is not { } declared)
-            {
+            if (Declare(parameter.Name, SymbolKind.MacroParameter) is not { } declared)
                 continue;
-            }
             declared.Parameter = Macros.Describe(parameter, declared);
             parameters.Add(declared.Parameter);
         }
@@ -858,13 +864,13 @@ internal sealed class Binder
     /// a proc would see that proc's cheap locals, and an expansion in another proc would
     /// branch into them, out of sight of the first proc's flow analysis.
     /// </summary>
-    private void CheckMacroPlacement(SyntaxNode opener)
+    private void CheckMacroPlacement(MacroDeclarationSyntax opener)
     {
         for (var around = scope; around is { Kind: not ScopeKind.File }; around = around.Parent)
         {
             if (around.Kind is not (ScopeKind.Proc or ScopeKind.Macro))
                 continue;
-            Report(opener.ChildTokens[0].Span,
+            Report(opener.Keyword.Span,
                 around.Kind == ScopeKind.Proc
                     ? "a `.macro` belongs at file level or in a `.scope`, not inside a routine"
                     : "a `.macro` belongs at file level or in a `.scope`, not inside another macro");
@@ -877,11 +883,11 @@ internal sealed class Binder
     /// every remaining positional argument, and the blocks after it, which are written after
     /// the parentheses and so cannot be positional at all.
     /// </summary>
-    private void CheckParameterOrder(IReadOnlyList<SyntaxNode> written, IReadOnlyList<MacroParameter> parameters)
+    private void CheckParameterOrder(ImmutableArray<MacroParameterSyntax> written, IReadOnlyList<MacroParameter> parameters)
     {
         MacroParameter? list = null;
         MacroParameter? block = null;
-        for (var i = 0; i < parameters.Count && i < written.Count; i++)
+        for (var i = 0; i < parameters.Count && i < written.Length; i++)
         {
             var parameter = parameters[i];
             var at = written[i].Span;
@@ -910,16 +916,15 @@ internal sealed class Binder
     /// names is the call's business; all that is left here is a continuation with no call
     /// above it at all, which the call never sees.
     /// </summary>
-    private void CheckContinuation(SyntaxNode block, SyntaxNode opener)
+    private void CheckContinuation(BlockSyntax block, BlockContinuationSyntax opener)
     {
         if (block.Parent is { } container
             && container.ChildNodes.IndexOf(block) is > 0 and var at
-            && container.ChildNodes[at - 1].Green is GreenBlock { BlockKind: BlockKind.MacroBlock })
+            && container.ChildNodes[at - 1] is BlockSyntax { BlockKind: BlockKind.MacroBlock })
         {
             return;
         }
-        if (opener.ChildTokens.Length > 1)
-            Report(opener.ChildTokens[1].Span, "this block continues no macro call");
+        Report(opener.Name.Span, "this block continues no macro call");
     }
 
     /// <summary>
@@ -928,7 +933,7 @@ internal sealed class Binder
     /// argument is spliced wherever the body names it, so anything it declared would be
     /// declared once per splice.
     /// </summary>
-    private void CheckAllowedHere(SyntaxNode statement)
+    private void CheckAllowedHere(StatementSyntax statement)
     {
         var why = InMacroBody ? Macros.Forbidden(statement) : null;
         if (why is null && InRepetition)
@@ -942,12 +947,16 @@ internal sealed class Binder
     /// An annotation stands between the statement it is about and whatever follows, so one
     /// with nothing above it is about nothing and is reported where it is written.
     /// </summary>
-    private void CheckAnnotation(SyntaxNode line, SyntaxNode statement)
+    private void CheckAnnotation(LineSyntax line, StatementSyntax statement)
     {
-        if (!Annotations.Is(statement) || statement.ChildTokens.Length == 0)
-            return;
-        if (Annotations.Misplaced(line, statement) is { } why)
-            Report(statement.ChildTokens[0].Span, why);
+        SyntaxToken? keyword = statement switch
+        {
+            NextDirectiveSyntax next => next.Keyword,
+            PatchDirectiveSyntax patch => patch.Keyword,
+            _ => null,
+        };
+        if (keyword is { } written && Annotations.Misplaced(line, statement) is { } why)
+            Report(written.Span, why);
     }
 
     /// <summary>Whether the walk is inside a <c>.repeat</c> or <c>.each</c> body, however many scopes deep.</summary>
@@ -1002,16 +1011,16 @@ internal sealed class Binder
     /// the block is one symbol holding them. A list's items name symbols, and those names
     /// belong to the scope the list is written in.
     /// </summary>
-    private void DeclareCollected(SyntaxNode? opener, SymbolKind kind, ImmutableArray<SyntaxNode> lines)
+    private void DeclareCollected(StatementSyntax opener, SymbolKind kind, ImmutableArray<SyntaxNode> lines)
     {
-        var bodies = new List<SyntaxNode>();
+        var bodies = new List<StatementSyntax>();
         for (var i = 1; i < lines.Length; i++)
         {
-            if (lines[i].Statement is { Kind: SyntaxKind.CharmapEntry or SyntaxKind.ListItems } line)
-                bodies.Add(line);
+            if (lines[i] is LineSyntax { Statement: CharmapEntrySyntax or ListItemsSyntax } line)
+                bodies.Add(line.Statement);
         }
 
-        if (opener is null || NameToken(opener) is not { } name)
+        if (NameToken(opener) is not { } name)
             return;
         if (kind == SymbolKind.List)
         {
@@ -1020,7 +1029,7 @@ internal sealed class Binder
                 CollectUses(line);
             return;
         }
-        Declare(name, kind, value: null, entries: bodies);
+        Declare(name, kind, value: null, entries: [.. bodies.OfType<CharmapEntrySyntax>()]);
         foreach (var line in bodies)
             CollectUses(line);
     }
@@ -1030,29 +1039,23 @@ internal sealed class Binder
     /// member names its values give are checked against that type once it is known, so only the
     /// values themselves are names to resolve here.
     /// </summary>
-    private void BindInitializer(SyntaxNode? opener, ImmutableArray<SyntaxNode> lines)
+    private void BindInitializer(StatementSyntax opener, ImmutableArray<SyntaxNode> lines)
     {
-        if (opener is not null)
-            BindStatement(opener);
-        for (var i = 1; i < lines.Length; i++)
-        {
-            if (lines[i].Statement is { } line)
-                CollectUses(line);
-        }
-        var directive = opener?.Kind == SyntaxKind.DataDeclaration ? DataSyntax.ElementOf(opener) : opener;
+        BindStatement(opener);
+        var written = lines.Skip(1).OfType<LineSyntax>().Select(line => line.Statement).ToList();
+        foreach (var statement in written)
+            CollectUses(statement);
+        var directive = opener is DataDeclarationSyntax data ? data.Directive : opener as DataDirectiveSyntax;
         if (DataSyntax.TypeOf(directive) is { } type)
-        {
-            records.Add((type, [.. lines.Skip(1).Select(line => line.Statement)
-                .OfType<SyntaxNode>().Where(statement => statement.Kind == SyntaxKind.MemberValue)]));
-        }
+            records.Add((type, [.. written.OfType<MemberValueSyntax>()]));
     }
 
     /// <summary>The records a <c>.type T</c> directive writes on its line, braced or as its values.</summary>
-    private void CollectRecords(SyntaxNode? directive)
+    private void CollectRecords(DataDirectiveSyntax? directive)
     {
-        if (DataSyntax.TypeOf(directive) is not { } type)
+        if (directive is null || DataSyntax.TypeOf(directive) is not { } type)
             return;
-        records.Add((type, [.. DataSyntax.ValuesOf(directive!).Append(DataSyntax.BracedOf(directive!)).OfType<SyntaxNode>()]));
+        records.Add((type, [.. DataSyntax.ValuesOf(directive).Append(DataSyntax.BracedOf(directive)).OfType<SyntaxNode>()]));
     }
 
     /// <summary>
@@ -1077,89 +1080,95 @@ internal sealed class Binder
     {
         foreach (var value in values)
         {
-            if (value.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            if (value is RecordValuesSyntax record)
             {
-                ReferMembers(type, value.ChildNodes);
+                ReferMembers(type, record.Members);
             }
-            else if (value.Kind == SyntaxKind.MemberValue && value.ChildTokens.Length > 0
-                && BodyOf(type)?.FindMember(value.ChildTokens[0].Text) is { Kind: SymbolKind.Member } member)
+            else if (value is ValueListSyntax list)
             {
-                references.Add(new SymbolReference(member, value.ChildTokens[0].Span, false));
+                ReferMembers(type, list.Values);
+            }
+            else if (value is MemberValueSyntax given
+                && BodyOf(type)?.FindMember(given.Name.Text) is { Kind: SymbolKind.Member } member)
+            {
+                references.Add(new SymbolReference(member, given.Name.Span, false));
 
                 // A member's type is resolved by the file that declares it, which may not have
                 // been resolved yet; only this file's own members are followed into, so what is
                 // found does not depend on the order the files are read in.
                 if (member.Tree == tree && BodyOf(member) is not null)
-                    ReferMembers(member, value.ChildNodes);
+                    ReferMembers(member, [given.Value]);
             }
         }
     }
 
     /// <summary>The segment a block or a region puts its contents in, or null when its opener does not say.</summary>
-    private string? SegmentOf(SyntaxNode? opener)
+    private string? SegmentOf(StatementSyntax opener)
     {
-        if (opener is null || opener.Kind is not (SyntaxKind.SegmentBlock or SyntaxKind.SegmentRegion))
-            return null;
-
-        if (Constructs.SegmentOf(opener) is not { } name)
+        var written = opener switch
+        {
+            SegmentBlockSyntax block => block.Name,
+            SegmentRegionSyntax region => region.Name,
+            _ => null,
+        };
+        if (written is not { } token || SegmentNames.Of(token) is not { } name)
             return null;
 
         // A region or block that names a segment declared nowhere is an error, so a misspelled
         // name is caught before ld65 runs. Its contents still go there, which keeps the mistake
         // to one diagnostic.
         if (segments.Find(name) is null)
-            Report(opener.ChildTokens[1].Span, $"segment \"{name}\" is not declared");
+            Report(token.Span, $"segment \"{name}\" is not declared");
         return name;
     }
 
-    private void WalkLine(SyntaxNode line)
+    private void WalkLine(LineSyntax line)
     {
-        if (line.Statement is not { } statement)
-            return;
+        var statement = line.Statement;
         if (NamedByBinding(statement, repeated) is null)
             CheckAllowedHere(statement);
-        if (statement.Kind is not (SyntaxKind.BlankLine or SyntaxKind.ModuleDirective))
+        if (statement is not (BlankLineSyntax or ModuleDirectiveSyntax))
             pastFirstItem = true;
         CheckAnnotation(line, statement);
         var label = bareLabel;
-        if (statement.Kind != SyntaxKind.BlankLine)
+        if (statement is not BlankLineSyntax)
             bareLabel = null;
         inCodeRun = false;
         BindStatement(statement);
 
         // A run of misplaced instructions reads through the blank and comment lines among
         // them and ends at the first line that is anything else.
-        if (!inCodeRun && statement.Kind != SyntaxKind.BlankLine)
+        if (!inCodeRun && statement is not BlankLineSyntax)
             EndCodeRun();
 
         // Recorded on the label rather than found in the flow, so a jump from another file
         // can be checked against it too.
-        if (statement.Kind == SyntaxKind.StateDirective && label is not null)
-            label.StateDeclaration = statement;
+        if (statement is StateDirectiveSyntax state && label is not null)
+            label.StateDeclaration = state;
     }
 
-    private void BindStatement(SyntaxNode statement)
+    private void BindStatement(StatementSyntax statement)
     {
         CheckWidthsExist(statement);
-        switch (statement.Kind)
+        switch (statement)
         {
-            case SyntaxKind.LabeledLine:
-                BindLabeledLine(statement);
+            case LabeledLineSyntax labeled:
+                BindLabeledLine(labeled);
                 break;
 
-            case SyntaxKind.EnumMember:
-                BindEnumMember(statement);
+            case EnumMemberSyntax member:
+                BindEnumMember(member);
                 break;
 
-            case SyntaxKind.FuncDeclaration:
-                BindFunc(statement);
+            case FuncDeclarationSyntax func:
+                BindFunc(func);
                 break;
 
             // A signature set names its items, whose values and sets are read once the
             // program's names and constants are.
-            case SyntaxKind.SignatureDeclaration:
-                var items = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.StateList);
-                if (NameToken(statement) is { } set)
+            case SignatureDeclarationSyntax signature:
+                var items = signature.Items;
+                if (signature.Name is { } set)
                 {
                     if (SyntaxFacts.IsStateWord(set.Text))
                         Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
@@ -1171,9 +1180,9 @@ internal sealed class Binder
 
             // A setting is a constant whose value the build decided before anything was declared.
             // One written anywhere but at file level has been reported, and declares nothing.
-            case SyntaxKind.ConfigDeclaration:
-                var setting = statement.ChildNodes.FirstOrDefault();
-                if (NameToken(statement) is { } configured && Configuration.AtFileLevel(statement)
+            case ConfigDeclarationSyntax written:
+                var setting = written.Value;
+                if (written.Name is { } configured && Configuration.AtFileLevel(written)
                     && Declare(configured, SymbolKind.Constant) is { } config)
                 {
                     config.IsConfig = true;
@@ -1182,112 +1191,105 @@ internal sealed class Binder
                 CollectUses(setting, uses, words: true);
                 break;
 
-            case SyntaxKind.ConstantDeclaration:
+            case ConstantDeclarationSyntax constant:
                 // A constant or an address alias: which one depends on the expression, so the
                 // kind is settled once the names in it resolve.
-                var value = statement.ChildNodes.FirstOrDefault();
-                if (NameToken(statement) is { } constant)
-                    Declare(constant, SymbolKind.Constant, value);
-                CollectUses(value);
+                Declare(constant.Name, SymbolKind.Constant, constant.Value);
+                CollectUses(constant.Value);
                 break;
 
-            case SyntaxKind.ExternProcDeclaration:
-                var address = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.ProcSignature);
-                if (NameToken(statement) is { } routine
-                    && Declare(routine, SymbolKind.ExternProc, address) is { } externProc)
-                {
-                    externProc.Signature = ReadSignature(statement);
-                }
-                CollectUses(address);
+            case ExternProcDeclarationSyntax routine:
+                if (Declare(routine.Name, SymbolKind.ExternProc, routine.Address) is { } externProc)
+                    externProc.Signature = ReadSignature(routine);
+                CollectUses(routine.Address);
                 break;
 
             // A cheap local can neither be reached with `::` nor exported, and the parser has
             // already refused one here.
-            case SyntaxKind.ExportDirective:
-                foreach (var item in statement.ChildNodes.Where(child => child.Kind == SyntaxKind.ExportItem))
+            case ExportDirectiveSyntax export:
+                foreach (var item in export.Items)
                 {
                     exportItems.Add((item, scope));
-                    CollectUses(item.ChildNodes.FirstOrDefault());
+                    CollectUses(item.Name);
                 }
                 break;
 
-            case SyntaxKind.ModuleDirective:
-                BindModule(statement);
+            case ModuleDirectiveSyntax module:
+                BindModule(module);
                 break;
 
-            case SyntaxKind.UseDirective:
-                BindUse(statement);
+            case UseDirectiveSyntax use:
+                BindUse(use);
                 break;
 
-            case SyntaxKind.ImportDirective:
-                foreach (var item in statement.ChildNodes)
+            case ImportDirectiveSyntax import:
+                foreach (var item in import.Items)
                     BindImportItem(item);
                 break;
 
-            case SyntaxKind.BlockSplice:
-                BindSplice(statement);
+            case BlockSpliceSyntax splice:
+                BindSplice(splice);
                 break;
 
-            case SyntaxKind.MacroCall:
-                BindCall(statement);
+            case MacroCallSyntax call:
+                BindCall(call);
                 break;
 
-            case SyntaxKind.DataDeclaration:
-                BindData(statement);
+            case DataDeclarationSyntax data:
+                BindData(data);
                 break;
 
-            case SyntaxKind.InstructionStatement:
-                CheckCodePlacement(statement);
-                CollectUses(statement);
+            case InstructionStatementSyntax instruction:
+                CheckCodePlacement(instruction);
+                CollectUses(instruction);
                 break;
 
-            case SyntaxKind.DataDirective:
-                CheckDataPlacement(statement);
-                CollectUses(statement);
-                CollectRecords(statement);
+            case DataDirectiveSyntax directive:
+                CheckDataPlacement(directive);
+                CollectUses(directive);
+                CollectRecords(directive);
                 break;
 
             // The records of a `.type T` body, one or more to a line.
-            case SyntaxKind.DataValues:
-                CollectUses(statement);
-                if (DataSyntax.TypeOf(DataSyntax.DirectiveOfValues(statement)) is { } recordType)
-                    records.Add((recordType, statement.ChildNodes));
+            case DataValuesSyntax values:
+                CollectUses(values);
+                if (DataSyntax.TypeOf(DataSyntax.DirectiveOfValues(values)) is { } recordType)
+                    records.Add((recordType, values.Values));
                 break;
 
             // A region line reached as a line is inside a block: one at file level opens the
             // region it names, and is walked as that block's opener.
-            case SyntaxKind.SegmentRegion when statement.ChildTokens.Length > 0:
-                Report(statement.ChildTokens[0].Span, "a `.segment NAME` region belongs at file level, outside "
+            case SegmentRegionSyntax region:
+                Report(region.Keyword.Span, "a `.segment NAME` region belongs at file level, outside "
                     + "every block: inside one, `.segment NAME { }` places what it holds");
                 break;
 
-            case SyntaxKind.AssertDirective:
+            case AssertDirectiveSyntax:
 
             // An annotation names labels and nothing else, so its names resolve as any
             // other use does; that they name labels rather than constants is the flow
             // analysis's business.
-            case SyntaxKind.NextDirective:
-            case SyntaxKind.PatchDirective:
+            case NextDirectiveSyntax:
+            case PatchDirectiveSyntax:
                 CollectUses(statement);
                 break;
 
             // The `dp = e` and `bank = e` of a segment declaration, and the `dp = e` and
             // `dbr = e` of a `.state`, may name constants.
-            case SyntaxKind.SegmentDeclaration:
-            case SyntaxKind.StateDirective:
+            case SegmentDeclarationSyntax:
+            case StateDirectiveSyntax:
                 foreach (var item in statement.DescendantNodes())
                 {
-                    if (item.Kind is SyntaxKind.SegmentAttribute or SyntaxKind.StateItem)
+                    if (item is SegmentAttributeSyntax or StateItemSyntax)
                         CollectUses(item.ChildNodes.FirstOrDefault());
                 }
                 break;
 
             // A frame is named like data of a type, so its members are reached through it.
-            case SyntaxKind.FrameDirective:
-                var type = statement.ChildNodes.FirstOrDefault();
-                if (NameToken(statement) is { } frame)
-                    Declare(frame, SymbolKind.Frame, type: type);
-                CollectUses(type);
+            case FrameDirectiveSyntax frame:
+                if (frame.Name is { } frameName)
+                    Declare(frameName, SymbolKind.Frame, type: frame.Type);
+                CollectUses(frame.Type);
                 break;
 
             // Everything else either declares nothing and names nothing — `.cpu`, a blank or
@@ -1298,12 +1300,10 @@ internal sealed class Binder
     }
 
     /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
-    private void BindImportItem(SyntaxNode item)
+    private void BindImportItem(ImportItemSyntax item)
     {
-        if (item.Kind != SyntaxKind.ImportItem || NameToken(item) is not { } name)
-            return;
-
-        var checkedValue = item.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.ImportSignature);
+        var name = item.Name;
+        var checkedValue = item.Value;
         var kind = checkedValue is null ? SymbolKind.ImportedAddress : SymbolKind.ImportedConstant;
         if (Declare(name, kind, checkedValue) is { } symbol && kind == SymbolKind.ImportedAddress)
         {
@@ -1315,7 +1315,7 @@ internal sealed class Binder
                 if (token.Kind == SyntaxKind.Identifier && SegmentNames.ParseSize(token.Text) is { } size)
                     symbol.AddressSize = size;
             }
-            if (item.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ImportSignature) is { } signature)
+            if (item.Signature is { } signature)
             {
                 symbol.Signature = Signature.Read(signature);
                 CollectUses(signature);
@@ -1331,28 +1331,25 @@ internal sealed class Binder
     /// directive says how much room it takes; elsewhere it is a label, which is only a
     /// position, whatever follows it on the line.
     /// </summary>
-    private void BindLabeledLine(SyntaxNode statement)
+    private void BindLabeledLine(LabeledLineSyntax statement)
     {
-        var label = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.Label);
-        var rest = statement.ChildNodes.FirstOrDefault(child => child.Kind != SyntaxKind.Label);
+        var name = statement.Label.Name;
+        var rest = statement.Statement;
         var member = scope.Kind == ScopeKind.Type;
-        if (label is { ChildTokens.Length: > 0 })
+        if (!member)
+            CheckLabelPlacement(name);
+        var declared = member
+            ? Declare(name, SymbolKind.Member, data: rest, type: DataSyntax.TypeOf(rest as DataDirectiveSyntax))
+            : Declare(name, SymbolKind.Label);
+        if (rest is null && !member)
+            bareLabel = declared;
+        if (rest is MacroCallSyntax call)
         {
-            if (!member)
-                CheckLabelPlacement(label.ChildTokens[0]);
-            var declared = member
-                ? Declare(label.ChildTokens[0], SymbolKind.Member, data: rest, type: DataSyntax.TypeOf(rest))
-                : Declare(label.ChildTokens[0], SymbolKind.Label);
-            if (rest is null && !member)
-                bareLabel = declared;
-        }
-        if (rest is { Kind: SyntaxKind.MacroCall })
-        {
-            BindCall(rest);
+            BindCall(call);
             return;
         }
-        if (rest is { Kind: SyntaxKind.InstructionStatement })
-            CheckCodePlacement(rest);
+        if (rest is InstructionStatementSyntax instruction)
+            CheckCodePlacement(instruction);
         CollectUses(rest);
     }
 
@@ -1360,14 +1357,14 @@ internal sealed class Binder
     /// <c>.data name: ...</c>: an address with a size, and the fields of its type when it is a
     /// record. Mixed data, <c>.data name {</c>, opens a scope of its own where its block is walked.
     /// </summary>
-    private void BindData(SyntaxNode statement)
+    private void BindData(DataDeclarationSyntax statement)
     {
-        var element = DataSyntax.ElementOf(statement);
+        var element = statement.Directive;
         if (NamedByBinding(statement, repeated) is { } each && element is not null)
         {
             AddFamily(each, statement, scope, SymbolKind.Data, null, element, DataSyntax.TypeOf(element));
         }
-        else if (NameToken(statement) is { } name && element is not null)
+        else if (statement.Name is { } name && element is not null)
         {
             Declare(name, SymbolKind.Data, data: element, type: DataSyntax.TypeOf(element));
         }
@@ -1401,16 +1398,16 @@ internal sealed class Binder
     /// A run of them is one mistake, so it is counted here and reported once, on its first
     /// line, when the run ends: a routine's worth of ca65 pasted in says so once.
     /// </summary>
-    private void CheckCodePlacement(SyntaxNode instruction)
+    private void CheckCodePlacement(InstructionStatementSyntax instruction)
     {
         var placement = Placement;
-        if (placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument || instruction.ChildTokens.Length == 0)
+        if (placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument)
             return;
         inCodeRun = true;
         if (codeRun is { } run && run.Placement == placement)
             codeRun = run with { Lines = run.Lines + 1 };
         else
-            codeRun = new CodeRun(instruction.ChildTokens[0].Span, placement, 1);
+            codeRun = new CodeRun(instruction.Mnemonic.Span, placement, 1);
     }
 
     /// <summary>Reports the run of misplaced instructions that has just ended, if there was one.</summary>
@@ -1458,14 +1455,14 @@ internal sealed class Binder
     /// Every byte outside a routine belongs to a <c>.data</c> declaration, except unnamed
     /// <c>.res</c> and <c>.align</c>, which pad between declarations.
     /// </summary>
-    private void CheckDataPlacement(SyntaxNode statement)
+    private void CheckDataPlacement(DataDirectiveSyntax statement)
     {
-        if (Placement != ScopeKind.File || statement.ChildTokens.Length == 0)
+        if (Placement != ScopeKind.File)
             return;
-        if (statement.Kind == SyntaxKind.DataDirective && DataSyntax.NameOf(statement) is not (".res" or ".align"))
+        if (statement.Directive.Text.ToLowerInvariant() is not (".res" or ".align"))
         {
-            var directive = statement.ChildTokens[0].Text;
-            Report(statement.ChildTokens[0].Span, $"`{directive}` outside a `.proc` belongs to a `.data` declaration: "
+            var directive = statement.Directive.Text;
+            Report(statement.Directive.Span, $"`{directive}` outside a `.proc` belongs to a `.data` declaration: "
                 + $"`.data name: {directive} ...`");
         }
     }
@@ -1474,12 +1471,10 @@ internal sealed class Binder
     /// One enum member. A member with no value of its own follows the one before it, so each
     /// keeps a link to its predecessor rather than a number nothing has worked out yet.
     /// </summary>
-    private void BindEnumMember(SyntaxNode statement)
+    private void BindEnumMember(EnumMemberSyntax statement)
     {
-        if (NameToken(statement) is not { } name)
-            return;
-        var value = statement.ChildNodes.FirstOrDefault();
-        var member = Declare(name, SymbolKind.Constant, value, follows: value is null);
+        var value = statement.Value;
+        var member = Declare(statement.Name, SymbolKind.Constant, value, follows: value is null);
         if (member is not null)
         {
             member.PreviousMember = previousEnumMember;
@@ -1494,14 +1489,13 @@ internal sealed class Binder
     /// own, which nothing outside the body can reach, so the body reads as ordinary code and
     /// a call is the body with each parameter standing for its argument.
     /// </summary>
-    private void BindFunc(SyntaxNode statement)
+    private void BindFunc(FuncDeclarationSyntax statement)
     {
-        var body = statement.ChildNodes.LastOrDefault(child => child.Kind != SyntaxKind.ParameterList);
-        var written = statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.ParameterList);
-        if (NameToken(statement) is not { } name)
+        var body = statement.Body;
+        if (statement.Name is not { } name)
             return;
 
-        var symbol = Declare(name, SymbolKind.Func, value: null, items: body is null ? [] : [body]);
+        var symbol = Declare(name, SymbolKind.Func, value: null, items: [body]);
         if (symbol is null)
             return;
 
@@ -1511,13 +1505,10 @@ internal sealed class Binder
         var outer = scope;
         scope = inside;
         var parameters = new List<Symbol>();
-        foreach (var token in written?.ChildTokens ?? [])
+        foreach (var token in statement.Parameters?.Parameters ?? [])
         {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && Declare(token, SymbolKind.Constant) is { } parameter)
-            {
+            if (Declare(token, SymbolKind.Constant) is { } parameter)
                 parameters.Add(parameter);
-            }
         }
         symbol.ParameterSymbols = parameters;
         CollectUses(body);
@@ -1528,11 +1519,9 @@ internal sealed class Binder
     /// A name on its own, which splices the block argument bound to it. Only a macro body
     /// can hold one: everywhere else a name alone is the line the parser could not read.
     /// </summary>
-    private void BindSplice(SyntaxNode statement)
+    private void BindSplice(BlockSpliceSyntax statement)
     {
-        if (statement.ChildTokens.Length == 0)
-            return;
-        var token = statement.ChildTokens[0];
+        var token = statement.Name;
         if (!InMacroBody)
         {
             Report(token.Span, "expected a label, a constant, an instruction or a directive");
@@ -1546,7 +1535,7 @@ internal sealed class Binder
     /// macro it names may be declared further down or in another file, and what its
     /// arguments mean follows from the parameters they bind to.
     /// </summary>
-    private void BindCall(SyntaxNode call) => calls.Add(new Invocation(call, scope, EnclosingMacro));
+    private void BindCall(MacroCallSyntax call) => calls.Add(new Invocation(call, scope, EnclosingMacro));
 
     /// <summary>The macro whose body the walk is inside, or null when it is in none.</summary>
     private Symbol? EnclosingMacro
@@ -1572,8 +1561,7 @@ internal sealed class Binder
     {
         foreach (var (call, at, inside) in calls)
         {
-            if (Macros.CalleeOf(call) is not { } callee)
-                continue;
+            var callee = call.Name;
             if (Resolve(new Use(callee, at, Path: false, First: true, Last: true), null) is not { Symbol: { } symbol } place)
                 continue;
             references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
@@ -1634,13 +1622,13 @@ internal sealed class Binder
                 CollectUses(value, into, words, chosen: true);
             return;
         }
-        if (node.Kind == SyntaxKind.NameExpression)
+        if (node is NameExpressionSyntax name)
         {
             // A leading `::` starts the path at file scope, which the first name sees by
             // already being part of a path.
             var path = false;
             var first = true;
-            foreach (var token in node.ChildTokens)
+            foreach (var token in name.ChildTokens)
             {
                 if (token.Kind == SyntaxKind.ColonColon)
                 {
@@ -1662,7 +1650,7 @@ internal sealed class Binder
 
             // An `[i]` along the path is an expression of its own, whose names are looked up
             // where the path is written rather than inside whatever it leads to.
-            foreach (var index in node.ChildNodes)
+            foreach (var index in name.Indexes)
                 CollectUses(index, into, words, chosen);
             return;
         }
@@ -1673,11 +1661,11 @@ internal sealed class Binder
     private Symbol? Declare(
         SyntaxToken name,
         SymbolKind kind,
-        SyntaxNode? value = null,
-        SyntaxNode? data = null,
-        SyntaxNode? type = null,
+        ExpressionSyntax? value = null,
+        StatementSyntax? data = null,
+        ExpressionSyntax? type = null,
         IReadOnlyList<SyntaxNode>? items = null,
-        IReadOnlyList<SyntaxNode>? entries = null,
+        IReadOnlyList<CharmapEntrySyntax>? entries = null,
         bool follows = false)
     {
         // A member of a named type may be called after a register or a mnemonic: it is only
@@ -1723,8 +1711,8 @@ internal sealed class Binder
 
         // A declaration written after `.export` exports what it declares; the parameters of an
         // exported macro or function are written inside it and are not declarations of it.
-        var declaring = name.Parent.Kind == SyntaxKind.ImportItem ? name.Parent.Parent : name.Parent;
-        if (declaring?.ExportToken is { } export)
+        var declaring = name.Parent is ImportItemSyntax ? name.Parent.Parent : name.Parent;
+        if (declaring is StatementSyntax { ExportToken: { } export })
             exportedDeclarations.Add((symbol, export.Span));
         return symbol;
     }
@@ -2153,17 +2141,16 @@ internal sealed class Binder
     /// <c>.module name</c>: once, before the file's other items. A file is one module, so what
     /// it declares belongs to one path however the file is laid out.
     /// </summary>
-    private void BindModule(SyntaxNode statement)
+    private void BindModule(ModuleDirectiveSyntax statement)
     {
-        var parts = statement.ChildTokens.Skip(1)
-            .Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic).ToList();
-        if (parts.Count == 0)
+        var parts = statement.Names;
+        if (parts.Length == 0)
             return;
         var span = new TextSpan(parts[0].Span.Start, parts[^1].Span.End - parts[0].Span.Start);
         if (moduleName is not null)
             Report(span, "a file is one module, and names it once");
         else if (pastFirstItem || scope != fileScope)
-            Report(statement.ChildTokens[0].Span, "`.module` comes first: the file's other items belong to the module it names");
+            Report(statement.Keyword.Span, "`.module` comes first: the file's other items belong to the module it names");
         if (moduleName is not null)
             return;
         foreach (var part in parts)
@@ -2177,59 +2164,26 @@ internal sealed class Binder
     /// A <c>.use</c>, which is resolved once the program is known. What an exported one
     /// re-exports is part of the module from here on, as the path it was written with.
     /// </summary>
-    private void BindUse(SyntaxNode statement)
+    private void BindUse(UseDirectiveSyntax statement)
     {
         if (scope != fileScope)
         {
-            Report(statement.ChildTokens[0].Span, "`.use` belongs at the top level of a module");
+            Report(statement.Keyword.Span, "`.use` belongs at the top level of a module");
             return;
         }
         useDirectives.Add(statement);
         if (!statement.IsExported)
             return;
-        var (path, glob, items, alias) = UseParts(statement);
-        if (path.Count == 0 || glob)
+        var path = statement.Path;
+        if (path.Length == 0 || statement.StarToken is not null)
             return;
-        if (items.Count == 0)
+        if (statement.Items.Length == 0)
         {
-            reexports.Add(new ProgramSymbols.Reexport((alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]));
+            reexports.Add(new ProgramSymbols.Reexport((statement.Alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]));
             return;
         }
-        foreach (var (name, itemAlias) in items)
-            reexports.Add(new ProgramSymbols.Reexport((itemAlias ?? name).Text, [.. path.Select(part => part.Text), name.Text]));
-    }
-
-    /// <summary>
-    /// What a <c>.use</c> is written as: the path, whether it ends <c>::*</c>, the names in its
-    /// braces with the names they are brought in as, and the name after <c>as</c>.
-    /// </summary>
-    private static (List<SyntaxToken> Path, bool Glob, List<(SyntaxToken Name, SyntaxToken? Alias)> Items, SyntaxToken? Alias)
-        UseParts(SyntaxNode statement)
-    {
-        var path = new List<SyntaxToken>();
-        var glob = false;
-        SyntaxToken? alias = null;
-        var tokens = statement.ChildTokens;
-        for (var i = 1; i < tokens.Length; i++)
-        {
-            var token = tokens[i];
-            if (token.Kind == SyntaxKind.Star)
-                glob = true;
-            else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && (i == 1 || tokens[i - 1].Kind == SyntaxKind.ColonColon))
-                path.Add(token);
-            else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
-                && tokens[i - 1].Text.Equals("as", StringComparison.OrdinalIgnoreCase))
-                alias = token;
-        }
-        var items = new List<(SyntaxToken Name, SyntaxToken? Alias)>();
-        foreach (var item in statement.ChildNodes.Where(child => child.Kind == SyntaxKind.UseItem))
-        {
-            if (item.ChildTokens.Length == 0)
-                continue;
-            items.Add((item.ChildTokens[0], item.ChildTokens.Length > 2 ? item.ChildTokens[2] : null));
-        }
-        return (path, glob, items, alias);
+        foreach (var item in statement.Items)
+            reexports.Add(new ProgramSymbols.Reexport((item.Alias ?? item.Name).Text, [.. path.Select(part => part.Text), item.Name.Text]));
     }
 
     /// <summary>
@@ -2237,15 +2191,18 @@ internal sealed class Binder
     /// in. A name it brings in may not also be declared in the module, because then which one a
     /// use of it meant would depend on a rule rather than on what is written.
     /// </summary>
-    private void ResolveUse(SyntaxNode statement)
+    private void ResolveUse(UseDirectiveSyntax statement)
     {
-        var (path, glob, items, alias) = UseParts(statement);
-        if (path.Count == 0)
+        var path = statement.Path;
+        var glob = statement.StarToken is not null;
+        var items = statement.Items;
+        var alias = statement.Alias;
+        if (path.Length == 0)
             return;
         Place? place = null;
-        for (var i = 0; i < path.Count && (i == 0 || place is not null); i++)
+        for (var i = 0; i < path.Length && (i == 0 || place is not null); i++)
         {
-            var last = i == path.Count - 1 && !glob && items.Count == 0;
+            var last = i == path.Length - 1 && !glob && items.Length == 0;
             place = i == 0 ? ModuleRoot(path[i], report)
                 : place!.Value.Module is { } prefix ? InModule(path[i], prefix, last, report)
                 : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Place(CheckExported(path[i], member, last))
@@ -2274,13 +2231,15 @@ internal sealed class Binder
             }
             return;
         }
-        if (items.Count == 0)
+        if (items.Length == 0)
         {
             BringIn(alias ?? path[^1], target, alias is not null, statement.IsExported);
             return;
         }
-        foreach (var (name, itemAlias) in items)
+        foreach (var written in items)
         {
+            var name = written.Name;
+            var itemAlias = written.Alias;
             var found = target.Module is { } prefix ? InModule(name, prefix, last: true, report)
                 : BodyOf(target.Symbol!)?.FindMember(name.Text) is { } member ? new Place(CheckExported(name, member, last: true))
                 : NotIn(name, target.Symbol!);
@@ -2345,18 +2304,10 @@ internal sealed class Binder
             Export(symbol, at, linkerName: null, size: null);
         foreach (var (item, around) in exportItems)
         {
-            if (item.ChildNodes.FirstOrDefault() is not { } name || Declared(name, around) is not { } symbol)
+            if (Declared(item.Name, around) is not { } symbol)
                 continue;
-            AddressSize? size = null;
-            string? linkerName = null;
-            var tokens = item.ChildTokens;
-            for (var i = 0; i < tokens.Length; i++)
-            {
-                if (tokens[i].Kind == SyntaxKind.Identifier && i > 0 && tokens[i - 1].Kind == SyntaxKind.Colon)
-                    size = SegmentNames.ParseSize(tokens[i].Text);
-                if (tokens[i].Kind == SyntaxKind.StringLiteral)
-                    linkerName = tokens[i].Text.Trim('"');
-            }
+            var size = item.AddressSize is { } written ? SegmentNames.ParseSize(written.Text) : null;
+            var linkerName = item.LinkerName?.Text.Trim('"');
             Export(symbol, item.Span, linkerName, size);
         }
     }
@@ -2391,13 +2342,11 @@ internal sealed class Binder
     }
 
     /// <summary>What a name in an <c>.export</c> list is among the file's own declarations, or null.</summary>
-    private static Symbol? Declared(SyntaxNode name, Scope around)
+    private static Symbol? Declared(NameExpressionSyntax name, Scope around)
     {
         Symbol? symbol = null;
-        foreach (var token in name.ChildTokens)
+        foreach (var token in name.Names)
         {
-            if (token.Kind == SyntaxKind.ColonColon)
-                continue;
             symbol = symbol is null ? around.Lookup(token.Text) : symbol.Body?.FindMember(token.Text);
             if (symbol is null)
                 return null;
@@ -2469,18 +2418,18 @@ internal sealed class Binder
     /// <param name="Segment">The segment that scope is placing things in.</param>
     /// <param name="Why">Why a declaration named after the binding may not stand here, or null when it may.</param>
     private sealed record Repeated(
-        SyntaxNode Block, SyntaxNode? Walked, Symbol Binding, Scope Around, string? Segment, string? Why);
+        BlockSyntax Block, ExpressionSyntax? Walked, Symbol Binding, Scope Around, string? Segment, string? Why);
 
     /// <summary>A declaration named by a repetition's binding, waiting for the enum it walks to be known.</summary>
     private sealed record PendingFamily(
-        SyntaxNode Declaration, Repeated Each, Scope Body, SymbolKind Kind,
-        SyntaxNode? Signature, SyntaxNode? Data, SyntaxNode? Type);
+        StatementSyntax Declaration, Repeated Each, Scope Body, SymbolKind Kind,
+        ProcSignatureSyntax? Signature, DataDirectiveSyntax? Data, NameExpressionSyntax? Type);
 
     /// <summary>One call, waiting for the whole program to be read before it is matched up.</summary>
     /// <param name="Call">The call.</param>
     /// <param name="Scope">The scope it was written in, which its arguments resolve in.</param>
     /// <param name="Inside">The macro whose body holds it, or null when it is called outright.</param>
-    private readonly record struct Invocation(SyntaxNode Call, Scope Scope, Symbol? Inside);
+    private readonly record struct Invocation(MacroCallSyntax Call, Scope Scope, Symbol? Inside);
 
     /// <summary>What a part of a name resolved to: a symbol, or a module or the start of one's name.</summary>
     /// <param name="Symbol">The symbol, or null for a module path.</param>

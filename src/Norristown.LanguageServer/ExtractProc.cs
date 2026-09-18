@@ -72,11 +72,7 @@ internal static class ExtractProc
     /// it starts with none.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
-        StatementOn(tree, first) is { Kind: SyntaxKind.LabeledLine } labelled
-            && labelled.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.Label } label
-            && label.ChildTokens is [var name, ..]
-            ? name.Text.TrimStart('@')
-            : null;
+        StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
     /// The lines of the selection, where every one of them is code a call can stand for: an
@@ -92,27 +88,27 @@ internal static class ExtractProc
             var statement = StatementOn(tree, line);
             if (statement is null)
                 return null;
-            var kinds = statement.Kind == SyntaxKind.LabeledLine
-                ? statement.ChildNodes.Select(child => child.Kind).ToList()
-                : [statement.Kind];
-            foreach (var kind in kinds)
+            if (statement is not (InstructionStatementSyntax or BlankLineSyntax
+                or LabeledLineSyntax { Statement: null or InstructionStatementSyntax }))
             {
-                if (kind is not (SyntaxKind.InstructionStatement or SyntaxKind.Label or SyntaxKind.BlankLine))
-                    return null;
-                code |= kind == SyntaxKind.InstructionStatement;
-            }
-            if (Mnemonic(statement) is { } mnemonic && leaves.Contains(mnemonic))
                 return null;
+            }
+            if (Instruction(statement) is { } instruction)
+            {
+                if (leaves.Contains(instruction.Mnemonic.Text))
+                    return null;
+                code = true;
+            }
             lines.Add(line);
         }
         return code ? lines : null;
     }
 
     /// <summary>The block holding the whole selection, where one routine's body holds all of it.</summary>
-    private static SyntaxNode? Around(SyntaxTree tree, int first, int last)
+    private static BlockSyntax? Around(SyntaxTree tree, int first, int last)
     {
         var block = Edits.BlockAround(tree, first);
-        return block is { Green: GreenBlock { BlockKind: BlockKind.Proc } } && block == Edits.BlockAround(tree, last)
+        return block is { BlockKind: BlockKind.Proc } && block == Edits.BlockAround(tree, last)
             ? block
             : null;
     }
@@ -176,7 +172,7 @@ internal static class ExtractProc
         tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();
 
     /// <summary>The instruction statements of the selected lines, in order.</summary>
-    private static IEnumerable<SyntaxNode> Statements(SyntaxTree tree, IReadOnlyList<int> lines)
+    private static IEnumerable<InstructionStatementSyntax> Statements(SyntaxTree tree, IReadOnlyList<int> lines)
     {
         foreach (var line in lines)
         {
@@ -186,7 +182,7 @@ internal static class ExtractProc
     }
 
     /// <summary>The first instruction after <paramref name="line"/> in the same block, or null.</summary>
-    private static SyntaxNode? StatementAfter(SyntaxTree tree, int line)
+    private static InstructionStatementSyntax? StatementAfter(SyntaxTree tree, int line)
     {
         var block = Edits.BlockAround(tree, line);
         var end = block is not null ? tree.GetLineIndex(block.FullSpan.End - 1) : tree.LineStarts.Length - 1;
@@ -199,29 +195,24 @@ internal static class ExtractProc
     }
 
     /// <summary>The instruction a line holds, a labelled one included; null for a line holding none.</summary>
-    private static SyntaxNode? Instruction(SyntaxNode? statement) => statement switch
+    private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
     {
-        { Kind: SyntaxKind.InstructionStatement } => statement,
-        { Kind: SyntaxKind.LabeledLine } => statement.ChildNodes
-            .FirstOrDefault(child => child.Kind == SyntaxKind.InstructionStatement),
+        InstructionStatementSyntax instruction => instruction,
+        LabeledLineSyntax labelled => labelled.Statement as InstructionStatementSyntax,
         _ => null,
     };
-
-    /// <summary>The mnemonic a line's instruction is written with, or null for a line with none.</summary>
-    private static string? Mnemonic(SyntaxNode statement) =>
-        Instruction(statement) is { ChildTokens: [var mnemonic, ..] } ? mnemonic.Text : null;
 
     /// <summary>The symbol declared on <paramref name="line"/>, or null for a line that declares none.</summary>
     private static Symbol? DeclaredOn(SemanticModel model, int line) =>
         model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
 
     /// <summary>The statement parsed from <paramref name="line"/>, or null where the file has no such line.</summary>
-    private static SyntaxNode? StatementOn(SyntaxTree tree, int line)
+    private static StatementSyntax? StatementOn(SyntaxTree tree, int line)
     {
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (node.Green is GreenLine && node.LineIndex == line)
-                return node.Statement;
+            if (node is LineSyntax found && found.LineIndex == line)
+                return found.Statement;
         }
         return null;
     }

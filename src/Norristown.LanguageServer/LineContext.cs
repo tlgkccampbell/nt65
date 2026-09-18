@@ -1,3 +1,4 @@
+using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
@@ -188,20 +189,20 @@ internal sealed class LineContext
     private static Surrounding Around(SyntaxTree tree, int line)
     {
         var found = new Surrounding(Place.Item, false, false, false, null);
-        for (var node = tree.Root; Innermost(node, line) is { } block; node = block)
-            found = found.Within((GreenBlock)block.Green);
+        for (SyntaxNode node = tree.Root; Innermost(node, line) is { } block; node = block)
+            found = found.Within(block);
         return found;
     }
 
     /// <summary>The child block of <paramref name="node"/> that holds <paramref name="line"/>, or null.</summary>
-    private static SyntaxNode? Innermost(SyntaxNode node, int line)
+    private static BlockSyntax? Innermost(SyntaxNode node, int line)
     {
         foreach (var child in node.ChildNodes)
         {
-            if (child.Green is GreenBlock && child.LineIndex < line
-                && line <= child.Tree.GetLineIndex(child.FullSpan.End - 1))
+            if (child is BlockSyntax block && block.LineIndex < line
+                && line <= block.Tree.GetLineIndex(block.FullSpan.End - 1))
             {
-                return child;
+                return block;
             }
         }
         return null;
@@ -259,7 +260,7 @@ internal sealed class LineContext
         Place Place, bool InProc, bool InMacro, bool InRepetition, IReadOnlyList<string>? RecordType)
     {
         /// <summary>The same, one block further in.</summary>
-        public Surrounding Within(GreenBlock block) => block.BlockKind switch
+        public Surrounding Within(BlockSyntax block) => block.BlockKind switch
         {
             BlockKind.Proc => this with { Place = Place.Code, InProc = true },
             BlockKind.Macro => this with { Place = Place.Code, InMacro = true },
@@ -268,7 +269,7 @@ internal sealed class LineContext
             BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
             BlockKind.Data => this with { Place = Place.Data },
             BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Place = Place.Values },
-            BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener) },
+            BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener.Green) },
             BlockKind.Enum => this with { Place = Place.EnumMembers },
             BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
             _ => this with { Place = Place.Unknown },

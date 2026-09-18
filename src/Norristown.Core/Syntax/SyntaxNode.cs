@@ -1,18 +1,25 @@
 using System.Collections.Immutable;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
 /// <summary>
 /// A red node: a green node with its parent and absolute position, created on demand.
-/// Everything above the syntax layer works with these.
+/// Everything above the syntax layer works with these, through the class each kind of node
+/// has: a <see cref="BinaryExpressionSyntax"/> has a left and a right, a
+/// <see cref="ProcDeclarationSyntax"/> a name and a signature.
+/// <para>
+/// The parser never invents a token, so a piece it expected and did not find is absent from
+/// the node, and the property that names it is null. A property is non-null only where no
+/// line can parse to the node without the piece.
+/// </para>
 /// </summary>
-public sealed class SyntaxNode
+public abstract class SyntaxNode
 {
     private ImmutableArray<SyntaxNode> childNodes;
     private ImmutableArray<SyntaxToken> childTokens;
-    private SyntaxNode? statement;
 
-    internal SyntaxNode(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
+    private protected SyntaxNode(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
     {
         Tree = tree;
         Parent = parent;
@@ -56,50 +63,13 @@ public sealed class SyntaxNode
     /// <summary>The 0-based line this node starts on.</summary>
     public int LineIndex => Tree.GetLineIndex(Position);
 
-    /// <summary>
-    /// For a line, what its tokens parse to; null for every other node. A line's tokens are
-    /// reachable both directly and through the statement, which holds the same tokens in the
-    /// same order.
-    /// <para>
-    /// A declaration written after <c>.export</c> is the line's statement, so it reads as the
-    /// same declaration without it; <see cref="IsExported"/> says the <c>.export</c> is there.
-    /// </para>
-    /// </summary>
-    public SyntaxNode? Statement => Green is GreenLine ? statement ??= Parsed() : null;
-
-    /// <summary>Whether this is a declaration written after <c>.export</c>.</summary>
-    public bool IsExported => Parent is { Kind: SyntaxKind.ExportedDeclaration };
-
-    /// <summary>The <c>.export</c> a declaration is written after, or null.</summary>
-    public SyntaxToken? ExportToken => IsExported ? Parent!.ChildTokens[0] : null;
-
-    /// <summary>Child lines and blocks of a file or block, or a line's statement.</summary>
+    /// <summary>Child lines and blocks of a file or block, a line's statement, or the nodes a statement is made of.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
     {
         get
         {
             if (childNodes.IsDefault)
-            {
-                ImmutableArray<SyntaxNode> children;
-                if (Statement is { } parsed)
-                {
-                    children = [parsed];
-                }
-                else
-                {
-                    var builder = ImmutableArray.CreateBuilder<SyntaxNode>();
-                    var position = Position;
-                    for (var i = 0; i < Green.SlotCount; i++)
-                    {
-                        var slot = Green.GetSlot(i);
-                        if (slot is not GreenToken)
-                            builder.Add(new SyntaxNode(Tree, this, slot, position));
-                        position += slot.FullWidth;
-                    }
-                    children = builder.ToImmutable();
-                }
-                ImmutableInterlocked.InterlockedInitialize(ref childNodes, children);
-            }
+                ImmutableInterlocked.InterlockedInitialize(ref childNodes, CreateChildNodes());
             return childNodes;
         }
     }
@@ -137,6 +107,17 @@ public sealed class SyntaxNode
         }
     }
 
+    /// <summary>The nearest node of type <typeparamref name="T"/> among this one and those containing it, or null.</summary>
+    public T? FirstAncestorOrSelf<T>() where T : SyntaxNode
+    {
+        for (var node = this; node is not null; node = node.Parent)
+        {
+            if (node is T found)
+                return found;
+        }
+        return null;
+    }
+
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
@@ -145,6 +126,87 @@ public sealed class SyntaxNode
 
     /// <summary>The node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
+
+    /// <summary>The red node for each child that is not a token, in source order.</summary>
+    private protected virtual ImmutableArray<SyntaxNode> CreateChildNodes()
+    {
+        var builder = ImmutableArray.CreateBuilder<SyntaxNode>();
+        var position = Position;
+        for (var i = 0; i < Green.SlotCount; i++)
+        {
+            var slot = Green.GetSlot(i);
+            if (slot is not GreenToken)
+                builder.Add(slot.CreateRed(Tree, this, position));
+            position += slot.FullWidth;
+        }
+        return builder.ToImmutable();
+    }
+
+    /// <summary>The token at <paramref name="index"/> among <see cref="ChildTokens"/>, or null when there are not that many.</summary>
+    private protected SyntaxToken? TokenAt(int index) => index < ChildTokens.Length ? ChildTokens[index] : null;
+
+    /// <summary>The token at <paramref name="index"/> when it is one a name may be written as, or null.</summary>
+    private protected SyntaxToken? NameAt(int index) =>
+        TokenAt(index) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null;
+
+    /// <summary>The first token of <paramref name="kind"/> directly under this node, or null.</summary>
+    private protected SyntaxToken? FirstToken(SyntaxKind kind)
+    {
+        foreach (var token in ChildTokens)
+        {
+            if (token.Kind == kind)
+                return token;
+        }
+        return null;
+    }
+
+    /// <summary>The first contextual word <paramref name="word"/> directly under this node, such as <c>as</c>, or null.</summary>
+    private protected SyntaxToken? FirstWord(string word)
+    {
+        foreach (var token in ChildTokens)
+        {
+            if (token.Kind == SyntaxKind.Identifier && token.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
+                return token;
+        }
+        return null;
+    }
+
+    /// <summary>The first child node of type <typeparamref name="T"/>, or null.</summary>
+    private protected T? FirstNode<T>() where T : SyntaxNode
+    {
+        foreach (var node in ChildNodes)
+        {
+            if (node is T found)
+                return found;
+        }
+        return null;
+    }
+
+    /// <summary>Every child node of type <typeparamref name="T"/>, made once and kept in <paramref name="cache"/>.</summary>
+    private protected ImmutableArray<T> Nodes<T>(ref ImmutableArray<T> cache) where T : SyntaxNode
+    {
+        if (cache.IsDefault)
+            ImmutableInterlocked.InterlockedInitialize(ref cache, [.. ChildNodes.OfType<T>()]);
+        return cache;
+    }
+
+    /// <summary>The child written straight after <paramref name="token"/> when it is a node, or null.</summary>
+    private protected SyntaxNode? NodeAfter(SyntaxToken? token) =>
+        Locate(token) is var (slot, nodes, _) && slot + 1 < Green.SlotCount && Green.GetSlot(slot + 1) is not GreenToken
+            ? ChildNodes[nodes]
+            : null;
+
+    /// <summary>The child written straight before <paramref name="token"/> when it is a node, or null.</summary>
+    private protected SyntaxNode? NodeBefore(SyntaxToken? token) =>
+        Locate(token) is var (slot, nodes, _) && slot > 0 && Green.GetSlot(slot - 1) is not GreenToken
+            ? ChildNodes[nodes - 1]
+            : null;
+
+    /// <summary>The child written straight after <paramref name="token"/> when it is a token, or null.</summary>
+    private protected SyntaxToken? TokenAfter(SyntaxToken? token) =>
+        Locate(token) is var (slot, _, tokens) && slot + 1 < Green.SlotCount && Green.GetSlot(slot + 1) is GreenToken
+            ? ChildTokens[tokens + 1]
+            : null;
 
     /// <summary>The first token's text start and the last non-line-break token's text end.</summary>
     private static void Measure(GreenNode node, int position, ref int start, ref int end)
@@ -166,9 +228,30 @@ public sealed class SyntaxNode
         }
     }
 
-    private SyntaxNode Parsed()
+    /// <summary>
+    /// Where a token of this node sits among its children: its slot, and how many nodes and
+    /// how many tokens come before it. Null for no token, or one that is not this node's own.
+    /// </summary>
+    private (int Slot, int Nodes, int Tokens)? Locate(SyntaxToken? token)
     {
-        var parsed = new SyntaxNode(Tree, this, Tree.Statement(LineIndex), Position);
-        return parsed.Kind == SyntaxKind.ExportedDeclaration && parsed.ChildNodes.Length > 0 ? parsed.ChildNodes[0] : parsed;
+        if (token is not { } sought || !ReferenceEquals(sought.Parent, this))
+            return null;
+        int nodes = 0, tokens = 0, position = Position;
+        for (var i = 0; i < Green.SlotCount; i++)
+        {
+            var slot = Green.GetSlot(i);
+            if (slot is GreenToken)
+            {
+                if (position == sought.Position && ReferenceEquals(slot, sought.Green))
+                    return (i, nodes, tokens);
+                tokens++;
+            }
+            else
+            {
+                nodes++;
+            }
+            position += slot.FullWidth;
+        }
+        return null;
     }
 }

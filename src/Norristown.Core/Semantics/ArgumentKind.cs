@@ -28,12 +28,12 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
     /// A kind the parser could not read is an expression, which is the kind that
     /// accepts most and so says least about an argument that is already wrong.
     /// </summary>
-    public static ArgumentKind Read(SyntaxNode? node)
+    public static ArgumentKind Read(ParameterKindSyntax? written)
     {
-        if (node is not { Kind: SyntaxKind.ParameterKind } || node.ChildTokens.Length == 0)
+        if (written?.Keyword is not { } keyword)
             return Expression;
 
-        var kind = node.ChildTokens[0].Text.ToLowerInvariant() switch
+        var kind = keyword.Text.ToLowerInvariant() switch
         {
             "const" => ParameterKind.Const,
             "ident" => ParameterKind.Ident,
@@ -48,12 +48,10 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
         {
             // Every name inside the parentheses is a word it accepts; the `one` itself is the
             // first token, and the punctuation carries nothing.
-            return new ArgumentKind(kind, [.. node.ChildTokens.Skip(1)
-                .Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
-                .Select(token => token.Text)], null);
+            return new ArgumentKind(kind, [.. written.Words.Select(word => word.Text)], null);
         }
         if (kind == ParameterKind.List)
-            return new ArgumentKind(kind, [], Read(node.ChildNodes.FirstOrDefault()));
+            return new ArgumentKind(kind, [], Read(written.Element));
         return new ArgumentKind(kind, [], null);
     }
 }

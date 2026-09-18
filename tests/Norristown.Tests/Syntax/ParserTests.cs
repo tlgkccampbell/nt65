@@ -238,7 +238,7 @@ public sealed class ParserTests
     {
         // A continuation line opens a block of its own, which needs closing in turn.
         var tree = SyntaxTree.Parse("test.nt65", ".scope {\n" + line + (line.EndsWith('{') ? "\n}" : ""));
-        Assert.Equal(kind, tree.Statement(1).Kind);
+        Assert.Equal(kind, Statement(tree, 1).Kind);
         Assert.Empty(tree.Diagnostics);
     }
 
@@ -248,8 +248,8 @@ public sealed class ParserTests
     {
         var tree = SyntaxTree.Parse("main.nt65", ".frobnicate\nlda #1\n");
         Assert.Single(tree.Diagnostics);
-        Assert.Equal(SyntaxKind.ErrorLine, tree.Statement(0).Kind);
-        Assert.Equal("InstructionStatement(lda ImmediateOperand(# NumberExpression(1)))", SyntaxDump.Shape(tree.Statement(1)));
+        Assert.Equal(SyntaxKind.ErrorLine, Statement(tree, 0).Kind);
+        Assert.Equal("InstructionStatement(lda ImmediateOperand(# NumberExpression(1)))", SyntaxDump.Shape(Statement(tree, 1)));
     }
 
     /// <summary>
@@ -260,8 +260,8 @@ public sealed class ParserTests
     public void TheEnclosingBlockDecidesHowALineReads()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".enum Color {\ngreen = 5\n}\ngreen = 5\n");
-        Assert.Equal(SyntaxKind.EnumMember, tree.Statement(1).Kind);
-        Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(3).Kind);
+        Assert.Equal(SyntaxKind.EnumMember, Statement(tree, 1).Kind);
+        Assert.Equal(SyntaxKind.ConstantDeclaration, Statement(tree, 3).Kind);
         Assert.Empty(tree.Diagnostics);
     }
 
@@ -301,11 +301,15 @@ public sealed class ParserTests
     private static SyntaxTree Parse(string line) =>
         SyntaxTree.Parse("test.nt65", line.TrimEnd().EndsWith('{') ? line + "\n}" : line);
 
-    private static GreenNode Statement(string line) => Parse(line).Statement(0);
+    private static StatementSyntax Statement(string line) => Statement(Parse(line), 0);
+
+    /// <summary>What line <paramref name="line"/> of a tree parses to, 0-based.</summary>
+    private static StatementSyntax Statement(SyntaxTree tree, int line) =>
+        tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(line).Statement;
 
     /// <summary>The operand of a <c>.word</c>, which is the shortest line an expression fits on.</summary>
-    private static GreenNode Expression(string expression) =>
-        ((GreenSyntax)Statement(".word " + expression)).Children[1];
+    private static SyntaxNode Expression(string expression) =>
+        Assert.Single(Assert.IsType<DataDirectiveSyntax>(Statement(".word " + expression)).Values);
 
     private static string[] Errors(string line) => [.. Parse(line).Diagnostics.Select(d => d.Message)];
 }

@@ -32,7 +32,7 @@ public sealed class RegisterStates
     /// hover twice. A writing's line is in the file of the block it writes out, which is
     /// another file's for a macro declared there.
     /// </summary>
-    public RegisterState? AnyBefore(SyntaxNode statement)
+    public RegisterState? AnyBefore(StatementSyntax statement)
     {
         RegisterState? merged = null;
         foreach (var (key, state) in reaching)

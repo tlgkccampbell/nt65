@@ -20,7 +20,7 @@ public sealed class ControlFlow
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly List<FlowRegion> regions = [];
-    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<SyntaxNode>> annotations = [];
+    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations = [];
     private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls = [];
     private readonly HashSet<(int Position, Expansion? On)> returnAddresses = [];
 
@@ -106,11 +106,11 @@ public sealed class ControlFlow
         {
             foreach (var child in node.ChildNodes)
             {
-                if (child.Green is not GreenBlock block)
+                if (child is not BlockSyntax block)
                     continue;
-                if (inProc && block.BlockKind == BlockKind.Scope && child.ChildNodes.Length > 0)
-                    found.Add((child.ChildNodes[0].Span, child.FullSpan));
-                Walk(child, inProc || block.BlockKind == BlockKind.Proc);
+                if (inProc && block.BlockKind == BlockKind.Scope)
+                    found.Add((block.Opener.Span, block.FullSpan));
+                Walk(block, inProc || block.BlockKind == BlockKind.Proc);
             }
         }
     }
@@ -211,7 +211,7 @@ public sealed class ControlFlow
         {
             if (step.On is null)
                 within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
-            if (!within || step.Statement.Kind is SyntaxKind.StateDirective or SyntaxKind.FrameDirective || step.IsMarker)
+            if (!within || step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax || step.IsMarker)
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
                 return null;
@@ -233,7 +233,7 @@ public sealed class ControlFlow
     }
 
     /// <summary>The annotations written under <paramref name="step"/>'s statement, in order.</summary>
-    internal IReadOnlyList<SyntaxNode> AnnotationsOf(Step step) =>
+    internal IReadOnlyList<StatementSyntax> AnnotationsOf(Step step) =>
         annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
 
     /// <summary>Whether a statement calls a routine that never returns, which is where its path ends.</summary>
@@ -272,9 +272,10 @@ public sealed class ControlFlow
         {
             // An annotation after a macro call is about the last statement of its expansion,
             // which is before the step that marks where the expansion ends.
-            if (Annotations.Is(step.Statement) && units.FindLast(unit => !unit.Step.IsMarker) is { } above)
+            if (step.Statement is StatementSyntax annotation && Annotations.Is(annotation)
+                && units.FindLast(unit => !unit.Step.IsMarker) is { } above)
             {
-                above.Annotations.Add(step.Statement);
+                above.Annotations.Add(annotation);
                 continue;
             }
             units.Add(new Unit(step));
@@ -315,19 +316,18 @@ public sealed class ControlFlow
     /// <summary>Whether a <c>per</c> pushes <c>L-1</c>, the byte before <paramref name="label"/>, as a return address is.</summary>
     private bool NamesTheAddressBefore(Step push, Symbol label)
     {
-        if (push.Statement.ChildNodes.FirstOrDefault()?.ChildNodes.FirstOrDefault() is not
-            { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] } difference
-            || !difference.ChildTokens.Any(token => token.Kind == SyntaxKind.Minus))
+        if (push.Statement is not InstructionStatementSyntax { Operand: AbsoluteOperandSyntax { Prefix: null } pushed }
+            || pushed.Address is not BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference)
         {
             return false;
         }
-        return Targets.Of(model, left, push.On)?.Symbol == label
-            && model.ValueOf(right, push.On).AsNumber() == 1;
+        return Targets.Of(model, difference.Left, push.On)?.Symbol == label
+            && model.ValueOf(difference.Right, push.On).AsNumber() == 1;
     }
 
     private static bool IsInstruction(SyntaxNode statement, string mnemonic) =>
-        statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
-        && statement.ChildTokens[0].Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
+        statement is InstructionStatementSyntax instruction
+        && instruction.Mnemonic.Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The blocks of one region. A label starts a block, and a statement that transfers
@@ -466,7 +466,7 @@ public sealed class ControlFlow
         {
             // A `.state` and a `.frame` take no time, because they are not there at all, and
             // neither do the ends of an expansion.
-            if (step.Statement.Kind is SyntaxKind.StateDirective or SyntaxKind.FrameDirective || step.IsMarker)
+            if (step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax || step.IsMarker)
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
                 return null;
@@ -504,9 +504,9 @@ public sealed class ControlFlow
     /// table writes them — stands for every one of those labels, which is how an indirect
     /// call names the routines in its table.
     /// </summary>
-    internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(SyntaxNode next, Expansion? on)
+    internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(NextDirectiveSyntax next, Expansion? on)
     {
-        foreach (var written in Annotations.TargetsOf(next))
+        foreach (var written in next.Targets)
         {
             // A `list` parameter names every label the call gave it.
             if (model.SymbolOf(written, on) is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.List } list
@@ -564,7 +564,7 @@ public sealed class ControlFlow
     /// </summary>
     private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
     {
-        if (!IsAddressData(target) || target.Data is not { } element)
+        if (!IsAddressData(target) || target.Data is not DataDirectiveSyntax element)
             yield break;
         foreach (var value in DataLengths.ElementsOf(element))
             yield return (value, null);
@@ -572,9 +572,9 @@ public sealed class ControlFlow
             yield break;
         foreach (var step in layout.Steps)
         {
-            if (step.Statement.Kind == SyntaxKind.DataValues && DataSyntax.DirectiveOfValues(step.Statement) == element)
+            if (step.Statement is DataValuesSyntax values && DataSyntax.DirectiveOfValues(values) == element)
             {
-                foreach (var value in step.Statement.ChildNodes)
+                foreach (var value in DataLengths.ElementsOf(values))
                     yield return (value, step.On);
             }
         }
@@ -582,7 +582,7 @@ public sealed class ControlFlow
 
     /// <summary>Whether a symbol is data declared as addresses, which is what a table of targets is.</summary>
     private static bool IsAddressData(Symbol symbol) =>
-        symbol is { Kind: SymbolKind.Data, Data: { } element } && DataSyntax.NameOf(element) is ".addr" or ".faraddr";
+        symbol is { Kind: SymbolKind.Data, Data: DataDirectiveSyntax element } && DataSyntax.NameOf(element) is ".addr" or ".faraddr";
 
     /// <summary>Whether a name is data that does not spread to code labels, which names nowhere code goes.</summary>
     private bool IsDataWithoutCodeLabels(Symbol symbol, Expansion? on) =>
@@ -593,10 +593,7 @@ public sealed class ControlFlow
     /// same label either way.
     /// </summary>
     private static SyntaxNode Stripped(SyntaxNode item) =>
-        item is { Kind: SyntaxKind.BinaryExpression } && item.ChildNodes.Length == 2
-            && item.ChildTokens.Any(token => token.Kind == SyntaxKind.Minus)
-            ? item.ChildNodes[0]
-            : item;
+        item is BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference ? difference.Left : item;
 
     /// <summary>
     /// What an annotation names has to be somewhere code can be: a label, a routine, or a
@@ -646,7 +643,7 @@ public sealed class ControlFlow
             // never goes, and nothing can name it either.
             if (block.Index > 0 && block.Label is null && block.Predecessors.Count == 0
                 && block.Stream != region.Blocks[block.Index - 1].Stream
-                && block.Steps is [{ Statement.Kind: SyntaxKind.InstructionStatement } first, ..])
+                && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
             {
                 diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span), Severity.Warning,
                     "this code is never reached: fall-through does not enter a nested segment block, so code "
@@ -654,7 +651,7 @@ public sealed class ControlFlow
                 continue;
             }
             if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
-                || block.IsDeclared || block.Steps is [{ Statement.Kind: SyntaxKind.DataDirective or SyntaxKind.DataValues }, ..])
+                || block.IsDeclared || block.Steps is [{ Statement: DataDirectiveSyntax or DataValuesSyntax }, ..])
             {
                 continue;
             }
@@ -694,7 +691,7 @@ public sealed class ControlFlow
             }
             if (unit.Step.Label is not null || unit.Step.IsMarker)
                 continue;
-            var data = unit.Step.Statement.Kind is SyntaxKind.DataDirective or SyntaxKind.DataValues;
+            var data = unit.Step.Statement is DataDirectiveSyntax or DataValuesSyntax;
 
             // The data a routine returns past is skipped, and flow carries on after it.
             if (inline.Contains(unit))
@@ -733,9 +730,8 @@ public sealed class ControlFlow
             {
                 if (i + 1 < units.Count && units[i + 1].Step.Label is null
                     && units[i + 1].Step.Stream == units[i].Step.Stream
-                    && units[i + 1].Step.Statement is { Kind: SyntaxKind.DataDirective } text
-                    && text.ChildTokens.Length > 0
-                    && text.ChildTokens[0].Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
+                    && units[i + 1].Step.Statement is DataDirectiveSyntax text
+                    && text.Directive.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
                 {
                     skipped.Add(units[i + 1]);
                 }
@@ -759,7 +755,7 @@ public sealed class ControlFlow
             for (var j = i + 1; j < units.Count && taken < bytes; j++)
             {
                 if (units[j].Step.Label is not null || units[j].Step.Stream != units[i].Step.Stream
-                    || units[j].Step.Statement.Kind is not (SyntaxKind.DataDirective or SyntaxKind.DataValues))
+                    || units[j].Step.Statement is not (DataDirectiveSyntax or DataValuesSyntax))
                     break;
                 taken += layout.Of(units[j].Step.Statement, units[j].Step.On)?.Length ?? 0;
                 skipped.Add(units[j]);
@@ -789,9 +785,10 @@ public sealed class ControlFlow
         {
             var statement = unit.Step.Statement;
             if (unit.Next is null && routine.Signature is { HasNoCaller: true } own
-                && (IsInstruction(statement, "rts") || IsInstruction(statement, "rtl")))
+                && statement is InstructionStatementSyntax instruction
+                && (IsInstruction(instruction, "rts") || IsInstruction(instruction, "rtl")))
             {
-                var returned = statement.ChildTokens[0].Text.ToLowerInvariant();
+                var returned = instruction.Mnemonic.Text.ToLowerInvariant();
                 Report(statement, own.IsInterrupt
                     ? $"`{routine.DisplayName}` is an interrupt handler, and leaves by `rti` rather than `{returned}`"
                     : $"`{routine.DisplayName}` never returns, as its `noreturn` says, and `{returned}` returns",
@@ -840,7 +837,7 @@ public sealed class ControlFlow
                 continue;
             }
             var end = layout.Placed(unit.Step.Statement, unit.Step.On);
-            foreach (var written in Annotations.TargetsOf(next))
+            foreach (var written in next.Targets)
             {
                 if (Targets.Of(model, written, unit.Step.On) is not { Symbol: { Signature: not null } routine })
                     continue;
@@ -884,10 +881,7 @@ public sealed class ControlFlow
         return unit.Next is null && transfer is Transfer.Through or Transfer.Branch or Transfer.Call;
     }
 
-    private static bool IsCall(SyntaxNode statement) =>
-        statement.ChildTokens.Length > 0
-        && (statement.ChildTokens[0].Text.Equals("jsr", StringComparison.OrdinalIgnoreCase)
-            || statement.ChildTokens[0].Text.Equals("jsl", StringComparison.OrdinalIgnoreCase));
+    private static bool IsCall(SyntaxNode statement) => IsInstruction(statement, "jsr") || IsInstruction(statement, "jsl");
 
     /// <summary>One statement and the annotations written under it.</summary>
     private sealed class Unit(Step step)
@@ -896,10 +890,9 @@ public sealed class ControlFlow
         public Step Step { get; } = step;
 
         /// <summary>The annotations under it, in the order they were written.</summary>
-        public List<SyntaxNode> Annotations { get; } = [];
+        public List<StatementSyntax> Annotations { get; } = [];
 
         /// <summary>The <c>.next</c> among them, or null when there is none.</summary>
-        public SyntaxNode? Next =>
-            Annotations.FirstOrDefault(a => a.Kind == SyntaxKind.NextDirective);
+        public NextDirectiveSyntax? Next => Annotations.OfType<NextDirectiveSyntax>().FirstOrDefault();
     }
 }

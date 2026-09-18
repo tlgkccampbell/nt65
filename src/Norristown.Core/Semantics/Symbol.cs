@@ -77,7 +77,7 @@ public sealed class Symbol
     public (Symbol Binding, Expansion.Bound Value)? Bound { get; internal set; }
 
     /// <summary>The expression after <c>=</c>, or null for a label, proc body or scope.</summary>
-    public SyntaxNode? ValueExpression { get; internal init; }
+    public ExpressionSyntax? ValueExpression { get; internal init; }
 
     /// <summary>The scope a <c>.proc</c>, a <c>.scope</c> or mixed data opens; null for everything else.</summary>
     public Scope? Body { get; internal set; }
@@ -101,7 +101,7 @@ public sealed class Symbol
     /// The <c>T</c> of a <c>.type T</c>, before it is resolved. A member or a data declaration
     /// takes its size and its fields from the type it names.
     /// </summary>
-    public SyntaxNode? TypeExpression { get; internal init; }
+    public ExpressionSyntax? TypeExpression { get; internal init; }
 
     /// <summary>The type a <c>.type</c> names, once resolved.</summary>
     public Symbol? Type { get; internal set; }
@@ -132,13 +132,13 @@ public sealed class Symbol
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
 
     /// <summary>A charmap's entry lines, read into a mapping when it is first applied.</summary>
-    public IReadOnlyList<SyntaxNode> Entries { get; internal init; } = [];
+    public IReadOnlyList<CharmapEntrySyntax> Entries { get; internal init; } = [];
 
     /// <summary>
     /// The element directive of a data declaration or a struct member, which is what gives it a
     /// size and a count; null for mixed data, whose block is its <see cref="Definition"/>.
     /// </summary>
-    public SyntaxNode? Data { get; internal init; }
+    public StatementSyntax? Data { get; internal init; }
 
     /// <summary>
     /// The enum member written before this one, or null for the first. A member with no value
@@ -173,7 +173,7 @@ public sealed class Symbol
     /// The <c>.state</c> written directly after a label, which declares the label an entry
     /// point with that state; null for a label with none and for every other symbol.
     /// </summary>
-    public SyntaxNode? StateDeclaration { get; internal set; }
+    public StateDirectiveSyntax? StateDeclaration { get; internal set; }
 
     /// <summary>The routine a label is written inside, or null for one at file level or in no routine.</summary>
     public Symbol? Routine

@@ -10,33 +10,24 @@ namespace Norristown.Semantics;
 /// </summary>
 public static class ElementIndexes
 {
-    /// <summary>Whether the path writes an index anywhere along it.</summary>
-    public static bool In(SyntaxNode name) =>
-        name.Kind == SyntaxKind.NameExpression && name.ChildNodes.Any(child => child.Kind == SyntaxKind.ElementIndex);
-
     /// <summary>
     /// Each component of the path that carries an index, with the index written after it, in
     /// the order they are written.
     /// </summary>
-    public static IEnumerable<(SyntaxToken Part, SyntaxNode Index)> Of(SyntaxNode name)
+    public static IEnumerable<(SyntaxToken Part, ElementIndexSyntax Index)> Of(NameExpressionSyntax name)
     {
-        foreach (var index in name.ChildNodes)
+        foreach (var index in name.Indexes)
         {
-            if (index.Kind != SyntaxKind.ElementIndex)
-                continue;
             SyntaxToken? part = null;
-            foreach (var token in name.ChildTokens)
+            foreach (var token in name.Names)
             {
-                if (token.Kind != SyntaxKind.ColonColon && token.Span.Start < index.Span.Start)
+                if (token.Span.Start < index.Span.Start)
                     part = token;
             }
             if (part is { } component)
                 yield return (component, index);
         }
     }
-
-    /// <summary>The expression inside the brackets, or null where the parser read none.</summary>
-    public static SyntaxNode? WrittenIn(SyntaxNode index) => index.ChildNodes.FirstOrDefault();
 
     /// <summary>
     /// How many bytes one element of <paramref name="symbol"/> takes — its size divided among

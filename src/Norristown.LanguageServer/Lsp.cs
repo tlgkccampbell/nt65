@@ -292,7 +292,7 @@ internal static class Lsp
         {
             return null;
         }
-        if (statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.EnsureDirective)
+        if (statement is not (InstructionStatementSyntax or EnsureDirectiveSyntax)
             || layout.AnyOf(statement) is not { Cycles: { } cycles } laid)
         {
             return null;
@@ -300,9 +300,7 @@ internal static class Lsp
 
         // An instruction is read under the name its datasheet gives it, written as a comment
         // is written here, since a reader who knows what `xba` stands for is not the one asking.
-        var mnemonic = statement.Kind == SyntaxKind.InstructionStatement && statement.ChildTokens.Length > 0
-            ? statement.ChildTokens[0].Text.ToLowerInvariant()
-            : null;
+        var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant();
         var line = Written(model.Tree.Text[statement.Span.Start..statement.Span.End]);
         var card = new Card(mnemonic is { } named && Mnemonics.Name(named) is { } called
             ? $"{line}  ; {called}"
@@ -369,29 +367,26 @@ internal static class Lsp
     /// The value of the immediate a line is written with, or null where it has none or none
     /// nt65 can work out. It is what says which flags a <c>rep</c> or a <c>sep</c> writes.
     /// </summary>
-    private static long? Immediate(SemanticModel model, SyntaxNode statement, LineLayout laid) =>
+    private static long? Immediate(SemanticModel model, StatementSyntax statement, LineLayout laid) =>
         laid.Mode == AddressingMode.Immediate
-            && statement.ChildNodes.FirstOrDefault()?.ChildNodes
-                .FirstOrDefault(child => child.Kind != SyntaxKind.AddressPrefix) is { } expression
+            && statement is InstructionStatementSyntax { Operand: { } operand }
+            && operand.ChildNodes.FirstOrDefault(child => child is not AddressPrefixSyntax) is { } expression
             ? model.ValueOf(expression).AsNumber()
             : null;
 
     /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>
-    private static SyntaxNode? Statement(SyntaxTree tree, int position)
+    private static StatementSyntax? Statement(SyntaxTree tree, int position)
     {
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (node.Green is GreenLine && position >= node.Position
-                && position < node.Position + node.Green.FullWidth)
-            {
-                return node.Statement;
-            }
+            if (node is LineSyntax line && position >= line.Position && position < line.FullSpan.End)
+                return line.Statement;
         }
         return null;
     }
 
     /// <summary>The block a statement is in, wherever in the file it was written.</summary>
-    private static BasicBlock? Around(ControlFlow? flow, SyntaxNode statement) =>
+    private static BasicBlock? Around(ControlFlow? flow, StatementSyntax statement) =>
         flow?.Regions
             .SelectMany(region => region.Blocks)
             .FirstOrDefault(block => block.Steps.Any(step =>

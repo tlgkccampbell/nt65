@@ -16,14 +16,13 @@ public sealed record MacroArgument(
     MacroParameter Parameter,
     SyntaxNode? Value,
     IReadOnlyList<SyntaxNode> Items,
-    SyntaxNode? Block,
+    BlockSyntax? Block,
     bool Written)
 {
     /// <summary>The word a <c>one</c> parameter was given, or null when it is not one.</summary>
     public string? Word =>
-        Parameter.Kind == ParameterKind.One && Value is { Kind: SyntaxKind.NameExpression } name
-        && name.ChildTokens.Length == 1
-            ? name.ChildTokens[0].Text
+        Parameter.Kind == ParameterKind.One && Value is NameExpressionSyntax { ChildTokens: [var word] }
+            ? word.Text
             : null;
 
     /// <summary>
@@ -31,5 +30,5 @@ public sealed record MacroArgument(
     /// address is written without them, and is an operand all the same.
     /// </summary>
     public SyntaxNode? Operand =>
-        Value is { Kind: SyntaxKind.BracedOperand } braced ? braced.ChildNodes.FirstOrDefault() : Value;
+        Value is BracedOperandSyntax braced ? braced.Operand : Value;
 }

@@ -118,14 +118,11 @@ internal static class UseItems
     {
         var tree = model.Tree;
         var lines = new List<Line>();
-        foreach (var child in tree.Root.ChildNodes)
+        foreach (var child in tree.Root.Members)
         {
-            if (child.Green is not GreenLine || child.Statement is not { Kind: SyntaxKind.UseDirective } statement
-                || statement.IsExported)
-            {
+            if (child is not LineSyntax { Statement: UseDirectiveSyntax { IsExported: false } } written)
                 continue;
-            }
-            if (Read(tree, child.LineIndex) is { } line)
+            if (Read(tree, written.LineIndex) is { } line)
                 lines.Add(line);
         }
         return lines;

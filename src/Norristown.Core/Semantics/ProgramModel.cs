@@ -371,7 +371,7 @@ public sealed class ProgramModel
     private static void Value(
         IEnumerable<Symbol> symbols, SegmentTable segments, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
     {
-        Symbol? SetOf(SyntaxNode name) => Evaluator.SymbolNamed(name, resolved);
+        Symbol? SetOf(NameExpressionSyntax name) => Evaluator.SymbolNamed(name, resolved);
         foreach (var symbol in symbols)
         {
             // An instance of a family reads its signature with what the binding is worth there,
@@ -379,7 +379,7 @@ public sealed class ProgramModel
             var bound = symbol.Bound is { } held
                 ? new Dictionary<Symbol, Expansion.Bound> { [held.Binding] = held.Value }
                 : null;
-            long? ValueOf(SyntaxNode expression) => Evaluator.ValueOf(expression, segments, resolved, bound).AsNumber();
+            long? ValueOf(ExpressionSyntax expression) => Evaluator.ValueOf(expression, segments, resolved, bound).AsNumber();
             void Report(TextSpan span, string message) =>
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
             if (symbol.Kind == SymbolKind.SignatureSet)
@@ -411,7 +411,7 @@ public sealed class ProgramModel
             {
                 continue;
             }
-            if (value.Parent?.ChildNodes.Any(child => child.Kind == SyntaxKind.ProcSignature) != true)
+            if (value.Parent is not ExternProcDeclarationSyntax { Signature: not null })
             {
                 alias.Signature = actual;
                 continue;
@@ -483,7 +483,7 @@ public sealed class ProgramModel
     /// </summary>
     private static IEnumerable<Symbol> Named(Symbol symbol, SymbolMap resolved)
     {
-        var written = new[] { symbol.ValueExpression, symbol.Data, symbol.TypeExpression }
+        var written = new SyntaxNode?[] { symbol.ValueExpression, symbol.Data, symbol.TypeExpression }
             .Concat(symbol.Items)
             .Concat(symbol.Entries)
             .OfType<SyntaxNode>();

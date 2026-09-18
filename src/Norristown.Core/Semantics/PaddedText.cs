@@ -16,10 +16,10 @@ public static class PaddedText
     /// when it is not one text in a counted <c>.byte</c> array — a text as long as its count,
     /// or longer, among them.
     /// </summary>
-    public static (long Zeros, long Count)? Padding(SyntaxNode directive, SemanticModel model, Expansion? on = null)
+    public static (long Zeros, long Count)? Padding(DataDirectiveSyntax directive, SemanticModel model, Expansion? on = null)
     {
         if (DataSyntax.NameOf(directive) != ".byte"
-            || DataSyntax.CountExpressionOf(directive) is not { } written
+            || directive.Count?.Count is not { } written
             || model.ValueOf(written, on).AsNumber() is not { } count
             || OnlyValueOf(directive) is not { } value
             || !IsText(value, model, on)
@@ -34,20 +34,20 @@ public static class PaddedText
     /// The one value the directive holds, wherever it is written, or null when it holds any
     /// other number of them.
     /// </summary>
-    private static SyntaxNode? OnlyValueOf(SyntaxNode directive)
+    private static SyntaxNode? OnlyValueOf(DataDirectiveSyntax directive)
     {
-        if (DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.ValueList } list)
-            return list.ChildNodes is [var braced] ? braced : null;
+        if (DataSyntax.BracedOf(directive) is ValueListSyntax list)
+            return list.Values is [var braced] ? braced : null;
         if (DataSyntax.BodyOf(directive) is not { } body)
             return null;
         SyntaxNode? only = null;
-        foreach (var line in body.ChildNodes.Skip(1))
+        foreach (var line in body.Members.Skip(1))
         {
             // A conditional or a repetition in the body writes values of its own, however few
             // its lines look like, so a body holding one is never the one-text case.
-            if (line.Green is GreenBlock)
+            if (line is BlockSyntax)
                 return null;
-            if (line.Statement is not { Kind: SyntaxKind.DataValues } values)
+            if (line is not LineSyntax { Statement: DataValuesSyntax values })
                 continue;
             if (only is not null || values.ChildNodes is not [var written])
                 return null;
@@ -62,10 +62,10 @@ public static class PaddedText
     /// </summary>
     private static bool IsText(SyntaxNode value, SemanticModel model, Expansion? on)
     {
-        if (value is { Kind: SyntaxKind.CallExpression, ChildNodes: [{ Kind: SyntaxKind.NameExpression } callee, var given] }
+        if (value is CallExpressionSyntax { Callee: { } callee } call
             && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap })
         {
-            return given.ChildNodes is [var text] && IsText(text, model, on);
+            return call.Arguments.Arguments is [var text] && IsText(text, model, on);
         }
         return model.ValueOf(value, on).Kind == ValueKind.String;
     }

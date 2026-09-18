@@ -14,17 +14,16 @@ namespace Norristown.Semantics;
 /// <param name="IsFar">Whether a <see cref="StatePart.Distance"/> item says <c>far</c>.</param>
 /// <param name="IsUnchanged">Whether it is a <c>*</c> item, which describes a routine rather than a point in it.</param>
 public readonly record struct StateItem(
-    SyntaxNode Node, StatePart Part, Width Width, ProcessorMode Mode, bool IsFar, bool IsUnchanged)
+    StateItemSyntax Node, StatePart Part, Width Width, ProcessorMode Mode, bool IsFar, bool IsUnchanged)
 {
     /// <summary>The item as it is written, for a message that names it.</summary>
     public string Text => Node.GetText().Trim();
 
     /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
-    public SyntaxNode? Expression => Node.ChildNodes.FirstOrDefault();
+    public ExpressionSyntax? Expression => Node.Value;
 
     /// <summary>Whether an <c>inline</c> item says <c>inline .strz</c>.</summary>
-    public bool IsStrz => Node.ChildTokens.Any(token =>
-        token.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase));
+    public bool IsStrz => Node.StrzToken is not null;
 
     /// <summary>The registers a <see cref="StatePart.Keeps"/> item names; none for every other item.</summary>
     public Layout.Registers Registers
@@ -32,7 +31,7 @@ public readonly record struct StateItem(
         get
         {
             var registers = Layout.Registers.None;
-            foreach (var token in Node.ChildTokens.Skip(1))
+            foreach (var token in Node.Registers)
             {
                 if (Layout.RegisterEffects.Named(token.Text) is { } register)
                     registers |= register;
@@ -46,12 +45,12 @@ public readonly record struct StateItem(
     {
         foreach (var node in list?.ChildNodes ?? [])
         {
-            if (node.Kind == SyntaxKind.StateList)
+            if (node is StateListSyntax nested)
             {
-                foreach (var item in Read(node))
+                foreach (var item in Read(nested))
                     yield return item;
             }
-            else if (node.Kind == SyntaxKind.StateItem && Of(node) is { } item)
+            else if (node is StateItemSyntax written && Of(written) is { } item)
             {
                 yield return item;
             }
@@ -59,7 +58,7 @@ public readonly record struct StateItem(
     }
 
     /// <summary>The name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
-    public SyntaxNode? SetName => Part == StatePart.Set ? Node.ChildNodes.FirstOrDefault() : null;
+    public NameExpressionSyntax? SetName => Part == StatePart.Set ? Node.SetName : null;
 
     /// <summary>
     /// Whether a list says something and every item of it is a <c>keeps</c>. Such a list says
@@ -73,19 +72,19 @@ public readonly record struct StateItem(
     }
 
     /// <summary>One item, or null when its line did not parse into one.</summary>
-    private static StateItem? Of(SyntaxNode node)
+    private static StateItem? Of(StateItemSyntax node)
     {
-        if (node.ChildTokens.Length == 0)
+        if (node.AllUnknownToken is not null)
+            return new StateItem(node, StatePart.AllUnknown, Width.Unknown, ProcessorMode.Unknown, false, false);
+        if (node.Name is not { } word)
         {
-            return node.ChildNodes is [{ Kind: SyntaxKind.NameExpression }]
+            return node.SetName is not null
                 ? new StateItem(node, StatePart.Set, Width.Unknown, ProcessorMode.Unknown, false, false)
                 : null;
         }
-        if (node.ChildTokens[0].Kind == SyntaxKind.Question)
-            return new StateItem(node, StatePart.AllUnknown, Width.Unknown, ProcessorMode.Unknown, false, false);
 
-        var name = node.ChildTokens[0].Text.ToLowerInvariant();
-        var suffix = node.ChildTokens.Length > 1 ? node.ChildTokens[1].Kind : SyntaxKind.None;
+        var name = word.Text.ToLowerInvariant();
+        var suffix = node.Suffix?.Kind ?? SyntaxKind.None;
         var width = suffix switch
         {
             SyntaxKind.Star => Width.Unchanged,

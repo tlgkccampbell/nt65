@@ -16,43 +16,40 @@ public static class Operands
     /// </summary>
     public static OperandSubstitution? Substituted(SemanticModel model, SyntaxNode? operand, Expansion? on)
     {
-        if (on is null || operand is not { Kind: SyntaxKind.AbsoluteOperand })
+        if (on is null || operand is not AbsoluteOperandSyntax absolute)
             return null;
 
         // Only a bare expression can name one: a prefix or an index of its own would be
         // written around a whole operand, which is not something the language allows.
-        if (operand.ChildNodes.Length != 1)
+        if (absolute.Prefix is not null || absolute.Second is not null)
             return null;
-        return Read(model, operand.ChildNodes[0], on);
+        return Read(model, absolute.Address, on);
     }
 
     /// <summary>The same, for the expression inside an operand.</summary>
-    private static OperandSubstitution? Read(SemanticModel model, SyntaxNode expression, Expansion? on)
+    private static OperandSubstitution? Read(SemanticModel model, ExpressionSyntax expression, Expansion? on)
     {
-        switch (expression.Kind)
+        switch (expression)
         {
-            case SyntaxKind.NameExpression:
+            case NameExpressionSyntax:
                 return Bound(model, expression, on) is { } plain
                     ? new OperandSubstitution(plain.Parameter, plain.Operand, 0, false, expression)
                     : null;
 
             // `dest + 1` and `dest - 1` apply to the argument's expression, so that `dest+1`
             // with `dest` bound to `buf,x` is `buf+1,x`.
-            case SyntaxKind.BinaryExpression when expression.ChildNodes.Length == 2
-                && expression.ChildTokens.Length > 0
-                && expression.ChildTokens[0].Kind is SyntaxKind.Plus or SyntaxKind.Minus:
-                if (Bound(model, expression.ChildNodes[0], on) is not { } shifted)
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary:
+                if (Bound(model, binary.Left, on) is not { } shifted)
                     return null;
-                if (model.ValueOf(expression.ChildNodes[1], on).AsNumber() is not { } by)
+                if (model.ValueOf(binary.Right, on).AsNumber() is not { } by)
                     return null;
-                var sign = expression.ChildTokens[0].Kind == SyntaxKind.Minus ? -1 : 1;
+                var sign = binary.OperatorToken.Kind == SyntaxKind.Minus ? -1 : 1;
                 return new OperandSubstitution(
                     shifted.Parameter, shifted.Operand, sign * by, false, expression);
 
             // `.byteof(p, n)` stands where the operand may, and is byte n of its value.
-            case SyntaxKind.CallExpression when IsByteOf(expression):
-                var given = expression.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList);
-                var arguments = given?.ChildNodes ?? [];
+            case CallExpressionSyntax call when IsByteOf(call):
+                var arguments = call.Arguments.Arguments;
                 if (arguments.Length < 1 || Bound(model, arguments[0], on) is not { } whole)
                     return null;
                 var byteAt = arguments.Length > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
@@ -67,33 +64,26 @@ public static class Operands
     /// The mode an operand is in, as <c>.mode(p)</c> spells it. An argument written
     /// without braces is an expression, and a plain address operand by being one.
     /// </summary>
-    public static string ModeOf(SyntaxNode operand) => operand.Kind switch
+    public static string ModeOf(SyntaxNode operand) => operand switch
     {
-        SyntaxKind.ImmediateOperand => "imm",
-        SyntaxKind.AccumulatorOperand => "acc",
-        SyntaxKind.IndirectOperand => IndexedBy(operand, "y") ? "indy" : "ind",
-        SyntaxKind.IndexedIndirectOperand => IndexedBy(operand, "s") ? "sry" : "indx",
-        SyntaxKind.LongIndirectOperand => IndexedBy(operand, "y") ? "longy" : "long",
-        SyntaxKind.AbsoluteOperand when IndexedBy(operand, "s") => "sr",
-        SyntaxKind.AbsoluteOperand when IndexedBy(operand, "x") => "absx",
-        SyntaxKind.AbsoluteOperand when IndexedBy(operand, "y") => "absy",
+        ImmediateOperandSyntax => "imm",
+        AccumulatorOperandSyntax => "acc",
+        IndirectOperandSyntax indirect => Is(indirect.IndexRegister, "y") ? "indy" : "ind",
+        IndexedIndirectOperandSyntax indexed => Is(indexed.InnerRegister, "s") ? "sry" : "indx",
+        LongIndirectOperandSyntax far => Is(far.IndexRegister, "y") ? "longy" : "long",
+        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "s") => "sr",
+        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "x") => "absx",
+        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "y") => "absy",
         _ => "abs",
     };
 
-    private static bool IndexedBy(SyntaxNode operand, string register)
-    {
-        foreach (var token in operand.ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.Register && token.Text.Equals(register, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
+    private static bool Is(SyntaxToken? register, string name) =>
+        register is { } written && written.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether a call is <c>.byteof</c>.</summary>
-    public static bool IsByteOf(SyntaxNode call) =>
-        call.Kind == SyntaxKind.CallExpression && call.ChildTokens.Length > 0
-        && call.ChildTokens[0].Text.Equals(".byteof", StringComparison.OrdinalIgnoreCase);
+    public static bool IsByteOf(CallExpressionSyntax call) =>
+        call.Function is { } function
+        && function.Text.Equals(".byteof", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The operand parameter a name stands for at this expansion, and the operand it was
@@ -102,7 +92,7 @@ public static class Operands
     private static (MacroParameter Parameter, SyntaxNode Operand)? Bound(
         SemanticModel model, SyntaxNode name, Expansion? on)
     {
-        if (name.Kind != SyntaxKind.NameExpression
+        if (name is not NameExpressionSyntax
             || model.SymbolOf(name) is not { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }
             || parameter.Kind != ParameterKind.Operand)
         {

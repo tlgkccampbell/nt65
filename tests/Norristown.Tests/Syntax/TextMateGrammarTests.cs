@@ -94,6 +94,7 @@ public sealed class TextMateGrammarTests
         {
             var tree = SyntaxTree.Parse(name, text);
             var bodies = Bodies(tree);
+            var syntax = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
             var lineScopes = TextMateGrammar.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
             for (var l = 0; l < tree.Lines.Length; l++)
             {
@@ -116,7 +117,7 @@ public sealed class TextMateGrammarTests
                     }
                     if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.Error is not null)
                         continue;
-                    var expected = TextMateGrammar.Expected(tree, l, t, bodies.GetValueOrDefault(l));
+                    var expected = TextMateGrammar.Expected(syntax[l], t, bodies.GetValueOrDefault(l));
                     var actual = scopes[start..triviaStart].Distinct().ToList();
                     if (actual.Count != 1 || actual[0] != expected)
                         failures.Add($"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}");
@@ -133,18 +134,17 @@ public sealed class TextMateGrammarTests
     private static Dictionary<int, BlockKind> Bodies(SyntaxTree tree)
     {
         var bodies = new Dictionary<int, BlockKind>();
-        foreach (var line in tree.Root.DescendantNodes().Where(node => node.Green is GreenLine))
+        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
-            var child = line;
-            for (var block = line.Parent; block is not null; child = block, block = block.Parent)
+            SyntaxNode child = line;
+            for (var parent = line.Parent; parent is not null; child = parent, parent = parent.Parent)
             {
-                if (block.Green is not GreenBlock { BlockKind: var kind }
-                    || (block.ChildNodes.Length > 0 && block.ChildNodes[0].Green == child.Green && block.ChildNodes[0].Position == child.Position)
-                    || kind is BlockKind.If or BlockKind.Repeat or BlockKind.Each)
+                if (parent is not BlockSyntax block || block.Opener == child
+                    || block.BlockKind is BlockKind.If or BlockKind.Repeat or BlockKind.Each)
                 {
                     continue;
                 }
-                bodies[line.LineIndex] = kind;
+                bodies[line.LineIndex] = block.BlockKind;
                 break;
             }
         }

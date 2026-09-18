@@ -49,19 +49,10 @@ public static class ProgramCpu
 
     private static IEnumerable<(Cpu Cpu, TextSpan Span)> Read(SyntaxTree tree)
     {
-        foreach (var node in tree.Root.DescendantNodes())
+        foreach (var directive in tree.Root.DescendantNodes().OfType<CpuDirectiveSyntax>())
         {
-            if (node.Kind != SyntaxKind.CpuDirective)
-                continue;
-            foreach (var token in node.ChildTokens)
-            {
-                if (token.Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier
-                    && CpuNames.Parse(token.Text) is { } cpu)
-                {
-                    yield return (cpu, token.Span);
-                    break;
-                }
-            }
+            if (directive.Cpu is { } name && CpuNames.Parse(name.Text) is { } cpu)
+                yield return (cpu, name.Span);
         }
     }
 }

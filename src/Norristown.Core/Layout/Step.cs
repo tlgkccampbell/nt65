@@ -27,6 +27,6 @@ public readonly record struct Step(
     SyntaxNode Statement, Expansion? On, Symbol? Routine, int Stream, string? Segment, Symbol? Label, bool Closes = false)
 {
     /// <summary>Whether the step marks where an expansion or a splice starts or ends, rather than a statement.</summary>
-    public bool IsMarker => Statement.Kind is SyntaxKind.MacroCall or SyntaxKind.BlockSplice;
+    public bool IsMarker => Statement is MacroCallSyntax or BlockSpliceSyntax;
 }
 

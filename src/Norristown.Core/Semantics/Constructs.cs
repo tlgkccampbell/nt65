@@ -16,29 +16,25 @@ public static class Constructs
     /// What an <c>.assert</c> or an <c>.error</c> says: the expression that has to hold (none,
     /// for an <c>.error</c>), and the message written with it.
     /// </summary>
-    public static Assertion AssertionOf(SyntaxNode directive)
+    public static Assertion AssertionOf(StatementSyntax directive) => directive switch
     {
-        string? message = null;
-        foreach (var token in directive.ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.StringLiteral)
-                message ??= Literals.Text(token.Text);
-        }
-        return new Assertion(directive.ChildNodes.FirstOrDefault(), message);
-    }
+        AssertDirectiveSyntax assert => new Assertion(assert.Condition, MessageOf(assert.Message)),
+        ErrorDirectiveSyntax error => new Assertion(null, MessageOf(error.Message)),
+        _ => default,
+    };
 
     /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
     /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
     /// <param name="Message">What to say about it, or null when none was written.</param>
-    public readonly record struct Assertion(SyntaxNode? Condition, string? Message);
+    public readonly record struct Assertion(ExpressionSyntax? Condition, string? Message);
 
     /// <summary>
     /// The segment a segment block or a region line names, or null when the line is neither or
     /// names none. A name written in quotes has been reported, and still names its segment.
     /// </summary>
-    public static string? SegmentOf(SyntaxNode opener) =>
-        opener.Kind is SyntaxKind.SegmentBlock or SyntaxKind.SegmentRegion or SyntaxKind.SegmentDeclaration
-            && opener.ChildTokens.Length > 1
-            ? SegmentNames.Of(opener.ChildTokens[1])
-            : null;
+    public static string? SegmentOf(StatementSyntax opener) =>
+        opener is SegmentStatementSyntax { Name: { } name } ? SegmentNames.Of(name) : null;
+
+    private static string? MessageOf(SyntaxToken? message) =>
+        message is { } written ? Literals.Text(written.Text) : null;
 }

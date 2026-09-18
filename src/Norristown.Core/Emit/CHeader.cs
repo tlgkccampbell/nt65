@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Emit;
 
@@ -181,13 +182,13 @@ public sealed class CHeader
     {
         var size = symbol.Size ?? 0;
         var count = symbol.Count ?? 1;
-        var directive = symbol.Data;
-        var counted = directive is not null && (DataSyntax.CountOf(directive) is not null || count != 1);
+        var directive = symbol.Data as DataDirectiveSyntax;
+        var counted = directive is not null && (directive.Count is not null || count != 1);
         var dimension = counted ? $"[{count}]" : "";
 
-        if (directive is not null && DataSyntax.IsRecord(directive))
+        if (directive is { IsRecord: true })
         {
-            var type = symbol.Type ?? (DataSyntax.TypeOf(directive) is { } named ? ModelOf(symbol).SymbolOf(named) : null);
+            var type = symbol.Type ?? (directive.Type is { } named ? ModelOf(symbol).SymbolOf(named) : null);
             if (type is not null && defined.Contains(type))
                 return $"{(type.Kind == SymbolKind.Union ? "union" : "struct")} {CName(type.OutputName)} {name}{dimension}";
             if (type is not null)

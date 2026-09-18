@@ -9,52 +9,26 @@ namespace Norristown.Semantics;
 /// </summary>
 public static class Macros
 {
-    /// <summary>The parameters written on a <c>.macro</c> opener, in order.</summary>
-    public static IReadOnlyList<SyntaxNode> ParametersOf(SyntaxNode opener) =>
-        [.. opener.ChildNodes
-            .FirstOrDefault(child => child.Kind == SyntaxKind.MacroParameterList)?.ChildNodes
-            .Where(child => child.Kind == SyntaxKind.MacroParameter) ?? []];
-
-    /// <summary>The name of one parameter, which is the first thing written in it.</summary>
-    public static SyntaxToken? NameOf(SyntaxNode parameter)
-    {
-        foreach (var token in parameter.ChildTokens)
-        {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
-                return token;
-        }
-        return null;
-    }
-
     /// <summary>What a call that leaves the parameter out gets, or null when it has no default.</summary>
-    public static SyntaxNode? DefaultOf(SyntaxNode parameter) =>
-        parameter.ChildNodes.FirstOrDefault(child =>
-            child.Kind is not (SyntaxKind.ParameterKind or SyntaxKind.EmptyBlock));
+    public static SyntaxNode? DefaultOf(MacroParameterSyntax parameter) =>
+        parameter.Default is { } written and not EmptyBlockSyntax ? written : null;
 
     /// <summary>One parameter as the analysis reads it, given the symbol its name declares.</summary>
-    public static MacroParameter Describe(SyntaxNode parameter, Symbol symbol) =>
+    public static MacroParameter Describe(MacroParameterSyntax parameter, Symbol symbol) =>
         new(symbol,
-            ArgumentKind.Read(parameter.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ParameterKind)),
+            ArgumentKind.Read(parameter.ParameterKind),
             DefaultOf(parameter),
-            parameter.ChildNodes.Any(child => child.Kind == SyntaxKind.EmptyBlock));
+            parameter.Default is EmptyBlockSyntax);
 
     /// <summary>The macro a call names.</summary>
-    public static SyntaxToken? CalleeOf(SyntaxNode call) =>
-        call.ChildTokens.Length > 0 && call.ChildTokens[0].Kind == SyntaxKind.Identifier
-            ? call.ChildTokens[0]
-            : null;
-
-    /// <summary>The arguments written in a call's parentheses, in order.</summary>
-    public static IReadOnlyList<SyntaxNode> ArgumentsOf(SyntaxNode call) =>
-        [.. call.ChildNodes
-            .FirstOrDefault(child => child.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? []];
+    public static SyntaxToken? CalleeOf(MacroCallSyntax call) =>
+        call.Name is { Kind: SyntaxKind.Identifier } name ? name : null;
 
     /// <summary>The call a line holds, whether it stands alone or follows a label.</summary>
-    public static SyntaxNode? CallIn(SyntaxNode? statement) => statement switch
+    public static MacroCallSyntax? CallIn(StatementSyntax? statement) => statement switch
     {
-        { Kind: SyntaxKind.MacroCall } => statement,
-        { Kind: SyntaxKind.LabeledLine } =>
-            statement.ChildNodes.FirstOrDefault(child => child.Kind == SyntaxKind.MacroCall),
+        MacroCallSyntax call => call,
+        LabeledLineSyntax labeled => labeled.Statement as MacroCallSyntax,
         _ => null,
     };
 
@@ -63,55 +37,35 @@ public static class Macros
     /// <c>} name {</c> after it, which the block layer makes a sibling rather than a child.
     /// Empty when the call takes no block.
     /// </summary>
-    public static IReadOnlyList<SyntaxNode> BlocksOf(SyntaxNode call)
+    public static IReadOnlyList<BlockSyntax> BlocksOf(MacroCallSyntax call)
     {
         // The block around the call's line is the call's only when that line opens it: a call
         // written inside another call's block argument is in that block, and opens none.
-        if (LineOf(call) is not { Parent: { } block } line || block.Green is not GreenBlock opened
-            || opened.BlockKind != BlockKind.MacroBlock || block.Parent is not { } container
-            || block.ChildNodes.Length == 0 || block.ChildNodes[0] != line)
+        if (call.FirstAncestorOrSelf<LineSyntax>() is not { Parent: BlockSyntax { BlockKind: BlockKind.MacroBlock, Parent: { } container } block } line
+            || block.Opener != line)
         {
             return [];
         }
 
-        var blocks = new List<SyntaxNode>();
-        var started = false;
-        foreach (var sibling in container.ChildNodes)
+        var blocks = new List<BlockSyntax> { block };
+        foreach (var sibling in container.ChildNodes.SkipWhile(node => node != block).Skip(1))
         {
-            if (sibling == block)
-                started = true;
-            else if (!started)
-                continue;
-            else if (sibling.Green is not GreenBlock { BlockKind: BlockKind.MacroBlock }
-                || sibling.ChildNodes is not [{ Statement.Kind: SyntaxKind.BlockContinuation }, ..])
-            {
+            if (sibling is not BlockSyntax { BlockKind: BlockKind.MacroBlock, Opener.Statement: BlockContinuationSyntax } next)
                 break;
-            }
-            blocks.Add(sibling);
+            blocks.Add(next);
         }
         return blocks;
     }
 
-    /// <summary>The line a node was written on.</summary>
-    public static SyntaxNode? LineOf(SyntaxNode node)
-    {
-        for (var above = node; above is not null; above = above.Parent)
-        {
-            if (above.Green is GreenLine)
-                return above;
-        }
-        return null;
-    }
-
     /// <summary>The lines of a block argument: everything between the braces around it.</summary>
-    public static IReadOnlyList<SyntaxNode> LinesOf(SyntaxNode block)
+    public static IReadOnlyList<SyntaxNode> LinesOf(BlockSyntax block)
     {
         var lines = block.ChildNodes;
         var last = lines.Length;
 
         // The line that opens the block is its first; the `}` that closes it is a line of its
         // own, and a `} name {` belongs to the block it opens rather than to this one.
-        if (last > 1 && lines[last - 1].Statement is { Kind: SyntaxKind.BlockCloseLine })
+        if (last > 1 && lines[last - 1] is LineSyntax { Statement: BlockCloseLineSyntax })
             last--;
         return [.. lines.Take(last).Skip(1)];
     }
@@ -250,31 +204,31 @@ public static class Macros
     /// would either declare a name in the caller or make something program-wide depend on
     /// how many times the macro is called.
     /// </summary>
-    public static string? Forbidden(SyntaxNode statement) => (statement.IsExported ? SyntaxKind.ExportDirective : statement.Kind) switch
+    public static string? Forbidden(StatementSyntax statement) => statement switch
     {
-        SyntaxKind.ExportDirective =>
+        { IsExported: true } or ExportDirectiveSyntax =>
             "`.export` belongs outside a macro body: other files resolve names through the "
             + "export map, and a body cannot add to it",
-        SyntaxKind.ImportDirective =>
+        ImportDirectiveSyntax =>
             "`.import` belongs outside a macro body: a body resolves names where the macro is "
             + "declared, and the output imports whatever an expansion uses",
-        SyntaxKind.CpuDirective => "`.cpu` belongs outside a macro body: the CPU is program-wide",
-        SyntaxKind.SegmentDeclaration =>
+        CpuDirectiveSyntax => "`.cpu` belongs outside a macro body: the CPU is program-wide",
+        SegmentDeclarationSyntax =>
             "a segment declaration belongs outside a macro body: a segment is declared exactly "
             + "once for the program, and this one would be declared once per call",
-        SyntaxKind.MultiProcDeclaration =>
+        MultiProcDeclarationSyntax =>
             "`.multiproc` belongs outside a macro body: a routine's name and signature are part of "
             + "the file's interface, and a body declares nothing in its caller",
-        SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration =>
+        ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
             "`.proc` belongs outside a macro body: a routine's name and signature are part of "
             + "the file's interface. Take a `block` parameter and let the caller declare the routine",
-        SyntaxKind.MacroDeclaration =>
+        MacroDeclarationSyntax =>
             "`.macro` belongs outside a macro body: a definition there could capture the "
             + "enclosing macro's parameters",
-        SyntaxKind.FuncDeclaration =>
+        FuncDeclarationSyntax =>
             "`.func` belongs outside a macro body: a definition there could capture the "
             + "enclosing macro's parameters",
-        SyntaxKind.SignatureDeclaration =>
+        SignatureDeclarationSyntax =>
             "`.signature` belongs outside a macro body: a signature set is used in signatures, which "
             + "are part of the file's interface",
         _ => null,

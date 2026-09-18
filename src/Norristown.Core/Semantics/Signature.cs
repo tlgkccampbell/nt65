@@ -109,7 +109,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// names it.
     /// </summary>
     public static void CheckSet(
-        Symbol set, Func<SyntaxNode, long?> valueOf, Func<SyntaxNode, Symbol?> setOf, Action<TextSpan, string> report)
+        Symbol set, Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, string> report)
     {
         if (set.Definition is not { Parent: { } declaration } list)
             return;
@@ -132,11 +132,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <paramref name="report"/>.
     /// </summary>
     public Signature Resolved(
-        Func<SyntaxNode, long?> valueOf, Func<SyntaxNode, Symbol?> setOf, Action<TextSpan, string> report) =>
+        Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, string> report) =>
         syntax is null ? this : Read(syntax, forMacro, valueOf, setOf, report);
 
     /// <summary>Whether the sets <paramref name="from"/> names come, however indirectly, to <paramref name="to"/>.</summary>
-    private static bool Reaches(Symbol from, Symbol to, Func<SyntaxNode, Symbol?> setOf, HashSet<Symbol> seen)
+    private static bool Reaches(Symbol from, Symbol to, Func<NameExpressionSyntax, Symbol?> setOf, HashSet<Symbol> seen)
     {
         if (from == to)
             return true;
@@ -149,16 +149,19 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     private static Signature Read(
         SyntaxNode? syntax, bool forMacro,
-        Func<SyntaxNode, long?>? valueOf, Func<SyntaxNode, Symbol?>? setOf, Action<TextSpan, string> report)
+        Func<ExpressionSyntax, long?>? valueOf, Func<NameExpressionSyntax, Symbol?>? setOf, Action<TextSpan, string> report)
     {
         var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
         if (syntax is null)
             return forMacro ? Unchanged : Default;
 
-        var arrow = syntax.ChildTokens.FirstOrDefault(token => token.Kind == SyntaxKind.Arrow);
-        var lists = syntax.ChildNodes.Where(node => node.Kind == SyntaxKind.StateList).ToList();
-        var entryList = lists.FirstOrDefault(list => arrow.Parent is null || list.Position < arrow.Position);
-        var exitList = arrow.Parent is null ? null : lists.FirstOrDefault(list => list.Position > arrow.Position);
+        var (entryList, exitList) = syntax switch
+        {
+            ProcSignatureSyntax proc => (proc.Entry, proc.Exit),
+            ImportSignatureSyntax import => (import.Entry, import.Exit),
+            SignatureDeclarationSyntax set => (set.Items, null),
+            _ => ((StateListSyntax?)null, (StateListSyntax?)null),
+        };
 
         // The items the signature sets it names give, which are reported where each set is declared.
         var fromSets = new HashSet<(SyntaxTree Tree, int Position)>();
@@ -314,7 +317,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         // The items of one list by part. A signature set comes first, and what the list writes
         // after it takes the place of what the set gives for the same part.
-        Parts Take(SyntaxNode? list, bool isExit)
+        Parts Take(StateListSyntax? list, bool isExit)
         {
             var parts = new Parts();
             var first = true;
@@ -506,7 +509,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? Arguments;
         public StateItem? Interrupt;
         public StateItem? NoReturn;
-        public SyntaxNode? SetReference;
+        public StateItemSyntax? SetReference;
 
         // Every `keeps` the list gives, and whether a signature set gave it. A list may write
         // more than one, and what it writes itself takes the place of what a set gives.

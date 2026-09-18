@@ -27,20 +27,21 @@ public static class DataLengths
     /// <paramref name="diagnostics"/>, which callers that have already reported pass as null.
     /// </summary>
     public static int? Of(
-        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on = null)
+        StatementSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on = null)
     {
-        if (directive.Kind != SyntaxKind.DataValues && directive.ChildTokens.Length == 0)
-            return null;
         if (diagnostics is not null)
         {
             foreach (var operand in ElementsOf(directive))
                 model.Check(operand, diagnostics, on);
         }
         Check(directive, model, diagnostics, on);
-        if (DataSyntax.NameOf(directive) == ".align")
-            return Unpredictable;
-        if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.DataBody } })
-            return 0;
+        if (directive is DataDirectiveSyntax data)
+        {
+            if (DataSyntax.NameOf(data) == ".align")
+                return Unpredictable;
+            if (DataSyntax.BodyOf(data) is { BlockKind: BlockKind.DataBody })
+                return 0;
+        }
         return model.RoomFor(directive, on) is { } room && room.Bytes is >= 0 and <= int.MaxValue
             ? (int)room.Bytes
             : null;
@@ -54,12 +55,12 @@ public static class DataLengths
     /// The values a directive or a line of a body gives, one element each: its operands, the
     /// values of a braced list, or a line's values. A record is one element.
     /// </summary>
-    public static IReadOnlyList<SyntaxNode> ElementsOf(SyntaxNode directive) =>
-        directive.Kind == SyntaxKind.DataValues
-            ? directive.ChildNodes
-            : DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.ValueList } list
-                ? list.ChildNodes
-                : DataSyntax.ValuesOf(directive);
+    public static IReadOnlyList<SyntaxNode> ElementsOf(StatementSyntax directive) => directive switch
+    {
+        DataValuesSyntax values => values.ChildNodes,
+        DataDirectiveSyntax data => DataSyntax.BracedOf(data) is ValueListSyntax list ? list.Values : DataSyntax.ValuesOf(data),
+        _ => [],
+    };
 
     /// <summary>
     /// What one element of a data directive holds, or null for one that is not an element type.
@@ -79,16 +80,16 @@ public static class DataLengths
 
     /// <summary>What the assembler would refuse about a directive's values.</summary>
     private static void Check(
-        SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+        StatementSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
-        var element = directive.Kind == SyntaxKind.DataValues ? DataSyntax.DirectiveOfValues(directive) : directive;
+        var element = directive is DataValuesSyntax values ? DataSyntax.DirectiveOfValues(values) : directive as DataDirectiveSyntax;
         if (element is null)
             return;
         var name = DataSyntax.NameOf(element);
         var operands = ElementsOf(directive);
 
         // Storage is declared with its type, and padding has no name to declare.
-        if (directive.Parent is { Kind: SyntaxKind.DataDeclaration } && name is ".res" or ".align")
+        if (directive.Parent is DataDeclarationSyntax && name is ".res" or ".align")
         {
             Report(directive, model, diagnostics, on, name == ".res"
                 ? "`.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values"
@@ -101,10 +102,10 @@ public static class DataLengths
                     : null);
             return;
         }
-        if (directive.Kind == SyntaxKind.DataDirective && DataSyntax.IsElementType(directive))
-            CheckCount(directive, model, diagnostics, on);
+        if (directive is DataDirectiveSyntax counted && DataSyntax.IsElementType(counted))
+            CheckCount(counted, model, diagnostics, on);
 
-        if (DataSyntax.IsRecord(element))
+        if (element.IsRecord)
         {
             if (DataSyntax.TypeOf(element) is { } named && model.SymbolOf(named) is { IsLayout: true } type)
                 Records(type, directive, operands, model, diagnostics, on);
@@ -112,7 +113,7 @@ public static class DataLengths
         }
         foreach (var operand in operands)
         {
-            if (operand.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            if (operand is RecordValuesSyntax or ValueListSyntax)
                 Report(operand, model, diagnostics, on, $"a `{name}` element is one value, and braces hold a record or a list");
         }
 
@@ -172,7 +173,7 @@ public static class DataLengths
     /// declared <c>inline .strz</c> among them, would stop there.
     /// </summary>
     private static void Terminated(
-        SyntaxNode directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        StatementSyntax directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
     {
         if (operands.Count != 1 || TextOf(operands[0], model, on) is not { } text)
@@ -187,8 +188,8 @@ public static class DataLengths
         if (at < 0)
             return;
         Report(operand, model, diagnostics, on,
-            operand.Kind == SyntaxKind.CallExpression && at < text.Length
-                ? $"`{operand.ChildNodes[0].GetText().Trim()}` maps `{text[at]}` to $00, which would end the text early: `.strz` writes the zero that ends it"
+            operand is CallExpressionSyntax call && at < text.Length
+                ? $"`{(call.Callee ?? (SyntaxNode)call.Arguments).GetText().Trim()}` maps `{text[at]}` to $00, which would end the text early: `.strz` writes the zero that ends it"
                 : "the text holds a zero, which would end it early: `.strz` writes the zero that ends it");
     }
 
@@ -198,10 +199,10 @@ public static class DataLengths
     /// </summary>
     private static string? TextOf(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
-        if (operand is { Kind: SyntaxKind.CallExpression, ChildNodes: [{ Kind: SyntaxKind.NameExpression } callee, var arguments] }
+        if (operand is CallExpressionSyntax { Callee: { } callee } call
             && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap })
         {
-            return arguments.ChildNodes is [var given] ? TextOf(given, model, on) : null;
+            return call.Arguments.Arguments is [var given] ? TextOf(given, model, on) : null;
         }
         return model.ValueOf(operand, on) is { Kind: ValueKind.String, Text: { } text } ? text : null;
     }
@@ -211,17 +212,17 @@ public static class DataLengths
     /// short table is exactly the mistake a count is there to catch, so values are never padded
     /// out to it — except one text, which is padded with zero to the count it declares.
     /// </summary>
-    private static void CheckCount(SyntaxNode directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+    private static void CheckCount(DataDirectiveSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
-        if (DataSyntax.CountOf(directive) is not { } count)
+        if (directive.Count is not { } count)
             return;
         var (declared, given) = model.ElementsOf(directive, on);
-        if (DataSyntax.CountExpressionOf(directive) is not { } written)
+        if (count.Count is not { } written)
         {
             if (given is null && DataSyntax.BracedOf(directive) is null && DataSyntax.BodyOf(directive) is null)
             {
                 Report(count, model, diagnostics, on,
-                    $"`[]` counts the values given, and there are none: `{directive.ChildTokens[0].Text}[n]` holds n");
+                    $"`[]` counts the values given, and there are none: `{directive.Directive.Text}[n]` holds n");
             }
             return;
         }
@@ -240,27 +241,27 @@ public static class DataLengths
     /// and one record written over several lines is the block the directive's line opens.
     /// </summary>
     private static void Records(
-        Symbol type, SyntaxNode directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model,
+        Symbol type, StatementSyntax directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model,
         List<Diagnostic>? diagnostics, Expansion? on)
     {
-        if (directive.Kind == SyntaxKind.DataDirective)
+        if (directive is DataDirectiveSyntax data)
         {
-            if (DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.RecordValues } one)
+            if (DataSyntax.BracedOf(data) is RecordValuesSyntax one)
             {
-                Initialized(type, one.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                Initialized(type, one.Members, model, diagnostics, on);
                 return;
             }
-            if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.RecordInitializer } } lines)
+            if (DataSyntax.BodyOf(data) is { BlockKind: BlockKind.RecordInitializer } body)
             {
-                Initialized(type, lines.ChildNodes.Skip(1).Select(line => line.Statement).OfType<SyntaxNode>()
-                    .Where(statement => statement.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                Initialized(type, body.Members.Skip(1).OfType<LineSyntax>().Select(line => line.Statement)
+                    .OfType<MemberValueSyntax>(), model, diagnostics, on);
                 return;
             }
         }
         foreach (var operand in operands)
         {
-            if (operand.Kind == SyntaxKind.RecordValues)
-                Initialized(type, operand.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+            if (operand is RecordValuesSyntax record)
+                Initialized(type, record.Members, model, diagnostics, on);
             else
                 Report(operand, model, diagnostics, on, $"each element of a `{type.Name}` array is a record, written `{{ member = value }}`");
         }
@@ -295,14 +296,13 @@ public static class DataLengths
     /// nothing said.
     /// </summary>
     private static void Initialized(
-        Symbol type, IEnumerable<SyntaxNode> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+        Symbol type, IEnumerable<MemberValueSyntax> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         var named = new HashSet<string>(StringComparer.Ordinal);
         foreach (var value in values)
         {
-            if (value.ChildTokens.Length == 0 || value.ChildNodes.LastOrDefault() is not { } given)
-                continue;
-            var name = value.ChildTokens[0].Text;
+            var given = value.Value;
+            var name = value.Name.Text;
             if (type.Body?.FindMember(name) is not { Kind: SymbolKind.Member } member)
             {
                 Report(value, model, diagnostics, on, $"`{type.Name}` has no member `{name}`");
@@ -322,21 +322,21 @@ public static class DataLengths
                 continue;
             }
 
-            var element = member.Data is { Kind: SyntaxKind.DataDirective } data ? data : null;
-            if (element is not null && DataSyntax.CountOf(element) is not null)
+            var element = member.Data as DataDirectiveSyntax;
+            if (element?.Count is not null)
             {
                 ArrayMember(member, element, given, model, diagnostics, on);
                 continue;
             }
             if (member.Type is { IsLayout: true } inner)
             {
-                if (given.Kind == SyntaxKind.RecordValues)
-                    Initialized(inner, given.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                if (given is RecordValuesSyntax record)
+                    Initialized(inner, record.Members, model, diagnostics, on);
                 else
                     Report(given, model, diagnostics, on, $"`{name}` is a `{inner.Name}`, which takes a braced list of its members");
                 continue;
             }
-            if (given.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            if (given is RecordValuesSyntax or ValueListSyntax)
             {
                 Report(given, model, diagnostics, on, $"`{name}` is not a record or an array, and takes one value");
                 continue;
@@ -347,28 +347,28 @@ public static class DataLengths
 
     /// <summary>An array member's value: a braced list, of exactly as many elements as the member holds.</summary>
     private static void ArrayMember(
-        Symbol member, SyntaxNode element, SyntaxNode given, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+        Symbol member, DataDirectiveSyntax element, SyntaxNode given, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
-        var spelled = element.ChildTokens[0].Text;
-        if (given.Kind != SyntaxKind.ValueList)
+        var spelled = element.Directive.Text;
+        if (given is not ValueListSyntax list)
         {
             Report(given, model, diagnostics, on, $"`{member.Name}` is an array, which takes a braced list: `{member.Name} = {{ … }}`");
             return;
         }
-        var items = given.ChildNodes;
+        var items = list.Values;
         if (member.Count is { } count && items.Length != count)
             Report(given, model, diagnostics, on, $"`{member.Name}` holds {count} {Elements(count)}, and this list gives {items.Length}");
         foreach (var item in items)
         {
             if (member.Type is { IsLayout: true } inner)
             {
-                if (item.Kind == SyntaxKind.RecordValues)
-                    Initialized(inner, item.ChildNodes.Where(c => c.Kind == SyntaxKind.MemberValue), model, diagnostics, on);
+                if (item is RecordValuesSyntax record)
+                    Initialized(inner, record.Members, model, diagnostics, on);
                 else
                     Report(item, model, diagnostics, on, $"each element of `{member.Name}` is a `{inner.Name}`, written `{{ member = value }}`");
                 continue;
             }
-            if (item.Kind is SyntaxKind.RecordValues or SyntaxKind.ValueList)
+            if (item is RecordValuesSyntax or ValueListSyntax)
             {
                 Report(item, model, diagnostics, on, $"each element of `{member.Name}` is one `{spelled}`");
                 continue;
@@ -419,17 +419,16 @@ public static class DataLengths
     }
 
     /// <summary>The name an operand is, or is a constant away from, or null when it is neither.</summary>
-    private static SyntaxNode? AddressIn(SyntaxNode operand, SemanticModel model, Expansion? on)
+    private static NameExpressionSyntax? AddressIn(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
         var address = operand;
-        if (operand is { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] }
-            && operand.ChildTokens.Any(t => t.Kind is SyntaxKind.Plus or SyntaxKind.Minus))
+        if (operand is BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary)
         {
-            address = model.ValueOf(right, on).AsNumber() is not null ? left
-                : model.ValueOf(left, on).AsNumber() is not null && operand.ChildTokens.Any(t => t.Kind == SyntaxKind.Plus) ? right
+            address = model.ValueOf(binary.Right, on).AsNumber() is not null ? binary.Left
+                : model.ValueOf(binary.Left, on).AsNumber() is not null && binary.OperatorToken.Kind == SyntaxKind.Plus ? binary.Right
                 : operand;
         }
-        return address.Kind == SyntaxKind.NameExpression ? address : null;
+        return address as NameExpressionSyntax;
     }
 
     /// <summary>
@@ -489,16 +488,11 @@ public static class DataLengths
     /// </summary>
     private static void CheckAscii(SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
-        if (argument.Kind is not (SyntaxKind.StringExpression or SyntaxKind.CharacterExpression))
-            return;
-        foreach (var token in argument.ChildTokens)
+        if (argument is LiteralExpressionSyntax literal and (StringExpressionSyntax or CharacterExpressionSyntax)
+            && literal.Token.Text.Any(c => c > 127))
         {
-            if (token.Text.Any(c => c > 127))
-            {
-                Report(argument, model, diagnostics, on,
-                    "text is ASCII outside a charmap; write `\\xHH` for a byte above $7f");
-                return;
-            }
+            Report(argument, model, diagnostics, on,
+                "text is ASCII outside a charmap; write `\\xHH` for a byte above $7f");
         }
     }
 

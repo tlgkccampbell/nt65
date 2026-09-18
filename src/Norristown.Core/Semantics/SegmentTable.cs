@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Norristown.Syntax;
 
@@ -30,7 +31,7 @@ public sealed class SegmentTable
 
     // The `dp = e` and `bank = e` a file's declarations write, by segment. They are expressions,
     // worth something only once the program's constants are, which is after the table is needed.
-    private readonly Dictionary<string, List<SyntaxNode>> attributes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ImmutableArray<SegmentAttributeSyntax>> attributes = new(StringComparer.Ordinal);
 
     private SegmentTable(Dictionary<string, Segment> segments) => this.segments = segments;
 
@@ -91,7 +92,7 @@ public sealed class SegmentTable
                 continue;
             }
             segments[name] = new Segment(name, SizeOf(node), declared);
-            table.attributes[name] = [.. node.ChildNodes.Where(child => child.Kind == SyntaxKind.SegmentAttribute)];
+            table.attributes[name] = node.Attributes;
         }
         return table;
     }
@@ -128,17 +129,17 @@ public sealed class SegmentTable
     /// Works out the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> the files' declarations write, now that
     /// <paramref name="valueOf"/> can answer what an expression is worth.
     /// </summary>
-    public void Evaluate(Func<SyntaxNode, long?> valueOf, List<Diagnostic> diagnostics)
+    public void Evaluate(Func<ExpressionSyntax, long?> valueOf, List<Diagnostic> diagnostics)
     {
         foreach (var (name, written) in attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             var segment = segments[name];
-            SyntaxNode? mirrors = null;
+            SegmentAttributeSyntax? mirrors = null;
             foreach (var attribute in written)
             {
-                if (attribute.ChildTokens.Length == 0)
+                if (attribute.Name is not { } attributeName)
                     continue;
-                var word = attribute.ChildTokens[0].Text.ToLowerInvariant();
+                var word = attributeName.Text.ToLowerInvariant();
                 var at = attribute.Tree.GetSpan(attribute.Span);
                 if (word == "mirrors")
                 {
@@ -151,7 +152,7 @@ public sealed class SegmentTable
                     segment = segment with { Mirrors = Mirrors(attribute, valueOf, diagnostics) };
                     continue;
                 }
-                if (attribute.ChildNodes.FirstOrDefault() is not { } expression)
+                if (attribute.Value is not { } expression)
                     continue;
                 var value = valueOf(expression);
                 if (Check(name, segment.Size, word, value, at, (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
@@ -175,13 +176,14 @@ public sealed class SegmentTable
 
     /// <summary>The banks a <c>mirrors = [$00..$3f, $80]</c> gives, each checked to be a constant bank.</summary>
     private static List<(long First, long Last)> Mirrors(
-        SyntaxNode attribute, Func<SyntaxNode, long?> valueOf, List<Diagnostic> diagnostics)
+        SegmentAttributeSyntax attribute, Func<ExpressionSyntax, long?> valueOf, List<Diagnostic> diagnostics)
     {
         var banks = new List<(long First, long Last)>();
-        foreach (var range in attribute.ChildNodes.Where(child => child.Kind == SyntaxKind.BankRange))
+        foreach (var range in attribute.Ranges)
         {
-            var ends = range.ChildNodes.Select(valueOf).ToList();
-            if (ends is not [{ } first, ..] || ends[^1] is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
+            var start = valueOf(range.First);
+            var end = range.Last is { } written ? valueOf(written) : start;
+            if (start is not { } first || end is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
                 || first > last)
             {
                 diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Severity.Error,
@@ -201,17 +203,15 @@ public sealed class SegmentTable
 
     private static IEnumerable<Declaration> Read(SyntaxTree tree)
     {
-        foreach (var node in tree.Root.DescendantNodes())
+        foreach (var node in tree.Root.DescendantNodes().OfType<SegmentDeclarationSyntax>())
         {
-            if (node.Kind != SyntaxKind.SegmentDeclaration)
-                continue;
-            if (node.ChildTokens.Length > 1 && SegmentNames.Of(node.ChildTokens[1]) is { } name)
-                yield return new Declaration(node, name, node.ChildTokens[1].Span);
+            if (node.Name is { } written && SegmentNames.Of(written) is { } name)
+                yield return new Declaration(node, name, written.Span);
         }
     }
 
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> a declaration writes after its <c>:</c>.</summary>
-    private static AddressSize SizeOf(SyntaxNode declaration)
+    private static AddressSize SizeOf(SegmentDeclarationSyntax declaration)
     {
         foreach (var token in declaration.ChildTokens)
         {
@@ -225,5 +225,5 @@ public sealed class SegmentTable
     }
 
     /// <summary>One <c>.segment NAME: size</c> item, before it reaches the table.</summary>
-    private readonly record struct Declaration(SyntaxNode Node, string Name, TextSpan Span);
+    private readonly record struct Declaration(SegmentDeclarationSyntax Node, string Name, TextSpan Span);
 }

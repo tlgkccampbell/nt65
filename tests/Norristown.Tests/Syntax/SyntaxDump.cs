@@ -1,4 +1,5 @@
 using System.Text;
+using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
@@ -21,7 +22,7 @@ internal static class SyntaxDump
         {
             foreach (var child in node.ChildNodes)
             {
-                if (child.Green is not GreenBlock block)
+                if (child is not BlockSyntax block)
                     continue;
                 var first = child.LineIndex + 1;
                 var last = tree.GetLineIndex(child.FullSpan.End - 1) + 1;
@@ -65,11 +66,9 @@ internal static class SyntaxDump
     /// A statement on one line, as <c>Kind(child child)</c> with tokens written as their
     /// text: <c>InstructionStatement(lda ImmediateOperand(# NumberExpression($10)))</c>.
     /// </summary>
-    public static string Shape(GreenNode node)
+    public static string Shape(SyntaxNode node)
     {
-        if (node is GreenToken token)
-            return token.Kind == SyntaxKind.EndOfLine ? "" : token.Text;
-        var parts = Enumerable.Range(0, node.SlotCount).Select(i => Shape(node.GetSlot(i))).Where(p => p.Length > 0);
+        var parts = Children(node, Shape, token => token.Kind == SyntaxKind.EndOfLine ? "" : token.Text).Where(p => p.Length > 0);
         return $"{node.Kind}({string.Join(' ', parts)})";
     }
 
@@ -77,16 +76,12 @@ internal static class SyntaxDump
     /// An expression with every binding made visible: <c>1 &lt;&lt; i + 1</c> renders as
     /// <c>(1 &lt;&lt; (i + 1))</c>, and what the source itself parenthesized as <c>[...]</c>.
     /// </summary>
-    public static string Infix(GreenNode node) => node switch
+    public static string Infix(SyntaxNode node) => node switch
     {
-        GreenToken token => token.Text,
-        GreenSyntax { Kind: SyntaxKind.BinaryExpression } b =>
-            $"({Infix(b.Children[0])} {Infix(b.Children[1])} {Infix(b.Children[2])})",
-        GreenSyntax { Kind: SyntaxKind.UnaryExpression } u => $"({Infix(u.Children[0])}{Infix(u.Children[1])})",
-        GreenSyntax { Kind: SyntaxKind.ParenthesizedExpression } p =>
-            $"[{(p.Children.Length > 1 ? Infix(p.Children[1]) : "")}]",
-        GreenSyntax other => string.Concat(other.Children.Select(Infix)),
-        _ => "",
+        BinaryExpressionSyntax b => $"({Infix(b.Left)} {b.OperatorToken.Text} {Infix(b.Right)})",
+        UnaryExpressionSyntax u => $"({u.OperatorToken.Text}{Infix(u.Operand)})",
+        ParenthesizedExpressionSyntax p => $"[{Infix(p.Expression)}]",
+        _ => string.Concat(Children(node, Infix, token => token.Text)),
     };
 
     /// <summary>
@@ -137,6 +132,21 @@ internal static class SyntaxDump
         foreach (var d in tree.Diagnostics)
             builder.Append($"{d.Span.Line}:{d.Span.StartColumn}-{d.Span.EndColumn} {d.Message}\n");
         return builder.ToString();
+    }
+
+    /// <summary>A node's child nodes and tokens rendered in source order, which is the order of their positions.</summary>
+    private static IEnumerable<string> Children(SyntaxNode node, Func<SyntaxNode, string> ofNode, Func<SyntaxToken, string> ofToken)
+    {
+        var tokens = node.ChildTokens;
+        var next = 0;
+        foreach (var child in node.ChildNodes)
+        {
+            while (next < tokens.Length && tokens[next].Position < child.Position)
+                yield return ofToken(tokens[next++]);
+            yield return ofNode(child);
+        }
+        while (next < tokens.Length)
+            yield return ofToken(tokens[next++]);
     }
 
     private static string Escape(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";

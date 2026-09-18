@@ -156,7 +156,7 @@ public sealed class CodeLayout
         do
         {
             layout = new CodeLayout(model, cpu, states, lengthened, measured, settled);
-            layout.WalkContainer(model.Tree.Root);
+            layout.Walk(model.Tree.Root.Members, from: 0);
         }
         while (layout.Lengthen() | layout.Settle());
 
@@ -193,36 +193,29 @@ public sealed class CodeLayout
         if (operand is null)
             return [AddressingMode.Implied, AddressingMode.Accumulator];
 
-        switch (operand.Kind)
+        switch (operand)
         {
-            // An `operand` argument written without braces is an expression, and a plain
-            // address operand by being one.
-            case not (SyntaxKind.AbsoluteOperand or SyntaxKind.ImmediateOperand
-                or SyntaxKind.AccumulatorOperand or SyntaxKind.IndirectOperand
-                or SyntaxKind.IndexedIndirectOperand or SyntaxKind.LongIndirectOperand):
-                return Unindexed;
-
-            case SyntaxKind.AccumulatorOperand:
+            case AccumulatorOperandSyntax:
                 return [AddressingMode.Accumulator];
 
             // Two immediates are the source and destination banks of `mvn` and `mvp`.
-            case SyntaxKind.ImmediateOperand:
-                return operand.ChildNodes.Length > 1 ? [AddressingMode.BlockMove] : [AddressingMode.Immediate];
-            case SyntaxKind.IndirectOperand:
+            case ImmediateOperandSyntax immediate:
+                return immediate.SecondValue is not null ? [AddressingMode.BlockMove] : [AddressingMode.Immediate];
+            case IndirectOperandSyntax:
                 return IndexedBy(operand, "y")
                     ? [AddressingMode.DirectIndirectY]
                     : [AddressingMode.DirectIndirect, AddressingMode.AbsoluteIndirect];
-            case SyntaxKind.IndexedIndirectOperand:
+            case IndexedIndirectOperandSyntax:
                 if (IndexedBy(operand, "s"))
                     return IndexedBy(operand, "y") ? [AddressingMode.StackRelativeIndirectY] : [];
                 return IndexedBy(operand, "x")
                     ? [AddressingMode.DirectIndirectX, AddressingMode.AbsoluteIndirectX]
                     : [];
-            case SyntaxKind.LongIndirectOperand:
+            case LongIndirectOperandSyntax:
                 return IndexedBy(operand, "y")
                     ? [AddressingMode.DirectIndirectLongY]
                     : [AddressingMode.DirectIndirectLong, AddressingMode.AbsoluteIndirectLong];
-            default:
+            case AbsoluteOperandSyntax absolute:
                 if (IndexedBy(operand, "x"))
                     return [AddressingMode.DirectX, AddressingMode.AbsoluteX, AddressingMode.LongX];
                 if (IndexedBy(operand, "y"))
@@ -232,9 +225,12 @@ public sealed class CodeLayout
 
                 // A second expression rather than an index register: the branch target of
                 // `bbr0 flags, @skip`.
-                return operand.ChildNodes.Count(c => c.Kind != SyntaxKind.AddressPrefix) > 1
-                    ? [AddressingMode.DirectRelative]
-                    : Unindexed;
+                return absolute.Second is not null ? [AddressingMode.DirectRelative] : Unindexed;
+
+            // An `operand` argument written without braces is an expression, and a plain
+            // address operand by being one.
+            default:
+                return Unindexed;
         }
     }
 
@@ -255,10 +251,9 @@ public sealed class CodeLayout
     /// </summary>
     private static AddressSize? WrittenPrefix(SyntaxNode operand)
     {
-        var prefix = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
-        if (prefix is null || prefix.ChildTokens.Length == 0)
+        if (operand is not AbsoluteOperandSyntax { Prefix: { } prefix })
             return null;
-        return char.ToLowerInvariant(prefix.ChildTokens[0].Text[0]) switch
+        return char.ToLowerInvariant(prefix.Name.Text[0]) switch
         {
             'z' or 'd' => AddressSize.ZeroPage,
             'a' => AddressSize.Absolute,
@@ -269,18 +264,18 @@ public sealed class CodeLayout
 
     /// <summary>Whether an operand is written <c>d:</c>, reaching a constant address through the direct page.</summary>
     public static bool ThroughDirectPage(SyntaxNode operand) =>
-        operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix) is { ChildTokens: [var prefix, ..] }
-        && char.ToLowerInvariant(prefix.Text[0]) == 'd';
+        operand is AbsoluteOperandSyntax { Prefix: { } prefix } && char.ToLowerInvariant(prefix.Name.Text[0]) == 'd';
 
     /// <summary>The expression an operand addresses, which is what an address size is worked out from.</summary>
-    private static SyntaxNode? Expression(SyntaxNode operand) =>
-        operand.Kind is SyntaxKind.AbsoluteOperand or SyntaxKind.ImmediateOperand
-            or SyntaxKind.IndirectOperand or SyntaxKind.IndexedIndirectOperand
-            or SyntaxKind.LongIndirectOperand
-            ? operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix)
-            : operand.Kind == SyntaxKind.AccumulatorOperand ? null : operand;
-
-    private void WalkContainer(SyntaxNode container) => Walk(container.ChildNodes, from: 0);
+    private static ExpressionSyntax? Expression(SyntaxNode operand) => operand switch
+    {
+        AbsoluteOperandSyntax absolute => absolute.Address,
+        ImmediateOperandSyntax immediate => immediate.Value,
+        IndirectOperandSyntax indirect => indirect.Address,
+        IndexedIndirectOperandSyntax indexed => indexed.Address,
+        LongIndirectOperandSyntax indirect => indirect.Address,
+        _ => operand as ExpressionSyntax,
+    };
 
     /// <summary>
     /// A run of sibling lines and blocks. The <c>.if</c> chains among them are resolved here,
@@ -292,19 +287,19 @@ public sealed class CodeLayout
         for (var i = from; i < children.Count; i++)
         {
             var child = children[i];
-            if (child.Green is not GreenBlock block)
+            if (child is not BlockSyntax block)
             {
                 chain.Break();
-                if (child.Statement is { } statement)
-                    Statement(statement);
+                if (child is LineSyntax line)
+                    Statement(line.Statement);
                 continue;
             }
-            if (chain.Includes(model, child, expansion))
-                WalkBlock(child, block.BlockKind);
+            if (chain.Includes(model, block, expansion))
+                WalkBlock(block, block.BlockKind);
         }
     }
 
-    private void WalkBlock(SyntaxNode block, BlockKind kind)
+    private void WalkBlock(BlockSyntax block, BlockKind kind)
     {
         // A macro body generates nothing where it is written: it is laid out at every call
         // that expands it, and in the segment that call is in. A type's members are room in
@@ -316,11 +311,8 @@ public sealed class CodeLayout
         // out here, and its lines are laid out wherever the body splices them.
         if (kind == BlockKind.MacroBlock)
         {
-            if (block.ChildNodes.Length > 0 && block.ChildNodes[0].Statement is { } call
-                && Macros.CallIn(call) is not null)
-            {
-                Statement(call);
-            }
+            if (Macros.CallIn(block.Opener.Statement) is not null)
+                Statement(block.Opener.Statement);
             return;
         }
 
@@ -333,12 +325,12 @@ public sealed class CodeLayout
 
             // A repetition inside an expansion writes its body out once per turn, and every
             // turn counts towards the bound, which is checked before any of them is laid out.
-            if (outerTurn?.NearestCall is { } call && Exceeds(turns.Count * (block.ChildNodes.Length - 1), call))
+            if (outerTurn?.NearestCall is { } call && Exceeds(turns.Count * (block.Members.Length - 1), call))
                 return;
             foreach (var turn in turns)
             {
                 expansion = turn;
-                Walk(block.ChildNodes, from: 1);
+                Walk(block.Members, from: 1);
             }
             expansion = outerTurn;
             return;
@@ -348,7 +340,7 @@ public sealed class CodeLayout
         // member, as the `.each` around a `.proc` that it stands for would lay it out.
         if (kind == BlockKind.MultiProc)
         {
-            if (block.ChildNodes.Length == 0 || model.FamilyAt(block.ChildNodes[0].Statement!) is null)
+            if (model.FamilyAt(block.Opener.Statement) is null)
                 return;
             var outerFamily = expansion;
             foreach (var turn in Repetitions.Of(model, block, outerFamily, diagnostics))
@@ -360,45 +352,42 @@ public sealed class CodeLayout
             return;
         }
 
-        var lines = block.ChildNodes;
+        var opener = block.Opener.Statement;
         var outer = segment;
         var outerRoutine = routine;
-        if (kind == BlockKind.Proc && lines.Length > 0
-            && lines[0].Statement is { Kind: SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration } declaration)
-        {
-            routine = NameOf(declaration);
-        }
+        if (kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax)
+            routine = NameOf(opener);
 
         // What a routine or data takes is the bytes between the two ends of its block, in its
         // own stream: a nested segment block is somewhere else and does not count.
         var spanning = kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer
-            && lines.Length > 0 && lines[0].Statement is { } header && NameOf(header) is { } named && measured.Contains(named)
+            && NameOf(opener) is { } named && measured.Contains(named)
             ? named
             : null;
         var opened = (Stream: Measured, Offset: filled.GetValueOrDefault(Measured));
         var placing = kind is BlockKind.Segment or BlockKind.Region;
-        if (placing && lines.Length > 0 && lines[0].Statement is { } opener)
+        if (placing)
         {
             // A detour to the segment the bytes are already in goes nowhere: its contents stay
             // inline, where fall-through runs into them.
             if (Constructs.SegmentOf(opener) == segment
-                && (routine is not null || streams.Count > 1) && opener.ChildTokens.Length > 0)
+                && (routine is not null || streams.Count > 1) && opener is SegmentStatementSyntax detour)
             {
-                Report(opener.ChildTokens[0], $"this block names \"{segment}\", the segment it is already in, "
+                Report(detour.Keyword, $"this block names \"{segment}\", the segment it is already in, "
                     + "so its contents would stay inline where fall-through reaches them");
             }
             segment = Constructs.SegmentOf(opener) ?? segment;
             streams.Add(nextStream++);
         }
-        else if (lines.Length > 0 && lines[0].Statement is { } other)
+        else
         {
-            Statement(other);
+            Statement(opener);
         }
 
         var declaresData = kind is BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer;
         if (declaresData)
             inData++;
-        Walk(lines, from: 1);
+        Walk(block.Members, from: 1);
         if (declaresData)
             inData--;
         if (spanning is not null && Measured == opened.Stream)
@@ -414,11 +403,11 @@ public sealed class CodeLayout
     /// declares the macro, and is read there and laid out here, in this call's segment and
     /// with this call's arguments.
     /// </summary>
-    private void Expand(SyntaxNode call)
+    private void Expand(MacroCallSyntax call)
     {
-        if (model.MacroAt(call) is not { Definition: { } definition } || Expansion.Expanding(expansion, definition))
+        if (model.MacroAt(call) is not { Definition: BlockSyntax definition } || Expansion.Expanding(expansion, definition))
             return;
-        if (Exceeds(definition.ChildNodes.Length, call))
+        if (Exceeds(definition.Members.Length, call))
             return;
 
         // A macro with a state signature is checked where its expansion starts and where it
@@ -428,7 +417,7 @@ public sealed class CodeLayout
         if (marked)
             steps.Add(new Step(call, outer, routine, Stream, segment, null));
         expansion = Expansion.Of(outer, call, definition);
-        Walk(definition.ChildNodes, from: 1);
+        Walk(definition.Members, from: 1);
         expansion = outer;
         if (marked)
             steps.Add(new Step(call, outer, routine, Stream, segment, null, Closes: true));
@@ -456,10 +445,9 @@ public sealed class CodeLayout
     /// spliced them, at a level of their own: the same block may be spliced more than once,
     /// and each splice writes the lines out again.
     /// </summary>
-    private void Splice(SyntaxNode statement)
+    private void Splice(BlockSpliceSyntax statement)
     {
-        if (statement.ChildTokens.Length == 0
-            || model.SymbolAt(statement.ChildTokens[0]) is not { Parameter: { } parameter }
+        if (model.SymbolAt(statement.Name) is not { Parameter: { } parameter }
             || model.ArgumentFor(parameter.Symbol, expansion) is not { Block: { } block })
         {
             return;
@@ -478,73 +466,69 @@ public sealed class CodeLayout
             steps.Add(new Step(statement, outer, routine, Stream, segment, null, Closes: true));
     }
 
-    private void Statement(SyntaxNode statement)
+    private void Statement(StatementSyntax statement)
     {
-        switch (statement.Kind)
+        switch (statement)
         {
-            case SyntaxKind.InstructionStatement:
-                Instruction(statement);
+            case InstructionStatementSyntax instruction:
+                Instruction(instruction);
                 break;
-            case SyntaxKind.DataDirective:
-            case SyntaxKind.DataValues:
+            case DataDirectiveSyntax:
+            case DataValuesSyntax:
                 Data(statement);
                 break;
 
             // A data declaration's name stands where its first byte does. What it holds is
             // laid out on its own line, or in the body it opens.
-            case SyntaxKind.DataDeclaration:
-                Mark(statement);
-                if (DataSyntax.ElementOf(statement) is { } element)
+            case DataDeclarationSyntax data:
+                Mark(data);
+                if (data.Directive is { } element)
                 {
                     Data(element);
-                    if (DataSyntax.BodyOf(element) is null && NameOf(statement) is { } declared && measured.Contains(declared)
+                    if (DataSyntax.BodyOf(element) is null && NameOf(data) is { } declared && measured.Contains(declared)
                         && placements.GetValueOrDefault((element.Position, expansion)) is { Length: >= 0 } placed)
                     {
                         extents[declared] = placed.Length;
                     }
                 }
                 break;
-            case SyntaxKind.AssertDirective:
-                Assertion(statement);
+            case AssertDirectiveSyntax assertion:
+                Assertion(assertion);
                 break;
-            case SyntaxKind.MacroCall:
-                Expand(statement);
+            case MacroCallSyntax call:
+                Expand(call);
                 break;
-            case SyntaxKind.BlockSplice:
-                Splice(statement);
+            case BlockSpliceSyntax splice:
+                Splice(splice);
                 break;
-            case SyntaxKind.ErrorDirective:
-                Refuse(statement);
+            case ErrorDirectiveSyntax error:
+                Refuse(error);
                 break;
-            case SyntaxKind.LabeledLine:
-                foreach (var child in statement.ChildNodes)
-                {
-                    if (child.Kind == SyntaxKind.Label)
-                        Mark(child);
-                    else
-                        Statement(child);
-                }
+            case LabeledLineSyntax labeled:
+                Mark(labeled.Label);
+                if (labeled.Statement is { } labelled)
+                    Statement(labelled);
                 break;
 
             // A routine's name stands where its first byte does, which is what a branch to
             // it reaches. One turn of a `.multiproc` is a routine, and the member it is named
             // after stands there.
-            case SyntaxKind.ProcDeclaration:
-            case SyntaxKind.MultiProcDeclaration:
+            case ProcDeclarationSyntax:
+            case MultiProcDeclarationSyntax:
                 Mark(statement);
                 break;
 
             // An annotation generates nothing and is here for the flow analysis, which reads
             // it off the statement above it. A `.state` generates nothing either, and says
             // what the processor state is where it stands.
-            case SyntaxKind.NextDirective:
-            case SyntaxKind.PatchDirective:
-            case SyntaxKind.StateDirective:
-            case SyntaxKind.FrameDirective:
+            case NextDirectiveSyntax:
+            case PatchDirectiveSyntax:
+            case StateDirectiveSyntax:
+            case FrameDirectiveSyntax:
                 steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
                 break;
-            case SyntaxKind.EnsureDirective:
-                Ensure(statement);
+            case EnsureDirectiveSyntax ensure:
+                Ensure(ensure);
                 break;
             default:
                 break;
@@ -563,11 +547,9 @@ public sealed class CodeLayout
             unlaid.Add(routine);
     }
 
-    private void Instruction(SyntaxNode statement)
+    private void Instruction(InstructionStatementSyntax statement)
     {
-        if (statement.ChildTokens.Length == 0)
-            return;
-        var mnemonic = statement.ChildTokens[0];
+        var mnemonic = statement.Mnemonic;
 
         // A long branch is not one of the CPU's instructions but a choice between two of
         // them, so it is laid out before the table has its say.
@@ -600,13 +582,13 @@ public sealed class CodeLayout
 
         // In a macro body an `operand` parameter stands as a whole operand, so the mode and
         // the address size come from what the call gave rather than from what the body wrote.
-        var written = statement.ChildNodes.FirstOrDefault();
+        var written = statement.Operand;
         var substituted = Operands.Substituted(model, written, expansion);
         CheckSubstitution(substituted);
 
         // What an operand's expressions are worth is checked here, as a data directive's
         // are, since no symbol holds them and nothing else evaluates them with anything to say.
-        foreach (var expression in written?.ChildNodes.Where(child => child.Kind != SyntaxKind.AddressPrefix) ?? [])
+        foreach (var expression in written?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
             model.Check(expression, diagnostics, expansion, SpanOf);
         var operand = substituted?.Operand ?? written;
 
@@ -659,7 +641,7 @@ public sealed class CodeLayout
         if (mode is AddressingMode.Relative or AddressingMode.DirectRelative && operand is not null)
         {
             var target = mode == AddressingMode.DirectRelative
-                ? operand.ChildNodes.LastOrDefault(child => child.Kind != SyntaxKind.AddressPrefix)
+                ? (operand as AbsoluteOperandSyntax)?.Second
                 : Expression(operand);
             if (target is not null)
                 branches.Add(new Branch(statement, expansion, target, Long: false));
@@ -673,9 +655,9 @@ public sealed class CodeLayout
     /// that form only for a target it has already seen, so its forward branches are always
     /// long.
     /// </summary>
-    private void LongBranch(SyntaxNode statement, SyntaxToken mnemonic)
+    private void LongBranch(InstructionStatementSyntax statement, SyntaxToken mnemonic)
     {
-        var operand = statement.ChildNodes.FirstOrDefault();
+        var operand = statement.Operand;
         if (operand is null || Expression(operand) is not { } target
             || !Plausible(operand).Contains(AddressingMode.Relative))
         {
@@ -725,7 +707,7 @@ public sealed class CodeLayout
     /// </summary>
     private Placement? Located(SyntaxNode expression, Expansion? on)
     {
-        if (expression.Kind != SyntaxKind.NameExpression || model.SymbolOf(expression) is not { } symbol)
+        if (expression is not NameExpressionSyntax || model.SymbolOf(expression) is not { } symbol)
             return null;
         if (symbol.Kind == SymbolKind.MacroParameter)
         {
@@ -769,7 +751,7 @@ public sealed class CodeLayout
         {
             if (branch.Long || Distance(branch) is not { } reach || InRange(reach))
                 continue;
-            var mnemonic = branch.Statement.ChildTokens[0].Text;
+            var mnemonic = branch.Statement.Mnemonic.Text;
             var longer = "j" + mnemonic[1..];
             var reaches = SyntaxFacts.LongBranches.Contains(longer);
             var fix = reaches ? $". `{longer}` reaches any near target" : "";
@@ -819,7 +801,7 @@ public sealed class CodeLayout
     {
         if (substituted is not { } given || given.HasNextByte)
             return;
-        if (given.ByteOf && given.Operand.Kind == SyntaxKind.ImmediateOperand)
+        if (given.ByteOf && given.Operand is ImmediateOperandSyntax)
             return;
         if (!given.ByteOf && given.Offset == 0)
             return;
@@ -967,7 +949,7 @@ public sealed class CodeLayout
     /// That a control transfer reaches as far as its target is: <c>jsr</c>, <c>jmp</c> and
     /// the branches a near one, <c>jsl</c> and <c>jml</c> a far one.
     /// </summary>
-    private void CheckDistance(SyntaxToken mnemonic, SyntaxNode expression, AddressingMode mode)
+    private void CheckDistance(SyntaxToken mnemonic, ExpressionSyntax expression, AddressingMode mode)
     {
         var size = model.AddressSizeOf(expression, segment, expansion);
         if (mode != AddressingMode.Long)
@@ -1039,7 +1021,7 @@ public sealed class CodeLayout
     }
 
     /// <summary>Whether an expression names a routine, which carries a signature.</summary>
-    private bool NamesRoutine(SyntaxNode expression) =>
+    private bool NamesRoutine(ExpressionSyntax expression) =>
         Targets.Of(model, expression, expansion) is { Symbol.Signature: not null };
 
     /// <summary>
@@ -1047,7 +1029,7 @@ public sealed class CodeLayout
     /// file with the whole program worked out. One nt65 can answer is answered; one it
     /// cannot is left for ca65 and ld65, which see the addresses nt65 never does.
     /// </summary>
-    private void Assertion(SyntaxNode directive)
+    private void Assertion(AssertDirectiveSyntax directive)
     {
         var assertion = Constructs.AssertionOf(directive);
         if (assertion.Condition is not { } condition)
@@ -1065,7 +1047,7 @@ public sealed class CodeLayout
     /// An <c>.ensure</c>, which writes the <c>rep</c> and <c>sep</c> the analysis found it
     /// needs. Before the analysis has run, it is laid out writing all it could.
     /// </summary>
-    private void Ensure(SyntaxNode directive)
+    private void Ensure(EnsureDirectiveSyntax directive)
     {
         var state = states?.Before(directive, expansion)?.Processor;
 
@@ -1085,23 +1067,23 @@ public sealed class CodeLayout
     /// An <c>.error</c> the build reached, a configuration the file refuses to be built in, or a
     /// <c>.warning</c>, which is said and built.
     /// </summary>
-    private void Refuse(SyntaxNode directive)
+    private void Refuse(ErrorDirectiveSyntax directive)
     {
-        var warns = directive.ChildTokens[0].Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
+        var warns = directive.Keyword.Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
         Report(directive, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported",
             warns ? Severity.Warning : Severity.Error);
     }
 
-    private void Data(SyntaxNode directive)
+    private void Data(StatementSyntax directive)
     {
         if (DataLengths.Of(directive, model, diagnostics, expansion) is not { } length)
             return;
-        if (routine is null && inData == 0 && directive is { Kind: SyntaxKind.DataDirective, Parent.Kind: not SyntaxKind.DataDeclaration })
+        if (routine is null && inData == 0 && directive is DataDirectiveSyntax { Parent: not DataDeclarationSyntax } loose)
         {
             // Bytes a macro expands outside a routine belong to a declaration as much as bytes
             // written there do, which binding could not see where the body was written.
-            if (expansion?.NearestCall is not null && DataSyntax.NameOf(directive) is not (".res" or ".align"))
-                Report(directive, $"`{directive.ChildTokens[0].Text}` outside a `.proc` belongs to a `.data` declaration");
+            if (expansion?.NearestCall is not null && DataSyntax.NameOf(loose) is not (".res" or ".align"))
+                Report(directive, $"`{loose.Directive.Text}` outside a `.proc` belongs to a `.data` declaration");
             else if (segment is null && length != 0)
                 Report(directive, "this is outside every segment: a `.segment NAME` region or block places it");
         }
@@ -1114,7 +1096,7 @@ public sealed class CodeLayout
     /// What a statement assembles to, whichever writing of it is asked about. An editor asks
     /// about a line rather than about one expansion of it, so it is shown the first writing.
     /// </summary>
-    public LineLayout? AnyOf(SyntaxNode statement) => anyWriting.GetValueOrDefault((statement.Tree, statement.Position));
+    public LineLayout? AnyOf(StatementSyntax statement) => anyWriting.GetValueOrDefault((statement.Tree, statement.Position));
 
     /// <summary>The stream the walk is writing into.</summary>
     private int Stream => streams[^1];
@@ -1123,7 +1105,7 @@ public sealed class CodeLayout
     private int Measured => measuredIn.GetValueOrDefault(Stream, Stream);
 
     /// <summary>Records what a line assembles to on this writing of it.</summary>
-    private void Laid(SyntaxNode statement, LineLayout laid)
+    private void Laid(StatementSyntax statement, LineLayout laid)
     {
         lines[(statement.Position, expansion)] = laid;
         anyWriting.TryAdd((statement.Tree, statement.Position), laid);
@@ -1134,7 +1116,7 @@ public sealed class CodeLayout
     /// new run of distances instead: how many bytes it generates depends on an address, so
     /// nothing after it stands at a distance nt65 knows from anything before it.
     /// </summary>
-    private void Place(SyntaxNode statement, int length)
+    private void Place(StatementSyntax statement, int length)
     {
         var offset = filled.GetValueOrDefault(Measured);
         placements[(statement.Position, expansion)] = new Placement(Measured, offset, length);
@@ -1156,8 +1138,8 @@ public sealed class CodeLayout
         // What has an address needs a segment to have one in. A routine or data outside every
         // segment is reported where it is declared, and what is inside them is not reported again.
         if (segment is null && inData == 0
-            && (declaration.Kind is SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration
-                || (routine is null && declaration.Kind == SyntaxKind.DataDeclaration)))
+            && (declaration is ProcDeclarationSyntax or MultiProcDeclarationSyntax
+                || (routine is null && declaration is DataDeclarationSyntax)))
         {
             Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is outside every segment: "
                 + "a `.segment NAME` region or block places it");
@@ -1220,5 +1202,5 @@ public sealed class CodeLayout
     /// A branch whose reach nt65 can check: where it stands, and the target it was written
     /// with. A long branch is here too, because the same distance is what decides its form.
     /// </summary>
-    private readonly record struct Branch(SyntaxNode Statement, Expansion? On, SyntaxNode Target, bool Long);
+    private readonly record struct Branch(InstructionStatementSyntax Statement, Expansion? On, ExpressionSyntax Target, bool Long);
 }

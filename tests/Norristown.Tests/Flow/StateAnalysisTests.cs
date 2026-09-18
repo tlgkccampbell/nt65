@@ -421,8 +421,8 @@ public sealed class StateAnalysisTests
     {
         var model = analysis.File("main.nt65");
         var statement = model.Tree.Root.DescendantNodes()
+            .OfType<LineSyntax>()
             .Select(node => node.Statement)
-            .OfType<SyntaxNode>()
             .First(statement => statement.GetText().Trim() == line);
         var state = analysis.StatesFor("main.nt65")?.Before(statement);
         Assert.NotNull(state);

@@ -203,16 +203,15 @@ internal static class CountedLoops
 
     /// <summary>The instructions written in a block, the markers and the directives aside.</summary>
     private static List<Step> Written(BasicBlock block) =>
-        [.. block.Steps.Where(step => !step.IsMarker && step.Statement.Kind == SyntaxKind.InstructionStatement)];
+        [.. block.Steps.Where(step => !step.IsMarker && step.Statement is InstructionStatementSyntax)];
 
     /// <summary>The mnemonic a step's statement is written with, lower case, or null.</summary>
     private static string? Mnemonic(Step step) =>
-        step.Statement.ChildTokens.Length > 0 ? step.Statement.ChildTokens[0].Text.ToLowerInvariant() : null;
+        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant();
 
     /// <summary>The value of the immediate a step is written with, or null when it has none nt65 knows.</summary>
     private static long? Immediate(SemanticModel model, Step step) =>
-        step.Statement.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.ImmediateOperand } operand
-            && operand.ChildNodes.FirstOrDefault() is { } expression
-            ? model.ValueOf(expression, step.On).AsNumber()
+        step.Statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax operand }
+            ? model.ValueOf(operand.Value, step.On).AsNumber()
             : null;
 }

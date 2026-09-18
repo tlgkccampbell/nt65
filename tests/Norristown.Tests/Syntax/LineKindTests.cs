@@ -1,3 +1,4 @@
+using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;

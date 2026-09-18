@@ -20,15 +20,15 @@ public static class Folding
     {
         foreach (var child in node.ChildNodes)
         {
-            if (child.Green is not GreenBlock)
+            if (child is not BlockSyntax block)
                 continue;
 
             // A block on one line has nothing to hide.
-            var start = child.LineIndex;
-            var end = child.Tree.GetLineIndex(child.FullSpan.End - 1);
+            var start = block.LineIndex;
+            var end = block.Tree.GetLineIndex(block.FullSpan.End - 1);
             if (end > start)
                 ranges.Add(new LineRange(start, end));
-            Walk(child, ranges);
+            Walk(block, ranges);
         }
     }
 }

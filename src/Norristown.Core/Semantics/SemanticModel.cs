@@ -18,7 +18,7 @@ public sealed class SemanticModel
     private readonly ILookup<Symbol, SymbolReference> bySymbol;
     private readonly Func<string, long?>? binaryLength;
     private readonly IReadOnlyList<(TextSpan Span, Scope Scope)> regions;
-    private readonly Dictionary<SyntaxNode, Family> byFamily;
+    private readonly Dictionary<StatementSyntax, Family> byFamily;
 
     internal SemanticModel(
         SyntaxTree tree,
@@ -132,7 +132,7 @@ public sealed class SemanticModel
     public IReadOnlyList<Family> Families { get; }
 
     /// <summary>The family <paramref name="declaration"/> stands for, or null when it stands for one name.</summary>
-    public Family? FamilyAt(SyntaxNode declaration) => byFamily.GetValueOrDefault(declaration);
+    public Family? FamilyAt(StatementSyntax declaration) => byFamily.GetValueOrDefault(declaration);
 
     /// <summary>
     /// The declaration <paramref name="header"/> makes at <paramref name="on"/>: the one
@@ -140,7 +140,7 @@ public sealed class SemanticModel
     /// </summary>
     public Symbol? DeclaredBy(SyntaxNode header, Expansion? on)
     {
-        if (byFamily.GetValueOrDefault(header) is { } family)
+        if (header is StatementSyntax declaration && byFamily.GetValueOrDefault(declaration) is { } family)
             return family.InstanceAt(on);
         foreach (var token in header.ChildTokens)
         {
@@ -239,14 +239,14 @@ public sealed class SemanticModel
     /// How much room a data directive takes: the bytes it generates and how many elements
     /// they are. Null where nt65 cannot say, such as for an <c>.align</c>.
     /// </summary>
-    public DataSize? RoomFor(SyntaxNode directive, Expansion? on = null) =>
+    public DataSize? RoomFor(StatementSyntax directive, Expansion? on = null) =>
         Evaluator.DataSizeOf(directive, Segments, resolved, binaryLength, BindingsOf(on), Configuration);
 
     /// <summary>
     /// How many elements an element type's count declares, and how many its values come to.
     /// Either may be unknown, and where both are known they have to agree.
     /// </summary>
-    public (long? Declared, long? Given) ElementsOf(SyntaxNode directive, Expansion? on = null) =>
+    public (long? Declared, long? Given) ElementsOf(DataDirectiveSyntax directive, Expansion? on = null) =>
         Evaluator.ElementsOf(directive, Segments, resolved, BindingsOf(on), Configuration);
 
     /// <summary>
@@ -321,7 +321,7 @@ public sealed class SemanticModel
     /// </summary>
     private Value WordFor(MacroArgument argument, Expansion? outer)
     {
-        if (argument.Value is { Kind: SyntaxKind.NameExpression } name
+        if (argument.Value is NameExpressionSyntax name
             && SymbolOf(name) is { Kind: SymbolKind.MacroParameter } passed
             && ArgumentFor(passed, outer) is { } given)
         {
@@ -331,7 +331,7 @@ public sealed class SemanticModel
     }
 
     /// <summary>The macro a call names, wherever in the program the call was written.</summary>
-    public Symbol? MacroAt(SyntaxNode call) =>
+    public Symbol? MacroAt(MacroCallSyntax call) =>
         Macros.CalleeOf(call) is { } callee
             ? resolved.GetValueOrDefault((callee.Parent.Tree, callee.Span.Start)) is { Kind: SymbolKind.Macro } macro
                 ? macro
@@ -342,7 +342,7 @@ public sealed class SemanticModel
     /// What one call gives each parameter. Nothing is reported from here: binding has
     /// already said everything there is to say about this call's arguments.
     /// </summary>
-    public MacroInvocation? InvocationAt(SyntaxNode call) =>
+    public MacroInvocation? InvocationAt(MacroCallSyntax call) =>
         MacroAt(call) is { } macro ? MacroInvocation.Of(call, macro, call.Tree, null) : null;
 
     /// <summary>

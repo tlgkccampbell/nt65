@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -12,7 +13,7 @@ public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
     private readonly ImmutableArray<Parser.Result> statements;
-    private SyntaxNode? root;
+    private FileSyntax? root;
 
     private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
     {
@@ -49,7 +50,7 @@ public sealed class SyntaxTree
     public GreenFile Green { get; }
 
     /// <summary>The root node, created on first use.</summary>
-    public SyntaxNode Root => root ??= new SyntaxNode(this, null, Green, 0);
+    public FileSyntax Root => root ??= new FileSyntax(this, null, Green, 0);
 
     /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;

@@ -167,15 +167,12 @@ internal static class TextMateGrammar
     /// The scope the grammar should give a token, or null for none (punctuation), from what the
     /// parser reads the line as and the block it is in.
     /// </summary>
-    public static string? Expected(SyntaxTree tree, int lineIndex, int index, BlockKind body)
+    public static string? Expected(LineSyntax line, int index, BlockKind body)
     {
-        var line = tree.Lines[lineIndex];
-        var token = line.Tokens[index];
-        if (token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal
-            && NameScope(tree, lineIndex, index, body) is { } name)
-        {
+        var tokens = Tokens(line);
+        var token = tokens[index];
+        if (IsName(token) && NameScope(tokens, index, body) is { } name)
             return name;
-        }
         return token.Kind switch
         {
             SyntaxKind.Identifier => Identifier,
@@ -198,72 +195,66 @@ internal static class TextMateGrammar
     /// The scope of a name the parser reads as a declaration, a member or a parameter, or null
     /// for a name the grammar cannot place.
     /// </summary>
-    private static string? NameScope(SyntaxTree tree, int lineIndex, int index, BlockKind body)
+    private static string? NameScope(List<SyntaxToken> tokens, int index, BlockKind body)
     {
-        var tokens = tree.Lines[lineIndex].Tokens;
         if (index > 0 && tokens[index - 1].Kind == SyntaxKind.ColonColon)
             return Identifier;
-        if (Parent(tree.Statement(lineIndex), index) is not { } found)
-            return null;
-        var (parent, first) = found;
-        return parent.Kind switch
+
+        // The first name a node holds is the one a declaration declares.
+        var token = tokens[index];
+        var first = !token.Parent.ChildTokens.TakeWhile(earlier => earlier != token).Any(IsName);
+        return token.Parent switch
         {
-            SyntaxKind.Label when first => body is BlockKind.Struct or BlockKind.Union ? Property : Label,
-            SyntaxKind.ProcDeclaration or SyntaxKind.ExternProcDeclaration or SyntaxKind.FuncDeclaration when first => Function,
-            SyntaxKind.MacroDeclaration when first => Macro,
-            SyntaxKind.MacroParameter when first => Parameter,
-            SyntaxKind.ImportItem when first => HasToken(parent, SyntaxKind.Equals) ? Constant : Variable,
-            SyntaxKind.RepeatDirective or SyntaxKind.EachDirective or SyntaxKind.MultiProcDeclaration => Constant,
-            SyntaxKind.ParameterList => Parameter,
-            SyntaxKind.EnumDeclaration when first => Enum,
-            SyntaxKind.StructDeclaration or SyntaxKind.UnionDeclaration when first => Struct,
-            SyntaxKind.ScopeDeclaration when first => Namespace,
-            SyntaxKind.CharmapDeclaration or SyntaxKind.SignatureDeclaration when first => Type,
-            SyntaxKind.DataDeclaration or SyntaxKind.ListDeclaration or SyntaxKind.FrameDirective when first => Variable,
-            SyntaxKind.ConstantDeclaration or SyntaxKind.ConfigDeclaration when first => Constant,
-            SyntaxKind.EnumMember when first => EnumMember,
-            SyntaxKind.MemberValue when first => Property,
-            SyntaxKind.NamedArgument when first => Parameter,
-            SyntaxKind.MacroCall when first && index + 1 < tokens.Length && tokens[index + 1].Kind == SyntaxKind.Bang => Macro,
-            _ => tokens[index].Kind == SyntaxKind.Identifier && index + 1 < tokens.Length && tokens[index + 1].Kind == SyntaxKind.Bang
+            LabelSyntax when first => body is BlockKind.Struct or BlockKind.Union ? Property : Label,
+            ProcDeclarationSyntax or ExternProcDeclarationSyntax or FuncDeclarationSyntax when first => Function,
+            MacroDeclarationSyntax when first => Macro,
+            MacroParameterSyntax when first => Parameter,
+            ImportItemSyntax item when first => item.EqualsToken is not null ? Constant : Variable,
+            RepeatDirectiveSyntax or EachDirectiveSyntax or MultiProcDeclarationSyntax => Constant,
+            ParameterListSyntax => Parameter,
+            EnumDeclarationSyntax when first => Enum,
+            StructDeclarationSyntax or UnionDeclarationSyntax when first => Struct,
+            ScopeDeclarationSyntax when first => Namespace,
+            CharmapDeclarationSyntax or SignatureDeclarationSyntax when first => Type,
+            DataDeclarationSyntax or ListDeclarationSyntax or FrameDirectiveSyntax when first => Variable,
+            ConstantDeclarationSyntax or ConfigDeclarationSyntax when first => Constant,
+            EnumMemberSyntax when first => EnumMember,
+            MemberValueSyntax when first => Property,
+            NamedArgumentSyntax when first => Parameter,
+            MacroCallSyntax when first && index + 1 < tokens.Count && tokens[index + 1].Kind == SyntaxKind.Bang => Macro,
+            _ => token.Kind == SyntaxKind.Identifier && index + 1 < tokens.Count && tokens[index + 1].Kind == SyntaxKind.Bang
                 ? Macro
                 : null,
         };
     }
 
     /// <summary>
-    /// The node holding the line's token at <paramref name="index"/>, and whether it is the first
-    /// name that node holds, which is the one a declaration declares.
+    /// Every token of a line in source order, which is every token of its statement; an
+    /// exported declaration's include the <c>.export</c> before it.
     /// </summary>
-    private static (GreenNode Parent, bool First)? Parent(GreenNode statement, int index)
+    private static List<SyntaxToken> Tokens(LineSyntax line)
     {
-        var at = 0;
-        (GreenNode, bool)? found = null;
-        void Walk(GreenNode node)
+        var tokens = new List<SyntaxToken>();
+        void Walk(SyntaxNode node)
         {
-            var named = false;
-            for (var i = 0; i < node.SlotCount && found is null; i++)
+            var own = node.ChildTokens;
+            var next = 0;
+            foreach (var child in node.ChildNodes)
             {
-                var child = node.GetSlot(i);
-                if (child is GreenToken token)
-                {
-                    var isName = token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal;
-                    if (at++ == index)
-                        found = (node, isName && !named);
-                    named |= isName;
-                }
-                else
-                {
-                    Walk(child);
-                }
+                while (next < own.Length && own[next].Position < child.Position)
+                    tokens.Add(own[next++]);
+                Walk(child);
             }
+            while (next < own.Length)
+                tokens.Add(own[next++]);
         }
-        Walk(statement);
-        return found;
+        var statement = line.Statement;
+        Walk(statement.IsExported ? statement.Parent! : statement);
+        return tokens;
     }
 
-    private static bool HasToken(GreenNode node, SyntaxKind kind) =>
-        Enumerable.Range(0, node.SlotCount).Any(i => node.GetSlot(i) is GreenToken token && token.Kind == kind);
+    private static bool IsName(SyntaxToken token) =>
+        token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal;
 
     private static void Paint(string?[] scopes, Group group, string? scope)
     {

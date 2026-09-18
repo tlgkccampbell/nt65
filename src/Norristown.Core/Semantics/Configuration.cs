@@ -19,7 +19,7 @@ namespace Norristown.Semantics;
 public sealed class Configuration
 {
     // A file's `.config` items wherever they are written, read once per tree.
-    private static readonly ConditionalWeakTable<SyntaxTree, List<SyntaxNode>> written = new();
+    private static readonly ConditionalWeakTable<SyntaxTree, List<ConfigDeclarationSyntax>> written = new();
 
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
     private readonly HashSet<(SyntaxTree Tree, int Position)> answered;
@@ -75,7 +75,7 @@ public sealed class Configuration
     /// macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition may name what the
     /// expansion binds, and those are answered once per expansion instead.
     /// </summary>
-    public bool Answered(SyntaxNode block) => answered.Contains((block.Tree, block.Position));
+    public bool Answered(BlockSyntax block) => answered.Contains((block.Tree, block.Position));
 
     /// <summary>Whether the build includes what is written at <paramref name="node"/>.</summary>
     public bool Includes(SyntaxNode node)
@@ -119,7 +119,7 @@ public sealed class Configuration
             // Whether the CPU has an instruction, whichever it is: a program that runs on more
             // than one asks this rather than listing the CPUs that have it.
             case ".has":
-                if (given.Count != 1 || given[0] is not { Kind: SyntaxKind.NameExpression, ChildTokens: [{ Kind: SyntaxKind.Mnemonic } mnemonic] })
+                if (given.Count != 1 || given[0] is not NameExpressionSyntax { ChildTokens: [{ Kind: SyntaxKind.Mnemonic } mnemonic] })
                 {
                     report(function.Span, "`.has` takes a mnemonic, such as `.has(phx)`");
                     return Value.Unknown;
@@ -132,13 +132,8 @@ public sealed class Configuration
     }
 
     /// <summary>Whether a statement is written at file level, outside every block, exported or not.</summary>
-    internal static bool AtFileLevel(SyntaxNode statement)
-    {
-        var line = statement.Parent;
-        while (line is not null && line.Green is not GreenLine)
-            line = line.Parent;
-        return line?.Parent?.Parent is null;
-    }
+    internal static bool AtFileLevel(StatementSyntax statement) =>
+        statement.Parent?.FirstAncestorOrSelf<LineSyntax>()?.Parent?.Parent is null;
 
     /// <summary>
     /// What the build makes the <c>.config</c> <paramref name="name"/> that <paramref name="tree"/>
@@ -178,8 +173,8 @@ public sealed class Configuration
         return values;
     }
 
-    private static List<SyntaxNode> SettingsIn(SyntaxTree tree) =>
-        written.GetValue(tree, tree => [.. tree.Root.DescendantNodes().Where(node => node.Kind == SyntaxKind.ConfigDeclaration)]);
+    private static List<ConfigDeclarationSyntax> SettingsIn(SyntaxTree tree) =>
+        written.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConfigDeclarationSyntax>()]);
 
     /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks: the <c>.if</c> that
@@ -202,7 +197,7 @@ public sealed class Configuration
             var taken = false;
             foreach (var child in container.ChildNodes)
             {
-                if (child.Green is not GreenBlock block)
+                if (child is not BlockSyntax block)
                 {
                     chaining = false;
                     continue;
@@ -216,30 +211,30 @@ public sealed class Configuration
                     continue;
                 }
 
-                var opener = child.ChildNodes.Length > 0 ? child.ChildNodes[0].Statement : null;
-                switch (opener?.Kind)
+                var opener = block.Opener.Statement;
+                switch (opener)
                 {
-                    case SyntaxKind.IfDirective:
+                    case IfDirectiveSyntax:
                         chaining = true;
-                        answered.Add((tree, child.Position));
-                        taken = Branch(child, opener, already: false);
+                        answered.Add((tree, block.Position));
+                        taken = Branch(block, opener, already: false);
                         continue;
 
-                    case SyntaxKind.ElseIfDirective:
-                    case SyntaxKind.ElseDirective:
+                    case ElseIfDirectiveSyntax:
+                    case ElseDirectiveSyntax:
                         if (!chaining)
                         {
                             Report(opener.Span, $"`{Directive(opener)}` continues an `.if`, and there is none to continue");
-                            Leave(child);
+                            Leave(block);
                             continue;
                         }
-                        answered.Add((tree, child.Position));
-                        taken |= Branch(child, opener, taken);
+                        answered.Add((tree, block.Position));
+                        taken |= Branch(block, opener, taken);
                         continue;
 
                     default:
                         chaining = false;
-                        Container(child);
+                        Container(block);
                         continue;
                 }
             }
@@ -247,33 +242,31 @@ public sealed class Configuration
 
         public Value Evaluate(SyntaxNode node)
         {
-            switch (node.Kind)
+            switch (node)
             {
-                case SyntaxKind.NumberExpression:
-                    return Number(Literals.Number(Text(node)));
+                case NumberExpressionSyntax number:
+                    return Number(Literals.Number(number.Token.Text));
 
-                case SyntaxKind.CharacterExpression:
-                    return Number(Literals.Character(Text(node)));
+                case CharacterExpressionSyntax character:
+                    return Number(Literals.Character(character.Token.Text));
 
-                case SyntaxKind.StringExpression:
-                    return Literals.Text(Text(node)) is { } text ? Value.Of(text) : Value.Unknown;
+                case StringExpressionSyntax quoted:
+                    return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
 
-                case SyntaxKind.ParenthesizedExpression:
-                    return node.ChildNodes.Length > 0 ? Evaluate(node.ChildNodes[0]) : Value.Unknown;
+                case ParenthesizedExpressionSyntax parenthesized:
+                    return Evaluate(parenthesized.Expression);
 
-                case SyntaxKind.UnaryExpression:
-                    return node.ChildNodes.Length > 0 && node.ChildTokens.Length > 0
-                        ? Unary(node.ChildTokens[0], Evaluate(node.ChildNodes[0]))
-                        : Value.Unknown;
+                case UnaryExpressionSyntax unary:
+                    return Unary(unary.OperatorToken, Evaluate(unary.Operand));
 
-                case SyntaxKind.BinaryExpression:
-                    return Binary(node);
+                case BinaryExpressionSyntax binary:
+                    return Binary(binary);
 
-                case SyntaxKind.NameExpression:
-                    return ValueOfName(node);
+                case NameExpressionSyntax name:
+                    return ValueOfName(name);
 
-                case SyntaxKind.CallExpression:
-                    return Call(node);
+                case CallExpressionSyntax call:
+                    return Call(call);
 
                 default:
                     return Value.Unknown;
@@ -287,13 +280,13 @@ public sealed class Configuration
         /// One branch of a chain: whether the build takes it. <paramref name="already"/> says
         /// an earlier branch was taken, in which case this one is left out whatever it says.
         /// </summary>
-        private bool Branch(SyntaxNode block, SyntaxNode opener, bool already)
+        private bool Branch(BlockSyntax block, StatementSyntax opener, bool already)
         {
             // The CPU is configuration, and a condition may test it with `.target`, so a
             // `.cpu` under an `.if` would be deciding what decides it.
             foreach (var node in block.DescendantNodes())
             {
-                if (node.Kind == SyntaxKind.CpuDirective)
+                if (node is CpuDirectiveSyntax)
                     Report(node.Span, "`.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`");
             }
 
@@ -306,11 +299,11 @@ public sealed class Configuration
         }
 
         /// <summary>Whether the condition an <c>.if</c> or <c>.elseif</c> writes holds.</summary>
-        private bool Holds(SyntaxNode opener)
+        private bool Holds(StatementSyntax opener)
         {
-            if (opener.Kind == SyntaxKind.ElseDirective)
+            if (opener is ElseDirectiveSyntax)
                 return true;
-            if (opener.ChildNodes.FirstOrDefault() is not { } condition)
+            if (opener is not ConditionalDirectiveSyntax { Condition: var condition })
                 return false;
 
             var value = Evaluate(condition);
@@ -325,31 +318,27 @@ public sealed class Configuration
         // From the block's full start, indentation included, to its closing brace: `Includes`
         // compares where a node starts, and an indented block starts at its line's leading
         // whitespace, before its first token.
-        private void Leave(SyntaxNode block) =>
+        private void Leave(BlockSyntax block) =>
             omitted.Add(new TextSpan(block.Position, block.Span.End - block.Position));
 
-        private Value Binary(SyntaxNode node)
+        private Value Binary(BinaryExpressionSyntax binary)
         {
-            var children = node.ChildNodes;
-            if (children.Length != 2 || node.ChildTokens.Length == 0)
-                return Value.Unknown;
-
             // The right operand is neither evaluated nor looked up once the left decides the
             // result, which is what makes `.defined(TRACE) && TRACE` a question with an answer.
-            var op = node.ChildTokens[0];
-            var left = Evaluate(children[0]);
+            var op = binary.OperatorToken;
+            var left = Evaluate(binary.Left);
             if (left.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
                 return Value.Of(decided != 0);
 
-            var right = Evaluate(children[1]);
+            var right = Evaluate(binary.Right);
             if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
                 return Reject(op, left.IsString ? left : right);
-            if (b == 0 && Operators.Divides(op.Green))
+            if (b == 0 && Operators.Divides(op))
             {
                 Report(op.Span, "division by zero");
                 return Value.Unknown;
             }
-            return Operators.Binary(op.Green, a, b) is { } result ? Value.Of(result) : Value.Unknown;
+            return Operators.Binary(op, a, b) is { } result ? Value.Of(result) : Value.Unknown;
         }
 
         private Value Unary(SyntaxToken op, Value operand)
@@ -371,10 +360,10 @@ public sealed class Configuration
         /// Anything else the program declares is refused here rather than looked up: a check
         /// about the program is an <c>.assert</c>, which is evaluated once the program is known.
         /// </summary>
-        private Value ValueOfName(SyntaxNode name)
+        private Value ValueOfName(NameExpressionSyntax name)
         {
             var written = name.GetText().Trim();
-            if (name.ChildTokens.Length == 1 && defines.TryGetValue(name.ChildTokens[0].Text, out var value))
+            if (name.ChildTokens is [var only] && defines.TryGetValue(only.Text, out var value))
                 return Value.Of(value);
             var (setting, reported) = settings.Find(tree, name, Report);
             if (setting is not null)
@@ -387,10 +376,10 @@ public sealed class Configuration
             return Value.Unknown;
         }
 
-        private Value Call(SyntaxNode call)
+        private Value Call(CallExpressionSyntax call)
         {
-            var given = call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? [];
-            if (call.ChildTokens.Length == 0 || call.ChildTokens[0].Kind != SyntaxKind.Directive)
+            var given = call.Arguments.Arguments;
+            if (call.Function is not { Kind: SyntaxKind.Directive } function)
             {
                 // A charmap or a `.func` called by name. Both are declarations, and reaching
                 // them means resolving a name before the declarations exist.
@@ -398,16 +387,14 @@ public sealed class Configuration
                 return Value.Unknown;
             }
 
-            var function = call.ChildTokens[0];
             var name = function.Text.ToLowerInvariant();
 
             // `.defined` asks whether a name is a define, so the name is not looked up at all
             // and one that is not a define is the answer rather than a mistake.
             if (name == ".defined")
             {
-                return given.Length == 1 && given[0].Kind == SyntaxKind.NameExpression
-                    && given[0].ChildTokens.Length == 1
-                    ? Value.Of(defines.ContainsKey(given[0].ChildTokens[0].Text))
+                return given is [NameExpressionSyntax { ChildTokens: [var asked] }]
+                    ? Value.Of(defines.ContainsKey(asked.Text))
                     : Value.Unknown;
             }
 
@@ -474,10 +461,8 @@ public sealed class Configuration
 
         private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
-        private static string Text(SyntaxNode node) => node.ChildTokens.Length > 0 ? node.ChildTokens[0].Text : "";
-
-        private static string Directive(SyntaxNode opener) =>
-            opener.Kind == SyntaxKind.ElseDirective ? ".else" : ".elseif";
+        private static string Directive(StatementSyntax opener) =>
+            opener is ElseDirectiveSyntax ? ".else" : ".elseif";
     }
 
     /// <summary>
@@ -525,16 +510,16 @@ public sealed class Configuration
                 var exported = ExportedNames(tree);
                 foreach (var declaration in SettingsIn(tree))
                 {
-                    if (declaration.ChildTokens is not [_, { Kind: SyntaxKind.Identifier } name, ..])
+                    if (declaration.Name is not { } name)
                         continue;
                     if (!Configuration.AtFileLevel(declaration))
                     {
-                        diagnostics.Add(new Diagnostic(tree.GetSpan(declaration.ChildTokens[0].Span), Severity.Error,
+                        diagnostics.Add(new Diagnostic(tree.GetSpan(declaration.Keyword.Span), Severity.Error,
                             "a `.config` is written at file level, outside every block: which settings a program has "
                                 + "depends on no condition"));
                         continue;
                     }
-                    settings.byName.TryAdd((module, name.Text), new Setting(tree, name, declaration.ChildNodes.FirstOrDefault(),
+                    settings.byName.TryAdd((module, name.Text), new Setting(tree, name, declaration.Value,
                         declaration.IsExported || exported.Contains(name.Text)));
                 }
             }
@@ -591,14 +576,14 @@ public sealed class Configuration
         /// declares, one a <c>.use</c> brought in, or one written with its module's path. Whether
         /// anything was reported about it, such as a setting another module keeps to itself.
         /// </summary>
-        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, SyntaxNode name, Action<TextSpan, string> report)
+        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<TextSpan, string> report)
         {
-            var parts = name.ChildTokens.Where(token => token.Kind != SyntaxKind.ColonColon).ToList();
-            if (parts.Count == 0 || !modules.TryGetValue(tree, out var own))
+            var parts = name.Names;
+            if (parts.Length == 0 || !modules.TryGetValue(tree, out var own))
                 return (null, false);
 
             Setting? found;
-            if (parts.Count == 1)
+            if (parts.Length == 1)
             {
                 if (byName.TryGetValue((own, parts[0].Text), out var local))
                     return (local, false);
@@ -643,9 +628,9 @@ public sealed class Configuration
 
         private static string ModuleOf(SyntaxTree tree)
         {
-            foreach (var child in tree.Root.ChildNodes)
+            foreach (var child in tree.Root.Members)
             {
-                if (child.Statement is { Kind: SyntaxKind.ModuleDirective } module)
+                if (child is LineSyntax { Statement: ModuleDirectiveSyntax module })
                     return string.Concat(module.ChildTokens.Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.ColonColon).Select(token => token.Text));
             }
             return "";
@@ -655,13 +640,13 @@ public sealed class Configuration
         private static HashSet<string> ExportedNames(SyntaxTree tree)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var child in tree.Root.ChildNodes)
+            foreach (var child in tree.Root.Members)
             {
-                if (child.Statement is not { Kind: SyntaxKind.ExportDirective } export)
+                if (child is not LineSyntax { Statement: ExportDirectiveSyntax export })
                     continue;
-                foreach (var item in export.ChildNodes)
+                foreach (var item in export.Items)
                 {
-                    if (item.ChildNodes.FirstOrDefault() is { ChildTokens: [{ Kind: SyntaxKind.Identifier } name] })
+                    if (item.Name.ChildTokens is [{ Kind: SyntaxKind.Identifier } name])
                         names.Add(name.Text);
                 }
             }
@@ -674,9 +659,9 @@ public sealed class Configuration
         /// </summary>
         private Setting? Used(SyntaxTree tree, string name)
         {
-            foreach (var child in tree.Root.ChildNodes)
+            foreach (var child in tree.Root.Members)
             {
-                if (child.Statement is not { Kind: SyntaxKind.UseDirective } use)
+                if (child is not LineSyntax { Statement: UseDirectiveSyntax use })
                     continue;
                 var tokens = use.ChildTokens;
                 var path = new List<string>();
@@ -697,10 +682,10 @@ public sealed class Configuration
                 }
                 if (rest is [{ Kind: SyntaxKind.ColonColon }, { Kind: SyntaxKind.OpenBrace }, ..])
                 {
-                    foreach (var item in use.ChildNodes.Where(node => node.Kind == SyntaxKind.UseItem))
+                    foreach (var item in use.Items)
                     {
-                        var alias = item.ChildTokens is [_, _, var given] ? given.Text : item.ChildTokens[0].Text;
-                        if (alias == name && byName.GetValueOrDefault((string.Join("::", path), item.ChildTokens[0].Text)) is { } listed)
+                        var alias = (item.Alias ?? item.Name).Text;
+                        if (alias == name && byName.GetValueOrDefault((string.Join("::", path), item.Name.Text)) is { } listed)
                             return listed;
                     }
                     continue;
@@ -716,13 +701,13 @@ public sealed class Configuration
     }
 
     /// <summary>One <c>.config</c>: where it is written, what its file gives it, and what the build sets.</summary>
-    private sealed class Setting(SyntaxTree tree, SyntaxToken name, SyntaxNode? expression, bool isExported)
+    private sealed class Setting(SyntaxTree tree, SyntaxToken name, ExpressionSyntax? expression, bool isExported)
     {
         public SyntaxTree Tree { get; } = tree;
 
         public SyntaxToken Name { get; } = name;
 
-        public SyntaxNode? Expression { get; } = expression;
+        public ExpressionSyntax? Expression { get; } = expression;
 
         public bool IsExported { get; } = isExported;
 

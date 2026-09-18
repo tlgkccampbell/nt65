@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 

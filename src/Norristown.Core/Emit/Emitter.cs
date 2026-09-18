@@ -4,6 +4,7 @@ using System.Text;
 using Norristown.Layout;
 using Norristown.Project;
 using Norristown.Semantics;
+using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
 namespace Norristown.Emit;
@@ -84,7 +85,7 @@ public sealed class Emitter
     // The line an expansion's output maps back to. The lines of an expansion map to the line
     // of the call, the way a C debugger treats a preprocessor macro, and only a line of this
     // file can be named: the line map names one source, and a body may belong to another.
-    private SyntaxNode? callLine;
+    private LineSyntax? callLine;
 
     private Emitter(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
@@ -227,9 +228,9 @@ public sealed class Emitter
     private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
 
     /// <summary>Writes the end label of whatever <paramref name="declaration"/> names, if it has one.</summary>
-    private void End(SyntaxNode? declaration)
+    private void End(StatementSyntax declaration)
     {
-        if (declaration is null || model.DeclaredBy(declaration, expansion) is not { } symbol || !ends.Contains(symbol))
+        if (model.DeclaredBy(declaration, expansion) is not { } symbol || !ends.Contains(symbol))
             return;
         Segment();
         Flush();
@@ -379,7 +380,7 @@ public sealed class Emitter
         return symbol.Value.AsNumber() is { } value ? $"{name} = {Constant(value)}" : null;
     }
 
-    private void WalkContainer(SyntaxNode container) => Walk(container.ChildNodes, from: 0);
+    private void WalkContainer(FileSyntax file) => Walk(file.Members, from: 0);
 
     /// <summary>
     /// A run of sibling lines and blocks. The <c>.if</c> chains among them are resolved here,
@@ -390,22 +391,22 @@ public sealed class Emitter
         var chain = new ConditionChain();
         for (var i = from; i < children.Count; i++)
         {
-            var child = children[i];
-            if (child.Green is not GreenBlock block)
+            if (children[i] is not BlockSyntax block)
             {
                 chain.Break();
-                WalkLine(child);
+                if (children[i] is LineSyntax line)
+                    WalkLine(line);
                 continue;
             }
-            if (chain.Includes(model, child, expansion))
-                WalkBlock(child, block.BlockKind);
+            if (chain.Includes(model, block, expansion))
+                WalkBlock(block, block.BlockKind);
         }
     }
 
-    private void WalkBlock(SyntaxNode block, BlockKind kind)
+    private void WalkBlock(BlockSyntax block, BlockKind kind)
     {
-        var lines = block.ChildNodes;
-        var opener = lines.Length > 0 ? lines[0].Statement : null;
+        var lines = block.Members;
+        var opener = block.Opener.Statement;
 
         // A macro body is written at every call that expands it, and nothing at all where it
         // stands.
@@ -417,8 +418,8 @@ public sealed class Emitter
         // splices them.
         if (kind == BlockKind.MacroBlock)
         {
-            if (opener is not null && Macros.CallIn(opener) is not null)
-                WalkLine(lines[0]);
+            if (Macros.CallIn(opener) is not null)
+                WalkLine(block.Opener);
             return;
         }
 
@@ -450,7 +451,7 @@ public sealed class Emitter
         // that it stands for would write it.
         if (kind == BlockKind.MultiProc)
         {
-            if (opener is null || model.FamilyAt(opener) is null)
+            if (model.FamilyAt(opener) is null)
                 return;
             var outerFamily = expansion;
             foreach (var turn in Repetitions.Of(model, block, outerFamily, null))
@@ -469,7 +470,7 @@ public sealed class Emitter
             return;
         if (kind is BlockKind.Struct or BlockKind.Union)
         {
-            Offsets(lines[0], opener);
+            Offsets(opener);
             return;
         }
 
@@ -486,7 +487,7 @@ public sealed class Emitter
         // directive per member; the lines of values are the record's, and write nothing.
         if (kind == BlockKind.RecordInitializer)
         {
-            WalkLine(lines[0]);
+            WalkLine(block.Opener);
             return;
         }
 
@@ -496,7 +497,7 @@ public sealed class Emitter
         var pushed = false;
         var outerSegment = segment;
         var placing = kind is BlockKind.Segment or BlockKind.Region;
-        if (placing && opener is not null)
+        if (placing)
         {
             var name = Constructs.SegmentOf(opener) ?? segment;
             if (nested)
@@ -509,32 +510,31 @@ public sealed class Emitter
             }
             segment = name;
         }
-        else if (kind == BlockKind.Proc
-            && opener is { Kind: SyntaxKind.ProcDeclaration or SyntaxKind.MultiProcDeclaration })
+        else if (kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax)
         {
             Segment();
             Flush();
-            routine = ProcLabel(lines[0], opener);
+            routine = ProcLabel(opener);
 
             // An instance of a family is written under the family's line and the member it is:
             // one routine in the output, named as the source names it.
             var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
             Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
-            Label(lines[0], routine);
+            Label(block.Opener, routine);
         }
-        else if (opener is not null && kind != BlockKind.Scope)
+        else if (kind != BlockKind.Scope)
         {
-            WalkLine(lines[0]);
+            WalkLine(block.Opener);
         }
 
         var outerRoutine = routine;
         depth++;
         Walk(lines, from: 1);
         depth--;
-        if (kind == BlockKind.DataBody && opener is not null
-            && (opener.Kind == SyntaxKind.DataDirective ? opener : DataSyntax.ElementOf(opener)) is { } declared)
+        if (kind == BlockKind.DataBody
+            && (opener as DataDirectiveSyntax ?? (opener as DataDeclarationSyntax)?.Directive) is { } declared)
         {
-            Padding(lines[0], declared);
+            Padding(block.Opener, declared);
         }
         if (kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody)
             End(opener);
@@ -566,107 +566,103 @@ public sealed class Emitter
         var chain = new ConditionChain();
         for (var i = from; i < lines.Count; i++)
         {
-            if (lines[i].Green is not GreenBlock block)
+            if (lines[i] is not BlockSyntax block)
             {
                 chain.Break();
-                if (lines[i].Statement is { Kind: SyntaxKind.EnumMember } member)
-                    EnumMember(lines[i], member);
+                if (lines[i] is LineSyntax { Statement: EnumMemberSyntax member })
+                    EnumMember(member);
                 continue;
             }
-            if (chain.Includes(model, lines[i], expansion) && block.BlockKind == BlockKind.If)
-                Members(lines[i].ChildNodes, 1);
+            if (chain.Includes(model, block, expansion) && block.BlockKind == BlockKind.If)
+                Members(block.Members, 1);
         }
     }
 
-    private void WalkLine(SyntaxNode line)
+    private void WalkLine(LineSyntax line)
     {
-        if (line.Statement is not { } statement)
-            return;
-
-        switch (statement.Kind)
+        var statement = line.Statement;
+        switch (statement)
         {
-            case SyntaxKind.BlankLine:
+            case BlankLineSyntax:
                 pendingBlank = true;
                 break;
 
-            case SyntaxKind.LabeledLine:
-                LabeledLine(line, statement);
+            case LabeledLineSyntax labeled:
+                LabeledLine(line, labeled);
                 break;
 
-            case SyntaxKind.ConstantDeclaration:
-                Constant(line, statement);
+            case ConstantDeclarationSyntax constant:
+                Constant(line, constant);
                 break;
 
             // Data that names itself stands where its first byte does, and ends where its last
             // byte does when anything measures it.
-            case SyntaxKind.DataDeclaration:
-                Declared(line, statement);
-                if (line.Green is not GreenLine { OpensBlockKind: BlockKind.Data or BlockKind.DataBody })
-                    End(statement);
+            case DataDeclarationSyntax data:
+                Declared(line, data);
+                if (line.OpensBlockKind is not (BlockKind.Data or BlockKind.DataBody))
+                    End(data);
                 break;
 
-            case SyntaxKind.DataDirective when DataSyntax.IsElementType(statement):
-                Elements(line, statement, statement, symbol: null);
+            case DataDirectiveSyntax directive when DataSyntax.IsElementType(directive):
+                Elements(line, directive, directive, symbol: null);
                 break;
 
-            case SyntaxKind.DataDirective when layout.Of(statement, expansion) is null:
+            case DataDirectiveSyntax when layout.Of(statement, expansion) is null:
                 NotTranspiled(statement);
                 break;
 
-            case SyntaxKind.DataValues:
-                Values(line, statement);
+            case DataValuesSyntax values:
+                Values(line, values);
                 break;
 
-            case SyntaxKind.InstructionStatement
-                when statement.ChildTokens.Length > 0
-                    && SyntaxFacts.LongBranches.Contains(statement.ChildTokens[0].Text)
-                    && layout.Of(statement, expansion) is { } laid:
-                Branch(line, statement, laid);
+            case InstructionStatementSyntax instruction
+                when SyntaxFacts.LongBranches.Contains(instruction.Mnemonic.Text)
+                    && layout.Of(instruction, expansion) is { } laid:
+                Branch(line, instruction, laid);
                 break;
 
-            case SyntaxKind.InstructionStatement:
-            case SyntaxKind.DataDirective:
+            case InstructionStatementSyntax:
+            case DataDirectiveSyntax:
                 Source(line, statement, layout.Of(statement, expansion)?.Length ?? 0);
                 break;
 
-            case SyntaxKind.ExternProcDeclaration:
-                ExternProc(line, statement);
+            case ExternProcDeclarationSyntax declared:
+                ExternProc(declared);
                 break;
 
             // An assertion nt65 answered has been answered; one it could not depends on where
             // things land, so it is written out for ld65 to check, with the level ca65 needs
             // for that. An `.error` the build reached has already been reported, and never
             // reaches ca65.
-            case SyntaxKind.AssertDirective
-                when Constructs.AssertionOf(statement).Condition is { } condition
-                    && model.ValueOf(condition, expansion, layout.SpanOf).AsNumber() is null:
-                Linked(line, statement, condition);
+            case AssertDirectiveSyntax assert
+                when model.ValueOf(assert.Condition, expansion, layout.SpanOf).AsNumber() is null:
+                Linked(line, assert);
                 break;
 
-            case SyntaxKind.AssertDirective:
-            case SyntaxKind.ErrorDirective:
+            case AssertDirectiveSyntax:
+            case ErrorDirectiveSyntax:
                 break;
 
             // A function, and the lines of the blocks above, exist for the analysis: a call is
             // written as its body, and a type as the constants it names.
-            case SyntaxKind.FuncDeclaration:
-            case SyntaxKind.SignatureDeclaration:
-            case SyntaxKind.EnumMember:
-            case SyntaxKind.CharmapEntry:
-            case SyntaxKind.ListItems:
-            case SyntaxKind.MemberValue:
+            case FuncDeclarationSyntax:
+            case SignatureDeclarationSyntax:
+            case EnumMemberSyntax:
+            case CharmapEntrySyntax:
+            case ListItemsSyntax:
+            case MemberValueSyntax:
                 break;
 
-            case SyntaxKind.MacroCall:
-                Expand(line, statement);
+            case MacroCallSyntax call:
+                Expand(line, call);
                 break;
 
-            case SyntaxKind.EnsureDirective:
-                Ensure(line, statement);
+            case EnsureDirectiveSyntax ensure:
+                Ensure(line, ensure);
                 break;
 
-            case SyntaxKind.BlockSplice:
-                Splice(statement);
+            case BlockSpliceSyntax splice:
+                Splice(splice);
                 break;
 
             // A `.cpu` item, a segment declaration, an `.export` or `.import` (both already
@@ -682,9 +678,9 @@ public sealed class Emitter
     /// macros itself and emits flat code: ca65's own <c>.macro</c> is never used, so nt65's
     /// macro semantics never depend on ca65's.
     /// </summary>
-    private void Expand(SyntaxNode line, SyntaxNode call)
+    private void Expand(LineSyntax line, MacroCallSyntax call)
     {
-        if (model.MacroAt(call) is not { Definition: { } definition })
+        if (model.MacroAt(call) is not { Definition: BlockSyntax definition })
         {
             NotTranspiled(call);
             return;
@@ -716,7 +712,7 @@ public sealed class Emitter
         // outermost call, which is the line of this file that asked for all of it.
         callLine ??= line;
         expansion = Expansion.Of(outer, call, definition);
-        Walk(definition.ChildNodes, from: 1);
+        Walk(definition.Members, from: 1);
         expansion = outer;
         callLine = outerCall;
 
@@ -731,10 +727,9 @@ public sealed class Emitter
     /// Those are the caller's own code, so where they are this file's own lines they map back
     /// to themselves rather than to the call that spliced them.
     /// </summary>
-    private void Splice(SyntaxNode statement)
+    private void Splice(BlockSpliceSyntax statement)
     {
-        if (statement.ChildTokens.Length == 0
-            || model.SymbolAt(statement.ChildTokens[0]) is not { Parameter: { } parameter }
+        if (model.SymbolAt(statement.Name) is not { Parameter: { } parameter }
             || model.ArgumentFor(parameter.Symbol, expansion) is not { Block: { } block })
         {
             return;
@@ -751,17 +746,17 @@ public sealed class Emitter
     }
 
     /// <summary>Where a call was written, as the comment before its expansion names it.</summary>
-    private string Where(SyntaxNode call)
+    private string Where(StatementSyntax call)
     {
         return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
 
     /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
     /// <summary>The routine a <c>.proc</c> or a turn of a <c>.multiproc</c> writes out here.</summary>
-    private Symbol? ProcLabel(SyntaxNode line, SyntaxNode opener) => model.DeclaredBy(opener, expansion);
+    private Symbol? ProcLabel(StatementSyntax opener) => model.DeclaredBy(opener, expansion);
 
     /// <summary>The label a routine's first byte carries, where the routine has a name.</summary>
-    private void Label(SyntaxNode line, Symbol? routine)
+    private void Label(LineSyntax line, Symbol? routine)
     {
         if (routine is not null)
             Code(line, LabelText(Named(routine)), 0);
@@ -773,9 +768,9 @@ public sealed class Emitter
     /// generated label. ca65's own package can only ever write the long form forwards,
     /// because it chooses without knowing where the target lands.
     /// </summary>
-    private void Branch(SyntaxNode line, SyntaxNode statement, LineLayout laid)
+    private void Branch(LineSyntax line, InstructionStatementSyntax statement, LineLayout laid)
     {
-        var mnemonic = statement.ChildTokens[0];
+        var mnemonic = statement.Mnemonic;
         var (taken, skipped) = Instructions.FormsOf(mnemonic.Text);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
@@ -795,27 +790,27 @@ public sealed class Emitter
         Line($"{over}:");
     }
 
-    private void LabeledLine(SyntaxNode line, SyntaxNode statement)
+    private void LabeledLine(LineSyntax line, LabeledLineSyntax statement)
     {
-        var label = statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.Label);
-        var rest = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.Label);
+        var label = statement.Label;
+        var rest = statement.Statement;
 
         // An element type after a label is written as it is anywhere, with the label in front.
-        if (rest is { Kind: SyntaxKind.DataDirective } && DataSyntax.IsElementType(rest))
+        if (rest is DataDirectiveSyntax directive && DataSyntax.IsElementType(directive))
         {
-            Elements(line, statement, rest, label is { ChildTokens.Length: > 0 } ? model.SymbolAt(label.ChildTokens[0]) : null);
+            Elements(line, statement, directive, model.SymbolAt(label.Name));
             return;
         }
 
         // A label on a call names what the expansion emits, so the label comes first and the
         // expansion follows it.
-        if (rest is { Kind: SyntaxKind.MacroCall })
+        if (rest is MacroCallSyntax call)
         {
-            LabelOnly(line, statement, label);
-            Expand(line, rest);
+            LabelOnly(line, label);
+            Expand(line, call);
             return;
         }
-        if (rest is { Kind: SyntaxKind.DataDirective } && layout.Of(rest, expansion) is null)
+        if (rest is DataDirectiveSyntax && layout.Of(rest, expansion) is null)
         {
             NotTranspiled(rest);
             return;
@@ -831,10 +826,9 @@ public sealed class Emitter
             Direct(rest, edits);
         }
 
-        if (label is not { ChildTokens.Length: > 0 }
-            || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
+        if (model.SymbolAt(label.Name) is not { } reference)
         {
-            Code(line, Render(statement, edits, label is null ? Body : ""), bytes);
+            Code(line, Render(statement, edits), bytes);
             return;
         }
 
@@ -849,9 +843,8 @@ public sealed class Emitter
             return;
         }
 
-        edits.Replace[label.ChildTokens[0].Position] = text;
-        if (label.ChildTokens.Length > 1)
-            edits.Replace[label.ChildTokens[1].Position] = "";
+        edits.Replace[label.Name.Position] = text;
+        edits.Replace[label.ColonToken.Position] = "";
         Code(line, Render(statement, edits), bytes);
     }
 
@@ -860,11 +853,11 @@ public sealed class Emitter
     /// and an array whose values are in a body, write the name here and their bytes a line at
     /// a time below it.
     /// </summary>
-    private void Declared(SyntaxNode line, SyntaxNode declaration)
+    private void Declared(LineSyntax line, DataDeclarationSyntax declaration)
     {
-        if (DataSyntax.DeclaredName(declaration) is null || model.DeclaredBy(declaration, expansion) is not { } symbol)
+        if (declaration.Name is null || model.DeclaredBy(declaration, expansion) is not { } symbol)
             return;
-        if (DataSyntax.ElementOf(declaration) is not { } element)
+        if (declaration.Directive is not { } element)
         {
             Code(line, LabelText(Named(symbol)), 0);
             return;
@@ -890,15 +883,15 @@ public sealed class Emitter
     /// An element type, named or not: its values as the directive of its type, or the room it
     /// takes as zeros. Values in a body are written a line at a time, below the name.
     /// </summary>
-    private void Elements(SyntaxNode line, SyntaxNode statement, SyntaxNode directive, Symbol? symbol)
+    private void Elements(LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol)
     {
-        if (DataSyntax.BodyOf(directive) is { Green: GreenBlock { BlockKind: BlockKind.DataBody } })
+        if (DataSyntax.BodyOf(directive) is { BlockKind: BlockKind.DataBody })
         {
             if (symbol is not null)
                 Code(line, LabelText(Named(symbol)), 0);
             return;
         }
-        if (DataSyntax.TypeOf(directive) is { } named)
+        if (directive.Type is { } named)
         {
             if (model.SymbolOf(named) is { IsLayout: true } type)
                 Records(line, statement, directive, symbol, type);
@@ -916,14 +909,15 @@ public sealed class Emitter
         var edits = new Edits();
         string text;
         string? comment = null;
-        if (DataSyntax.BracedOf(directive) is { Kind: SyntaxKind.ValueList } list)
+        if (DataSyntax.BracedOf(directive) is ValueListSyntax list)
         {
             var (width, bigEndian) = Slot(directive);
-            foreach (var value in list.ChildNodes)
+            foreach (var value in list.Values)
                 InPlace(value, width, bigEndian, edits);
-            foreach (var brace in list.ChildTokens.Where(token => token.Kind is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace))
-                edits.Replace[brace.Position] = "";
-            text = $"{ForCa65(directive.ChildTokens[0].Text)} {Bare(list, edits, out comment)}";
+            edits.Replace[list.OpenBraceToken.Position] = "";
+            if (list.CloseBraceToken is { } close)
+                edits.Replace[close.Position] = "";
+            text = $"{ForCa65(directive.Directive.Text)} {Bare(list, edits, out comment)}";
         }
         else if (DataSyntax.ValuesOf(directive).Count > 0)
         {
@@ -943,7 +937,7 @@ public sealed class Emitter
     }
 
     /// <summary>The zeros a padded text is filled out with, where a declaration writes any.</summary>
-    private void Padding(SyntaxNode line, SyntaxNode directive)
+    private void Padding(LineSyntax line, DataDirectiveSyntax directive)
     {
         if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
             return;
@@ -962,15 +956,15 @@ public sealed class Emitter
     }
 
     /// <summary>One line of a body's values, written as the directive of the type the body is of.</summary>
-    private void Values(SyntaxNode line, SyntaxNode values)
+    private void Values(LineSyntax line, DataValuesSyntax values)
     {
         if (DataSyntax.DirectiveOfValues(values) is not { } directive)
             return;
-        if (DataSyntax.TypeOf(directive) is { } named)
+        if (directive.Type is { } named)
         {
             if (model.SymbolOf(named) is not { IsLayout: true } type)
                 return;
-            foreach (var record in values.ChildNodes)
+            foreach (var record in values.Values)
                 Fields(line, type, ValuesIn(record), path: "");
             return;
         }
@@ -981,7 +975,7 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(values, edits, nested: false);
-        var text = $"{Body}{ForCa65(directive.ChildTokens[0].Text)} {Bare(values, edits, out var comment)}";
+        var text = $"{Body}{ForCa65(directive.Directive.Text)} {Bare(values, edits, out var comment)}";
         if (comment is not null)
             text += new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
         Code(line, text, laid.Length);
@@ -994,7 +988,7 @@ public sealed class Emitter
     /// wrote it, because the name in front is rarely the one the source used.
     /// </summary>
     private void WithName(
-        SyntaxNode line, SyntaxNode statement, SyntaxNode directive, Symbol? symbol, string text, int bytes,
+        LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol, string text, int bytes,
         string? comment = null)
     {
         if (symbol is null)
@@ -1115,21 +1109,21 @@ public sealed class Emitter
     /// order the values were written in. Room with no values is zeros, which one `.res` says,
     /// unless a member pads with something else.
     /// </summary>
-    private void Records(SyntaxNode line, SyntaxNode statement, SyntaxNode directive, Symbol? symbol, Symbol type)
+    private void Records(LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
     {
         if (model.RoomFor(directive, expansion) is not { } room)
         {
             NotTranspiled(directive);
             return;
         }
-        IReadOnlyList<IReadOnlyDictionary<string, SyntaxNode>> records;
+        IReadOnlyList<IReadOnlyDictionary<string, MemberValueSyntax>> records;
         if (DataSyntax.BracedOf(directive) is { } braced)
         {
-            records = braced.Kind == SyntaxKind.RecordValues ? [ValuesIn(braced)] : [.. braced.ChildNodes.Select(ValuesIn)];
+            records = braced is ValueListSyntax list ? [.. list.Values.Select(ValuesIn)] : [ValuesIn(braced)];
         }
         else if (DataSyntax.BodyOf(directive) is { } block)
         {
-            records = [ValuesIn(block.ChildNodes.Skip(1).Select(child => child.Statement).OfType<SyntaxNode>())];
+            records = [ValuesIn(block.Members.Skip(1).OfType<LineSyntax>().Select(member => member.Statement))];
         }
         else if (!Pads(type))
         {
@@ -1157,33 +1151,25 @@ public sealed class Emitter
 
     /// <summary>The byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
     private long Fill(Symbol member) =>
-        member.Data is { Kind: SyntaxKind.DataDirective } data && DataSyntax.NameOf(data) == ".res"
-        && data.ChildNodes.Length > 1 && model.ValueOf(data.ChildNodes[1], expansion).AsNumber() is { } fill
+        member.Data is DataDirectiveSyntax data && DataSyntax.NameOf(data) == ".res"
+        && data.Values is [_, var padding, ..] && model.ValueOf(padding, expansion).AsNumber() is { } fill
             ? fill & 0xff
             : 0;
 
     /// <summary>The label of a line whose statement is written separately.</summary>
-    private void LabelOnly(SyntaxNode line, SyntaxNode statement, SyntaxNode? label)
+    private void LabelOnly(LineSyntax line, LabelSyntax label)
     {
-        if (label is not { ChildTokens.Length: > 0 }
-            || model.SymbolAt(label.ChildTokens[0]) is not { } reference)
-        {
-            return;
-        }
-        Code(line, LabelText(Named(reference)), 0);
+        if (model.SymbolAt(label.Name) is { } reference)
+            Code(line, LabelText(Named(reference)), 0);
     }
 
     /// <summary>
     /// The members of an exported layout, each written out as the constant offset it is, and its size.
     /// A layout nothing exports says nothing to ca65 and is left out entirely.
     /// </summary>
-    private void Offsets(SyntaxNode line, SyntaxNode? opener)
+    private void Offsets(StatementSyntax opener)
     {
-        if (opener is null || opener.ChildTokens.Length == 0)
-            return;
-        var named = opener.ChildTokens.FirstOrDefault(token =>
-            token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
-        if (named.Parent is null || model.SymbolAt(named) is not { } reference)
+        if (opener is not TypeDeclarationSyntax { Name: { } named } || model.SymbolAt(named) is not { } reference)
             return;
 
         foreach (var member in reference.Body?.Symbols ?? [])
@@ -1196,10 +1182,9 @@ public sealed class Emitter
     }
 
     /// <summary>One enum member, which is a constant like any other.</summary>
-    private void EnumMember(SyntaxNode line, SyntaxNode statement)
+    private void EnumMember(EnumMemberSyntax member)
     {
-        if (statement.ChildTokens.Length == 0
-            || model.SymbolAt(statement.ChildTokens[0]) is not { } reference
+        if (model.SymbolAt(member.Name) is not { } reference
             || reference.Value.AsNumber() is not { } value)
         {
             return;
@@ -1213,7 +1198,7 @@ public sealed class Emitter
     /// nested value reaches the fields inside it.
     /// </summary>
     private long Fields(
-        SyntaxNode line, Symbol type, IReadOnlyDictionary<string, SyntaxNode> written, string path)
+        LineSyntax line, Symbol type, IReadOnlyDictionary<string, MemberValueSyntax> written, string path)
     {
         long bytes = 0;
         var members = (type.Body?.Symbols ?? []).Where(member => member.Kind == SymbolKind.Member).ToList();
@@ -1226,14 +1211,14 @@ public sealed class Emitter
         {
             if (member.Size is not { } size)
                 continue;
-            var given = written.GetValueOrDefault(member.Name)?.ChildNodes.LastOrDefault();
+            var given = written.GetValueOrDefault(member.Name)?.Value;
             var named = path.Length == 0 ? member.Name : $"{path}::{member.Name}";
-            var element = member.Data is { Kind: SyntaxKind.DataDirective } data ? data : null;
+            var element = member.Data as DataDirectiveSyntax;
 
             // An array member takes a braced list, and one no value names is zeros.
-            if (element is not null && DataSyntax.CountOf(element) is not null)
+            if (element is { Count: not null })
             {
-                var items = given is { Kind: SyntaxKind.ValueList } list ? list.ChildNodes : [];
+                var items = given is ValueListSyntax list ? list.Values : [];
                 if (member.Type is { IsLayout: true } records)
                 {
                     for (var i = 0; i < member.Count; i++)
@@ -1269,20 +1254,20 @@ public sealed class Emitter
     }
 
     /// <summary>One member's directive, with the path it fills in a comment.</summary>
-    private void Field(SyntaxNode line, string directive, string path, long size) =>
+    private void Field(LineSyntax line, string directive, string path, long size) =>
         Code(line, Commented(Body + directive, path), (int)size);
 
     /// <summary>The <c>member = value</c>s of a record, by member name: a braced record, or the lines of one.</summary>
-    private static IReadOnlyDictionary<string, SyntaxNode> ValuesIn(SyntaxNode? record) =>
-        ValuesIn(record is { Kind: SyntaxKind.RecordValues } ? record.ChildNodes : []);
+    private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(SyntaxNode? record) =>
+        ValuesIn(record is RecordValuesSyntax values ? values.Members : []);
 
-    private static IReadOnlyDictionary<string, SyntaxNode> ValuesIn(IEnumerable<SyntaxNode> values)
+    private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(IEnumerable<StatementSyntax> values)
     {
-        var named = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
+        var named = new Dictionary<string, MemberValueSyntax>(StringComparer.Ordinal);
         foreach (var value in values)
         {
-            if (value.Kind == SyntaxKind.MemberValue && value.ChildTokens.Length > 0)
-                named[value.ChildTokens[0].Text] = value;
+            if (value is MemberValueSyntax member)
+                named[member.Name.Text] = member;
         }
         return named;
     }
@@ -1292,7 +1277,7 @@ public sealed class Emitter
     /// names is zero, and a member reserved by <c>.res</c> takes text, padded to the room it
     /// has with the byte it pads with.
     /// </summary>
-    private IEnumerable<(string Text, long Size)> Member(Symbol member, SyntaxNode? element, SyntaxNode? given)
+    private IEnumerable<(string Text, long Size)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
     {
         var size = member.Size ?? 0;
         var directive = element is null ? ".res" : DataSyntax.NameOf(element);
@@ -1324,14 +1309,14 @@ public sealed class Emitter
     /// </summary>
     private string Rendered(SyntaxNode node, List<string>? comments = null)
     {
-        switch (node.Kind)
+        switch (node)
         {
-            case SyntaxKind.ParenthesizedExpression:
-                return node.ChildNodes.Length > 0 ? "(" + Rendered(node.ChildNodes[0], comments) + ")" : "";
-            case SyntaxKind.BinaryExpression when node.ChildNodes.Length == 2 && node.ChildTokens.Length > 0:
-                return $"({Rendered(node.ChildNodes[0], comments)} {Operator(node.ChildTokens[0])} {Rendered(node.ChildNodes[1], comments)})";
-            case SyntaxKind.UnaryExpression when node.ChildNodes.Length == 1 && node.ChildTokens.Length > 0:
-                return $"({node.ChildTokens[0].Text}{Rendered(node.ChildNodes[0], comments)})";
+            case ParenthesizedExpressionSyntax parenthesized:
+                return "(" + Rendered(parenthesized.Expression, comments) + ")";
+            case BinaryExpressionSyntax binary:
+                return $"({Rendered(binary.Left, comments)} {Operator(binary.OperatorToken)} {Rendered(binary.Right, comments)})";
+            case UnaryExpressionSyntax unary:
+                return $"({unary.OperatorToken.Text}{Rendered(unary.Operand, comments)})";
             default:
                 break;
         }
@@ -1390,7 +1375,7 @@ public sealed class Emitter
         var edits = new Edits();
         Substitute(argument, edits, nested: false);
         var text = Inline(argument, edits, comments);
-        return argument.Kind is SyntaxKind.BinaryExpression or SyntaxKind.UnaryExpression
+        return argument is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? "(" + text + ")"
             : text;
     }
@@ -1398,21 +1383,19 @@ public sealed class Emitter
     /// <summary>A label, or the assignment that stands in for one ca65 would misread.</summary>
     private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
 
-    private void Constant(SyntaxNode line, SyntaxNode statement)
+    private void Constant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
         // A string has no ca65 spelling as a constant: it is used through `.strlen` and
         // `.strat`, which are numbers by the time anything is written.
-        if (statement.ChildTokens.Length > 0
-            && model.SymbolAt(statement.ChildTokens[0]) is { } reference)
+        if (model.SymbolAt(statement.Name) is { } reference)
         {
             if (reference.Value.IsString)
                 return;
             var edits = new Edits();
-            edits.Replace[statement.ChildTokens[0].Position] = Named(reference);
-            foreach (var child in statement.ChildNodes)
-                Substitute(child, edits, nested: false);
+            edits.Replace[statement.Name.Position] = Named(reference);
+            Substitute(statement.Value, edits, nested: false);
             var text = Render(statement, edits);
-            if (statement.DescendantNodes().Any(node => node.Kind == SyntaxKind.CurrentAddressExpression))
+            if (statement.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
                 Code(line, text, 0);
             else
                 Definition(text);
@@ -1420,23 +1403,18 @@ public sealed class Emitter
     }
 
     /// <summary>An extern proc is a routine at a constant address, which is a constant.</summary>
-    private void ExternProc(SyntaxNode line, SyntaxNode statement)
+    private void ExternProc(ExternProcDeclarationSyntax statement)
     {
-        var name = statement.ChildTokens.FirstOrDefault(token =>
-            token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
-        var address = statement.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.ProcSignature);
-        if (name.Parent is null || address is null
-            || model.SymbolAt(name) is not { } reference)
-        {
+        if (model.SymbolAt(statement.Name) is not { } reference)
             return;
-        }
 
+        var address = statement.Address;
         var edits = new Edits();
         Substitute(address, edits, nested: false);
         Definition($"{Named(reference)} = {Render(address, edits)}");
     }
 
-    private void Source(SyntaxNode line, SyntaxNode statement, int bytes, bool located = false)
+    private void Source(LineSyntax line, StatementSyntax statement, int bytes, bool located = false)
     {
         Width(statement);
         var edits = new Edits();
@@ -1451,9 +1429,9 @@ public sealed class Emitter
     /// An immediate is a byte or a word slot, as wide as the instruction makes it, so a negative
     /// constant in one is written as its two's complement.
     /// </summary>
-    private void Immediate(SyntaxNode statement, int bytes, Edits edits)
+    private void Immediate(StatementSyntax statement, int bytes, Edits edits)
     {
-        if (statement is { Kind: SyntaxKind.InstructionStatement, ChildNodes: [{ Kind: SyntaxKind.ImmediateOperand, ChildNodes: [var value] }] }
+        if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } }
             && bytes is 2 or 3 && Datum(value, bytes - 1, bigEndian: false, edits.Comments) is { } text)
         {
             Replace(value, text, edits, around: false);
@@ -1461,11 +1439,11 @@ public sealed class Emitter
     }
 
     /// <summary>An assertion the linker checks: ca65's <c>.assert</c> with the level that defers it to ld65.</summary>
-    private void Linked(SyntaxNode line, SyntaxNode statement, SyntaxNode condition)
+    private void Linked(LineSyntax line, AssertDirectiveSyntax statement)
     {
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
-        var last = Tokens(condition)[^1].Position;
+        var last = Tokens(statement.Condition)[^1].Position;
         edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", lderror";
         Code(line, Render(statement, edits), 0, located: true);
     }
@@ -1474,7 +1452,7 @@ public sealed class Emitter
     /// An <c>.ensure</c>, written as the <c>rep</c> and <c>sep</c> the analysis found it needs,
     /// which is nothing where the widths already hold.
     /// </summary>
-    private void Ensure(SyntaxNode line, SyntaxNode directive)
+    private void Ensure(LineSyntax line, EnsureDirectiveSyntax directive)
     {
         if (layout.Of(directive, expansion)?.Ensured is not { } ensured)
             return;
@@ -1488,14 +1466,14 @@ public sealed class Emitter
     /// A frame's member in a stack-relative operand, written as the offset from the stack
     /// pointer the analysis counted for it here: ca65 knows nothing of frames.
     /// </summary>
-    private void Slot(SyntaxNode statement, Edits edits)
+    private void Slot(StatementSyntax statement, Edits edits)
     {
         if (layout.Of(statement, expansion)?.Slot is not { } slot
-            || statement.ChildNodes.FirstOrDefault() is not { } operand)
+            || statement is not InstructionStatementSyntax { Operand: { } operand })
         {
             return;
         }
-        foreach (var name in operand.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
         {
             var tokens = name.ChildTokens;
             if (tokens.Length == 0 || model.SymbolAt(tokens[0]) is not { Kind: SymbolKind.Frame })
@@ -1511,20 +1489,16 @@ public sealed class Emitter
     /// makes it: with D at <c>$2100</c>, <c>lda d:$2105</c> is <c>lda z:$05</c>. ca65 has no
     /// <c>d:</c>, and knows nothing of D.
     /// </summary>
-    private void Direct(SyntaxNode statement, Edits edits)
+    private void Direct(StatementSyntax statement, Edits edits)
     {
         if (layout.Of(statement, expansion) is not { Direct: { } offset } laid
-            || statement.ChildNodes.FirstOrDefault() is not { } operand)
+            || statement is not InstructionStatementSyntax { Operand: AbsoluteOperandSyntax { Prefix: { } written } operand })
         {
             return;
         }
-        var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
-        var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
-        if (written is null || expression is null)
-            return;
         foreach (var token in written.ChildTokens)
             edits.Replace[token.Position] = "";
-        var tokens = Tokens(expression);
+        var tokens = Tokens(operand.Address);
         edits.Before.Remove(tokens[0].Position);
         edits.Replace[tokens[0].Position] = (laid.Prefix ?? "") + Hex(offset, 2);
         for (var i = 1; i < tokens.Count; i++)
@@ -1538,11 +1512,11 @@ public sealed class Emitter
     /// immediate's for the same register, and nowhere else. The width itself is the
     /// analysis's, which follows control flow.
     /// </summary>
-    private void Width(SyntaxNode statement)
+    private void Width(StatementSyntax statement)
     {
         if (layout.Of(statement, expansion) is not { Bits: { } bits }
-            || statement.ChildTokens.Length == 0
-            || Instructions.SizedBy(statement.ChildTokens[0].Text) is not { } register)
+            || statement is not InstructionStatementSyntax instruction
+            || Instructions.SizedBy(instruction.Mnemonic.Text) is not { } register)
         {
             return;
         }
@@ -1582,7 +1556,7 @@ public sealed class Emitter
     /// what goes wrong with those, whatever the map says, and each would only map a line covering
     /// nothing.
     /// </summary>
-    private void Code(SyntaxNode line, string text, int bytes, bool located = false)
+    private void Code(LineSyntax line, string text, int bytes, bool located = false)
     {
         Segment();
         Flush();
@@ -1720,61 +1694,57 @@ public sealed class Emitter
     /// </summary>
     private void Substitute(SyntaxNode node, Edits edits, bool nested)
     {
-        switch (node.Kind)
+        switch (node)
         {
-            case SyntaxKind.NameExpression:
-                Name(node, edits);
+            case NameExpressionSyntax name:
+                Name(name, edits);
                 return;
 
-            case SyntaxKind.StringExpression:
-            case SyntaxKind.CharacterExpression:
-                Text(node, edits);
+            case LiteralExpressionSyntax literal when literal is StringExpressionSyntax or CharacterExpressionSyntax:
+                Text(literal, edits);
                 return;
 
-            case SyntaxKind.CallExpression:
-                Applied(node, edits);
+            case CallExpressionSyntax call:
+                Applied(call, edits);
                 return;
 
             // `wdm #n` is written as its bytes, which is what it is to every processor but the
             // emulator that hooks it.
-            case SyntaxKind.InstructionStatement
-                when node.ChildTokens.Length > 0
-                    && node.ChildTokens[0].Text.Equals("wdm", StringComparison.OrdinalIgnoreCase)
-                    && node.ChildNodes.FirstOrDefault() is { Kind: SyntaxKind.ImmediateOperand } hook
-                    && hook.ChildTokens.Length > 0:
-                edits.Replace[node.ChildTokens[0].Position] = ".byte";
-                edits.Replace[hook.ChildTokens[0].Position] = "$42, ";
+            case InstructionStatementSyntax { Operand: ImmediateOperandSyntax hook } instruction
+                when instruction.Mnemonic.Text.Equals("wdm", StringComparison.OrdinalIgnoreCase):
+                edits.Replace[instruction.Mnemonic.Position] = ".byte";
+                edits.Replace[hook.HashToken.Position] = "$42, ";
                 break;
 
-            case SyntaxKind.AbsoluteOperand:
+            case AbsoluteOperandSyntax operand:
                 // In a macro body an `operand` parameter stands as a whole operand, so what
                 // the call gave replaces what the body wrote, prefix, index and all. The
                 // prefix goes on last, outside whatever parentheses the expression was given.
-                if (Given(node, edits))
+                if (Given(operand, edits))
                     return;
-                foreach (var child in node.ChildNodes)
+                foreach (var child in operand.ChildNodes)
                     Substitute(child, edits, nested: false);
-                Prefix(node, edits);
+                Prefix(operand, edits);
                 return;
 
-            case SyntaxKind.DataDirective:
-                Terminated(node, edits);
+            case DataDirectiveSyntax directive:
+                Terminated(directive, edits);
 
                 // An `.incbin` names a file rather than holding data, so its path is left a
                 // path — pointed at the file from wherever the output lands.
-                if (Included(node, edits))
+                if (Included(directive, edits))
                     return;
 
                 // An element type's values, and a `.res` fill, are slots of a width.
-                if (DataSyntax.IsElementType(node) && DataSyntax.BracedOf(node) is null && node.ChildTokens.Length > 0)
+                if (DataSyntax.IsElementType(directive) && DataSyntax.BracedOf(directive) is null)
                 {
-                    edits.Replace[node.ChildTokens[0].Position] = ForCa65(node.ChildTokens[0].Text);
-                    var (width, bigEndian) = Slot(node);
-                    foreach (var value in DataSyntax.ValuesOf(node))
+                    edits.Replace[directive.Directive.Position] = ForCa65(directive.Directive.Text);
+                    var (width, bigEndian) = Slot(directive);
+                    foreach (var value in DataSyntax.ValuesOf(directive))
                         InPlace(value, width, bigEndian, edits);
                     return;
                 }
-                if (DataSyntax.NameOf(node) == ".res" && node.ChildNodes is [var count, var fill])
+                if (DataSyntax.NameOf(directive) == ".res" && directive.Values is [var count, var fill])
                 {
                     Substitute(count, edits, nested: false);
                     InPlace(fill, 1, bigEndian: false, edits);
@@ -1782,14 +1752,15 @@ public sealed class Emitter
                 }
                 break;
 
-            case SyntaxKind.DataValues when DataSyntax.DirectiveOfValues(node) is { } of && !DataSyntax.IsRecord(of):
+            case DataValuesSyntax values
+                when DataSyntax.DirectiveOfValues(values) is { IsRecord: false } of:
                 var (valueWidth, valuesBigEndian) = Slot(of);
-                foreach (var value in node.ChildNodes)
+                foreach (var value in values.Values)
                     InPlace(value, valueWidth, valuesBigEndian, edits);
                 return;
 
-            case SyntaxKind.BinaryExpression:
-            case SyntaxKind.UnaryExpression:
+            case BinaryExpressionSyntax:
+            case UnaryExpressionSyntax:
                 foreach (var op in node.ChildTokens)
                 {
                     if (Operator(op) is var spelled && spelled != op.Text)
@@ -1827,7 +1798,7 @@ public sealed class Emitter
     };
 
     /// <summary>How wide one element of an element type is, and whether its bytes are written high first.</summary>
-    private static (int Width, bool BigEndian) Slot(SyntaxNode directive)
+    private static (int Width, bool BigEndian) Slot(DataDirectiveSyntax directive)
     {
         var name = DataSyntax.NameOf(directive);
         return (SyntaxFacts.ElementSize(name) ?? 1, name is ".beword" or ".belong" or ".bedword");
@@ -1903,18 +1874,15 @@ public sealed class Emitter
     /// Text reaches the output as bytes, so <c>.strz</c> becomes the bytes and
     /// the zero that ends them: ca65's own directive takes a string, and there is none left.
     /// </summary>
-    private static void Terminated(SyntaxNode directive, Edits edits)
+    private static void Terminated(DataDirectiveSyntax directive, Edits edits)
     {
-        if (directive.ChildTokens.Length == 0
-            || !directive.ChildTokens[0].Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
-        {
+        if (!directive.Directive.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
             return;
-        }
 
-        edits.Replace[directive.ChildTokens[0].Position] = ".byte";
-        var last = directive.ChildNodes.LastOrDefault() is { } argument && Tokens(argument) is [.., var token]
+        edits.Replace[directive.Directive.Position] = ".byte";
+        var last = directive.Values.LastOrDefault() is { } argument && Tokens(argument) is [.., var token]
             ? token.Position
-            : directive.ChildTokens[0].Position;
+            : directive.Directive.Position;
         edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", $00";
     }
 
@@ -1923,34 +1891,28 @@ public sealed class Emitter
     /// rather than from the source: ca65 looks beside the file it is assembling, so the output
     /// assembles from any directory. Returns whether the directive was one.
     /// </summary>
-    private bool Included(SyntaxNode directive, Edits edits)
+    private bool Included(DataDirectiveSyntax directive, Edits edits)
     {
-        if (directive.ChildTokens.Length == 0
-            || !directive.ChildTokens[0].Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase))
-        {
+        if (!directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase))
             return false;
-        }
-        if (directive.ChildNodes.FirstOrDefault() is { } path
+        if (directive.Values.FirstOrDefault() is { } path
             && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
         {
             Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"", edits);
         }
-        foreach (var argument in directive.ChildNodes.Skip(1))
+        foreach (var argument in directive.Values.Skip(1))
             Substitute(argument, edits, nested: false);
         return true;
     }
 
-    private void Name(SyntaxNode name, Edits edits)
+    private void Name(NameExpressionSyntax name, Edits edits)
     {
         var tokens = name.ChildTokens;
-        if (tokens.Length == 0)
-            return;
 
         // A path names one symbol; the whole of it becomes that symbol's flat name. A body is
         // written out in every file that calls its macro, so what a name means is the
         // program's answer rather than this one file's.
-        var last = tokens.LastOrDefault(token => token.Kind is not SyntaxKind.ColonColon);
-        if (last.Parent is null || model.SymbolAt(last) is not { } named)
+        if (name.Names is not [.., var last] || model.SymbolAt(last) is not { } named)
             return;
         var reference = named;
 
@@ -1975,7 +1937,7 @@ public sealed class Emitter
         // A member is an offset: the offsets along the path added up, on the address the
         // path starts from when it starts at an instance rather than at a type. An index along
         // the path is whole elements of the same sum.
-        if (reference.Kind == SymbolKind.Member || (ElementIndexes.In(name) && reference.IsAddress))
+        if (reference.Kind == SymbolKind.Member || (name.Indexes.Length > 0 && reference.IsAddress))
         {
             MemberPath(name, edits);
             return;
@@ -2064,13 +2026,13 @@ public sealed class Emitter
     /// offset, which is what ca65 and ld65 resolve. Either way the path it came from is kept
     /// in a comment.
     /// </summary>
-    private void MemberPath(SyntaxNode name, Edits edits)
+    private void MemberPath(NameExpressionSyntax name, Edits edits)
     {
         Symbol? start = null;
         long offset = 0;
-        foreach (var token in name.ChildTokens)
+        foreach (var token in name.Names)
         {
-            if (token.Kind == SyntaxKind.ColonColon || model.SymbolAt(token) is not { } part)
+            if (model.SymbolAt(token) is not { } part)
                 continue;
             if (part.Kind == SymbolKind.Member)
                 offset += part.Value.AsNumber() ?? 0;
@@ -2080,7 +2042,7 @@ public sealed class Emitter
         foreach (var (part, index) in ElementIndexes.Of(name))
         {
             if (model.SymbolAt(part) is { } indexed && ElementIndexes.Stride(indexed) is { } stride
-                && ElementIndexes.WrittenIn(index) is { } written
+                && index.Index is { } written
                 && model.ValueOf(written, expansion).AsNumber() is { } element)
             {
                 offset += element * stride;
@@ -2098,7 +2060,7 @@ public sealed class Emitter
     /// it maps them to, and a function call becomes its value. A call nt65 cannot work out
     /// is refused rather than passed to ca65, which knows neither.
     /// </summary>
-    private void Applied(SyntaxNode call, Edits edits)
+    private void Applied(CallExpressionSyntax call, Edits edits)
     {
         var tokens = Tokens(call);
         if (tokens.Count == 0)
@@ -2114,7 +2076,7 @@ public sealed class Emitter
         }
 
         // A built-in the analysis answers keeps the ordinary path.
-        if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is null)
+        if (call.Callee is null)
         {
             // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
             if (model.ValueOf(call, expansion).AsNumber() is null
@@ -2131,8 +2093,7 @@ public sealed class Emitter
                 Replace(call, Constant(builtin), edits);
                 return;
             }
-            foreach (var child in call.ChildNodes)
-                Substitute(child, edits, nested: false);
+            Substitute(call.Arguments, edits, nested: false);
             return;
         }
 
@@ -2152,11 +2113,11 @@ public sealed class Emitter
     }
 
     /// <summary>Text becomes byte values, with the source spelling kept in a comment.</summary>
-    private void Text(SyntaxNode literal, Edits edits)
+    private void Text(LiteralExpressionSyntax literal, Edits edits)
     {
-        if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes || literal.ChildTokens.Length == 0)
+        if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes)
             return;
-        edits.Replace[literal.ChildTokens[0].Position] =
+        edits.Replace[literal.Token.Position] =
             string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
         edits.Comments.Add(literal.GetText());
     }
@@ -2165,7 +2126,7 @@ public sealed class Emitter
     /// An operand that names an <c>operand</c> parameter, written out as the one the call
     /// gave. Returns whether it was one.
     /// </summary>
-    private bool Given(SyntaxNode operand, Edits edits)
+    private bool Given(AbsoluteOperandSyntax operand, Edits edits)
     {
         if (Semantics.Operands.Substituted(model, operand, expansion) is not { } given)
             return false;
@@ -2195,7 +2156,7 @@ public sealed class Emitter
     {
         // `.byteof` on an immediate is a byte of the value, which is a number wherever nt65
         // knows it and a shift and a mask wherever only the linker will.
-        if (given.ByteOf && given.Operand.Kind == SyntaxKind.ImmediateOperand)
+        if (given.ByteOf && given.Operand is ImmediateOperandSyntax)
         {
             if (given.Expression is not { } value)
                 return null;
@@ -2220,18 +2181,17 @@ public sealed class Emitter
     }
 
     /// <summary>The <c>z:</c> or <c>a:</c> that says which mode was chosen.</summary>
-    private void Prefix(SyntaxNode operand, Edits edits)
+    private void Prefix(AbsoluteOperandSyntax operand, Edits edits)
     {
         var instruction = operand.Parent;
         if (instruction is null)
             return;
         var chosen = layout.Of(instruction, expansion)?.Prefix;
         var prefix = chosen ?? "";
-        var written = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.AddressPrefix);
+        var written = operand.Prefix;
         if (chosen is null && written is not null)
             return;
-        var expression = operand.ChildNodes.FirstOrDefault(c => c.Kind != SyntaxKind.AddressPrefix);
-        var tokens = expression is null ? [] : Tokens(expression);
+        var tokens = Tokens(operand.Address);
 
         // ca65 reads a `(` at the head of an operand, or straight after a prefix, as indirect
         // addressing, so an expression that starts with one — `lda (hi + lo) * 2`, which the
@@ -2242,13 +2202,13 @@ public sealed class Emitter
             || (tokens.Count > 0 && edits.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
         var text = opens ? prefix + "+" : prefix;
 
-        if (written is { ChildTokens.Length: > 0 })
+        if (written is not null)
         {
             // The source already said which; write the one that was chosen, in case an
             // expression made it wider.
             foreach (var token in written.ChildTokens)
                 edits.Replace[token.Position] = "";
-            edits.Replace[written.ChildTokens[0].Position] = text;
+            edits.Replace[written.Name.Position] = text;
             return;
         }
         if (tokens.Count > 0)

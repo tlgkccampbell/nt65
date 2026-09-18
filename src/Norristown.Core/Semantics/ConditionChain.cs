@@ -22,18 +22,18 @@ public sealed class ConditionChain
     /// Whether <paramref name="block"/> is written out at <paramref name="on"/>. A block that
     /// is not part of a chain is always written, and ends whatever chain came before it.
     /// </summary>
-    public bool Includes(SemanticModel model, SyntaxNode block, Expansion? on)
+    public bool Includes(SemanticModel model, BlockSyntax block, Expansion? on)
     {
-        var opener = block.ChildNodes.Length > 0 ? block.ChildNodes[0].Statement : null;
-        switch (opener?.Kind)
+        var opener = block.Opener.Statement;
+        switch (opener)
         {
-            case SyntaxKind.IfDirective:
+            case IfDirectiveSyntax:
                 chaining = true;
                 taken = Holds(model, block, opener, already: false, on);
                 return taken;
 
-            case SyntaxKind.ElseIfDirective:
-            case SyntaxKind.ElseDirective:
+            case ElseIfDirectiveSyntax:
+            case ElseDirectiveSyntax:
                 // A continuation with no chain to continue has already been reported; it is
                 // left out rather than written twice.
                 if (!chaining)
@@ -52,15 +52,15 @@ public sealed class ConditionChain
     public void Break() => chaining = false;
 
     private static bool Holds(
-        SemanticModel model, SyntaxNode block, SyntaxNode opener, bool already, Expansion? on)
+        SemanticModel model, BlockSyntax block, StatementSyntax opener, bool already, Expansion? on)
     {
         if (model.Configuration.Answered(block))
             return model.Configuration.Includes(block);
         if (already)
             return false;
-        if (opener.Kind == SyntaxKind.ElseDirective)
+        if (opener is ElseDirectiveSyntax)
             return true;
-        return opener.ChildNodes.FirstOrDefault() is { } condition
-            && model.ValueOf(condition, on).AsNumber() is { } value && value != 0;
+        return opener is ConditionalDirectiveSyntax conditional
+            && model.ValueOf(conditional.Condition, on).AsNumber() is { } value && value != 0;
     }
 }

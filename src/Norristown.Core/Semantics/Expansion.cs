@@ -20,7 +20,7 @@ public sealed class Expansion : IEquatable<Expansion>
 
     private Expansion(
         Expansion? outer, Symbol? binding, Value value, SyntaxNode? item, int index,
-        SyntaxNode? call, SyntaxNode? body, bool splice = false, Symbol? member = null)
+        MacroCallSyntax? call, BlockSyntax? body, bool splice = false, Symbol? member = null)
     {
         this.splice = splice;
         Member = member;
@@ -52,23 +52,23 @@ public sealed class Expansion : IEquatable<Expansion>
     public int Index { get; }
 
     /// <summary>The call being expanded, or null for a repetition turn.</summary>
-    public SyntaxNode? Call { get; }
+    public MacroCallSyntax? Call { get; }
 
     /// <summary>
     /// The block this level writes out: a repetition's body, a macro's body, or the block
     /// argument a splice names. What it holds is what this level is a writing of, which is
     /// how a name declared there is told from the same name at another level.
     /// </summary>
-    public SyntaxNode? Body { get; }
+    public BlockSyntax? Body { get; }
 
     /// <summary>One turn of a repetition, with the name it binds and what that is worth.</summary>
     public static Expansion Turn(
-        Expansion? outer, SyntaxNode block, Symbol? binding, Value value, SyntaxNode? item, int index,
+        Expansion? outer, BlockSyntax block, Symbol? binding, Value value, SyntaxNode? item, int index,
         Symbol? member = null) =>
         new(outer, binding, value, item, index, null, block, member: member);
 
     /// <summary>One expansion of the macro <paramref name="call"/> names.</summary>
-    public static Expansion Of(Expansion? outer, SyntaxNode call, SyntaxNode definition) =>
+    public static Expansion Of(Expansion? outer, MacroCallSyntax call, BlockSyntax definition) =>
         new(outer, null, Value.Unknown, null, 0, call, definition);
 
     /// <summary>
@@ -76,7 +76,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// name, so this level carries none; it is here because the same block may be spliced in
     /// more than one place, and each splice writes its lines out again.
     /// </summary>
-    public static Expansion Spliced(Expansion? outer, SyntaxNode splice, SyntaxNode block) =>
+    public static Expansion Spliced(Expansion? outer, BlockSpliceSyntax splice, BlockSyntax block) =>
         new(outer, null, Value.Unknown, splice, 0, null, block, splice: true);
 
     /// <summary>
@@ -90,7 +90,7 @@ public sealed class Expansion : IEquatable<Expansion>
         {
             if (level.Body is { } body && body.Tree == declared.Tree
                 && declared.NameSpan.Start >= body.Position
-                && declared.NameSpan.Start < body.Position + body.Green.FullWidth)
+                && declared.NameSpan.Start < body.FullSpan.End)
             {
                 return level;
             }
@@ -109,7 +109,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// the macro whose body spliced it.
     /// </para>
     /// </summary>
-    public static bool Expanding(Expansion? at, SyntaxNode definition)
+    public static bool Expanding(Expansion? at, BlockSyntax definition)
     {
         for (var level = at; level is not null; level = level.Outer)
         {
@@ -127,7 +127,7 @@ public sealed class Expansion : IEquatable<Expansion>
         for (var level = splice.Outer; level is not null; level = level.Outer)
         {
             if (level.Call is not null && level.Body is { } body && body.Tree == line.Tree
-                && line.Position >= body.Position && line.Position < body.Position + body.Green.FullWidth)
+                && line.Position >= body.Position && line.Position < body.FullSpan.End)
             {
                 return level;
             }
@@ -173,7 +173,7 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>The macro call this line is inside, nearest first, or null when it is in none.</summary>
-    public SyntaxNode? NearestCall
+    public MacroCallSyntax? NearestCall
     {
         get
         {

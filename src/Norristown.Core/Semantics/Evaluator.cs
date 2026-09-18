@@ -157,9 +157,9 @@ internal sealed class Evaluator
         // A named scope is a namespace and has no address of its own, so nothing is written
         // for it and ca65 would find the name undefined. What a call does with its arguments,
         // `.spanof` of a scope among them, is the call's to say.
-        foreach (var name in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
+        foreach (var node in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
         {
-            if (name.Kind == SyntaxKind.NameExpression && !InsideCall(name, operand)
+            if (node is NameExpressionSyntax name && !InsideCall(name, operand)
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.ChildTokens[^1].Text == scope.Name)
                 Report(name, $"`{scope.Name}` is a scope, which has no address: a routine or data inside it does");
         }
@@ -170,7 +170,7 @@ internal sealed class Evaluator
     {
         for (var at = node.Parent; at is not null && at != top.Parent; at = at.Parent)
         {
-            if (at.Kind == SyntaxKind.CallExpression)
+            if (at is CallExpressionSyntax)
                 return true;
         }
         return false;
@@ -178,7 +178,7 @@ internal sealed class Evaluator
 
     /// <summary>How much room a data directive takes, for a caller that has already reported.</summary>
     public static DataSize? DataSizeOf(
-        SyntaxNode directive,
+        StatementSyntax directive,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         Func<string, long?>? binaryLength,
@@ -191,7 +191,7 @@ internal sealed class Evaluator
     /// come to, either of which may be unknown. The two have to agree.
     /// </summary>
     public static (long? Declared, long? Given) ElementsOf(
-        SyntaxNode directive,
+        DataDirectiveSyntax directive,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
@@ -214,16 +214,16 @@ internal sealed class Evaluator
         SyntaxNode name,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        name.Kind == SyntaxKind.NameExpression
-            ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(name)
+        name is NameExpressionSyntax written
+            ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(written)
             : null;
 
     /// <summary>The items a name stands for when it names a list, or null when it does not.</summary>
     public static IReadOnlyList<SyntaxNode>? ItemsOf(
         SyntaxNode argument,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
-        argument.Kind == SyntaxKind.NameExpression
-        && new Evaluator(SegmentTable.Standard, resolved, null).SymbolOf(argument) is { Kind: SymbolKind.List } list
+        argument is NameExpressionSyntax name
+        && new Evaluator(SegmentTable.Standard, resolved, null).SymbolOf(name) is { Kind: SymbolKind.List } list
             ? list.Items
             : null;
 
@@ -321,13 +321,13 @@ internal sealed class Evaluator
         if (symbol.Kind == SymbolKind.Data)
         {
             evaluating.Add(symbol);
-            symbol.Type ??= DataSyntax.TypeOf(symbol.Data) is { } typed ? SymbolOf(typed) : null;
+            symbol.Type ??= DataSyntax.TypeOf(symbol.Data as DataDirectiveSyntax) is { } typed ? SymbolOf(typed) : null;
             if (symbol.Data is { } element && RoomFor(element) is { } room)
             {
                 symbol.Size = room.Bytes;
                 symbol.Count = room.Elements;
             }
-            else if (symbol.Definition is { } block)
+            else if (symbol.Definition is BlockSyntax block)
             {
                 symbol.Size = RoomForMixed(block);
             }
@@ -390,54 +390,50 @@ internal sealed class Evaluator
 
     private Value Evaluate(SyntaxNode node)
     {
-        switch (node.Kind)
+        switch (node)
         {
-            case SyntaxKind.NumberExpression:
-                return Number(Literals.Number(Text(node)));
+            case NumberExpressionSyntax number:
+                return Number(Literals.Number(number.Token.Text));
 
-            case SyntaxKind.CharacterExpression:
-                return Number(Literals.Character(Text(node)));
+            case CharacterExpressionSyntax character:
+                return Number(Literals.Character(character.Token.Text));
 
-            case SyntaxKind.StringExpression:
-                return Literals.Text(Text(node)) is { } text ? Value.Of(text) : Value.Unknown;
+            case StringExpressionSyntax quoted:
+                return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
 
-            case SyntaxKind.ParenthesizedExpression:
-                return Child(node) is { } inner ? Evaluate(inner) : Value.Unknown;
+            case ParenthesizedExpressionSyntax parenthesized:
+                return Evaluate(parenthesized.Expression);
 
-            case SyntaxKind.NameExpression:
-                return ValueOfName(node);
+            case NameExpressionSyntax name:
+                return ValueOfName(name);
 
-            case SyntaxKind.UnaryExpression:
-                return Child(node) is { } operand ? Unary(node.ChildTokens[0], Evaluate(operand)) : Value.Unknown;
+            case UnaryExpressionSyntax unary:
+                return Unary(unary.OperatorToken, Evaluate(unary.Operand));
 
-            case SyntaxKind.BinaryExpression:
-                var children = node.ChildNodes;
-                if (children.Length != 2 || node.ChildTokens.Length == 0)
-                    return Value.Unknown;
-
+            case BinaryExpressionSyntax binary:
                 // `&&` and `||` leave the right operand alone once the left decides the
                 // result, so `.defined(TRACE) && TRACE` is answerable when TRACE is not
                 // defined and the name on the right is never looked up.
-                var op = node.ChildTokens[0];
-                var first = Evaluate(children[0]);
+                var op = binary.OperatorToken;
+                var first = Evaluate(binary.Left);
                 if (first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
                     return Value.Of(decided != 0);
-                var second = Evaluate(children[1]);
+                var second = Evaluate(binary.Right);
 
                 // A `one` parameter and a repetition over words compare as words: the side
                 // that is not already one is the bare name written beside it, which is a word
                 // rather than a name and is never looked up.
                 if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
                     && (first.IsWord || second.IsWord)
-                    && WordOf(first, children[0]) is { } left && WordOf(second, children[1]) is { } right)
+                    && WordOf(first, binary.Left) is { } left && WordOf(second, binary.Right) is { } right)
                 {
                     var same = string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
                     return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
                 }
                 return Binary(op, first, second);
 
-            case SyntaxKind.CallExpression:
-                return Call(node);
+            case CallExpressionSyntax call:
+                return Call(call);
 
             // `*`, an error the parser has already reported, and the CPU names, which only
             // `.cpu` and `.target` accept.
@@ -451,7 +447,7 @@ internal sealed class Evaluator
     /// argument it was called with; a member reached through a path is the offsets along
     /// that path added up, which is what makes `Player::pos::y` a number.
     /// </summary>
-    private Value ValueOfName(SyntaxNode name)
+    private Value ValueOfName(NameExpressionSyntax name)
     {
         if (BoundItem(name) is { } item)
             return Indexed(name, Evaluate(item));
@@ -474,9 +470,9 @@ internal sealed class Evaluator
     /// starts at data. Every name a path can end in comes through here, so an index on one
     /// that reaches no declaration is refused rather than quietly dropped.
     /// </summary>
-    private Value Indexed(SyntaxNode name, Value value)
+    private Value Indexed(NameExpressionSyntax name, Value value)
     {
-        if (!ElementIndexes.In(name))
+        if (name.Indexes.Length == 0)
             return value;
         return IndexOffset(name) is { } stepped && value.AsNumber() is { } at
             ? Value.Of(at + stepped)
@@ -488,7 +484,7 @@ internal sealed class Evaluator
     /// which is reported here. An index is worked out before the program runs, so it is a
     /// constant and has to be an element the declaration holds.
     /// </summary>
-    private long? IndexOffset(SyntaxNode name)
+    private long? IndexOffset(NameExpressionSyntax name)
     {
         long offset = 0;
         foreach (var (part, index) in ElementIndexes.Of(name))
@@ -507,7 +503,7 @@ internal sealed class Evaluator
             EvaluateSymbol(symbol);
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
-            if (ElementIndexes.WrittenIn(index) is not { } written)
+            if (index.Index is not { } written)
                 return null;
             if (Evaluate(written).AsNumber() is not { } at)
             {
@@ -538,7 +534,7 @@ internal sealed class Evaluator
     /// own offset; a path that starts at an instance is an address, which only the linker
     /// knows, so it has no value here and is written symbolically instead.
     /// </summary>
-    private Value OffsetAlong(SyntaxNode name)
+    private Value OffsetAlong(NameExpressionSyntax name)
     {
         long offset = 0;
         foreach (var token in name.ChildTokens)
@@ -559,11 +555,11 @@ internal sealed class Evaluator
 
     /// <summary>Whether every name an expression writes names something, declared or bound.</summary>
     private bool Names(SyntaxNode node) =>
-        (node.Kind != SyntaxKind.NameExpression || SymbolOf(node) is not null || BoundItem(node) is not null)
+        (node is not NameExpressionSyntax name || SymbolOf(name) is not null || BoundItem(name) is not null)
         && node.ChildNodes.All(Names);
 
     /// <summary>The address a path of members starts from, such as the instance of <c>pos::y</c>, or null.</summary>
-    private Symbol? AddressAlong(SyntaxNode name)
+    private Symbol? AddressAlong(NameExpressionSyntax name)
     {
         foreach (var token in name.ChildTokens)
         {
@@ -612,22 +608,22 @@ internal sealed class Evaluator
     /// The word one side of a comparison stands for: the value when it is already a word, or
     /// else the bare name written there, which a word is compared against unlooked-up.
     /// </summary>
-    private static string? WordOf(Value value, SyntaxNode written) => value.IsWord
+    private static string? WordOf(Value value, ExpressionSyntax written) => value.IsWord
         ? value.Text
-        : written is { Kind: SyntaxKind.NameExpression, ChildTokens.Length: 1 }
-            ? written.ChildTokens[0].Text
+        : written is NameExpressionSyntax { ChildTokens: [var word] }
+            ? word.Text
             : null;
 
     private Value Binary(SyntaxToken op, Value left, Value right)
     {
         if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
             return Reject(op, left.IsString ? left : right);
-        if (b == 0 && Operators.Divides(op.Green))
+        if (b == 0 && Operators.Divides(op))
         {
             Report(op, "division by zero");
             return Value.Unknown;
         }
-        return Operators.Binary(op.Green, a, b) is { } result ? Value.Of(result) : Value.Unknown;
+        return Operators.Binary(op, a, b) is { } result ? Value.Of(result) : Value.Unknown;
     }
 
     /// <summary>An operand that is a string where a number belongs; there is no string arithmetic.</summary>
@@ -643,19 +639,19 @@ internal sealed class Evaluator
     /// declared with <c>.func</c>, which means its body with the arguments in place of its
     /// parameters.
     /// </summary>
-    private Value Call(SyntaxNode call)
+    private Value Call(CallExpressionSyntax call)
     {
-        var given = call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? [];
-        if (call.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is { } callee)
+        var given = call.Arguments.Arguments;
+        if (call.Callee is { } callee)
             return Applied(callee, given);
-        if (call.ChildTokens.Length == 0 || call.ChildTokens[0].Kind != SyntaxKind.Directive)
+        if (call.Function is not { Kind: SyntaxKind.Directive } function)
             return Value.Unknown;
 
-        var name = call.ChildTokens[0].Text.ToLowerInvariant();
+        var name = function.Text.ToLowerInvariant();
         var arguments = given;
 
         if (name == ".select")
-            return Select(call, arguments);
+            return Select(function, arguments);
 
         // What a macro body adds asks about an argument rather than about a value, so each
         // reads the binding rather than evaluating what is written.
@@ -734,8 +730,8 @@ internal sealed class Evaluator
 
         // A condition in an expansion asks about the CPU as the build's conditions do.
         if (configuration is not null
-            && Configuration.AboutTheCpu(name, call.ChildTokens[0], arguments, configuration.Cpu,
-                (_, message) => Report(call.ChildTokens[0], message)) is { } answer)
+            && Configuration.AboutTheCpu(name, function, arguments, configuration.Cpu,
+                (_, message) => Report(function, message)) is { } answer)
         {
             return answer;
         }
@@ -766,11 +762,11 @@ internal sealed class Evaluator
     /// <c>.select(c, a, b)</c>: <c>a</c> when the constant <c>c</c> holds, and <c>b</c> when it
     /// does not. Only the chosen value is evaluated.
     /// </summary>
-    private Value Select(SyntaxNode call, IReadOnlyList<SyntaxNode> arguments)
+    private Value Select(SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
     {
         if (arguments.Count != 3)
         {
-            Report(call.ChildTokens[0], "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
+            Report(function, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
             return Value.Unknown;
         }
         var condition = Evaluate(arguments[0]);
@@ -821,7 +817,7 @@ internal sealed class Evaluator
     /// </summary>
     private bool NotAnExtent(Symbol symbol, string function, SyntaxNode at)
     {
-        if (ElementIndexes.In(at))
+        if (at is NameExpressionSyntax { Indexes.Length: > 0 })
         {
             Report(at, $"`{function}` measures a declaration, and `{at.GetText().Trim()}` is a place in one");
             return true;
@@ -847,7 +843,7 @@ internal sealed class Evaluator
     /// function evaluates its body with each parameter bound to the argument it was given,
     /// and a function that ends up needing itself is the same cycle any constant would be.
     /// </summary>
-    private Value Applied(SyntaxNode callee, IReadOnlyList<SyntaxNode> given)
+    private Value Applied(NameExpressionSyntax callee, IReadOnlyList<SyntaxNode> given)
     {
         if (SymbolOf(callee) is not { } symbol)
             return Value.Unknown;
@@ -905,14 +901,13 @@ internal sealed class Evaluator
     private Dictionary<int, long> Map(Symbol charmap)
     {
         var mapped = new Dictionary<int, long>();
-        foreach (var entry in charmap.Entries)
+        foreach (var line in charmap.Entries)
         {
-            var parts = entry.ChildNodes;
-            if (parts.Length < 2)
+            if (line is not CharmapEntrySyntax entry)
                 continue;
-            var first = Evaluate(parts[0]).AsNumber();
-            var last = parts.Length > 2 ? Evaluate(parts[1]).AsNumber() : first;
-            var to = Evaluate(parts[^1]).AsNumber();
+            var first = Evaluate(entry.First).AsNumber();
+            var last = entry.Last is { } end ? Evaluate(end).AsNumber() : first;
+            var to = Evaluate(entry.Value).AsNumber();
             if (first is null || last is null || to is null || last < first)
                 continue;
             for (var c = first.Value; c <= last.Value; c++)
@@ -950,12 +945,12 @@ internal sealed class Evaluator
         {
             // A span is the difference of two addresses, which is a number; an end is an
             // address, as wide as the label it follows.
-            if (node.Kind == SyntaxKind.CallExpression && node.ChildTokens.Length > 0
-                && node.ChildTokens[0].Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase))
+            if (node is CallExpressionSyntax { Function: { } function }
+                && function.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
-            if (node.Kind == SyntaxKind.CurrentAddressExpression)
+            if (node is CurrentAddressExpressionSyntax)
             {
                 named = true;
                 widest = Widest(widest, SegmentSize(segment));
@@ -967,14 +962,14 @@ internal sealed class Evaluator
                     Walk(chosen);
                 return;
             }
-            if (node.Kind == SyntaxKind.NameExpression)
+            if (node is NameExpressionSyntax name)
             {
                 // A member reached through an instance, `pos::y`, is a place in the instance,
                 // and as wide an address as the instance is.
-                if ((SymbolOf(node) is { IsAddress: true } symbol ? symbol : AddressAlong(node)) is { } address)
+                if ((SymbolOf(name) is { IsAddress: true } symbol ? symbol : AddressAlong(name)) is { } address)
                 {
                     named = true;
-                    widest = Widest(widest, address.AddressSizeIn(node.Tree));
+                    widest = Widest(widest, address.AddressSizeIn(name.Tree));
                 }
                 return;
             }
@@ -986,10 +981,10 @@ internal sealed class Evaluator
     /// <summary>Whether an expression names an address, which is what makes it an alias rather than a constant.</summary>
     private bool NamesAnAddress(SyntaxNode node)
     {
-        if (node.Kind == SyntaxKind.CurrentAddressExpression)
+        if (node is CurrentAddressExpressionSyntax)
             return true;
-        if (node.Kind == SyntaxKind.NameExpression)
-            return SymbolOf(node) is { IsAddress: true };
+        if (node is NameExpressionSyntax name)
+            return SymbolOf(name) is { IsAddress: true };
         if (SelectArguments(node) is not null)
             return ChosenBy(node) is { } chosen && NamesAnAddress(chosen);
         foreach (var child in node.ChildNodes)
@@ -1004,9 +999,9 @@ internal sealed class Evaluator
     /// The arguments of a <c>.select</c> call, or null when <paramref name="node"/> is not one.
     /// </summary>
     internal static IReadOnlyList<SyntaxNode>? SelectArguments(SyntaxNode node) =>
-        node is { Kind: SyntaxKind.CallExpression, ChildTokens: [{ Kind: SyntaxKind.Directive } function, ..] }
+        node is CallExpressionSyntax { Function: { Kind: SyntaxKind.Directive } function } call
             && function.Text.Equals(".select", StringComparison.OrdinalIgnoreCase)
-            ? node.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? []
+            ? call.Arguments.Arguments
             : null;
 
     /// <summary>
@@ -1014,23 +1009,22 @@ internal sealed class Evaluator
     /// they are. Null where nt65 cannot say — an `.align`, whose size depends on where it
     /// lands, or a directive whose operands do not add up.
     /// </summary>
-    private DataSize? RoomFor(SyntaxNode directive)
+    private DataSize? RoomFor(StatementSyntax written)
     {
         // A line of a body is its values, each one element of the type the body is of.
-        if (directive.Kind == SyntaxKind.DataValues)
+        if (written is DataValuesSyntax values)
         {
-            return DataSyntax.DirectiveOfValues(directive) is { } of && ElementWidth(of) is { } each
-                ? Spread(directive.ChildNodes, each)
+            return DataSyntax.DirectiveOfValues(values) is { } of && ElementWidth(of) is { } each
+                ? Spread(values.ChildNodes, each)
                 : null;
         }
-        if (directive.ChildTokens.Length == 0)
+        if (written is not DataDirectiveSyntax directive)
             return null;
         if (DataSyntax.IsElementType(directive))
             return RoomForElements(directive);
-        var name = DataSyntax.NameOf(directive);
         var operands = directive.ChildNodes;
 
-        switch (name)
+        switch (DataSyntax.NameOf(directive))
         {
             case ".lobytes":
             case ".hibytes":
@@ -1063,19 +1057,18 @@ internal sealed class Evaluator
     /// when it has neither, each as big as the element type — a record's being its type's size,
     /// which is also the stride of an array of them.
     /// </summary>
-    private DataSize? RoomForElements(SyntaxNode directive)
+    private DataSize? RoomForElements(DataDirectiveSyntax directive)
     {
         if (ElementWidth(directive) is not { } width)
             return null;
-        var counted = DataSyntax.CountOf(directive) is not null;
-        var count = counted
-            ? DataSyntax.CountExpressionOf(directive) is null ? GivenCount(directive) ?? 0 : DeclaredCount(directive)
+        var count = directive.Count is { } counted
+            ? counted.Count is null ? GivenCount(directive) ?? 0 : DeclaredCount(directive)
             : GivenCount(directive) ?? 1;
         return count is { } many and >= 0 ? new DataSize(width * many, many) : null;
     }
 
     /// <summary>How many bytes one element of an element type takes: a record's is its type's size.</summary>
-    private long? ElementWidth(SyntaxNode directive)
+    private long? ElementWidth(DataDirectiveSyntax directive)
     {
         if (DataSyntax.TypeOf(directive) is not { } named)
             return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
@@ -1086,24 +1079,24 @@ internal sealed class Evaluator
     }
 
     /// <summary>The <c>n</c> of <c>[n]</c>, or null when there is none or it is no constant.</summary>
-    private long? DeclaredCount(SyntaxNode directive) =>
-        DataSyntax.CountExpressionOf(directive) is { } count ? Evaluate(count).AsNumber() : null;
+    private long? DeclaredCount(DataDirectiveSyntax directive) =>
+        directive.Count?.Count is { } count ? Evaluate(count).AsNumber() : null;
 
     /// <summary>
     /// How many elements an element type's values come to, wherever they are written: after it
     /// on the line, in braces, or in the body its line opens. Null when it has none, or when
     /// nt65 cannot count them.
     /// </summary>
-    private long? GivenCount(SyntaxNode directive)
+    private long? GivenCount(DataDirectiveSyntax directive)
     {
         if (DataSyntax.BracedOf(directive) is { } braced)
-            return braced.Kind == SyntaxKind.RecordValues ? 1 : Spread(braced.ChildNodes, 1).Elements;
+            return braced is ValueListSyntax list ? Spread(list.Values, 1).Elements : 1;
         if (DataSyntax.BodyOf(directive) is { } body)
         {
-            return ((GreenBlock)body.Green).BlockKind == BlockKind.RecordInitializer
+            return body.BlockKind == BlockKind.RecordInitializer
                 ? 1
-                : Total(body.ChildNodes, 1, statement =>
-                    statement.Kind == SyntaxKind.DataValues ? Spread(statement.ChildNodes, 1).Elements : 0, _ => null);
+                : Total(body.Members, 1, statement =>
+                    statement is DataValuesSyntax row ? Spread(row.ChildNodes, 1).Elements : 0, _ => null);
         }
         var values = DataSyntax.ValuesOf(directive);
         return values.Count > 0 ? Spread(values, 1).Elements : null;
@@ -1114,23 +1107,22 @@ internal sealed class Evaluator
     /// conditionals decided and its repetitions unrolled. Null when an `.align` in it makes
     /// that depend on where it lands.
     /// </summary>
-    private long? RoomForMixed(SyntaxNode block) => Total(block.ChildNodes, 1, BytesOnLine, nested =>
-        ((GreenBlock)nested.Green).BlockKind switch
+    private long? RoomForMixed(BlockSyntax block) => Total(block.Members, 1, BytesOnLine, nested =>
+        nested.BlockKind switch
         {
             BlockKind.Data => RoomForMixed(nested),
-            BlockKind.DataBody or BlockKind.RecordInitializer when nested.ChildNodes[0].Statement is { } opener =>
-                BytesOnLine(opener),
+            BlockKind.DataBody or BlockKind.RecordInitializer => BytesOnLine(nested.Opener.Statement),
             _ => null,
         });
 
     /// <summary>The bytes one line of mixed data takes, or null when nt65 cannot say.</summary>
-    private long? BytesOnLine(SyntaxNode statement)
+    private long? BytesOnLine(StatementSyntax statement)
     {
-        var directive = statement.Kind switch
+        var directive = statement switch
         {
-            SyntaxKind.DataDirective => statement,
-            SyntaxKind.DataDeclaration => DataSyntax.ElementOf(statement),
-            SyntaxKind.LabeledLine => statement.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.DataDirective),
+            DataDirectiveSyntax data => data,
+            DataDeclarationSyntax declaration => declaration.Directive,
+            LabeledLineSyntax labeled => labeled.Statement as DataDirectiveSyntax,
             _ => null,
         };
         return directive is null ? 0 : RoomFor(directive)?.Bytes;
@@ -1143,7 +1135,7 @@ internal sealed class Evaluator
     /// it is unknown.
     /// </summary>
     private long? Total(
-        IReadOnlyList<SyntaxNode> children, int from, Func<SyntaxNode, long?> line, Func<SyntaxNode, long?> block)
+        IReadOnlyList<SyntaxNode> children, int from, Func<StatementSyntax, long?> line, Func<BlockSyntax, long?> block)
     {
         long total = 0;
         var chaining = false;
@@ -1152,30 +1144,30 @@ internal sealed class Evaluator
         {
             var child = children[i];
             long? part;
-            if (child.Green is not GreenBlock green)
+            if (child is not BlockSyntax nested)
             {
                 chaining = false;
-                part = child.Statement is { } statement ? line(statement) : 0;
+                part = child is LineSyntax written ? line(written.Statement) : 0;
             }
             else
             {
-                var opener = child.ChildNodes[0].Statement;
-                switch (green.BlockKind)
+                var opener = nested.Opener.Statement;
+                switch (nested.BlockKind)
                 {
                     case BlockKind.If:
-                        var continues = opener?.Kind is SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective;
-                        var take = (!continues || chaining) && Holds(child, opener, continues && taken);
+                        var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
+                        var take = (!continues || chaining) && Holds(nested, opener, continues && taken);
                         chaining = true;
                         taken = (continues && taken) || take;
-                        part = take ? Total(child.ChildNodes, 1, line, block) : 0;
+                        part = take ? Total(nested.Members, 1, line, block) : 0;
                         break;
-                    case BlockKind.Repeat or BlockKind.Each when opener is not null:
+                    case BlockKind.Repeat or BlockKind.Each when opener is RepetitionDirectiveSyntax repetition:
                         chaining = false;
-                        part = Turns(child, opener, () => Total(child.ChildNodes, 1, line, block));
+                        part = Turns(nested, repetition, () => Total(nested.Members, 1, line, block));
                         break;
                     default:
                         chaining = false;
-                        part = block(child);
+                        part = block(nested);
                         break;
                 }
             }
@@ -1190,28 +1182,27 @@ internal sealed class Evaluator
     /// Whether a branch of a conditional is taken: as the build answered it where it could, and
     /// otherwise by its condition, as one inside an expansion is.
     /// </summary>
-    private bool Holds(SyntaxNode block, SyntaxNode? opener, bool already)
+    private bool Holds(BlockSyntax block, StatementSyntax opener, bool already)
     {
         if (configuration?.Answered(block) == true)
             return configuration.Includes(block);
-        if (already || opener is null)
+        if (already)
             return false;
-        if (opener.Kind == SyntaxKind.ElseDirective)
+        if (opener is ElseDirectiveSyntax)
             return true;
-        return opener.ChildNodes.FirstOrDefault() is { } condition && Evaluate(condition).AsNumber() is { } value and not 0;
+        return opener is ConditionalDirectiveSyntax conditional && Evaluate(conditional.Condition).AsNumber() is { } value and not 0;
     }
 
     /// <summary>
     /// The sum of <paramref name="body"/> over every turn of a repetition, with the name it
     /// binds standing for that turn's index, item or member. Null when the turns are unknown.
     /// </summary>
-    private long? Turns(SyntaxNode block, SyntaxNode opener, Func<long?> body)
+    private long? Turns(BlockSyntax block, RepetitionDirectiveSyntax opener, Func<long?> body)
     {
-        if (opener.ChildNodes.FirstOrDefault() is not { } counted)
-            return null;
+        var counted = opener.Expression;
         var binding = BindingIn(block, opener);
         List<Action> turns = [];
-        if (opener.Kind == SyntaxKind.RepeatDirective)
+        if (opener is RepeatDirectiveSyntax)
         {
             if (Evaluate(counted).AsNumber() is not { } count || count < 0)
                 return null;
@@ -1260,13 +1251,11 @@ internal sealed class Evaluator
     }
 
     /// <summary>The name a repetition binds, found where its body names it; null when nothing does.</summary>
-    private Symbol? BindingIn(SyntaxNode block, SyntaxNode opener)
+    private Symbol? BindingIn(BlockSyntax block, RepetitionDirectiveSyntax opener)
     {
-        var declared = opener.ChildTokens.LastOrDefault(token =>
-            token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic);
-        if (declared.Parent is null)
+        if (opener.Name is not { } declared)
             return null;
-        foreach (var name in block.DescendantNodes().Where(node => node.Kind == SyntaxKind.NameExpression))
+        foreach (var name in block.DescendantNodes().OfType<NameExpressionSyntax>())
         {
             foreach (var token in name.ChildTokens)
             {
@@ -1292,7 +1281,7 @@ internal sealed class Evaluator
         {
             if (BytesIn(operand) is { } bytes)
                 elements += bytes.Count;
-            else if (operand.Kind == SyntaxKind.NameExpression && SymbolOf(operand) is { Kind: SymbolKind.List } list)
+            else if (operand is NameExpressionSyntax name && SymbolOf(name) is { Kind: SymbolKind.List } list)
                 elements += list.Items.Count;
             else
                 elements++;
@@ -1304,7 +1293,7 @@ internal sealed class Evaluator
     /// A binary file, whose length nt65 reads for itself. The path is relative to the file
     /// that names it, and an offset and a length may narrow it.
     /// </summary>
-    private DataSize? RoomForBinary(SyntaxNode directive, IReadOnlyList<SyntaxNode> operands)
+    private DataSize? RoomForBinary(DataDirectiveSyntax directive, IReadOnlyList<SyntaxNode> operands)
     {
         if (operands.Count == 0 || Evaluate(operands[0]) is not { Kind: ValueKind.String, Text: { } path })
             return null;
@@ -1330,15 +1319,15 @@ internal sealed class Evaluator
     private IReadOnlyList<long>? BytesIn(SyntaxNode operand)
     {
         // A macro parameter given text is that text, as many bytes as it has.
-        if (operand.Kind == SyntaxKind.NameExpression && BoundItem(operand) is { } item)
+        if (operand is NameExpressionSyntax bound && BoundItem(bound) is { } item)
             return BytesIn(item);
 
         // A string constant is its text wherever it is named, as a literal would be.
-        if (operand.Kind == SyntaxKind.NameExpression && SymbolOf(operand) is { Kind: SymbolKind.Constant }
-            && Evaluate(operand) is { Kind: ValueKind.String, Text: { } named })
+        if (operand is NameExpressionSyntax constant && SymbolOf(constant) is { Kind: SymbolKind.Constant }
+            && Evaluate(constant) is { Kind: ValueKind.String, Text: { } named })
             return [.. named.Select(c => (long)c)];
 
-        if (operand.Kind is SyntaxKind.StringExpression or SyntaxKind.CharacterExpression)
+        if (operand is StringExpressionSyntax or CharacterExpressionSyntax)
         {
             var value = Evaluate(operand);
             return value.Kind switch
@@ -1349,14 +1338,13 @@ internal sealed class Evaluator
             };
         }
 
-        if (operand.Kind != SyntaxKind.CallExpression
-            || operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.NameExpression) is not { } callee
+        if (operand is not CallExpressionSyntax { Callee: { } callee } call
             || SymbolOf(callee) is not { Kind: SymbolKind.Charmap } charmap)
         {
             return null;
         }
 
-        var given = operand.ChildNodes.FirstOrDefault(c => c.Kind == SyntaxKind.ArgumentList)?.ChildNodes ?? [];
+        var given = call.Arguments.Arguments;
         if (given.Length != 1)
             return null;
         var text = Evaluate(given[0]);
@@ -1397,23 +1385,23 @@ internal sealed class Evaluator
                 continue;
             // The type a member names is worth keeping on it: emission walks into it, and
             // nothing else would have resolved it unless a path happened to reach through.
-            member.Type ??= DataSyntax.TypeOf(member.Data) is { } named ? SymbolOf(named) : null;
+            member.Type ??= DataSyntax.TypeOf(member.Data as DataDirectiveSyntax) is { } named ? SymbolOf(named) : null;
 
             // A member reserves room and holds no value, so an operand would be silently
             // ignored, and `colors: .word 16` read as sixteen words would be two bytes.
-            var room = member.Data is { } data && (data.Kind != SyntaxKind.DataDirective || DataSyntax.IsElementType(data)
-                || DataSyntax.NameOf(data) == ".res")
+            var room = member.Data is DataDirectiveSyntax data
+                && (DataSyntax.IsElementType(data) || DataSyntax.NameOf(data) == ".res")
                 ? RoomFor(data)
                 : null;
-            if (member.Data is { } element && DataSyntax.IsElementType(element))
+            if (member.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element))
             {
-                var spelled = element.ChildTokens[0].Text;
+                var spelled = element.Directive.Text;
                 if ((DataSyntax.ValuesOf(element).FirstOrDefault() ?? DataSyntax.BracedOf(element)) is { } valued)
                 {
                     Report(valued, $"`{member.Name}` is a member, which reserves room and holds no value: "
                         + $"several are `{spelled}[n]`");
                 }
-                else if (DataSyntax.CountOf(element) is { } count && DataSyntax.CountExpressionOf(element) is null)
+                else if (element.Count is { Count: null } count)
                 {
                     Report(count, $"`{member.Name}` is a member, whose count is a number: `{spelled}[n]`");
                 }
@@ -1446,31 +1434,36 @@ internal sealed class Evaluator
     /// file is part of the key, because following a name into another file lands on offsets
     /// that mean something else there.
     /// </summary>
-    private Symbol? SymbolOf(SyntaxNode name)
+    private Symbol? SymbolOf(NameExpressionSyntax name)
     {
         // A name bound to a list item is that item: `.each handlers, h` makes `h` the label
         // it stands for, with that label's address size and everything else about it.
-        if (BoundItem(name) is { Kind: SyntaxKind.NameExpression } item)
+        if (BoundItem(name) is NameExpressionSyntax item)
             return SymbolOf(item);
 
-        for (var i = name.ChildTokens.Length - 1; i >= 0; i--)
+        var tokens = name.ChildTokens;
+        for (var i = tokens.Length - 1; i >= 0; i--)
         {
-            if (resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out var symbol))
+            if (resolved.TryGetValue((name.Tree, tokens[i].Span.Start), out var symbol))
                 return i > 0 && symbol.Kind == SymbolKind.Binding ? Namesake(name, i, symbol) : symbol;
         }
         return null;
     }
+
+    /// <summary>The same, for whatever is written where a name may be: only a name stands for a symbol.</summary>
+    private Symbol? SymbolOf(SyntaxNode written) => written is NameExpressionSyntax name ? SymbolOf(name) : null;
 
     /// <summary>
     /// What <c>actions::c</c> names, where <c>c</c> walks an enum: the member of <c>actions</c>
     /// with the same name as the enum member <c>c</c> stands for on this turn. Off any turn,
     /// as an editor asks, it names nothing.
     /// </summary>
-    private Symbol? Namesake(SyntaxNode name, int last, Symbol binding)
+    private Symbol? Namesake(NameExpressionSyntax name, int last, Symbol binding)
     {
         Symbol? container = null;
+        var tokens = name.ChildTokens;
         for (var i = last - 1; i >= 0 && container is null; i--)
-            resolved.TryGetValue((name.Tree, name.ChildTokens[i].Span.Start), out container);
+            resolved.TryGetValue((name.Tree, tokens[i].Span.Start), out container);
         if (container?.Body is not { } body)
             return null;
 
@@ -1490,19 +1483,15 @@ internal sealed class Evaluator
     }
 
     /// <summary>The item a written name is bound to on this turn, or null when it is bound to none.</summary>
-    private SyntaxNode? BoundItem(SyntaxNode name)
+    private SyntaxNode? BoundItem(NameExpressionSyntax name)
     {
-        if (items.Count == 0 || name.ChildTokens.Length != 1)
+        if (items.Count == 0 || name.ChildTokens is not [var only])
             return null;
-        return resolved.TryGetValue((name.Tree, name.ChildTokens[0].Span.Start), out var symbol)
+        return resolved.TryGetValue((name.Tree, only.Span.Start), out var symbol)
             && items.TryGetValue(symbol, out var item)
             ? item
             : null;
     }
-
-    private static string Text(SyntaxNode node) => node.ChildTokens.Length > 0 ? node.ChildTokens[0].Text : "";
-
-    private static SyntaxNode? Child(SyntaxNode node) => node.ChildNodes.Length > 0 ? node.ChildNodes[0] : null;
 
     private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 

@@ -430,11 +430,10 @@ public static class Compiler
                 named.Add(reference.Symbol.Tree.Path);
             foreach (var used in file.Used)
                 named.Add(used.Tree.Path);
-            foreach (var node in file.Tree.Root.DescendantNodes())
+            foreach (var directive in file.Tree.Root.DescendantNodes().OfType<DataDirectiveSyntax>())
             {
-                if (node is { Kind: SyntaxKind.DataDirective, ChildTokens.Length: > 0 }
-                    && node.ChildTokens[0].Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
-                    && node.ChildNodes.FirstOrDefault() is { } operand
+                if (directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
+                    && directive.Values.FirstOrDefault() is { } operand
                     && file.ValueOf(operand) is { Kind: ValueKind.String, Text: { } included })
                 {
                     named.Add(Paths.Beside(file.Tree.Path, included));

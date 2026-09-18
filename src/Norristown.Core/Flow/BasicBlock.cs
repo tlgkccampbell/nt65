@@ -67,7 +67,7 @@ public sealed class BasicBlock
     /// The <c>.next</c> written under the block's last statement, or null. It says where
     /// control goes after that statement, in place of what its operand says.
     /// </summary>
-    public SyntaxNode? Next { get; internal set; }
+    public NextDirectiveSyntax? Next { get; internal set; }
 
     /// <summary>
     /// Whether a <c>.state</c> stands directly after the block's label, which declares the
@@ -76,8 +76,8 @@ public sealed class BasicBlock
     /// not what the processor state at the label is.
     /// </summary>
     public bool IsDeclared => Label is not null && steps.Count > 0
-        && steps[0].Statement.Kind == SyntaxKind.StateDirective
-        && !Semantics.StateItem.OnlyKeeps(steps[0].Statement);
+        && steps[0].Statement is StateDirectiveSyntax state
+        && !Semantics.StateItem.OnlyKeeps(state);
 
     /// <summary>
     /// How long running the whole block takes, or null when any statement in it has no

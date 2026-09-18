@@ -72,9 +72,9 @@ internal static class Refactors
             if (edits.Count > 0)
             {
                 edits.Add(Edits.InsertAfter(tree,
-                    Edits.LastLine(tree, SyntaxKind.UseDirective) is var use and >= 0
+                    Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
                         ? use
-                        : Edits.LastLine(tree, SyntaxKind.ModuleDirective),
+                        : Edits.LastLine<ModuleDirectiveSyntax>(tree),
                     $".use {path}"));
                 yield return new Change($"Bring in `{path}` with `.use`", CodeActionKinds.Rewrite, edits);
             }
@@ -200,13 +200,12 @@ internal static class Refactors
             .SelectMany(region => region.Blocks)
             .SelectMany(block => block.Steps))
         {
-            if (step.On is not null || step.Statement.Kind != SyntaxKind.InstructionStatement
-                || step.Statement.ChildTokens is not [var mnemonic, ..]
-                || mnemonic.Text.ToLowerInvariant() is not ("rts" or "rtl"))
+            if (step.On is not null || step.Statement is not InstructionStatementSyntax instruction
+                || instruction.Mnemonic.Text.ToLowerInvariant() is not ("rts" or "rtl"))
             {
                 continue;
             }
-            if (states.AnyBefore(step.Statement)?.Processor is not { } state)
+            if (states.AnyBefore(instruction)?.Processor is not { } state)
                 yield break;
             if (leaves is { } found && found != state)
                 yield break;
@@ -241,9 +240,8 @@ internal static class Refactors
         if (StatementOn(tree, line) is not { } statement)
             yield break;
 
-        var written = statement.ChildTokens is [var mnemonic, ..] ? mnemonic.Text.ToLowerInvariant() : null;
-        if (statement.Kind == SyntaxKind.InstructionStatement && written is "rep" or "sep"
-            && statement.ChildNodes.FirstOrDefault() is { } operand
+        if (statement is InstructionStatementSyntax { Operand: { } operand } instruction
+            && instruction.Mnemonic.Text.ToLowerInvariant() is ("rep" or "sep") and var written
             && operand.ChildNodes.FirstOrDefault() is { } expression
             && model.ValueOf(expression) is { Kind: ValueKind.Number } value)
         {
@@ -262,7 +260,7 @@ internal static class Refactors
             yield break;
         }
 
-        if (statement.Kind == SyntaxKind.EnsureDirective
+        if (statement is EnsureDirectiveSyntax
             && analysis.LayoutFor(tree.Path)?.AnyOf(statement) is { Ensured: { } ensured })
         {
             var lines = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
@@ -284,19 +282,21 @@ internal static class Refactors
         if (StatementOn(tree, line) is not { } statement || model.ReferenceAt(caret) is not null)
             yield break;
         var numbers = statement.DescendantNodes()
-            .Where(node => node.Kind == SyntaxKind.NumberExpression)
-            .SelectMany(node => node.ChildTokens)
-            .Where(token => token.Kind == SyntaxKind.NumberLiteral
-                && caret >= token.Span.Start && caret <= token.Span.End)
+            .OfType<NumberExpressionSyntax>()
+            .Select(node => node.Token)
+            .Where(token => caret >= token.Span.Start && caret <= token.Span.End)
             .ToList();
         if (numbers is not [var number, ..])
             yield break;
         var text = number.Text;
 
         var name = Edits.UnusedName(model, "VALUE");
-        var after = new[] { SyntaxKind.UseDirective, SyntaxKind.CpuDirective, SyntaxKind.ModuleDirective }
-            .Select(kind => Edits.LastLine(tree, kind))
-            .Max();
+        var after = new[]
+        {
+            Edits.LastLine<UseDirectiveSyntax>(tree),
+            Edits.LastLine<CpuDirectiveSyntax>(tree),
+            Edits.LastLine<ModuleDirectiveSyntax>(tree),
+        }.Max();
         yield return new Change($"Give `{text}` a name", CodeActionKinds.Extract,
             [
                 new Edit(tree, number.Span, name),
@@ -347,7 +347,7 @@ internal static class Refactors
         var tree = model.Tree;
         if (DeclaredOn(model, line) is not { Kind: SymbolKind.Data } data || data.Routine is null)
             yield break;
-        if (StatementOn(tree, line) is not { Kind: SyntaxKind.DataDeclaration })
+        if (StatementOn(tree, line) is not DataDeclarationSyntax)
             yield break;
 
         var indent = Edits.IndentOf(tree, line);
@@ -377,12 +377,12 @@ internal static class Refactors
         model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
 
     /// <summary>The statement parsed from <paramref name="line"/>, or null where the file has no such line.</summary>
-    private static SyntaxNode? StatementOn(SyntaxTree tree, int line)
+    private static StatementSyntax? StatementOn(SyntaxTree tree, int line)
     {
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (node.Green is GreenLine && node.LineIndex == line)
-                return node.Statement;
+            if (node is LineSyntax found && found.LineIndex == line)
+                return found.Statement;
         }
         return null;
     }

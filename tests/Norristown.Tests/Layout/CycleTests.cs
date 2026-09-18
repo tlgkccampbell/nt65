@@ -229,9 +229,9 @@ public sealed class CycleTests
             """));
         var layout = analysis.Layouts.Single();
         var lines = analysis.File("main.nt65").Tree.Root.DescendantNodes()
-            .Select(node => node.Statement)
-            .OfType<Norristown.Syntax.SyntaxNode>()
-            .Where(statement => statement.Kind == Norristown.Syntax.SyntaxKind.InstructionStatement)
+            .OfType<Norristown.Syntax.LineSyntax>()
+            .Select(line => line.Statement)
+            .OfType<Norristown.Syntax.InstructionStatementSyntax>()
             .ToList();
 
         Assert.Equal("3", layout.AnyOf(lines[0])?.Cycles?.ToString());

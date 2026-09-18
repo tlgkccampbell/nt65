@@ -17,10 +17,10 @@ public static class Transfers
     /// </summary>
     public static Transfer Of(SyntaxNode statement, AddressingMode? mode)
     {
-        if (statement.Kind != SyntaxKind.InstructionStatement || statement.ChildTokens.Length == 0)
+        if (statement is not InstructionStatementSyntax instruction)
             return Transfer.Through;
 
-        var mnemonic = statement.ChildTokens[0].Text;
+        var mnemonic = instruction.Mnemonic.Text;
         if (Is(mnemonic, "rts") || Is(mnemonic, "rti") || Is(mnemonic, "rtl"))
             return Transfer.Return;
 
@@ -51,9 +51,9 @@ public static class Transfers
     /// </summary>
     public static SyntaxNode? TargetOf(SyntaxNode statement, AddressingMode? mode)
     {
-        if (statement.ChildNodes.FirstOrDefault() is not { } operand)
+        if (statement is not InstructionStatementSyntax { Operand: { } operand })
             return null;
-        var written = operand.ChildNodes.Where(child => child.Kind != SyntaxKind.AddressPrefix).ToList();
+        var written = operand.ChildNodes.OfType<ExpressionSyntax>().ToList();
         if (mode == AddressingMode.DirectRelative)
             return written.Count > 1 ? written[1] : null;
         return written.Count > 0 ? written[0] : operand;

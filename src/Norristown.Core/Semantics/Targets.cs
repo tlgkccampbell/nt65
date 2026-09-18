@@ -18,7 +18,7 @@ public static class Targets
     {
         if (MirrorOf(model, expression, on) is { } mirror)
             return (mirror.Routine, mirror.At);
-        if (expression is not { Kind: SyntaxKind.NameExpression } || model.SymbolOf(expression, on) is not { } symbol)
+        if (expression is not NameExpressionSyntax name || model.SymbolOf(name, on) is not { } symbol)
             return null;
         if (symbol.Kind != SymbolKind.MacroParameter)
             return (symbol, Expansion.Owning(on, symbol));
@@ -34,16 +34,13 @@ public static class Targets
     /// </summary>
     public static (Symbol Routine, Expansion? At, long Bank)? MirrorOf(SemanticModel model, SyntaxNode? expression, Expansion? on)
     {
-        if (Inner(expression) is not { Kind: SyntaxKind.BinaryExpression, ChildNodes: [var left, var right] } combined
-            || !combined.ChildTokens.Any(token => token.Kind is SyntaxKind.Bar or SyntaxKind.Plus))
-        {
+        if (Inner(expression) is not BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Bar or SyntaxKind.Plus } combined)
             return null;
-        }
-        foreach (var (low, high) in new[] { (left, right), (right, left) })
+        foreach (var (low, high) in new[] { (combined.Left, combined.Right), (combined.Right, combined.Left) })
         {
-            if (Inner(low) is { Kind: SyntaxKind.CallExpression, ChildTokens: [var function, ..], ChildNodes: [var arguments] }
+            if (Inner(low) is CallExpressionSyntax { Function: { } function } call
                 && function.Text.Equals(".loword", StringComparison.OrdinalIgnoreCase)
-                && arguments.ChildNodes is [{ Kind: SyntaxKind.NameExpression } named]
+                && call.Arguments.Arguments is [NameExpressionSyntax named]
                 && Of(model, named, on) is { Symbol.Signature: not null } routine
                 && model.ValueOf(high, on).AsNumber() is { } bank and >= 0 and <= 0xff0000 && (bank & 0xffff) == 0)
             {
@@ -56,8 +53,8 @@ public static class Targets
     /// <summary>An expression with the parentheses around it taken off.</summary>
     private static SyntaxNode? Inner(SyntaxNode? expression)
     {
-        while (expression is { Kind: SyntaxKind.ParenthesizedExpression })
-            expression = expression.ChildNodes.FirstOrDefault();
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+            expression = parenthesized.Expression;
         return expression;
     }
 }

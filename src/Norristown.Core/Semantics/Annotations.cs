@@ -15,26 +15,25 @@ namespace Norristown.Semantics;
 public static class Annotations
 {
     /// <summary>Whether a statement is one of the two annotations.</summary>
-    public static bool Is(SyntaxNode statement) =>
-        statement.Kind is SyntaxKind.NextDirective or SyntaxKind.PatchDirective;
+    public static bool Is(StatementSyntax statement) =>
+        statement is NextDirectiveSyntax or PatchDirectiveSyntax;
 
     /// <summary>Whether a statement is something an annotation can be about.</summary>
-    public static bool IsAnnotatable(SyntaxNode statement) => statement.Kind switch
+    public static bool IsAnnotatable(StatementSyntax statement) => statement switch
     {
-        SyntaxKind.InstructionStatement or SyntaxKind.DataDirective
-            or SyntaxKind.MacroCall or SyntaxKind.BlockSplice => true,
-        SyntaxKind.LabeledLine => statement.ChildNodes.Any(IsAnnotatable),
+        InstructionStatementSyntax or DataDirectiveSyntax
+            or MacroCallSyntax or BlockSpliceSyntax => true,
+        LabeledLineSyntax { Statement: { } labelled } => IsAnnotatable(labelled),
         _ => false,
     };
 
-    /// <summary>Whether a <c>.next</c> is the <c>.next ?</c> that ends a path unchecked.</summary>
-    public static bool IsUnchecked(SyntaxNode directive) =>
-        directive.Kind == SyntaxKind.NextDirective
-        && directive.ChildTokens.Any(token => token.Kind == SyntaxKind.Question);
-
     /// <summary>The labels an annotation names, each as it was written.</summary>
-    public static IReadOnlyList<SyntaxNode> TargetsOf(SyntaxNode directive) =>
-        [.. directive.ChildNodes.Where(child => child.Kind == SyntaxKind.NameExpression)];
+    public static IReadOnlyList<NameExpressionSyntax> TargetsOf(StatementSyntax directive) => directive switch
+    {
+        NextDirectiveSyntax next => [.. next.Targets],
+        PatchDirectiveSyntax { Target: { } target } => [target],
+        _ => [],
+    };
 
     /// <summary>
     /// The statement the annotation on <paramref name="line"/> is about: the nearest one
@@ -42,7 +41,7 @@ public static class Annotations
     /// statement passed over. A macro call that opens a block argument is a block among the
     /// siblings rather than a line, and the call is its first line.
     /// </summary>
-    public static SyntaxNode? Annotated(SyntaxNode line)
+    public static LineSyntax? Annotated(LineSyntax line)
     {
         if (line.Parent is not { } container)
             return null;
@@ -50,15 +49,13 @@ public static class Annotations
         for (var i = siblings.IndexOf(line) - 1; i >= 0; i--)
         {
             var above = siblings[i];
-            if (above.Green is GreenBlock { BlockKind: BlockKind.MacroBlock })
-                return above.ChildNodes.Length > 0 ? above.ChildNodes[0] : null;
-            if (above.Green is GreenBlock)
+            if (above is BlockSyntax { BlockKind: BlockKind.MacroBlock } block)
+                return block.Opener;
+            if (above is not LineSyntax { Statement: var statement } written)
                 return null;
-            if (above.Statement is not { } statement)
-                return null;
-            if (statement.Kind == SyntaxKind.BlankLine || Is(statement))
+            if (statement is BlankLineSyntax || Is(statement))
                 continue;
-            return IsAnnotatable(statement) ? above : null;
+            return IsAnnotatable(statement) ? written : null;
         }
         return null;
     }
@@ -68,11 +65,11 @@ public static class Annotations
     /// has to be above it: a label below takes the address the annotation's statement ends
     /// at, and an annotation about nothing is a claim about nothing.
     /// </summary>
-    public static string? Misplaced(SyntaxNode line, SyntaxNode directive) =>
+    public static string? Misplaced(LineSyntax line, StatementSyntax directive) =>
         Annotated(line) is not null ? null
             : $"`{Spell(directive)}` is about the statement above it, and there is none here";
 
     /// <summary>The directive as it is written, for a message that names it.</summary>
-    public static string Spell(SyntaxNode directive) =>
-        directive.Kind == SyntaxKind.PatchDirective ? ".patch" : ".next";
+    public static string Spell(StatementSyntax directive) =>
+        directive is PatchDirectiveSyntax ? ".patch" : ".next";
 }

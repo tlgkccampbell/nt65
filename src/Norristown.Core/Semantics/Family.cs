@@ -19,7 +19,7 @@ public sealed class Family
     private readonly Dictionary<Symbol, Symbol> byMember = [];
 
     internal Family(
-        SyntaxNode declaration, SyntaxNode block, Symbol binding, Symbol enumeration,
+        StatementSyntax declaration, BlockSyntax block, Symbol binding, Symbol enumeration,
         IReadOnlyList<(Symbol Member, Symbol Instance)> instances)
     {
         Declaration = declaration;
@@ -36,10 +36,10 @@ public sealed class Family
     /// The statement that declares the instances: the <c>.proc b</c> or <c>.data b:</c> line, or
     /// the <c>.multiproc</c> line, which is both that and the repetition's.
     /// </summary>
-    public SyntaxNode Declaration { get; }
+    public StatementSyntax Declaration { get; }
 
     /// <summary>The block the turns are written out from: the <c>.each</c>'s, or the <c>.multiproc</c>'s own.</summary>
-    public SyntaxNode Block { get; }
+    public BlockSyntax Block { get; }
 
     /// <summary>The name the repetition binds, which each instance is named from.</summary>
     public Symbol Binding { get; }
@@ -54,7 +54,7 @@ public sealed class Family
     public IReadOnlyList<Symbol> Members { get; }
 
     /// <summary>Whether it is written as <c>.multiproc</c> rather than as an <c>.each</c> with a body.</summary>
-    public bool IsFolded => Declaration.Kind == SyntaxKind.MultiProcDeclaration;
+    public bool IsFolded => Declaration is MultiProcDeclarationSyntax;
 
     /// <summary>What the family is called where a message names it, <c>.multiproc</c> or <c>.each</c>.</summary>
     public string Directive => IsFolded ? ".multiproc" : ".each";

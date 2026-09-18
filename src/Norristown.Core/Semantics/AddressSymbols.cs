@@ -16,17 +16,17 @@ public static class AddressSymbols
 
     private static IEnumerable<Symbol> Collect(SemanticModel model, SyntaxNode node, Expansion? on, HashSet<Symbol> followed)
     {
-        var names = node.Kind == SyntaxKind.NameExpression
-            ? [node]
-            : node.DescendantNodes().Where(child => child.Kind == SyntaxKind.NameExpression);
+        var names = node is NameExpressionSyntax single
+            ? [single]
+            : node.DescendantNodes().OfType<NameExpressionSyntax>();
         foreach (var name in names)
         {
             if (model.SymbolOf(name) is not { } symbol)
                 continue;
 
             // A field of a data declaration is at a place in the declaration's segment.
-            if (symbol.Kind == SymbolKind.Member && name.ChildTokens.Length > 0
-                && model.SymbolAt(name.ChildTokens[0]) is { Kind: SymbolKind.Data } instance)
+            if (symbol.Kind == SymbolKind.Member && name is { GlobalToken: null, Names: [var outermost, ..] }
+                && model.SymbolAt(outermost) is { Kind: SymbolKind.Data } instance)
             {
                 symbol = instance;
             }
