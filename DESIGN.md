@@ -1539,10 +1539,13 @@ warning. A `.state` carrying only `keeps` is not a label's declaration: it says 
 holds, not what the processor state at that label is.
 
 What is **not** here is a warning at a caller that holds a register across a call that destroys
-it. It cannot be made honest: a routine that returns a value in the accumulator destroys it in
-exactly the sense this analysis means, and telling that apart from one that merely wrecked it
-would need to know which registers carry results — a calling convention, which §1 makes a
-non-goal. What a routine keeps is a fact about that routine, and that is where it stays.
+it. It can be made to work: which registers a routine reads before writing them is as
+computable as what it keeps, and a register the routine called reads is one the caller loaded
+for it, so passing a value in a register and reading the result back out of the same one says
+nothing. It is left out because a warning is the wrong shape for the answer. Every call takes
+some register away, being told so is rarely news, and the reader's question is what the
+registers are doing here rather than a list of the places they changed. That is something to
+show, and §14 says where per-instruction facts are shown.
 
 Tooling shows it above each routine beside what a pass costs. Most routines work in the
 accumulator and leave the rest alone, so what they keep is said as what they do not:
@@ -3026,10 +3029,11 @@ Recorded so the reasoning survives. None is open.
   `keeps` is a promise a caller may lean on, so it is declared and checked. That is the same
   split the cycle counts and the signatures already have, and it is why inferring `keeps` into
   a routine's interface, which §16 rules out for signatures, is not what this does.
-- **`keeps` where a register is lost, and no warning where one is leaned on.** A caller that
-  holds a register across a call that destroys it cannot be told so honestly: a routine
-  returning a value in A destroys A in exactly this sense, and telling the two apart needs a
-  calling convention, which §1 rules out.
+- **A caller is not warned about a register a call takes away.** Not because it cannot be
+  worked out — which registers a routine reads before writing them settles an argument from a
+  loss, and needs no calling convention — but because a warning is the wrong shape for it.
+  Every call takes some register away; what a reader wants is to see what the registers are
+  doing, not a list of the places they changed.
 - **`.state keeps`, not a third annotation directive.** `keeps a` means the same at a point as
   at an exit, so `.state` carries it, and §7.4's two directives stay two.
 - **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the

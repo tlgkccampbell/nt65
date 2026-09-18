@@ -466,12 +466,15 @@ restores across a call, one that restores across a label, a `keeps` a body break
 on a routine with no body that a caller relies on, one that saves to memory and restores with
 `.state keeps`, a call nt65 cannot follow, and a pair of routines that call each other.
 
-**Done.** All of it but the last bullet, which was dropped rather than put off: a warning where
-a caller leans on a register a call destroys cannot be made honest, because a routine that
-returns a value in the accumulator destroys it in exactly the sense this analysis means, and
-telling that from one that merely wrecked it needs to know which registers carry results — a
-calling convention, which §1 makes a non-goal. §16 records it. What the writing of the rest
-found: the register-effects table is written out twice, in the analysis and in its test, because
+**Done.** All of it but the last bullet. That one was built and then taken out again: what it
+needed turned out to be small — which registers a routine reads before writing them, computed
+in the same fixpoint, which tells a value passed in from a value taken away and needs no
+calling convention — and it found a real bug when a save was removed from a corpus routine,
+with nothing said about any of the checked-in programs. It came out because a warning is the
+wrong shape for the answer: every call takes some register away, being told so is rarely news,
+and what a reader wants is to see what the registers are doing rather than a list of the places
+they changed. §16 records it, and the showing of it is a stage of its own if it is wanted. What
+the writing of the rest found: the register-effects table is written out twice, in the analysis and in its test, because
 a mnemonic left out of it fails nothing on its own — it quietly says the instruction writes no
 register, and a routine then promises to hand back one it destroyed. The 6502 has no `phx`, so X
 is saved through the accumulator, and a register's value has to be followed across `txa` and
