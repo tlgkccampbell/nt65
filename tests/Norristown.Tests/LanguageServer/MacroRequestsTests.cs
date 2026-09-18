@@ -149,6 +149,6 @@ public sealed class MacroRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(20, 4), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**macro** `set16`", hover.Contents.Value);
+        Assert.Contains("```nt65\n.macro set16(dest: operand, value)\n```", hover.Contents.Value, StringComparison.Ordinal);
     }
 }

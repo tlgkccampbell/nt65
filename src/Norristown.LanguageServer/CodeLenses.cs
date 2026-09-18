@@ -63,24 +63,16 @@ internal static class CodeLenses
     }
 
     /// <summary>
-    /// Which registers a routine hands back as it was entered with them. A routine nt65 could
-    /// not cost is one it could not lay out either, and what it keeps would be worked out from
-    /// bytes that are not the ones it would assemble to.
-    /// </summary>
-    private static string? Kept(FlowRegion region) => region.Total.Ends
-        ? Spell(region.Registers.Kept, region.Registers.Complete)
-        : null;
-
-    /// <summary>What is kept, spelled as the hover spells it so that the two agree word for word.</summary>
-    private static string Spell(Registers kept, bool complete) => Lsp.Spell(kept, complete);
-
-    /// <summary>
     /// What it costs, as the lens says it: an interval where a path has a longest, the fewest
     /// and a <c>+</c> where it loops, and what it costs with its calls after that, or a word
     /// saying they are not in the count when nt65 cannot follow one of them.
     /// <paramref name="endless"/> is what to say where no path leaves at all.
+    /// <para>
+    /// The hover says it too, at the declaration and at every call, and calls this so that the
+    /// two agree word for word.
+    /// </para>
     /// </summary>
-    private static string? Spell(RoutineCost cost, RoutineCost? total, string? endless)
+    internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless)
     {
         // A routine no path leaves has no pass to cost, which is worth saying rather than
         // leaving a line that looks as though the lens failed on it.
@@ -106,6 +98,21 @@ internal static class CodeLenses
             ? count + ending
             : $"{count}, {Count(with, total.Value.Most)} with calls{ending}";
     }
+
+    /// <summary>
+    /// Which registers a routine hands back as it was entered with them. A routine nt65 could
+    /// not cost is one it could not lay out either, and what it keeps would be worked out from
+    /// bytes that are not the ones it would assemble to.
+    /// </summary>
+    private static string? Kept(FlowRegion region) => region.Total.Ends
+        ? Spell(region.Registers.Kept, region.Registers.Complete)
+        : null;
+
+    /// <summary>
+    /// What is kept, as a lens says it. The hover spells the list the same way and leaves the
+    /// word off, because the key beside it already says what the list is.
+    /// </summary>
+    private static string Spell(Registers kept, bool complete) => $"preserves {Lsp.Spell(kept, complete)}";
 
     /// <summary>A count as it is shown: an interval, or the fewest and a <c>+</c> where there is no most.</summary>
     private static string Count(int least, int? most) =>

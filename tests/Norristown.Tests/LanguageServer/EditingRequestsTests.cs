@@ -733,8 +733,10 @@ public sealed class EditingRequestsTests
         var routine = await client.HoverAsync(MainUri, new Position(2, 7), timeout);
         var scope = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
 
-        Assert.Contains("preserves Y, C", routine?.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("preserves A, Y, C", scope?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\n.proc main\n```", routine?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("preserves  Y, C", routine?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\n.scope\n```", scope?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("preserves  A, Y, C", scope?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -764,12 +766,205 @@ public sealed class EditingRequestsTests
         var after = await client.HoverAsync(MainUri, new Position(5, 4), timeout);
 
         Assert.Contains(
-            "registers here:\n\n```text\nA  as entered\nX  as entered\nY  as entered\nC  as entered\n```",
+            "A       as entered\nX       as entered\nY       as entered\nC       as entered\n```",
             entry?.Contents.Value,
             StringComparison.Ordinal);
         Assert.Contains(
-            "registers here:\n\n```text\nA  as X entered\nX  as entered\nY  set\nC  as entered\n```",
+            "A       X as entered\nX       as entered\nY       new\nC       as entered\n```",
             after?.Contents.Value,
+            StringComparison.Ordinal);
+
+        // The routine pushes nothing, and a missing group is what an empty stack looks like.
+        Assert.DoesNotContain("stack", after?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// What a register may hold is a set, and a place two paths reach may hold the entry value
+    /// on one of them and something loaded on the other. Collapsing that to not known hides a
+    /// save that is still good on one path, so the words are joined instead.
+    /// </summary>
+    [Fact]
+    public async Task HoverSpellsOutWhatTwoPathsLeaveInARegister()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                ldx $10
+                beq @skip
+                lda #1
+            @skip:
+                sta $11
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
+
+        // One path falls through the `lda` and the other branches over it.
+        Assert.Contains(
+            "A       as entered, or new\nX       new\nY       as entered\nC       as entered",
+            hover?.Contents.Value,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// What a routine is holding, top of the stack first. A save is worth as much as what it
+    /// saved, and what a <c>pla</c> is about to get back is the question a reader has.
+    /// </summary>
+    [Fact]
+    public async Task HoverListsWhatTheRoutineHasPushed()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                txa
+                pha
+                php
+                sta $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(6, 4), timeout);
+
+        // The `php` is on top; under it is the accumulator, which `txa` filled with X.
+        Assert.Contains(
+            "C       as entered\n\nstack   C as entered\n        X as entered\n```",
+            hover?.Contents.Value,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A stack the analysis lost track of says so. A missing group is what an empty stack looks
+    /// like, and one nothing is known of is not an empty one.
+    /// </summary>
+    [Fact]
+    public async Task HoverSaysSoWhereTheStackIsNotKnown()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                txs
+                sta $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(4, 4), timeout);
+
+        Assert.Contains("\nstack   unknown", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A reader takes in the top of the stack, which is what the routine is about to pull back,
+    /// so a deep one is cut off and counted rather than run down the screen.
+    /// </summary>
+    [Fact]
+    public async Task HoverCountsThePushesItDoesNotList()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                pha
+                pha
+                pha
+                pha
+                pha
+                pha
+                pha
+                sta $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(10, 4), timeout);
+
+        Assert.Contains("        A as entered\n        and 1 more\n```", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A <c>.frame</c> makes the bytes under it one thing the routine put there, so they are
+    /// read as one row however many pushes went into them.
+    /// </summary>
+    [Fact]
+    public async Task HoverReadsAFrameAsOnePush()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 65816
+            .struct Locals {
+            a:      .word
+            b:      .word
+            }
+            .segment CODE
+            .proc p: a16, i8 {
+                pea $0000
+                pea $1234
+                .frame vars: Locals
+                sta $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(11, 4), timeout);
+
+        Assert.Contains("\nstack   frame vars\n```", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// On the 65816 the processor-state analysis knows what the saved-register stack cannot:
+    /// what a <c>php</c> saved, and how wide the register a push moved was, which is what
+    /// decides whether the pull gets the value back at all.
+    /// </summary>
+    [Fact]
+    public async Task HoverNamesA65816PushAndSaysHowWideItWas()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc p: a8, i8 {
+                pha
+                php
+                phx
+                sta $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
+
+        Assert.Contains(
+            "stack   X as entered, 8-bit\n        status a8, i8\n        A as entered, 8-bit\n```",
+            hover?.Contents.Value,
             StringComparison.Ordinal);
     }
 

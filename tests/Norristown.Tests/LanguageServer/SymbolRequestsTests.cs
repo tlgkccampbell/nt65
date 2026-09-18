@@ -67,15 +67,33 @@ public sealed class SymbolRequestsTests
 
         var label = await client.HoverAsync(Uri, new Position(2, 6), timeout);
         Assert.NotNull(label);
-        Assert.Contains("**data declaration** `ptr`", label.Contents.Value);
-        Assert.Contains("address size: `zp` (1 byte)", label.Contents.Value);
-        Assert.Contains("segment: `ZEROPAGE`", label.Contents.Value);
+        Assert.Contains("```nt65\n.data ptr:    .word\n```", label.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("address  zp (1 byte) in ZEROPAGE", label.Contents.Value, StringComparison.Ordinal);
 
         var constant = await client.HoverAsync(Uri, new Position(5, 0), timeout);
         Assert.NotNull(constant);
-        Assert.Contains("**constant** `SCREEN`", constant.Contents.Value);
-        Assert.Contains("value: `$0400`", constant.Contents.Value);
-        Assert.Contains("address size: `abs` (2 bytes)", constant.Contents.Value);
+        Assert.Contains("```nt65\nSCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("value    $0400 (1024)\naddress  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// nt65 writes a number in hexadecimal, which is what an address or a mask is read as. A
+    /// number that is also a count is worth the decimal beside it, and below ten the two are
+    /// the same digit, so there is nothing to put beside it.
+    /// </summary>
+    [Fact]
+    public async Task HoverPutsTheDecimalBesideAHexadecimalValue()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, ".module main\nWIDE = $0400\nSMALL = 4\n");
+        await client.NextDiagnosticsAsync(timeout);
+
+        var wide = await client.HoverAsync(Uri, new Position(1, 0), timeout);
+        var small = await client.HoverAsync(Uri, new Position(2, 0), timeout);
+
+        Assert.Contains("value    $0400 (1024)", wide?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("value    4\n", small?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>A name inside a scope hovers under the path another file would write.</summary>
@@ -87,8 +105,26 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(8, 11), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**routine** `gfx::init`", hover.Contents.Value);
+        Assert.Contains("```nt65\n.proc gfx::init\n```", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Equal(new Range(new Position(8, 10), new Position(8, 14)), hover.Range);
+    }
+
+    /// <summary>
+    /// What a routine costs and what it hands back are shown wherever its name is written:
+    /// what a call costs is the question asked at the call, not at the declaration, and the
+    /// lens that says it above the declaration is nowhere near the call.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnACallSaysWhatTheRoutineCostsAndKeeps()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(18, 13), timeout);
+
+        Assert.NotNull(hover);
+        Assert.Contains("```nt65\n.proc gfx::init\n```", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cost       13+ cycles, loops\npreserves  X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -118,20 +154,18 @@ public sealed class SymbolRequestsTests
 
         var member = await client.HoverAsync(Uri, new Position(8, 0), timeout);
         Assert.NotNull(member);
-        Assert.Contains("**member** `Player::hp`", member.Contents.Value);
-        Assert.Contains("offset: `4`", member.Contents.Value);
-        Assert.Contains("size: `1` byte", member.Contents.Value);
+        Assert.Contains("```nt65\nmember Player::hp\n```", member.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("offset  4\nsize    1 byte", member.Contents.Value, StringComparison.Ordinal);
 
         var nested = await client.HoverAsync(Uri, new Position(7, 0), timeout);
         Assert.NotNull(nested);
-        Assert.Contains("type: `Point`", nested.Contents.Value);
-        Assert.Contains("size: `4` bytes", nested.Contents.Value);
+        Assert.Contains("type    Point\nsize    4 bytes", nested.Contents.Value, StringComparison.Ordinal);
 
+        // How much room it takes and how many of them there are read as one fact.
         var array = await client.HoverAsync(Uri, new Position(11, 6), timeout);
         Assert.NotNull(array);
-        Assert.Contains("**data declaration** `here`", array.Contents.Value);
-        Assert.Contains("size: `20` bytes", array.Contents.Value);
-        Assert.Contains("count: `4`", array.Contents.Value);
+        Assert.Contains("```nt65\n.data here:   .type Player[4]\n```", array.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("size  20 bytes x 4", array.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>A cheap local has no path, so hover names the routine it is private to.</summary>
@@ -143,8 +177,8 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(11, 4), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**label** `@loop`", hover.Contents.Value);
-        Assert.Contains("private to: `init`", hover.Contents.Value);
+        Assert.Contains("```nt65\n@loop:\n```", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("private to  init", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -169,10 +203,10 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(9, 8), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**2 cycles**", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\nlda #0\n```", hover.Contents.Value, StringComparison.Ordinal);
 
         // `lda #0` and `sta z:ptr` come to five, and the block ends at the label after them.
-        Assert.Contains("this block: 5 cycles", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cycles  2         block 5", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>A branch costs two not taken and three taken, and one more when a taken
@@ -185,7 +219,7 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(12, 8), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**2-4 cycles**", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cycles  2-4       block 2-4", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -202,8 +236,8 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(5, 5), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("**3 cycles**", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("state here: `a16, i8, native`, 1 pushed", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cycles  3", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("state   a16, i8, native", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>An <c>.ensure</c> shows what the analysis found it has to write.</summary>
@@ -217,7 +251,7 @@ public sealed class SymbolRequestsTests
 
         var hover = await client.HoverAsync(Uri, new Position(4, 5), timeout);
         Assert.NotNull(hover);
-        Assert.Contains("writes `rep #$20`", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("writes  rep #$20 and sep #$10", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -350,7 +384,7 @@ public sealed class SymbolRequestsTests
         Assert.Equal(4, diagnostic.Range.Start.Line);
 
         var hover = await client.HoverAsync(Uri, new Position(1, 0), timeout);
-        Assert.Contains("`TOTAL`", hover?.Contents.Value);
+        Assert.Contains("TOTAL = 1", hover?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>

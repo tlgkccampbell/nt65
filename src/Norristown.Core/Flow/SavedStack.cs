@@ -27,6 +27,11 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// <summary>How many pushes are on it.</summary>
     public int Depth => pushes.Length;
 
+    /// <summary>
+    /// The pushes on it, deepest first, for an editor that lists what a routine is holding.
+    /// </summary>
+    public IReadOnlyList<SavedPush> Pushes => pushes;
+
     /// <summary>The stack with <paramref name="push"/> on top of it.</summary>
     public SavedStack Push(SavedPush push) => new(pushes.Add(push));
 

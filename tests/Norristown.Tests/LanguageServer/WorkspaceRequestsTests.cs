@@ -63,8 +63,12 @@ public sealed class WorkspaceRequestsTests
         var hover = await client.HoverAsync(MainUri, new Position(4, 8), timeout);
 
         Assert.NotNull(hover);
-        Assert.Contains("**routine** `gfx::clear`", hover.Contents.Value);
-        Assert.Contains("from: `gfx.nt65`", hover.Contents.Value);
+        Assert.Contains("```nt65\n.proc gfx::clear\n```", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("from       gfx.nt65", hover.Contents.Value, StringComparison.Ordinal);
+
+        // What the call costs, worked out from the flow of the file that declares the routine,
+        // which is not the file the call is written in.
+        Assert.Contains("cost       6 cycles\npreserves  A, X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -207,7 +211,7 @@ public sealed class WorkspaceRequestsTests
         Assert.Equal(GfxUri, definition.Uri);
         Assert.Equal(new Range(new Position(1, 19), new Position(1, 22)), definition.Range);
         Assert.NotNull(hover);
-        Assert.Contains("**signature set** `sys::std`", hover.Contents.Value);
+        Assert.Contains("```nt65\n.export .signature sys::std = a8\n```", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>The next diagnostics published for one file, skipping the others.</summary>

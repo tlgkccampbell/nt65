@@ -166,15 +166,7 @@ internal sealed class Server
 
     [JsonRpcMethod("textDocument/hover")]
     public Hover? Hover(TextDocumentPositionParams request) =>
-        At(request) is { } asked
-            ? Lsp.ToHover(
-                asked.Program,
-                asked.Model,
-                asked.Analysis.LayoutFor(asked.Model.Tree.Path),
-                asked.Analysis.FlowFor(asked.Model.Tree.Path),
-                asked.Analysis.StatesFor(asked.Model.Tree.Path),
-                asked.Position)
-            : null;
+        At(request) is { } asked ? Lsp.ToHover(asked.Analysis, asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request) =>

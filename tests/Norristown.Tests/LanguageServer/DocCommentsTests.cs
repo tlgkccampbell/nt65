@@ -97,7 +97,7 @@ public sealed class DocCommentsTests
         var hover = await client.HoverAsync(Uri, new Position(15, 14), timeout);
 
         Assert.NotNull(hover);
-        Assert.Contains("`play::pulse2`", hover.Contents.Value);
+        Assert.Contains("routine play::pulse2", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("Starts the channel it is named after.", hover.Contents.Value);
     }
 

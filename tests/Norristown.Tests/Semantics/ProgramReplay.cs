@@ -280,16 +280,13 @@ internal sealed class ProgramReplay
         {
             var tree = model.Tree;
             text.Append($"== {tree.Path} omits {string.Join(", ", analysis.Configuration.Omitted(tree))}\n");
-            var layout = analysis.LayoutFor(tree.Path);
-            var flow = analysis.FlowFor(tree.Path);
-            var states = analysis.StatesFor(tree.Path);
             text.Append($"imports {string.Join(", ", model.ExternalSymbols.Select(symbol => $"{symbol.Tree.Path} {symbol.QualifiedName}"))}\n");
             foreach (var start in tree.LineStarts)
-                text.Append($"{start}: {Json(Lsp.ToHover(analysis.Program, model, layout, flow, states, start))}\n");
+                text.Append($"{start}: {Json(Lsp.ToHover(analysis, model, start))}\n");
             foreach (var reference in model.References)
             {
                 var position = reference.Span.Start;
-                text.Append($"{position} {Json(Lsp.ToHover(analysis.Program, model, layout, flow, states, position))}"
+                text.Append($"{position} {Json(Lsp.ToHover(analysis, model, position))}"
                     + $" -> {Json(Lsp.ToDefinition(analysis.Program, model, position))}"
                     + $" all {Json(Lsp.ToReferences(analysis.Program, model, position, includeDeclaration: true))}\n");
             }

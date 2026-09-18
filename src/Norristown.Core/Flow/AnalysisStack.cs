@@ -43,6 +43,13 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     /// <summary>The byte on top, or null when there is none.</summary>
     public StackEntry? Top => entries.IsEmpty ? null : entries[^1];
 
+    /// <summary>
+    /// The bytes on it, deepest first, for an editor that lists what a routine is holding. The
+    /// saved-register stack counts pushes and this one counts bytes, so a reader that wants
+    /// pushes groups these by each entry's size.
+    /// </summary>
+    public IReadOnlyList<StackEntry> Entries => entries;
+
     /// <summary>The stack with <paramref name="entry"/> pushed <paramref name="count"/> times.</summary>
     public AnalysisStack Push(StackEntry entry, int count = 1)
     {

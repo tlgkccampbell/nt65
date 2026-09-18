@@ -1560,18 +1560,27 @@ editor can be told not to show.
 - **On hover over the line that declares a routine or opens a block**, the same list, because
   the lens above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,
-  one to a line and always all four:
+  one to a line and always all four, and under them what the routine has pushed, top of the
+  stack first:
 
   ```text
-  A  as X entered
-  X  as entered
-  Y  set
-  C  not known
+  A       X as entered
+  X       as entered
+  Y       new
+  C       as entered, or new
+
+  stack   X as entered
+          status a8, i8
   ```
 
-  A register holds what it was entered with, what an instruction here set, or what another
-  register was entered with — which is how a 6502 saves X, and naming the register the value
-  came from is what makes the save readable.
+  What a register may hold is a set rather than one answer: the value it was entered with, the
+  value another register was entered with — which is how a 6502 saves X, and naming the
+  register the value came from is what makes the save readable — a value written here, or
+  something nothing is known about. Where two paths leave different things the words are
+  joined and not collapsed, because a save that is still good on one of them is worth seeing.
+  A push is spelled the same way, and on the 65816 the state analysis names what the
+  saved-register stack cannot: what a `php` saved, what a constant push holds, where a
+  `.frame` is, and how wide the register a push moved was.
 
 ## 8. Data
 
@@ -2812,8 +2821,9 @@ alone and without an assembler:
   the symbol, and leaves a name `as` gave alone), the member names a record gives values
   included;
 - colour every name by what it refers to, so `Joy::A` is an enum member and not a register;
-- show on hover a symbol's kind, value, address size, segment and byte size, and with them
-  the comment written above the declaration. There is no doc-comment syntax of its own: the
+- show on hover the line that declares a symbol, as the language writes it, and under it its
+  value, how wide an address it is, the segment it sits in and how many bytes it takes, and
+  with them the comment written above the declaration. There is no doc-comment syntax of its own: the
   `;` lines directly above a declaration, each on a line of its own, are what its author had
   to say about it, and a blank line or a line of code between ends them. Every instance of a
   family is declared on the family's line, so each of them shows the family's comment;

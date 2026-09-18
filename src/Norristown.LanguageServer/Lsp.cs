@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.Text;
 using Norristown.Flow;
 using Norristown.Layout;
+using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -20,6 +20,15 @@ internal static class Lsp
 {
     /// <summary>What the client shows as the origin of every diagnostic nt65 reports.</summary>
     private const string SourceName = "nt65";
+
+    /// <summary>Where the block's own count stands on the row the line's count starts.</summary>
+    private const int BlockColumn = 10;
+
+    /// <summary>
+    /// How many pushes a hover lists before it says how many more there are. A reader takes
+    /// in the top of the stack, which is what the routine is about to pull back.
+    /// </summary>
+    private const int MostPushes = 6;
 
     /// <summary>
     /// Everything wrong with one file, and the branches this build leaves out. An omitted
@@ -48,51 +57,187 @@ internal static class Lsp
         [.. Folding.Build(tree).Select(range => new Protocol.FoldingRange(range.StartLine, range.EndLine))];
 
     /// <summary>
-    /// What to show at <paramref name="position"/>: the name under the caret, or, where
-    /// there is none, how long the instruction on that line takes, how long the block
-    /// around it takes, and on the 65816 the processor state that reaches it.
+    /// What to show at <paramref name="position"/>: the name under the caret, or, where there
+    /// is none, the <c>.scope</c> block the line opens or the instruction written on it.
+    /// <para>
+    /// Every hover is the same three zones, and each is left out when it is empty: the line
+    /// under the caret as the language writes it, a grid of what the analysis worked out about
+    /// it, and the comment its author left above it.
+    /// </para>
     /// </summary>
-    public static Protocol.Hover? ToHover(
-        ProgramModel program, SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states,
-        int position)
+    public static Protocol.Hover? ToHover(ProgramAnalysis analysis, SemanticModel model, int position)
     {
-        if (model.ReferenceAt(position) is { } reference)
-        {
-            // The declaration as the program has it now: an edit that leaves what other files
-            // see of a file alone keeps their models, and with them the symbols they resolved
-            // to, whose file is the one from before the edit.
-            var symbol = program.Current(reference.Symbol);
-            return new Protocol.Hover(
-                Protocol.MarkupContent.Markdown(
-                    Describe(symbol, model.Tree) + Declares(model, reference)
-                    + Preserves(flow, reference) + Documented(symbol)),
-                ToRange(model.Tree, reference.Span));
-        }
-        return ToScope(model, flow, position) ?? ToTiming(model, layout, flow, states, position);
+        var flow = analysis.FlowFor(model.Tree.Path);
+        return model.ReferenceAt(position) is { } reference
+            ? ToName(analysis, model, reference)
+            : ToScope(model, flow, position) ?? ToTiming(analysis, model, flow, position);
     }
 
     /// <summary>
-    /// What a routine hands back, where the caret is on the line that declares it. A lens says
-    /// the same thing above the line, and a lens is something an editor can be told not to
-    /// show, so the hover does not leave it to one.
+    /// What an editor shows about a name: the line that declares it, the facts the analysis
+    /// worked out, and the comment written above it. What a routine costs and what it hands
+    /// back are shown wherever it is named and not only where it is declared, because what a
+    /// call costs is the question asked at the call.
     /// </summary>
-    private static string Preserves(ControlFlow? flow, SymbolReference reference)
+    private static Protocol.Hover ToName(ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
     {
-        if (!reference.IsDeclaration || flow is null)
-            return "";
-        var found = flow.Regions
-            .Where(region => region.Routine.NameSpan == reference.Symbol.NameSpan && region.Total.Ends)
-            .Select(region => (region.Routine.Name, Text: Spell(region.Registers.Kept, region.Registers.Complete)))
-            .ToList();
-        if (found.Count == 0)
-            return "";
+        // The declaration as the program has it now: an edit that leaves what other files
+        // see of a file alone keeps their models, and with them the symbols they resolved
+        // to, whose file is the one from before the edit.
+        var symbol = analysis.Program.Current(reference.Symbol);
+        var card = new Card(Headline(symbol, model.Tree));
 
-        // Every instance of a family is declared on one line. Where they all hand back the
-        // same, the line says it once.
-        var texts = found.Select(region => region.Text).Distinct(StringComparer.Ordinal).ToList();
-        return texts.Count == 1
-            ? $"\n- {texts[0]}"
-            : string.Concat(found.Select(region => $"\n- {region.Name}: {region.Text}"));
+        // A name from another module is worth naming that module for: it is the file the
+        // declaration is in, and the file whose `.export` makes it nameable here.
+        if (symbol.Tree != model.Tree)
+            card.Row("from", symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..]);
+
+        // A name no path can reach is shown as it is written, so the routine or scope it is
+        // private to is worth saying instead.
+        if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
+            card.Row("private to", owner);
+        if (symbol.Kind == SymbolKind.Member)
+            card.Row("offset", symbol.Value.ToString());
+        else if (symbol.Value.IsKnown)
+            card.Row("value", Spell(symbol.Value));
+        if (symbol.Type is { } type)
+            card.Row("type", type.QualifiedName);
+
+        // How much room it takes and how many of them there are answer one question, so they
+        // are read together rather than a line apart. One of something is what a declaration
+        // with no count means, and saying so says nothing.
+        if (symbol.Size is { } room)
+        {
+            card.Row("size", $"{room} byte{(room == 1 ? "" : "s")}"
+                + (symbol.Count is > 1 and { } count && symbol.Kind != SymbolKind.Member ? $" x {count}" : ""));
+        }
+        if (symbol.AddressSize is { } size)
+        {
+            card.Row("address", $"{Spell(size)} ({(int)size} byte{((int)size == 1 ? "" : "s")})"
+                + (symbol.IsAddress && symbol.Segment is { } segment ? $" in {segment}" : ""));
+        }
+        Declares(card, model, reference);
+        Routine(card, analysis, symbol);
+        card.Prose(DocComments.Of(symbol));
+        return new Protocol.Hover(
+            Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, reference.Span));
+    }
+
+    /// <summary>
+    /// The line a name is declared on, as the language writes it, under the name a reader
+    /// would write for it. Where the declaration is not a line of its own — a member of a
+    /// layout, a macro's parameter, the name a repetition binds and the instances it stands
+    /// for — there is no line to show, so the kind and the name stand in for one.
+    /// </summary>
+    private static string Headline(Symbol symbol, SyntaxTree asked)
+    {
+        var named = symbol.Tree != asked ? symbol.PathName : symbol.QualifiedName;
+        return symbol.Kind is SymbolKind.Member or SymbolKind.MacroParameter or SymbolKind.Binding
+            || symbol.Bound is not null
+            || Declaring(symbol, named) is not { Length: > 0 } line
+                ? $"{symbol.KindText} {named}"
+                : line;
+    }
+
+    /// <summary>
+    /// The declaring line as it is written, with the name on it replaced by
+    /// <paramref name="named"/>, since a scope or a module makes the name a reader writes
+    /// longer than the one the line carries.
+    /// </summary>
+    private static string Declaring(Symbol symbol, string named)
+    {
+        var tree = symbol.Tree;
+        var index = tree.GetLineIndex(symbol.NameSpan.Start);
+        var start = tree.LineStarts[index];
+        var end = index + 1 < tree.LineStarts.Length ? tree.LineStarts[index + 1] : tree.Text.Length;
+        var line = tree.Text[start..end].TrimEnd('\n', '\r');
+        var at = symbol.NameSpan.Start - start;
+
+        // A cheap local is written with an `@` that its name does not carry, so the line
+        // already says it the way a reader would.
+        if (!symbol.IsCheapLocal && at >= 0 && at + symbol.NameSpan.Length <= line.Length
+            && line.AsSpan(at, symbol.NameSpan.Length).SequenceEqual(symbol.Name.AsSpan()))
+        {
+            line = line[..at] + named + line[(at + symbol.NameSpan.Length)..];
+        }
+        return Written(line);
+    }
+
+    /// <summary>
+    /// A line as a headline shows it: without the indentation before it, the comment at the
+    /// end of it or the brace that opens the block it heads, none of which is what was asked
+    /// about.
+    /// </summary>
+    private static string Written(string line)
+    {
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] == '"')
+                quoted = !quoted;
+            else if (line[i] == ';' && !quoted)
+            {
+                line = line[..i];
+                break;
+            }
+        }
+        return line.TrimEnd().TrimEnd('{').Trim();
+    }
+
+    /// <summary>
+    /// What a routine costs and what it hands back, wherever its name is written. A lens says
+    /// the same above the declaration, and a lens is something an editor can be told not to
+    /// show and is nowhere near the call anyway. The flow is the declaring file's, which a
+    /// call from another file is not in.
+    /// </summary>
+    private static void Routine(Card card, ProgramAnalysis analysis, Symbol symbol)
+    {
+        if (analysis.FlowFor(symbol.Tree.Path) is not { } flow)
+            return;
+        var found = flow.Regions
+            .Where(region => region.Routine.Tree == symbol.Tree && region.Routine.NameSpan == symbol.NameSpan)
+            .Select(region => (
+                region.Routine.Name,
+                Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns"),
+                Kept: region.Total.Ends ? Spell(region.Registers.Kept, region.Registers.Complete) : null))
+            .ToList();
+        Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
+        Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
+    }
+
+    /// <summary>
+    /// One row of the grid, or one row per instance where the instances of a family answer
+    /// differently. Every instance is declared on the family's one line, so where they all
+    /// answer the same the line says it once.
+    /// </summary>
+    private static void Rows(Card card, string key, IEnumerable<(string Name, string? Text)> found)
+    {
+        var named = found.Where(region => region.Text is { Length: > 0 }).ToList();
+        var texts = named.Select(region => region.Text!).Distinct(StringComparer.Ordinal).ToList();
+        if (texts.Count == 1)
+        {
+            card.Row(key, texts[0]);
+            return;
+        }
+        for (var i = 0; i < named.Count; i++)
+            card.Row(i == 0 ? key : "", $"{named[i].Name}: {named[i].Text}");
+    }
+
+    /// <summary>
+    /// What a family declares, for the name its repetition binds: the instances it stands for,
+    /// which is what the line the caret is on is worth knowing.
+    /// </summary>
+    private static void Declares(Card card, SemanticModel model, SymbolReference reference)
+    {
+        if (reference is not { IsDeclaration: true, Symbol.Kind: SymbolKind.Binding })
+            return;
+        var declared = model.Families
+            .Where(family => family.Binding == reference.Symbol)
+            .SelectMany(family => family.Instances)
+            .Select(instance => instance.QualifiedName)
+            .ToList();
+        if (declared.Count > 0)
+            card.Row("declares", string.Join(", ", declared));
     }
 
     /// <summary>
@@ -108,79 +253,73 @@ internal static class Lsp
             {
                 if (position < scope.Opener.Start || position >= scope.Opener.End)
                     continue;
+                var card = new Card(Written(model.Tree.Text[scope.Opener.Start..scope.Opener.End]));
                 var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
-                var text = cost is { Least: { } least }
-                    ? $"**{Spell(new CycleCount(least, cost.Most ?? least))}**\n\n{Spell(scope.Kept, scope.Complete)}"
-                    : Spell(scope.Kept, scope.Complete);
+                card.Row("cost", CodeLenses.Spell(cost, null, null));
+                card.Row("preserves", Spell(scope.Kept, scope.Complete));
                 return new Protocol.Hover(
-                    Protocol.MarkupContent.Markdown(text), ToRange(model.Tree, scope.Opener));
+                    Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, scope.Opener));
             }
         }
         return null;
     }
 
-    /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
-    private static string Documented(Symbol symbol) =>
-        DocComments.Of(symbol) is { } written ? $"\n\n{written}" : "";
-
     /// <summary>
-    /// What a family declares, for the name its repetition binds: the instances it stands for,
-    /// which is what the line the caret is on is worth knowing.
-    /// </summary>
-    private static string Declares(SemanticModel model, SymbolReference reference)
-    {
-        if (reference is not { IsDeclaration: true, Symbol.Kind: SymbolKind.Binding })
-            return "";
-        var declared = model.Families
-            .Where(family => family.Binding == reference.Symbol)
-            .SelectMany(family => family.Instances)
-            .Select(instance => $"`{instance.QualifiedName}`")
-            .ToList();
-        return declared.Count == 0 ? "" : $"\n- declares: {string.Join(", ", declared)}";
-    }
-
-    /// <summary>
-    /// How long the instruction at <paramref name="position"/> takes, and how long the block
-    /// it is in takes. The count is an interval wherever it depends on something the program
-    /// does not say, such as whether an indexed read crosses a page.
+    /// The instruction at <paramref name="position"/>: how long it takes and how long the
+    /// block around it takes, and, where the analysis followed control to it, the processor
+    /// state that reaches it, what each register holds and what the routine has pushed. The
+    /// count is an interval wherever it depends on something the program does not say, such
+    /// as whether an indexed read crosses a page.
     /// </summary>
     private static Protocol.Hover? ToTiming(
-        SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states, int position)
+        ProgramAnalysis analysis, SemanticModel model, ControlFlow? flow, int position)
     {
-        if (layout is null || Statement(model.Tree, position) is not { } statement)
+        if (analysis.LayoutFor(model.Tree.Path) is not { } layout
+            || Statement(model.Tree, position) is not { } statement)
+        {
             return null;
+        }
         if (statement.Kind is not (SyntaxKind.InstructionStatement or SyntaxKind.EnsureDirective)
             || layout.AnyOf(statement) is not { Cycles: { } cycles } laid)
         {
             return null;
         }
 
-        var text = new StringBuilder($"**{Spell(cycles)}**");
+        // What the line takes and what the block around it takes answer the same question at
+        // two scales, so they are read across one row rather than down two.
+        var card = new Card(Written(model.Tree.Text[statement.Span.Start..statement.Span.End]));
+        card.Row("cycles", Around(flow, statement)?.Cycles is { } block
+            ? cycles.ToString().PadRight(BlockColumn) + $"block {block}"
+            : cycles.ToString());
 
         // An `.ensure` writes what the analysis found it needs, which is worth seeing.
         if (laid.Ensured is { } ensured)
         {
             var written = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
                 .Where(pair => pair.Flags != 0)
-                .Select(pair => $"`{pair.Mnemonic} #${pair.Flags.ToString("x2", CultureInfo.InvariantCulture)}`")
+                .Select(pair => $"{pair.Mnemonic} #${pair.Flags.ToString("x2", CultureInfo.InvariantCulture)}")
                 .ToList();
-            text.Append(written.Count == 0
-                ? "\n\nwrites nothing: the widths already hold"
-                : $"\n\nwrites {string.Join(" and ", written)}");
+            card.Row("writes", written.Count == 0
+                ? "nothing: the widths already hold"
+                : string.Join(" and ", written));
         }
-        if (Around(flow, statement)?.Cycles is { } block)
-            text.Append($"\n\nthis block: {Spell(block)}");
 
         // What the analysis found reaching the line, which is what sized its immediate.
-        if (states?.AnyBefore(statement) is { } state)
+        var state = analysis.StatesFor(model.Tree.Path)?.AnyBefore(statement);
+        if (state is not null)
+            card.Row("state", state.Processor.ToString());
+
+        // A column a reader's eye can run down beats a sentence they have to take apart, so
+        // the registers are always all four wherever anything is known of them.
+        var registers = flow?.Registers?.AnyBefore(statement);
+        if (registers is { } held)
         {
-            text.Append($"\n\nstate here: `{state.Processor}`");
-            text.Append(state.Stack is { } stack ? $", {stack.Depth} pushed" : ", stack not known");
+            foreach (var register in RegisterEffects.Each(Registers.All))
+                card.Row(RegisterEffects.Spell(register), Held(held.Of(register), register));
         }
-        if (flow?.Registers?.AnyBefore(statement) is { } registers)
-            text.Append($"\n\nregisters here:\n\n```text\n{Spell(registers)}\n```");
+        Pushed(card, analysis, registers, state);
         return new Protocol.Hover(
-            Protocol.MarkupContent.Markdown(text.ToString()), ToRange(model.Tree, statement.Span));
+            Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, statement.Span));
     }
 
     /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>
@@ -205,37 +344,184 @@ internal static class Lsp
                 step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
 
     /// <summary>
-    /// What each register holds at a point, one to a line and always all four, for the hover to
-    /// show in a fenced block. A hover has room to lay it out, and a column a reader's eye can
-    /// run down beats a sentence they have to take apart:
-    /// <code>
-    /// A  as X entered
-    /// X  as entered
-    /// Y  set
-    /// C  not known
-    /// </code>
+    /// What the routine has pushed, top of the stack first, one row to a push. Two models of
+    /// the stack are lined up against one another: the saved-register stack says whose entry
+    /// value a push holds, and the 65816's says what a <c>php</c> saved, what a constant push
+    /// holds and where a <c>.frame</c> is, neither of which the other can see.
     /// </summary>
-    internal static string Spell(RegisterState state) => string.Join("\n", RegisterEffects
-        .Each(Registers.All)
-        .Select(register => $"{RegisterEffects.Spell(register)}  {Held(register, state.Of(register))}"));
+    private static void Pushed(Card card, ProgramAnalysis analysis, RegisterState? registers, FlowState? state)
+    {
+        if (registers is null && state is null)
+            return;
+
+        // A missing group would read as an empty stack, and a stack the analysis lost track of
+        // is not an empty one.
+        if (registers?.Stack is null && state?.Stack is null)
+        {
+            card.Gap();
+            card.Row("stack", "unknown");
+            return;
+        }
+        var rows = Pushes(analysis, registers?.Stack, state?.Stack);
+        if (rows.Count == 0)
+            return;
+        card.Gap();
+        for (var i = 0; i < rows.Count && i < MostPushes; i++)
+            card.Row(i == 0 ? "stack" : "", rows[i]);
+
+        // A routine deep in a save holds more than a reader can take in at a glance, and the
+        // pushes it is about to pull back are the ones on top.
+        if (rows.Count > MostPushes)
+            card.Row("", $"and {rows.Count - MostPushes} more");
+    }
 
     /// <summary>
-    /// What one register holds. A 6502 saves X through the accumulator, so a register may hold
-    /// what another was entered with, and saying which one is what makes a save readable.
+    /// One row per push, top first, from whichever of the two stacks knows about it. The
+    /// 65816's names a push the other can only call new, so where it has a name that name is
+    /// what the row says; a push neither of them reaches is unknown rather than missing.
     /// </summary>
-    private static string Held(Registers register, RegisterValue value)
+    private static IReadOnlyList<string> Pushes(ProgramAnalysis analysis, SavedStack? saved, AnalysisStack? bytes)
     {
-        if (value.Holds(register))
-            return "as entered";
-        if (value is { IsWritten: false, IsUnknown: false } && value.Entry != Registers.None)
-            return $"as {RegisterEffects.Spell(value.Entry)} entered";
-        return value is { IsWritten: true, IsUnknown: false } && value.Entry == Registers.None ? "set" : "not known";
+        List<SavedPush> pushes = saved is null ? [] : [.. saved.Pushes.Reverse()];
+        IReadOnlyList<StackEntry> entries = bytes?.Entries ?? [];
+        var rows = new List<string>();
+        var top = entries.Count - 1;
+        var i = 0;
+        while (i < pushes.Count || top >= 0)
+        {
+            var wide = i < pushes.Count ? Bytes(pushes[i]) : null;
+            var group = top >= 0 ? Group(analysis, entries, top, wide) : (Bytes: 0, Name: (string?)null);
+            top -= group.Bytes;
+
+            // One group of bytes may be more than one push: a `.frame` names all of the pushes
+            // it covers, and reading them as the one thing it made of them is what it is for.
+            var first = i;
+            for (var covered = 0; i < pushes.Count && (i == first || covered < group.Bytes); i++)
+            {
+                if (Bytes(pushes[i]) is not { } more)
+                {
+                    i++;
+                    break;
+                }
+                covered += more;
+            }
+
+            // The saved-register stack is about this row only where it is about one push of it.
+            var push = i == first + 1 && first < pushes.Count ? pushes[first] : (SavedPush?)null;
+            var text = group.Name ?? (push is { } held ? Held(held.Value, null) : "unknown");
+
+            // Only the 65816 pushes a register whose width the caller cannot read off the CPU,
+            // and only there does the width decide whether a pull gets the value back.
+            if (analysis.Cpu == Cpu.Wdc65816 && push is { Size: PushSize.Accumulator or PushSize.Index, Width: var width }
+                && width is Width.Eight or Width.Sixteen)
+            {
+                text += width == Width.Sixteen ? ", 16-bit" : ", 8-bit";
+            }
+            rows.Add(text);
+        }
+        return rows;
+    }
+
+    /// <summary>How many bytes a push took, or null where the width it goes by is not known.</summary>
+    private static int? Bytes(SavedPush push) => push.Size switch
+    {
+        PushSize.OneByte => 1,
+        PushSize.TwoBytes => 2,
+        _ => push.Width switch
+        {
+            Width.Eight => 1,
+            Width.Sixteen => 2,
+            _ => (int?)null,
+        },
+    };
+
+    /// <summary>
+    /// The push whose top byte is <paramref name="top"/>: how many bytes it took, and what the
+    /// 65816's analysis knows it holds, or null where it knows nothing about it.
+    /// <paramref name="hint"/> is how many bytes the saved-register stack says the push took,
+    /// which is what says how far a push of bytes nothing is known about reaches.
+    /// </summary>
+    private static (int Bytes, string? Name) Group(
+        ProgramAnalysis analysis, IReadOnlyList<StackEntry> entries, int top, int? hint)
+    {
+        if (Framed(analysis, entries, top) is { } frame)
+            return frame;
+        var entry = entries[top];
+        if (entry.IsStatus)
+            return (1, $"status {ProcessorState.Spell("a", entry.A)}, {ProcessorState.Spell("i", entry.Index)}");
+        if (entry is { Size: > 0, Byte: 0, Held.IsKnown: true } && entry.Size <= top + 1)
+            return (entry.Size, StateValue.Hex(entry.Held.Value, entry.Size * 2));
+        return (hint is { } wide && wide <= top + 1 ? wide : 1, null);
+    }
+
+    /// <summary>
+    /// The <c>.frame</c> the byte at <paramref name="top"/> belongs to, as one push however
+    /// many bytes it covers; null when it belongs to none. A frame is named on its lowest byte
+    /// only, and how far up it reaches is the size of the layout it was declared as.
+    /// </summary>
+    private static (int Bytes, string? Name)? Framed(
+        ProgramAnalysis analysis, IReadOnlyList<StackEntry> entries, int top)
+    {
+        for (var i = top; i >= 0; i--)
+        {
+            if (entries[i].Frame is not { } frame)
+                continue;
+            return i + (Room(analysis, frame) ?? 1) > top ? (top - i + 1, $"frame {frame.DisplayName}") : null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// How many bytes a <c>.frame</c> names: the size of the layout it was declared as. Nothing
+    /// asks a frame what it is laid out as until something like this does, so the answer is
+    /// looked up in the model of the file that declares it rather than read off the symbol.
+    /// </summary>
+    private static long? Room(ProgramAnalysis analysis, Symbol frame) => frame.Type?.Size
+        ?? (frame.TypeExpression is { } named
+            ? analysis.ModelFor(frame.Tree.Path)?.SymbolOf(named)?.Size
+            : null);
+
+    /// <summary>
+    /// What one register, or one push, may hold. It is a set rather than one answer: a place
+    /// two paths reach may hold the entry value on one of them and something loaded on the
+    /// other, and a reader told only that it is not known cannot see the save that is still
+    /// good. The words are joined rather than collapsed, in that order:
+    /// <code>
+    /// A  X as entered
+    /// X  as entered, or new
+    /// Y  new
+    /// C  new, or unknown
+    /// </code>
+    /// <para>
+    /// A 6502 saves X through the accumulator, so the entry value is named by the register it
+    /// came from rather than the one holding it: after <c>txa</c> the accumulator holds what X
+    /// was entered with, and so does the byte a <c>pha</c> puts on the stack.
+    /// </para>
+    /// </summary>
+    /// <param name="value">What may be held.</param>
+    /// <param name="own">The register holding it, whose own entry value needs no naming; null for a push.</param>
+    private static string Held(RegisterValue value, Registers? own)
+    {
+        var words = new List<string>();
+        if (own is { } self && value.Entry == self)
+            words.Add("as entered");
+        else if (value.Entry != Registers.None)
+        {
+            words.Add(
+                string.Join(" or ", RegisterEffects.Each(value.Entry).Select(RegisterEffects.Spell)) + " as entered");
+        }
+        if (value.IsWritten)
+            words.Add("new");
+        if (value.IsUnknown || words.Count == 0)
+            words.Add("unknown");
+        return string.Join(", or ", words);
     }
 
     /// <summary>
     /// The registers a routine or a block hands back, as a lens and a hover both say it:
-    /// <c>preserves A, X, Y, C</c>, <c>preserves X, Y</c>, <c>preserves none</c>. It is a list
-    /// and not a sentence about one, because it is read at a glance.
+    /// <c>A, X, Y, C</c>, <c>X, Y</c>, <c>none</c>. It is a list and not a sentence about one,
+    /// because it is read at a glance. A lens writes <c>preserves</c> in front of it; a hover
+    /// has a key beside it that says as much.
     /// <para>
     /// What nt65 works out is a floor, so where a call could not be followed the list ends with
     /// <c>?</c>: those registers and perhaps more, which is what <c>?</c> means everywhere else.
@@ -246,7 +532,7 @@ internal static class Lsp
         var names = RegisterEffects.Each(kept).Select(RegisterEffects.Spell).ToList();
         if (!complete)
             names.Add("?");
-        return "preserves " + (names.Count == 0 ? "none" : string.Join(", ", names));
+        return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
     /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
@@ -388,38 +674,13 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// What an editor shows about a symbol: what kind it is, what it is worth, how wide an
-    /// address it is and, for an address, the segment it sits in.
+    /// A value as the grid shows it. nt65 writes a number in hexadecimal, which is what an
+    /// address or a mask is read as; a number that is also a count is worth the decimal beside
+    /// it, and below ten the two are the same digit.
     /// </summary>
-    private static string Describe(Symbol symbol, SyntaxTree asked)
-    {
-        var text = new StringBuilder($"**{symbol.KindText}** `{(symbol.Tree != asked ? symbol.PathName : symbol.QualifiedName)}`\n");
-
-        // A name from another module is worth naming that module for: it is the file the
-        // declaration is in, and the file whose `.export` makes it nameable here.
-        if (symbol.Tree != asked)
-            text.Append($"\n- from: `{symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..]}`");
-
-        // A name no path can reach is shown as it is written, so the routine or scope it is
-        // private to is worth saying instead.
-        if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
-            text.Append($"\n- private to: `{owner}`");
-        if (symbol.Kind == SymbolKind.Member)
-            text.Append($"\n- offset: `{symbol.Value}`");
-        else if (symbol.Value.IsKnown)
-            text.Append($"\n- value: `{symbol.Value}`");
-        if (symbol.Type is { } type)
-            text.Append($"\n- type: `{type.QualifiedName}`");
-        if (symbol.Size is { } room)
-            text.Append($"\n- size: `{room}` byte{(room == 1 ? "" : "s")}");
-        if (symbol.Count is { } count && symbol.Kind != SymbolKind.Member)
-            text.Append($"\n- count: `{count}`");
-        if (symbol.AddressSize is { } size)
-            text.Append($"\n- address size: `{Spell(size)}` ({(int)size} byte{((int)size == 1 ? "" : "s")})");
-        if (symbol.IsAddress && symbol.Segment is { } segment)
-            text.Append($"\n- segment: `{segment}`");
-        return text.ToString();
-    }
+    private static string Spell(Value value) => value.AsNumber() is { } number && number >= 10
+        ? $"{value} ({number.ToString(CultureInfo.InvariantCulture)})"
+        : value.ToString();
 
     /// <summary>An address size as the language writes it.</summary>
     private static string Spell(AddressSize size) => size switch
@@ -486,4 +747,64 @@ internal static class Lsp
     /// <summary>A logical path back as a URI, for a diagnostic that points into another file.</summary>
     internal static string ToUri(string path) =>
         Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri : path;
+
+    /// <summary>
+    /// One hover's text, as every hover is written: a headline holding the line under the
+    /// caret in the language's own syntax, a grid of what the analysis worked out about it,
+    /// and the comment its author left above it, with a rule between the zones and each zone
+    /// left out when it is empty.
+    /// <para>
+    /// The grid's keys are padded to one column so that the values line up under one another
+    /// and a reader's eye can run down them. A row whose fact is not known is left out rather
+    /// than written as unknown, so the grid is only what is known.
+    /// </para>
+    /// </summary>
+    private sealed class Card
+    {
+        /// <summary>How far the values stand off the longest key.</summary>
+        private const int Gutter = 2;
+
+        /// <summary>The rows, a null standing for a blank line between two groups of them.</summary>
+        private readonly List<(string Key, string Value)?> rows = [];
+
+        private readonly string headline;
+
+        private string? prose;
+
+        public Card(string headline) => this.headline = headline;
+
+        /// <summary>
+        /// One row of the grid, left out when there is nothing to say. An empty key carries the
+        /// row above it on, which is how one fact takes more than one line.
+        /// </summary>
+        public void Row(string key, string? value)
+        {
+            if (value is { Length: > 0 })
+                rows.Add((key, value));
+        }
+
+        /// <summary>A blank line between two groups of rows, which keeps them in the same columns.</summary>
+        public void Gap() => rows.Add(null);
+
+        /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
+        public void Prose(string? written) => prose = written;
+
+        /// <inheritdoc/>
+        public override string ToString()
+        {
+            var zones = new List<string>();
+            if (headline.Length > 0)
+                zones.Add($"```nt65\n{headline}\n```");
+            if (rows.Count > 0)
+            {
+                var column = rows.Max(row => row?.Key.Length ?? 0) + Gutter;
+                zones.Add("```text\n"
+                    + string.Join("\n", rows.Select(row => row is { } written ? written.Key.PadRight(column) + written.Value : ""))
+                    + "\n```");
+            }
+            if (prose is { Length: > 0 })
+                zones.Add(prose);
+            return string.Join("\n---\n", zones);
+        }
+    }
 }
