@@ -6,84 +6,87 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// What is shown above a routine, and above each inline <c>.scope</c> block of one: what a
-/// pass through it costs. A <c>.scope</c> at file level holds declarations and no code, so it
-/// has nothing to count; one inside a routine is a part of that routine, and does.
+/// pass through it costs, and which registers it hands on. A <c>.scope</c> at file level holds
+/// declarations and no code, so it has neither; one inside a routine is a part of that routine,
+/// and has both.
+/// <para>
+/// The two are lenses of their own rather than one line, because they answer different
+/// questions and a reader looking for one should not have to read past the other.
+/// </para>
 /// </summary>
 internal static class CodeLenses
 {
     /// <summary>The lenses for <paramref name="tree"/>, in position order.</summary>
     public static IReadOnlyList<Protocol.CodeLens> In(SyntaxTree tree, ControlFlow? flow)
     {
-        var found = new List<(TextSpan At, string Routine, string Text)>();
+        var found = new List<(TextSpan At, int Kind, string Routine, string Text)>();
         foreach (var region in flow?.Regions ?? [])
         {
             if (region.Routine.Tree != tree)
                 continue;
-            if (Above(region) is { } text)
-                found.Add((region.Routine.NameSpan, region.Routine.Name, text));
+            if (Spell(region.Cost, region.Total, "never returns") is { } cost)
+                found.Add((region.Routine.NameSpan, 0, region.Routine.Name, cost));
+            if (Kept(region) is { } kept)
+                found.Add((region.Routine.NameSpan, 1, region.Routine.Name, kept));
             foreach (var scope in region.Scopes)
             {
                 if (Spell(scope.Cost, null, null) is { } inline)
-                    found.Add((scope.Opener, region.Routine.Name, inline));
+                    found.Add((scope.Opener, 0, region.Routine.Name, inline));
+            }
+            foreach (var scope in region.ScopeRegisters)
+            {
+                if (Spell(scope.Kept, scope.Complete) is { } inline)
+                    found.Add((scope.Opener, 1, region.Routine.Name, inline));
             }
         }
 
-        // Every instance of a family is declared on one line and costs at it. Where a pass
-        // costs the same on each of them the line says it once; where it does not, each says
-        // which instance it is about.
-        var lenses = new List<(int At, Protocol.CodeLens Lens)>();
-        foreach (var at in found.GroupBy(lens => lens.At))
+        // Every instance of a family is declared on one line and answers at it. Where every
+        // instance answers the same the line says it once; where they differ, each says which
+        // instance it is about. The two kinds are grouped apart, so one of them differing
+        // between instances does not make the other say which instance it is about too.
+        var lenses = new List<(int At, int Kind, Protocol.CodeLens Lens)>();
+        foreach (var at in found.GroupBy(lens => (lens.At, lens.Kind)))
         {
             var texts = at.Select(lens => lens.Text).Distinct(StringComparer.Ordinal).ToList();
             if (texts.Count == 1)
-                Add(at.Key, texts[0]);
+                Add(at.Key.At, at.Key.Kind, texts[0]);
             else
             {
                 foreach (var lens in at)
-                    Add(at.Key, $"{lens.Routine}: {lens.Text}");
+                    Add(at.Key.At, at.Key.Kind, $"{lens.Routine}: {lens.Text}");
             }
         }
 
-        void Add(TextSpan at, string text) =>
-            lenses.Add((at.Start, new Protocol.CodeLens(Lsp.ToRange(tree, at), new Protocol.Command(text, ""))));
-        return [.. lenses.OrderBy(lens => lens.At).Select(lens => lens.Lens)];
+        void Add(TextSpan at, int kind, string text) =>
+            lenses.Add((at.Start, kind, new Protocol.CodeLens(Lsp.ToRange(tree, at), new Protocol.Command(text, ""))));
+        return [.. lenses.OrderBy(lens => lens.At).ThenBy(lens => lens.Kind).Select(lens => lens.Lens)];
     }
 
     /// <summary>
-    /// The whole line above a routine: what a pass through it costs, and which registers it
-    /// hands back, where either is worth saying.
+    /// Which registers a routine hands back as it was entered with them. A routine nt65 could
+    /// not cost is one it could not lay out either, and what it keeps would be worked out from
+    /// bytes that are not the ones it would assemble to.
     /// </summary>
-    private static string? Above(FlowRegion region)
-    {
-        // A routine nt65 could not cost is one it could not lay out either, and what it keeps
-        // would be worked out from bytes that are not the ones it would assemble to.
-        if (Spell(region.Cost, region.Total, "never returns") is not { } cost)
-            return null;
-        return Kept(region) is { } kept ? $"{cost} · {kept}" : cost;
-    }
+    private static string? Kept(FlowRegion region) => region.Total.Ends
+        ? Spell(region.Registers.Kept, region.Registers.Complete)
+        : null;
 
     /// <summary>
-    /// Which registers a routine hands back as it was entered with them. Most routines work in
-    /// the accumulator and leave the rest alone, so what they keep is said as what they do not:
-    /// <c>keeps all but A</c> is the same answer as <c>keeps X, Y, C</c> and is the one worth
-    /// reading. What nt65 works out is a floor, so a routine whose calls it cannot all follow
-    /// never says <c>everything</c> or <c>all but</c>, which would read as the whole answer.
+    /// What is kept, as the lens says it: the registers, in one order, and nothing else.
+    /// <c>keeps A X Y C</c>, <c>keeps X Y</c>, <c>keeps none</c>. A lens is read at a glance
+    /// rather than out loud, so it is a list and not a sentence about a list.
+    /// <para>
+    /// What nt65 works out is a floor, so a routine whose calls it could not all follow ends
+    /// its list with <c>?</c>: those registers and perhaps more, which is what <c>?</c> means
+    /// everywhere else in the language.
+    /// </para>
     /// </summary>
-    private static string? Kept(FlowRegion region)
+    private static string Spell(Registers kept, bool complete)
     {
-        if (!region.Total.Ends)
-            return null;
-        var kept = region.Registers.Kept;
-        if (!region.Registers.Complete)
-            return kept == Registers.None ? "keeps ?" : "keeps " + RegisterEffects.Spell(kept);
-        if (kept == Registers.All)
-            return "keeps everything";
-        if (kept == Registers.None)
-            return "keeps nothing";
-        var lost = Registers.All & ~kept;
-        return RegisterEffects.Each(lost).Count() == 1
-            ? "keeps all but " + RegisterEffects.Spell(lost)
-            : "keeps " + RegisterEffects.Spell(kept);
+        var names = RegisterEffects.Each(kept).Select(RegisterEffects.Spell).ToList();
+        if (!complete)
+            names.Add("?");
+        return "keeps " + (names.Count == 0 ? "none" : string.Join(" ", names));
     }
 
     /// <summary>

@@ -452,10 +452,12 @@ restore across calls, and a compose across the program that folds callees into c
   promises nothing, and one with no body keeps nothing as far as a caller may rely. This
   makes a signature mean something on every CPU, where until now it meant something only on
   the 65816; `near`, `far`, `inline` and `args` stay 65816 items.
-- **The lens says what survives**, beside what a pass costs: `keeps all but A` where a routine
-  keeps all but one, `keeps everything` and `keeps nothing` at the ends, the registers listed
-  where it is neither, and `keeps ?` where a call could not be followed and silence would read
-  as safety.
+- **A lens of its own** above each routine and each inline `.scope` block of one, beside what a
+  pass costs: the registers listed and nothing else, `keeps A X Y C`, `keeps X Y`,
+  `keeps none`, with `?` ending the list where a call could not be followed and it may keep
+  more. A block is asked the same question of itself, from where it is entered.
+- **What each register holds at a line, on hover**, beside what the line costs: as entered,
+  set, or, where a save has moved one, as another register was entered.
 - **A warning where a caller leans on a register a call destroys**: loaded before the call,
   not written between, read after it, and the callee's set known. This is the one that finds
   bugs and the one that can be wrong about a program that is right, so it stays a warning and
@@ -473,10 +475,11 @@ calling convention — and it found a real bug when a save was removed from a co
 with nothing said about any of the checked-in programs. It came out because a warning is the
 wrong shape for the answer: every call takes some register away, being told so is rarely news,
 and what a reader wants is to see what the registers are doing rather than a list of the places
-they changed. §16 records it, and the showing of it is a stage of its own if it is wanted. What
-the writing of the rest found: the register-effects table is written out twice, in the analysis and in its test, because
-a mnemonic left out of it fails nothing on its own — it quietly says the instruction writes no
-register, and a routine then promises to hand back one it destroyed. The 6502 has no `phx`, so X
+they changed. §16 records it, and the showing of it is what the lens and the hover are for.
+What the writing of the rest found: the register-effects table is written out twice, in the
+analysis and in its test, because a mnemonic left out of it fails nothing on its own — it
+quietly says the instruction writes no register, and a routine then promises to hand back one
+it destroyed. The 6502 has no `phx`, so X
 is saved through the accumulator, and a register's value has to be followed across `txa` and
 `tax` as well as across the pushes; that is why what a register holds is named by the register
 it came from rather than by the one holding it. `rti` pulls the flags the processor pushed, so a
@@ -484,10 +487,12 @@ handler that has left the stack alone hands the carry back however it used it, a
 handler is checked at its `rti` as every other routine is at its `rts`. The saved-value stack is
 its own small thing rather than a field on the 65816's `StackEntry`: that one follows values to
 say what the widths and the banks are, this one follows whose value a push holds, and the four
-fields they would have shared are ones neither wants. The lens phrasing turned over on contact
-with real code: most routines work in the accumulator and keep three registers of four, so
-`keeps X, Y, C` above nearly every routine was the noise a lens exists to avoid. It says
-`keeps all but A`, with `everything`, `nothing` and `?` for the ends.
+fields they would have shared are ones neither wants. And two bugs came out of the replay
+tests, which compare an edited program against the same program read from scratch: a routine
+was keyed by where it was declared, so a file kept from before an edit named the routines of a
+file that changed at the positions they were at before the edit moved them, and the lookup
+missed. It is keyed by name now — and `CallCosts`, which this was copied from, had the same
+bug and is fixed with it.
 
 ## Stage 33: Release
 

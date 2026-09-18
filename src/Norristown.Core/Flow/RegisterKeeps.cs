@@ -34,11 +34,13 @@ public static class RegisterKeeps
         IReadOnlyList<SemanticModel> models, IReadOnlyList<CodeLayout> layouts,
         IReadOnlyList<ControlFlow> flows, IReadOnlyList<StateAnalysis> states)
     {
-        var regions = new Dictionary<(string Path, int At), FlowRegion>();
-        var walks = new Dictionary<(string Path, int At), Walk>();
+        var regions = new Dictionary<(string Path, string Name), FlowRegion>();
+        var walks = new Dictionary<(string Path, string Name), Walk>();
+        var byFile = new List<Walk>();
         for (var i = 0; i < flows.Count && i < models.Count && i < layouts.Count; i++)
         {
             var walk = new Walk(models[i], layouts[i], flows[i], i < states.Count ? states[i] : null);
+            byFile.Add(walk);
             foreach (var region in flows[i].Regions)
             {
                 var name = Named(region.Routine);
@@ -71,8 +73,11 @@ public static class RegisterKeeps
         foreach (var (name, region) in regions)
         {
             region.Registers = found[name];
+            region.ScopeRegisters = walks[name].Scopes(region, Of);
             walks[name].Run(region, Of, diagnostics);
         }
+        for (var i = 0; i < byFile.Count; i++)
+            flows[i].Registers = byFile[i].Held;
         return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Message)));
 
         // What a routine keeps: what the walk found, or, for one whose body is not here, what
@@ -91,10 +96,12 @@ public static class RegisterKeeps
             : found;
 
     /// <summary>
-    /// A routine by where it is declared, rather than by the symbol, which an analysis that kept
-    /// the file before an edit may hold a different object for.
+    /// A routine by its file and its flattened name, rather than by the symbol, which an
+    /// analysis that kept a file from before an edit holds a different object for. It is the
+    /// name and not the position, because a file that was kept still names the routines of a
+    /// file that changed at the positions they were at before the edit moved them.
     /// </summary>
-    private static (string Path, int At) Named(Symbol routine) => (routine.Tree.Path, routine.NameSpan.Start);
+    private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
     /// <summary>One file's routines, followed a routine at a time.</summary>
     private sealed class Walk
@@ -110,7 +117,11 @@ public static class RegisterKeeps
             this.layout = layout;
             this.flow = flow;
             this.states = states;
+            Held = new RegisterStates(model.Tree);
         }
+
+        /// <summary>What the registers hold at each statement of the file, for an editor to show.</summary>
+        public RegisterStates Held { get; }
 
         /// <summary>
         /// What <paramref name="region"/>'s routine keeps, with <paramref name="of"/> saying what
@@ -186,22 +197,142 @@ public static class RegisterKeeps
                 }
             }
 
-            // The blocks the state after a block travels to, as the 65816's analysis reads
-            // them: a call goes on at the statement after it, and a jump to a routine's entry
-            // leaves this one.
-            IEnumerable<int> Carried(BasicBlock block)
+            IEnumerable<int> Carried(BasicBlock block) => CarriedTo(blocks, block);
+        }
+
+        /// <summary>
+        /// The blocks the state after a block travels to, as the 65816's analysis reads them: a
+        /// call goes on at the statement after it, and a jump to a routine's entry leaves this one.
+        /// </summary>
+        private IEnumerable<int> CarriedTo(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
+        {
+            var calls = Ends(block).Calls;
+            foreach (var edge in block.Successors)
             {
-                var calls = Ends(block).Calls;
-                foreach (var edge in block.Successors)
-                {
-                    if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
-                        continue;
-                    if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
-                        continue;
-                    yield return edge.To;
-                }
+                if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
+                    continue;
+                if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
+                    continue;
+                yield return edge.To;
             }
         }
+
+        /// <summary>
+        /// What each inline <c>.scope</c> block of <paramref name="region"/> hands on. A block
+        /// is asked the same question its routine is, from where it is entered rather than from
+        /// where the routine was: a scope that saves a register and gives it back keeps it, even
+        /// where the routine around it does not.
+        /// </summary>
+        public IReadOnlyList<ScopeRegisters> Scopes(FlowRegion region, Func<Symbol, RoutineRegisters> of)
+        {
+            var found = new List<ScopeRegisters>();
+            foreach (var (opener, whole) in region.Inline)
+            {
+                if (Within(region, whole, of) is { } kept)
+                    found.Add(new ScopeRegisters(opener, kept.Kept, kept.Complete));
+            }
+            return found;
+        }
+
+        /// <summary>
+        /// What the part of a routine written inside <paramref name="whole"/> hands on, or null
+        /// where that is not one thing to ask: a block holding none of it, or holding some of it
+        /// and some of another, is not a pass through it. The shapes are the ones a cost is
+        /// worked out for, since they are the ones a block is a part of in the first place.
+        /// </summary>
+        private RoutineRegisters? Within(FlowRegion region, TextSpan whole, Func<Symbol, RoutineRegisters> of)
+        {
+            var blocks = region.Blocks;
+            var held = ControlFlow.Held(blocks, whole);
+            var inside = new bool[blocks.Count];
+            var all = 0;
+            var part = 0;
+            for (var i = 0; i < blocks.Count; i++)
+            {
+                inside[i] = held[i].Inside > 0;
+                if (held[i].Inside == 0)
+                    continue;
+                if (held[i].Inside == held[i].Total)
+                    all++;
+                else
+                    part++;
+            }
+
+            // Written inside one block, which runs all of it: what it hands on is what its own
+            // statements leave, with nothing branching in or out of the middle of them.
+            if (part == 1 && all == 0)
+            {
+                var at = Array.FindIndex(held, block => block.Inside > 0);
+                return blocks[at].IsReached ? Straight(blocks[at], whole, of) : null;
+            }
+            if (part > 0 || all == 0)
+                return null;
+
+            var entry = Array.FindIndex(inside, block => block);
+            if (!blocks[entry].IsReached || inside.All(block => block))
+                return null;
+
+            var reached = new RegisterState?[blocks.Count];
+            var pending = new SortedSet<int> { entry };
+            reached[entry] = RegisterState.Entered;
+            while (pending.Count > 0)
+            {
+                var index = pending.Min;
+                pending.Remove(index);
+                var after = Through(blocks[index], reached[index]!, of, null);
+                foreach (var edge in CarriedTo(blocks, blocks[index]).Where(to => inside[to]))
+                {
+                    var merged = RegisterState.Merge(reached[edge], after);
+                    if (merged.Equals(reached[edge]))
+                        continue;
+                    reached[edge] = merged;
+                    pending.Add(edge);
+                }
+            }
+
+            var kept = Registers.All;
+            var complete = true;
+            var leaves = false;
+            for (var i = 0; i < blocks.Count; i++)
+            {
+                if (!inside[i] || reached[i] is not { } state)
+                    continue;
+                complete &= Followed(blocks[i], of);
+
+                // A block is a way out of the scope when what runs after it is not in the
+                // scope, which a return and a jump away are too.
+                if (CarriedTo(blocks, blocks[i]).All(to => inside[to]) && !Ends(blocks[i]).Returns)
+                    continue;
+                leaves = true;
+                kept &= Through(blocks[i], state, of, null).Kept;
+            }
+            return leaves ? new RoutineRegisters(kept, complete) : null;
+        }
+
+        /// <summary>What the statements of one block written inside a span hand on.</summary>
+        private RoutineRegisters? Straight(BasicBlock block, TextSpan whole, Func<Symbol, RoutineRegisters> of)
+        {
+            var state = RegisterState.Entered;
+            var within = false;
+            var any = false;
+            for (var i = 0; i < block.Steps.Count; i++)
+            {
+                var step = block.Steps[i];
+                if (step.On is null)
+                    within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
+                if (!within)
+                    continue;
+                any = true;
+                state = Step(step, state, null);
+                if (i == block.Steps.Count - 1 && Ends(block) is { Calls: true } or { Tail: true })
+                    state = Calls(block, state, of);
+            }
+            return any ? new RoutineRegisters(state.Kept, Followed(block, of)) : null;
+        }
+
+        /// <summary>Whether every call a block makes is one nt65 could follow into a body.</summary>
+        private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
+            !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
 
         /// <summary>Whether a routine's promise holds where a path leaves it, and what to write when it does not.</summary>
         private void Check(FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
@@ -231,6 +362,8 @@ public static class RegisterKeeps
             for (var i = 0; i < block.Steps.Count; i++)
             {
                 var step = block.Steps[i];
+                if (report is not null && !step.Closes)
+                    Held.Record(step, state);
                 state = Step(step, state, report);
                 if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
                     state = Calls(block, state, of);

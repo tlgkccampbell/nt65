@@ -36,6 +36,13 @@ public sealed class ControlFlow
     /// <summary>What is wrong with the paths through this file.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
+    /// <summary>
+    /// What the registers hold at each statement of the file, or null before it has been worked
+    /// out. It is a question about the program rather than about one file, because what a
+    /// statement leaves in a register follows from what the routines above it call.
+    /// </summary>
+    public RegisterStates? Registers { get; internal set; }
+
     /// <summary>Works out where control goes in <paramref name="layout"/>'s file.</summary>
     public static ControlFlow Of(SemanticModel model, CodeLayout layout)
     {
@@ -63,7 +70,8 @@ public sealed class ControlFlow
                 ? (null, null, true)
                 : Paths.Through(blocks);
             var region = new FlowRegion(
-                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends), flow.Costed(blocks, inline));
+                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends),
+                flow.Costed(blocks, inline), inline);
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
@@ -174,7 +182,7 @@ public sealed class ControlFlow
     /// many it has. A statement of the file says where the walk is, and one from an expansion
     /// is wherever the call that wrote it was, so the walk carries the answer forward.
     /// </summary>
-    private static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
+    internal static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
         var held = new (int Inside, int Total)[blocks.Count];
         var within = false;

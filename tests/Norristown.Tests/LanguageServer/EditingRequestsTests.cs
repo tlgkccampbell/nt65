@@ -358,7 +358,7 @@ public sealed class EditingRequestsTests
                 // `stz` is not on the 6502, so the line is left out of the stream and what
                 // is left of the routine is not what it would cost. It gets no lens at all.
             ],
-            lenses.Select(lens => (lens.Range.Start.Line, Cost(lens))));
+            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
     }
 
     /// <summary>
@@ -440,7 +440,7 @@ public sealed class EditingRequestsTests
                 "never returns",
                 "12 cycles, not counting calls",
             ],
-            lenses.Select(Cost));
+            Costs(lenses).Select(lens => lens.Command.Title));
     }
 
     /// <summary>
@@ -477,7 +477,7 @@ public sealed class EditingRequestsTests
 
         Assert.Equal(
             [(2, "13 cycles"), (4, "5 cycles"), (11, "6 cycles")],
-            lenses.Select(lens => (lens.Range.Start.Line, Cost(lens))));
+            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
     }
 
     /// <summary>
@@ -520,9 +520,9 @@ public sealed class EditingRequestsTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            ["6 cycles · keeps everything", "10 cycles · keeps Y, C", "15 cycles · keeps everything",
-                "12 cycles, not counting calls · keeps ?"],
-            lenses.Select(lens => lens.Command.Title));
+            ["keeps A X Y C", "keeps Y C", "keeps A X Y C", "keeps ?"],
+            lenses.Where(lens => lens.Command.Title.Contains("keeps", StringComparison.Ordinal))
+                .Select(lens => lens.Command.Title));
     }
 
     /// <summary>
@@ -642,7 +642,7 @@ public sealed class EditingRequestsTests
                 // `bpl` reads the sign, and 200 has it set before the loop starts.
                 "17+ cycles, loops",
             ],
-            lenses.Select(Cost));
+            Costs(lenses).Select(lens => lens.Command.Title));
     }
 
     /// <summary>A search finds declarations in files no one has open, by the letters of their names in order.</summary>
@@ -666,10 +666,85 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What a lens says a pass costs, which is the part of it these tests are about: what the
-    /// routine keeps is written after it and has a test of its own.
+    /// An inline <c>.scope</c> is a part of its routine and is asked the same question of
+    /// itself: a block that saves a register and gives it back keeps it, even where the routine
+    /// around it does not.
     /// </summary>
-    private static string Cost(CodeLens lens) => lens.Command.Title.Split(" · ")[0];
+    [Fact]
+    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineKeeps()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                lda #1
+                .scope {
+                    pha
+                    ldx #2
+                    stx $10
+                    pla
+                }
+                sta $11
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        // The routine loses A and X; the block gives A back, so all it costs the routine is X.
+        Assert.Equal(
+            [(2, "keeps Y C"), (4, "keeps A Y C")],
+            lenses.Where(lens => lens.Command.Title.Contains("keeps", StringComparison.Ordinal))
+                .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
+    /// What the registers hold at a line, on hover, beside what it costs. A register may hold
+    /// what another was entered with, which is how a 6502 saves X, and saying which one is what
+    /// makes the save readable.
+    /// </summary>
+    [Fact]
+    public async Task HoverSaysWhatTheRegistersHoldAtTheLine()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                txa
+                ldy #0
+                sty $10
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var entry = await client.HoverAsync(MainUri, new Position(3, 4), timeout);
+        var after = await client.HoverAsync(MainUri, new Position(5, 4), timeout);
+
+        Assert.Contains(
+            "registers here: A as entered, X as entered, Y as entered, C as entered",
+            entry?.Contents.Value,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "registers here: A as X was entered, X as entered, Y set, C as entered",
+            after?.Contents.Value,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The lenses that say what a pass costs, which is what these tests are about: what is kept
+    /// is a lens of its own and has a test of its own.
+    /// </summary>
+    private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
+        lenses.Where(lens => !lens.Command.Title.Contains("keeps", StringComparison.Ordinal));
 
     /// <summary>
     /// The main file with <paramref name="line"/> in the place <paramref name="where"/> marks,

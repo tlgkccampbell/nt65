@@ -19,14 +19,14 @@ public static class CallCosts
     /// <summary>Works out the total for every routine of <paramref name="flows"/> and writes it on each.</summary>
     public static void Compose(IEnumerable<ControlFlow> flows)
     {
-        var regions = new Dictionary<(string Path, int At), FlowRegion>();
+        var regions = new Dictionary<(string Path, string Name), FlowRegion>();
         foreach (var flow in flows)
         {
             foreach (var region in flow.Regions)
                 regions.TryAdd(Named(region.Routine), region);
         }
         var returns = Returning(regions);
-        var totals = new Dictionary<(string Path, int At), RoutineCost>();
+        var totals = new Dictionary<(string Path, string Name), RoutineCost>();
         foreach (var region in regions.Values)
             region.Total = Total(region, regions, returns, totals, []);
     }
@@ -44,9 +44,9 @@ public static class CallCosts
     /// about code that is not here.
     /// </para>
     /// </summary>
-    private static HashSet<(string Path, int At)> Returning(Dictionary<(string Path, int At), FlowRegion> regions)
+    private static HashSet<(string Path, string Name)> Returning(Dictionary<(string Path, string Name), FlowRegion> regions)
     {
-        var found = new HashSet<(string Path, int At)>();
+        var found = new HashSet<(string Path, string Name)>();
         bool moved;
         do
         {
@@ -63,7 +63,9 @@ public static class CallCosts
 
     /// <summary>Whether any way out of a routine is one control comes back through.</summary>
     private static bool ComesBack(
-        FlowRegion region, Dictionary<(string Path, int At), FlowRegion> regions, HashSet<(string Path, int At)> found)
+        FlowRegion region,
+        Dictionary<(string Path, string Name), FlowRegion> regions,
+        HashSet<(string Path, string Name)> found)
     {
         foreach (var block in region.Blocks)
         {
@@ -78,10 +80,12 @@ public static class CallCosts
     }
 
     /// <summary>
-    /// A routine by where it is declared, rather than by the symbol, which an analysis that
-    /// kept the file before an edit may hold a different object for.
+    /// A routine by its file and its flattened name, rather than by the symbol, which an
+    /// analysis that kept the file before an edit holds a different object for. It is the name
+    /// and not the position, because a file that was kept still names the routines of a file
+    /// that changed at the positions they were at before the edit moved them.
     /// </summary>
-    private static (string Path, int At) Named(Symbol routine) => (routine.Tree.Path, routine.NameSpan.Start);
+    private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
     /// <summary>
     /// What <paramref name="region"/>'s routine costs with its calls, working out what each
@@ -90,10 +94,10 @@ public static class CallCosts
     /// </summary>
     private static RoutineCost Total(
         FlowRegion region,
-        Dictionary<(string Path, int At), FlowRegion> regions,
-        HashSet<(string Path, int At)> returns,
-        Dictionary<(string Path, int At), RoutineCost> totals,
-        HashSet<(string Path, int At)> walking)
+        Dictionary<(string Path, string Name), FlowRegion> regions,
+        HashSet<(string Path, string Name)> returns,
+        Dictionary<(string Path, string Name), RoutineCost> totals,
+        HashSet<(string Path, string Name)> walking)
     {
         var name = Named(region.Routine);
         if (totals.TryGetValue(name, out var found))

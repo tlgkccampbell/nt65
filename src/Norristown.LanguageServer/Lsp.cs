@@ -128,6 +128,8 @@ internal static class Lsp
             text.Append($"\n\nstate here: `{state.Processor}`");
             text.Append(state.Stack is { } stack ? $", {stack.Depth} pushed" : ", stack not known");
         }
+        if (flow?.Registers?.AnyBefore(statement) is { } registers)
+            text.Append($"\n\nregisters here: {Spell(registers)}");
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(text.ToString()), ToRange(model.Tree, statement.Span));
     }
@@ -152,6 +154,28 @@ internal static class Lsp
             .SelectMany(region => region.Blocks)
             .FirstOrDefault(block => block.Steps.Any(step =>
                 step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
+
+    /// <summary>
+    /// What each register holds at a point, as the hover says it: <c>A set, X as entered,
+    /// Y as entered, C not known</c>. Every register is named every time, because a reader
+    /// looking for one of them should not have to work out whether its absence means anything.
+    /// </summary>
+    internal static string Spell(RegisterState state) => string.Join(", ", RegisterEffects
+        .Each(Registers.All)
+        .Select(register => $"{RegisterEffects.Spell(register)} {Held(register, state.Of(register))}"));
+
+    /// <summary>
+    /// What one register holds. A 6502 saves X through the accumulator, so a register may hold
+    /// what another was entered with, and saying which one is what makes a save readable.
+    /// </summary>
+    private static string Held(Registers register, RegisterValue value)
+    {
+        if (value.Holds(register))
+            return "as entered";
+        if (value is { IsWritten: false, IsUnknown: false } && value.Entry != Registers.None)
+            return $"as {RegisterEffects.Spell(value.Entry)} was entered";
+        return value is { IsWritten: true, IsUnknown: false } && value.Entry == Registers.None ? "set" : "not known";
+    }
 
     /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
     internal static string Spell(CycleCount cycles) =>

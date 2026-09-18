@@ -1547,11 +1547,15 @@ some register away, being told so is rarely news, and the reader's question is w
 registers are doing here rather than a list of the places they changed. That is something to
 show, and §14 says where per-instruction facts are shown.
 
-Tooling shows it above each routine beside what a pass costs. Most routines work in the
-accumulator and leave the rest alone, so what they keep is said as what they do not:
-`keeps all but A`. A routine that keeps every one of them says `keeps everything` and one that
-keeps none says `keeps nothing`; one whose calls could not all be followed says `keeps ?`,
-because what it shows is a floor and silence there would read as safety.
+Tooling shows it in two places. Above each routine, and above each inline `.scope` block of
+one, a lens lists the registers beside what a pass costs: `keeps A X Y C`, `keeps X Y`,
+`keeps none`. It is a list and not a sentence about one, because a lens is read at a glance. A
+block is asked the same question of itself that its routine is asked of its caller, from where
+the block is entered, so a `.scope` that saves a register and gives it back keeps it even where
+the routine around it does not. What nt65 works out is a floor, so a routine whose calls it
+could not all follow ends its list with `?` — those registers and perhaps more, which is what
+`?` means everywhere else. On hover, beside what the line costs, is what each register holds
+there: as entered, set, or, where a save has moved one, as another register was entered.
 
 ## 8. Data
 
