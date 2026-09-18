@@ -67,8 +67,12 @@ public sealed class WorkspaceRequestsTests
         Assert.Contains("from       gfx.nt65", hover.Contents.Value, StringComparison.Ordinal);
 
         // What the call costs, worked out from the flow of the file that declares the routine,
-        // which is not the file the call is written in.
-        Assert.Contains("cost       6 cycles\npreserves  A, X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
+        // which is not the file the call is written in. It is what a caller came to ask, so it
+        // is read before where the routine lives.
+        Assert.Contains(
+            "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\naddress",
+            hover.Contents.Value,
+            StringComparison.Ordinal);
     }
 
     [Fact]

@@ -103,6 +103,10 @@ internal static class Lsp
         if (symbol.Type is { } type)
             card.Row("type", type.QualifiedName);
 
+        // What a routine costs and hands back is what a caller came to ask, so it is read before
+        // where the routine lives.
+        Routine(card, analysis, symbol);
+
         // How much room it takes and how many of them there are answer one question, so they
         // are read together rather than a line apart. One of something is what a declaration
         // with no count means, and saying so says nothing.
@@ -117,7 +121,6 @@ internal static class Lsp
                 + (symbol.IsAddress && symbol.Segment is { } segment ? $" in {segment}" : ""));
         }
         Declares(card, model, reference);
-        Routine(card, analysis, symbol);
         card.Prose(DocComments.Of(symbol));
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, reference.Span));
