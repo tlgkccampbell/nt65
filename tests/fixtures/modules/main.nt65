@@ -46,7 +46,7 @@
 }
 
 .segment RODATA
-.export .data shape: .byte gfx::glyphs
+.export .data shape:        .byte gfx::glyphs
 ; Where another module's routine ends, and how long it is: gfx exports the end with it.
 .export .data clear_extent: .addr .endof(clear), .spanof(clear)
 

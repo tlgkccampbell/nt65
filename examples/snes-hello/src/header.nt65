@@ -6,16 +6,16 @@
 .use main::{reset, nmi, ignore}
 
 .struct RomHeader {
-    title:     .res 21, ' '
-    map_mode:  .byte
-    cart_type: .byte
-    rom_size:  .byte
-    ram_size:  .byte
-    region:    .byte
-    developer: .byte
-    version:   .byte
+    title:               .res 21, ' '
+    map_mode:            .byte
+    cart_type:           .byte
+    rom_size:            .byte
+    ram_size:            .byte
+    region:              .byte
+    developer:           .byte
+    version:             .byte
     checksum_complement: .word
-    checksum:  .word
+    checksum:            .word
 }
 
 .segment HEADER

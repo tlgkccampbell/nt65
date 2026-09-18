@@ -5,7 +5,7 @@
 .export copy_twice
 
 .segment ZEROPAGE
-.data ptr: .word
+.data ptr:   .word
 .data other: .word
 
 .segment CODE

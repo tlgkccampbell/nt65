@@ -8,23 +8,23 @@
 DELTA = -2
 
 .struct Motion {
-dx:     .byte
-dy:     .word
+    dx: .byte
+    dy: .word
 }
 
 .segment RODATA
-.data bytes:        .byte -128, -1, 0, 255, DELTA
-.data words:        .word -32768, DELTA, $ffff
-.data longs:        .long -1, $123456, handler
-.data dwords:       .dword -1, $12345678
-.data be_words:     .beword $1234, DELTA, handler
-.data be_longs:     .belong $123456, -1, handler
-.data be_dwords:    .bedword $12345678, DELTA, handler
-.data be_table:     .beword[] {
+.data bytes:     .byte -128, -1, 0, 255, DELTA
+.data words:     .word -32768, DELTA, $ffff
+.data longs:     .long -1, $123456, handler
+.data dwords:    .dword -1, $12345678
+.data be_words:  .beword $1234, DELTA, handler
+.data be_longs:  .belong $123456, -1, handler
+.data be_dwords: .bedword $12345678, DELTA, handler
+.data be_table:  .beword[] {
     1, -1
 }
-.data banks:        .bankbytes handler, far_away
-.data step:         .type Motion { dx = -1, dy = DELTA }
+.data banks: .bankbytes handler, far_away
+.data step:  .type Motion { dx = -1, dy = DELTA }
 .data padding {
     .res 3, -1
 }
@@ -32,7 +32,7 @@ dy:     .word
 
 .segment FAR: far, bank = 1
 .segment FAR
-.data far_away:     .byte 0
+.data far_away: .byte 0
 
 .segment CODE
 .proc handler: a8, i16 {

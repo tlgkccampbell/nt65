@@ -38,4 +38,4 @@
 }
 
 .segment BSS
-.data count:  .byte
+.data count: .byte

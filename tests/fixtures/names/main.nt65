@@ -8,7 +8,7 @@ SIZE = 2                    ;! error: `SIZE` is already declared in this scope
 
 lda = 5                     ;! error: `lda` is a mnemonic of the 6502 and cannot be used as a name
 .segment CODE
-.data x:  .byte 0                 ;! error: `x` is a register name and cannot be used as a name
+.data x: .byte 0                 ;! error: `x` is a register name and cannot be used as a name
 
 ; An anonymous enum declares its members where it is written, so they are ordinary names.
 .enum {

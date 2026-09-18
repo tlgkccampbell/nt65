@@ -32,10 +32,10 @@ WRAM_BANK = $7e
 }
 
 .struct Sprite {
-    x:     .byte
-    y:     .byte
-    tile:  .byte
-    attr:  .byte
+    x:    .byte
+    y:    .byte
+    tile: .byte
+    attr: .byte
 }
 
 
@@ -54,11 +54,11 @@ WRAM_BANK = $7e
 .data scratch:        .word
 
 .segment LORAM
-.data player_x:       .word
-.data player_y:       .word
+.data player_x: .word
+.data player_y: .word
 
 .segment WRAM
-.data oam_shadow:     .type Sprite[128]
+.data oam_shadow: .type Sprite[128]
 
 ; Screen off: force blank at full brightness 0.
 .macro ppu_off(): a8 {

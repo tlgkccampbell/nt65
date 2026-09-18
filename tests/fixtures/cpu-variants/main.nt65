@@ -5,7 +5,7 @@
 .module main
 
 .segment ZEROPAGE
-.data flags:    .byte
+.data flags: .byte
 
 ; A macro body asks the same way.
 .macro set_ready(at: operand) {

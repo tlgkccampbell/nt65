@@ -56,5 +56,5 @@
 }
 
 .segment BSS
-.data cmd:    .byte
-.data value:  .byte
+.data cmd:   .byte
+.data value: .byte

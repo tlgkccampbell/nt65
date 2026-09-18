@@ -5,7 +5,7 @@
 .use lib::{set16, delay}
 
 .segment ZEROPAGE
-.data ptr:    .word
+.data ptr: .word
 
 ; A name of the file's own that an expansion's label would otherwise become: the
 ; expansion's gives way, since only fixed spellings are kept.

@@ -12,7 +12,7 @@
 }
 
 .segment BSS
-.data total:  .word
+.data total: .word
 
 ; A frame over two pushed words: each slot is counted from the stack pointer where it is
 ; used, so the `pha` between two reads is counted.

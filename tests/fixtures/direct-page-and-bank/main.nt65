@@ -11,13 +11,13 @@ HUD_PAGE = $0300
 .segment HUD: zp, dp = HUD_PAGE
 
 .segment ZP2
-.data ptr:    .word
+.data ptr: .word
 
 .segment HUD
-.data lives:  .byte
+.data lives: .byte
 
 .segment WRAM
-.data score:  .word
+.data score: .word
 
 ; The signature's example: D and B at entry, and so at exit.
 .segment CODE

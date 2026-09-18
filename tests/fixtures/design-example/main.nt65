@@ -9,8 +9,8 @@ SCREEN_PAGES = 4
 .export fill_page
 
 .segment ZEROPAGE
-.data ptr:    .word             ; destination pointer
-.data frame:  .byte
+.data ptr:   .word             ; destination pointer
+.data frame: .byte
 
 .segment CODE
 ; Fill 256 bytes at (ptr) with A.

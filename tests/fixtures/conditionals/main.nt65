@@ -6,19 +6,19 @@
 .module main
 
 .if PLATFORM == 1 {
-LINES = 262
+    LINES = 262
 }
 .if PLATFORM == 2 {
-LINES = 312
+    LINES = 312
 }
 
 ; A chain takes the first branch that holds.
 .if DEBUG {
-TRACE = 1
+    TRACE = 1
 } .elseif .defined(VERBOSE) {
-TRACE = 2
+    TRACE = 2
 } .else {
-TRACE = 0
+    TRACE = 0
 }
 
 ; The right operand is neither evaluated nor looked up once the left decides the result,
@@ -28,17 +28,17 @@ TRACE = 0
 }
 
 ; nt65 knows what these are worth whichever way the build goes, so neither reaches ca65.
-    .assert LINES > 200, "a platform has more than 200 lines"
-    .assert TRACE <= 2, "the trace level is 0, 1 or 2"
+.assert LINES > 200, "a platform has more than 200 lines"
+.assert TRACE <= 2, "the trace level is 0, 1 or 2"
 
 .segment CODE
 .proc main {
     ; A branch belongs to the scope around it: `@again` is `main`'s cheap local.
-.if DEBUG {
-@again:
-    jsr trace
-    bne @again
-}
+    .if DEBUG {
+    @again:
+        jsr trace
+        bne @again
+    }
     ldy #.countof(Cmd)          ; an enum counts its members
     lda #<LINES
     ldx #>LINES
@@ -47,21 +47,21 @@ TRACE = 0
 
 ; The CPU is configuration, like a define.
 .proc trace {
-.if .target(65c02) {
-    phx
-    plx
-} .else {
-    txa
-    pha
-    pla
-    tax
-}
+    .if .target(65c02) {
+        phx
+        plx
+    } .else {
+        txa
+        pha
+        pla
+        tax
+    }
     rts
 }
 
 ; Where main lands is the linker's to say, so this one is written out for ld65.
-    .assert main >= $0200, "main must be past the zero page"
-    .assert main != trace && main == main, "ca65 spells these operators its own way"
+.assert main >= $0200, "main must be past the zero page"
+.assert main != trace && main == main, "ca65 spells these operators its own way"
 
 ; A repetition is unrolled by nt65, so none of it reaches ca65 either.
 .list handlers {
@@ -73,12 +73,12 @@ TRACE = 0
 ; turn does, and a member with no value of its own is still the one before it taken plus one:
 ; `wait` is 3 with `dump` and 2 without.
 .enum Cmd {
-move
-fire
-.if DEBUG {
-dump
-}
-wait
+    move
+    fire
+    .if DEBUG {
+        dump
+    }
+    wait
 }
 
 .segment RODATA
@@ -116,13 +116,13 @@ wait
     }
 }
 
-; Indentation means nothing: an indented chain is answered exactly as one at the margin,
-; at file level and in a proc.
-    .if PLATFORM == 1 {
+; A chain at file level and a chain inside a proc are read the same way, and what indentation
+; either is written with means nothing at all.
+.if PLATFORM == 1 {
     COLUMNS = 40
-    } .else {
+} .else {
     COLUMNS = 80
-    }
+}
 
 .segment CODE
 .proc indented {
@@ -137,42 +137,42 @@ wait
 }
 
 .scope actions {
-.proc move {
-    rts
-}
-.proc fire {
-    jmp move
-}
-.if DEBUG {
-.proc dump {
-    rts
-}
-}
-.proc wait {
-    rts
-}
+    .proc move {
+        rts
+    }
+    .proc fire {
+        jmp move
+    }
+    .if DEBUG {
+        .proc dump {
+            rts
+        }
+    }
+    .proc wait {
+        rts
+    }
 }
 
 ; What a repetition declares is its own on every turn, as a macro expansion's is: each turn
 ; has its own `@delay`, and `skip` is a different label each time.
 .proc slow {
-.repeat 3, i {
-    ldx #i + 1
-@delay:
-    dex
-    bne @delay
-    bcc skip
-    nop
-skip:
-}
+    .repeat 3, i {
+        ldx #i + 1
+    @delay:
+        dex
+        bne @delay
+        bcc skip
+        nop
+        skip:
+    }
     rts
 }
 
 ; The same path as an operand, called once for each member in the enum's order.
 .proc run_all {
-.each Cmd, c {
-    jsr actions::c
-}
+    .each Cmd, c {
+        jsr actions::c
+    }
     rts
 }
 

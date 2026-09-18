@@ -16,7 +16,7 @@
 }
 
 .segment GFXDATA
-.data tiles:      .incbin "tiles.bin"
+.data tiles:   .incbin "tiles.bin"
 .data tilemap: .word[32] {
     .repeat 32, i {
         i

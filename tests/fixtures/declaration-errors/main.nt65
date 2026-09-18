@@ -16,10 +16,10 @@
 .segment RODATA
 ; A count is exactly what the values come to, one way or the other.
 .data short: .byte[4] { 1, 2, 3 }       ;! error: this array holds 4 elements, and its values come to 3
-.data long: .addr[2] {                  ;! error: this array holds 2 elements, and its values come to 3
+.data long:  .addr[2] {                  ;! error: this array holds 2 elements, and its values come to 3
     0, 0, 0
 }
-.data none: .word[]                     ;! error: `[]` counts the values given, and there are none: `.word[n]` holds n
+.data none:    .word[]                     ;! error: `[]` counts the values given, and there are none: `.word[n]` holds n
 .data padding: .res 4                   ;! error: `.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values
 
 ; An element is a value, or a record for an array of records.
@@ -40,10 +40,10 @@
 }
 
 ; Outside a routine, bytes belong to a declaration and code to a routine.
-    .byte 3                             ;! error: `.byte` outside a `.proc` belongs to a `.data` declaration: `.data name: .byte ...`
+.byte 3                             ;! error: `.byte` outside a `.proc` belongs to a `.data` declaration: `.data name: .byte ...`
 label: .word 4                          ;! error: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
-    rts                                 ;! error: an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow
-    .res 2                              ; padding is fine
+rts                                 ;! error: an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow
+.res 2                              ; padding is fine
 
 .segment CODE
 .proc main {

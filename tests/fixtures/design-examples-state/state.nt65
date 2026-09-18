@@ -11,14 +11,14 @@
 .segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
 
 .segment ZEROPAGE
-.data ptr: .word
-.data cmd: .byte
+.data ptr:      .word
+.data cmd:      .byte
 .data nmi_flag: .byte
-.data saved_p: .byte
-.data value: .byte
+.data saved_p:  .byte
+.data value:    .byte
 
 .segment BSS
-.data buf: .byte[16]
+.data buf:    .byte[16]
 .data vector: .addr
 
 .segment CODE
@@ -100,7 +100,7 @@
     jmp (table,x)
     .next @move, @fire
 
-.data table: .addr @move, @fire
+    .data table: .addr @move, @fire
 
 @move:
     lda #1

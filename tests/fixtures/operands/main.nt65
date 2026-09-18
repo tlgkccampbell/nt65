@@ -6,11 +6,11 @@
 .cpu 6502
 
 .segment ZEROPAGE
-.data ptr:        .word
-.data vector:     .word
+.data ptr:    .word
+.data vector: .word
 
 .segment BSS
-.data buf:        .byte[256]
+.data buf: .byte[256]
 
 hi = $12
 lo = $34

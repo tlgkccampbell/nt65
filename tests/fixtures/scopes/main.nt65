@@ -5,8 +5,8 @@
 .cpu 65c02
 
 .segment ZEROPAGE
-.data palette:    .byte[32]
-.data frames:     .byte
+.data palette: .byte[32]
+.data frames:  .byte
 
 .segment CODE
 .scope gfx {
@@ -54,7 +54,7 @@
 @done:
     lda table,x
     .segment RODATA {
-    table:  .byte 1, 2, 4, 8    ; a nested segment block changes the segment, not the scope
+        table: .byte 1, 2, 4, 8    ; a nested segment block changes the segment, not the scope
     }
     rts
 }

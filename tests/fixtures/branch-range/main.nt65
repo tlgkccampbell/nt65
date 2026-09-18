@@ -31,7 +31,7 @@
 .proc around_a_detour {
     beq @out
     .segment RODATA {
-    table:  .res 200
+        table: .res 200
     }
 @out:
     lda table
@@ -39,4 +39,4 @@
 }
 
 .segment BSS
-.data count:  .byte
+.data count: .byte

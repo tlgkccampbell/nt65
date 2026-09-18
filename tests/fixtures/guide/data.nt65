@@ -17,7 +17,7 @@
 .segment RODATA
 .data sines: .byte 0, 49, 90, 117   ; four bytes, with values
 .data title: .strz "SPACE TRAIN"
-.data boss: .type Actor { x = 100, y = 40, hp = 99 }
+.data boss:  .type Actor { x = 100, y = 40, hp = 99 }
 .data exe_header {                  ; data of several kinds
     .word @end - exe_header, 0
     .byte "NT"

@@ -25,6 +25,17 @@ internal static class Repo
         File.WriteAllText(path, text.ReplaceLineEndings("\n"));
     }
 
+    /// <summary>Every nt65 source in the repository: the fixtures, the corpus programs and the examples.</summary>
+    public static IReadOnlyList<string> Sources() =>
+        [.. new[] { Path("tests"), Path("examples"), Path("docs") }
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.GetFiles(root, "*.nt65", SearchOption.AllDirectories))
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>A file as a message names it: relative to the repository, with <c>/</c> separators.</summary>
+    public static string Named(string file) =>
+        System.IO.Path.GetRelativePath(Root, file).Replace(System.IO.Path.DirectorySeparatorChar, '/');
+
     /// <summary>Runs <paramref name="work"/> over <paramref name="items"/> in parallel and collects failure messages in input order.</summary>
     public static List<string> CollectFailures<T>(IReadOnlyList<T> items, Func<T, IEnumerable<string>> work)
     {

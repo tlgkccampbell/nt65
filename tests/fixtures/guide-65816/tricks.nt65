@@ -15,10 +15,10 @@
     jmp (handlers,x)
     .next cmd_move, cmd_fire            ; where the indirect jump goes
 
-.data handlers: .addr cmd_move, cmd_fire
+    .data handlers: .addr cmd_move, cmd_fire
 
-cmd_move:
+    cmd_move:
     rts
-cmd_fire:
+    cmd_fire:
     rts
 }

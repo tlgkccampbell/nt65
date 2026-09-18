@@ -11,10 +11,10 @@ C4 = 60
 E4 = 64
 
 .segment ZEROPAGE
-.data ptr: .word
+.data ptr:       .word
 .data other_ptr: .word
-.data value: .byte
-.data total: .word
+.data value:     .byte
+.data total:     .word
 
 .segment BSS
 .data buf: .byte[16]

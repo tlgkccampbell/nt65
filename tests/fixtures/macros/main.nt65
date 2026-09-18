@@ -6,14 +6,14 @@
 .cpu 65c02
 
 .struct Pair {
-lo:         .byte
-hi:         .byte
+    lo: .byte
+    hi: .byte
 }
 
 .segment ZEROPAGE
-.data ptr:        .word
-.data other:      .word
-.data pair:       .type Pair
+.data ptr:   .word
+.data other: .word
+.data pair:  .type Pair
 
 SCREEN = $0400
 C4     = 60
@@ -144,8 +144,8 @@ E4     = 64
 }
 
 .segment BSS
-.data buf:    .byte[256]
-.data count:  .byte
+.data buf:   .byte[256]
+.data count: .byte
 
 .segment RODATA
 .data tune {

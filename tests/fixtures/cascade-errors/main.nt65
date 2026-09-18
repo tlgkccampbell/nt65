@@ -12,11 +12,11 @@
 
 ; A type with a reserved name, and an instance of it that therefore cannot be written.
 .struct S {                 ;! error: `S` is a register name and cannot be used as a name
-q:      .byte
+    q: .byte
 }
 
 .segment RODATA
-.data one:    .type S { q = 1 }
+.data one: .type S { q = 1 }
 
 .segment CODE
 .proc near_one: a8, i16 {
@@ -41,14 +41,14 @@ q:      .byte
     ; An instruction that needs an operand, and a far jump to a near routine.
     jsr                     ;! error: `jsr` needs an operand
     jml near_one            ;! error: `near_one` is near: a jump to it is `jmp near_one`
-table:
+    table:
     .addr near_one
 }
 
 ; What a paste from ca65 leaves behind: each of these is one decision to make, and each is
 ; reported once rather than once per token the reader of the line then trips over.
 .proc pasted: a8, i16 {
-:                           ;! error: an unnamed label is written `@name`: a cheap local, private to the routine around it
+    :                           ;! error: an unnamed label is written `@name`: a cheap local, private to the routine around it
     lda #1
     bne :+                  ;! error: an unnamed label is written `@name`: a cheap local, private to the routine around it
     nop
@@ -56,9 +56,9 @@ table:
 }
 
 ; Instructions outside a routine are one paste, said once and counted.
-    lda #1                  ;! error: these 3 instructions belong in a `.proc`: code outside one is reached by nothing nt65 can follow
-    sta $10
-    rts
+lda #1                  ;! error: these 3 instructions belong in a `.proc`: code outside one is reached by nothing nt65 can follow
+sta $10
+rts
 
 ; A block holds its lines, so what was written after the `{` says so rather than being
 ; unexpected where the opener ended.

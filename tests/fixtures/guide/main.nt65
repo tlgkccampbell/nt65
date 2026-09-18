@@ -7,7 +7,7 @@ SCREEN       = $0400
 SCREEN_PAGES = 4
 
 .segment ZEROPAGE
-.data ptr:    .word             ; destination pointer
+.data ptr: .word             ; destination pointer
 
 .segment CODE
 .proc fill_page {

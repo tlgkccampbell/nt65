@@ -22,8 +22,8 @@ SCREEN       = $0400
 SCREEN_PAGES = 4
 
 .segment ZEROPAGE
-.data ptr:        .word
-.data frame:      .byte
+.data ptr:   .word
+.data frame: .byte
 
 .segment RODATA
 .data table:      .byte 1, 2, $ff, 'A', "text"

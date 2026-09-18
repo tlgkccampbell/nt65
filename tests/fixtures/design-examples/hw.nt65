@@ -30,7 +30,7 @@ K = $1234
 
 .proc clear: a8, i8 {
     rts
-again:
+    again:
     .state a8, i8, native
     rts
 }

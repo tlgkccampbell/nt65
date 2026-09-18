@@ -19,19 +19,19 @@
 }
 
 .struct Point {
-x:      .word
-y:      .word
+    x: .word
+    y: .word
 }
 
 .struct Player {
-pos:    .type Point
-hp:     .byte
-name:   .res 8
+    pos:  .type Point
+    hp:   .byte
+    name: .res 8
 }
 
 .union Value {
-b:      .byte
-w:      .word
+    b: .byte
+    w: .word
 }
 
 .charmap screen {
@@ -65,24 +65,24 @@ MAX_ACTORS = 3
 .data one:    .byte screen('Z')
 
 ; A call is worth what its body is worth, and a list stands for its own items.
-.data color:  .word rgb15(31, 0, 0)
-.data table:  .byte handlers
-.data lo:     .lobytes handlers
+.data color: .word rgb15(31, 0, 0)
+.data table: .byte handlers
+.data lo:    .lobytes handlers
 
 ; An instance written out with values, on one line and over several.
-.data boss:   .type Player { pos = { x = 100, y = 40 }, hp = 99 }
+.data boss: .type Player { pos = { x = 100, y = 40 }, hp = 99 }
 
-.data hero:   .type Player {
+.data hero: .type Player {
     hp = 3
     name = "ZIP"
 }
 
 ; A binary file is read for its length, and its path is written relative to the output.
-.data blob:   .incbin "sprites.bin"
-.data part:   .incbin "sprites.bin", 6, 4
+.data blob: .incbin "sprites.bin"
+.data part: .incbin "sprites.bin", 6, 4
 
 ; An alignment generates however many bytes it takes, which only the assembler settles.
-    .align 16
+.align 16
 
 .segment ZEROPAGE
 .data cursor: .type Player

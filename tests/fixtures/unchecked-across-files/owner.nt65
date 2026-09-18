@@ -8,12 +8,12 @@
 .proc owner: a16, i8 -> a8 {
     lda #$1234
     sep #$20
-.export entry
-entry:
+    .export entry
+    entry:
     .state a8, i8, native
     lda #$12
     rts
-.export plain                   ;! error: `plain` is inside `owner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
-plain:
+    .export plain                   ;! error: `plain` is inside `owner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
+    plain:
     rts
 }

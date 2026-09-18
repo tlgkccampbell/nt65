@@ -4,10 +4,10 @@
 .module main
 
 .segment FAST
-.data scratch:    .word
+.data scratch: .word
 
 .segment VRAM
-.data tiles:      .byte[64]
+.data tiles: .byte[64]
 
 .segment CODE
 .proc start {

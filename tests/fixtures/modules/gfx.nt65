@@ -19,8 +19,8 @@ rows   = 25
 }
 
 .export .struct Sprite {
-x:      .byte
-y:      .byte
+    x: .byte
+    y: .byte
 }
 
 ; A charmap, a function and a list are used by value, so exporting one writes nothing for
@@ -58,7 +58,7 @@ y:      .byte
     ; `gfx::clear::again`.
     .export again
     ldy #0
-again:
+    again:
     sta (ptr),y
     iny
     bne again

@@ -14,7 +14,8 @@ public static class Commands
     {
         switch (arguments)
         {
-            case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["remap-dbg", "--help" or "-h"]:
+            case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["fmt", "--help" or "-h"]
+                or ["remap-dbg", "--help" or "-h"]:
                 output.WriteLine(CommandLine.Usage);
                 return 0;
             case ["--version"]:
@@ -24,6 +25,8 @@ public static class Commands
                 if (CommandLine.Parse(rest, out var problem) is { } command)
                     return BuildCommand.Build(command, Path.GetFullPath(directory), error);
                 return Wrong(error, problem!);
+            case ["fmt", .. var asked]:
+                return FormatCommand.Run(asked, Path.GetFullPath(directory), output, error);
             case ["remap-dbg", .. var given]:
                 return RemapCommand.Run(given, Path.GetFullPath(directory), error);
 

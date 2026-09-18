@@ -4,8 +4,8 @@
 .cpu 6502
 
 .segment ZEROPAGE
-.export .data ptr1:        .word
-.export .data ptr2:        .word
+.export .data ptr1: .word
+.export .data ptr2: .word
 
 .segment BSS
 .export .data frame_flag:  .byte

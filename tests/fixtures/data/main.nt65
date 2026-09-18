@@ -8,20 +8,20 @@
 SCREEN = $0400
 
 .segment RODATA
-.data table:      .byte 1, 2, $ff, 'A', "text"
-.data words:      .word $1234, table
-.data wide:       .dword $12345678
-.data here:       .addr table
-.data there:      .faraddr table
-.data greeting:   .strz "hello"
-.data padding:    .byte[16] {
+.data table:    .byte 1, 2, $ff, 'A', "text"
+.data words:    .word $1234, table
+.data wide:     .dword $12345678
+.data here:     .addr table
+.data there:    .faraddr table
+.data greeting: .strz "hello"
+.data padding:  .byte[16] {
     .repeat 16 {
         $ff
     }
 }
-.data escaped:    .byte "a\nb", '\x7f'
-.data bytes:      .byte <SCREEN, >SCREEN, SCREEN .mod 256
-.data sums:       .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
+.data escaped: .byte "a\nb", '\x7f'
+.data bytes:   .byte <SCREEN, >SCREEN, SCREEN .mod 256
+.data sums:    .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
 
 .segment CODE
 .proc use {

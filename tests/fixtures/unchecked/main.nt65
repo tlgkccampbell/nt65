@@ -11,10 +11,10 @@
 .export patching, enter, jumper
 
 .segment BSS
-.data cmd:        .byte
-.data value:      .byte
-.data nmi_flag:   .byte
-.data saved_p:    .byte
+.data cmd:      .byte
+.data value:    .byte
+.data nmi_flag: .byte
+.data saved_p:  .byte
 
 ; A jump table inside a proc: the targets need no declarations, because the `.next` edges
 ; carry the state at the jump.
@@ -84,7 +84,7 @@
     rts
     .next targets
 
-.data targets: .addr @one - 1, @two - 1
+    .data targets: .addr @one - 1, @two - 1
 
 @one:
     rts
@@ -148,7 +148,7 @@
 .proc enter: a16 -> a8 {
     lda #$1234
     sep #$20
-into:
+    into:
     .state a8
     lda #$12
     rts

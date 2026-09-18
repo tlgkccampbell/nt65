@@ -15,6 +15,10 @@ build tasks and a schema for the project file.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.
+- **One layout, on Format Document or Format Selection.** nt65 has one way of laying a file
+  out and no setting for it: leading whitespace means nothing to the language, so there is
+  nothing to disagree about. It is the same layout `nt65 fmt` writes, so turning on **Format
+  on Save** and running `nt65 fmt --check` in CI agree by construction.
 - **Highlighting** from a TextMate grammar for a file the server has not read yet, and semantic
   highlighting from the server for one it has.
 - **Build tasks**, under **Run Task → nt65**: one for the project's own settings and one for

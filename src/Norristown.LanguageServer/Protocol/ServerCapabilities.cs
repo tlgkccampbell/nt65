@@ -17,6 +17,8 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
 /// <param name="CallHierarchyProvider">Whether the server answers the three call-hierarchy requests.</param>
 /// <param name="DocumentLinkProvider">How the server answers <c>textDocument/documentLink</c>, or null when it does not.</param>
+/// <param name="DocumentFormattingProvider">Whether the server lays a whole file out.</param>
+/// <param name="DocumentRangeFormattingProvider">Whether the server lays part of a file out.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
     bool DocumentSymbolProvider,
@@ -33,4 +35,6 @@ internal sealed record ServerCapabilities(
     CodeActionOptions? CodeActionProvider = null,
     SemanticTokensOptions? SemanticTokensProvider = null,
     bool CallHierarchyProvider = false,
-    DocumentLinkOptions? DocumentLinkProvider = null);
+    DocumentLinkOptions? DocumentLinkProvider = null,
+    bool DocumentFormattingProvider = false,
+    bool DocumentRangeFormattingProvider = false);

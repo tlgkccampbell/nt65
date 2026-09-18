@@ -3,8 +3,8 @@
 .module hw
 
 .export .struct Slot {
-id:     .byte
-addr:   .addr
+    id:   .byte
+    addr: .addr
 }
 
 .segment BSS

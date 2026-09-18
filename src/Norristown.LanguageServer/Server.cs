@@ -74,7 +74,9 @@ internal sealed class Server
             CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
             SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true),
             CallHierarchyProvider: true,
-            DocumentLinkProvider: new DocumentLinkOptions(ResolveProvider: false));
+            DocumentLinkProvider: new DocumentLinkOptions(ResolveProvider: false),
+            DocumentFormattingProvider: true,
+            DocumentRangeFormattingProvider: true);
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
 
@@ -227,6 +229,26 @@ internal sealed class Server
     [JsonRpcMethod("textDocument/documentLink")]
     public IReadOnlyList<DocumentLink> DocumentLinks(DocumentLinkParams request) =>
         Model(request.TextDocument.Uri) is { } model ? LanguageServer.DocumentLinks.In(model) : [];
+
+    /// <summary>
+    /// The file laid out as nt65 writes one. It needs no analysis: what a line is written at is
+    /// what its own file's braces say, so a file with a mistake in it still formats.
+    /// </summary>
+    [JsonRpcMethod("textDocument/formatting")]
+    public IReadOnlyList<TextEdit> Formatting(DocumentFormattingParams request) =>
+        workspace.Find(request.TextDocument.Uri) is { } document
+            ? Lsp.ToFormatting(document.Tree, 0, document.Tree.Lines.Length - 1)
+            : [];
+
+    /// <summary>
+    /// The chosen lines laid out. The whole file decides where they go — a run of data lines
+    /// says together where its column is — and only the chosen ones move.
+    /// </summary>
+    [JsonRpcMethod("textDocument/rangeFormatting")]
+    public IReadOnlyList<TextEdit> RangeFormatting(DocumentRangeFormattingParams request) =>
+        workspace.Find(request.TextDocument.Uri) is { } document
+            ? Lsp.ToFormatting(document.Tree, request.Range.Start.Line, request.Range.End.Line)
+            : [];
 
     [JsonRpcMethod("textDocument/prepareCallHierarchy")]
     public IReadOnlyList<CallHierarchyItem> PrepareCallHierarchy(CallHierarchyPrepareParams request) =>

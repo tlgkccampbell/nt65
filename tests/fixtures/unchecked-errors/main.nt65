@@ -9,7 +9,7 @@
 .import far_away: proc(far)
 
 .segment BSS
-.data cmd:    .byte
+.data cmd: .byte
 
 ; An indirect jump and an indirect call.
 .segment CODE
@@ -63,7 +63,7 @@
 ; A jump into another routine, to a label nothing declares.
 .proc owner: a8, i8 {
     rts
-inner:
+    inner:
     rts
 }
 
@@ -74,7 +74,7 @@ inner:
 ; A declared label, jumped into in the wrong state.
 .proc declared: a8, i8 {
     rts
-entry:
+    entry:
     .state a16, i8, native
     lda #$1234
     sep #$20
@@ -127,7 +127,7 @@ entry:
 ; An exported label inside a routine is another way in.
 .proc exported_inner: a8, i8 {
     rts
-.export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
-inside:
+    .export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
+    inside:
     rts
 }

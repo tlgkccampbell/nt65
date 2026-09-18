@@ -22,8 +22,8 @@
     .addr .endof(reloc)
 }
 
-.data table:  .byte 1, 2, 4, 8
-.data count:  .byte .spanof(table)
+.data table: .byte 1, 2, 4, 8
+.data count: .byte .spanof(table)
 
 .segment CODE
 .proc copy {

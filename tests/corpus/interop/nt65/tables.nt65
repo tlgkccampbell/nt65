@@ -12,10 +12,10 @@
 
 ; struct sprite { unsigned char x, y; unsigned tile; const char* name; };
 .export .struct Sprite {
-x:      .byte
-y:      .byte
-tile:   .word
-name:   .addr
+    x:    .byte
+    y:    .byte
+    tile: .word
+    name: .addr
 }
 
 .export .enum Cmd {
@@ -40,9 +40,9 @@ name:   .addr
 .data name_hero: .strz "HERO"
 .data name_boss: .strz "BOSS"
 
-.data message:  .byte apple("HELLO, WORLD"), 0
+.data message: .byte apple("HELLO, WORLD"), 0
 
-.data glyphs:   .incbin "../data/glyphs.bin"
+.data glyphs:      .incbin "../data/glyphs.bin"
 .data glyphs_size: .word .sizeof(glyphs)
 
 ; One handler address per command, in enum order: each is the routine named after it.

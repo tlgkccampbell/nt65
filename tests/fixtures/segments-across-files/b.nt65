@@ -1,7 +1,7 @@
 .module second
 
 .segment SHARED
-.data other:      .byte
+.data other: .byte
 
 ; The second declaration is the one reported, whichever file it is in.
 .segment DUP: abs         ;! error: segment "DUP" is already declared

@@ -168,7 +168,15 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
 - **One statement per line.** An opening `{` ends the line of its opener; a closing `}`
   starts a line and may be followed only by `.else {`, `.elseif expr {` or, after a
   macro call's block, `name {` for its next block (§11.4).
-- **Leading whitespace is insignificant.** Labels may be indented.
+- **Leading whitespace is insignificant.** Labels may be indented. Because it means nothing
+  there is nothing to argue about, so nt65 has one layout and writes it (§5.3): names at the
+  margin of whatever holds them, what a block holds indented four columns further than the
+  line that opens it, a routine's cheap locals at the routine's own margin, a run of named
+  data lines with nothing between them lined up one column past the longest name in the run,
+  and nothing after a line's last token. A `.segment NAME` region opens a block with no
+  brace, so it indents nothing. It is the layout the generated ca65 is written in (§13), and
+  the only whitespace inside a line it touches is the gap a run lines up on, so laying a file
+  out cannot change what any line of it means.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, case-sensitive. Scoped names use `::`
   (`gfx::init`, `::hw::init`); `::` is one token, so `z::foo` walks into scope `z`
   and a prefix on a path from the root of the modules is written `z: ::hw::foo`. Cheap
@@ -454,6 +462,12 @@ normally runs in; what it tells the person running it is from where they are.
 | `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
 | `--c-header <file>` | a C header of what the program exports (§13) |
 | `--help`, `--version` | |
+
+**Formatting.** `nt65 fmt` writes the files it names in the one layout (§4), in place;
+`--check` writes nothing, lists the files that are not in it already and exits 1, which is
+what a gate runs. Named nothing, it formats every file the project's `files` name. It needs
+no program: a file that belongs to no project, or that does not compile, is laid out from its
+own lines and braces like any other.
 
 A file named on the command line is built as part of its project, so a name another module
 exports means what it means there, and only its output is written. Without a project the
@@ -2696,6 +2710,10 @@ alone and without an assembler:
   put in one;
 - link the path an `.incbin` writes to the file it names, resolved beside the file that
   writes it, as the build resolves it;
+- lay a file, or the lines a selection covers, out in the one layout (§4), from the same code
+  `nt65 fmt` runs, so what the editor writes on save and what a gate checks are one thing. The
+  whole file says where a line goes even when only part of it is asked about, because a run of
+  data lines says together where its column is;
 - diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
   module does not export, unused symbols, and constant assertions;
 - on the 65816, diagnose width, mode and near/far mismatches at calls and returns,
@@ -3170,6 +3188,14 @@ Recorded so the reasoning survives. None is open.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
+- **One layout, and no setting for it.** Leading whitespace means nothing to the language, so
+  nothing is lost by choosing a layout, and a setting would only give a project the chance to
+  disagree with the next one. The layout is not invented either: it is the one the generated
+  ca65 is already written in (§13), which is what a reader comparing a module with its output
+  sees anyway. The formatter moves what stands before a line's first token, drops what stands
+  after its last, and sets the one gap a run of data lines lines up on; everything else on a
+  line is the programmer's, because a formatter that reflows an expression has to be told when
+  not to, and that is the setting there is not.
 - **Names are coloured by the language server; the grammar colours declarations the same way.**
   What a name refers to is the server's to say: a use, `jsr init` or `Joy::A`, names something
   only resolution can see, and a member of a named enum, struct or union may be spelled like a
@@ -3201,6 +3227,8 @@ as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x 
   output goes and what it is named, the dependency file, the exit status (0 when the program
   built, 1 when it is wrong, 2 when the command is) and the form of each diagnostic,
   `file:line:column: severity: message`, with the path as the person running it would write it.
+  `nt65 fmt` keeps its own exit status too: 0 when every file it was given is in the layout,
+  1 when `--check` found one that is not.
 - **To packagers: the cc65 pin.** A release's output is tested against, and promised for, ca65
   and ld65 built from the cc65 commit that release names (§13). The pin moves in a minor
   release that says so, and only to a commit the same output assembles with, to the same bytes.
@@ -3210,6 +3238,9 @@ Version 1 does not promise:
 - which warnings a program gets, or the wording and exact position of any diagnostic;
 - the text of the output beyond what the contract of §1 names: its layout, its comments, and
   the generated names of cheap locals, expansions and iterations;
+- the layout `nt65 fmt` writes, character for character. It stays one layout, and laying out
+  what is laid out changes nothing; a release that moves it says so, and formatting again is
+  what answers it;
 - the editor: which requests the language server answers, what it completes, hints or fixes,
   its own protocol extensions and the settings of the VS Code extension;
 - the Norristown libraries as an API, the record nt65 keeps in `out`, and how fast anything is.

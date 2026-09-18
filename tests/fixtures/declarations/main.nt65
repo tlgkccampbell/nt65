@@ -30,19 +30,19 @@
 
 .segment RODATA
 .data gradient: .byte 40, $e0, 0
-.data lut: .byte[4] { 1, 2, 4, 8 }
-.data row_lo: .byte[] {
+.data lut:      .byte[4] { 1, 2, 4, 8 }
+.data row_lo:   .byte[] {
     .repeat 5, i {
         i * 40
     }
 }
-.data text: .strz "hi"
+.data text:     .strz "hi"
 .data handlers: .addr[] {
     .each Cmd, c {
         actions::c
     }
 }
-.data hero: .type Sprite { pos = { x = 1, y = 2 }, tile = $0100, colors = { 1, 2, 3 }, name = "HERO" }
+.data hero:    .type Sprite { pos = { x = 1, y = 2 }, tile = $0100, colors = { 1, 2, 3 }, name = "HERO" }
 .data sprites: .type Sprite[] {
     { pos = { x = 10 }, name = "A" }
     { pos = { x = 20, y = 30 } }

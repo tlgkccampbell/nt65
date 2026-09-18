@@ -8,13 +8,13 @@
 .segment FARDATA: far
 
 .segment ZEROPAGE
-.data ptr:        .faraddr
+.data ptr: .faraddr
 
 .segment FARDATA
-.data far_table:  .byte[16]
+.data far_table: .byte[16]
 
 .segment RODATA
-.data vector:     .addr forms
+.data vector: .addr forms
 
 .import far_routine: proc(a*, i*, far)
 

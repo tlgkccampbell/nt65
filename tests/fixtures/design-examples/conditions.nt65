@@ -14,13 +14,13 @@
 }
 
 .proc run: a8, i8 {
-.if DEBUG {
-    jsr trace
-} .elseif LEVEL > 2 {
-    nop
-} .else {
-    rts
-}
+    .if DEBUG {
+        jsr trace
+    } .elseif LEVEL > 2 {
+        nop
+    } .else {
+        rts
+    }
     rts
 }
 

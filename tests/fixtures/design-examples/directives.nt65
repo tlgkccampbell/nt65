@@ -78,7 +78,7 @@ WIDE = 1
 }
 
 .data greeting: .byte screen("HELLO WORLD")
-.data letter: .byte screen('A')
+.data letter:   .byte screen('A')
 
 COLUMNS = .select(WIDE, 80, 40)
 .func clamp(v) = .select(v > 255, 255, v)

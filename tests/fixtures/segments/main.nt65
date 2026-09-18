@@ -6,13 +6,13 @@
 .segment WRAM: abs, bank = $7e
 
 .segment ZP2
-.data scratch:    .word
+.data scratch: .word
 
 .segment WRAM
-.data buffer:     .byte[256]
+.data buffer: .byte[256]
 
 .segment NOWHERE  ;! error: segment "NOWHERE" is not declared
-.data lost:       .byte
+.data lost: .byte
 
 .segment ZP2: zp          ;! error: segment "ZP2" is already declared
 .segment ZEROPAGE: zp     ;! error: segment "ZEROPAGE" is already declared

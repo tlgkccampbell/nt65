@@ -180,6 +180,15 @@ internal static class Lsp
             ToRange(model.Tree, reference.Span),
             reference.IsDeclaration ? Protocol.DocumentHighlightKind.Write : Protocol.DocumentHighlightKind.Read))];
 
+    /// <summary>
+    /// Lines <paramref name="first"/> to <paramref name="last"/> laid out as nt65 writes them,
+    /// one edit per line that moves. The whole file decides where a line goes, and only these
+    /// lines come back, which is what a client asking about a selection means.
+    /// </summary>
+    public static IReadOnlyList<Protocol.TextEdit> ToFormatting(SyntaxTree tree, int first, int last) =>
+        [.. Formatter.Changes(tree, first, last).Select(change => new Protocol.TextEdit(
+            ToRange(tree, new TextSpan(change.Start, change.Length)), change.NewText))];
+
     /// <summary>The name at <paramref name="position"/>, which is what a rename would replace.</summary>
     public static Protocol.Range? ToRenameRange(SemanticModel model, int position) =>
         model.ReferenceAt(position) is { } reference ? ToRange(model.Tree, reference.Span) : null;

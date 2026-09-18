@@ -86,9 +86,9 @@
 ; The caller pushes two words before the call, and a frame lays them out past the return
 ; address.
 .struct AddFrame {
-    ret:    .res 2
-    right:  .word
-    left:   .word
+    ret:   .res 2
+    right: .word
+    left:  .word
 }
 
 .proc add: std, a16, args 4 {

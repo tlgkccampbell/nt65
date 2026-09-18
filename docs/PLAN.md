@@ -353,6 +353,25 @@ lists the ones that would change and exits 1; and `textDocument/formatting` and
 same commit; formatting is idempotent; formatting then transpiling gives byte-identical
 output for every fixture, which is the test that it changed no meaning.
 
+**Done.** The layout is the emitter's, worked out the same way: a run's column is one past the
+longest name in it. One thing inside a line is touched after all, which is that column — the
+run is what the stage asks for, and leaving it would have meant a formatter that lines nothing
+up while the output it writes does. Sixty-nine of the hundred and forty sources were
+reformatted with it, and every `expected` snapshot but one line of each stayed as it was: the
+source size the line map records, which is the whole proof that nothing else moved. What the
+writing of it found: a comment between two data lines belongs to the run it stands in, or a
+column breaks wherever somebody said something about the next declaration, while an empty line
+ends one, which is gofmt's rule for struct fields and is right for the same reason; a data line
+may be written `.export .data name:`, so the name is whatever follows the directives rather
+than the second token; and a member may be named for a register or a mnemonic, since a member
+is only ever reached through `::`. The standing test is that laying a source out from no
+indentation at all, from tabs and trailing whitespace, or with its columns squeezed shut gives
+back the file that is checked in, character for character, which says both that the repository
+is formatted and that the layout is reached from anywhere. Editor indentation rules were tried
+and dropped: `increaseIndentPattern` is one regular expression, and it cannot tell the `{` of
+`.macro if(c: one(eq, ne), then: block) {` from the `{` of a half-typed `m!({`, which needs
+balanced parentheses; VS Code's bracket rules already do as well without claiming more.
+
 ## Stage 31: The command line
 
 **Build.**

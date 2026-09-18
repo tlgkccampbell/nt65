@@ -7,7 +7,7 @@
 .segment DUP: abs
 
 .segment SHARED
-.data scratch:    .word
+.data scratch: .word
 
 ; Exported, so that what the file only declares counts as used.
 .export scratch

@@ -5,14 +5,14 @@
 .cpu 6502
 
 .struct Point {
-x:      .word
-y:      .word
+    x: .word
+    y: .word
 }
 
 .struct Actor {
-pos:    .type Point
-hp:     .byte
-tiles:  .byte[4]
+    pos:   .type Point
+    hp:    .byte
+    tiles: .byte[4]
 }
 
 .charmap screen {
@@ -21,23 +21,23 @@ tiles:  .byte[4]
 }
 
 .segment BSS
-.data actors: .type Actor[8]
+.data actors:   .type Actor[8]
 .data buffer:   .byte[64]
 .data handlers: .addr[4]
 
 .segment RODATA
 ; An index through a type is a number, as every path through one is.
-.data offsets:  .byte Actor::tiles[2], Actor::pos::y
+.data offsets: .byte Actor::tiles[2], Actor::pos::y
 
 ; One text is padded with zero to the count, written on the line or in the body.
-.data title:    .byte[8] { "NT65" }
-.data mapped:   .byte[4] { screen("AB") }
-.data banner:   .byte[6] {
+.data title:  .byte[8] { "NT65" }
+.data mapped: .byte[4] { screen("AB") }
+.data banner: .byte[6] {
     "hi"
 }
 
 ; A text as long as its count is the array, with nothing to pad.
-.data exact:    .byte[2] { "hi" }
+.data exact: .byte[2] { "hi" }
 
 .segment CODE
 .proc main {

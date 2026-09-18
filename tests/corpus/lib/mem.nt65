@@ -19,7 +19,7 @@
     jsr popax
     sta ptr1
     stx ptr1+1
-fill:
+    fill:
     ldy #0
     lda tmp1
     ldx ptr2+1

@@ -11,18 +11,18 @@ TEXT = "AB"
 }
 
 .segment RODATA
-.data two:      .strz "A", "B"          ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
-.data number:   .strz 5                 ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
-.data letter:   .strz 'A'               ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
-.data early:    .strz screen("A@B")     ;! error: `screen` maps `@` to $00, which would end the text early: `.strz` writes the zero that ends it
-.data zero:     .strz "A\x00B"          ;! error: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
-.data short:    .strz "A\0B"            ;! error: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
-.data bytes:    .byte 256, -129         ;! error: $0100 does not fit in this directive ;! error: -129 does not fit in this directive
-.data longs:    .long $1000000          ;! error: $01000000 does not fit in this directive
-.data address:  .addr -1                ;! error: -1 is negative, and an address is not
-.data far:      .faraddr -2             ;! error: -2 is negative, and an address is not
-.data joined:   .byte TEXT + 1          ;! error: `+` cannot be used on a string
-.data old:      .asciiz "hi"            ;! error: `.asciiz` is written `.strz`
+.data two:     .strz "A", "B"          ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
+.data number:  .strz 5                 ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
+.data letter:  .strz 'A'               ;! error: `.strz` takes one text: a string, a string constant, or a charmap applied to one
+.data early:   .strz screen("A@B")     ;! error: `screen` maps `@` to $00, which would end the text early: `.strz` writes the zero that ends it
+.data zero:    .strz "A\x00B"          ;! error: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
+.data short:   .strz "A\0B"            ;! error: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
+.data bytes:   .byte 256, -129         ;! error: $0100 does not fit in this directive ;! error: -129 does not fit in this directive
+.data longs:   .long $1000000          ;! error: $01000000 does not fit in this directive
+.data address: .addr -1                ;! error: -1 is negative, and an address is not
+.data far:     .faraddr -2             ;! error: -2 is negative, and an address is not
+.data joined:  .byte TEXT + 1          ;! error: `+` cannot be used on a string
+.data old:     .asciiz "hi"            ;! error: `.asciiz` is written `.strz`
 
 .segment CODE
 .proc main: a8 {

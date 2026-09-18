@@ -9,9 +9,9 @@
 .segment ZEROPAGE
 ; ca65 reads `z:` and `f:` at the start of a line as address-size prefixes, so a label
 ; named `z` or `f` is written as an assignment instead.
-.data z:          .byte
-.data f:          .byte
-.data ptr:        .word
+.data z:   .byte
+.data f:   .byte
+.data ptr: .word
 
 .export top
 
@@ -41,7 +41,7 @@
         bne @loop
     }
     .scope {
-    reused:                 ; an anonymous scope's names are generated too
+        reused:                 ; an anonymous scope's names are generated too
         jmp reused
     }
     jmp outer::inner

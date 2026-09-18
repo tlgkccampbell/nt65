@@ -15,16 +15,16 @@ BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
 .func clamp(value) = .select(value > 255, 255, value)
 
 .segment ZEROPAGE
-.data narrow:   .word
+.data narrow: .word
 
 .segment BSS
-.data wide:     .word
+.data wide: .word
 
 ; An address expression: the chosen address, with its own width.
 BUFFER = .select(WIDE, wide, narrow)
 
 .segment RODATA
-.data sizes:    .byte COLUMNS, ROWS, BORDER, clamp(300), clamp(7)
+.data sizes: .byte COLUMNS, ROWS, BORDER, clamp(300), clamp(7)
 
 .segment CODE
 .proc main {

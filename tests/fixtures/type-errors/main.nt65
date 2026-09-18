@@ -12,40 +12,40 @@
 .func pong(n) = ping(n) - 1
 
 .struct Point {
-x:      .word
-y:      .word
-bad:    .strz "no"    ;! error: `bad` reserves no room a member may take
-colors: .word 16        ;! error: `colors` is a member, which reserves room and holds no value: several are `.word[n]`
+    x:      .word
+    y:      .word
+    bad:    .strz "no"    ;! error: `bad` reserves no room a member may take
+    colors: .word 16        ;! error: `colors` is a member, which reserves room and holds no value: several are `.word[n]`
 }
 
 .union Value {
-b:      .byte
-w:      .word
+    b: .byte
+    w: .word
 }
 
 ; A layout that holds itself has no size, which is the same ring any constant would be.
 .struct Ring {          ;! error: `Ring` is defined in terms of itself
-self:   .type Ring       ;! error: `self` reserves no room a member may take
+    self: .type Ring       ;! error: `self` reserves no room a member may take
 }
 
 ; What an initialized instance gives each member has to fit the room the member has.
 .struct Named {
-name:   .addr
-count:  .byte
-at:     .type Point
-title:  .res 3
+    name:  .addr
+    count: .byte
+    at:    .type Point
+    title: .res 3
 }
 
 .segment RODATA
-.data hero:   .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res` ;! error: $012c does not fit in `count`, a `.byte` ;! error: `title` has room for 3 bytes, and this is 4
-.data boss:   .type Named {
+.data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res` ;! error: $012c does not fit in `count`, a `.byte` ;! error: `title` has room for 3 bytes, and this is 4
+.data boss: .type Named {
     at = { x = 1, z = 2 }   ;! error: `Point` has no member `z`
     count = 1
     level = 1               ;! error: `Named` has no member `level`
     count = 2               ;! error: `count` is given a value twice: a member is named at most once
 }
-.data flat:   .type Named { at = 3 }   ;! error: `at` is a `Point`, which takes a braced list of its members
-.data both:   .type Value { b = 1, w = 2 } ;! error: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
+.data flat: .type Named { at = 3 }   ;! error: `at` is a `Point`, which takes a braced list of its members
+.data both: .type Value { b = 1, w = 2 } ;! error: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
 .data mistakes {
     .byte screen("hi")  ;! error: `screen` does not map `h`
     .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given

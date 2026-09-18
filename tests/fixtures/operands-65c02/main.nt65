@@ -5,11 +5,11 @@
 .cpu 65c02
 
 .segment ZEROPAGE
-.data ptr:        .word
-.data flags:      .byte
+.data ptr:   .word
+.data flags: .byte
 
 .segment RODATA
-.data table:      .byte 1, 2, 4, 8
+.data table: .byte 1, 2, 4, 8
 
 .segment CODE
 .proc forms {

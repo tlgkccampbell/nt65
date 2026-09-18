@@ -65,4 +65,4 @@
 }
 
 ; Outside a routine there is no stack and no widths to set.
-    .ensure a8              ;! error: `.ensure` describes a point in a routine, and this is outside any `.proc`
+.ensure a8              ;! error: `.ensure` describes a point in a routine, and this is outside any `.proc`

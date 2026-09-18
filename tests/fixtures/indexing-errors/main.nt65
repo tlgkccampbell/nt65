@@ -8,24 +8,24 @@ COUNT = 4
 .import outside: abs
 
 .struct Point {
-x:      .word
-y:      .word
+    x: .word
+    y: .word
 }
 
 .segment BSS
-.data buffer:   .byte[COUNT]
-.data one:      .word
+.data buffer: .byte[COUNT]
+.data one:    .word
 .data stub {
     .byte 1, 2
 }
 
 .segment RODATA
 ; A count catches a short table; only one text is padded out to it.
-.data table:    .addr[4] { one, one }    ;! error: this array holds 4 elements, and its values come to 2
-.data letters:  .byte[4] { "a", "b" }    ;! error: this array holds 4 elements, and its values come to 2
-.data letter:   .byte[4] { 'A' }         ;! error: this array holds 4 elements, and its values come to 1
-.data over:     .byte[2] { "hello" }     ;! error: this array holds 2 elements, and its values come to 5
-.data words:    .word[4] { "hi" }        ;! error: this array holds 4 elements, and its values come to 2
+.data table:   .addr[4] { one, one }    ;! error: this array holds 4 elements, and its values come to 2
+.data letters: .byte[4] { "a", "b" }    ;! error: this array holds 4 elements, and its values come to 2
+.data letter:  .byte[4] { 'A' }         ;! error: this array holds 4 elements, and its values come to 1
+.data over:    .byte[2] { "hello" }     ;! error: this array holds 2 elements, and its values come to 5
+.data words:   .word[4] { "hi" }        ;! error: this array holds 4 elements, and its values come to 2
 
 .list order {
     one

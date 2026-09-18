@@ -25,15 +25,15 @@ SIZE = -1
 }
 
 .enum Cmd {
-move
-fire
+    move
+    fire
 }
 
 .segment CODE
 .scope actions {
-.proc move {
-    rts
-}
+    .proc move {
+        rts
+    }
 }
 
 ; A path ends in a repetition's name only over an enum, and the scope needs every member.
@@ -56,9 +56,9 @@ fire
 
 ; A repetition in a macro body counts every turn towards what an expansion may lay out.
 .macro big(n: const) {
-.repeat n {
-    .byte 0
-}
+    .repeat n {
+        .byte 0
+    }
 }
 
 .data lots {

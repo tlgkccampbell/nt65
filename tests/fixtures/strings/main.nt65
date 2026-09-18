@@ -6,8 +6,8 @@
 PROMPT = "PRESS START"
 
 .struct Entry {
-name:   .res 8
-score:  .word
+    name:  .res 8
+    score: .word
 }
 
 .macro label(words) {

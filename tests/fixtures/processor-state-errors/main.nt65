@@ -9,7 +9,7 @@
 .import plain
 
 .segment BSS
-.data value:  .word
+.data value: .word
 
 ; An immediate needs a known width.
 .segment CODE
@@ -99,7 +99,7 @@
 }
 
 ; Outside a routine there is no processor state.
-    .state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
+.state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.
 .proc long_to_near: a8, i8 {

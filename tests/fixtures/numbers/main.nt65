@@ -9,10 +9,10 @@ COUNT   = 1_000
 LONG    = $01_23_45
 
 ; What a separated number is worth, decided by nt65 rather than by the assembler.
-    .assert BYTES == 32767, "a separator counts for nothing"
-    .assert BITS == 170, "in binary too"
-    .assert COUNT == 1000, "and in decimal"
-    .assert LONG == 74565, "however many there are"
+.assert BYTES == 32767, "a separator counts for nothing"
+.assert BITS == 170, "in binary too"
+.assert COUNT == 1000, "and in decimal"
+.assert LONG == 74565, "however many there are"
 
 .segment RODATA
 .data masks: .byte[] {

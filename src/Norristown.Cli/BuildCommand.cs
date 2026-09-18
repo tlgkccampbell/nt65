@@ -26,10 +26,10 @@ public static class BuildCommand
             ? Path.GetFullPath(given, directory) is var chosenPath && Directory.Exists(chosenPath)
                 ? Path.Combine(chosenPath, ProjectFile.Name)
                 : chosenPath
-            : Nearest(directory);
+            : ProjectRoot.Nearest(directory);
         if (command.Project is not null && !File.Exists(projectFile))
         {
-            error.WriteLine($"nt65: {Shown(directory, projectFile!)} does not exist");
+            error.WriteLine($"nt65: {ProjectRoot.Shown(directory, projectFile!)} does not exist");
             return 2;
         }
         var root = projectFile is null ? directory : Path.GetDirectoryName(projectFile)!;
@@ -45,7 +45,7 @@ public static class BuildCommand
         var defines = command.Defines.Select(define => ProjectFile.Definition(define, arguments)).OfType<Define>().ToList();
         project = project.With(defines) with { Diagnostics = [.. project.Diagnostics, .. arguments] };
         if (command.Out is { } chosen)
-            project = project with { Out = Logical(root, Path.GetFullPath(chosen, directory)) };
+            project = project with { Out = ProjectRoot.Logical(root, Path.GetFullPath(chosen, directory)) };
 
         // Naming files builds the program they are part of, so that a name another file declares
         // still means what it means; only the named files are written.
@@ -58,7 +58,7 @@ public static class BuildCommand
                 error.WriteLine($"{file}: error: file not found");
                 return 1;
             }
-            named.Add(Logical(root, full));
+            named.Add(ProjectRoot.Logical(root, full));
         }
         var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(root, glob)).Concat(named)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
@@ -79,7 +79,7 @@ public static class BuildCommand
         {
             var file = d.Span.File.StartsWith('-') || d.Span.File.StartsWith('(')
                 ? d.Span.File
-                : Shown(directory, Path.Combine(root, d.Span.File));
+                : ProjectRoot.Shown(directory, Path.Combine(root, d.Span.File));
             error.WriteLine($"{file}:{d.Span.Line}:{d.Span.StartColumn}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}");
         }
         if (compilation.Diagnostics.Any(d => d.Severity == Severity.Error))
@@ -100,7 +100,7 @@ public static class BuildCommand
         if (only is null)
         {
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
-                error.WriteLine($"nt65: deleted {Shown(directory, Path.Combine(root, deleted))}, whose module is not in the program");
+                error.WriteLine($"nt65: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, whose module is not in the program");
         }
 
         if (header is not null && compilation.Header is { } text)
@@ -110,26 +110,14 @@ public static class BuildCommand
         {
             List<(string, IEnumerable<string>)> rules =
             [
-                .. written.Select(o => (Shown(directory, Path.Combine(root, o.Path)),
-                    o.Dependencies.Concat(extra).Select(dependency => Shown(directory, Path.Combine(root, dependency))))),
+                .. written.Select(o => (ProjectRoot.Shown(directory, Path.Combine(root, o.Path)),
+                    o.Dependencies.Concat(extra).Select(dependency => ProjectRoot.Shown(directory, Path.Combine(root, dependency))))),
             ];
             if (header is not null)
-                rules.Add((Shown(directory, header), paths.Concat(extra).Select(path => Shown(directory, Path.Combine(root, path)))));
+                rules.Add((ProjectRoot.Shown(directory, header), paths.Concat(extra).Select(path => ProjectRoot.Shown(directory, Path.Combine(root, path)))));
             Write(Path.GetFullPath(dependencyFile, directory), DependencyFile.Write(rules), []);
         }
         return 0;
-    }
-
-    /// <summary>The nearest project file at or above <paramref name="directory"/>, or null when there is none.</summary>
-    private static string? Nearest(string directory)
-    {
-        for (var at = directory; at is not null; at = Path.GetDirectoryName(at))
-        {
-            var candidate = Path.Combine(at, ProjectFile.Name);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-        return null;
     }
 
     /// <summary>
@@ -164,12 +152,4 @@ public static class BuildCommand
             return null;
         }
     }
-
-    /// <summary>The logical path of <paramref name="full"/>: relative to <paramref name="root"/>, with <c>/</c> separators.</summary>
-    private static string Logical(string root, string full) =>
-        Paths.Normalized(Path.GetRelativePath(root, full));
-
-    /// <summary>A path as the person running nt65 reads it: relative to where they ran it.</summary>
-    private static string Shown(string directory, string full) =>
-        Paths.Normalized(Path.GetRelativePath(directory, Path.GetFullPath(full)));
 }

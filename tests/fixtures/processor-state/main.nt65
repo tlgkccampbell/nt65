@@ -8,7 +8,7 @@
 .export render, fill, reset, save, keep, tail
 
 .segment BSS
-.data value:  .word
+.data value: .word
 
 ; The signature's example: 16-bit A at entry, 8-bit at the `rts`.
 .segment CODE
@@ -114,9 +114,9 @@
     jmp (@table,x)
     .next targets
 @table:
-.each targets, t {
-    .addr t
-}
+    .each targets, t {
+        .addr t
+    }
 }
 
 .proc command: a8, i8 {

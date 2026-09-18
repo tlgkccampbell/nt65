@@ -4,18 +4,18 @@
 .cpu 65816
 
 .segment ZP2
-.data ptr:    .word
+.data ptr: .word
 
 .segment WRAM
-.data score:  .word
+.data score: .word
 
 .struct Pair {
-lo:     .byte
-hi:     .byte
+    lo: .byte
+    hi: .byte
 }
 
 .segment BANK1
-.data pair:   .type Pair
+.data pair: .type Pair
 
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
 .segment SLOW: abs, dp = $2100        ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
