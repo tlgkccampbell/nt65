@@ -26,14 +26,17 @@ Problems panel. Output assembles with ca65 and ld65 built from the cc65 commit i
 ## Using it
 
 ```text
-nt65 build [--config name] [-D NAME=value] [--depfile nt65.d] [--c-header nt65.h]
+nt65 init [dir] [--cpu 65816]
+nt65 build [--config name] [-D NAME=value] [--check] [--watch] [--json]
 nt65 fmt [--check] [file.nt65...]
 ```
 
-`nt65 build` reads `nt65.json` in the directory it runs in or the nearest one above it, and
-writes one ca65 source per module. `nt65 fmt` writes files in the one layout nt65 sources are
-written in, or with `--check` lists the ones that are not in it and exits 1; named nothing, it
-formats every file the project names. `nt65 --help` lists every option; §5.3 of the design
+`nt65 init` writes an `nt65.json` and a `src/main.nt65` that builds. `nt65 build` reads
+`nt65.json` in the directory it runs in or the nearest one above it, and writes one ca65 source
+per module; `--check` reports and writes nothing, `--watch` builds again whenever the program
+changes, and `--json` writes one object per diagnostic for tools that are not editors.
+`nt65 fmt` writes files in the one layout nt65 sources are written in, or with `--check` lists
+the ones that are not in it and exits 1. `nt65 --help` lists every option; §5.3 of the design
 describes the project file and the command line.
 
 ## Examples

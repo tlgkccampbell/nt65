@@ -66,7 +66,8 @@ public sealed class ExtensionTests : IDisposable
         Write("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda nowhere\n    rts\n}\n");
 
         var error = new StringWriter { NewLine = "\n" };
-        Assert.Equal(1, Commands.Run(["build"], root.FullName, new StringWriter { NewLine = "\n" }, error));
+        Assert.Equal(1, Commands.Run(["build"], root.FullName, new StringWriter { NewLine = "\n" }, error,
+            cancellation: TestContext.Current.CancellationToken));
 
         var said = error.ToString().ReplaceLineEndings("\n").Split('\n').Where(line => line.Length > 0).ToList();
         var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));

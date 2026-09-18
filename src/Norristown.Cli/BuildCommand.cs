@@ -18,21 +18,27 @@ public static class BuildCommand
     /// Builds what <paramref name="command"/> asks for, from <paramref name="directory"/>, and
     /// returns the exit code: 0 when it built, 1 when the program is wrong, 2 when the command is.
     /// </summary>
-    public static int Build(CommandLine command, string directory, TextWriter error)
+    public static int Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
+        Run(command, directory, output, error, colour).Code;
+
+    /// <summary>
+    /// One build, with what it read, so that a watch knows what to wait on. A failure that
+    /// stopped before the program was found names what it had, which is nothing or the project
+    /// file; the watch is watching the directory as well, so a file appearing is noticed anyway.
+    /// </summary>
+    internal static BuildResult Run(
+        CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
     {
         // The project file is the one named, or the nearest one at or above where nt65 runs;
         // with none, the directory nt65 runs in is the root.
-        var projectFile = command.Project is { } given
-            ? Path.GetFullPath(given, directory) is var chosenPath && Directory.Exists(chosenPath)
-                ? Path.Combine(chosenPath, ProjectFile.Name)
-                : chosenPath
-            : ProjectRoot.Nearest(directory);
+        var projectFile = ProjectRoot.Chosen(command.Project, directory);
         if (command.Project is not null && !File.Exists(projectFile))
         {
             error.WriteLine($"nt65: {ProjectRoot.Shown(directory, projectFile!)} does not exist");
-            return 2;
+            return new BuildResult(2, directory, []);
         }
         var root = projectFile is null ? directory : Path.GetDirectoryName(projectFile)!;
+        string[] watched = projectFile is null ? [] : [projectFile];
         var project = projectFile is null
             ? ProjectSettings.None
             : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
@@ -56,7 +62,7 @@ public static class BuildCommand
             if (!File.Exists(full))
             {
                 error.WriteLine($"{file}: error: file not found");
-                return 1;
+                return new BuildResult(1, root, watched);
             }
             named.Add(ProjectRoot.Logical(root, full));
         }
@@ -68,27 +74,43 @@ public static class BuildCommand
                 : project.Files.Count == 0 ? $"nt65: no input files, and no `files` in {ProjectFile.Name}"
                 : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
             error.WriteLine(CommandLine.Usage);
-            return 2;
+            return new BuildResult(2, root, watched);
         }
 
         var sources = paths.Select(path => new SourceFile(path, File.ReadAllText(Path.Combine(root, path)))).ToList();
         var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
         var compilation = Compiler.Compile(sources, project, path => Length(Path.Combine(root, path)), header);
 
+        // What a watch waits on is what the build read: the sources, and the binaries the outputs
+        // say they include. A program that is wrong writes no output and so names no binaries;
+        // the source that fixes it is in the list either way.
+        watched =
+        [
+            .. watched,
+            .. paths.Select(path => Path.Combine(root, path)),
+            .. compilation.Outputs.SelectMany(o => o.Dependencies).Distinct(StringComparer.Ordinal)
+                .Select(dependency => Path.Combine(root, dependency)),
+        ];
+
         foreach (var d in compilation.Diagnostics)
         {
-            var file = d.Span.File.StartsWith('-') || d.Span.File.StartsWith('(')
-                ? d.Span.File
-                : ProjectRoot.Shown(directory, Path.Combine(root, d.Span.File));
-            error.WriteLine($"{file}:{d.Span.Line}:{d.Span.StartColumn}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}");
+            if (command.Json)
+                output.WriteLine(Reported.Object(d, span => Named(directory, root, span)));
+            else
+                error.WriteLine(Reported.Line(d, Named(directory, root, d.Span), colour));
         }
         if (compilation.Diagnostics.Any(d => d.Severity == Severity.Error))
-            return 1;
+            return new BuildResult(1, root, watched);
         if (compilation.IsCpuAssumed)
         {
             error.WriteLine($"nt65: note: nothing says which processor this program is for, so it is built for the "
                 + $"{CpuNames.Spell(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
         }
+
+        // `--check` asked what is wrong, which has now been said, and for nothing else: no
+        // output, no header, no dependency file, and no record of what was written.
+        if (command.Check)
+            return new BuildResult(0, root, watched);
 
         var only = named.Count > 0 && project.Files.Count > 0 ? named.ToHashSet(StringComparer.Ordinal) : null;
         var written = compilation.Outputs.Where(o => only is null || only.Contains(o.Source)).ToList();
@@ -117,8 +139,17 @@ public static class BuildCommand
                 rules.Add((ProjectRoot.Shown(directory, header), paths.Concat(extra).Select(path => ProjectRoot.Shown(directory, Path.Combine(root, path)))));
             Write(Path.GetFullPath(dependencyFile, directory), DependencyFile.Write(rules), []);
         }
-        return 0;
+        return new BuildResult(0, root, watched);
     }
+
+    /// <summary>
+    /// A span's file as the person running nt65 would write it. One whose file is an option or a
+    /// place with no file of its own keeps the name it was given.
+    /// </summary>
+    private static string Named(string directory, string root, Span span) =>
+        span.File.StartsWith('-') || span.File.StartsWith('(')
+            ? span.File
+            : ProjectRoot.Shown(directory, Path.Combine(root, span.File));
 
     /// <summary>
     /// Writes <paramref name="text"/> to <paramref name="path"/> only when it changes, so a build

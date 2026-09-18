@@ -11,6 +11,9 @@ namespace Norristown.Cli;
 /// <param name="DependencyFile">Where <c>--depfile</c> writes make-style dependencies, or null.</param>
 /// <param name="Header">Where <c>--c-header</c> writes a C header, or null.</param>
 /// <param name="Files">The source files named, which are the ones to write output for.</param>
+/// <param name="Check">Whether <c>--check</c> asked for the report without the output.</param>
+/// <param name="Watch">Whether <c>--watch</c> asked to build again whenever the program changes.</param>
+/// <param name="Json">Whether <c>--json</c> asked for the diagnostics as JSON on standard output.</param>
 public sealed record CommandLine(
     string? Project,
     string? Configuration,
@@ -19,17 +22,24 @@ public sealed record CommandLine(
     string? Out,
     string? DependencyFile,
     string? Header,
-    IReadOnlyList<string> Files)
+    IReadOnlyList<string> Files,
+    bool Check = false,
+    bool Watch = false,
+    bool Json = false)
 {
     /// <summary>How the command is used, as <c>--help</c> prints it.</summary>
     public const string Usage = """
         usage: nt65 build [options] [<file.nt65>...]
+               nt65 init [<dir>] [--cpu <cpu>]
                nt65 fmt [--check] [<file.nt65>...]
                nt65 remap-dbg <file.dbg> [--out <file>]
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
         Naming files builds the whole program and writes output only for those files.
+
+        `init` writes an nt65.json and a src/main.nt65 that builds, in this directory or the one
+        named, and refuses to overwrite either.
 
         `fmt` writes files in the one layout nt65 sources are written in, or with `--check`
         lists the ones that are not in it already and exits 1. Named nothing, it formats every
@@ -47,6 +57,9 @@ public sealed record CommandLine(
           --out <dir>           where output goes, instead of the project's `out`
           --depfile <file>      writes make-style dependencies of every output
           --c-header <file>     writes a C header of what the program exports
+          --check               reports what is wrong and writes nothing
+          --watch               builds again whenever the program changes, until interrupted
+          --json                writes one JSON object per diagnostic to standard output
         """;
 
     /// <summary>
@@ -64,6 +77,7 @@ public sealed record CommandLine(
         problem = null;
         string? project = null, configuration = null, output = null, dependencies = null, header = null;
         Cpu? cpu = null;
+        bool check = false, watch = false, json = false;
         var defines = new List<string>();
         var files = new List<string>();
         for (var i = 0; i < arguments.Count; i++)
@@ -93,6 +107,17 @@ public sealed record CommandLine(
                 case "-D":
                     defines.Add(value!);
                     break;
+
+                // A flag takes no value, so it does not step over the argument after it.
+                case "--check":
+                    check = true;
+                    continue;
+                case "--watch":
+                    watch = true;
+                    continue;
+                case "--json":
+                    json = true;
+                    continue;
                 case "--cpu":
                     if (value is null || CpuNames.Parse(value) is not { } named)
                     {
@@ -112,6 +137,7 @@ public sealed record CommandLine(
             }
             i++;
         }
-        return new CommandLine(project, configuration, cpu, defines, output, dependencies, header, files);
+        return new CommandLine(project, configuration, cpu, defines, output, dependencies, header, files,
+            check, watch, json);
     }
 }

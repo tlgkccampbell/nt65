@@ -9,6 +9,20 @@ namespace Norristown.Cli;
 /// </summary>
 internal static class ProjectRoot
 {
+    /// <summary>
+    /// The project file a build reads: the one <c>--project</c> names, as a file or as the
+    /// directory holding it, or the nearest one at or above <paramref name="directory"/>. A path
+    /// <c>--project</c> named comes back whether or not it exists, because that is what the
+    /// message about it says.
+    /// </summary>
+    public static string? Chosen(string? project, string directory)
+    {
+        if (project is null)
+            return Nearest(directory);
+        var named = Path.GetFullPath(project, directory);
+        return Directory.Exists(named) ? Path.Combine(named, ProjectFile.Name) : named;
+    }
+
     /// <summary>The nearest project file at or above <paramref name="directory"/>, or null when there is none.</summary>
     public static string? Nearest(string directory)
     {

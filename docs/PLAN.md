@@ -388,6 +388,23 @@ balanced parentheses; VS Code's bracket rules already do as well without claimin
 **Check.** CLI tests for each; `--watch` by a test that edits a file and waits for the
 rebuild.
 
+**Done.** All five. What the writing of it found: `--watch` has to start its watcher before its
+first build, or a file saved while that build is running is one it slept through; the set the
+dependency file names is not enough on its own, because a file written after the globs were
+matched is in no set worked out before it existed, so any `.nt65` under the root counts too —
+and nothing nt65 writes is either of those, so a build never sets off the next one. A wrong
+command line comes straight back from a watch rather than waiting for a change that cannot fix
+it. `--json` goes to standard output while the lines stay on standard error, so a tool capturing
+one stream gets structure and nothing else; the `nt65:` lines nt65 says about itself stay with
+the person either way. Colour is the caller's to decide, not the command's: `Program` asks
+whether standard error is a terminal and whether `NO_COLOR` is set, and passes the answer in, so
+a test can ask for colour without a terminal. Two things fell out along the way: `Commands.Run`
+taking a `CancellationToken` makes xUnit's analyzer ask every call site for the test's own
+token, which is right and now done; and `nt65 build --watch` was the example of an option nt65
+does not have in a test, which it no longer is. A VS Code background task for `--watch` was left
+out: it needs `beginsPattern` and `endsPattern` on the matcher and a test of its own, and it
+belongs with the editor work rather than here.
+
 ## Stage 32: Release
 
 **Build.**

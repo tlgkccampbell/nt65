@@ -10,21 +10,27 @@ public static class Commands
     /// the exit code: 0 when it did what it was asked, 1 when what it was given is wrong, 2 when
     /// the command is.
     /// </summary>
-    public static int Run(string[] arguments, string directory, TextWriter output, TextWriter error)
+    public static int Run(
+        string[] arguments, string directory, TextWriter output, TextWriter error,
+        bool colour = false, CancellationToken cancellation = default)
     {
         switch (arguments)
         {
-            case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["fmt", "--help" or "-h"]
-                or ["remap-dbg", "--help" or "-h"]:
+            case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["init", "--help" or "-h"]
+                or ["fmt", "--help" or "-h"] or ["remap-dbg", "--help" or "-h"]:
                 output.WriteLine(CommandLine.Usage);
                 return 0;
             case ["--version"]:
                 output.WriteLine($"nt65 {Version()}");
                 return 0;
             case ["build", .. var rest]:
-                if (CommandLine.Parse(rest, out var problem) is { } command)
-                    return BuildCommand.Build(command, Path.GetFullPath(directory), error);
-                return Wrong(error, problem!);
+                if (CommandLine.Parse(rest, out var problem) is not { } command)
+                    return Wrong(error, problem!);
+                return command.Watch
+                    ? WatchCommand.Run(command, Path.GetFullPath(directory), output, error, colour, cancellation)
+                    : BuildCommand.Build(command, Path.GetFullPath(directory), output, error, colour);
+            case ["init", .. var chosen]:
+                return InitCommand.Run(chosen, Path.GetFullPath(directory), output, error);
             case ["fmt", .. var asked]:
                 return FormatCommand.Run(asked, Path.GetFullPath(directory), output, error);
             case ["remap-dbg", .. var given]:

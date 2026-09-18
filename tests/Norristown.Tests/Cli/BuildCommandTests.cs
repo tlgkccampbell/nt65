@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Norristown.Cli;
 
 namespace Norristown.Tests.Cli;
@@ -169,6 +170,86 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Contains("nt65: note: nothing says which processor this program is for, so it is built for the 6502", said);
     }
 
+    /// <summary>
+    /// <c>--check</c> says what a build would say and writes none of what a build would write,
+    /// which is what a gate or a pre-commit hook wants: the report, the exit code, and no
+    /// output tree to clean up afterwards.
+    /// </summary>
+    [Fact]
+    public void CheckReportsAndWritesNothing()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
+        File("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020\nUNUSED = 1", StringComparison.Ordinal));
+        var app = Path.Combine(root.FullName, "app");
+
+        var (code, said) = Run(app, "build", "--check", "--depfile", "nt65.d", "--c-header", "nt65.h");
+
+        Assert.Equal(0, code);
+        Assert.Contains("main.nt65:3:1: warning: `UNUSED` is never used", said);
+        Assert.False(Directory.Exists(Path.Combine(app, "build")));
+        Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.d")));
+        Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.h")));
+
+        // It exits as a build would, so what a build refuses it refuses.
+        File("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        Assert.Equal(1, Run(app, "build", "--check").Code);
+    }
+
+    /// <summary>
+    /// <c>--json</c> puts one object per diagnostic on standard output, with the related spans a
+    /// line leaves to an editor, and leaves standard error to what nt65 says about itself.
+    /// </summary>
+    [Fact]
+    public void JsonWritesOneObjectPerDiagnostic()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nBORDER = $d021\n");
+        var app = Path.Combine(root.FullName, "app");
+
+        var (code, output, error) = Apart(app, false, "build", "--json");
+
+        Assert.Equal((1, ""), (code, error));
+        var said = JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries))).RootElement;
+        Assert.Equal("main.nt65", said.GetProperty("file").GetString());
+        Assert.Equal(4, said.GetProperty("line").GetInt32());
+        Assert.Equal(1, said.GetProperty("column").GetInt32());
+        Assert.Equal(7, said.GetProperty("endColumn").GetInt32());
+        Assert.Equal("error", said.GetProperty("severity").GetString());
+        Assert.Equal("`BORDER` is already declared in this scope", said.GetProperty("message").GetString());
+
+        var related = Assert.Single(said.GetProperty("related").EnumerateArray());
+        Assert.Equal((3, "declared here"),
+            (related.GetProperty("line").GetInt32(), related.GetProperty("message").GetString()));
+
+        // A diagnostic with nothing else to point at says nothing about related spans at all.
+        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        Assert.DoesNotContain("related", Apart(app, false, "build", "--json").Output);
+    }
+
+    /// <summary>
+    /// Colour marks what a diagnostic is and nothing else, so the position stays selectable and
+    /// the message is not competing with it. Whether there is any is the caller's to decide.
+    /// </summary>
+    [Fact]
+    public void ColourMarksWhatADiagnosticIs()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        var app = Path.Combine(root.FullName, "app");
+
+        Assert.Equal(
+            "main.nt65:4:1: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not exported\n",
+            Apart(app, true, "build").Error);
+        Assert.Equal(
+            "main.nt65:4:1: warning: `UNUSED` is never used: nothing names it, and it is not exported\n",
+            Apart(app, false, "build").Error);
+
+        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = nowhere\n");
+        Assert.Equal(
+            "main.nt65:3:10: [31merror:[0m `nowhere` is not declared\n",
+            Apart(app, true, "build").Error);
+    }
+
     [Fact]
     public void HelpAndVersionAreAnswered()
     {
@@ -200,9 +281,9 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal(2, code);
         Assert.Equal("nt65: `--watch` is not an option\nsee `nt65 --help`\n", said);
 
-        (code, said) = Run(root.FullName, "build", "--watch");
+        (code, said) = Run(root.FullName, "build", "--rebuild");
         Assert.Equal(2, code);
-        Assert.Equal("nt65: `--watch` is not an option\nsee `nt65 --help`\n", said);
+        Assert.Equal("nt65: `--rebuild` is not an option\nsee `nt65 --help`\n", said);
 
         (code, said) = Run(root.FullName);
         Assert.Equal(2, code);
@@ -211,10 +292,18 @@ public sealed class BuildCommandTests : IDisposable
 
     private (int Code, string Said) Run(string directory, params string[] arguments)
     {
+        var (code, output, error) = Apart(directory, false, arguments);
+        return (code, output + error);
+    }
+
+    /// <summary>The two streams kept apart, for what is written to one and not to the other.</summary>
+    private (int Code, string Output, string Error) Apart(string directory, bool colour, params string[] arguments)
+    {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(arguments, directory, output, error);
-        return (code, output.ToString() + error.ToString());
+        var code = Commands.Run(arguments, directory, output, error, colour,
+            cancellation: TestContext.Current.CancellationToken);
+        return (code, output.ToString(), error.ToString());
     }
 
     private void Project(string text) => File("app/nt65.json", text);

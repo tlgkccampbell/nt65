@@ -89,7 +89,8 @@ public sealed class FormatCommandTests : IDisposable
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(arguments, directory, output, error);
+        var code = Commands.Run(arguments, directory, output, error,
+            cancellation: TestContext.Current.CancellationToken);
         return (code, output.ToString() + error.ToString());
     }
 

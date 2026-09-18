@@ -461,7 +461,31 @@ normally runs in; what it tells the person running it is from where they are.
 | `--out <dir>` | where output goes, in place of the configuration's `out` |
 | `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
 | `--c-header <file>` | a C header of what the program exports (§13) |
+| `--check` | report and write nothing: no output, no header, no dependency file and no record of what was written |
+| `--watch` | build again whenever the program changes, until interrupted |
+| `--json` | one JSON object per diagnostic on standard output, for whatever is reading nt65 that is not an editor |
 | `--help`, `--version` | |
+
+A diagnostic is one line, `file:line:column: severity: message`, on standard error. Where
+standard error is a terminal and `NO_COLOR` is unset, `error:` and `warning:` are coloured and
+nothing else on the line is, so the position stays selectable. `--json` puts them on standard
+output instead, one object per line, with `file`, `line`, `column`, `endColumn`, `severity`,
+`message`, and `related` where a diagnostic points at a second place, which the line form
+leaves to an editor. What nt65 says about itself, the `nt65:` lines, stays on standard error
+either way, because it is not about the program.
+
+**Watching.** `nt65 build --watch` builds, then builds again whenever the program changes,
+and says which directory it is watching after each one. What it waits for is what the last
+build read — the project file, the sources, and the binaries an `.incbin` measured, which is
+the set `--depfile` names — and any `.nt65` under the project root besides, since a file that
+did not exist when the globs were matched is in no set worked out before it was written.
+Nothing nt65 writes is either of those, so a build does not set off the next one. A command
+line that is wrong comes straight back, because no file changing fixes it.
+
+**Starting.** `nt65 init` writes an `nt65.json` and a `src/main.nt65` that builds, in the
+directory it is given or the one it runs in, with `--cpu` choosing the processor. It refuses
+to overwrite either, and writes neither when it would have to, so a directory that already
+holds a program is left as it was.
 
 **Formatting.** `nt65 fmt` writes the files it names in the one layout (§4), in place;
 `--check` writes nothing, lists the files that are not in it already and exits 1, which is
@@ -3188,6 +3212,13 @@ Recorded so the reasoning survives. None is open.
 - **Each project in a workspace is its own program.** A folder of several games, or a library
   with its test programs, holds projects that declare the same modules; one program of all
   of them would report every module twice.
+- **Diagnostics are lines on standard error, and objects on standard output when asked for.**
+  A person reads the line, and it is the line an editor's problem matcher already reads, so it
+  stays where it is. Something reading nt65 that is not an editor wants structure, wants it on
+  the stream it is capturing, and wants nothing else on that stream, so `--json` writes to
+  standard output and what nt65 says about itself stays on standard error. Colour marks
+  `error:` and `warning:` and nothing else: the position is what gets selected and copied, and
+  a message wrapped in escapes is one nobody can grep.
 - **One layout, and no setting for it.** Leading whitespace means nothing to the language, so
   nothing is lost by choosing a layout, and a setting would only give a project the chance to
   disagree with the next one. The layout is not invented either: it is the one the generated
@@ -3226,9 +3257,10 @@ as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x 
 - **To scripts and Makefiles: the command line** of §5.3. The options and what they do, where
   output goes and what it is named, the dependency file, the exit status (0 when the program
   built, 1 when it is wrong, 2 when the command is) and the form of each diagnostic,
-  `file:line:column: severity: message`, with the path as the person running it would write it.
-  `nt65 fmt` keeps its own exit status too: 0 when every file it was given is in the layout,
-  1 when `--check` found one that is not.
+  `file:line:column: severity: message`, with the path as the person running it would write it,
+  and the fields of the object `--json` writes in its place. `nt65 fmt` keeps its own exit
+  status too: 0 when every file it was given is in the layout, 1 when `--check` found one that
+  is not.
 - **To packagers: the cc65 pin.** A release's output is tested against, and promised for, ca65
   and ld65 built from the cc65 commit that release names (§13). The pin moves in a minor
   release that says so, and only to a commit the same output assembles with, to the same bytes.
