@@ -23,7 +23,8 @@ public sealed class ImportItemSyntax : SyntaxNode
     public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
 
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
-    public SyntaxToken? AddressSize => TokenAfter(ColonToken);
+    public SyntaxToken? AddressSize =>
+        TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null;
 
     /// <summary>The <c>proc(...)</c> after the <c>:</c>, or null.</summary>
     public ImportSignatureSyntax? Signature => FirstNode<ImportSignatureSyntax>();

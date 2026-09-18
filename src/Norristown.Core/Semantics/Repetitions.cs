@@ -27,11 +27,10 @@ public static class Repetitions
             MultiProcDeclarationSyntax family =>
                 Walked(model, block, family.Expression, binding, outer, diagnostics, folded: true),
 
-            // An opener that is none of them is walked as an `.each` would be, by whatever it
-            // wrote first, which is where it is said to be neither a list nor an enum.
-            _ => opener.ChildNodes.FirstOrDefault() is { } walked
-                ? Walked(model, block, walked, binding, outer, diagnostics)
-                : [],
+            // An opener that is none of them, such as a `.repeat` written after a label, opens
+            // no repetition and stands for no turns. The parser has already said what is wrong
+            // with it, and reading it as an `.each` would only say something else instead.
+            _ => [],
         };
     }
 

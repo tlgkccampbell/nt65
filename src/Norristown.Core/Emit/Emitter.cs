@@ -604,7 +604,7 @@ public sealed class Emitter
                 break;
 
             case DataDirectiveSyntax directive when DataSyntax.IsElementType(directive):
-                Elements(line, directive, directive, symbol: null);
+                Elements(line, directive, symbol: null);
                 break;
 
             case DataDirectiveSyntax when layout.Of(statement, expansion) is null:
@@ -751,7 +751,6 @@ public sealed class Emitter
         return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
 
-    /// <summary>A <c>.proc</c> becomes its label; the signature says nothing to ca65.</summary>
     /// <summary>The routine a <c>.proc</c> or a turn of a <c>.multiproc</c> writes out here.</summary>
     private Symbol? ProcLabel(StatementSyntax opener) => model.DeclaredBy(opener, expansion);
 
@@ -798,7 +797,7 @@ public sealed class Emitter
         // An element type after a label is written as it is anywhere, with the label in front.
         if (rest is DataDirectiveSyntax directive && DataSyntax.IsElementType(directive))
         {
-            Elements(line, statement, directive, model.SymbolAt(label.Name));
+            Elements(line, directive, model.SymbolAt(label.Name));
             return;
         }
 
@@ -864,7 +863,7 @@ public sealed class Emitter
         }
         if (DataSyntax.IsElementType(element))
         {
-            Elements(line, declaration, element, symbol);
+            Elements(line, element, symbol);
             return;
         }
 
@@ -876,14 +875,14 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(element, edits, nested: false);
-        WithName(line, declaration, element, symbol, Bare(element, edits, out var comment), laid.Length, comment);
+        WithName(line, symbol, Bare(element, edits, out var comment), laid.Length, comment);
     }
 
     /// <summary>
     /// An element type, named or not: its values as the directive of its type, or the room it
     /// takes as zeros. Values in a body are written a line at a time, below the name.
     /// </summary>
-    private void Elements(LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol)
+    private void Elements(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol)
     {
         if (DataSyntax.BodyOf(directive) is { BlockKind: BlockKind.DataBody })
         {
@@ -894,7 +893,7 @@ public sealed class Emitter
         if (directive.Type is { } named)
         {
             if (model.SymbolOf(named) is { IsLayout: true } type)
-                Records(line, statement, directive, symbol, type);
+                Records(line, directive, symbol, type);
             else
                 NotTranspiled(directive);
             return;
@@ -932,7 +931,7 @@ public sealed class Emitter
         // One text in a counted `.byte` array is padded with zero to the count, so the line
         // holds the text and the line below it the zeros that fill the array out.
         var zeros = (int)(PaddedText.Padding(directive, model, expansion)?.Zeros ?? 0);
-        WithName(line, statement, directive, symbol, text, laid.Length - zeros, comment);
+        WithName(line, symbol, text, laid.Length - zeros, comment);
         Padding(line, directive);
     }
 
@@ -987,9 +986,7 @@ public sealed class Emitter
     /// directive is lined up with those of the lines around it rather than where the source
     /// wrote it, because the name in front is rarely the one the source used.
     /// </summary>
-    private void WithName(
-        LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol, string text, int bytes,
-        string? comment = null)
+    private void WithName(LineSyntax line, Symbol? symbol, string text, int bytes, string? comment = null)
     {
         if (symbol is null)
         {
@@ -1109,7 +1106,7 @@ public sealed class Emitter
     /// order the values were written in. Room with no values is zeros, which one `.res` says,
     /// unless a member pads with something else.
     /// </summary>
-    private void Records(LineSyntax line, StatementSyntax statement, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
+    private void Records(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
     {
         if (model.RoomFor(directive, expansion) is not { } room)
         {
@@ -1127,7 +1124,7 @@ public sealed class Emitter
         }
         else if (!Pads(type))
         {
-            WithName(line, statement, directive, symbol, $".res {room.Bytes}", (int)room.Bytes, type.QualifiedName);
+            WithName(line, symbol, $".res {room.Bytes}", (int)room.Bytes, type.QualifiedName);
             return;
         }
         else
@@ -1299,7 +1296,6 @@ public sealed class Emitter
         yield return ($"{ForCa65(directive)} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
     }
 
-    /// <summary>The bytes a reserved member takes: the text it was given, then the byte it pads with.</summary>
     /// <summary>
     /// An expression written out rather than edited in place: a call becomes what it stands
     /// for, and every nested operation is parenthesized, so nothing depends on how ca65

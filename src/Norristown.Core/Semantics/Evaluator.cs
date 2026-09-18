@@ -321,7 +321,7 @@ internal sealed class Evaluator
         if (symbol.Kind == SymbolKind.Data)
         {
             evaluating.Add(symbol);
-            symbol.Type ??= DataSyntax.TypeOf(symbol.Data as DataDirectiveSyntax) is { } typed ? SymbolOf(typed) : null;
+            symbol.Type ??= (symbol.Data as DataDirectiveSyntax)?.Type is { } typed ? SymbolOf(typed) : null;
             if (symbol.Data is { } element && RoomFor(element) is { } room)
             {
                 symbol.Size = room.Bytes;
@@ -1015,14 +1015,14 @@ internal sealed class Evaluator
         if (written is DataValuesSyntax values)
         {
             return DataSyntax.DirectiveOfValues(values) is { } of && ElementWidth(of) is { } each
-                ? Spread(values.ChildNodes, each)
+                ? Spread(values.Values, each)
                 : null;
         }
         if (written is not DataDirectiveSyntax directive)
             return null;
         if (DataSyntax.IsElementType(directive))
             return RoomForElements(directive);
-        var operands = directive.ChildNodes;
+        var operands = directive.Values;
 
         switch (DataSyntax.NameOf(directive))
         {
@@ -1070,7 +1070,7 @@ internal sealed class Evaluator
     /// <summary>How many bytes one element of an element type takes: a record's is its type's size.</summary>
     private long? ElementWidth(DataDirectiveSyntax directive)
     {
-        if (DataSyntax.TypeOf(directive) is not { } named)
+        if (directive.Type is not { } named)
             return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
         if (SymbolOf(named) is not { } type)
             return null;
@@ -1096,7 +1096,7 @@ internal sealed class Evaluator
             return body.BlockKind == BlockKind.RecordInitializer
                 ? 1
                 : Total(body.Members, 1, statement =>
-                    statement is DataValuesSyntax row ? Spread(row.ChildNodes, 1).Elements : 0, _ => null);
+                    statement is DataValuesSyntax row ? Spread(row.Values, 1).Elements : 0, _ => null);
         }
         var values = DataSyntax.ValuesOf(directive);
         return values.Count > 0 ? Spread(values, 1).Elements : null;
@@ -1385,7 +1385,7 @@ internal sealed class Evaluator
                 continue;
             // The type a member names is worth keeping on it: emission walks into it, and
             // nothing else would have resolved it unless a path happened to reach through.
-            member.Type ??= DataSyntax.TypeOf(member.Data as DataDirectiveSyntax) is { } named ? SymbolOf(named) : null;
+            member.Type ??= (member.Data as DataDirectiveSyntax)?.Type is { } named ? SymbolOf(named) : null;
 
             // A member reserves room and holds no value, so an operand would be silently
             // ignored, and `colors: .word 16` read as sixteen words would be two bytes.

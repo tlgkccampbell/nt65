@@ -1046,14 +1046,14 @@ internal sealed class Binder
         foreach (var statement in written)
             CollectUses(statement);
         var directive = opener is DataDeclarationSyntax data ? data.Directive : opener as DataDirectiveSyntax;
-        if (DataSyntax.TypeOf(directive) is { } type)
+        if (directive?.Type is { } type)
             records.Add((type, [.. written.OfType<MemberValueSyntax>()]));
     }
 
     /// <summary>The records a <c>.type T</c> directive writes on its line, braced or as its values.</summary>
     private void CollectRecords(DataDirectiveSyntax? directive)
     {
-        if (directive is null || DataSyntax.TypeOf(directive) is not { } type)
+        if (directive?.Type is not { } type)
             return;
         records.Add((type, [.. DataSyntax.ValuesOf(directive).Append(DataSyntax.BracedOf(directive)).OfType<SyntaxNode>()]));
     }
@@ -1253,7 +1253,7 @@ internal sealed class Binder
             // The records of a `.type T` body, one or more to a line.
             case DataValuesSyntax values:
                 CollectUses(values);
-                if (DataSyntax.TypeOf(DataSyntax.DirectiveOfValues(values)) is { } recordType)
+                if (DataSyntax.DirectiveOfValues(values)?.Type is { } recordType)
                     records.Add((recordType, values.Values));
                 break;
 
@@ -1275,13 +1275,25 @@ internal sealed class Binder
                 break;
 
             // The `dp = e` and `bank = e` of a segment declaration, and the `dp = e` and
-            // `dbr = e` of a `.state`, may name constants.
+            // `dbr = e` of a `.state`, may name constants; so may every bank of a `mirrors`,
+            // which is a list of ranges rather than one value.
             case SegmentDeclarationSyntax:
             case StateDirectiveSyntax:
                 foreach (var item in statement.DescendantNodes())
                 {
-                    if (item is SegmentAttributeSyntax or StateItemSyntax)
+                    if (item is SegmentAttributeSyntax attribute)
+                    {
+                        CollectUses(attribute.Value);
+                        foreach (var range in attribute.Ranges)
+                        {
+                            CollectUses(range.First);
+                            CollectUses(range.Last);
+                        }
+                    }
+                    else if (item is StateItemSyntax)
+                    {
                         CollectUses(item.ChildNodes.FirstOrDefault());
+                    }
                 }
                 break;
 
@@ -1310,11 +1322,8 @@ internal sealed class Binder
             // An import states its own address size. An unqualified import is absolute, and so
             // is a routine, unless its signature says it is called far.
             symbol.AddressSize = AddressSize.Absolute;
-            foreach (var token in item.ChildTokens)
-            {
-                if (token.Kind == SyntaxKind.Identifier && SegmentNames.ParseSize(token.Text) is { } size)
-                    symbol.AddressSize = size;
-            }
+            if (item.AddressSize is { } written && SegmentNames.ParseSize(written.Text) is { } size)
+                symbol.AddressSize = size;
             if (item.Signature is { } signature)
             {
                 symbol.Signature = Signature.Read(signature);
@@ -1339,7 +1348,7 @@ internal sealed class Binder
         if (!member)
             CheckLabelPlacement(name);
         var declared = member
-            ? Declare(name, SymbolKind.Member, data: rest, type: DataSyntax.TypeOf(rest as DataDirectiveSyntax))
+            ? Declare(name, SymbolKind.Member, data: rest, type: (rest as DataDirectiveSyntax)?.Type)
             : Declare(name, SymbolKind.Label);
         if (rest is null && !member)
             bareLabel = declared;
@@ -1362,11 +1371,11 @@ internal sealed class Binder
         var element = statement.Directive;
         if (NamedByBinding(statement, repeated) is { } each && element is not null)
         {
-            AddFamily(each, statement, scope, SymbolKind.Data, null, element, DataSyntax.TypeOf(element));
+            AddFamily(each, statement, scope, SymbolKind.Data, null, element, element.Type);
         }
         else if (statement.Name is { } name && element is not null)
         {
-            Declare(name, SymbolKind.Data, data: element, type: DataSyntax.TypeOf(element));
+            Declare(name, SymbolKind.Data, data: element, type: element.Type);
         }
         CollectUses(element);
         CollectRecords(element);

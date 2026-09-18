@@ -240,10 +240,11 @@ internal static class Refactors
         if (StatementOn(tree, line) is not { } statement)
             yield break;
 
-        if (statement is InstructionStatementSyntax { Operand: { } operand } instruction
+        // Only an immediate sets the flags: `rep flags` is another instruction altogether, and
+        // writing it as the `.ensure` its value happens to spell would change what it does.
+        if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax immediate } instruction
             && instruction.Mnemonic.Text.ToLowerInvariant() is ("rep" or "sep") and var written
-            && operand.ChildNodes.FirstOrDefault() is { } expression
-            && model.ValueOf(expression) is { Kind: ValueKind.Number } value)
+            && model.ValueOf(immediate.Value) is { Kind: ValueKind.Number } value)
         {
             var flags = value.Number;
             if (flags != 0 && (flags & ~0x30) == 0)

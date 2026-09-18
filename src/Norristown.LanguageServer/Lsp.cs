@@ -369,9 +369,8 @@ internal static class Lsp
     /// </summary>
     private static long? Immediate(SemanticModel model, StatementSyntax statement, LineLayout laid) =>
         laid.Mode == AddressingMode.Immediate
-            && statement is InstructionStatementSyntax { Operand: { } operand }
-            && operand.ChildNodes.FirstOrDefault(child => child is not AddressPrefixSyntax) is { } expression
-            ? model.ValueOf(expression).AsNumber()
+            && statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax immediate }
+            ? model.ValueOf(immediate.Value).AsNumber()
             : null;
 
     /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>

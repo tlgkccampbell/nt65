@@ -19,24 +19,17 @@ public static class DataSyntax
     public static bool IsElementType(DataDirectiveSyntax directive) =>
         directive.IsRecord || SyntaxFacts.ElementSize(NameOf(directive)) is not null;
 
-    /// <summary>The <c>T</c> of a <c>.type T</c>, or null for any other directive.</summary>
-    public static NameExpressionSyntax? TypeOf(DataDirectiveSyntax? directive) =>
-        directive is { IsRecord: true } ? directive.ChildNodes.OfType<NameExpressionSyntax>().FirstOrDefault() : null;
-
     /// <summary>The braced values written on the directive's line, <c>{ 1, 2 }</c> or <c>{ x = 1 }</c>, or null.</summary>
     public static SyntaxNode? BracedOf(DataDirectiveSyntax directive) =>
         directive.ChildNodes.FirstOrDefault(c => c is ValueListSyntax or RecordValuesSyntax);
 
     /// <summary>
     /// The values written after the directive on its line: its operands for any directive that
-    /// is not an element type, and the unbraced values of one that is.
+    /// is not an element type, and the unbraced values of one that is. Tokens the parser had to
+    /// skip are no value, however they were written.
     /// </summary>
-    public static IReadOnlyList<SyntaxNode> ValuesOf(DataDirectiveSyntax directive)
-    {
-        var type = TypeOf(directive);
-        return [.. directive.ChildNodes.Where(c =>
-            c != type && c is not (ElementCountSyntax or ValueListSyntax or RecordValuesSyntax))];
-    }
+    public static IReadOnlyList<SyntaxNode> ValuesOf(DataDirectiveSyntax directive) =>
+        [.. directive.Values.Where(c => c is not (ValueListSyntax or RecordValuesSyntax))];
 
     /// <summary>
     /// The block of values or <c>member = value</c> lines the directive's line opens, or null
@@ -44,7 +37,7 @@ public static class DataSyntax
     /// </summary>
     public static BlockSyntax? BodyOf(DataDirectiveSyntax directive)
     {
-        if (directive.ChildTokens is not [.., { Kind: SyntaxKind.OpenBrace }])
+        if (directive.OpenBraceToken is null)
             return null;
         var line = directive.FirstAncestorOrSelf<LineSyntax>();
         return line?.Parent is BlockSyntax { BlockKind: BlockKind.DataBody or BlockKind.RecordInitializer } block

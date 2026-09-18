@@ -213,11 +213,8 @@ public sealed class SegmentTable
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> a declaration writes after its <c>:</c>.</summary>
     private static AddressSize SizeOf(SegmentDeclarationSyntax declaration)
     {
-        foreach (var token in declaration.ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.Identifier && SegmentNames.ParseSize(token.Text) is { } size)
-                return size;
-        }
+        if (declaration.AddressSize is { } written && SegmentNames.ParseSize(written.Text) is { } size)
+            return size;
 
         // The parser has already reported the missing size; absolute is the default that
         // makes the fewest further complaints.

@@ -315,6 +315,19 @@ public sealed class MacroCallTests
             analysis.Problems());
     }
 
+    /// <summary>
+    /// Only an operand's own index says what it is indexed by: an unbraced argument is an
+    /// expression, and a name in it that reads as a register is still only a name, so
+    /// <c>dest+1</c> is not refused for having no next byte.
+    /// </summary>
+    [Fact]
+    public void AnUnbracedArgumentIsIndexedByNothing()
+    {
+        var program = Analysis.Program(("main.nt65", Set16 + "\n.segment CODE\n.proc main {\n    set16!(s, 0)\n    rts\n}\n"));
+
+        Assert.Equal(["main.nt65:11: `s` is a register name and cannot be used as a name"], program.Problems());
+    }
+
     /// <summary>Two calls to the same macro are not a cycle, however many there are.</summary>
     [Fact]
     public void CallingTheSameMacroTwiceIsNotRecursion()

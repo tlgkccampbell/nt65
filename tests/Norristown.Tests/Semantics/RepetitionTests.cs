@@ -116,6 +116,18 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
+    /// A block whose opener is no repetition at all — a <c>.repeat</c> written after a label,
+    /// which the parser refuses — stands for no turns, and says nothing further about itself.
+    /// </summary>
+    [Fact]
+    public void ALineThatOpensNoRepetitionStandsForNoTurns()
+    {
+        var program = Analysis.Program(("main.nt65", ".module main\n.segment RODATA\nfoo: .repeat 3 {\n}\n"));
+
+        Assert.Equal(["main.nt65:3: `.repeat` may not follow a label"], program.Problems());
+    }
+
+    /// <summary>
     /// What a repetition declares is its own on every turn, as a macro expansion's is, so each
     /// turn's label gets a name of its own in the output.
     /// </summary>

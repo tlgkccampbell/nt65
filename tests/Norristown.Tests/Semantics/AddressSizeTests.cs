@@ -107,6 +107,20 @@ public sealed class AddressSizeTests
         Assert.Equal(2, model.Symbol("WIDE").Value.Number);
     }
 
+    /// <summary>
+    /// The size is the word written after the <c>:</c> and nothing else, so an import or a
+    /// segment whose own name happens to be <c>zp</c> or <c>abs</c> is only a name.
+    /// </summary>
+    [Fact]
+    public void AnAddressSizeIsOnlyTheWordAfterItsColon()
+    {
+        var model = Analysis.Model(".module main\n.import zp\n.segment abs: zp\n.segment abs\n.data ptr: .byte 0\n");
+
+        Assert.Empty(model.Problems());
+        Assert.Equal(AddressSize.Absolute, model.Symbol("zp").AddressSize);
+        Assert.Equal(AddressSize.ZeroPage, model.Symbol("ptr").AddressSize);
+    }
+
     /// <summary>A block naming a segment nothing declares is an error, and sizes nothing.</summary>
     [Fact]
     public void AnUndeclaredSegmentIsReported()

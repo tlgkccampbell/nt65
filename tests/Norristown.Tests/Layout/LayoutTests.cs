@@ -2,6 +2,7 @@ using Norristown.Layout;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
+using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Layout;
 
@@ -163,6 +164,34 @@ public sealed class LayoutTests
         var layout = CodeLayout.Create(model, Cpu.Mos6502);
         Assert.Equal("`jsr` takes a near target, and this one is far",
             Assert.Single(layout.Diagnostics).Message);
+    }
+
+    /// <summary>
+    /// A data directive with no name in front of it opens its body just as a named one does:
+    /// its own line takes no bytes, and the lines of the body carry them.
+    /// </summary>
+    [Fact]
+    public void ADirectiveWithNoNameOpensItsBody()
+    {
+        var main = Analysis.Outputs(("main.nt65",
+            ".module main\n.segment CODE\n.proc p {\n    rts\n.byte[] {\n    1, 2\n    3\n}\n}\n"))["main.s"];
+
+        Assert.Contains("    rts\n    .byte 1, 2\n    .byte 3\n", main, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Tokens the parser had to skip are no value of the directive they were left on, so a
+    /// line whose junk was reported does not also count as one element too many.
+    /// </summary>
+    [Theory]
+    [InlineData(".data d {\n.byte[2] 1, 2 ]\n}", "the values of an array go in braces: `.byte[n] { 1, 2 }`")]
+    [InlineData(".data d {\n.strz \"ab\" ]\n}", "unexpected `]`")]
+    [InlineData(".data d: .byte[3] {\n    1, 2 )\n    3\n}", "unexpected `)`")]
+    public void SkippedTokensAreNoElementOfTheirDirective(string data, string message)
+    {
+        var program = Analysis.Program(("main.nt65", $".module main\n.segment RODATA\n{data}\n.export d\n"));
+
+        Assert.EndsWith($": {message}", Assert.Single(program.Problems()), StringComparison.Ordinal);
     }
 
     /// <summary>Lays out one line, with a few symbols around it to point at.</summary>

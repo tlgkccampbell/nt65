@@ -14,7 +14,7 @@ public sealed class CallExpressionSyntax : ExpressionSyntax
     public NameExpressionSyntax? Callee => ChildNodes[0] as NameExpressionSyntax;
 
     /// <summary>The built-in function called, or null for a <c>.func</c>.</summary>
-    public SyntaxToken? Function => TokenAt(0);
+    public SyntaxToken? Function => TokenAt(0) is { Kind: SyntaxKind.Directive } function ? function : null;
 
     /// <summary>The arguments.</summary>
     public ArgumentListSyntax Arguments => FirstNode<ArgumentListSyntax>()!;

@@ -860,7 +860,7 @@ public sealed class StateAnalysis
 
     /// <summary>The value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the <c>c</c> of <c>pea c</c>, or null when it is not a constant.</summary>
     private long? Constant(Step step) =>
-        OperandOf(step)?.ChildNodes.FirstOrDefault(c => c is not AddressPrefixSyntax) is { } expression
+        OperandOf(step) is { } operand && CodeLayout.Expression(operand) is { } expression
             ? model.ValueOf(expression, step.On).AsNumber()
             : null;
 
@@ -898,7 +898,7 @@ public sealed class StateAnalysis
     private void CheckMemory(Step step, string mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
         if (mode is not { } chosen || OperandOf(step) is not { } operand
-            || operand.ChildNodes.FirstOrDefault(c => c is not AddressPrefixSyntax) is not { } expression)
+            || CodeLayout.Expression(operand) is not { } expression)
         {
             return;
         }

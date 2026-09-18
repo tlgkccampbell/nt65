@@ -49,7 +49,7 @@ public static class PaddedText
                 return null;
             if (line is not LineSyntax { Statement: DataValuesSyntax values })
                 continue;
-            if (only is not null || values.ChildNodes is not [var written])
+            if (only is not null || values.Values is not [var written])
                 return null;
             only = written;
         }

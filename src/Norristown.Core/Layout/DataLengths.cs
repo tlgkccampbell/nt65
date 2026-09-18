@@ -57,7 +57,7 @@ public static class DataLengths
     /// </summary>
     public static IReadOnlyList<SyntaxNode> ElementsOf(StatementSyntax directive) => directive switch
     {
-        DataValuesSyntax values => values.ChildNodes,
+        DataValuesSyntax values => values.Values,
         DataDirectiveSyntax data => DataSyntax.BracedOf(data) is ValueListSyntax list ? list.Values : DataSyntax.ValuesOf(data),
         _ => [],
     };
@@ -107,7 +107,7 @@ public static class DataLengths
 
         if (element.IsRecord)
         {
-            if (DataSyntax.TypeOf(element) is { } named && model.SymbolOf(named) is { IsLayout: true } type)
+            if (element.Type is { } named && model.SymbolOf(named) is { IsLayout: true } type)
                 Records(type, directive, operands, model, diagnostics, on);
             return;
         }

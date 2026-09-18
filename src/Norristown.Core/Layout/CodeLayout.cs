@@ -16,6 +16,14 @@ namespace Norristown.Layout;
 /// </summary>
 public sealed class CodeLayout
 {
+    /// <summary>
+    /// How many statements one file's expansions may lay out before nt65 gives up. The
+    /// recursion check bounds each expansion on its own, but a chain of macros over long
+    /// lists is not bounded by it, and neither is a program that simply asks for too
+    /// much.
+    /// </summary>
+    private const int MaximumStatements = 65536;
+
     private readonly SemanticModel model;
     private readonly Cpu cpu;
 
@@ -82,14 +90,6 @@ public sealed class CodeLayout
 
     // Whether the immediate being laid out is sized by a register whose width is not known.
     private bool sizeUnknown;
-
-    /// <summary>
-    /// How many statements one file's expansions may lay out before nt65 gives up. The
-    /// recursion check bounds each expansion on its own, but a chain of macros over long
-    /// lists is not bounded by it, and neither is a program that simply asks for too
-    /// much.
-    /// </summary>
-    private const int MaximumStatements = 65536;
 
     private CodeLayout(
         SemanticModel model, Cpu cpu, StateAnalysis? states,
@@ -266,8 +266,12 @@ public sealed class CodeLayout
     public static bool ThroughDirectPage(SyntaxNode operand) =>
         operand is AbsoluteOperandSyntax { Prefix: { } prefix } && char.ToLowerInvariant(prefix.Name.Text[0]) == 'd';
 
-    /// <summary>The expression an operand addresses, which is what an address size is worked out from.</summary>
-    private static ExpressionSyntax? Expression(SyntaxNode operand) => operand switch
+    /// <summary>
+    /// The expression an operand addresses, which is what an address size is worked out from.
+    /// An <c>operand</c> argument written without braces is an expression, and so is the whole
+    /// of what it addresses.
+    /// </summary>
+    public static ExpressionSyntax? Expression(SyntaxNode operand) => operand switch
     {
         AbsoluteOperandSyntax absolute => absolute.Address,
         ImmediateOperandSyntax immediate => immediate.Value,
@@ -535,11 +539,6 @@ public sealed class CodeLayout
         }
     }
 
-    /// <summary>
-    /// The addressing mode: the narrowest the instruction offers that is at least as
-    /// wide as the operand, with the choice written into the output as a prefix when the
-    /// instruction offers more than one width for that shape.
-    /// </summary>
     /// <summary>Marks the routine being walked as one an instruction could not be laid out in.</summary>
     private void Unlayable()
     {
@@ -547,6 +546,12 @@ public sealed class CodeLayout
             unlaid.Add(routine);
     }
 
+    /// <summary>
+    /// One instruction, laid out in the addressing mode it calls for: the narrowest the
+    /// instruction offers that is at least as wide as the operand, with the choice written
+    /// into the output as a prefix when the instruction offers more than one width for that
+    /// shape.
+    /// </summary>
     private void Instruction(InstructionStatementSyntax statement)
     {
         var mnemonic = statement.Mnemonic;
@@ -1052,8 +1057,8 @@ public sealed class CodeLayout
         var state = states?.Before(directive, expansion)?.Processor;
 
         // On the 6502 and its CMOS variants there is no processor state to set, and no `rep` or
-        // `sep` to set it with, so an `.ensure` is accepted and writes nothing (§7.3). That is
-        // what lets one routine be written for both CPUs.
+        // `sep` to set it with, so an `.ensure` is accepted and writes nothing. That is what
+        // lets one routine be written for both CPUs.
         var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
         var cycles = new CycleCount(0);
         foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
@@ -1157,7 +1162,6 @@ public sealed class CodeLayout
         steps.Add(new Step(declaration, expansion, routine, Stream, segment, symbol));
     }
 
-    /// <summary>What a label or a routine declaration names.</summary>
     /// <summary>
     /// The symbol a declaration declares here: the one instance of a family the turn being
     /// laid out writes, and the one name every other declaration has.

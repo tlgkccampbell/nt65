@@ -55,15 +55,20 @@ public sealed record OperandSubstitution(
     /// <summary>The index the argument wrote, such as <c>,x</c>, which follows the expression.</summary>
     public SyntaxToken? Index => (Operand as AbsoluteOperandSyntax)?.IndexRegister;
 
-    private bool IndexedByStack => IndexedBy("s");
-
-    private bool IndexedBy(string register)
+    /// <summary>
+    /// Whether the argument's own index is <c>,s</c>. Only an operand form has an index: an
+    /// argument written without braces is an expression, and a name in it that reads as a
+    /// register — <c>s</c> itself among them — is still only a name.
+    /// </summary>
+    private bool IndexedByStack => Operand switch
     {
-        foreach (var token in Operand.ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.Register && token.Text.Equals(register, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
+        AbsoluteOperandSyntax absolute => IsStack(absolute.IndexRegister),
+        IndirectOperandSyntax indirect => IsStack(indirect.IndexRegister),
+        IndexedIndirectOperandSyntax indexed => IsStack(indexed.InnerRegister) || IsStack(indexed.OuterRegister),
+        LongIndirectOperandSyntax far => IsStack(far.IndexRegister),
+        _ => false,
+    };
+
+    private static bool IsStack(SyntaxToken? register) =>
+        register is { } written && written.Text.Equals("s", StringComparison.OrdinalIgnoreCase);
 }

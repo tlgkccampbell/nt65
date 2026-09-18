@@ -104,6 +104,24 @@ public sealed class RefactorsTests
         Assert.Equal(Main, Editing.Apply(written, back.Edit.Changes[Uri]));
     }
 
+    /// <summary>
+    /// Only an immediate sets the flags: <c>rep FLAGS</c> is another instruction altogether,
+    /// and writing it as the <c>.ensure</c> its value happens to spell would change what the
+    /// line does.
+    /// </summary>
+    [Fact]
+    public void OnlyAnImmediateRepIsWrittenAsAnEnsure()
+    {
+        const string Main = ".module main\n.cpu 65816\nFLAGS = $20\n.segment CODE\n"
+            + ".proc widen: a8, i8 -> a16 {\n    rep FLAGS\n    rts\n}\n";
+
+        var start = Main.IndexOf("rep FLAGS", StringComparison.Ordinal);
+        var caret = new Position(Main[..start].Count(c => c == '\n'), 4);
+        Assert.DoesNotContain(
+            Actions(Main, new Range(caret, caret)),
+            action => action.Title.StartsWith("Write it as `.ensure", StringComparison.Ordinal));
+    }
+
     /// <summary>A number written in an operand is given a name at the top of the file.</summary>
     [Fact]
     public void ANumberIsGivenAName()

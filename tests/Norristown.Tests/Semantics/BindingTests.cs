@@ -315,4 +315,22 @@ public sealed class BindingTests
         Assert.Equal(5, model.ReferencesTo(model.Symbol("x")).Count);
         Assert.Equal(2, model.ReferencesTo(model.Symbol("corner")).Count);
     }
+
+    /// <summary>
+    /// Every bank range of a <c>mirrors</c> names constants, not only the first: each of them
+    /// is resolved where the segment is declared.
+    /// </summary>
+    [Fact]
+    public void EveryBankRangeOfAMirrorsNamesConstants()
+    {
+        var model = Analysis.Model("""
+            .module main
+            FIRST  = $00
+            MIRROR = $80
+            .segment LORAM: abs, bank = $7e, mirrors = [FIRST..$3f, MIRROR..$bf]
+            """);
+
+        Assert.Empty(model.Problems());
+        Assert.Equal([(0x00L, 0x3fL), (0x80L, 0xbfL)], model.Segments.Find("LORAM")!.Mirrors);
+    }
 }

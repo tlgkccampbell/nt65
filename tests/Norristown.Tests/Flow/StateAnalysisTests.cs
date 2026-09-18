@@ -386,6 +386,20 @@ public sealed class StateAnalysisTests
         Assert.Equal(state, StateAt(text, "nop").Processor.ToString());
     }
 
+    /// <summary>
+    /// An <c>operand</c> argument written without braces is an expression, and the whole of
+    /// it is what the instruction is given: <c>pea slot</c> with <c>slot</c> bound to
+    /// <c>BASE + 2</c> pushes that address, not the base it starts from.
+    /// </summary>
+    [Fact]
+    public void AnUnbracedOperandArgumentIsTheWholeExpression()
+    {
+        var state = StateAt("BASE = $2000\n.macro pushed(slot: operand) {\n    pea slot\n}\n"
+            + ".proc main: a8, i8 {\n    pushed!(BASE + 2)\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "nop");
+
+        Assert.Equal("a8, i8, native, dp = $2002", state.Processor.ToString());
+    }
+
     /// <summary>A label a `.state` declares starts from what its routine says of D and B, so only a routine that declares them needs its labels to.</summary>
     [Fact]
     public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
