@@ -81,8 +81,7 @@ public sealed class CodeActionsTests
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(GfxUri, Gfx);
         await client.OpenAsync(MainUri, Main);
-        for (var i = 0; i < 1 + 2; i++)
-            await client.NextDiagnosticsAsync(timeout);
+        await client.NextDiagnosticsAsync(MainUri, timeout);
 
         var export = await ActionAsync(client, MainUri, "Export `clear` from `gfx`", timeout);
         Assert.Equal([GfxUri], export.Edit.Changes.Keys);

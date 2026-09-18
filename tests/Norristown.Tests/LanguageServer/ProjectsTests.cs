@@ -54,13 +54,15 @@ public sealed class ProjectsTests : IDisposable
             Regex.Replace(uri, "^file:///([A-Za-z]):", m => $"file:///{m.Groups[1].Value.ToLowerInvariant()}%3A");
         await using var client = await TestClient.StartAsync(AsVsCode(Uri("")), null, timeout);
 
+        // Once the client has named a file its own way, that is the name it is published under.
         await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), Read("src/main.nt65"));
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        Assert.Empty((await client.NextDiagnosticsAsync(AsVsCode(Uri("src/main.nt65")), timeout)).Diagnostics);
     }
 
     /// <summary>
     /// A change on disk to what a program reads is published again: the project file, a source
     /// no one has open, and a file an <c>.incbin</c> measured. A file nothing reads is not news.
+    /// Nothing here is ever opened: every file of a project is reported on either way.
     /// </summary>
     [Fact]
     public async Task WhatAProgramReadsChangingOnDiskIsPublishedAgain()
@@ -76,24 +78,44 @@ public sealed class ProjectsTests : IDisposable
             """);
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
         Assert.Equal(["`gfx` is not declared, and no module `gfx` is in this build"],
-            await DiagnosticsAsync(client, "main.nt65", timeout));
+            (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
 
         // The project names gfx.nt65 as well from here on.
         Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         await client.ChangedOnDiskAsync(Uri("nt65.json"));
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        Assert.Empty((await NextForAsync(client, "main.nt65", timeout)).Diagnostics);
 
         Write("gfx.nt65", ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n");
         await client.ChangedOnDiskAsync(Uri("gfx.nt65"));
         Assert.Equal(["`gfx::clear` is not exported by module `gfx`"],
-            (await client.NextDiagnosticsAsync(timeout)).Diagnostics.Select(d => d.Message));
+            (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
 
         Write("tiles.bin", "123");
         Write("unrelated.txt", "");
         await client.ChangedOnDiskAsync(Uri("unrelated.txt"));
         await client.ChangedOnDiskAsync(Uri("tiles.bin"));
         Assert.Equal(["`gfx::clear` is not exported by module `gfx`", "four tiles"],
-            (await client.NextDiagnosticsAsync(timeout)).Diagnostics.Select(d => d.Message));
+            (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
+    }
+
+    /// <summary>
+    /// The project file is reported on as well. It is not a file of the program, and what is
+    /// wrong with it is what stops the program being read at all, so it is worth a squiggle
+    /// where it is written.
+    /// </summary>
+    [Fact]
+    public async Task WhatIsWrongWithTheProjectFileIsPublishedForIt()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "define": {} }""");
+        Write("main.nt65", ".module main\n");
+        await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
+
+        var published = await NextForAsync(client, "nt65.json", timeout);
+
+        Assert.Equal("`define` is not a nt65.json key; `defines` is",
+            Assert.Single(published.Diagnostics).Message);
+        Assert.Null(published.Version);
     }
 
     /// <summary>
@@ -114,15 +136,13 @@ public sealed class ProjectsTests : IDisposable
         await using var client = await TestClient.StartAsync(Uri(""), "debug", timeout);
 
         Assert.Equal(["debug"], await client.RequestAsync<IReadOnlyList<string>>("nt65/configurations", new { }, timeout));
-        await client.OpenAsync(Uri("app/main.nt65"), Read("app/main.nt65"));
-        Assert.Equal([3], Dimmed(await client.NextDiagnosticsAsync(timeout)));
-        await client.OpenAsync(Uri("lib/main.nt65"), Read("lib/main.nt65"));
+        Assert.Equal([3], Dimmed(await NextForAsync(client, "app/main.nt65", timeout)));
         Assert.Empty((await NextForAsync(client, "lib/main.nt65", timeout)).Diagnostics);
 
-        // Every open document is published again, the app first because it was opened first.
+        // The project the configuration does not name builds its own settings either way, so
+        // the other project is the only one whose dimmed lines move.
         await client.ConfigureAsync(null);
-        Assert.Equal([1], Dimmed(await client.NextDiagnosticsAsync(timeout)));
-        Assert.Empty((await NextForAsync(client, "lib/main.nt65", timeout)).Diagnostics);
+        Assert.Equal([1], Dimmed(await NextForAsync(client, "app/main.nt65", timeout)));
     }
 
     private static IReadOnlyList<int> Dimmed(PublishDiagnosticsParams published) =>
@@ -135,18 +155,11 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
-    /// What is published next for <paramref name="path"/>. Every open document is published again
-    /// after any change, so what comes first may be another document's.
+    /// What is published next for <paramref name="path"/>. Every file of every project is
+    /// published after any change, so what comes first is rarely the one a test is about.
     /// </summary>
-    private async Task<PublishDiagnosticsParams> NextForAsync(TestClient client, string path, CancellationToken timeout)
-    {
-        while (true)
-        {
-            var published = await client.NextDiagnosticsAsync(timeout);
-            if (published.Uri == Uri(path))
-                return published;
-        }
-    }
+    private Task<PublishDiagnosticsParams> NextForAsync(TestClient client, string path, CancellationToken timeout) =>
+        client.NextDiagnosticsAsync(Uri(path), timeout);
 
     private string Read(string path) => File.ReadAllText(Path.Combine(root.FullName, path));
 

@@ -9,5 +9,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// What to run once it is written, or null. An item that writes more than its own name leaves
 /// the caret where something else may go, and asks the client for that list straight away.
 /// </param>
+/// <param name="Documentation">The comment above the declaration it names, or null.</param>
 internal sealed record CompletionItem(
-    string Label, CompletionItemKind Kind, string? Detail, TextEdit TextEdit, Command? Command = null);
+    string Label, CompletionItemKind Kind, string? Detail, TextEdit TextEdit, Command? Command = null,
+    MarkupContent? Documentation = null);

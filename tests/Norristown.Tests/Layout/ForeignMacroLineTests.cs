@@ -56,7 +56,8 @@ public sealed class ForeignMacroLineTests
         Assert.Equal(sta, analysis.File("defs.nt65").Offset("lda"));
 
         var hover = Lsp.ToHover(
-            main, analysis.LayoutFor("main.nt65"), analysis.FlowFor("main.nt65"), analysis.StatesFor("main.nt65"), sta);
+            analysis.Program, main,
+            analysis.LayoutFor("main.nt65"), analysis.FlowFor("main.nt65"), analysis.StatesFor("main.nt65"), sta);
 
         Assert.NotNull(hover);
         Assert.StartsWith("**3 cycles**", hover.Contents.Value);

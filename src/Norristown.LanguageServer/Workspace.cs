@@ -21,6 +21,12 @@ internal sealed class Workspace
 {
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
+
+    // How the client spells the URI of each file it has named, by logical path. VS Code
+    // escapes a drive's colon and nt65 does not, so a file the client has opened keeps the
+    // client's spelling for the rest of the session: two spellings of one file would leave
+    // what is wrong with it in the problem list twice.
+    private readonly Dictionary<string, string> named = new(StringComparer.Ordinal);
     private readonly List<WorkspaceProject> projects = [];
     private IReadOnlyList<string> roots = [];
     private string? configuration;
@@ -108,6 +114,7 @@ internal sealed class Workspace
         lock (gate)
         {
             open[item.Uri] = document;
+            named[document.Tree.Path] = item.Uri;
             Invalidate(document.Tree.Path);
         }
         return document;
@@ -147,15 +154,6 @@ internal sealed class Workspace
         lock (gate)
         {
             return open.GetValueOrDefault(uri);
-        }
-    }
-
-    /// <summary>Every open document, for republishing what a change elsewhere made wrong.</summary>
-    public IReadOnlyList<Document> Open()
-    {
-        lock (gate)
-        {
-            return [.. open.Values];
         }
     }
 
@@ -215,15 +213,68 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            if (Owner(path) is { } project)
-                return project.Analysis(open.Values);
-            if (loose is not null)
-                return loose;
+            return Owner(path) is { } project ? project.Analysis(open.Values) : Loose();
+        }
+    }
 
-            // An open document stands in for whatever is on disk, and brings its own tree,
-            // which an edit re-parsed only in the lines it touched.
-            var sources = open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree);
-            return loose = loosePrevious = Compiler.Analyze([.. sources], ProjectSettings.None, loosePrevious);
+    /// <summary>
+    /// The program of the open documents no project names. An open document stands in for
+    /// whatever is on disk, and brings its own tree, which an edit re-parsed only in the lines
+    /// it touched.
+    /// </summary>
+    private ProgramAnalysis Loose()
+    {
+        if (loose is not null)
+            return loose;
+        var sources = open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree);
+        return loose = loosePrevious = Compiler.Analyze([.. sources], ProjectSettings.None, loosePrevious);
+    }
+
+    /// <summary>The open document for a logical path, or null when it is not open.</summary>
+    private Document? Opened(string path) =>
+        open.Values.FirstOrDefault(document => document.Tree.Path == path);
+
+    /// <summary>How the client names a file: its own spelling where it has given one.</summary>
+    private string UriOf(string path) => named.GetValueOrDefault(path) ?? Lsp.ToUri(path);
+
+    /// <summary>
+    /// Every file the editor is told about, with what is wrong with it: each file of each
+    /// project, each project file, and each open document that belongs to no project. A file
+    /// two projects share is reported by the one nearest it, which is the project every other
+    /// answer about it comes from.
+    /// </summary>
+    public IReadOnlyList<Published> ToPublish()
+    {
+        lock (gate)
+        {
+            var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(StringComparer.Ordinal);
+            foreach (var project in projects)
+            {
+                var analysis = project.Analysis(open.Values);
+
+                // The project file is not a program's file, and what is wrong with it is what
+                // stops the program being read at all, so it is worth the same squiggle.
+                found[project.File] = (analysis, null);
+                foreach (var file in analysis.Program.Files)
+                {
+                    if (Owner(file.Tree.Path) == project)
+                        found[file.Tree.Path] = (analysis, file.Tree);
+                }
+            }
+            if (open.Values.Any(document => Owner(document.Tree.Path) is null))
+            {
+                var analysis = Loose();
+                foreach (var file in analysis.Program.Files)
+                    found[file.Tree.Path] = (analysis, file.Tree);
+            }
+            return [.. found
+                .OrderBy(file => file.Key, StringComparer.Ordinal)
+                .Select(file => new Published(
+                    UriOf(file.Key),
+                    Opened(file.Key)?.Version,
+                    file.Value.Tree,
+                    file.Value.Analysis.DiagnosticsFor(file.Key),
+                    file.Value.Analysis.Configuration))];
         }
     }
 

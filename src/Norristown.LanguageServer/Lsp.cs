@@ -27,11 +27,11 @@ internal static class Lsp
     /// anything that appears in a problem list.
     /// </summary>
     public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(
-        IEnumerable<Diagnostic> diagnostics, SyntaxTree tree, Configuration configuration) =>
+        IEnumerable<Diagnostic> diagnostics, SyntaxTree? tree, Configuration configuration) =>
         [
             .. diagnostics.Select(ToDiagnostic),
-            .. configuration.Omitted(tree).Select(span => new Protocol.Diagnostic(
-                ToRange(tree, span),
+            .. (tree is null ? [] : configuration.Omitted(tree)).Select(span => new Protocol.Diagnostic(
+                ToRange(tree!, span),
                 Protocol.DiagnosticSeverity.Hint,
                 SourceName,
                 "the build configuration leaves this branch out",
@@ -53,16 +53,26 @@ internal static class Lsp
     /// around it takes, and on the 65816 the processor state that reaches it.
     /// </summary>
     public static Protocol.Hover? ToHover(
-        SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states, int position)
+        ProgramModel program, SemanticModel model, CodeLayout? layout, ControlFlow? flow, StateAnalysis? states,
+        int position)
     {
         if (model.ReferenceAt(position) is { } reference)
         {
+            // The declaration as the program has it now: an edit that leaves what other files
+            // see of a file alone keeps their models, and with them the symbols they resolved
+            // to, whose file is the one from before the edit.
+            var symbol = program.Current(reference.Symbol);
             return new Protocol.Hover(
-                Protocol.MarkupContent.Markdown(Describe(reference.Symbol, model.Tree) + Declares(model, reference)),
+                Protocol.MarkupContent.Markdown(
+                    Describe(symbol, model.Tree) + Declares(model, reference) + Documented(symbol)),
                 ToRange(model.Tree, reference.Span));
         }
         return ToTiming(model, layout, flow, states, position);
     }
+
+    /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
+    private static string Documented(Symbol symbol) =>
+        DocComments.Of(symbol) is { } written ? $"\n\n{written}" : "";
 
     /// <summary>
     /// What a family declares, for the name its repetition binds: the instances it stands for,

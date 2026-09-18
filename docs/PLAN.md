@@ -323,6 +323,20 @@ relative to where it ran and the matcher resolves them against the folder.
 **Check.** Server tests for each; the keystroke benchmark before and after publishing for
 closed files, since that is the one that could cost.
 
+**Done.** All four, and the project file is published for as well, so a wrong key in
+`nt65.json` is a squiggle where it is written. Publishing starts when the editor connects,
+before anything is open. The benchmark measures the whole of what a keystroke costs now, the
+diagnostics of every file included: on the 300-file program a keystroke went from 5.8 ms to
+6.7 ms, a new line from 7.1 to 7.7, an exported constant from 7.9 to 8.2, and the edit that
+re-analyzes all 300 files from 150.0 to 149.2. Three things the writing of it found: a file
+nobody has open must be sent again only when what is wrong with it changed, or a keystroke
+costs one message per file of the program; the client's own spelling of a URI has to be kept
+once it gives one, because VS Code escapes a drive's colon and nt65 does not, and two
+spellings would leave one file in the problem list twice; and hover has to read the
+declaration as the program has it now — an edit that leaves a file's interface alone keeps
+the other files' models, and with them symbols whose file is the one from before the edit,
+which nothing noticed until a doc comment was read out of it.
+
 ## Stage 30: A formatter
 
 Leading whitespace means nothing (§4), so a formatter that touches only leading and trailing

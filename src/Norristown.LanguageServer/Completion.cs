@@ -53,14 +53,16 @@ internal static class Completion
         ProgramModel program, SemanticModel model, Cpu cpu, int position)
     {
         var line = LineContext.At(model.Tree, position);
-        var items = new Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)>(StringComparer.Ordinal);
+        var items = new Dictionary<string, Suggestion>(StringComparer.Ordinal);
         if (!line.InText)
             Collect(program, model, line, cpu, items);
         var range = Lsp.ToRange(model.Tree, line.Replaced);
         return [.. items
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .Select(item => new Protocol.CompletionItem(item.Key, item.Value.Kind, item.Value.Detail,
-                new Protocol.TextEdit(range, item.Value.Text), Unfinished(item.Value.Text) ? Again : null))];
+                new Protocol.TextEdit(range, item.Value.Text),
+                Unfinished(item.Value.Text) ? Again : null,
+                item.Value.Documentation is { } written ? Protocol.MarkupContent.Markdown(written) : null))];
     }
 
     /// <summary>
@@ -79,7 +81,7 @@ internal static class Completion
 
     private static void Collect(
         ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         var before = line.Before;
         var directive = line.Directive;
@@ -181,7 +183,7 @@ internal static class Completion
             && Callee(program, model, scope, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
         {
             foreach (var parameter in macro.Parameters)
-                items.TryAdd(parameter.Symbol.Name, (Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = "));
+                items.TryAdd(parameter.Symbol.Name, new Suggestion(Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = "));
         }
 
         if (!Ends(before[^1].Kind))
@@ -200,10 +202,10 @@ internal static class Completion
     /// <summary>What may begin a statement where the caret is.</summary>
     private static void Starting(
         ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.At(line))
-            items.TryAdd(name, (Protocol.CompletionItemKind.Keyword, detail, name));
+            items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, name));
 
         switch (line.Place)
         {
@@ -215,7 +217,7 @@ internal static class Completion
                     if (!Instructions.Writable(cpu, mnemonic))
                         continue;
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
-                    items.TryAdd(mnemonic, (Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic));
+                    items.TryAdd(mnemonic, new Suggestion(Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic));
                 }
                 AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro
                     || (symbol.Kind == SymbolKind.MacroParameter && symbol.Parameter is { IsBlock: true }));
@@ -248,14 +250,14 @@ internal static class Completion
     /// A macro is written where a statement goes with the <c>!(</c> that calls it, so that the
     /// arguments it takes are what is offered next. Only a macro is listed as a snippet.
     /// </summary>
-    private static void Called(Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+    private static void Called(Dictionary<string, Suggestion> items)
     {
         foreach (var name in items
             .Where(item => item.Value.Kind == Protocol.CompletionItemKind.Snippet)
             .Select(item => item.Key)
             .ToList())
         {
-            items[name] = (Protocol.CompletionItemKind.Snippet, items[name].Detail, name + "!(");
+            items[name] = items[name] with { Text = name + "!(" };
         }
     }
 
@@ -265,7 +267,7 @@ internal static class Completion
     /// </summary>
     private static void Operand(
         ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         var mnemonic = line.Before[line.Start].Text;
         var modes = ModesOf(cpu, mnemonic);
@@ -320,7 +322,7 @@ internal static class Completion
     /// <summary>Every form an instruction has, written as the mark that begins it.</summary>
     private static void Forms(
         IReadOnlySet<AddressingMode> modes, Cpu cpu, string mnemonic,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         if (modes.Contains(AddressingMode.Immediate))
             AddWord("#", "a value", items);
@@ -355,7 +357,7 @@ internal static class Completion
     /// <summary>What may follow the comma of an operand: the register that indexes it, or a second value.</summary>
     private static void Indexing(
         IReadOnlySet<AddressingMode> modes, char opened, int depth, bool value,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         if (opened == '(' && depth > 0)
         {
@@ -476,7 +478,7 @@ internal static class Completion
     /// <summary>The names after <c>::</c> where a path leads, and the modules below it when it is a module path.</summary>
     private static void AddMembers(
         ProgramModel program, SemanticModel model, (Symbol? Symbol, string? Module) at, bool modulesToo,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         if (at.Module is { } prefix)
         {
@@ -488,7 +490,7 @@ internal static class Completion
                 foreach (var declared in module.FileScope.Symbols.Where(declared => !declared.IsCheapLocal && (own || declared.IsExported)))
                     Add(declared, items);
                 foreach (var reexport in module.Reexports)
-                    items.TryAdd(reexport.Name, (Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`", reexport.Name));
+                    items.TryAdd(reexport.Name, new Suggestion(Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`", reexport.Name));
             }
             return;
         }
@@ -503,7 +505,7 @@ internal static class Completion
     /// <summary>The next part of every module path that starts with <paramref name="prefix"/>.</summary>
     private static void AddModules(
         ProgramModel program, string prefix,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         foreach (var module in program.Symbols.Modules)
         {
@@ -511,7 +513,7 @@ internal static class Completion
                 continue;
             var rest = name[prefix.Length..];
             var next = rest.Split("::")[0];
-            items.TryAdd(next, (Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next));
+            items.TryAdd(next, new Suggestion(Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next));
         }
     }
 
@@ -522,7 +524,7 @@ internal static class Completion
     /// </summary>
     private static void AddExpression(
         ProgramModel program, SemanticModel model, Scope scope, LineContext line,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         AddWord("$", "a hexadecimal number", items);
         AddWord("%", "a binary number", items);
@@ -533,7 +535,7 @@ internal static class Completion
             ? SyntaxFacts.BuiltinFunctions.Concat(SyntaxFacts.MacroBuiltinFunctions)
             : SyntaxFacts.BuiltinFunctions;
         foreach (var builtin in builtins)
-            items.TryAdd(builtin, (Protocol.CompletionItemKind.Function, "built-in function", builtin + "("));
+            items.TryAdd(builtin, new Suggestion(Protocol.CompletionItemKind.Function, "built-in function", builtin + "("));
     }
 
     /// <summary>
@@ -543,7 +545,7 @@ internal static class Completion
     /// </summary>
     private static void AddInScope(
         ProgramModel program, SemanticModel model, Scope scope,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items, Func<Symbol, bool> wanted)
+        Dictionary<string, Suggestion> items, Func<Symbol, bool> wanted)
     {
         for (var around = scope; around is not null; around = around.Parent)
         {
@@ -553,9 +555,9 @@ internal static class Completion
         foreach (var (name, brought) in model.Brought)
         {
             if (brought.Symbol is { } symbol && wanted(symbol))
-                items.TryAdd(name, (KindOf(symbol), Detail(symbol), name));
+                items.TryAdd(name, new Suggestion(KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol)));
             else if (brought.Module is { } module)
-                items.TryAdd(name, (Protocol.CompletionItemKind.Module, $"module `{module}`", name));
+                items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Module, $"module `{module}`", name));
         }
         foreach (var module in model.Globs)
         {
@@ -568,15 +570,15 @@ internal static class Completion
 
     private static void AddDirectives(
         IEnumerable<string> names,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.Described(names))
-            items.TryAdd(name, (Protocol.CompletionItemKind.Keyword, detail, name));
+            items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, name));
     }
 
     private static void AddWords(
         IEnumerable<string> words, string detail,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         foreach (var word in words)
             AddWord(word, detail, items);
@@ -588,14 +590,15 @@ internal static class Completion
     /// </summary>
     private static void AddWord(
         string word, string detail,
-        Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items)
+        Dictionary<string, Suggestion> items)
     {
         var label = word.TrimEnd(' ', '=', '(');
-        items.TryAdd(label.Length > 0 ? label : word, (Protocol.CompletionItemKind.Keyword, detail, word));
+        items.TryAdd(label.Length > 0 ? label : word, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, word));
     }
 
-    private static void Add(Symbol symbol, Dictionary<string, (Protocol.CompletionItemKind Kind, string? Detail, string Text)> items) =>
-        items.TryAdd(symbol.DisplayName, (KindOf(symbol), Detail(symbol), symbol.DisplayName));
+    private static void Add(Symbol symbol, Dictionary<string, Suggestion> items) =>
+        items.TryAdd(symbol.DisplayName,
+            new Suggestion(KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol)));
 
     private static string Detail(Symbol symbol) =>
         symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;

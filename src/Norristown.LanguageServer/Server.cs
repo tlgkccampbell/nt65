@@ -13,6 +13,10 @@ internal sealed class Server
 {
     private readonly ServerLog log;
     private readonly Workspace workspace = new();
+
+    // What was last published for each URI, so that a file nobody has open is sent again only
+    // when what is wrong with it changed.
+    private readonly Dictionary<string, string> published = new(StringComparer.Ordinal);
     private JsonRpc? rpc;
 
     // Whether the client may be asked to fetch semantic tokens again, which an edit in one file
@@ -68,14 +72,23 @@ internal sealed class Server
             CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
             CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
-            SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true));
+            SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true),
+            CallHierarchyProvider: true,
+            DocumentLinkProvider: new DocumentLinkOptions(ResolveProvider: false));
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
 
+    /// <summary>
+    /// The client is ready. What is wrong with every file of every project is published
+    /// straight away, so a broken export shows in the Problems panel before anything is opened.
+    /// </summary>
     [JsonRpcMethod("initialized")]
-    public Task InitializedAsync(JsonElement _) =>
-        rpc!.NotifyWithParameterObjectAsync("window/logMessage",
+    public async Task InitializedAsync(JsonElement _)
+    {
+        await rpc!.NotifyWithParameterObjectAsync("window/logMessage",
             new LogMessageParams(MessageType.Info, "Norristown language server ready"));
+        await PublishDiagnosticsAsync();
+    }
 
     /// <summary>The client's settings changed: the project is read again as the configuration they now choose.</summary>
     [JsonRpcMethod("workspace/didChangeConfiguration")]
@@ -113,7 +126,7 @@ internal sealed class Server
     {
         var document = workspace.Open(request.TextDocument);
         log.Write($"opened {document.Uri} ({document.Tree.Lines.Length} lines)");
-        return PublishDiagnosticsAsync();
+        return PublishDiagnosticsAsync(document.Uri);
     }
 
     [JsonRpcMethod("textDocument/didChange")]
@@ -125,9 +138,9 @@ internal sealed class Server
             return Task.CompletedTask;
         }
 
-        // An edit in one file can change what is wrong with another, so every open
-        // document is republished rather than just the one that changed.
-        return PublishDiagnosticsAsync();
+        // An edit in one file can change what is wrong with another, so every file of the
+        // program is republished rather than just the one that changed.
+        return PublishDiagnosticsAsync(request.TextDocument.Uri);
     }
 
     [JsonRpcMethod("textDocument/didClose")]
@@ -136,10 +149,9 @@ internal sealed class Server
         workspace.Close(request.TextDocument.Uri);
         log.Write($"closed {request.TextDocument.Uri}");
 
-        // The client holds what was last published until it is told otherwise, and a closed
-        // document is no longer the server's to report on.
-        return rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
-            new PublishDiagnosticsParams(request.TextDocument.Uri, null, []));
+        // A closed file of a program is still reported on; one that belonged to no program
+        // leaves with the document, and is cleared by whatever it is no longer among.
+        return PublishDiagnosticsAsync();
     }
 
     [JsonRpcMethod("textDocument/documentSymbol")]
@@ -154,6 +166,7 @@ internal sealed class Server
     public Hover? Hover(TextDocumentPositionParams request) =>
         At(request) is { } asked
             ? Lsp.ToHover(
+                asked.Program,
                 asked.Model,
                 asked.Analysis.LayoutFor(asked.Model.Tree.Path),
                 asked.Analysis.FlowFor(asked.Model.Tree.Path),
@@ -211,6 +224,28 @@ internal sealed class Server
         return LanguageServer.CodeLenses.In(document.Tree, workspace.AnalysisFor(path).FlowFor(path));
     }
 
+    [JsonRpcMethod("textDocument/documentLink")]
+    public IReadOnlyList<DocumentLink> DocumentLinks(DocumentLinkParams request) =>
+        Model(request.TextDocument.Uri) is { } model ? LanguageServer.DocumentLinks.In(model) : [];
+
+    [JsonRpcMethod("textDocument/prepareCallHierarchy")]
+    public IReadOnlyList<CallHierarchyItem> PrepareCallHierarchy(CallHierarchyPrepareParams request) =>
+        At(new TextDocumentPositionParams(request.TextDocument, request.Position)) is { } asked
+            ? LanguageServer.CallHierarchy.Prepare(asked.Analysis, asked.Model, asked.Position)
+            : [];
+
+    /// <summary>
+    /// What calls a routine, and what it calls. The item comes back from the client as the
+    /// server gave it, so the program it belongs to is found from the file it names.
+    /// </summary>
+    [JsonRpcMethod("callHierarchy/incomingCalls")]
+    public IReadOnlyList<CallHierarchyIncomingCall> IncomingCalls(CallHierarchyIncomingCallsParams request) =>
+        LanguageServer.CallHierarchy.Incoming(workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item);
+
+    [JsonRpcMethod("callHierarchy/outgoingCalls")]
+    public IReadOnlyList<CallHierarchyOutgoingCall> OutgoingCalls(CallHierarchyOutgoingCallsParams request) =>
+        LanguageServer.CallHierarchy.Outgoing(workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item);
+
     [JsonRpcMethod("textDocument/codeAction")]
     public IReadOnlyList<CodeAction> CodeActions(CodeActionParams request)
     {
@@ -253,18 +288,41 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Publishes what is wrong with every open document, after anything changes, and asks the
-    /// client for the names' classes again, since what a name refers to may have changed too.
+    /// Publishes what is wrong with every file of every program, after anything changes, and
+    /// asks the client for the names' classes again, since what a name refers to may have
+    /// changed too. Not only the open ones: an export broken in one file is what is wrong with
+    /// every module that uses it, and none of them may be open.
     /// </summary>
-    private async Task PublishDiagnosticsAsync()
+    /// <param name="changed">
+    /// The document the client has just opened or edited, which is always published: the
+    /// client asked, and hears back.
+    /// </param>
+    private async Task PublishDiagnosticsAsync(string? changed = null)
     {
-        foreach (var document in workspace.Open())
+        var current = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in workspace.ToPublish())
         {
-            var analysis = workspace.AnalysisFor(document.Tree.Path);
+            current.Add(file.Uri);
+            var diagnostics = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
+
+            // A program may hold hundreds of files and every keystroke re-analyzes it, so
+            // every file but the one the client just asked about is sent again only when what
+            // is wrong with it changed.
+            var said = Signature(diagnostics);
+            if (file.Uri != changed && published.TryGetValue(file.Uri, out var before) && before == said)
+                continue;
+            published[file.Uri] = said;
             await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
-                new PublishDiagnosticsParams(document.Uri, document.Version,
-                    Lsp.ToDiagnostics(
-                        analysis.DiagnosticsFor(document.Tree.Path), document.Tree, analysis.Configuration)));
+                new PublishDiagnosticsParams(file.Uri, file.Version, diagnostics));
+        }
+
+        // The client holds what it was last told until it is told otherwise, so a file that
+        // left the program, or that the client named differently, is emptied by hand.
+        foreach (var gone in published.Keys.Where(uri => !current.Contains(uri)).ToList())
+        {
+            published.Remove(gone);
+            await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
+                new PublishDiagnosticsParams(gone, null, []));
         }
         if (refreshesTokens)
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
@@ -274,6 +332,14 @@ internal sealed class Server
         if (refreshesLenses)
             _ = RefreshAsync("workspace/codeLens/refresh", "code lenses");
     }
+
+    /// <summary>
+    /// What was published for a file, as one string: enough to tell one set of diagnostics
+    /// from another, and nothing more, since nothing reads it back.
+    /// </summary>
+    private static string Signature(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
+        string.Join("\n", diagnostics.Select(d =>
+            $"{d.Range.Start.Line}:{d.Range.Start.Character}:{(int)d.Severity}:{d.Message}"));
 
     /// <summary>Whether the client asks to be told when what it holds of <paramref name="what"/> is stale.</summary>
     private static bool Refreshes(JsonElement? capabilities, string what) =>
@@ -296,6 +362,13 @@ internal sealed class Server
         {
             log.Write($"{what} refresh failed: {e.Message}");
         }
+    }
+
+    /// <summary>What a file the client named means, or null when the program does not hold it.</summary>
+    private SemanticModel? Model(string uri)
+    {
+        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
+        return workspace.AnalysisFor(path).ModelFor(path);
     }
 
     /// <summary>

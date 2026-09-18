@@ -665,8 +665,7 @@ public sealed class EditingRequestsTests
         await client.OpenAsync(GfxUri, Gfx.ReplaceLineEndings("\n"));
         await client.OpenAsync(VicUri, Vic);
         await client.OpenAsync(MainUri, main);
-        for (var i = 0; i < 1 + 2 + 3; i++)
-            await client.NextDiagnosticsAsync(timeout);
+        await client.NextDiagnosticsAsync(MainUri, timeout);
         return client;
     }
 }

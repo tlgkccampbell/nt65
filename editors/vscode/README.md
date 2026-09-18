@@ -7,10 +7,14 @@ build tasks and a schema for the project file.
 ## What it gives you
 
 - **Whole-program analysis as you type.** The server reads every file of the project, not only
-  the ones you have open, so an error in a module you use shows up where you use it.
-  Diagnostics, go to definition, find references, document highlights, rename, hover,
-  completion, signature help, code actions, code lenses, document and workspace symbols, and
-  folding.
+  the ones you have open, and reports on every one of them: a broken export is a problem in
+  each module that named it, and none of them has to be open. Go to definition, find
+  references, call hierarchy, document highlights, rename, hover, completion, signature help,
+  code actions, code lenses, document and workspace symbols, links to what an `.incbin`
+  names, and folding.
+- **The comment above a declaration** on hover and beside its completion. There is no
+  doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
+  what you had to say about it.
 - **Highlighting** from a TextMate grammar for a file the server has not read yet, and semantic
   highlighting from the server for one it has.
 - **Build tasks**, under **Run Task → nt65**: one for the project's own settings and one for

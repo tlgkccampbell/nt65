@@ -167,10 +167,11 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await OpenAsync(timeout);
 
-        // A comment line above `.proc clear`, which moves it down a line.
+        // A comment line above `.proc clear`, which moves it down a line. Nothing about
+        // main.nt65 changes, so gfx.nt65 is the file the server publishes for.
         await client.ChangeAsync(GfxUri, 2,
             new TextDocumentContentChangeEvent(new Range(new Position(6, 0), new Position(6, 0)), "; wipes the screen\n"));
-        await NextForAsync(client, MainUri, timeout);
+        await NextForAsync(client, GfxUri, timeout);
 
         var definition = await client.DefinitionAsync(MainUri, new Position(4, 8), timeout);
         Assert.NotNull(definition);

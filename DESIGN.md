@@ -2685,7 +2685,17 @@ alone and without an assembler:
   the symbol, and leaves a name `as` gave alone), the member names a record gives values
   included;
 - colour every name by what it refers to, so `Joy::A` is an enum member and not a register;
-- show on hover a symbol's kind, value, address size, segment and byte size;
+- show on hover a symbol's kind, value, address size, segment and byte size, and with them
+  the comment written above the declaration. There is no doc-comment syntax of its own: the
+  `;` lines directly above a declaration, each on a line of its own, are what its author had
+  to say about it, and a blank line or a line of code between ends them. Every instance of a
+  family is declared on the family's line, so each of them shows the family's comment;
+- say who calls a routine and what it calls, across modules, from the edges the cycle counts
+  are already worked out over: a call, a tail jump, a `.next` under a call, and a `per` and
+  branch pair (§7.4). A call nt65 cannot follow is in no list, because there is no routine to
+  put in one;
+- link the path an `.incbin` writes to the file it names, resolved beside the file that
+  writes it, as the build resolves it;
 - diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
   module does not export, unused symbols, and constant assertions;
 - on the 65816, diagnose width, mode and near/far mismatches at calls and returns,
@@ -2730,6 +2740,9 @@ alone and without an assembler:
   a call left where they were, the state they were written under declared and the label they
   start with as the name to be going on with, and ca65 in a selection read as nt65 as far as
   one line at a time can say it;
+- report on every file of every program, not only the ones that are open: a broken export is
+  wrong in each module that named it, and none of them may be open. What is wrong with the
+  project file is published for it too;
 - run incrementally: editing one file re-parses one file; only resolution is global.
 
 **Projects in the editor.** Every `nt65.json` in the folders the editor opened, and in the
@@ -2738,7 +2751,9 @@ project whose `files` name it, whether or not it is saved yet; a library two pro
 belongs to both, and is shown as the nearest one analyzes it; a file no project names is part
 of a program of the other such open files. A project file, a source nobody has open, or a
 file an `.incbin` measured changing on disk is read again, and what is wrong is published
-again.
+again. What is published is every file of every project, from the moment the editor connects,
+and a file is sent again only where what is wrong with it changed, so that an edit in a
+program of hundreds of files costs one message and not hundreds.
 
 **Unused symbols** are warnings: a label, constant, macro, struct, union, enum or data
 declaration that nothing names and the file does not export, since an export is what another

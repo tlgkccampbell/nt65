@@ -99,11 +99,23 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.InvokeWithParameterObjectAsync<T>(method, parameters, cancellation);
 
     /// <summary>
-    /// The next set of diagnostics the server publishes. Opening and changing a document each
-    /// publish exactly once, so a test reads one set per edit it made.
+    /// The next set of diagnostics the server publishes, for whichever file it is about. The
+    /// server publishes for every file of the program, so a test with more than one file in it
+    /// asks for the one it is about by name.
     /// </summary>
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(CancellationToken cancellation) =>
         await notifications.Published.Reader.ReadAsync(cancellation);
+
+    /// <summary>The next set published for <paramref name="uri"/>, passing over every other file's.</summary>
+    public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(string uri, CancellationToken cancellation)
+    {
+        while (true)
+        {
+            var published = await NextDiagnosticsAsync(cancellation);
+            if (published.Uri == uri)
+                return published;
+        }
+    }
 
     /// <summary>Waits for the server to ask for semantic tokens to be fetched again.</summary>
     public async Task NextTokensRefreshAsync(CancellationToken cancellation) =>

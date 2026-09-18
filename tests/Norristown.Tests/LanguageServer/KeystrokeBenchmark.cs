@@ -8,9 +8,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an edit costs: the edit, and the analysis the diagnostics are published from. Not part
-/// of the edit loop; <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most from
-/// a Release build.
+/// What an edit costs: the edit, the analysis, and the diagnostics of every file of the
+/// program, which is what the server publishes for each of them. Not part of the edit loop;
+/// <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most from a Release build.
 /// </summary>
 public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 {
@@ -100,7 +100,8 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
                 [new TextDocumentContentChangeEvent(range, written)]);
             var analysis = workspace.AnalysisFor(Workspace.PathOf(uri));
-            _ = analysis.DiagnosticsFor(workspace.Find(uri)!.Tree.Path);
+            foreach (var file in workspace.ToPublish())
+                _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
             times.Add(watch.Elapsed.TotalMilliseconds);
             analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");
             Assert.Empty(analysis.Diagnostics);
