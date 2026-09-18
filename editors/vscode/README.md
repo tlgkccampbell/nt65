@@ -12,11 +12,12 @@ build tasks and a schema for the project file.
   references, call hierarchy, document highlights, rename, hover, completion, signature help,
   code actions, code lenses, document and workspace symbols, links to what an `.incbin`
   names, and folding.
-- **What each routine costs and keeps**, on the line that opens it, and on each inline
+- **What each routine costs and preserves**, on the line that opens it, and on each inline
   `.scope` block of one: the shortest and longest path through it, what it costs with
   everything it calls, and which of A, X, Y and the carry it hands back as it was entered with
-  them — `keeps X Y C`, or `keeps X ?` where a call could not be followed and it may keep more.
-  What each register holds at a line is on hover, beside what the line costs.
+  them — `preserves X, Y, C`, or `preserves X, ?` where a call could not be followed and it may
+  preserve more. It is on hover too, because lenses can be turned off; and hovering an
+  instruction shows what each register holds at that line.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.

@@ -453,11 +453,13 @@ restore across calls, and a compose across the program that folds callees into c
   makes a signature mean something on every CPU, where until now it meant something only on
   the 65816; `near`, `far`, `inline` and `args` stay 65816 items.
 - **A lens of its own** above each routine and each inline `.scope` block of one, beside what a
-  pass costs: the registers listed and nothing else, `keeps A X Y C`, `keeps X Y`,
-  `keeps none`, with `?` ending the list where a call could not be followed and it may keep
-  more. A block is asked the same question of itself, from where it is entered.
-- **What each register holds at a line, on hover**, beside what the line costs: as entered,
-  set, or, where a save has moved one, as another register was entered.
+  pass costs: the registers listed and nothing else, `preserves A, X, Y, C`, `preserves X, Y`,
+  `preserves none`, with `?` ending the list where a call could not be followed and it may
+  preserve more. A block is asked the same question of itself, from where it is entered.
+- **The same list on hover** over the line that declares a routine or opens a block, because a
+  lens is something an editor can be told not to show.
+- **What each register holds at a line, on hover** over an instruction, beside what the line
+  costs: a fenced block, one register to a line, always all four.
 - **A warning where a caller leans on a register a call destroys**: loaded before the call,
   not written between, read after it, and the callee's set known. This is the one that finds
   bugs and the one that can be wrong about a program that is right, so it stays a warning and

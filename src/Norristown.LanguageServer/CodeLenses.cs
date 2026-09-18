@@ -71,23 +71,8 @@ internal static class CodeLenses
         ? Spell(region.Registers.Kept, region.Registers.Complete)
         : null;
 
-    /// <summary>
-    /// What is kept, as the lens says it: the registers, in one order, and nothing else.
-    /// <c>keeps A X Y C</c>, <c>keeps X Y</c>, <c>keeps none</c>. A lens is read at a glance
-    /// rather than out loud, so it is a list and not a sentence about a list.
-    /// <para>
-    /// What nt65 works out is a floor, so a routine whose calls it could not all follow ends
-    /// its list with <c>?</c>: those registers and perhaps more, which is what <c>?</c> means
-    /// everywhere else in the language.
-    /// </para>
-    /// </summary>
-    private static string Spell(Registers kept, bool complete)
-    {
-        var names = RegisterEffects.Each(kept).Select(RegisterEffects.Spell).ToList();
-        if (!complete)
-            names.Add("?");
-        return "keeps " + (names.Count == 0 ? "none" : string.Join(" ", names));
-    }
+    /// <summary>What is kept, spelled as the hover spells it so that the two agree word for word.</summary>
+    private static string Spell(Registers kept, bool complete) => Lsp.Spell(kept, complete);
 
     /// <summary>
     /// What it costs, as the lens says it: an interval where a path has a longest, the fewest

@@ -1547,15 +1547,31 @@ some register away, being told so is rarely news, and the reader's question is w
 registers are doing here rather than a list of the places they changed. That is something to
 show, and §14 says where per-instruction facts are shown.
 
-Tooling shows it in two places. Above each routine, and above each inline `.scope` block of
-one, a lens lists the registers beside what a pass costs: `keeps A X Y C`, `keeps X Y`,
-`keeps none`. It is a list and not a sentence about one, because a lens is read at a glance. A
-block is asked the same question of itself that its routine is asked of its caller, from where
-the block is entered, so a `.scope` that saves a register and gives it back keeps it even where
-the routine around it does not. What nt65 works out is a floor, so a routine whose calls it
-could not all follow ends its list with `?` — those registers and perhaps more, which is what
-`?` means everywhere else. On hover, beside what the line costs, is what each register holds
-there: as entered, set, or, where a save has moved one, as another register was entered.
+Tooling shows it in three places, and none of them is the only one: a lens is something an
+editor can be told not to show.
+
+- **A lens** above each routine, and above each inline `.scope` block of one, beside what a
+  pass costs: `preserves A, X, Y, C`, `preserves X, Y`, `preserves none`. It is a list and not
+  a sentence about one, because a lens is read at a glance. A block is asked the same question
+  of itself that its routine is asked of its caller, from where the block is entered, so a
+  `.scope` that saves a register and gives it back preserves it even where the routine around
+  it does not. What nt65 works out is a floor, so where a call could not be followed the list
+  ends with `?` — those registers and perhaps more, which is what `?` means everywhere else.
+- **On hover over the line that declares a routine or opens a block**, the same list, because
+  the lens above it may not be there.
+- **On hover over an instruction**, beside what the line costs, what each register holds there,
+  one to a line and always all four:
+
+  ```text
+  A  as X entered
+  X  as entered
+  Y  set
+  C  not known
+  ```
+
+  A register holds what it was entered with, what an instruction here set, or what another
+  register was entered with — which is how a 6502 saves X, and naming the register the value
+  came from is what makes the save readable.
 
 ## 8. Data
 

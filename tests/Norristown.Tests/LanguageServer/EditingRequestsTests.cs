@@ -520,8 +520,8 @@ public sealed class EditingRequestsTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            ["keeps A X Y C", "keeps Y C", "keeps A X Y C", "keeps ?"],
-            lenses.Where(lens => lens.Command.Title.Contains("keeps", StringComparison.Ordinal))
+            ["preserves A, X, Y, C", "preserves Y, C", "preserves A, X, Y, C", "preserves ?"],
+            lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
                 .Select(lens => lens.Command.Title));
     }
 
@@ -671,7 +671,7 @@ public sealed class EditingRequestsTests
     /// around it does not.
     /// </summary>
     [Fact]
-    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineKeeps()
+    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutinePreserves()
     {
         var timeout = TestContext.Current.CancellationToken;
         const string Source = """
@@ -698,9 +698,43 @@ public sealed class EditingRequestsTests
 
         // The routine loses A and X; the block gives A back, so all it costs the routine is X.
         Assert.Equal(
-            [(2, "keeps Y C"), (4, "keeps A Y C")],
-            lenses.Where(lens => lens.Command.Title.Contains("keeps", StringComparison.Ordinal))
+            [(2, "preserves Y, C"), (4, "preserves A, Y, C")],
+            lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
                 .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
+    /// A lens is something an editor can be told not to show, so what a routine and an inline
+    /// <c>.scope</c> block hand back is on hover as well as above the line.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnARoutineAndOnAScopeSaysWhatItPreserves()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                lda #1
+                .scope {
+                    pha
+                    ldx #2
+                    stx $10
+                    pla
+                }
+                sta $11
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var routine = await client.HoverAsync(MainUri, new Position(2, 7), timeout);
+        var scope = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
+
+        Assert.Contains("preserves Y, C", routine?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("preserves A, Y, C", scope?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -730,11 +764,11 @@ public sealed class EditingRequestsTests
         var after = await client.HoverAsync(MainUri, new Position(5, 4), timeout);
 
         Assert.Contains(
-            "registers here: A as entered, X as entered, Y as entered, C as entered",
+            "registers here:\n\n```text\nA  as entered\nX  as entered\nY  as entered\nC  as entered\n```",
             entry?.Contents.Value,
             StringComparison.Ordinal);
         Assert.Contains(
-            "registers here: A as X was entered, X as entered, Y set, C as entered",
+            "registers here:\n\n```text\nA  as X entered\nX  as entered\nY  set\nC  as entered\n```",
             after?.Contents.Value,
             StringComparison.Ordinal);
     }
@@ -744,7 +778,7 @@ public sealed class EditingRequestsTests
     /// is a lens of its own and has a test of its own.
     /// </summary>
     private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
-        lenses.Where(lens => !lens.Command.Title.Contains("keeps", StringComparison.Ordinal));
+        lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal));
 
     /// <summary>
     /// The main file with <paramref name="line"/> in the place <paramref name="where"/> marks,

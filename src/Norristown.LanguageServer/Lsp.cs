@@ -64,10 +64,59 @@ internal static class Lsp
             var symbol = program.Current(reference.Symbol);
             return new Protocol.Hover(
                 Protocol.MarkupContent.Markdown(
-                    Describe(symbol, model.Tree) + Declares(model, reference) + Documented(symbol)),
+                    Describe(symbol, model.Tree) + Declares(model, reference)
+                    + Preserves(flow, reference) + Documented(symbol)),
                 ToRange(model.Tree, reference.Span));
         }
-        return ToTiming(model, layout, flow, states, position);
+        return ToScope(model, flow, position) ?? ToTiming(model, layout, flow, states, position);
+    }
+
+    /// <summary>
+    /// What a routine hands back, where the caret is on the line that declares it. A lens says
+    /// the same thing above the line, and a lens is something an editor can be told not to
+    /// show, so the hover does not leave it to one.
+    /// </summary>
+    private static string Preserves(ControlFlow? flow, SymbolReference reference)
+    {
+        if (!reference.IsDeclaration || flow is null)
+            return "";
+        var found = flow.Regions
+            .Where(region => region.Routine.NameSpan == reference.Symbol.NameSpan && region.Total.Ends)
+            .Select(region => (region.Routine.Name, Text: Spell(region.Registers.Kept, region.Registers.Complete)))
+            .ToList();
+        if (found.Count == 0)
+            return "";
+
+        // Every instance of a family is declared on one line. Where they all hand back the
+        // same, the line says it once.
+        var texts = found.Select(region => region.Text).Distinct(StringComparer.Ordinal).ToList();
+        return texts.Count == 1
+            ? $"\n- {texts[0]}"
+            : string.Concat(found.Select(region => $"\n- {region.Name}: {region.Text}"));
+    }
+
+    /// <summary>
+    /// What an inline <c>.scope</c> block costs and hands on, where the caret is on the line
+    /// that opens it. The block has no name to hover, so this is the only place to say it
+    /// other than the lens.
+    /// </summary>
+    private static Protocol.Hover? ToScope(SemanticModel model, ControlFlow? flow, int position)
+    {
+        foreach (var region in flow?.Regions ?? [])
+        {
+            foreach (var scope in region.ScopeRegisters)
+            {
+                if (position < scope.Opener.Start || position >= scope.Opener.End)
+                    continue;
+                var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
+                var text = cost is { Least: { } least }
+                    ? $"**{Spell(new CycleCount(least, cost.Most ?? least))}**\n\n{Spell(scope.Kept, scope.Complete)}"
+                    : Spell(scope.Kept, scope.Complete);
+                return new Protocol.Hover(
+                    Protocol.MarkupContent.Markdown(text), ToRange(model.Tree, scope.Opener));
+            }
+        }
+        return null;
     }
 
     /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
@@ -129,7 +178,7 @@ internal static class Lsp
             text.Append(state.Stack is { } stack ? $", {stack.Depth} pushed" : ", stack not known");
         }
         if (flow?.Registers?.AnyBefore(statement) is { } registers)
-            text.Append($"\n\nregisters here: {Spell(registers)}");
+            text.Append($"\n\nregisters here:\n\n```text\n{Spell(registers)}\n```");
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(text.ToString()), ToRange(model.Tree, statement.Span));
     }
@@ -156,13 +205,19 @@ internal static class Lsp
                 step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
 
     /// <summary>
-    /// What each register holds at a point, as the hover says it: <c>A set, X as entered,
-    /// Y as entered, C not known</c>. Every register is named every time, because a reader
-    /// looking for one of them should not have to work out whether its absence means anything.
+    /// What each register holds at a point, one to a line and always all four, for the hover to
+    /// show in a fenced block. A hover has room to lay it out, and a column a reader's eye can
+    /// run down beats a sentence they have to take apart:
+    /// <code>
+    /// A  as X entered
+    /// X  as entered
+    /// Y  set
+    /// C  not known
+    /// </code>
     /// </summary>
-    internal static string Spell(RegisterState state) => string.Join(", ", RegisterEffects
+    internal static string Spell(RegisterState state) => string.Join("\n", RegisterEffects
         .Each(Registers.All)
-        .Select(register => $"{RegisterEffects.Spell(register)} {Held(register, state.Of(register))}"));
+        .Select(register => $"{RegisterEffects.Spell(register)}  {Held(register, state.Of(register))}"));
 
     /// <summary>
     /// What one register holds. A 6502 saves X through the accumulator, so a register may hold
@@ -173,8 +228,25 @@ internal static class Lsp
         if (value.Holds(register))
             return "as entered";
         if (value is { IsWritten: false, IsUnknown: false } && value.Entry != Registers.None)
-            return $"as {RegisterEffects.Spell(value.Entry)} was entered";
+            return $"as {RegisterEffects.Spell(value.Entry)} entered";
         return value is { IsWritten: true, IsUnknown: false } && value.Entry == Registers.None ? "set" : "not known";
+    }
+
+    /// <summary>
+    /// The registers a routine or a block hands back, as a lens and a hover both say it:
+    /// <c>preserves A, X, Y, C</c>, <c>preserves X, Y</c>, <c>preserves none</c>. It is a list
+    /// and not a sentence about one, because it is read at a glance.
+    /// <para>
+    /// What nt65 works out is a floor, so where a call could not be followed the list ends with
+    /// <c>?</c>: those registers and perhaps more, which is what <c>?</c> means everywhere else.
+    /// </para>
+    /// </summary>
+    internal static string Spell(Registers kept, bool complete)
+    {
+        var names = RegisterEffects.Each(kept).Select(RegisterEffects.Spell).ToList();
+        if (!complete)
+            names.Add("?");
+        return "preserves " + (names.Count == 0 ? "none" : string.Join(", ", names));
     }
 
     /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
