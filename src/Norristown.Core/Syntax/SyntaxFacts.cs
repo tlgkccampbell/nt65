@@ -19,6 +19,13 @@ public static class SyntaxFacts
     /// <summary>The register names, lower case.</summary>
     public static readonly IReadOnlyList<string> Registers = ["a", "x", "y", "s"];
 
+    /// <summary>
+    /// The registers a <c>keeps</c> item may name, lower case. The carry is among them and the
+    /// stack pointer is not, and <c>c</c> is an ordinary identifier everywhere else, so what
+    /// these are is not what the lexer calls a register.
+    /// </summary>
+    public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c"];
+
     /// <summary>The built-in functions any expression may call.</summary>
     public static readonly IReadOnlyList<string> BuiltinFunctions =
     [
@@ -33,6 +40,9 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> mnemonicSet = Mnemonics.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> registerSet = Registers.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> keptRegisterSet =
+        KeptRegisters.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // Directives are case-insensitive, like mnemonics and registers.
     private static readonly FrozenDictionary<string, BlockKind> blockDirectives = new Dictionary<string, BlockKind>
@@ -133,8 +143,11 @@ public static class SyntaxFacts
     // The processor-state items, by the suffix that follows the name: a point item stands
     // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
     private static readonly FrozenSet<string> pointStateItems =
-        new[] { "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt", "noreturn" }
-            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        new[]
+        {
+            "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt",
+            "noreturn", "keeps",
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =
         new[] { "a", "i", "e", "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
@@ -152,6 +165,9 @@ public static class SyntaxFacts
 
     /// <summary>Whether <paramref name="text"/> is a register name, whatever its case.</summary>
     public static bool IsRegister(ReadOnlySpan<char> text) => registerSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
+
+    /// <summary>Whether <paramref name="text"/> is a register a <c>keeps</c> item may name.</summary>
+    public static bool IsKeptRegister(string text) => keptRegisterSet.Contains(text);
 
     /// <summary>
     /// Whether <paramref name="text"/> is a word a state item is spelled with, whatever

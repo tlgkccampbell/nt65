@@ -35,7 +35,9 @@
     IRQ        = $EA31          ; full KERNAL IRQ (keyboard scan, cursor blink)
     IRQ_EXIT   = $EA81          ; restore registers and RTI
 
-    .proc CHROUT = $FFD2
+    ; CHROUT is documented as using A alone, so X and Y come back; the rest use all three
+    ; and promise nothing.
+    .proc CHROUT = $FFD2: keeps x, y
     .proc GETIN  = $FFE4
     .proc SCNKEY = $FF9F
     .proc CLRSCR = $E544

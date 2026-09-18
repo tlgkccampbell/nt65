@@ -84,9 +84,9 @@ public sealed class EditingRequestsTests
         { "body", "    |", ["lda", "poke"], ["clear"] },
 
         // A signature's items, and the signature sets; a `.state` asserts a point, and a macro is not called.
-        { "top", ".proc other: |", ["a16", "a?", "a*", "dp", "far", "fast", "near"], ["clear", "lda"] },
-        { "body", "    .state |", ["a16", "dbr", "e?", "native"], ["near", "a*", "fast"] },
-        { "top", ".macro m(): |", ["a8", "e*"], ["near", "far"] },
+        { "top", ".proc other: |", ["a16", "a?", "a*", "dp", "far", "fast", "keeps", "near"], ["clear", "lda"] },
+        { "body", "    .state |", ["a16", "dbr", "e?", "keeps", "native"], ["near", "a*", "fast"] },
+        { "top", ".macro m(): |", ["a8", "e*"], ["near", "far", "keeps"] },
         { "top", ".proc other: a8, dp = |", ["twice", "vic"], ["a16"] },
 
         // A macro call's argument may name its parameter.
@@ -358,7 +358,7 @@ public sealed class EditingRequestsTests
                 // `stz` is not on the 6502, so the line is left out of the stream and what
                 // is left of the routine is not what it would cost. It gets no lens at all.
             ],
-            lenses.Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+            lenses.Select(lens => (lens.Range.Start.Line, Cost(lens))));
     }
 
     /// <summary>
@@ -440,7 +440,7 @@ public sealed class EditingRequestsTests
                 "never returns",
                 "12 cycles, not counting calls",
             ],
-            lenses.Select(lens => lens.Command.Title));
+            lenses.Select(Cost));
     }
 
     /// <summary>
@@ -477,7 +477,52 @@ public sealed class EditingRequestsTests
 
         Assert.Equal(
             [(2, "13 cycles"), (4, "5 cycles"), (11, "6 cycles")],
-            lenses.Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+            lenses.Select(lens => (lens.Range.Start.Line, Cost(lens))));
+    }
+
+    /// <summary>
+    /// What a routine hands back, beside what it costs. Most routines work in the accumulator
+    /// and leave the rest alone, so it is said as what they do not keep; a routine whose calls
+    /// nt65 cannot follow says its answer is not one, because silence would read as safety.
+    /// </summary>
+    [Fact]
+    public async Task ALensSaysWhichRegistersARoutineHandsBack()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc quiet {
+                rts
+            }
+            .proc counts {
+                lda #0
+                ldx #1
+                rts
+            }
+            .proc saves {
+                pha
+                lda #0
+                pla
+                rts
+            }
+            .proc rom = $FFD2
+            .proc asks {
+                jsr rom
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            ["6 cycles · keeps everything", "10 cycles · keeps Y, C", "15 cycles · keeps everything",
+                "12 cycles, not counting calls · keeps ?"],
+            lenses.Select(lens => lens.Command.Title));
     }
 
     /// <summary>
@@ -597,7 +642,7 @@ public sealed class EditingRequestsTests
                 // `bpl` reads the sign, and 200 has it set before the loop starts.
                 "17+ cycles, loops",
             ],
-            lenses.Select(lens => lens.Command.Title));
+            lenses.Select(Cost));
     }
 
     /// <summary>A search finds declarations in files no one has open, by the letters of their names in order.</summary>
@@ -619,6 +664,12 @@ public sealed class EditingRequestsTests
         Assert.Equal([("Sprite", "gfx")], (await client.RequestAsync<IReadOnlyList<SymbolInformation>>("workspace/symbol",
             new WorkspaceSymbolParams("sprite"), timeout)).Select(s => (s.Name, s.ContainerName)));
     }
+
+    /// <summary>
+    /// What a lens says a pass costs, which is the part of it these tests are about: what the
+    /// routine keeps is written after it and has a test of its own.
+    /// </summary>
+    private static string Cost(CodeLens lens) => lens.Command.Title.Split(" · ")[0];
 
     /// <summary>
     /// The main file with <paramref name="line"/> in the place <paramref name="where"/> marks,

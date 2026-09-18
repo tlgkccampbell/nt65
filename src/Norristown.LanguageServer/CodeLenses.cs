@@ -19,7 +19,7 @@ internal static class CodeLenses
         {
             if (region.Routine.Tree != tree)
                 continue;
-            if (Spell(region.Cost, region.Total, "never returns") is { } text)
+            if (Above(region) is { } text)
                 found.Add((region.Routine.NameSpan, region.Routine.Name, text));
             foreach (var scope in region.Scopes)
             {
@@ -47,6 +47,43 @@ internal static class CodeLenses
         void Add(TextSpan at, string text) =>
             lenses.Add((at.Start, new Protocol.CodeLens(Lsp.ToRange(tree, at), new Protocol.Command(text, ""))));
         return [.. lenses.OrderBy(lens => lens.At).Select(lens => lens.Lens)];
+    }
+
+    /// <summary>
+    /// The whole line above a routine: what a pass through it costs, and which registers it
+    /// hands back, where either is worth saying.
+    /// </summary>
+    private static string? Above(FlowRegion region)
+    {
+        // A routine nt65 could not cost is one it could not lay out either, and what it keeps
+        // would be worked out from bytes that are not the ones it would assemble to.
+        if (Spell(region.Cost, region.Total, "never returns") is not { } cost)
+            return null;
+        return Kept(region) is { } kept ? $"{cost} · {kept}" : cost;
+    }
+
+    /// <summary>
+    /// Which registers a routine hands back as it was entered with them. Most routines work in
+    /// the accumulator and leave the rest alone, so what they keep is said as what they do not:
+    /// <c>keeps all but A</c> is the same answer as <c>keeps X, Y, C</c> and is the one worth
+    /// reading. What nt65 works out is a floor, so a routine whose calls it cannot all follow
+    /// never says <c>everything</c> or <c>all but</c>, which would read as the whole answer.
+    /// </summary>
+    private static string? Kept(FlowRegion region)
+    {
+        if (!region.Total.Ends)
+            return null;
+        var kept = region.Registers.Kept;
+        if (!region.Registers.Complete)
+            return kept == Registers.None ? "keeps ?" : "keeps " + RegisterEffects.Spell(kept);
+        if (kept == Registers.All)
+            return "keeps everything";
+        if (kept == Registers.None)
+            return "keeps nothing";
+        var lost = Registers.All & ~kept;
+        return RegisterEffects.Each(lost).Count() == 1
+            ? "keeps all but " + RegisterEffects.Spell(lost)
+            : "keeps " + RegisterEffects.Spell(kept);
     }
 
     /// <summary>

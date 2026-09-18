@@ -1,0 +1,83 @@
+; Which registers a routine hands back as it was entered with them. `keeps` is the promise,
+; checked at every way out of a routine with a body and taken at its word for a routine
+; without one. A save and its restore cancel through the stack, so the idiom needs nothing
+; written; a restore through memory is not one the analysis can see, and `.state keeps` says
+; it where the value comes back.
+.module main
+
+.cpu 6502
+
+.export handler, draw_row, save_slot
+
+; A routine with no body: nothing will ever contradict what it says, so what it says is all
+; anyone can know. The C64 KERNAL hands X and Y back, which used to live in a comment.
+.proc CHROUT = $FFD2: keeps x, y
+
+.segment BSS
+.export .data save_slot: .byte
+
+.segment CODE
+
+; The 6502 has no `phx`, so X is saved through the accumulator: the value has to be followed
+; across the transfers as well as the pushes for the save and the restore to cancel.
+.proc keeps_by_saving: keeps a, x {
+    pha
+    txa
+    pha
+
+    lda #0
+    ldx #7
+    jsr CHROUT
+
+    pla
+    tax
+    pla
+    rts
+}
+
+; Ruling out every store that could have reached the byte would need addresses, which are the
+; linker's, so a save through memory is one the analysis never sees come back.
+.proc keeps_through_memory: keeps x {
+    stx save_slot
+
+    ldx #3
+    jsr CHROUT
+
+    ldx save_slot
+    .state keeps x
+    rts
+}
+
+; `php` and `plp` hand the carry back across a call, because the stack remembers what the
+; push held.
+.proc keeps_the_carry: keeps c {
+    php
+    sec
+    jsr CHROUT
+    plp
+    rts
+}
+
+; An interrupt handler returns to whatever it broke into, which is where handing the
+; registers back matters most. The processor pushes the flags and `rti` pulls them again, so
+; the carry comes back however the handler used it.
+.proc handler: interrupt, keeps a, c {
+    pha
+    lda #1
+    sec
+    sta save_slot
+    pla
+    rti
+}
+
+; A caller that hands nothing back promises nothing, and says so by writing no `keeps`.
+.proc draw_row {
+    ldy #0
+@next:
+    lda save_slot
+    jsr keeps_by_saving
+    iny
+    cpy #40
+    bne @next
+    rts
+}

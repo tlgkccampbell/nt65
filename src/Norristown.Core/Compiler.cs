@@ -177,14 +177,16 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
-        // What a routine costs with its calls is a question about the program, not about one
-        // file, so it is worked out once every file's own costs are in.
+        // What a routine costs with its calls, and which registers it hands back, are questions
+        // about the program rather than about one file, so they are worked out once every
+        // file's own answers are in.
         Flow.CallCosts.Compose(flows);
+        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, target, layouts, flows, states, defines, configuration,
-            Collected(project, target, cpu, program, reuse))
+            Collected(project, target, cpu, program, reuse, registers))
         {
             Reused = reuse,
             Reanalyzed = program.Files.Count,
@@ -301,12 +303,14 @@ public static class Compiler
         }
 
         // A file kept from before the edit keeps its own costs, and what it costs with its
-        // calls may still have moved, because a routine it calls is in the file that changed.
+        // calls, and what it keeps, may still have moved, because a routine it calls is in the
+        // file that changed.
         Flow.CallCosts.Compose(flows);
+        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
         var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, previous.Cpu, layouts, flows, states, previous.Defines, configuration,
-            Collected(project, previous.Cpu, cpu, program, reused))
+            Collected(project, previous.Cpu, cpu, program, reused, registers))
         {
             Reused = reused,
             Reanalyzed = dirty.Count,
@@ -353,10 +357,11 @@ public static class Compiler
     /// <summary>Everything wrong with the program, from what each part of the analysis found.</summary>
     private static IReadOnlyList<Diagnostic> Collected(
         ProjectSettings project, Cpu target, IReadOnlyList<Diagnostic> cpu, ProgramModel program,
-        ProgramAnalysis.Reuse reuse)
+        ProgramAnalysis.Reuse reuse, IReadOnlyList<Diagnostic> registers)
     {
         var diagnostics = new List<Diagnostic>(project.Diagnostics);
         diagnostics.AddRange(cpu);
+        diagnostics.AddRange(registers);
         diagnostics.AddRange(reuse.Conditions.Values.SelectMany(found => found));
         diagnostics.AddRange(reuse.SegmentTable);
         diagnostics.AddRange(reuse.Trees.SelectMany(tree => tree.Diagnostics));

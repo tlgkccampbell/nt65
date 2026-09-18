@@ -26,6 +26,12 @@ internal static class Completion
     /// <summary>What only a routine's signature says: how it is called and left.</summary>
     private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn"];
 
+    /// <summary>
+    /// What a routine hands back, written with the registers to follow. A macro is expanded
+    /// into the routine that calls it, so it has none of its own.
+    /// </summary>
+    private static readonly string[] PromiseItems = ["keeps "];
+
     /// <summary>What an <c>.ensure</c> makes hold.</summary>
     private static readonly string[] Widths = ["a8", "a16", "i8", "i16"];
 
@@ -129,6 +135,7 @@ internal static class Completion
             {
                 AddWords(PointItems, "processor state", items);
                 AddWords(ValuedItems, "processor state", items);
+                AddWords(PromiseItems, "registers kept", items);
                 return;
             }
         }
@@ -140,7 +147,10 @@ internal static class Completion
                 AddWords(ValuedItems, "processor state", items);
                 AddWords(KeepItems, "processor state", items);
                 if (signature != ".macro")
+                {
                     AddWords(RoutineItems, "processor state", items);
+                    AddWords(PromiseItems, "registers kept", items);
+                }
                 AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
                 return;
             }

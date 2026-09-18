@@ -11,7 +11,10 @@ from a modern toolchain looks for first. This plan builds them.
 
 The rules are those of version 1 (§17): every stage adds and never breaks. A program that
 builds today builds after every stage here, to the same bytes; each new construct was an error
-before it was a construct. A stage that changes the language changes `DESIGN.md` in the same
+before it was a construct. Stage 32 is the one exception, and only because nothing has been
+released yet: its `keeps` takes a word a signature set could be named today, which §17 counts
+as part of the language version. It is written here rather than left for a version 2 that has
+no reason to exist. A stage that changes the language changes `DESIGN.md` in the same
 commit, with its reasoning in §16, and nothing here needs a decision record beyond that.
 `docs/GUIDE.md` is **not** updated stage by stage: the guide is rewritten once, at the end,
 from the list in the last section, and the one thing it gets wrong today (signature widths
@@ -405,7 +408,85 @@ does not have in a test, which it no longer is. A VS Code background task for `-
 out: it needs `beginsPattern` and `endsPattern` on the matcher and a test of its own, and it
 belongs with the editor work rather than here.
 
-## Stage 32: Release
+## Stage 32: What a routine does to the registers
+
+A 6502 programmer's first question about someone else's routine is which registers survive it,
+and nt65 answers every other question about a routine — what it costs, what state it wants,
+where control goes — while leaving that one to a comment. The analysis already has what it
+takes: a per-routine flow with merges at labels, an analysis stack that pairs a save with its
+restore across calls, and a compose across the program that folds callees into callers.
+
+**Build.**
+
+- **A register-effects table**, beside the mode and length tables: which of A, X, Y and the
+  carry each mnemonic writes. N and Z are left out — nearly everything writes them, so
+  tracking them would say nothing. A test asserts every mnemonic each CPU has is in it.
+- **What one routine does to its registers**: a value per register through the routine, the
+  one it was entered with or one it is not, merged at labels as the state analysis merges.
+  A save and its restore cancel — `pha` … `pla`, `phx` … `plx`, `php` … `plp` — which the
+  analysis stack already sees; `StackEntry` gains which register a saved byte holds, where it
+  says `IsStatus` today. On the 65816 the pass runs after the state analysis and reads the
+  widths from it, since `pha` pushes one byte or two; elsewhere every push is a byte and it
+  runs on its own. A restore through memory is not seen, and is what the next item is for.
+- **`.state keeps a`**, the same item at a point: from here, A holds what the routine was
+  entered with. It is what a routine that saves a register to memory and loads it back writes
+  at the load, and it is the answer rather than a stand-in for a better analysis: seeing the
+  byte come back unchanged means ruling out every store that could have hit it, and nt65 never
+  knows an address, so whether `sta table,x` reached `save` cannot be answered wherever the two
+  are not in one stream — which, for a zero-page slot and a table in another segment, is always.
+  Without it such a routine cannot write `keeps` at all: its own body would be read as breaking
+  the promise. Like `.next ?` it is a claim with nothing to check it against, which is the
+  contract every annotation of §7.4 has. Written where the register was never destroyed it is
+  redundant, which is worth a warning. It takes no third directive and no second word: `.state`
+  already carries the signature items, and `keeps a` means the same at a point as at an exit.
+- **Composed across the program**, as `CallCosts` composes what a routine costs: a call
+  destroys what the routine it names destroys. The set only grows, so a routine that reaches
+  itself converges rather than coming out unknown, which is the one place this is easier than
+  the cycle counts. A call through a pointer, and a call to a routine with no body that
+  declares nothing, leave it unknown — and unknown is said, not assumed away.
+- **`keeps a, x, y`**, a signature item: the routine hands those registers back as it was
+  entered with them. On a proc with a body it is checked at every `rts` and `rtl`, as `dp*`
+  is; on an extern proc and an import it is declared and trusted, which is the only way to
+  know anything about a routine whose body is not here. It takes bare register names, which
+  are items nowhere else, so the list needs no brackets. A routine that writes no `keeps`
+  promises nothing, and one with no body keeps nothing as far as a caller may rely. This
+  makes a signature mean something on every CPU, where until now it meant something only on
+  the 65816; `near`, `far`, `inline` and `args` stay 65816 items.
+- **The lens says what survives**, beside what a pass costs: `keeps all but A` where a routine
+  keeps all but one, `keeps everything` and `keeps nothing` at the ends, the registers listed
+  where it is neither, and `keeps ?` where a call could not be followed and silence would read
+  as safety.
+- **A warning where a caller leans on a register a call destroys**: loaded before the call,
+  not written between, read after it, and the callee's set known. This is the one that finds
+  bugs and the one that can be wrong about a program that is right, so it stays a warning and
+  names the call and the routine that destroyed it.
+
+**Check.** Fixtures for each shape: a routine that keeps everything, one that saves and
+restores across a call, one that restores across a label, a `keeps` a body breaks, a `keeps`
+on a routine with no body that a caller relies on, one that saves to memory and restores with
+`.state keeps`, a call nt65 cannot follow, and a pair of routines that call each other.
+
+**Done.** All of it but the last bullet, which was dropped rather than put off: a warning where
+a caller leans on a register a call destroys cannot be made honest, because a routine that
+returns a value in the accumulator destroys it in exactly the sense this analysis means, and
+telling that from one that merely wrecked it needs to know which registers carry results — a
+calling convention, which §1 makes a non-goal. §16 records it. What the writing of the rest
+found: the register-effects table is written out twice, in the analysis and in its test, because
+a mnemonic left out of it fails nothing on its own — it quietly says the instruction writes no
+register, and a routine then promises to hand back one it destroyed. The 6502 has no `phx`, so X
+is saved through the accumulator, and a register's value has to be followed across `txa` and
+`tax` as well as across the pushes; that is why what a register holds is named by the register
+it came from rather than by the one holding it. `rti` pulls the flags the processor pushed, so a
+handler that has left the stack alone hands the carry back however it used it, and an interrupt
+handler is checked at its `rti` as every other routine is at its `rts`. The saved-value stack is
+its own small thing rather than a field on the 65816's `StackEntry`: that one follows values to
+say what the widths and the banks are, this one follows whose value a push holds, and the four
+fields they would have shared are ones neither wants. The lens phrasing turned over on contact
+with real code: most routines work in the accumulator and keep three registers of four, so
+`keeps X, Y, C` above nearly every routine was the noise a lens exists to avoid. It says
+`keeps all but A`, with `everything`, `nothing` and `?` for the ends.
+
+## Stage 33: Release
 
 **Build.**
 
@@ -428,7 +509,7 @@ from their registries and builds the SNES example.
 
 ## Deferred: the guide
 
-`docs/GUIDE.md` is rewritten once, after Stage 32, in one pass:
+`docs/GUIDE.md` is rewritten once, after Stage 33, in one pass:
 
 - signature widths default to `*`, not `a8, i8`;
 - the family idiom, in "Tricks the analysis needs told about" or a section of its own, and

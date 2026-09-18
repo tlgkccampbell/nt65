@@ -31,6 +31,9 @@ public sealed class FlowRegion
     /// <summary>What one pass through it costs with what it calls, worked out across the program.</summary>
     public RoutineCost Total { get; internal set; }
 
+    /// <summary>Which registers it hands back as it was entered with them, worked out across the program.</summary>
+    public RoutineRegisters Registers { get; internal set; } = RoutineRegisters.Everything;
+
     /// <summary>What one pass through each inline <c>.scope</c> block of it costs.</summary>
     public IReadOnlyList<ScopeCost> Scopes { get; }
 

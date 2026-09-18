@@ -1531,8 +1531,37 @@ internal sealed class Parser
             else
                 children.Add(ParseExpression());
         }
+        else if (name.Text.Equals("keeps", StringComparison.OrdinalIgnoreCase))
+        {
+            ParseKeptRegisters(children);
+        }
         return new GreenSyntax(SyntaxKind.StateItem, children.ToImmutable());
     }
+
+    /// <summary>
+    /// The registers of a <c>keeps a, x</c>. A bare register name is an item nowhere else, so
+    /// the list runs on through the commas that separate the signature's own items, and stops
+    /// at the first comma that is followed by anything else.
+    /// </summary>
+    private void ParseKeptRegisters(ImmutableArray<GreenNode>.Builder children)
+    {
+        if (!AtKeptRegister(index))
+        {
+            Report("expected the registers it keeps: `keeps a`, `keeps x, y`");
+            return;
+        }
+        children.Add(Advance());
+        while (Kind == SyntaxKind.Comma && AtKeptRegister(index + 1))
+        {
+            children.Add(Advance());
+            children.Add(Advance());
+        }
+    }
+
+    /// <summary>Whether the token at <paramref name="at"/> names a register a <c>keeps</c> may take.</summary>
+    private bool AtKeptRegister(int at) =>
+        at < tokens.Length && tokens[at].Kind is SyntaxKind.Identifier or SyntaxKind.Register
+        && SyntaxFacts.IsKeptRegister(tokens[at].Text);
 
     private static bool LooksLikeAWidth(string text) =>
         text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);

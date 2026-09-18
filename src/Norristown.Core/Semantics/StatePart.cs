@@ -33,6 +33,9 @@ public enum StatePart
     /// <summary>A routine that never returns: <c>noreturn</c>.</summary>
     NoReturn,
 
+    /// <summary>The registers a routine hands back as it was entered with them: <c>keeps a, x</c>.</summary>
+    Keeps,
+
     /// <summary>
     /// Every tracked part of the state unknown, written <c>?</c> on its own: what a routine
     /// reached from outside nt65 assumes, and what an extern proc or an import usually declares.

@@ -845,6 +845,7 @@ items are:
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
+| `keeps a, x, y, c` | the registers it hands back as it was entered with them (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
@@ -982,7 +983,9 @@ the known top gets a value nothing is known of. The whole stack becomes unknown 
 or pull whose size is unknown, and at a merge where the incoming stacks differ in depth.
 
 **Assertions.** `.state` takes the same items as a signature, except `near`, `far` and
-the `*` items, which describe a routine rather than a point in it:
+the `*` items, which describe a routine rather than a point in it. `keeps` is the one item
+that is about a routine and is written at a point too, because a routine's promise is its
+point fact asked at every way out of it (§7.7):
 `.state a16, i8, dbr = $7e`. Each item asserts and sets: if that part of the state is
 known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`, `e?`,
 `dp?`) deliberately forgets. `emu` also makes both widths 8, which is what emulation mode
@@ -1483,6 +1486,69 @@ program's entry point, which sets up and hands over to a loop that runs for ever
 
 There are still no cycle-count built-ins for `.assert`: what tooling shows is a bound on one
 pass, and an `.assert` would be read as a bound on the program.
+
+### 7.7 What a routine keeps
+
+The first question anyone asks about someone else's routine is which registers survive it.
+nt65 answers every other question about a routine — what it costs, where control goes, what
+state it wants — so it answers this one too, on every CPU, of A, X, Y and the carry. N and Z
+are left out: nearly every instruction writes one of them, so a promise about either would say
+nothing.
+
+Each routine is followed the way the 65816's state is, over what each register may hold at each
+point: the value some register was entered with, a value an instruction here wrote, or nothing
+known. The entry value is named by the register it came from and not by the one holding it,
+because a 6502 saves X through the accumulator, and `txa` then has to carry X's value into A
+for the `pha` after it to save it. A save and its restore cancel through a stack of what each
+push holds, so `pha` … `pla` around a call, or a `php` … `plp` across a label, needs nothing
+written. On the 65816 a push is as wide as the register, so a pull gets the value back only
+where the width is the same at both — which a routine that changes neither width is, whatever
+those widths are.
+
+What a routine's calls do is worked out with it, across the program: a call hands back what the
+routine it names hands back, and no more. Every routine starts out keeping everything and what
+each one keeps is taken away until nothing moves, so two routines that call each other settle
+rather than go round for ever. This is the one place the registers are easier than the cycle
+counts, which leave no total at all for a routine that can reach itself. A call nt65 cannot
+follow — through a pointer, or to a routine with no body that promises nothing — leaves the
+registers it did not save unknown, and the answer says it is not the whole one.
+
+**`keeps a, x` is the promise.** On a routine with a body it is checked at every `rts`, `rtl`
+and `rti`: a register the routine cannot be shown to hand back is reported there, with what to
+write. On an extern proc and an imported routine it is declared and trusted, exactly as the
+rest of a signature is, which is the only way to know anything about a body that is not here:
+`.proc CHROUT = $FFD2: keeps x, y` is a fact about the C64 KERNAL that had nowhere to live. A
+routine that writes no `keeps` promises nothing, and one whose body is not here keeps nothing
+as far as a caller may rely. `keeps` takes bare register names, which are items nowhere else,
+so the list needs no brackets; a signature set may give one, and a signature that writes its
+own takes the place of what the set gives.
+
+This makes a signature mean something on every CPU, where until now only the 65816 read one.
+`near`, `far`, `inline`, `args` and the state items stay what they were.
+
+**`.state keeps a` is what a restore the analysis cannot see says.** A routine that saves a
+register to memory and loads it back has handed it over, and no analysis that does not follow
+memory can see that the byte came back unchanged. Seeing it would mean ruling out every store
+that could have reached it, and nt65 never knows an address, so whether `sta table,x` reached
+`save` cannot be answered wherever the two are not in one stream — which, for a zero-page slot
+and a table in another segment, is always. The annotation is therefore the answer and not a
+stand-in for a better analysis. Like `.next ?` it is a claim with nothing to check it against,
+which is the contract every annotation of §7.4 has, and a program it is wrong about is wrong in
+the same way. Written where the register was never destroyed it says nothing, which is a
+warning. A `.state` carrying only `keeps` is not a label's declaration: it says what a register
+holds, not what the processor state at that label is.
+
+What is **not** here is a warning at a caller that holds a register across a call that destroys
+it. It cannot be made honest: a routine that returns a value in the accumulator destroys it in
+exactly the sense this analysis means, and telling that apart from one that merely wrecked it
+would need to know which registers carry results — a calling convention, which §1 makes a
+non-goal. What a routine keeps is a fact about that routine, and that is where it stays.
+
+Tooling shows it above each routine beside what a pass costs. Most routines work in the
+accumulator and leave the rest alone, so what they keep is said as what they do not:
+`keeps all but A`. A routine that keeps every one of them says `keeps everything` and one that
+keeps none says `keeps nothing`; one whose calls could not all be followed says `keeps ?`,
+because what it shows is a floor and silence there would read as safety.
 
 ## 8. Data
 
@@ -2745,7 +2811,8 @@ alone and without an assembler:
   direct-page and bank mismatches against declared segments and ranges (§7.5);
 - report out-of-range branches and per-block cycle intervals before ca65 runs (§7.6), and
   show above each routine, and each inline `.scope` block of one, as a lens on the line that
-  opens it, what one pass through it costs and what it costs with everything it calls;
+  opens it, what one pass through it costs and what it costs with everything it calls, and
+  which registers the routine hands back as it was entered with them (§7.7);
   an instruction's own cycles, its block's, and on the 65816 the state reaching it, are
   on hover, so nothing stands in the lines as they are written;
 - complete what may be written at the caret, and only that: the statements the place the
@@ -2954,6 +3021,17 @@ Recorded so the reasoning survives. None is open.
   and B belong on the routines that set them.
 - **A stack of saved state, not push and pull pairing.** Tracking saved P, D and B as
   the analysis runs lets a save and restore span calls and labels.
+- **What a routine keeps is worked out; what it promises is declared.** The set is a fact
+  about a body, as what a pass costs is, so it is computed and shown rather than written;
+  `keeps` is a promise a caller may lean on, so it is declared and checked. That is the same
+  split the cycle counts and the signatures already have, and it is why inferring `keeps` into
+  a routine's interface, which §16 rules out for signatures, is not what this does.
+- **`keeps` where a register is lost, and no warning where one is leaned on.** A caller that
+  holds a register across a call that destroys it cannot be told so honestly: a routine
+  returning a value in A destroys A in exactly this sense, and telling the two apart needs a
+  calling convention, which §1 rules out.
+- **`.state keeps`, not a third annotation directive.** `keeps a` means the same at a point as
+  at an exit, so `.state` carries it, and §7.4's two directives stay two.
 - **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the
   state, so its annotations would be ceremony.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a
@@ -3358,7 +3436,9 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | keep-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | path  ; a path names a signature set, first
+             | 'args' expr | 'interrupt' | 'noreturn' | kept-item
+             | path                                   ; a path names a signature set, first
+kept-item   := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state
 keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'

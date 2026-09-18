@@ -71,10 +71,13 @@ public sealed class BasicBlock
 
     /// <summary>
     /// Whether a <c>.state</c> stands directly after the block's label, which declares the
-    /// label an entry point: the state there is what the directive says.
+    /// label an entry point: the state there is what the directive says. One carrying nothing
+    /// but <c>keeps</c> is not such a declaration, because it says what a register holds and
+    /// not what the processor state at the label is.
     /// </summary>
     public bool IsDeclared => Label is not null && steps.Count > 0
-        && steps[0].Statement.Kind == SyntaxKind.StateDirective;
+        && steps[0].Statement.Kind == SyntaxKind.StateDirective
+        && !Semantics.StateItem.OnlyKeeps(steps[0].Statement);
 
     /// <summary>
     /// How long running the whole block takes, or null when any statement in it has no

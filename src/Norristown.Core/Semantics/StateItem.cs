@@ -26,6 +26,21 @@ public readonly record struct StateItem(
     public bool IsStrz => Node.ChildTokens.Any(token =>
         token.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The registers a <see cref="StatePart.Keeps"/> item names; none for every other item.</summary>
+    public Layout.Registers Registers
+    {
+        get
+        {
+            var registers = Layout.Registers.None;
+            foreach (var token in Node.ChildTokens.Skip(1))
+            {
+                if (Layout.RegisterEffects.Named(token.Text) is { } register)
+                    registers |= register;
+            }
+            return registers;
+        }
+    }
+
     /// <summary>The items of a state list, or of a <c>.state</c>, in the order they are written.</summary>
     public static IEnumerable<StateItem> Read(SyntaxNode? list)
     {
@@ -45,6 +60,17 @@ public readonly record struct StateItem(
 
     /// <summary>The name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
     public SyntaxNode? SetName => Part == StatePart.Set ? Node.ChildNodes.FirstOrDefault() : null;
+
+    /// <summary>
+    /// Whether a list says something and every item of it is a <c>keeps</c>. Such a list says
+    /// what a register holds and nothing about the processor state, so it neither declares a
+    /// label nor answers what a routine with no body assumes.
+    /// </summary>
+    public static bool OnlyKeeps(SyntaxNode? list)
+    {
+        var items = Read(list).ToList();
+        return items.Count > 0 && items.TrueForAll(item => item.Part == StatePart.Keeps);
+    }
 
     /// <summary>One item, or null when its line did not parse into one.</summary>
     private static StateItem? Of(SyntaxNode node)
@@ -84,6 +110,7 @@ public readonly record struct StateItem(
             "noreturn" => StatePart.NoReturn,
             "dp" => StatePart.DirectPage,
             "dbr" => StatePart.DataBank,
+            "keeps" => StatePart.Keeps,
             _ => null,
         };
         return part is { } known

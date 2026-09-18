@@ -12,6 +12,10 @@ build tasks and a schema for the project file.
   references, call hierarchy, document highlights, rename, hover, completion, signature help,
   code actions, code lenses, document and workspace symbols, links to what an `.incbin`
   names, and folding.
+- **What each routine costs and keeps**, on the line that opens it: the shortest and longest
+  path through it, what it costs with everything it calls, and which of A, X, Y and the carry
+  it hands back as it was entered with them — `keeps all but A` above most of them, and
+  `keeps ?` where a call could not be followed, because silence there would read as safety.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.
