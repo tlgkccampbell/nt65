@@ -21,6 +21,13 @@ internal static class Lsp
     /// <summary>What the client shows as the origin of every diagnostic nt65 reports.</summary>
     private const string SourceName = "nt65";
 
+    /// <summary>
+    /// The language the grid of a hover is fenced as. Markdown cannot reach inside a fenced
+    /// block, so the only way to tell one row from another is to give the grid a grammar; an
+    /// editor that has none renders it as the plain monospace it was before.
+    /// </summary>
+    private const string Grid = "nt65-hover";
+
     /// <summary>Where the block's own count stands on the row the line's count starts.</summary>
     private const int BlockColumn = 10;
 
@@ -329,10 +336,12 @@ internal static class Lsp
         }
 
         // A column a reader's eye can run down beats a sentence they have to take apart, so
-        // the registers are always all four wherever anything is known of them.
+        // the registers are always all four wherever anything is known of them, and stand apart
+        // from what the line itself is.
         var registers = flow?.Registers?.AnyBefore(statement);
         if (registers is { } held)
         {
+            card.Gap();
             foreach (var register in RegisterEffects.Each(Registers.All))
                 card.Row(RegisterEffects.Spell(register), Held(held.Of(register), register));
         }
@@ -843,7 +852,7 @@ internal static class Lsp
             if (rows.Count > 0)
             {
                 var column = rows.Max(row => row?.Key.Length ?? 0) + Gutter;
-                zones.Add("```text\n"
+                zones.Add($"```{Grid}\n"
                     + string.Join("\n", rows.Select(row => row is { } written ? written.Key.PadRight(column) + written.Value : ""))
                     + "\n```");
             }

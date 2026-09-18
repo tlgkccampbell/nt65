@@ -17,7 +17,9 @@ build tasks and a schema for the project file.
   everything it calls, and which of A, X, Y and the carry it hands back as it was entered with
   them — `preserves X, Y, C`, or `preserves X, ?` where a call could not be followed and it may
   preserve more. It is on hover too, because lenses can be turned off; and hovering an
-  instruction shows what each register holds at that line.
+  instruction shows what each register holds at that line. A hover's grid of facts is
+  coloured from a grammar this extension contributes, so the keys, what the analysis could
+  not work out and what is about the block rather than the line each read as themselves.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.

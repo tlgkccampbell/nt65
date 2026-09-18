@@ -283,7 +283,10 @@ public sealed class SymbolRequestsTests
         var add = await client.HoverAsync(Uri, new Position(4, 4), timeout);
         var store = await client.HoverAsync(Uri, new Position(5, 4), timeout);
 
-        Assert.Contains("flags   N Z\n", load?.Contents.Value, StringComparison.Ordinal);
+        // The line's own facts stand apart from what the registers hold, and the grid is
+        // fenced as a language of its own so that an editor can tell one row from another.
+        Assert.Contains("```nt65-hover\ncycles  2         block 13\nflags   N Z\n\nA       as entered\n",
+            load?.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("flags   N V Z C\n", add?.Contents.Value, StringComparison.Ordinal);
 
         // A store writes no flag at all, and a row saying none would say nothing.

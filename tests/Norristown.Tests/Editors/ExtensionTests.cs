@@ -18,6 +18,9 @@ public sealed class ExtensionTests : IDisposable
     private static readonly JsonDocument Schema = Read("nt65.schema.json");
     private static readonly JsonDocument Language = Read("language-configuration.json");
 
+    private static readonly JsonDocument Hover = JsonDocument.Parse(
+        Repo.ReadText(Repo.Path("editors", "vscode", "syntaxes", "nt65-hover.tmLanguage.json")));
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-extension-");
 
     public void Dispose() => root.Delete(recursive: true);
@@ -134,6 +137,93 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("./nt65.schema.json", validation.GetProperty("url").GetString());
         Assert.Equal("nt65", contributes.GetProperty("problemMatchers").EnumerateArray().Single().GetProperty("name").GetString());
         Assert.Equal("nt65", contributes.GetProperty("taskDefinitions").EnumerateArray().Single().GetProperty("type").GetString());
+    }
+
+    /// <summary>
+    /// The grammar that colours a hover's grid, against the lines the server writes into one.
+    /// Markdown cannot reach inside a fenced block, so the grid is fenced as a language of its
+    /// own and this is the whole of what tells one row from another; nothing compiles either
+    /// of them, so nothing else would notice them drifting apart.
+    /// </summary>
+    [Fact]
+    public void TheHoverGrammarColoursTheGridTheServerWrites()
+    {
+        var contributes = Package.RootElement.GetProperty("contributes");
+        Assert.Contains(
+            contributes.GetProperty("languages").EnumerateArray(),
+            language => language.GetProperty("id").GetString() == "nt65-hover");
+        var grammar = contributes.GetProperty("grammars").EnumerateArray()
+            .Single(item => item.GetProperty("language").GetString() == "nt65-hover");
+
+        Assert.Equal("source.nt65-hover", grammar.GetProperty("scopeName").GetString());
+        Assert.Equal("./syntaxes/nt65-hover.tmLanguage.json", grammar.GetProperty("path").GetString());
+        Assert.Equal("source.nt65-hover", Hover.RootElement.GetProperty("scopeName").GetString());
+
+        // The key of every row, whether it is one word, two, or a register; the block and the
+        // reason on a cycles row, which are about more than the line; and everything the
+        // analysis could not work out. Everything else is left plain.
+        foreach (var (line, text, scope) in (ReadOnlySpan<(string, string, string?)>)[
+            ("cycles  4-5       block 8-11    +1 when taken", "cycles", "entity.name.tag.nt65-hover"),
+            ("cycles  4-5       block 8-11    +1 when taken", "4-5", "constant.numeric.nt65-hover"),
+            ("cycles  4-5       block 8-11    +1 when taken", "block 8-11    +1 when taken", "comment.line.nt65-hover"),
+            ("cycles  3", "3", "constant.numeric.nt65-hover"),
+            ("cost       29-30 cycles", "cost", "entity.name.tag.nt65-hover"),
+            ("private to  init", "private to", "entity.name.tag.nt65-hover"),
+            ("flags   N V Z C", "flags", "entity.name.tag.nt65-hover"),
+            ("flags   N V Z C", "N V Z C", null),
+            ("state   a16, i8, native", "a16, i8, native", null),
+            ("value    $0400 (1024)", "$0400", "constant.numeric.nt65-hover"),
+            ("A       as entered, or new", "A", "entity.name.tag.nt65-hover"),
+            ("A       as entered, or new", "as entered, or new", null),
+            ("C       new, or unknown", "unknown", "invalid.deprecated.nt65-hover"),
+            ("stack   unknown", "stack", "entity.name.tag.nt65-hover"),
+            ("preserves  X, Y, ?", "preserves", "entity.name.tag.nt65-hover"),
+            ("preserves  X, Y, ?", "?", "invalid.deprecated.nt65-hover"),
+            ("preserves  A, X, Y, C", "A, X, Y, C", null),
+            ("        status a16, i8", "status", null),
+            ("        $1234", "$1234", "constant.numeric.nt65-hover"),
+            ("        and 1 more", "and 1 more", "invalid.deprecated.nt65-hover")])
+        {
+            Assert.Equal(scope, Scoped(line, line.IndexOf(text, StringComparison.Ordinal)));
+        }
+    }
+
+    /// <summary>
+    /// What the grammar scopes the character at <paramref name="at"/> as, or null where it
+    /// leaves it plain. TextMate takes the leftmost match, and the first rule written where
+    /// two of them would start in the same place, which is what this follows.
+    /// </summary>
+    private static string? Scoped(string line, int at)
+    {
+        for (var start = 0; start < line.Length;)
+        {
+            Match? found = null;
+            var matched = default(JsonElement);
+            foreach (var rule in Hover.RootElement.GetProperty("patterns").EnumerateArray())
+            {
+                var match = new Regex(rule.GetProperty("match").GetString() ?? "", RegexOptions.None, TimeSpan.FromSeconds(5))
+                    .Match(line, start);
+                if (match.Success && (found is null || match.Index < found.Index))
+                    (found, matched) = (match, rule);
+            }
+            if (found is null)
+                return null;
+            if (at < found.Index || at >= found.Index + found.Length)
+            {
+                start = Math.Max(found.Index + found.Length, start + 1);
+                continue;
+            }
+            if (matched.TryGetProperty("name", out var whole))
+                return whole.GetString();
+            foreach (var capture in matched.GetProperty("captures").EnumerateObject())
+            {
+                var group = found.Groups[int.Parse(capture.Name)];
+                if (group.Success && at >= group.Index && at < group.Index + group.Length)
+                    return capture.Value.GetProperty("name").GetString();
+            }
+            return null;
+        }
+        return null;
     }
 
     private static JsonDocument Read(string name) =>

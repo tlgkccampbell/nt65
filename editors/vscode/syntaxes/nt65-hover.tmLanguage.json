@@ -1,0 +1,62 @@
+{
+  "comment": "The grid of a hover, which the language server fences as nt65-hover. Markdown cannot reach inside a fenced block, so this is what tells one row from another. The grid's shape is fixed, so everything here matches by position on the line.",
+  "name": "nt65 hover",
+  "scopeName": "source.nt65-hover",
+  "patterns": [
+    {
+      "comment": "What the line costs, what the block around it costs, and why the count is an interval. The block and the reason are about more than the line, so they stand back from it.",
+      "match": "^(cycles)( +)(\\S+)( +)(block .*)$",
+      "captures": {
+        "1": {
+          "name": "entity.name.tag.nt65-hover"
+        },
+        "3": {
+          "name": "constant.numeric.nt65-hover"
+        },
+        "5": {
+          "name": "comment.line.nt65-hover"
+        }
+      }
+    },
+    {
+      "match": "^(cycles)( +)(\\S+) *$",
+      "captures": {
+        "1": {
+          "name": "entity.name.tag.nt65-hover"
+        },
+        "3": {
+          "name": "constant.numeric.nt65-hover"
+        }
+      }
+    },
+    {
+      "comment": "A stack too deep to read at a glance, cut off and counted.",
+      "match": "^ +and \\d+ more$",
+      "name": "invalid.deprecated.nt65-hover"
+    },
+    {
+      "comment": "The key of a row: a word or two at column 0, or one register.",
+      "match": "^(?:[a-z]+(?: [a-z]+)*|[AXYC])(?=  )",
+      "name": "entity.name.tag.nt65-hover"
+    },
+    {
+      "comment": "Where the analysis lost track, which a reader has to see rather than read past.",
+      "match": "\\bunknown\\b",
+      "name": "invalid.deprecated.nt65-hover"
+    },
+    {
+      "comment": "Those registers and perhaps more, which is what `?` means everywhere else.",
+      "match": "(?:^|[ ,])(\\?)$",
+      "captures": {
+        "1": {
+          "name": "invalid.deprecated.nt65-hover"
+        }
+      }
+    },
+    {
+      "comment": "A value as nt65 writes one.",
+      "match": "\\$[0-9a-fA-F]+\\b",
+      "name": "constant.numeric.nt65-hover"
+    }
+  ]
+}

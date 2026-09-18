@@ -35,6 +35,12 @@
           "light": "./icons/nt65-file.svg",
           "dark": "./icons/nt65-file.svg"
         }
+      },
+      {
+        "id": "nt65-hover",
+        "aliases": [
+          "nt65 hover"
+        ]
       }
     ],
     "grammars": [
@@ -42,6 +48,11 @@
         "language": "nt65",
         "scopeName": "source.nt65",
         "path": "./syntaxes/nt65.tmLanguage.json"
+      },
+      {
+        "language": "nt65-hover",
+        "scopeName": "source.nt65-hover",
+        "path": "./syntaxes/nt65-hover.tmLanguage.json"
       }
     ],
     "jsonValidation": [
