@@ -4,9 +4,5 @@
 DataDirective
 ModuleDirective
 NameExpression
-SegmentAttribute
-SegmentBlock
-SegmentDeclaration
-SegmentRegion
 StateItem
 UseDirective

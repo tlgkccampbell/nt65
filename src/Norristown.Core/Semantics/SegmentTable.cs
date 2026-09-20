@@ -31,7 +31,7 @@ public sealed class SegmentTable
 
     // The `dp = e` and `bank = e` a file's declarations write, by segment. They are expressions,
     // worth something only once the program's constants are, which is after the table is needed.
-    private readonly Dictionary<string, ImmutableArray<SegmentAttributeSyntax>> attributes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SeparatedSyntaxList<SegmentAttributeSyntax>> attributes = new(StringComparer.Ordinal);
 
     private SegmentTable(Dictionary<string, Segment> segments) => this.segments = segments;
 
@@ -137,9 +137,9 @@ public sealed class SegmentTable
             SegmentAttributeSyntax? mirrors = null;
             foreach (var attribute in written)
             {
-                if (attribute.Name is not { } attributeName)
+                if (attribute.Name.IsMissing)
                     continue;
-                var word = attributeName.Text.ToLowerInvariant();
+                var word = attribute.Name.Text.ToLowerInvariant();
                 var at = attribute.Tree.GetSpan(attribute.Span);
                 if (word == "mirrors")
                 {
@@ -205,15 +205,15 @@ public sealed class SegmentTable
     {
         foreach (var node in tree.Root.DescendantNodes().OfType<SegmentDeclarationSyntax>())
         {
-            if (node.Name is { } written && SegmentNames.Of(written) is { } name)
-                yield return new Declaration(node, name, written.Span);
+            if (SegmentNames.Of(node.Name) is { } name)
+                yield return new Declaration(node, name, node.Name.Span);
         }
     }
 
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> a declaration writes after its <c>:</c>.</summary>
     private static AddressSize SizeOf(SegmentDeclarationSyntax declaration)
     {
-        if (declaration.AddressSize is { } written && SegmentNames.ParseSize(written.Text) is { } size)
+        if (SegmentNames.ParseSize(declaration.AddressSize.Text) is { } size)
             return size;
 
         // The parser has already reported the missing size; absolute is the default that

@@ -33,7 +33,7 @@ public static class Constructs
     /// names none. A name written in quotes has been reported, and still names its segment.
     /// </summary>
     public static string? SegmentOf(StatementSyntax opener) =>
-        opener is SegmentStatementSyntax { Name: { } name } ? SegmentNames.Of(name) : null;
+        opener is SegmentStatementSyntax segment ? SegmentNames.Of(segment.Name) : null;
 
     // A message the line does not write is no message: an `.assert` leaves the slot empty, and
     // an `.error` holds the missing token that stands where the quotes belong.

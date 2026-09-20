@@ -72,7 +72,7 @@ public static class Outline
                 // A name written in quotes is an error that still names the segment, and holds no
                 // escapes, so the quotes come off by hand.
                 var written = (SegmentStatementSyntax)opener;
-                var segment = written.Name ?? written.Keyword;
+                var segment = written.Name.IsMissing ? written.Keyword : written.Name;
                 return new OutlineItem(OutlineKind.Segment, segment.Text.Trim('"'), null, block.Span, segment.Span, children);
 
             case DataDeclarationSyntax { Name: { IsMissing: false } data }:

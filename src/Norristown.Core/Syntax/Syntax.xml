@@ -2006,85 +2006,76 @@
     </Field>
   </Node>
 
-  <Node Name="SegmentAttributeSyntax" Base="SyntaxNode">
+  <Node Name="SegmentAttributeSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="SegmentAttribute"/>
     <TypeComment>
       <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
     </TypeComment>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>dp</c>, <c>bank</c> or <c>mirrors</c>, or null.</summary>
+        <summary>The <c>dp</c>, <c>bank</c> or <c>mirrors</c>.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(0)]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The value of a <c>dp</c> or a <c>bank</c>, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
     <Field Name="OpenBracketToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>[</c> of a <c>mirrors</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBracket)]]></Read>
     </Field>
-    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;" Today="ImmutableArray&lt;BankRangeSyntax&gt;">
+    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
       <PropertyComment>
         <summary>The banks of a <c>mirrors</c>.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>]</c> of a <c>mirrors</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBracket)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="SegmentBlockSyntax" Base="SegmentStatementSyntax">
+  <Node Name="SegmentBlockSyntax" Base="SegmentStatementSyntax" Converted="true">
     <Kind Name="SegmentBlock"/>
     <TypeComment>
       <summary><c>.segment NAME {</c>: the line that opens a segment block.</summary>
     </TypeComment>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="SegmentDeclarationSyntax" Base="SegmentStatementSyntax">
+  <Node Name="SegmentDeclarationSyntax" Base="SegmentStatementSyntax" Converted="true">
     <Kind Name="SegmentDeclaration"/>
     <TypeComment>
       <summary><c>.segment NAME: size</c>, with its attributes.</summary>
     </TypeComment>
-    <Field Name="ColonToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c> before the address size, or null.</summary>
+        <summary>The <c>:</c> before the address size.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
-    <Field Name="AddressSize" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="AddressSize" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>zp</c>, <c>abs</c> or <c>far</c>, or null.</summary>
+        <summary>The <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size ? size : null]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2092,22 +2083,27 @@
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
-    <Field Name="Attributes" Type="SeparatedSyntaxList&lt;SegmentAttributeSyntax&gt;" Today="ImmutableArray&lt;SegmentAttributeSyntax&gt;">
+    <Field Name="Attributes" Type="SeparatedSyntaxList&lt;SegmentAttributeSyntax&gt;">
       <PropertyComment>
         <summary>The attributes after the address size.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 
-  <Node Name="SegmentRegionSyntax" Base="SegmentStatementSyntax">
+  <Node Name="SegmentRegionSyntax" Base="SegmentStatementSyntax" Converted="true">
     <Kind Name="SegmentRegion"/>
     <TypeComment>
       <summary><c>.segment NAME</c>: a region line, which puts what follows it in the segment.</summary>
     </TypeComment>
+    <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The <c>{</c> written after the name on a line that opens no block, or null.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBrace"/>
+    </Field>
   </Node>
 
-  <AbstractNode Name="SegmentStatementSyntax" Base="StatementSyntax">
+  <AbstractNode Name="SegmentStatementSyntax" Base="StatementSyntax" Converted="true">
     <TypeComment>
       <summary>A line that starts with <c>.segment</c>: a declaration, a block's opener or a region line.</summary>
     </TypeComment>
@@ -2116,17 +2112,15 @@
         <summary>The <c>.segment</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The segment's name, or null. A quoted name is an error, and is still the name.</summary>
+        <summary>The segment's name. A quoted name is an error, and is still the name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
       <Kind Name="StringLiteral"/>
-      <Read><![CDATA[TokenAt(1) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral } name ? name : null]]></Read>
     </Field>
   </AbstractNode>
 

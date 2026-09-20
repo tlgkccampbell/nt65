@@ -942,91 +942,102 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseSegment()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        var kind = opensBlock ? SyntaxKind.SegmentBlock
-            : tokens.Any(token => token.Kind == SyntaxKind.Colon) ? SyntaxKind.SegmentDeclaration
-            : SyntaxKind.SegmentRegion;
+        var keyword = Advance();
+        var declaration = !opensBlock && tokens.Any(token => token.Kind == SyntaxKind.Colon);
+        GreenToken name;
         if (AtName)
         {
-            children.Add(Advance());
+            name = Advance();
         }
         else if (Kind == SyntaxKind.StringLiteral)
         {
             Report($"a segment name is written without quotes: `.segment {Current.Text.Trim('"')}`");
-            children.Add(Advance());
+            name = Advance();
         }
         else
         {
+            // A line that does not name its segment is read no further: what is written where
+            // the name belongs is the whole news about it.
             Report("expected a segment name");
-            return new GreenSyntax(kind, children.ToImmutable());
+            name = GreenToken.Missing(SyntaxKind.Identifier);
+            return opensBlock
+                ? new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace))
+                : declaration
+                    ? new SegmentDeclarationSyntax(
+                        keyword, name, GreenToken.Missing(SyntaxKind.Colon),
+                        GreenToken.Missing(SyntaxKind.Identifier), null, null)
+                    : new SegmentRegionSyntax(keyword, name, null);
         }
 
-        if (kind != SyntaxKind.SegmentDeclaration)
-        {
-            if (Kind == SyntaxKind.OpenBrace)
-                children.Add(Advance());
-            return new GreenSyntax(kind, children.ToImmutable());
-        }
+        // A `{` after the name opens a block, unless something else follows it on the line: then
+        // the line opens nothing and the brace is the region line's, misplaced.
+        if (opensBlock)
+            return new SegmentBlockSyntax(keyword, name, Expect(SyntaxKind.OpenBrace));
+        if (!declaration)
+            return new SegmentRegionSyntax(keyword, name, Kind == SyntaxKind.OpenBrace ? Advance() : null);
 
         if (Kind != SyntaxKind.Colon)
         {
             Report("expected `:` and an address size");
-            return new GreenSyntax(SyntaxKind.SegmentDeclaration, children.ToImmutable());
+            return new SegmentDeclarationSyntax(
+                keyword, name, GreenToken.Missing(SyntaxKind.Colon),
+                GreenToken.Missing(SyntaxKind.Identifier), null, null);
         }
-        children.Add(Advance());
-        if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
-        {
-            children.Add(Advance());
-            while (Kind == SyntaxKind.Comma)
-            {
-                children.Add(Advance());
-                children.Add(ParseSegmentAttribute());
-            }
-        }
-        else
+        var colon = Advance();
+        if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsAddressSize(Current.Text))
         {
             Report("expected `zp`, `abs` or `far`");
+            return new SegmentDeclarationSyntax(
+                keyword, name, colon, GreenToken.Missing(SyntaxKind.Identifier), null, null);
         }
-        return new GreenSyntax(SyntaxKind.SegmentDeclaration, children.ToImmutable());
+        var size = Advance();
+
+        // The attributes are a list of their own, so the `,` between the size and the first of
+        // them is the declaration's rather than the list's.
+        GreenToken? comma = null;
+        GreenSeparatedList? attributes = null;
+        if (Kind == SyntaxKind.Comma)
+        {
+            comma = Advance();
+            attributes = ParseSeparatedList(ParseSegmentAttribute);
+        }
+        return new SegmentDeclarationSyntax(keyword, name, colon, size, comma, attributes);
     }
 
     /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
     private GreenNode ParseSegmentAttribute()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
         if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors"))
         {
             Report("expected `dp`, `bank` or `mirrors`");
-            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+            return new SegmentAttributeSyntax(
+                GreenToken.Missing(SyntaxKind.Identifier), GreenToken.Missing(SyntaxKind.Equals),
+                null, null, null, null);
         }
         var mirrors = AtWord("mirrors");
-        children.Add(Advance());
+        var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
             Report("expected `=`");
-            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+            return new SegmentAttributeSyntax(name, GreenToken.Missing(SyntaxKind.Equals), null, null, null, null);
         }
-        children.Add(Advance());
+        var equals = Advance();
         if (!mirrors)
-        {
-            children.Add(ParseExpression());
-            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
-        }
+            return new SegmentAttributeSyntax(name, equals, ParseExpression(), null, null, null);
 
         if (Kind != SyntaxKind.OpenBracket)
         {
             Report("expected `[` and the banks: `mirrors = [$00..$3f, $80..$bf]`");
-            return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+            return new SegmentAttributeSyntax(name, equals, null, null, null, null);
         }
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseBracket)
-            children.AddRange(ParseCommaSeparated(ParseBankRange));
+        var openBracket = Advance();
+        var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
+        GreenToken? closeBracket = null;
         if (Kind == SyntaxKind.CloseBracket)
-            children.Add(Advance());
+            closeBracket = Advance();
         else
             Report("expected `]`");
-        return new GreenSyntax(SyntaxKind.SegmentAttribute, children.ToImmutable());
+        return new SegmentAttributeSyntax(name, equals, null, openBracket, ranges, closeBracket);
     }
 
     /// <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>

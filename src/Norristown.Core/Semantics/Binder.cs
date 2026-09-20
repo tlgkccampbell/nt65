@@ -1112,13 +1112,10 @@ internal sealed class Binder
     /// <summary>The segment a block or a region puts its contents in, or null when its opener does not say.</summary>
     private string? SegmentOf(StatementSyntax opener)
     {
-        var written = opener switch
-        {
-            SegmentBlockSyntax block => block.Name,
-            SegmentRegionSyntax region => region.Name,
-            _ => null,
-        };
-        if (written is not { } token || SegmentNames.Of(token) is not { } name)
+        if (opener is not (SegmentBlockSyntax or SegmentRegionSyntax))
+            return null;
+        var token = ((SegmentStatementSyntax)opener).Name;
+        if (SegmentNames.Of(token) is not { } name)
             return null;
 
         // A region or block that names a segment declared nowhere is an error, so a misspelled
