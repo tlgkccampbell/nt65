@@ -63,8 +63,9 @@ pwsh scripts/generate-syntax.ps1    # the syntax classes, after editing the node
 `scripts/test.ps1 -Fixture name` runs one fixture or corpus program, `-Update` accepts changed
 fixture output, and `-Benchmark` measures what an edit costs in the language server.
 
-The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.nodes`, a table with
-a block per kind of node. Change the table, run `scripts/generate-syntax.ps1`, and commit what it
+The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.xml`, a table with a
+block per kind of node, after Roslyn's own `Syntax.xml`. Change the table, run
+`scripts/generate-syntax.ps1`, and commit what it
 writes under the `Generated` folders; a test fails when the two disagree, and
 `scripts/generate-syntax.ps1 -Check` says the same thing without writing. The generator is
 `tools/Norristown.SyntaxGenerator`, which references nothing, so it runs whatever state the code

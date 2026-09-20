@@ -11,26 +11,29 @@ namespace Norristown.Tests.Syntax;
 public sealed class SyntaxGeneratorTests
 {
     private const string Widget = """
-        node WidgetSyntax : StatementSyntax
-          kind Widget
-          summary A widget.
-          slot Keyword : SyntaxToken
-            summary The word.
-            kinds Directive
-            read ChildTokens[0]
-          slot Name : SyntaxToken
-            summary The name.
-            kinds Identifier
-            today SyntaxToken?
-            read NameAt(1)
-          slot Parts : SeparatedSyntaxList<WidgetSyntax>
-            summary The parts.
-            today ImmutableArray<WidgetSyntax>
-            nodes
-          slot CloseBraceToken : SyntaxToken?
-            summary The <c>}</c>, or null.
-            kinds CloseBrace
-            read FirstToken(SyntaxKind.CloseBrace)
+        <Node Name="WidgetSyntax" Base="StatementSyntax">
+          <Kind Name="Widget"/>
+          <TypeComment><summary>A widget.</summary></TypeComment>
+          <Field Name="Keyword" Type="SyntaxToken">
+            <PropertyComment><summary>The word.</summary></PropertyComment>
+            <Kind Name="Directive"/>
+            <Read><![CDATA[ChildTokens[0]]]></Read>
+          </Field>
+          <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+            <PropertyComment><summary>The name.</summary></PropertyComment>
+            <Kind Name="Identifier"/>
+            <Read><![CDATA[NameAt(1)]]></Read>
+          </Field>
+          <Field Name="Parts" Type="SeparatedSyntaxList&lt;WidgetSyntax&gt;" Today="ImmutableArray&lt;WidgetSyntax&gt;">
+            <PropertyComment><summary>The parts.</summary></PropertyComment>
+            <Nodes/>
+          </Field>
+          <Field Name="CloseBraceToken" Type="SyntaxToken" Optional="true">
+            <PropertyComment><summary>The <c>}</c>, or null.</summary></PropertyComment>
+            <Kind Name="CloseBrace"/>
+            <Read><![CDATA[FirstToken(SyntaxKind.CloseBrace)]]></Read>
+          </Field>
+        </Node>
         """;
 
     [Fact]
@@ -48,7 +51,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void AConvertedKindReadsItsSlotsAndItsRequiredPiecesAreNotNullable()
     {
-        var red = Red(Widget + "\n  converted\n");
+        var red = Red(Converted(Widget, "WidgetSyntax"));
         Assert.Contains("public SyntaxToken Keyword => SlotToken(0);", red);
         Assert.Contains("public SyntaxToken Name => SlotToken(1);", red);
         Assert.Contains("public SeparatedSyntaxList<WidgetSyntax> Parts => SlotSeparatedList<WidgetSyntax>(2);", red);
@@ -63,7 +66,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void TheGreenClassTakesOneParameterPerSlot()
     {
-        foreach (var green in new[] { Green(Widget), Green(Widget + "\n  converted\n") })
+        foreach (var green in new[] { Green(Widget), Green(Converted(Widget, "WidgetSyntax")) })
         {
             Assert.Contains("internal sealed class WidgetSyntax : GreenNode", green);
             Assert.Contains("GreenToken keyword,", green);
@@ -88,22 +91,26 @@ public sealed class SyntaxGeneratorTests
     public void ANodeSlotTakesItsOwnGreenClassOnceWhatItHoldsBuildsOne()
     {
         const string holder = """
-            node LidSyntax : SyntaxNode
-              kind Lid
-              summary A lid.
-              slot Keyword : SyntaxToken
-                summary The word.
-                kinds Directive
-                read ChildTokens[0]
-            node BoxSyntax : SyntaxNode
-              kind Box
-              summary A box.
-              slot Lid : LidSyntax?
-                summary The lid, or null.
-                read FirstNode<LidSyntax>()
+            <Node Name="LidSyntax" Base="SyntaxNode">
+              <Kind Name="Lid"/>
+              <TypeComment><summary>A lid.</summary></TypeComment>
+              <Field Name="Keyword" Type="SyntaxToken">
+                <PropertyComment><summary>The word.</summary></PropertyComment>
+                <Kind Name="Directive"/>
+                <Read><![CDATA[ChildTokens[0]]]></Read>
+              </Field>
+            </Node>
+            <Node Name="BoxSyntax" Base="SyntaxNode">
+              <Kind Name="Box"/>
+              <TypeComment><summary>A box.</summary></TypeComment>
+              <Field Name="Lid" Type="LidSyntax" Optional="true">
+                <PropertyComment><summary>The lid, or null.</summary></PropertyComment>
+                <Read><![CDATA[FirstNode<LidSyntax>()]]></Read>
+              </Field>
+            </Node>
             """;
         Assert.Contains("GreenNode? lid)", Box(holder));
-        Assert.Contains("LidSyntax? lid)", Box(holder.Replace("kind Lid", "kind Lid\n  converted")));
+        Assert.Contains("LidSyntax? lid)", Box(Converted(holder, "LidSyntax")));
 
         static string Box(string table) =>
             Files(table)["src/Norristown.Core/Syntax/InternalSyntax/Generated/Nodes/BoxSyntax.cs"];
@@ -114,21 +121,23 @@ public sealed class SyntaxGeneratorTests
     public void ALayoutPutsTheSlotsOfTheClassesAboveWhereTheSourceWritesThem()
     {
         const string family = """
-            node LidSyntax : SyntaxNode
-              abstract
-              summary A lid.
-              slot Keyword : SyntaxToken
-                summary The word.
-                kinds Directive
-                read ChildTokens[0]
-            node ShutLidSyntax : LidSyntax
-              kind ShutLid
-              summary A shut lid.
-              layout CloseBraceToken Keyword
-              slot CloseBraceToken : SyntaxToken
-                summary The <c>}</c>.
-                kinds CloseBrace
-                read ChildTokens[0]
+            <AbstractNode Name="LidSyntax" Base="SyntaxNode">
+              <TypeComment><summary>A lid.</summary></TypeComment>
+              <Field Name="Keyword" Type="SyntaxToken">
+                <PropertyComment><summary>The word.</summary></PropertyComment>
+                <Kind Name="Directive"/>
+                <Read><![CDATA[ChildTokens[0]]]></Read>
+              </Field>
+            </AbstractNode>
+            <Node Name="ShutLidSyntax" Base="LidSyntax" Layout="CloseBraceToken Keyword">
+              <Kind Name="ShutLid"/>
+              <TypeComment><summary>A shut lid.</summary></TypeComment>
+              <Field Name="CloseBraceToken" Type="SyntaxToken">
+                <PropertyComment><summary>The <c>}</c>.</summary></PropertyComment>
+                <Kind Name="CloseBrace"/>
+                <Read><![CDATA[ChildTokens[0]]]></Read>
+              </Field>
+            </Node>
             """;
         var shut = Files(family)["src/Norristown.Core/Syntax/Nodes/Generated/ShutLidSyntax.cs"];
         Assert.Contains("public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);", shut);
@@ -142,40 +151,47 @@ public sealed class SyntaxGeneratorTests
     public void AKindConvertsWithTheFamilyThatWritesItsSlots()
     {
         const string family = """
-            node LidSyntax : SyntaxNode
-              abstract
-              summary A lid.
-              slot Keyword : SyntaxToken
-                summary The word.
-                kinds Directive
-                read ChildTokens[0]
-            node ShutLidSyntax : LidSyntax
-              kind ShutLid
-              converted
-              summary A shut lid.
+            <AbstractNode Name="LidSyntax" Base="SyntaxNode">
+              <TypeComment><summary>A lid.</summary></TypeComment>
+              <Field Name="Keyword" Type="SyntaxToken">
+                <PropertyComment><summary>The word.</summary></PropertyComment>
+                <Kind Name="Directive"/>
+                <Read><![CDATA[ChildTokens[0]]]></Read>
+              </Field>
+            </AbstractNode>
+            <Node Name="ShutLidSyntax" Base="LidSyntax" Converted="true">
+              <Kind Name="ShutLid"/>
+              <TypeComment><summary>A shut lid.</summary></TypeComment>
+            </Node>
             """;
         var alone = Assert.Throws<InvalidOperationException>(() => Files(family));
         Assert.Contains("LidSyntax", alone.Message);
 
         const string half = """
-            node LidSyntax : SyntaxNode
-              abstract
-              converted
-              summary A lid.
-              slot Keyword : SyntaxToken
-                summary The word.
-                kinds Directive
-                read ChildTokens[0]
-            node ShutLidSyntax : LidSyntax
-              kind ShutLid
-              summary A shut lid.
+            <AbstractNode Name="LidSyntax" Base="SyntaxNode" Converted="true">
+              <TypeComment><summary>A lid.</summary></TypeComment>
+              <Field Name="Keyword" Type="SyntaxToken">
+                <PropertyComment><summary>The word.</summary></PropertyComment>
+                <Kind Name="Directive"/>
+                <Read><![CDATA[ChildTokens[0]]]></Read>
+              </Field>
+            </AbstractNode>
+            <Node Name="ShutLidSyntax" Base="LidSyntax">
+              <Kind Name="ShutLid"/>
+              <TypeComment><summary>A shut lid.</summary></TypeComment>
+            </Node>
             """;
         var behind = Assert.Throws<InvalidOperationException>(() => Files(half));
         Assert.Contains("ShutLidSyntax", behind.Message);
     }
 
-    private static SortedDictionary<string, string> Files(string table) =>
-        SyntaxWriter.Files(NodeTable.Read(table));
+    /// <summary>The files these nodes make; they are written without the <c>Tree</c> around them.</summary>
+    private static SortedDictionary<string, string> Files(string nodes) =>
+        SyntaxWriter.Files(NodeTable.Read($"<Tree>\n{nodes}\n</Tree>"));
+
+    /// <summary>The table with <paramref name="node"/> converted, which is the one word it takes.</summary>
+    private static string Converted(string table, string node) =>
+        table.Replace($"Name=\"{node}\"", $"Name=\"{node}\" Converted=\"true\"");
 
     private static string Red(string table) =>
         Files(table)["src/Norristown.Core/Syntax/Nodes/Generated/WidgetSyntax.cs"];

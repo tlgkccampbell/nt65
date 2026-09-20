@@ -322,14 +322,14 @@ Done so far: steps 1, 2, 3, 4, 5 and 6. What they decided, where it differs from
   9's to settle.
 - `BrokenSourceTests` is the broken-source sweep (about two seconds); `BrokenLines` holds
   the cut-line variants it shares with `TypedNodeTests`.
-- **The description is a plain-text table**, `src/Norristown.Core/Syntax/Syntax.nodes`: a block
-  per node in the order the files list, a line per key, nesting by indentation, and its own
-  header for the format. A node says its base, its kinds, its summary and its markers
-  (`abstract`, `internal`, `handwritten`, `partial`); a `slot` says a name, the property's type
-  — whose trailing `?` is the whole of what optional means while nothing is invented — its
-  summary, and how it is read. A property that is not a piece of the node is a `member`. Two
-  people adding kinds touch two blocks. Generated files sit in a `Generated` folder beside the
-  hand-written ones they belong with.
+- **The description is `src/Norristown.Core/Syntax/Syntax.xml`**, modelled on Roslyn's own
+  `Syntax.xml`: a `<Node>` or `<AbstractNode>` per node in the order the files list, with its
+  own header for what the elements and attributes mean. A node says its `Base`, its `<Kind>`s,
+  its `<TypeComment>` and its markers (`Internal`, `HandWritten`, `Partial`); a `<Field>` says a
+  name, the property's type — whose `Optional` is the whole of what optional means while nothing
+  is invented — its `<PropertyComment>`, and how it is read. A property that is not a piece of
+  the node is a `<Member>`. Two people adding kinds touch two blocks. Generated files sit in a
+  `Generated` folder beside the hand-written ones they belong with.
 - **The generator is `tools/Norristown.SyntaxGenerator`, and references nothing**, because the
   order of work from step 5 on is: change the table, regenerate, fix what the compiler then
   points at. A generator that needed `Norristown.Core` to build could not be run in the state
