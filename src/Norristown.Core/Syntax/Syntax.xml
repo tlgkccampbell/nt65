@@ -420,7 +420,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapEntrySyntax" Base="StatementSyntax">
+  <Node Name="CharmapEntrySyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="CharmapEntry"/>
     <TypeComment>
       <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
@@ -429,33 +429,28 @@
       <PropertyComment>
         <summary>The character, or the first of the range.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>..</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.DotDot)]]></Read>
     </Field>
     <Field Name="Last" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The last character of the range, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[DotDotToken is null ? null : (ExpressionSyntax)ChildNodes[1]]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The value the first character maps to.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[DotDotToken is null ? 1 : 2]]]></Read>
     </Field>
   </Node>
 

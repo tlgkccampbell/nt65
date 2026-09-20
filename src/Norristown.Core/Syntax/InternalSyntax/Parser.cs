@@ -575,19 +575,16 @@ internal sealed class Parser
     /// <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
     private GreenNode ParseCharmapEntry()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(ParseExpression());
+        var first = ParseExpression();
+        GreenToken? dotDot = null;
+        GreenNode? last = null;
         if (Kind == SyntaxKind.DotDot)
         {
-            children.Add(Advance());
-            children.Add(ParseExpression());
+            dotDot = Advance();
+            last = ParseExpression();
         }
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
-            Report("expected `=`");
-        children.Add(ParseExpression());
-        return Finish(SyntaxKind.CharmapEntry, children.ToImmutable());
+        var equals = Expect(SyntaxKind.Equals, "expected `=`", once: false);
+        return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 
     /// <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
