@@ -51,7 +51,11 @@ internal static class SyntaxDump
                 builder.Append(' ').Append(Escape(token.Text));
             builder.Append('\n');
             for (var i = 0; i < node.SlotCount; i++)
-                Walk(node.GetSlot(i), depth + 1);
+            {
+                // A slot holding nothing is a piece that was not written, and writes nothing.
+                if (node.GetSlot(i) is { } slot)
+                    Walk(slot, depth + 1);
+            }
         }
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {

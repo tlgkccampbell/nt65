@@ -18,7 +18,7 @@ public sealed class GreenList(ImmutableArray<GreenNode> children)
     public override int SlotCount => Children.Length;
 
     /// <inheritdoc/>
-    public override GreenNode GetSlot(int index) => Children[index];
+    public override GreenNode? GetSlot(int index) => Children[index];
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>
         new SyntaxListNode(tree, parent, this, position);

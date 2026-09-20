@@ -5,9 +5,14 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A node's children, nodes and tokens together, in source order: one child per slot of the
-/// green node. The list itself is a view over the node, so asking for it costs nothing; the
-/// red node of a child that is a node is the one the parent keeps, made when first asked for.
+/// A node's children, nodes and tokens together, in source order. The list itself is a view
+/// over the node, so asking for it costs nothing; the red node of a child that is a node is
+/// the one the parent keeps, made when first asked for.
+/// <para>
+/// A slot holding nothing shows no child, and a slot holding a list shows the list's items and
+/// separators rather than the node over them, as Roslyn's does: an analyzer walking a node's
+/// children never meets a list node.
+/// </para>
 /// </summary>
 public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
 {
@@ -16,7 +21,21 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
     internal ChildSyntaxList(SyntaxNode node) => this.node = node;
 
     /// <summary>How many children the node has.</summary>
-    public int Count => node?.Green.SlotCount ?? 0;
+    public int Count
+    {
+        get
+        {
+            if (node is null)
+                return 0;
+            var count = 0;
+            for (var i = 0; i < node.Green.SlotCount; i++)
+            {
+                if (node.Green.GetSlot(i) is { } slot)
+                    count += SyntaxNode.IsList(slot) ? new ChildSyntaxList(node.SlotRed(i)!).Count : 1;
+            }
+            return count;
+        }
+    }
 
     /// <summary>The child at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
     public SyntaxNodeOrToken this[int index]
@@ -24,20 +43,12 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         get
         {
             ArgumentOutOfRangeException.ThrowIfNegative(index);
-            ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
-
-            var green = node!.Green;
-            int position = node.Position, nodes = 0;
-            for (var i = 0; i < index; i++)
+            foreach (var child in this)
             {
-                var earlier = green.GetSlot(i);
-                if (earlier is not GreenToken)
-                    nodes++;
-                position += earlier.FullWidth;
+                if (index-- == 0)
+                    return child;
             }
-            return green.GetSlot(index) is GreenToken token
-                ? new SyntaxNodeOrToken(new SyntaxToken(node, token, position))
-                : new SyntaxNodeOrToken(node.ChildNodes[nodes]);
+            throw new ArgumentOutOfRangeException(nameof(index));
         }
     }
 
@@ -58,13 +69,24 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         if (node is null)
             yield break;
         var green = node.Green;
-        int position = node.Position, nodes = 0;
+        var position = node.Position;
         for (var i = 0; i < green.SlotCount; i++)
         {
-            var slot = green.GetSlot(i);
-            yield return slot is GreenToken token
-                ? new SyntaxNodeOrToken(new SyntaxToken(node, token, position))
-                : new SyntaxNodeOrToken(node.ChildNodes[nodes++]);
+            if (green.GetSlot(i) is not { } slot)
+                continue;
+            if (slot is GreenToken token)
+            {
+                yield return new SyntaxNodeOrToken(new SyntaxToken(node.ChildParent, token, position));
+            }
+            else if (SyntaxNode.IsList(slot))
+            {
+                foreach (var inner in new ChildSyntaxList(node.SlotRed(i)!))
+                    yield return inner;
+            }
+            else
+            {
+                yield return new SyntaxNodeOrToken(node.SlotRed(i)!);
+            }
             position += slot.FullWidth;
         }
     }

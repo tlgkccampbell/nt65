@@ -18,5 +18,5 @@ public sealed partial class GreenSyntax(SyntaxKind kind, ImmutableArray<GreenNod
     public override int SlotCount => Children.Length;
 
     /// <inheritdoc/>
-    public override GreenNode GetSlot(int index) => Children[index];
+    public override GreenNode? GetSlot(int index) => Children[index];
 }

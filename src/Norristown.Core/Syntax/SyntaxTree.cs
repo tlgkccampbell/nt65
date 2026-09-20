@@ -185,7 +185,7 @@ public sealed class SyntaxTree
             if (node.GetSlot(i) is GreenBlock block)
                 ParseLines(block, Within(context, block.BlockKind), parsed, ref line);
             else
-                parsed[line++] = ((GreenLine)node.GetSlot(i)).Parse(context);
+                parsed[line++] = ((GreenLine)node.GetSlot(i)!).Parse(context);
         }
     }
 

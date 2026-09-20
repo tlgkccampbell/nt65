@@ -13,7 +13,7 @@ public sealed class GreenFile(ImmutableArray<GreenNode> children) : GreenNode(Sy
     public override int SlotCount => Children.Length;
 
     /// <inheritdoc/>
-    public override GreenNode GetSlot(int index) => Children[index];
+    public override GreenNode? GetSlot(int index) => Children[index];
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>
         new FileSyntax(tree, parent, this, position);

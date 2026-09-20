@@ -20,8 +20,17 @@ public abstract class GreenNode(SyntaxKind kind, int fullWidth)
     /// <summary>How many children the node has.</summary>
     public abstract int SlotCount { get; }
 
-    /// <summary>The child at <paramref name="index"/>, from 0 to <see cref="SlotCount"/> − 1.</summary>
-    public abstract GreenNode GetSlot(int index);
+    /// <summary>
+    /// Whether the node stands where one belongs that the source does not have: a missing token,
+    /// or the empty expression the parser leaves where it could read none.
+    /// </summary>
+    public virtual bool IsMissing => false;
+
+    /// <summary>
+    /// The child at <paramref name="index"/>, from 0 to <see cref="SlotCount"/> − 1, or null for
+    /// a slot the source leaves out: an optional piece not written, or a list with no items.
+    /// </summary>
+    public abstract GreenNode? GetSlot(int index);
 
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString()
@@ -37,7 +46,7 @@ public abstract class GreenNode(SyntaxKind kind, int fullWidth)
     internal virtual void WriteTo(StringBuilder builder)
     {
         for (var i = 0; i < SlotCount; i++)
-            GetSlot(i).WriteTo(builder);
+            GetSlot(i)?.WriteTo(builder);
     }
 
     /// <summary>The total width of <paramref name="nodes"/>, for a parent's own width.</summary>

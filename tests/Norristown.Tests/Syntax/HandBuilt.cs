@@ -28,13 +28,12 @@ internal static class HandBuilt
 
     /// <summary>The list in slot <paramref name="slot"/> of <paramref name="parent"/>.</summary>
     public static SyntaxList<T> List<T>(SyntaxNode parent, int slot) where T : SyntaxNode =>
-        new(parent.ChildNodesAndTokens()[slot].AsNode());
+        new(parent.SlotRed(slot));
 
     /// <summary>The separated list in slot <paramref name="slot"/> of <paramref name="parent"/>.</summary>
     public static SeparatedSyntaxList<T> SeparatedList<T>(SyntaxNode parent, int slot) where T : SyntaxNode =>
-        new(parent.ChildNodesAndTokens()[slot].AsNode());
+        new(parent.SlotRed(slot));
 
     /// <summary>The token list in slot <paramref name="slot"/> of <paramref name="parent"/>.</summary>
-    public static SyntaxTokenList TokenList(SyntaxNode parent, int slot) =>
-        new(parent.ChildNodesAndTokens()[slot].AsNode());
+    public static SyntaxTokenList TokenList(SyntaxNode parent, int slot) => new(parent.SlotRed(slot));
 }

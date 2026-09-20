@@ -44,7 +44,7 @@ public sealed class GreenSeparatedList : GreenNode
     public GreenToken Separator(int index) => (GreenToken)Children[(index * 2) + 1];
 
     /// <inheritdoc/>
-    public override GreenNode GetSlot(int index) => Children[index];
+    public override GreenNode? GetSlot(int index) => Children[index];
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>
         new SyntaxListNode(tree, parent, this, position);

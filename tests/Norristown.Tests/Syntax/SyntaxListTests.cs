@@ -60,10 +60,12 @@ public sealed class SyntaxListTests
         Assert.Equal(["a", "b"], items.Select(item => item.GetText()));
         Assert.Equal(new TextSpan(3, 1), items[1].Span);
 
-        // The list's own node covers its items, and an item's red node is made once and kept.
-        Assert.Equal(new TextSpan(1, 3), parent.ChildNodes[0].Span);
+        // The list's own node covers its items and is where their red nodes are kept, but the
+        // node holding the list shows the items themselves and is their parent.
+        Assert.Equal(new TextSpan(1, 3), parent.SlotRed(1)!.Span);
         Assert.Same(items[0], items[0]);
-        Assert.Same(items[0], parent.ChildNodes[0].ChildNodes[0]);
+        Assert.Equal([items[0], items[1]], parent.ChildNodes);
+        Assert.Same(parent, items[0].Parent);
     }
 
     [Fact]
@@ -104,7 +106,8 @@ public sealed class SyntaxListTests
         Assert.Equal(0, HandBuilt.TokenList(parent, 1).Count);
 
         // The empty list sits where its items would have been written, and takes up nothing.
-        Assert.Equal(new TextSpan(1, 0), parent.ChildNodes[0].Span);
+        Assert.Equal(new TextSpan(1, 0), parent.SlotRed(1)!.Span);
+        Assert.Empty(parent.ChildNodes);
         Assert.Equal("()", parent.ToFullString());
     }
 

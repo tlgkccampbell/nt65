@@ -55,7 +55,7 @@ public sealed class GreenLine : GreenNode
     }
 
     /// <inheritdoc/>
-    public override GreenNode GetSlot(int index) => Tokens[index];
+    public override GreenNode? GetSlot(int index) => Tokens[index];
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>
         new LineSyntax(tree, parent, this, position);

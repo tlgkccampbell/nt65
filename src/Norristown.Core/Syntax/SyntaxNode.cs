@@ -18,6 +18,7 @@ public abstract class SyntaxNode
 {
     private ImmutableArray<SyntaxNode> childNodes;
     private ImmutableArray<SyntaxToken> childTokens;
+    private SyntaxNode?[]? slots;
 
     private protected SyntaxNode(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
     {
@@ -74,7 +75,7 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>Tokens directly under this node, such as a line's.</summary>
+    /// <summary>Tokens directly under this node, such as a line's, and the separators of its lists.</summary>
     public ImmutableArray<SyntaxToken> ChildTokens
     {
         get
@@ -85,9 +86,12 @@ public abstract class SyntaxNode
                 var position = Position;
                 for (var i = 0; i < Green.SlotCount; i++)
                 {
-                    var slot = Green.GetSlot(i);
+                    if (Green.GetSlot(i) is not { } slot)
+                        continue;
                     if (slot is GreenToken token)
-                        builder.Add(new SyntaxToken(this, token, position));
+                        builder.Add(new SyntaxToken(ChildParent, token, position));
+                    else if (IsList(slot))
+                        builder.AddRange(SlotRed(i)!.ChildTokens);
                     position += slot.FullWidth;
                 }
                 ImmutableInterlocked.InterlockedInitialize(ref childTokens, builder.ToImmutable());
@@ -95,6 +99,13 @@ public abstract class SyntaxNode
             return childTokens;
         }
     }
+
+    /// <summary>
+    /// The node a child of this one hangs from. It is this node, except on the internal node
+    /// over a list, whose items and separators belong to the node that holds the list: the list
+    /// node keeps their red nodes and is otherwise invisible.
+    /// </summary>
+    internal virtual SyntaxNode ChildParent => this;
 
     /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
     /// <param name="visitor">The visitor to hand it to.</param>
@@ -140,20 +151,81 @@ public abstract class SyntaxNode
     /// <summary>The node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
 
-    /// <summary>The red node for each child that is not a token, in source order.</summary>
+    /// <summary>Where slot <paramref name="index"/> starts in the file's text, trivia included.</summary>
+    internal int SlotPosition(int index)
+    {
+        var position = Position;
+        for (var i = 0; i < index; i++)
+            position += Green.GetSlot(i)?.FullWidth ?? 0;
+        return position;
+    }
+
+    /// <summary>
+    /// The red node for slot <paramref name="index"/>, made on first use and kept, or null for
+    /// a slot that holds a token or nothing.
+    /// </summary>
+    internal SyntaxNode? SlotRed(int index)
+    {
+        if (Green.GetSlot(index) is not { } green || green is GreenToken)
+            return null;
+        var cache = slots;
+        if (cache is null)
+        {
+            var made = new SyntaxNode?[Green.SlotCount];
+            cache = Interlocked.CompareExchange(ref slots, made, null) ?? made;
+        }
+        if (cache[index] is { } red)
+            return red;
+        var created = green.CreateRed(Tree, ChildParent, SlotPosition(index));
+        return Interlocked.CompareExchange(ref cache[index], created, null) ?? created;
+    }
+
+    /// <summary>Whether <paramref name="node"/> is the node over a list, which a parent shows through.</summary>
+    internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
+
+    /// <summary>
+    /// The red node for each child that is not a token, in source order. A slot holding a list
+    /// shows its items here rather than itself, as Roslyn's does, so nothing above the syntax
+    /// layer ever meets the node over a list.
+    /// </summary>
     private protected virtual ImmutableArray<SyntaxNode> CreateChildNodes()
     {
         var builder = ImmutableArray.CreateBuilder<SyntaxNode>();
-        var position = Position;
         for (var i = 0; i < Green.SlotCount; i++)
         {
-            var slot = Green.GetSlot(i);
-            if (slot is not GreenToken)
-                builder.Add(slot.CreateRed(Tree, this, position));
-            position += slot.FullWidth;
+            if (Green.GetSlot(i) is not { } slot || slot is GreenToken)
+                continue;
+            if (IsList(slot))
+                builder.AddRange(SlotRed(i)!.ChildNodes);
+            else
+                builder.Add(SlotRed(i)!);
         }
         return builder.ToImmutable();
     }
+
+    /// <summary>The token in slot <paramref name="index"/>, which a required slot always holds.</summary>
+    private protected SyntaxToken SlotToken(int index) =>
+        new(ChildParent, (GreenToken)Green.GetSlot(index)!, SlotPosition(index));
+
+    /// <summary>The token in slot <paramref name="index"/>, or null when the slot is empty.</summary>
+    private protected SyntaxToken? SlotTokenOrNull(int index) =>
+        Green.GetSlot(index) is GreenToken token ? new SyntaxToken(ChildParent, token, SlotPosition(index)) : null;
+
+    /// <summary>The node in slot <paramref name="index"/>, which a required slot always holds.</summary>
+    private protected T SlotNode<T>(int index) where T : SyntaxNode => (T)SlotRed(index)!;
+
+    /// <summary>The node in slot <paramref name="index"/>, or null when the slot is empty.</summary>
+    private protected T? SlotNodeOrNull<T>(int index) where T : SyntaxNode => SlotRed(index) as T;
+
+    /// <summary>The items of the list in slot <paramref name="index"/>; an empty slot is an empty list.</summary>
+    private protected SyntaxList<T> SlotList<T>(int index) where T : SyntaxNode => new(SlotRed(index));
+
+    /// <summary>The items and separators of the list in slot <paramref name="index"/>.</summary>
+    private protected SeparatedSyntaxList<T> SlotSeparatedList<T>(int index) where T : SyntaxNode =>
+        new(SlotRed(index));
+
+    /// <summary>The tokens of the list in slot <paramref name="index"/>.</summary>
+    private protected SyntaxTokenList SlotTokenList(int index) => new(SlotRed(index));
 
     /// <summary>The token at <paramref name="index"/> among <see cref="ChildTokens"/>, or null when there are not that many.</summary>
     private protected SyntaxToken? TokenAt(int index) => index < ChildTokens.Length ? ChildTokens[index] : null;
@@ -205,13 +277,14 @@ public abstract class SyntaxNode
 
     /// <summary>The child written straight after <paramref name="token"/> when it is a node, or null.</summary>
     private protected SyntaxNode? NodeAfter(SyntaxToken? token) =>
-        Locate(token) is var (slot, nodes, _) && slot + 1 < Green.SlotCount && Green.GetSlot(slot + 1) is not GreenToken
+        Locate(token) is var (slot, nodes, _) && slot + 1 < Green.SlotCount
+        && Green.GetSlot(slot + 1) is not (null or GreenToken)
             ? ChildNodes[nodes]
             : null;
 
     /// <summary>The child written straight before <paramref name="token"/> when it is a node, or null.</summary>
     private protected SyntaxNode? NodeBefore(SyntaxToken? token) =>
-        Locate(token) is var (slot, nodes, _) && slot > 0 && Green.GetSlot(slot - 1) is not GreenToken
+        Locate(token) is var (slot, nodes, _) && slot > 0 && Green.GetSlot(slot - 1) is not (null or GreenToken)
             ? ChildNodes[nodes - 1]
             : null;
 
@@ -238,7 +311,8 @@ public abstract class SyntaxNode
         }
         for (var i = 0; i < node.SlotCount; i++)
         {
-            var slot = node.GetSlot(i);
+            if (node.GetSlot(i) is not { } slot)
+                continue;
             Measure(slot, position, ref start, ref end);
             position += slot.FullWidth;
         }
@@ -255,7 +329,8 @@ public abstract class SyntaxNode
         int nodes = 0, tokens = 0, position = Position;
         for (var i = 0; i < Green.SlotCount; i++)
         {
-            var slot = Green.GetSlot(i);
+            if (Green.GetSlot(i) is not { } slot)
+                continue;
             if (slot is GreenToken)
             {
                 if (position == sought.Position && ReferenceEquals(slot, sought.Green))

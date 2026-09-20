@@ -46,7 +46,7 @@ public sealed class GreenToken : GreenNode
     /// Whether the token stands where one belongs that the source does not have. It has no
     /// text and no trivia, so it is nowhere in the file's text and takes up no width.
     /// </summary>
-    public bool IsMissing { get; }
+    public override bool IsMissing { get; }
 
     /// <summary>Width of the leading trivia, which is where the token's own text starts.</summary>
     public int LeadingWidth => TriviaWidth(LeadingTrivia);
@@ -55,7 +55,7 @@ public sealed class GreenToken : GreenNode
     public override int SlotCount => 0;
 
     /// <summary>A token has no children, so this always throws.</summary>
-    public override GreenNode GetSlot(int index) => throw new ArgumentOutOfRangeException(nameof(index));
+    public override GreenNode? GetSlot(int index) => throw new ArgumentOutOfRangeException(nameof(index));
 
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;

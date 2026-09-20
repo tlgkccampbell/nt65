@@ -6,6 +6,10 @@ namespace Norristown.Tests.Syntax;
 
 public sealed class ChildSyntaxListTests
 {
+    /// <summary>
+    /// A slot holding a list shows the list's items and separators, not the node over them, so
+    /// a walk of a node's children never meets one.
+    /// </summary>
     [Fact]
     public void ChildrenAreNodesAndTokensTogether()
     {
@@ -14,8 +18,12 @@ public sealed class ChildSyntaxListTests
             new GreenSeparatedList([HandBuilt.Name(tokens[1]), tokens[2], HandBuilt.Name(tokens[3])]), tokens[4]);
 
         var children = arguments.ChildNodesAndTokens();
-        Assert.Equal(3, children.Count);
-        Assert.Equal([SyntaxKind.OpenParen, SyntaxKind.SeparatedList, SyntaxKind.CloseParen],
+        Assert.Equal(5, children.Count);
+        Assert.Equal(
+            [
+                SyntaxKind.OpenParen, SyntaxKind.NameExpression, SyntaxKind.Comma,
+                SyntaxKind.NameExpression, SyntaxKind.CloseParen,
+            ],
             children.Select(child => child.Kind));
         Assert.True(children[0].IsToken);
         Assert.False(children[0].IsNode);
@@ -23,15 +31,16 @@ public sealed class ChildSyntaxListTests
         Assert.Null(children[0].AsNode());
         Assert.True(children[1].IsNode);
         Assert.False(children[1].IsToken);
-        Assert.Equal("a, b", children[1].ToFullString());
-        Assert.Equal(new TextSpan(1, 4), children[1].Span);
+        Assert.Equal("a", children[1].ToFullString());
+        Assert.Equal(new TextSpan(1, 1), children[1].Span);
         Assert.Same(arguments, children[1].AsNode()!.Parent);
         Assert.Same(arguments, children[2].AsToken().Parent);
+        Assert.Same(arguments, children[4].AsToken().Parent);
 
-        // A child that is a node is the red node the parent keeps, not a new one each time.
+        // A child that is a node is the red node the list keeps, not a new one each time.
         Assert.Same(arguments.ChildNodes[0], children[1].AsNode());
         Assert.Same(children[1].AsNode(), arguments.ChildNodesAndTokens()[1].AsNode());
-        Assert.Throws<ArgumentOutOfRangeException>(() => { _ = children[3]; });
+        Assert.Throws<ArgumentOutOfRangeException>(() => { _ = children[5]; });
         Assert.Throws<ArgumentOutOfRangeException>(() => { _ = children[-1]; });
     }
 
