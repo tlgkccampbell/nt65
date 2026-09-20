@@ -34,9 +34,6 @@ public abstract class SyntaxNode
     /// <summary>The node containing this one, or null for the root.</summary>
     public SyntaxNode? Parent { get; }
 
-    /// <summary>The green node this one wraps.</summary>
-    public GreenNode Green { get; }
-
     /// <summary>Where the node starts in the file's text, trivia included.</summary>
     public int Position { get; }
 
@@ -67,7 +64,7 @@ public abstract class SyntaxNode
     /// <summary>
     /// Whether this node or anything under it carries a diagnostic, answered without walking.
     /// </summary>
-    public bool ContainsDiagnostics => Green.ContainsDiagnostics;
+    public virtual bool ContainsDiagnostics => Green.ContainsDiagnostics;
 
     /// <summary>Child lines and blocks of a file or block, a line's statement, or the nodes a statement is made of.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
@@ -105,6 +102,15 @@ public abstract class SyntaxNode
         }
     }
 
+    /// <summary>The green node this one wraps.</summary>
+    internal GreenNode Green { get; }
+
+    /// <summary>
+    /// The 0-based line this node ends on, which for a node written on one line is
+    /// <see cref="LineIndex"/> and for a block or a file is the last line under it.
+    /// </summary>
+    internal int LastLineIndex => Tree.GetLineIndex(Math.Max(Position, FullSpan.End - 1));
+
     /// <summary>
     /// The node a child of this one hangs from. It is this node, except on the internal node
     /// over a list, whose items and separators belong to the node that holds the list: the list
@@ -134,18 +140,19 @@ public abstract class SyntaxNode
     public ChildSyntaxList ChildNodesAndTokens() => new(this);
 
     /// <summary>
-    /// The syntax diagnostics of this node and everything under it, in source order. Nothing is
-    /// walked where <see cref="ContainsDiagnostics"/> says there is nothing to find.
+    /// The syntax diagnostics of this node and everything under it, in the order the pieces of it
+    /// hold them. Nothing is walked where <see cref="ContainsDiagnostics"/> says there is nothing
+    /// to find.
     /// <para>
-    /// A line, a block and a file hold a line's tokens rather than what they parse to, so what
-    /// they answer for is the lexical errors on those tokens; a statement and everything under it
-    /// answers for itself. <see cref="SyntaxTree.Diagnostics"/> is the file's whole answer.
+    /// A line answers for everything written on it, and a block and a file for every line under
+    /// them, the errors about their braces included, so the root's answer is the whole file's and
+    /// is the same list as <see cref="SyntaxTree.Diagnostics"/>.
     /// </para>
     /// </summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
     {
         var result = new List<Diagnostic>();
-        Tree.Collect(Green, Position, result);
+        CollectDiagnostics(result);
         return result;
     }
 
@@ -366,6 +373,16 @@ public abstract class SyntaxNode
 
     /// <summary>Whether <paramref name="node"/> is the node over a list, which a parent shows through.</summary>
     internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
+
+    /// <summary>
+    /// Adds this node's diagnostics to <paramref name="result"/>. A green node holds what it and
+    /// its children carry, which is the whole answer for everything but a line, a block and a
+    /// file: those hold the tokens of a line rather than what the line parses to, and each
+    /// overrides this to answer over the lines it is written over.
+    /// </summary>
+    /// <param name="result">The list to add to.</param>
+    private protected virtual void CollectDiagnostics(List<Diagnostic> result) =>
+        Tree.Collect(Green, Position, result);
 
     /// <summary>
     /// The red node for each child that is not a token, in source order. A slot holding a list

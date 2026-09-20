@@ -21,17 +21,14 @@ public sealed partial class LineSyntax : SyntaxNode
     {
     }
 
-    /// <summary>The green line this one wraps.</summary>
-    public new GreenLine Green => (GreenLine)base.Green;
-
     /// <summary>What kind of line this is, from its tokens alone.</summary>
-    public LineKind LineKind => Green.LineKind;
+    public LineKind LineKind => GreenLine.LineKind;
 
     /// <summary>
     /// For a line that opens a block, the kind of block; <see cref="BlockKind.Region"/> for a
     /// <c>.segment NAME</c> region line; otherwise <see cref="BlockKind.None"/>.
     /// </summary>
-    public BlockKind OpensBlockKind => Green.OpensBlockKind;
+    public BlockKind OpensBlockKind => GreenLine.OpensBlockKind;
 
     /// <summary>
     /// The <c>.export</c> written before a declaration, which exports what the line declares, or
@@ -63,6 +60,14 @@ public sealed partial class LineSyntax : SyntaxNode
     public ImmutableArray<SyntaxToken> Tokens => ChildTokens;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A green line holds the tokens the lexer read and not the pieces they parse to, so the
+    /// line's own answer is both of theirs, and the tree works it out for every line as it is
+    /// built rather than each line working it out again.
+    /// </remarks>
+    public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LineIndex);
+
+    /// <inheritdoc/>
     internal override ImmutableArray<SyntaxNodeOrToken>? RedChildren
     {
         get
@@ -82,8 +87,14 @@ public sealed partial class LineSyntax : SyntaxNode
         }
     }
 
+    private GreenLine GreenLine => (GreenLine)Green;
+
     private Parser.Result Parsed => Tree.Parsed(LineIndex);
 
     private protected override ImmutableArray<SyntaxNode> CreateChildNodes() =>
         SkippedTokens is { } left ? [Statement, left] : [Statement];
+
+    /// <inheritdoc/>
+    private protected override void CollectDiagnostics(List<Diagnostic> result) =>
+        Tree.CollectLines(LineIndex, LineIndex, result);
 }

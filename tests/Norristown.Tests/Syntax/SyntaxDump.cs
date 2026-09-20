@@ -1,8 +1,6 @@
 using System.Text;
 using Norristown.Syntax;
 using GreenLine = Norristown.Syntax.InternalSyntax.GreenLine;
-using GreenNode = Norristown.Syntax.InternalSyntax.GreenNode;
-using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 
 namespace Norristown.Tests.Syntax;
 
@@ -38,40 +36,37 @@ internal static class SyntaxDump
     }
 
     /// <summary>
-    /// The statement trees, one node per row, indented by depth: <c>InstructionStatement</c>,
-    /// then <c>Mnemonic "lda"</c> for each token. The pieces the line holds rather than the
-    /// statement — the <c>.export</c> before a declaration and whatever the statement could not
-    /// take — are written with it; line breaks are left out, since every line ends with one.
+    /// The statement trees, one node or token per row, indented by depth:
+    /// <c>InstructionStatement</c>, then <c>Mnemonic "lda"</c> for each token. The pieces the line
+    /// holds rather than the statement — the <c>.export</c> before a declaration and whatever the
+    /// statement could not take — are written with it; line breaks are left out, since every line
+    /// ends with one.
     /// </summary>
     public static string Statements(SyntaxTree tree)
     {
         var builder = new StringBuilder();
-        void Walk(GreenNode node, int depth)
+        void Walk(SyntaxNodeOrToken piece, int depth)
         {
-            builder.Append(' ', depth * 2).Append(node.Kind);
-            if (node is GreenToken token)
-                builder.Append(' ').Append(Escape(token.Text));
-            builder.Append('\n');
-            for (var i = 0; i < node.SlotCount; i++)
+            builder.Append(' ', depth * 2).Append(piece.Kind);
+            if (piece.AsNode() is not { } node)
             {
-                // A slot holding nothing is a piece that was not written, and writes nothing.
-                if (node.GetSlot(i) is { } slot)
-                    Walk(slot, depth + 1);
+                builder.Append(' ').Append(Escape(piece.AsToken().Text)).Append('\n');
+                return;
             }
+            builder.Append('\n');
+            foreach (var child in node.ChildNodesAndTokens())
+                Walk(child, depth + 1);
         }
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
-            if (line.ExportKeyword is { } export)
-                Walk(export.Green, 0);
-            Walk(line.Statement.Green, 0);
-            if (line.SkippedTokens is { } skipped)
-                Walk(skipped.Green, 0);
+            foreach (var piece in line.ChildNodesAndTokens())
+            {
+                if (piece.Kind != SyntaxKind.EndOfLine)
+                    Walk(piece, 0);
+            }
         }
         return builder.ToString();
     }
-
-    /// <summary>One line's statement tree, for a unit test's assertion.</summary>
-    public static string Statement(string line) => Statements(SyntaxTree.Parse("test.nt65", line)).TrimEnd('\n');
 
     /// <summary>
     /// A statement on one line, as <c>Kind(child child)</c> with tokens written as their
@@ -123,18 +118,23 @@ internal static class SyntaxDump
     public static string FoldingRanges(SyntaxTree tree) =>
         string.Concat(Folding.Build(tree).Select(r => $"{r.StartLine + 1}-{r.EndLine + 1}\n"));
 
-    /// <summary>Everything: every token with its trivia and error, line kinds, blocks, statements and diagnostics.</summary>
+    /// <summary>
+    /// Everything: every token with its trivia and what it reports, line kinds, blocks, statements
+    /// and diagnostics. Two trees of the same text dump the same, however each of them was built,
+    /// which is what the incremental tests compare.
+    /// </summary>
     public static string Full(SyntaxTree tree)
     {
         var builder = new StringBuilder();
-        foreach (var line in tree.Lines)
+        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
-            builder.Append($"{line.LineKind} {line.BraceValue} {line.OpensBlockKind}:");
+            builder.Append($"{line.LineKind} {line.OpensBlockKind}:");
             foreach (var t in line.Tokens)
             {
                 builder.Append($" [{string.Concat(t.LeadingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
                 builder.Append($"{t.Kind}{Escape(t.Text)}{string.Concat(t.TrailingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
-                builder.Append(string.Concat(t.Diagnostics.Select(d => $" !{d.Offset},{d.Width} {d.Message}")));
+                builder.Append(string.Concat(t.GetDiagnostics().Select(
+                    d => $" !{d.Span.StartColumn}-{d.Span.EndColumn} {d.Message}")));
                 builder.Append(']');
             }
             builder.Append('\n');

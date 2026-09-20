@@ -10,7 +10,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <see cref="SyntaxKind.EndOfLine"/> token, which carries the trivia of a line with no
 /// other tokens.
 /// </summary>
-public static class Lexer
+internal static class Lexer
 {
     /// <summary>Lexes <paramref name="line"/>, which holds at most one line break, at its end.</summary>
     public static GreenLine LexLine(ReadOnlySpan<char> line)

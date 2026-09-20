@@ -7,7 +7,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// one. A block closed by a continuation line (<c>} .else {</c>) has no closer: that line
 /// is the opener of the next block.
 /// </summary>
-public sealed class GreenBlock : GreenNode
+internal sealed class GreenBlock : GreenNode
 {
     internal GreenBlock(ImmutableArray<GreenNode> children, bool hasCloser) : base(SyntaxKind.Block, SumWidths(children))
     {

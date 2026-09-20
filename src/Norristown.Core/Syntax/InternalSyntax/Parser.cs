@@ -1770,7 +1770,7 @@ internal sealed class Parser
             return ParseUnary();
 
         var left = ParseBinary(level - 1);
-        while (SyntaxFacts.BinaryPrecedence(Current) == level)
+        while (SyntaxFacts.BinaryPrecedence(Current.Kind, Current.Text) == level)
         {
             var operatorIndex = index;
             var op = Advance();

@@ -6,7 +6,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// One source line, holding its tokens. Its kind and brace value come from its own tokens
 /// alone, so a line lexes and classifies without knowing anything about the lines around it.
 /// </summary>
-public sealed class GreenLine : GreenNode
+internal sealed class GreenLine : GreenNode
 {
     private Parser.Result? parsed;
 

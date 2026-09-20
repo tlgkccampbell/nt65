@@ -9,7 +9,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 /// <param name="kind">The node's kind.</param>
 /// <param name="fullWidth">The node's width, trivia included.</param>
-public abstract class GreenNode(SyntaxKind kind, int fullWidth)
+internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
 {
     private ImmutableArray<GreenDiagnostic> diagnostics;
 

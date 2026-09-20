@@ -7,7 +7,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// that holds them. A list with nothing in it is a slot with no node at all, so a list node
 /// is normally not empty, and an empty one is still legal and reads as no items.
 /// </summary>
-public sealed class GreenList : GreenNode
+internal sealed class GreenList : GreenNode
 {
     /// <summary>Wraps <paramref name="children"/>, the list's items in source order.</summary>
     /// <param name="children">The list's items, in source order.</param>

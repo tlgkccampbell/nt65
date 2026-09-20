@@ -13,6 +13,8 @@ public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
     private readonly ImmutableArray<Parser.Result> statements;
+    private readonly ImmutableArray<Blocks.Error> blockErrors;
+    private readonly bool[] reported;
     private FileSyntax? root;
 
     private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
@@ -21,8 +23,9 @@ public sealed class SyntaxTree
         Text = text;
         LineStarts = lineStarts;
         Lines = lines;
-        var blockErrors = new List<Blocks.Error>();
-        Green = Blocks.Build(lines, blockErrors);
+        var errors = new List<Blocks.Error>();
+        Green = Blocks.Build(lines, errors);
+        blockErrors = [.. errors];
 
         // Blocks come first because a line's syntax depends on the kind of block around it.
         // Nothing else about the line does, so a line that kept its tokens and its
@@ -31,7 +34,16 @@ public sealed class SyntaxTree
         var line = 0;
         ParseLines(Green, BlockKind.None, parsed, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
-        diagnostics = new(() => CollectDiagnostics(blockErrors));
+
+        // Which lines have something to say is worked out here, once, so that a node asked
+        // whether it holds a diagnostic answers by reading flags rather than by walking. A green
+        // line does not hold what it parses to, so no flag on it could answer for the line.
+        reported = new bool[lines.Length];
+        for (var i = 0; i < parsed.Length; i++)
+            reported[i] = Said(parsed[i], lines[i]);
+        foreach (var error in blockErrors)
+            reported[error.Line] = true;
+        diagnostics = new(() => CollectRange(0, lines.Length - 1));
     }
 
     /// <summary>The file's logical path, as it appears in diagnostics.</summary>
@@ -40,14 +52,14 @@ public sealed class SyntaxTree
     /// <summary>The file's text.</summary>
     public string Text { get; }
 
-    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
-    public ImmutableArray<GreenLine> Lines { get; }
-
     /// <summary>The offset in <see cref="Text"/> where each line starts.</summary>
     public ImmutableArray<int> LineStarts { get; }
 
+    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
+    internal ImmutableArray<GreenLine> Lines { get; }
+
     /// <summary>The file's lines and blocks.</summary>
-    public GreenFile Green { get; }
+    internal GreenFile Green { get; }
 
     /// <summary>The root node, created on first use.</summary>
     public FileSyntax Root => root ??= new FileSyntax(this, null, Green, 0);
@@ -117,7 +129,7 @@ public sealed class SyntaxTree
     }
 
     /// <summary>The statement parsed from line <paramref name="line"/>, 0-based.</summary>
-    public GreenNode Statement(int line) => statements[line].Node;
+    internal GreenNode Statement(int line) => statements[line].Node;
 
     /// <summary>
     /// Everything line <paramref name="line"/> parsed to, 0-based: its statement and the pieces
@@ -218,6 +230,17 @@ public sealed class SyntaxTree
         text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
 
     /// <summary>
+    /// Whether a parsed line has anything to say: a lexical error on one of its tokens, or
+    /// something the parser said about a piece of what they parse to. A green line holds the
+    /// tokens the lexer read and not those pieces, so the line's answer is both of theirs.
+    /// </summary>
+    private static bool Said(Parser.Result parsed, GreenLine line) =>
+        line.ContainsDiagnostics
+        || parsed.Node.ContainsDiagnostics
+        || parsed.ExportKeyword is { ContainsDiagnostics: true }
+        || parsed.SkippedTokens is { ContainsDiagnostics: true };
+
+    /// <summary>
     /// The diagnostics <paramref name="green"/> and everything under it carry, as spans in the
     /// file, where <paramref name="position"/> is where the node starts. Only a subtree that says
     /// it holds one is walked at all.
@@ -240,11 +263,40 @@ public sealed class SyntaxTree
         }
     }
 
-    private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
+    /// <summary>
+    /// Whether any line from <paramref name="first"/> to <paramref name="last"/>, both 0-based and
+    /// inclusive, has a diagnostic on it, which is what a block and a file answer for.
+    /// </summary>
+    internal bool LinesContainDiagnostics(int first, int last)
+    {
+        for (var i = first; i <= last; i++)
+        {
+            if (reported[i])
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>, both
+    /// 0-based and inclusive, added to <paramref name="result"/> in source order.
+    /// </summary>
+    internal void CollectLines(int first, int last, List<Diagnostic> result) =>
+        result.AddRange(CollectRange(first, last));
+
+    /// <summary>
+    /// Every diagnostic on the lines from <paramref name="first"/> to <paramref name="last"/>,
+    /// ordered by line and column. The lines that say nothing are skipped, so the whole file's
+    /// answer costs a walk of the subtrees that hold one.
+    /// </summary>
+    private List<Diagnostic> CollectRange(int first, int last)
     {
         var result = new List<Diagnostic>();
-        for (var i = 0; i < Lines.Length; i++)
+        for (var i = first; i <= last; i++)
         {
+            if (!reported[i])
+                continue;
+
             // A line's tokens are its statement's as well, so the line itself is not walked:
             // the pieces it is written in hold every token of it exactly once between them, and
             // the statement holds besides them the missing tokens and the nodes that carry what
@@ -268,14 +320,16 @@ public sealed class SyntaxTree
 
         // A block error is about the braces over the lines rather than about anything in one, so
         // it names its line and the token on it that the diagnostic covers.
-        result.AddRange(blockErrors.Select(error =>
-        {
-            var token = Lines[error.Line].Tokens[error.Token];
-            var column = Lines[error.Line].TextOffset(error.Token) + 1;
-            var width = token.Kind == SyntaxKind.EndOfLine ? 0 : token.Text.Length;
-            return new Diagnostic(
-                new Span(Path, error.Line + 1, column, column + width), Severity.Error, error.Message);
-        }));
+        result.AddRange(blockErrors
+            .Where(error => error.Line >= first && error.Line <= last)
+            .Select(error =>
+            {
+                var token = Lines[error.Line].Tokens[error.Token];
+                var column = Lines[error.Line].TextOffset(error.Token) + 1;
+                var width = token.Kind == SyntaxKind.EndOfLine ? 0 : token.Text.Length;
+                return new Diagnostic(
+                    new Span(Path, error.Line + 1, column, column + width), Severity.Error, error.Message);
+            }));
         return [.. result
             .OrderBy(d => d.Span.Line)
             .ThenBy(d => d.Span.StartColumn)

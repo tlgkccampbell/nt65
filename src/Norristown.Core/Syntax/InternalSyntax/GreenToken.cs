@@ -4,7 +4,7 @@ using System.Text;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>One token and the trivia around it.</summary>
-public sealed class GreenToken : GreenNode
+internal sealed class GreenToken : GreenNode
 {
     // The missing token of each kind that reports nothing, which every node that wants one
     // shares: such a token has no text, no trivia and no diagnostic of its own, so one per kind

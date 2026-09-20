@@ -7,7 +7,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// green node over them. A builder that was given nothing makes no node: an empty list is a
 /// slot with nothing in it.
 /// </summary>
-public sealed class GreenListBuilder
+internal sealed class GreenListBuilder
 {
     private readonly ImmutableArray<GreenNode>.Builder pieces = ImmutableArray.CreateBuilder<GreenNode>();
 

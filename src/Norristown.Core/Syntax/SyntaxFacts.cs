@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -252,12 +251,14 @@ public static class SyntaxFacts
     /// <summary>
     /// The precedence level of a binary operator, 3 to 13 with 3 binding tightest, or 0
     /// when the token is not one. <c>.mod</c> is a directive rather than a punctuation token,
-    /// because <c>%</c> begins a binary number.
+    /// because <c>%</c> begins a binary number, so which directive it is has to be said as well.
     /// </summary>
-    public static int BinaryPrecedence(GreenToken token) => token.Kind switch
+    /// <param name="kind">What the token is.</param>
+    /// <param name="text">The token's text, which tells one directive from another.</param>
+    public static int BinaryPrecedence(SyntaxKind kind, string text) => kind switch
     {
         SyntaxKind.Star or SyntaxKind.Slash => 3,
-        SyntaxKind.Directive when token.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase) => 3,
+        SyntaxKind.Directive when text.Equals(".mod", StringComparison.OrdinalIgnoreCase) => 3,
         SyntaxKind.Plus or SyntaxKind.Minus => 4,
         SyntaxKind.LessLess or SyntaxKind.GreaterGreater => 5,
         SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals => 6,

@@ -121,6 +121,88 @@ public sealed class TreeDiagnosticsTests
         Assert.False(Line(tree, 1).Statement.ContainsDiagnostics);
     }
 
+    /// <summary>
+    /// A line, a block and a file hold the tokens of their lines rather than what those lines parse
+    /// to, so each of them answers over the lines it is written over, the errors about the braces
+    /// among them.
+    /// </summary>
+    [Fact]
+    public void ALineABlockAndAFileAnswerForTheLinesUnderThem()
+    {
+        var tree = SyntaxTree.Parse("test.nt65", ".proc p {\nlda (1\nnop\n}\n");
+        var block = Assert.Single(tree.Root.Members.OfType<BlockSyntax>());
+
+        var broken = Line(tree, 1);
+        Assert.True(broken.ContainsDiagnostics);
+        Assert.Equal(["expected `)`"], broken.GetDiagnostics().Select(d => d.Message));
+
+        Assert.False(Line(tree, 2).ContainsDiagnostics);
+        Assert.Empty(Line(tree, 2).GetDiagnostics());
+
+        Assert.True(block.ContainsDiagnostics);
+        Assert.Equal(["expected `)`"], block.GetDiagnostics().Select(d => d.Message));
+        Assert.Equal(tree.Diagnostics, tree.Root.GetDiagnostics());
+    }
+
+    /// <summary>
+    /// An unclosed brace is about the braces over the lines rather than about anything on one, and
+    /// the line it is reported on, the blocks over it and the file all hold it.
+    /// </summary>
+    [Fact]
+    public void ABraceErrorBelongsToTheLineItIsReportedOn()
+    {
+        var tree = SyntaxTree.Parse("test.nt65", ".proc p {\nnop\n");
+        Assert.True(tree.Root.ContainsDiagnostics);
+        Assert.Equal(tree.Diagnostics, tree.Root.GetDiagnostics());
+
+        var opener = Line(tree, 0);
+        Assert.True(opener.ContainsDiagnostics);
+        Assert.Equal(["missing `}` to close this block"], opener.GetDiagnostics().Select(d => d.Message));
+        Assert.False(Line(tree, 1).ContainsDiagnostics);
+    }
+
+    /// <summary>
+    /// The root says it holds a diagnostic exactly when the file has one, over every source in the
+    /// repository and every way of cutting its lines short, and what it holds is what the tree
+    /// reports. Every line under it answers for itself, and the lines together are the file.
+    /// </summary>
+    [Fact]
+    public void TheRootAnswersForTheWholeFileOnWholeAndBrokenLines()
+    {
+        var variants = Repo.Sources()
+            .SelectMany(path => BrokenLines.Variants(Repo.ReadText(path))
+                .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
+            .ToList();
+        Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");
+
+        var failures = Repo.CollectFailures(variants, variant =>
+        {
+            var problems = new List<string>();
+            var tree = SyntaxTree.Parse(variant.Path, variant.Text);
+            if (tree.Root.ContainsDiagnostics != tree.Diagnostics.Count > 0)
+            {
+                problems.Add($"the root says {tree.Root.ContainsDiagnostics} "
+                    + $"and the tree reports {tree.Diagnostics.Count}");
+            }
+            if (!tree.Root.GetDiagnostics().SequenceEqual(tree.Diagnostics))
+                problems.Add("the root's diagnostics are not the tree's");
+
+            var lines = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
+            var gathered = lines.SelectMany(line => line.GetDiagnostics()).ToList();
+            if (gathered.Count != tree.Diagnostics.Count)
+                problems.Add($"the lines hold {gathered.Count} of the tree's {tree.Diagnostics.Count}");
+            foreach (var line in lines.Where(line => line.ContainsDiagnostics != line.GetDiagnostics().Count > 0))
+                problems.Add($"line {line.LineIndex + 1} says {line.ContainsDiagnostics} and holds {line.GetDiagnostics().Count}");
+            foreach (var block in tree.Root.DescendantNodes().OfType<BlockSyntax>())
+            {
+                if (block.ContainsDiagnostics != block.GetDiagnostics().Count > 0)
+                    problems.Add($"the block at line {block.LineIndex + 1} does not say what it holds");
+            }
+            return problems.Take(5).Select(problem => $"{variant.Where}: {problem}");
+        });
+        Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
+    }
+
     private static LineSyntax Line(SyntaxTree tree, int index) =>
         tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(index);
 }

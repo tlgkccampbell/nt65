@@ -15,14 +15,11 @@ public sealed partial class BlockSyntax : SyntaxNode
     {
     }
 
-    /// <summary>The green block this one wraps.</summary>
-    public new GreenBlock Green => (GreenBlock)base.Green;
-
     /// <summary>The kind of block, from the statement its opener line ends with.</summary>
-    public BlockKind BlockKind => Green.BlockKind;
+    public BlockKind BlockKind => GreenBlock.BlockKind;
 
     /// <summary>Whether the block ends with a <c>}</c> line of its own.</summary>
-    public bool HasCloser => Green.HasCloser;
+    public bool HasCloser => GreenBlock.HasCloser;
 
     /// <summary>The line that opens the block.</summary>
     public LineSyntax Opener => (LineSyntax)ChildNodes[0];
@@ -32,4 +29,17 @@ public sealed partial class BlockSyntax : SyntaxNode
 
     /// <summary>The opener line, the block's contents, and the closing line when it has one.</summary>
     public ImmutableArray<SyntaxNode> Members => ChildNodes;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// A block holds the lines it is written over rather than what they parse to, so it answers
+    /// over those lines, as <see cref="SyntaxNode.GetDiagnostics"/> does.
+    /// </remarks>
+    public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LastLineIndex);
+
+    private GreenBlock GreenBlock => (GreenBlock)Green;
+
+    /// <inheritdoc/>
+    private protected override void CollectDiagnostics(List<Diagnostic> result) =>
+        Tree.CollectLines(LineIndex, LastLineIndex, result);
 }

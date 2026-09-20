@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>A whole file: the lines and blocks at its top level.</summary>
-public sealed class GreenFile : GreenNode
+internal sealed class GreenFile : GreenNode
 {
     /// <summary>Wraps <paramref name="children"/>, the file's top-level lines and blocks.</summary>
     /// <param name="children">The file's top-level lines and blocks, in source order.</param>

@@ -2,12 +2,32 @@ using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
-/// <summary>A token with its parent and absolute position.</summary>
-/// <param name="Parent">The node the token is a piece of, which for a line's own is the line.</param>
-/// <param name="Green">The green token this one wraps.</param>
-/// <param name="Position">Where the token starts in the file's text, trivia included.</param>
-public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, int Position)
+/// <summary>
+/// A token with its parent and absolute position. It is a value of three words, copied rather
+/// than allocated, and two of them are equal when they are the same token of the same tree read
+/// through the same node. The tokens a tree hands out are the only ones there are: a default
+/// <see cref="SyntaxToken"/> is no token of anything, which is what a lookup answers with when
+/// there is nothing to answer.
+/// </summary>
+public readonly record struct SyntaxToken
 {
+    /// <summary>The token <paramref name="green"/> is, read through <paramref name="parent"/>.</summary>
+    /// <param name="parent">The node the token is a piece of.</param>
+    /// <param name="green">The green token it wraps.</param>
+    /// <param name="position">Where it starts in the file's text, trivia included.</param>
+    internal SyntaxToken(SyntaxNode parent, GreenToken green, int position)
+    {
+        Parent = parent;
+        Green = green;
+        Position = position;
+    }
+
+    /// <summary>The node the token is a piece of, which for a line's own is the line.</summary>
+    public SyntaxNode Parent { get; }
+
+    /// <summary>Where the token starts in the file's text, trivia included.</summary>
+    public int Position { get; }
+
     /// <summary>What the token is.</summary>
     public SyntaxKind Kind => Green.Kind;
 
@@ -37,6 +57,9 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
 
     /// <summary>The whitespace and comment after the token, up to the end of its line.</summary>
     public SyntaxTriviaList TrailingTrivia => new(this, Green.TrailingTrivia, Span.End);
+
+    /// <summary>The green token this one wraps.</summary>
+    internal GreenToken Green { get; }
 
     /// <summary>The token's text with its trivia, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();

@@ -14,4 +14,4 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <param name="Width">How many characters it covers; 0 for a caret between two of them.</param>
 /// <param name="Message">What to tell the programmer.</param>
 /// <param name="Fix">The change the message names as its fix, or null.</param>
-public sealed record GreenDiagnostic(int Offset, int Width, string Message, DiagnosticFix? Fix = null);
+internal sealed record GreenDiagnostic(int Offset, int Width, string Message, DiagnosticFix? Fix = null);

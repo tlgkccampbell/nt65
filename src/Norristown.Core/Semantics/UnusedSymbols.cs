@@ -111,7 +111,9 @@ public static class UnusedSymbols
     /// rather than as a step on a path, which is what a name brought in is written as. One pass
     /// answers for all of them, because a file with items to check has them all to check. It
     /// reads the tokens the lexer left on each line rather than the nodes they parsed to, since
-    /// every name the file writes is wanted here and where each of them sits is not.
+    /// every name the file writes is wanted here and where each of them sits is not: this is one
+    /// of the two places inside the compiler that still read the lines the lexer made, and the
+    /// walk of the red tree that would do instead cost about seven milliseconds a keystroke.
     /// </summary>
     private static HashSet<string> Written(SyntaxTree tree)
     {

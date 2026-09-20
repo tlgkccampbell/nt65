@@ -11,7 +11,7 @@ namespace Norristown.Syntax.InternalSyntax;
 /// Items are nodes and separators are tokens, which is what tells the two apart.
 /// </para>
 /// </summary>
-public sealed class GreenSeparatedList : GreenNode
+internal sealed class GreenSeparatedList : GreenNode
 {
     /// <summary>Wraps <paramref name="children"/>, the items and separators in source order.</summary>
     /// <param name="children">The items and the separators between them, alternating.</param>
