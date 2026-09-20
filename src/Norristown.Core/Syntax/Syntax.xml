@@ -519,7 +519,7 @@
     </Field>
   </Node>
 
-  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ConstantDeclaration"/>
     <TypeComment>
       <summary><c>name = expr</c>.</summary>
@@ -532,20 +532,17 @@
       <Kind Name="CheapLocal"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The constant's value.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
   </Node>
 
@@ -855,7 +852,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="EnumMemberSyntax" Base="StatementSyntax">
+  <Node Name="EnumMemberSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="EnumMember"/>
     <TypeComment>
       <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
@@ -867,20 +864,17 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>=</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The value the member is given, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 

@@ -267,7 +267,7 @@ internal sealed class Parser
     {
         var name = Advance();
         var equals = Advance();
-        return Finish(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()]);
+        return Finish(new ConstantDeclarationSyntax(name, equals, ParseExpression()));
     }
 
     private GreenNode ParseDirectiveLine()
@@ -564,14 +564,11 @@ internal sealed class Parser
     {
         if (!AtName)
             return ErrorLine("expected a member name, or `name = expr`");
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.Equals)
-        {
-            children.Add(Advance());
-            children.Add(ParseExpression());
-        }
-        return Finish(SyntaxKind.EnumMember, children.ToImmutable());
+        var name = Advance();
+        if (Kind != SyntaxKind.Equals)
+            return Finish(new EnumMemberSyntax(name, null, null));
+        var equals = Advance();
+        return Finish(new EnumMemberSyntax(name, equals, ParseExpression()));
     }
 
     /// <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
@@ -1269,7 +1266,7 @@ internal sealed class Parser
             exportKeyword = export;
             var name = Advance();
             var equals = Advance();
-            return new GreenSyntax(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()]);
+            return new ConstantDeclarationSyntax(name, equals, ParseExpression());
         }
 
         var children = ImmutableArray.CreateBuilder<GreenNode>();

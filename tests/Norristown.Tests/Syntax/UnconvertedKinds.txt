@@ -18,7 +18,6 @@ CharacterExpression
 CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
-ConstantDeclaration
 CpuDirective
 CpuNameExpression
 CurrentAddressExpression
@@ -33,7 +32,6 @@ ElseIfDirective
 EmptyBlock
 EnsureDirective
 EnumDeclaration
-EnumMember
 ErrorDirective
 ErrorExpression
 ErrorLine
