@@ -64,6 +64,12 @@ public readonly struct SyntaxNodeOrToken
     /// <summary>Its text, exactly as in the source.</summary>
     public string ToFullString() => node is not null ? node.ToFullString() : IsToken ? token.ToFullString() : "";
 
+    /// <summary>
+    /// Its text over <see cref="Span"/>: no surrounding trivia and no line break, which is what
+    /// reads a list's items and separators without asking which of the two each one is.
+    /// </summary>
+    public string GetText() => node is not null ? node.GetText() : IsToken ? token.Text : "";
+
     /// <summary>Its kind and range, for debugging.</summary>
     public override string ToString() => node is not null ? node.ToString() : IsToken ? token.ToString() : "";
 }

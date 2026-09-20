@@ -7,6 +7,8 @@ sources into ca65 sources, and a language server with a VS Code extension.
 - [The guide](docs/GUIDE.md): a tour of nt65 for ca65 programmers, and how to migrate.
 - [The design](DESIGN.md): the definition of version 1 of the language, of the output and of
   the command, with the reasons for each decision. §17 says what version 1 promises.
+- [The analysis API](docs/ANALYSIS-API.md): writing an analyzer or an editor feature against the
+  syntax tree, and how to add a kind of node to it.
 
 ## Installing
 
@@ -68,6 +70,8 @@ block per kind of node, after Roslyn's own `Syntax.xml`. The source generator in
 change the table, build, then fix what the compiler points at. Nothing is checked in and nothing
 can be stale. The classes it writes are on disk under `src/Norristown.Core/Generated`, one file
 per type and git-ignored, to be read and grepped like any other code.
+[The analysis API](docs/ANALYSIS-API.md) is the guide to writing against the tree, and
+[the syntax API](docs/SYNTAX-API.md) the record of how it came to be this shape.
 
 ## The corpus programs
 
