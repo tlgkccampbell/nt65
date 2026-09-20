@@ -516,14 +516,9 @@ internal sealed class Parser
             Report("expected a member name");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
-            Report("expected `=`");
-        children.Add(ParseDataValue());
-        return new GreenSyntax(SyntaxKind.MemberValue, children.ToImmutable());
+        var name = Advance();
+        var equals = Expect(SyntaxKind.Equals, "expected `=`", once: false);
+        return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
     /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>

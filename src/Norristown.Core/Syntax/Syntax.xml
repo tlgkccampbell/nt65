@@ -1683,7 +1683,7 @@
     </Field>
   </Node>
 
-  <Node Name="MemberValueSyntax" Base="StatementSyntax">
+  <Node Name="MemberValueSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="MemberValue"/>
     <TypeComment>
       <summary><c>member = value</c>, in a braced record or on a line of its own in a multi-line initializer.</summary>
@@ -1695,20 +1695,17 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
         <summary>The value: an expression, or a braced list or record.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes[0]]]></Read>
     </Field>
   </Node>
 

@@ -52,7 +52,6 @@ MacroCall
 MacroDeclaration
 MacroParameter
 MacroParameterList
-MemberValue
 ModuleDirective
 MultiProcDeclaration
 NameExpression
