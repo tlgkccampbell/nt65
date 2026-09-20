@@ -269,14 +269,14 @@
     </Field>
   </Node>
 
-  <Node Name="BlankLineSyntax" Base="StatementSyntax">
+  <Node Name="BlankLineSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="BlankLine"/>
     <TypeComment>
       <summary>A line holding nothing, or nothing but a comment.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="BlockCloseLineSyntax" Base="StatementSyntax">
+  <Node Name="BlockCloseLineSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="BlockCloseLine"/>
     <TypeComment>
       <summary>A <c>}</c> on its own line.</summary>
@@ -286,11 +286,10 @@
         <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </Node>
 
-  <Node Name="BlockContinuationSyntax" Base="StatementSyntax">
+  <Node Name="BlockContinuationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="BlockContinuation"/>
     <TypeComment>
       <summary><c>} name {</c>: the line that closes one block argument of a macro call and opens the next.</summary>
@@ -300,7 +299,6 @@
         <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
@@ -309,18 +307,16 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>{</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[ChildTokens[2]]]></Read>
     </Field>
   </Node>
 
-  <Node Name="BlockSpliceSyntax" Base="StatementSyntax">
+  <Node Name="BlockSpliceSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="BlockSplice"/>
     <TypeComment>
       <summary>A name on its own line, which splices a <c>block</c> parameter.</summary>
@@ -330,7 +326,6 @@
         <summary>The parameter spliced.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </Node>
 

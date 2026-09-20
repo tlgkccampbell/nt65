@@ -7,10 +7,6 @@ AddressPrefix
 ArgumentList
 AssertDirective
 BankRange
-BlankLine
-BlockCloseLine
-BlockContinuation
-BlockSplice
 BracedOperand
 CharmapDeclaration
 CharmapEntry

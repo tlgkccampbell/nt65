@@ -123,7 +123,7 @@ internal sealed class Parser
         if (kind == LineKind.BlockClose)
             return ParseBlockClose();
         if (kind == LineKind.Blank)
-            return Finish(SyntaxKind.BlankLine, []);
+            return Finish(new BlankLineSyntax());
 
         // An unnamed label needs a name rather than a spelling, so it is the whole news about
         // its line: `:` where a name belongs and `:+` in an operand are read no further, and
@@ -166,7 +166,7 @@ internal sealed class Parser
             // A name on its own splices a `block` parameter. Which blocks may hold one is not
             // a question about this line — a splice inside an `.if` inside a body is still a
             // splice — so it is read as one everywhere and the binder says where it belongs.
-            LineKind.BareIdentifier => Finish(SyntaxKind.BlockSplice, [Advance()]),
+            LineKind.BareIdentifier => Finish(new BlockSpliceSyntax(Advance())),
             _ => ErrorLine("expected a label, a constant, an instruction or a directive"),
         };
     }
@@ -227,18 +227,18 @@ internal sealed class Parser
     {
         var brace = Advance();
         if (AtEnd)
-            return Finish(SyntaxKind.BlockCloseLine, [brace]);
+            return Finish(new BlockCloseLineSyntax(brace));
 
         // `} .elseif expr {` and `} .else {` close one branch and open the next; a macro
         // call's `} name {` closes one block argument and opens the next.
         if (AtName && Next == SyntaxKind.OpenBrace)
-            return Finish(SyntaxKind.BlockContinuation, [brace, Advance(), Advance()]);
+            return Finish(new BlockContinuationSyntax(brace, Advance(), Advance()));
 
         return SyntaxFacts.LineDirectiveKind(Current.Text) switch
         {
             SyntaxKind.ElseIfDirective => Finish(ParseIf(SyntaxKind.ElseIfDirective, brace)),
             SyntaxKind.ElseDirective => Finish(ParseElse(brace)),
-            _ => Finish(SyntaxKind.BlockCloseLine, [brace]),
+            _ => Finish(new BlockCloseLineSyntax(brace)),
         };
     }
 
