@@ -207,10 +207,23 @@ Still true for anyone changing the tree.
 - Incremental parsing must not get slower in kind: an edit still lexes the lines it touches and
   reparses only those, and lines whose block context changed. `scripts/test.ps1 -Benchmark` prints
   what an edit costs.
-- `scripts/test.ps1` is the edit loop, about ten seconds; `scripts/gate.ps1` once per unit of work,
-  about eleven. Five sweeps run over 142 sources times eight variants — the broken-source sweep,
-  the shape test, the typed-node test, navigation and the tree's diagnostics — and each parses
-  those 1,136 trees for itself. Keep them parallel (`Repo.CollectFailures`), and if the loop grows,
-  one sweep that parses once and runs every check over that parse is the saving to take.
+- `scripts/test.ps1` is the edit loop, about three and a half seconds of which one is the build;
+  `scripts/gate.ps1` once per unit of work, about four and a half. It was ten and eleven, and what
+  it spent them on was not the work: the test project asks for the server collector, because the
+  workstation one suspended every test at once to gather what the sweeps allocate and cost over
+  five of the nine seconds; the runner is given `-parallelMode all`, because a class's tests queued
+  behind each other and the longest of them are three seeds of one theory and one replay among
+  twelve other tests; and the random-edit replay makes its edits a batch at a time and compares the
+  batch's trees beside each other, since making an edit is a twentieth of what checking it costs.
+- Five sweeps run over 142 sources times eight variants — the broken-source sweep, the shape test,
+  the typed-node test, navigation and the tree's diagnostics — and each parses those 1,136 trees
+  for itself. That reads like waste and measures like nothing: building the variants and parsing
+  them is a quarter of a second of the eighteen seconds of processor time the five spend, and the
+  five together are four tenths of a second of the loop. Keep them parallel
+  (`Repo.CollectFailures`); a tree shared between them would also be a tree two sweeps race to
+  build a red root over, which `SyntaxTree.Root` is not written for.
+- Where the next second is: the two analysis replays. Each of their steps analyzes the program
+  from scratch to compare against, which is most of what they cost and is about that step alone,
+  so they can be batched the way the parse replay now is.
 - `CLAUDE.md` holds the C# rules. Generated files are one type per file like any other.
 - `DESIGN.md` defines the language, not the API.
