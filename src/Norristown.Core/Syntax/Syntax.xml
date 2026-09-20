@@ -228,7 +228,7 @@
     </Field>
   </Node>
 
-  <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <Kind Name="BinaryExpression"/>
     <TypeComment>
       <summary><c>left op right</c>.</summary>
@@ -237,7 +237,6 @@
       <PropertyComment>
         <summary>The left operand.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="OperatorToken" Type="SyntaxToken">
       <PropertyComment>
@@ -262,13 +261,11 @@
       <Kind Name="EqualsEquals"/>
       <Kind Name="BangEquals"/>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Right" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The right operand.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[1]]]></Read>
     </Field>
   </Node>
 
@@ -579,7 +576,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="CurrentAddressExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="CurrentAddressExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <Kind Name="CurrentAddressExpression"/>
     <TypeComment>
       <summary><c>*</c>: the address of the statement it is written in.</summary>
@@ -589,7 +586,6 @@
         <summary>The <c>*</c>.</summary>
       </PropertyComment>
       <Kind Name="Star"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </Node>
 
@@ -2646,7 +2642,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="UnaryExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="UnaryExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <Kind Name="UnaryExpression"/>
     <TypeComment>
       <summary><c>op operand</c>.</summary>
@@ -2662,13 +2658,11 @@
       <Kind Name="Less"/>
       <Kind Name="Greater"/>
       <Kind Name="Caret"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Operand" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>What the operator applies to.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
   </Node>
 

@@ -23,6 +23,15 @@ internal sealed class Parser
     /// <summary>The tightest binding level that is still a binary operator.</summary>
     private const int TightestPrecedence = 3;
 
+    /// <summary>The slot a <see cref="BinaryExpressionSyntax"/> holds its operator in.</summary>
+    private const int BinaryOperator = 1;
+
+    /// <summary>The slot a <see cref="BinaryExpressionSyntax"/> holds its right operand in.</summary>
+    private const int BinaryRight = 2;
+
+    /// <summary>The slot a <see cref="UnaryExpressionSyntax"/> holds its operator in.</summary>
+    private const int UnaryOperator = 0;
+
     private readonly ImmutableArray<GreenToken> tokens;
     private readonly BlockKind context;
     private readonly bool opensBlock;
@@ -1760,7 +1769,7 @@ internal sealed class Parser
             var op = Advance();
             var right = ParseBinary(level - 1);
             CheckRequiredParentheses(operatorIndex, op, left, right);
-            left = new GreenSyntax(SyntaxKind.BinaryExpression, [left, op, right]);
+            left = new BinaryExpressionSyntax(left, op, right);
         }
         return left;
     }
@@ -1770,7 +1779,7 @@ internal sealed class Parser
         if (!SyntaxFacts.IsUnaryOperator(Kind))
             return ParsePrimary();
         var op = Advance();
-        return new GreenSyntax(SyntaxKind.UnaryExpression, [op, ParseUnary()]);
+        return new UnaryExpressionSyntax(op, ParseUnary());
     }
 
     private GreenNode ParsePrimary()
@@ -1786,7 +1795,7 @@ internal sealed class Parser
             case SyntaxKind.CpuName:
                 return new CpuNameExpressionSyntax(Advance());
             case SyntaxKind.Star:
-                return new GreenSyntax(SyntaxKind.CurrentAddressExpression, [Advance()]);
+                return new CurrentAddressExpressionSyntax(Advance());
             case SyntaxKind.OpenParen:
                 return ParseParenthesized();
             case SyntaxKind.Directive:
@@ -1937,8 +1946,12 @@ internal sealed class Parser
         }
     }
 
+    /// <summary>
+    /// The operator of <paramref name="node"/> when it is a binary expression, or null. A green
+    /// node names its pieces by slot, in the order its constructor takes them.
+    /// </summary>
     private static GreenToken? OperatorOf(GreenNode node) =>
-        node is GreenSyntax { Kind: SyntaxKind.BinaryExpression } binary ? (GreenToken)binary.Children[1] : null;
+        node is BinaryExpressionSyntax binary ? (GreenToken)binary.GetSlot(BinaryOperator)! : null;
 
     /// <summary>
     /// The <c>&lt;</c>, <c>&gt;</c> or <c>^</c> at the right edge of an operand, if any.
@@ -1948,10 +1961,10 @@ internal sealed class Parser
     /// </summary>
     private static GreenToken? RightmostByteOperator(GreenNode node)
     {
-        while (node is GreenSyntax { Kind: SyntaxKind.BinaryExpression } binary)
-            node = binary.Children[2];
-        return node is GreenSyntax { Kind: SyntaxKind.UnaryExpression } unary
-            && unary.Children[0] is GreenToken op && SyntaxFacts.IsByteOperator(op.Kind)
+        while (node is BinaryExpressionSyntax binary)
+            node = binary.GetSlot(BinaryRight)!;
+        return node is UnaryExpressionSyntax unary
+            && (GreenToken)unary.GetSlot(UnaryOperator)! is { } op && SyntaxFacts.IsByteOperator(op.Kind)
             ? op
             : null;
     }
