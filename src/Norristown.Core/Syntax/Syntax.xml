@@ -190,7 +190,7 @@
     </Field>
   </Node>
 
-  <Node Name="BankRangeSyntax" Base="SyntaxNode">
+  <Node Name="BankRangeSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="BankRange"/>
     <TypeComment>
       <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>
@@ -199,20 +199,17 @@
       <PropertyComment>
         <summary>The bank, or the first of the range.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>..</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.DotDot)]]></Read>
     </Field>
     <Field Name="Last" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The last bank of the range, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null]]></Read>
     </Field>
   </Node>
 

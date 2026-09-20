@@ -1098,14 +1098,11 @@ internal sealed class Parser
     /// <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>
     private GreenNode ParseBankRange()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.DotDot)
-        {
-            children.Add(Advance());
-            children.Add(ParseExpression());
-        }
-        return new GreenSyntax(SyntaxKind.BankRange, children.ToImmutable());
+        var first = ParseExpression();
+        if (Kind != SyntaxKind.DotDot)
+            return new BankRangeSyntax(first, null, null);
+        var dotDot = Advance();
+        return new BankRangeSyntax(first, dotDot, ParseExpression());
     }
 
     private GreenNode ParseProc()
