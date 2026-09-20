@@ -132,7 +132,7 @@ public sealed class BrokenSourceTests
     private static int Caret(SyntaxTree tree, int index)
     {
         var tokens = tree.GetLine(index).Tokens;
-        return tokens.Length < 2 ? tree.LineStarts[index] : tokens[^2].Span.End;
+        return tokens.Count < 2 ? tree.LineStarts[index] : tokens[^2].Span.End;
     }
 
     /// <summary>

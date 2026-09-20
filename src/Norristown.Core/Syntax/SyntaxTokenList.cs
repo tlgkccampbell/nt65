@@ -1,12 +1,14 @@
 using System.Collections;
 using System.Collections.Immutable;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
 /// <summary>
-/// The tokens of a node whose children are all tokens: the tokens left over at the end of a
-/// line, or the whole of a line the parser could not read. The list is a view over that node,
-/// so asking for it costs nothing.
+/// The tokens of a node whose slots are all tokens: a line's own tokens as the lexer read them,
+/// the tokens left over at the end of a line, or the whole of a line the parser could not read.
+/// The list is a view over that node and makes each token as it is asked for, so neither asking
+/// for the list nor walking it allocates anything.
 /// <para>
 /// A default list is the empty one, which is what a slot with nothing in it reads as.
 /// </para>
@@ -27,7 +29,7 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
         {
             ArgumentOutOfRangeException.ThrowIfNegative(index);
             ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
-            return list!.ChildTokens[index];
+            return list!.SlotToken(index);
         }
     }
 
@@ -43,11 +45,48 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
     }
 
     /// <summary>Walks the tokens in source order.</summary>
-    public IEnumerator<SyntaxToken> GetEnumerator()
+    /// <returns>A walk that allocates nothing, which is what a <c>foreach</c> uses.</returns>
+    public Enumerator GetEnumerator() => new(list);
+
+    IEnumerator<SyntaxToken> IEnumerable<SyntaxToken>.GetEnumerator()
     {
         for (var i = 0; i < Count; i++)
             yield return this[i];
     }
 
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable<SyntaxToken>)this).GetEnumerator();
+
+    /// <summary>
+    /// A walk over a list's tokens that carries the position it has reached, so that walking a
+    /// whole line costs one pass over its slots rather than a sum of widths per token.
+    /// </summary>
+    public struct Enumerator
+    {
+        private readonly SyntaxNode? list;
+        private int index;
+        private int position;
+
+        internal Enumerator(SyntaxNode? list)
+        {
+            this.list = list;
+            index = -1;
+            position = list?.Position ?? 0;
+            Current = default;
+        }
+
+        /// <summary>The token the walk has reached.</summary>
+        public SyntaxToken Current { get; private set; }
+
+        /// <summary>Steps to the next token.</summary>
+        /// <returns>Whether there was one.</returns>
+        public bool MoveNext()
+        {
+            if (list is null || ++index >= list.Green.SlotCount)
+                return false;
+            var green = (GreenToken)list.Green.GetSlot(index)!;
+            Current = new SyntaxToken(list.ChildParent, green, position);
+            position += green.FullWidth;
+            return true;
+        }
+    }
 }

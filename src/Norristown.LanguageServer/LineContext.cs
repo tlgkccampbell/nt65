@@ -265,13 +265,13 @@ internal sealed class LineContext
         {
             var tokens = opener.Tokens;
             var at = 0;
-            while (at < tokens.Length && !tokens[at].Text.Equals(".type", StringComparison.OrdinalIgnoreCase))
+            while (at < tokens.Count && !tokens[at].Text.Equals(".type", StringComparison.OrdinalIgnoreCase))
                 at++;
             var parts = new List<string>();
-            for (at++; at < tokens.Length && IsWord(tokens[at].Kind); at += 2)
+            for (at++; at < tokens.Count && IsWord(tokens[at].Kind); at += 2)
             {
                 parts.Add(tokens[at].Text);
-                if (at + 1 >= tokens.Length || tokens[at + 1].Kind != SyntaxKind.ColonColon)
+                if (at + 1 >= tokens.Count || tokens[at + 1].Kind != SyntaxKind.ColonColon)
                     break;
             }
             return parts.Count > 0 ? parts : null;

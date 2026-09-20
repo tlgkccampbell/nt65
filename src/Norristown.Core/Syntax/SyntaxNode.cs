@@ -408,7 +408,7 @@ public abstract class SyntaxNode
     }
 
     /// <summary>The token in slot <paramref name="index"/>, which a required slot always holds.</summary>
-    private protected SyntaxToken SlotToken(int index) =>
+    internal SyntaxToken SlotToken(int index) =>
         new(ChildParent, (GreenToken)Green.GetSlot(index)!, SlotPosition(index));
 
     /// <summary>The token in slot <paramref name="index"/>, or null when the slot is empty.</summary>

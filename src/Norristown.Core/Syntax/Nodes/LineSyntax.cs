@@ -36,7 +36,7 @@ public sealed partial class LineSyntax : SyntaxNode
     /// the declaration reads as the same one written without it;
     /// <see cref="StatementSyntax.IsExported"/> says the <c>.export</c> is there.
     /// </summary>
-    public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : ChildTokens[0];
+    public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : Tokens[0];
 
     /// <summary>What the line's own tokens parse to.</summary>
     public StatementSyntax Statement => statement ??= (StatementSyntax)Parsed.Node.CreateRed(
@@ -49,15 +49,19 @@ public sealed partial class LineSyntax : SyntaxNode
             : null;
 
     /// <summary>The line break that ends the line, which is the statement's terminator.</summary>
-    public SyntaxToken EndOfLineToken => ChildTokens[^1];
+    public SyntaxToken EndOfLineToken => Tokens[^1];
 
     /// <summary>
     /// The line's tokens as the lexer read them, the line break last. They belong to the line,
     /// and the same tokens are held again by the pieces the line is written in, where they belong
     /// to the node each is part of; the pieces hold a missing token as well, which the source does
     /// not write and the lexer never read.
+    /// <para>
+    /// The list is a view over the line, so reading a whole file's tokens through it neither
+    /// allocates nor makes a statement: it is the line as the lexer left it.
+    /// </para>
     /// </summary>
-    public ImmutableArray<SyntaxToken> Tokens => ChildTokens;
+    public SyntaxTokenList Tokens => new(this);
 
     /// <inheritdoc/>
     /// <remarks>
