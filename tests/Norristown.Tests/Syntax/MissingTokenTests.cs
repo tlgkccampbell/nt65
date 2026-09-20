@@ -89,6 +89,47 @@ public sealed class MissingTokenTests
         Assert.Equal(new TextSpan(12, 0), label.ChildTokens[1].Span);
     }
 
+    /// <summary>
+    /// A <c>.use</c> that opens its braces has a place for the <c>}</c> that closes them, so the
+    /// missing token stands there; a <c>.use</c> written without braces has no place for one.
+    /// </summary>
+    [Fact]
+    public void ABracedUseHoldsThePlaceForItsClosingBrace()
+    {
+        var tree = SyntaxTree.Parse("test.nt65", ".use gfx::{clear\n.use gfx::fill\n");
+        var braced = Assert.IsType<UseDirectiveSyntax>(tree.GetLine(0).Statement);
+
+        Assert.NotNull(braced.CloseBraceToken);
+        var close = braced.CloseBraceToken.Value;
+        Assert.True(close.IsMissing);
+        Assert.Equal(SyntaxKind.CloseBrace, close.Kind);
+        Assert.Equal(new TextSpan(16, 0), close.Span);
+        Assert.Equal(["expected `}`"], close.GetDiagnostics().Select(d => d.Message));
+        Assert.Equal(new Span("test.nt65", 1, 17, 17), Assert.Single(close.GetDiagnostics()).Span);
+
+        Assert.Null(Assert.IsType<UseDirectiveSyntax>(tree.GetLine(1).Statement).CloseBraceToken);
+    }
+
+    /// <summary>
+    /// A missing bracket says what to write and where, because there is only one thing to write;
+    /// a missing name is the programmer's to write and names no fix.
+    /// </summary>
+    [Fact]
+    public void AMissingBracketNamesTheFixThatWritesIt()
+    {
+        var tree = SyntaxTree.Parse("test.nt65", ".proc p   ; note\n}\n");
+        var proc = Assert.IsType<ProcDeclarationSyntax>(tree.GetLine(0).Statement);
+
+        var fix = Assert.Single(proc.OpenBraceToken.GetDiagnostics()).Fix;
+        Assert.NotNull(fix);
+        Assert.Equal(FixKind.MissingPiece, fix.Kind);
+        Assert.Equal("{", fix.Text);
+
+        var nameless = Assert.IsType<ProcDeclarationSyntax>(
+            SyntaxTree.Parse("test.nt65", ".proc {\n}\n").GetLine(0).Statement);
+        Assert.Null(Assert.Single(nameless.Name.GetDiagnostics()).Fix);
+    }
+
     [Fact]
     public void ANodeOfNothingButMissingTokensIsEmptyWhereItBelongs()
     {

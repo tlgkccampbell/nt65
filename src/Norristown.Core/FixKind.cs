@@ -59,4 +59,10 @@ public enum FixKind
 
     /// <summary>The <c>.use</c> item that brings in a name nothing writes, removed.</summary>
     UseItem,
+
+    /// <summary>
+    /// The bracket the line does not have, written where the tree holds the place for it: the
+    /// <c>{</c> a block needs, or the <c>)</c>, <c>]</c> or <c>}</c> that closes what is open.
+    /// </summary>
+    MissingPiece,
 }

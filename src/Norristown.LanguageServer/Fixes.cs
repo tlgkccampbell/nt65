@@ -137,6 +137,11 @@ internal static class Fixes
                     yield return Fix(diagnostic, $"Remove the `.use` of `{brought}`", without);
                 break;
 
+            case FixKind.MissingPiece when fix.Text is { } piece:
+                if (Piece(tree, diagnostic, piece) is { } written)
+                    yield return Fix(diagnostic, $"Write the `{piece}`", [written]);
+                break;
+
             default:
                 break;
         }
@@ -159,6 +164,29 @@ internal static class Fixes
         }
         var spelled = written.Text.All(char.IsUpper) ? mnemonic.ToUpperInvariant() : mnemonic;
         return new Edit(tree, new TextSpan(written.Start, written.Text.Length), spelled);
+    }
+
+    /// <summary>
+    /// <paramref name="piece"/> written where the line holds the place for it. The place is the
+    /// tree's answer and not the text's: the token standing in the slot says the piece is missing,
+    /// and what it reports says where the piece belongs, which is the end of the last token the
+    /// line does have rather than wherever the token itself sits behind a trailing comment. Null
+    /// where no missing token on the line owns the diagnostic, which means it is not about one.
+    /// </summary>
+    private static Edit? Piece(SyntaxTree tree, Diagnostic diagnostic, string piece)
+    {
+        var line = tree.GetLine(Math.Clamp(diagnostic.Span.Line - 1, 0, tree.LineCount - 1));
+        foreach (var token in line.DescendantTokens())
+        {
+            if (!token.IsMissing || !token.GetDiagnostics().Contains(diagnostic))
+                continue;
+
+            // A `{` opens a block and reads as its own word; a closer follows what it closes.
+            var at = Edits.SpanOf(tree, diagnostic.Span).Start;
+            var space = piece == "{" && at > 0 && tree.Text[at - 1] is not (' ' or '\t' or '\n' or '\r') ? " " : "";
+            return new Edit(tree, new TextSpan(at, 0), space + piece);
+        }
+        return null;
     }
 
     /// <summary>An <c>.export</c> of <paramref name="name"/>, under the <c>.module</c> of the file that declares it.</summary>

@@ -131,23 +131,38 @@ internal static class Edits
         }.OfType<string>());
 
     /// <summary>
+    /// The head of the routine or macro <paramref name="line"/> declares: the signature it
+    /// already has, and where the <c>{</c> that opens its body begins. Null for a line that
+    /// declares neither, and for one whose <c>{</c> is the place for a brace the source has not
+    /// written, because nothing goes before a brace that is not there.
+    /// </summary>
+    public static (ProcSignatureSyntax? Signature, int BeforeBrace)? RoutineHead(SyntaxTree tree, int line)
+    {
+        var (signature, brace) = (line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null) switch
+        {
+            ProcDeclarationSyntax proc => (proc.Signature, (SyntaxToken?)proc.OpenBraceToken),
+            MultiProcDeclarationSyntax multi => (multi.Signature, multi.OpenBraceToken),
+            MacroDeclarationSyntax macro => (macro.Signature, macro.OpenBraceToken),
+            _ => (null, null),
+        };
+        return brace is not { IsMissing: false } opened
+            ? null
+            : (signature, opened.GetPreviousToken()?.Span.End ?? opened.Span.Start);
+    }
+
+    /// <summary>
     /// <paramref name="item"/> written into the signature of the routine <paramref name="line"/>
     /// opens: after the items it already declares, or as the signature it does not yet have. The
-    /// entry is what the item joins, so it goes before any <c>-&gt;</c>, and null comes back for
-    /// a line that opens no block.
+    /// entry is what the item joins, so it goes at the end of the entry and before any
+    /// <c>-&gt;</c>; null comes back for a line that declares no routine.
     /// </summary>
     public static Edit? SignatureItem(SyntaxTree tree, int line, string item)
     {
-        var tokens = LineContext.TokensOf(tree, line);
-        var brace = tokens.FindIndex(token => token.Kind == SyntaxKind.OpenBrace);
-        if (brace < 0)
+        if (RoutineHead(tree, line) is not var (signature, beforeBrace))
             return null;
-        var arrow = tokens.FindIndex(token => token.Kind == SyntaxKind.Arrow);
-        var end = arrow >= 0 && arrow < brace ? arrow : brace;
-        var last = tokens[end - 1];
-        var at = new TextSpan(last.Start + last.Text.Length, 0);
-        var colon = tokens.FindIndex(token => token.Kind == SyntaxKind.Colon);
-        return new Edit(tree, at, colon >= 0 && colon < end ? $", {item}" : $": {item}");
+        return signature is null
+            ? new Edit(tree, new TextSpan(beforeBrace, 0), $": {item}")
+            : new Edit(tree, new TextSpan(signature.Entry.Span.End, 0), $", {item}");
     }
 
     /// <summary>

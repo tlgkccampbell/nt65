@@ -120,20 +120,21 @@ internal static class UseItems
         var lines = new List<Line>();
         foreach (var child in tree.Root.Members)
         {
-            if (child is not LineSyntax { Statement: UseDirectiveSyntax { IsExported: false } } written)
+            if (child is not LineSyntax { Statement: UseDirectiveSyntax { IsExported: false } use } written)
                 continue;
-            if (Read(tree, written.LineIndex) is { } line)
+            if (Read(tree, written.LineIndex, use) is { } line)
                 lines.Add(line);
         }
         return lines;
     }
 
-    /// <summary>What one <c>.use</c> line says, read off its tokens.</summary>
-    private static Line? Read(SyntaxTree tree, int index)
+    /// <summary>
+    /// What one <c>.use</c> line says, read off the directive it parsed to: the path it names,
+    /// whether it is a <c>::*</c>, and the names it brings in. How the line is written — its
+    /// indent, its code and whatever comment follows — is text, and is read as text.
+    /// </summary>
+    private static Line? Read(SyntaxTree tree, int index, UseDirectiveSyntax use)
     {
-        var tokens = LineContext.TokensOf(tree, index);
-        if (tokens is not [{ Kind: SyntaxKind.Directive }, ..])
-            return null;
         var indent = Edits.IndentOf(tree, index);
         var start = tree.LineStarts[index];
         var end = LineContext.CodeEnd(tree, index);
@@ -141,50 +142,28 @@ internal static class UseItems
         var code = tree.Text[(start + indent.Length)..end];
         var comment = tree.Text[end..lineEnd].TrimEnd('\r', '\n');
 
-        // The path runs to the `::` before a `*` or a `{`, or to the end of the path itself.
-        var at = 1;
-        var path = new List<string>();
-        while (at < tokens.Count && LineContext.IsWord(tokens[at].Kind))
-        {
-            path.Add(tokens[at].Text);
-            at++;
-            if (at >= tokens.Count || tokens[at].Kind != SyntaxKind.ColonColon)
-                break;
-            at++;
-            if (at < tokens.Count && tokens[at].Kind is SyntaxKind.Star or SyntaxKind.OpenBrace)
-                break;
-        }
-        if (path.Count == 0)
+        var path = use.Path.Names;
+        if (path.Length == 0)
             return null;
+        var named = string.Join("::", path.Select(name => name.Text));
 
-        if (at < tokens.Count && tokens[at].Kind == SyntaxKind.Star)
-            return new Line(index, indent, code, comment, string.Join("::", path), true, []);
+        if (use.StarToken is not null)
+            return new Line(index, indent, code, comment, named, true, []);
 
-        if (at < tokens.Count && tokens[at].Kind == SyntaxKind.OpenBrace)
+        if (use.OpenBraceToken is not null)
         {
-            var items = new List<Item>();
-            for (at++; at < tokens.Count && tokens[at].Kind != SyntaxKind.CloseBrace; at++)
-            {
-                if (!LineContext.IsWord(tokens[at].Kind))
-                    continue;
-                var name = tokens[at].Text;
-                var written = name;
-                if (at + 2 < tokens.Count && tokens[at + 1].Text.Equals("as", StringComparison.OrdinalIgnoreCase))
-                {
-                    written = $"{name} as {tokens[at + 2].Text}";
-                    name = tokens[at + 2].Text;
-                    at += 2;
-                }
-                items.Add(new Item(name, written));
-            }
-            return new Line(index, indent, code, comment, string.Join("::", path), false, items);
+            var items = use.Items
+                .Where(item => !item.Name.IsMissing)
+                .Select(item => item.Alias is { IsMissing: false } alias
+                    ? new Item(alias.Text, $"{item.Name.Text} as {alias.Text}")
+                    : new Item(item.Name.Text, item.Name.Text))
+                .ToList();
+            return new Line(index, indent, code, comment, named, false, items);
         }
 
         // `.use a::b`, which brings in `b`, or `.use a::b as c`, which brings in `c`.
-        var brought = path[^1];
-        if (at + 1 < tokens.Count && tokens[at].Text.Equals("as", StringComparison.OrdinalIgnoreCase))
-            brought = tokens[at + 1].Text;
-        return new Line(index, indent, code, comment, string.Join("::", path), false, [new Item(brought, brought)]);
+        var brought = use.Alias is { IsMissing: false } renamed ? renamed.Text : path[^1].Text;
+        return new Line(index, indent, code, comment, named, false, [new Item(brought, brought)]);
     }
 
     /// <summary>One <c>.use</c> line: where it is, how it reads, and what it brings in.</summary>

@@ -217,17 +217,11 @@ internal static class Refactors
         var items = Edits.SpellState(exit);
         if (items.Length == 0)
             yield break;
-        var tokens = LineContext.TokensOf(tree, line);
-        var brace = tokens.FindIndex(token => token.Kind == SyntaxKind.OpenBrace);
-        if (brace < 0)
+        if (Edits.RoutineHead(tree, line) is not var (declared, beforeBrace))
             yield break;
-        var colon = tokens.FindIndex(token => token.Kind == SyntaxKind.Colon);
-        var written = colon >= 0 && colon < brace
-            ? $" -> {items}"
-            : $": {Edits.SpellState(signature.Entry)} -> {items}";
-        var end = brace > 0 ? tokens[brace - 1].Start + tokens[brace - 1].Text.Length : tokens[brace].Start;
+        var written = declared is null ? $": {Edits.SpellState(signature.Entry)} -> {items}" : $" -> {items}";
         yield return new Change($"Declare what `{routine.Name}` leaves: `-> {items}`", CodeActionKinds.Rewrite,
-            [new Edit(tree, new TextSpan(end, 0), written)]);
+            [new Edit(tree, new TextSpan(beforeBrace, 0), written)]);
     }
 
     /// <summary>

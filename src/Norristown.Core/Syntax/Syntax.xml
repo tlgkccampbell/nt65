@@ -2417,7 +2417,10 @@
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>}</c> of <c>a::{b, c}</c>, or null.</summary>
+        <summary>
+        The <c>}</c> of <c>a::{b, c}</c>: missing where the <c>{</c> is written and the source does
+        not reach the <c>}</c>, and null for a line that writes no braces.
+        </summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>

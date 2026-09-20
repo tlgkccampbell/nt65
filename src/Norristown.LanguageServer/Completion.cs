@@ -11,6 +11,13 @@ namespace Norristown.LanguageServer;
 /// names a path leads to after <c>::</c> and in a <c>.use</c>, the names in scope where an
 /// operand or an expression goes, the items of a processor-state signature, and a macro's
 /// parameters as named arguments.
+/// <para>
+/// All of it is read off <see cref="LineContext"/>, which lexes the line as far as the caret,
+/// rather than off the nodes the file parsed to. That is deliberate and stays: the caret cuts the
+/// line in the middle of what is being typed, so <c>$10</c> is <c>$1</c> and <c>.byt</c> is not
+/// yet <c>.byte</c>, and it is what has been typed that a completion is about. The tree answers
+/// what surrounds the line — which blocks hold it, and what they make of it.
+/// </para>
 /// </summary>
 internal static class Completion
 {

@@ -1010,8 +1010,21 @@ internal sealed class Parser
     {
         var (start, width) = Caret(index);
         reported++;
-        return GreenToken.Missing(kind, new GreenDiagnostic(start - FullStart(index), width, message, fix));
+        return GreenToken.Missing(
+            kind, new GreenDiagnostic(start - FullStart(index), width, message, fix ?? Writes(kind)));
     }
+
+    /// <summary>
+    /// The fix for a piece the line does not have, where writing the piece is the whole of it: a
+    /// bracket has one text and one place, which the missing token in the slot already says, so
+    /// the editor is told to write it there. Anything else — a name, a number, a message in quotes
+    /// — is the programmer's to write, and has no fix.
+    /// </summary>
+    private static DiagnosticFix? Writes(SyntaxKind kind) =>
+        kind is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace or SyntaxKind.OpenParen
+            or SyntaxKind.CloseParen or SyntaxKind.OpenBracket or SyntaxKind.CloseBracket
+            ? new DiagnosticFix(FixKind.MissingPiece, SyntaxFacts.FixedText(kind))
+            : null;
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
@@ -1373,11 +1386,10 @@ internal sealed class Parser
 
             var openBrace = Advance();
             var items = ParseSeparatedList(ParseUseItem);
-            GreenToken? closeBrace = null;
-            if (Kind == SyntaxKind.CloseBrace)
-                closeBrace = Advance();
-            else
-                ReportOnce("expected `}`");
+
+            // The `{` is written, so the `}` that closes it has a place on the line whether or not
+            // the source reached it, and the missing token stands there.
+            var closeBrace = Expect(SyntaxKind.CloseBrace, "expected `}`");
             return new UseDirectiveSyntax(
                 keyword, path, colonColon, null, openBrace, items, closeBrace, null, null);
         }

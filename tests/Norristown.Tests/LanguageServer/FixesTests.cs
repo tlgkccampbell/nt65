@@ -170,6 +170,45 @@ public sealed class FixesTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
+    /// <summary>
+    /// A bracket the line does not have is written where the tree holds the place for it. Where
+    /// the piece belongs is the missing token's answer and not the text's, so a line with a
+    /// comment after it has the brace written before the comment rather than after it.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".proc main: a8, i8 {\n    rts\n}\n")]
+    [InlineData(".proc main   ; note\n}\n", "Write the `{`", ".proc main {   ; note\n}\n")]
+    [InlineData("MASK = (1 + 2\n", "Write the `)`", "MASK = (1 + 2)\n")]
+    [InlineData(".proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Write the `]`",
+        ".proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
+    [InlineData(".use gfx::{clear\n", "Write the `}`", ".use gfx::{clear}\n")]
+    public void AMissingBracketIsWrittenWhereTheTreeHoldsItsPlace(string body, string title, string written)
+    {
+        var (analysis, model) = Analyzed(Header + body);
+
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
+
+        Assert.Equal("quickfix", action.Kind);
+        Assert.Equal(Header + written, Editing.Apply(Header + body, action.Edit.Changes[Uri]));
+    }
+
+    /// <summary>
+    /// The brace a routine's body needs is written, and what the file then says is nothing: the
+    /// fix leaves a file that parses and means what it reads as.
+    /// </summary>
+    [Fact]
+    public void WritingTheMissingBraceLeavesAFileWithNothingWrong()
+    {
+        const string Body = ".proc main: a8, i8\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Header + Body);
+
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Write the `{`");
+
+        var written = Editing.Apply(Header + Body, action.Edit.Changes[Uri]);
+        var (after, _) = Analyzed(written);
+        Assert.Empty(after.Diagnostics.Select(diagnostic => diagnostic.Message));
+    }
+
     /// <summary>A client that asks for one kind of change is given that kind and no other.</summary>
     [Fact]
     public void OnlyTheKindsAskedForAreOffered()
