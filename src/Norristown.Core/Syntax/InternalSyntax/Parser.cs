@@ -1162,15 +1162,11 @@ internal sealed class Parser
 
     private GreenNode ParseScope()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            Report("expected `{`");
-        return new GreenSyntax(SyntaxKind.ScopeDeclaration, children.ToImmutable());
+        var keyword = Advance();
+
+        // `.scope { }` is anonymous: it opens a scope and declares no name for it.
+        var name = AtName ? Advance() : null;
+        return new ScopeDeclarationSyntax(keyword, name, ExpectOpenBrace());
     }
 
     /// <summary>

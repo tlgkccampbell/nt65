@@ -71,7 +71,6 @@ ParenthesizedExpression
 PatchDirective
 RecordValues
 RepeatDirective
-ScopeDeclaration
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration

@@ -2161,7 +2161,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ScopeDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ScopeDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ScopeDeclaration"/>
     <TypeComment>
       <summary><c>.scope name {</c>.</summary>
@@ -2171,7 +2171,6 @@
         <summary>The <c>.scope</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2180,14 +2179,12 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
