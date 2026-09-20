@@ -127,7 +127,7 @@ internal sealed class Server
     public Task DidOpenAsync(DidOpenTextDocumentParams request)
     {
         var document = workspace.Open(request.TextDocument);
-        log.Write($"opened {document.Uri} ({document.Tree.Lines.Length} lines)");
+        log.Write($"opened {document.Uri} ({document.Tree.LineCount} lines)");
         return PublishDiagnosticsAsync(document.Uri);
     }
 
@@ -229,7 +229,7 @@ internal sealed class Server
     [JsonRpcMethod("textDocument/formatting")]
     public IReadOnlyList<TextEdit> Formatting(DocumentFormattingParams request) =>
         workspace.Find(request.TextDocument.Uri) is { } document
-            ? Lsp.ToFormatting(document.Tree, 0, document.Tree.Lines.Length - 1)
+            ? Lsp.ToFormatting(document.Tree, 0, document.Tree.LineCount - 1)
             : [];
 
     /// <summary>

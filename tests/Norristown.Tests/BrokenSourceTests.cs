@@ -70,7 +70,7 @@ public sealed class BrokenSourceTests
         }
 
         WholeFile(analysis, model, where, problems);
-        for (var line = 0; line < tree.Lines.Length && problems.Count < Most; line++)
+        for (var line = 0; line < tree.LineCount && problems.Count < Most; line++)
             OnLine(analysis, model, line, where, problems);
     }
 
@@ -83,7 +83,7 @@ public sealed class BrokenSourceTests
         Answer("diagnostics", () => Lsp.ToDiagnostics(analysis.DiagnosticsFor(tree.Path), tree, analysis.Configuration));
         Answer("document symbols", () => Lsp.ToSymbols(tree));
         Answer("folding ranges", () => Lsp.ToFoldingRanges(tree));
-        Answer("formatting", () => Lsp.ToFormatting(tree, 0, tree.Lines.Length - 1));
+        Answer("formatting", () => Lsp.ToFormatting(tree, 0, tree.LineCount - 1));
         Answer("code lenses", () => CodeLenses.In(tree, analysis.FlowFor(tree.Path)));
         Answer("document links", () => DocumentLinks.In(model));
         Answer("semantic tokens", () => NameHighlighting.In(model));
@@ -131,11 +131,8 @@ public sealed class BrokenSourceTests
     /// </summary>
     private static int Caret(SyntaxTree tree, int index)
     {
-        var line = tree.Lines[index];
-        var start = tree.LineStarts[index];
-        return line.Tokens.Length < 2
-            ? start
-            : start + line.TextOffset(line.Tokens.Length - 2) + line.Tokens[^2].Text.Length;
+        var tokens = tree.GetLine(index).Tokens;
+        return tokens.Length < 2 ? tree.LineStarts[index] : tokens[^2].Span.End;
     }
 
     /// <summary>

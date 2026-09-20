@@ -109,17 +109,18 @@ public static class UnusedSymbols
     /// <summary>
     /// Every name the file writes outside the <c>.use</c> items themselves, and on its own
     /// rather than as a step on a path, which is what a name brought in is written as. One pass
-    /// answers for all of them, because a file with items to check has them all to check.
+    /// answers for all of them, because a file with items to check has them all to check. It
+    /// reads the tokens the lexer left on each line rather than the nodes they parsed to, since
+    /// every name the file writes is wanted here and where each of them sits is not.
     /// </summary>
     private static HashSet<string> Written(SyntaxTree tree)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < tree.LineCount; index++)
+        for (var index = 0; index < tree.Lines.Length; index++)
         {
-            var line = tree.GetLine(index);
-            if (line.Statement.Kind == SyntaxKind.UseDirective)
+            if (tree.Statement(index).Kind == SyntaxKind.UseDirective)
                 continue;
-            var tokens = line.Tokens;
+            var tokens = tree.Lines[index].Tokens;
             for (var at = 0; at < tokens.Length; at++)
             {
                 if (at == 0 || tokens[at - 1].Kind != SyntaxKind.ColonColon)

@@ -16,8 +16,8 @@ internal static class Fidelity
             yield return "the tree does not give back the file's text";
 
         var lines = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
-        if (lines.Count != tree.Lines.Length)
-            yield return $"the tree holds {lines.Count} lines, and the file has {tree.Lines.Length}";
+        if (lines.Count != tree.LineCount)
+            yield return $"the tree holds {lines.Count} lines, and the file has {tree.LineCount}";
 
         foreach (var line in lines)
         {
@@ -30,10 +30,10 @@ internal static class Fidelity
 
     /// <summary>A line as the pieces it is written in spell it, in the order they are written.</summary>
     private static string Pieces(LineSyntax line) =>
-        (line.ExportKeyword?.Green.ToFullString() ?? "")
+        (line.ExportKeyword?.ToFullString() ?? "")
         + line.Statement.ToFullString()
         + (line.SkippedTokens?.ToFullString() ?? "")
-        + line.EndOfLineToken.Green.ToFullString();
+        + line.EndOfLineToken.ToFullString();
 
     private static string Quote(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
 }
