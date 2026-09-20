@@ -1026,7 +1026,7 @@ internal sealed class Evaluator
             return null;
         if (DataSyntax.IsElementType(directive))
             return RoomForElements(directive);
-        var operands = directive.Values;
+        SeparatedSyntaxList<SyntaxNode> operands = directive.Tail is InlineDataSyntax inline ? inline.Values : default;
 
         switch (DataSyntax.NameOf(directive))
         {
@@ -1042,7 +1042,7 @@ internal sealed class Evaluator
                     : null;
 
             case ".res":
-                return operands.Length > 0 && Evaluate(operands[0]).AsNumber() is { } reserved and >= 0
+                return operands.Count > 0 && Evaluate(operands[0]).AsNumber() is { } reserved and >= 0
                     ? new DataSize(reserved, reserved)
                     : null;
 
@@ -1093,7 +1093,7 @@ internal sealed class Evaluator
     /// </summary>
     private long? GivenCount(DataDirectiveSyntax directive)
     {
-        if (DataSyntax.BracedOf(directive) is { } braced)
+        if (directive.Tail is BracedDataSyntax { Value: { } braced })
             return braced is ValueListSyntax list ? Spread(list.Values, 1).Elements : 1;
         if (DataSyntax.BodyOf(directive) is { } body)
         {
@@ -1102,8 +1102,7 @@ internal sealed class Evaluator
                 : Total(body.Members, 1, statement =>
                     statement is DataValuesSyntax row ? Spread(row.Values, 1).Elements : 0, _ => null);
         }
-        var values = DataSyntax.ValuesOf(directive);
-        return values.Count > 0 ? Spread(values, 1).Elements : null;
+        return directive.Tail is InlineDataSyntax written ? Spread(written.Values, 1).Elements : null;
     }
 
     /// <summary>
@@ -1278,7 +1277,7 @@ internal sealed class Evaluator
     /// One element per operand, except that text is one element per byte and a list stands
     /// for its own items.
     /// </summary>
-    private DataSize Spread(IReadOnlyList<SyntaxNode> operands, long width)
+    private DataSize Spread(SeparatedSyntaxList<SyntaxNode> operands, long width)
     {
         long elements = 0;
         foreach (var operand in operands)
@@ -1297,7 +1296,7 @@ internal sealed class Evaluator
     /// A binary file, whose length nt65 reads for itself. The path is relative to the file
     /// that names it, and an offset and a length may narrow it.
     /// </summary>
-    private DataSize? RoomForBinary(DataDirectiveSyntax directive, IReadOnlyList<SyntaxNode> operands)
+    private DataSize? RoomForBinary(DataDirectiveSyntax directive, SeparatedSyntaxList<SyntaxNode> operands)
     {
         if (operands.Count == 0 || Evaluate(operands[0]) is not { Kind: ValueKind.String, Text: { } path })
             return null;
@@ -1400,7 +1399,13 @@ internal sealed class Evaluator
             if (member.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element))
             {
                 var spelled = element.Directive.Text;
-                if ((DataSyntax.ValuesOf(element).FirstOrDefault() ?? DataSyntax.BracedOf(element)) is { } valued)
+                SyntaxNode? valued = element.Tail switch
+                {
+                    InlineDataSyntax { Values: [var first, ..] } => first,
+                    BracedDataSyntax braced => braced.Value,
+                    _ => null,
+                };
+                if (valued is not null)
                 {
                     Report(valued, $"`{member.Name}` is a member, which reserves room and holds no value: "
                         + $"several are `{spelled}[n]`");

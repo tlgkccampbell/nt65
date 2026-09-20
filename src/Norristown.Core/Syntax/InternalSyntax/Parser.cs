@@ -358,59 +358,60 @@ internal sealed class Parser
     /// <c>[]</c>, and then values: after it on the line, in braces on the line, or in the body
     /// the line opens. Any other directive takes its operands as ca65's does.
     /// </summary>
-    private GreenNode ParseDataDirective()
+    private DataDirectiveSyntax ParseDataDirective()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
         var directive = Advance();
-        children.Add(directive);
         var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
         if (!record && SyntaxFacts.ElementSize(directive.Text) is null)
-        {
-            if (!AtEnd)
-                children.AddRange(ParseCommaSeparated(ParseExpression));
-            return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
-        }
+            return new DataDirectiveSyntax(directive, null, null, AtEnd ? null : ParseInlineData());
 
+        GreenNode? type = null;
         if (record)
         {
             if (AtName || Kind == SyntaxKind.ColonColon)
-                children.Add(ParseName());
+                type = ParseName();
             else
                 Report("expected the type: `.type T`");
         }
-        var counted = Kind == SyntaxKind.OpenBracket;
-        if (counted)
-            children.Add(ParseElementCount());
+        var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
+        DataTailSyntax? tail = null;
         if (Kind == SyntaxKind.OpenBrace)
         {
             // A body holds an array's values, or one record's `member = value` lines.
             if (Next == SyntaxKind.EndOfLine)
             {
-                if (!counted && !record)
+                if (count is null && !record)
                     ReportOnce($"values in a body need a count: `{directive.Text}[] {{` counts them");
-                children.Add(Advance());
+                tail = new DataBodySyntax(Advance());
             }
             else
             {
-                children.Add(ParseBracedValue());
+                tail = new BracedDataSyntax(ParseBracedValue());
             }
         }
         else if (!AtEnd)
         {
-            if (counted || record)
+            if (count is not null || record)
             {
-                ReportOnce(counted
+                ReportOnce(count is not null
                     ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
                     : "a record's values go in braces: `.type T { member = value }`");
             }
-            children.AddRange(ParseCommaSeparated(ParseExpression));
+            tail = ParseInlineData();
         }
-        return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
+        return new DataDirectiveSyntax(directive, type, count, tail);
     }
 
+    /// <summary>
+    /// The values written after the directive on its own line, as the tail they are; null where
+    /// there are none to read, which leaves the directive no tail at all.
+    /// </summary>
+    private DataTailSyntax? ParseInlineData() =>
+        ParseSeparatedList(ParseExpression) is { } values ? new InlineDataSyntax(values) : null;
+
     /// <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
-    private GreenNode ParseElementCount()
+    private ElementCountSyntax ParseElementCount()
     {
         var bracket = Advance();
         var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
@@ -430,7 +431,7 @@ internal sealed class Parser
             : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
 
         GreenToken? colon = null;
-        GreenNode? element = null;
+        DataDirectiveSyntax? element = null;
         GreenToken? brace = null;
         if (Kind == SyntaxKind.Colon)
         {

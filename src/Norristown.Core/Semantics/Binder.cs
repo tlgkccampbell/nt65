@@ -1062,7 +1062,12 @@ internal sealed class Binder
     {
         if (directive?.Type is not { } type)
             return;
-        records.Add((type, [.. DataSyntax.ValuesOf(directive).Append(DataSyntax.BracedOf(directive)).OfType<SyntaxNode>()]));
+        records.Add((type, directive.Tail switch
+        {
+            InlineDataSyntax inline => [.. inline.Values],
+            BracedDataSyntax braced => [braced.Value],
+            _ => [],
+        }));
     }
 
     /// <summary>

@@ -908,7 +908,7 @@ public sealed class Emitter
         var edits = new Edits();
         string text;
         string? comment = null;
-        if (DataSyntax.BracedOf(directive) is ValueListSyntax list)
+        if (directive.Tail is BracedDataSyntax { Value: ValueListSyntax list })
         {
             var (width, bigEndian) = Slot(directive);
             foreach (var value in list.Values)
@@ -918,7 +918,7 @@ public sealed class Emitter
                 edits.Replace[list.CloseBraceToken.Position] = "";
             text = $"{ForCa65(directive.Directive.Text)} {Bare(list, edits, out comment)}";
         }
-        else if (DataSyntax.ValuesOf(directive).Count > 0)
+        else if (directive.Tail is InlineDataSyntax)
         {
             Substitute(directive, edits, nested: false);
             text = Bare(directive, edits, out comment);
@@ -1114,7 +1114,7 @@ public sealed class Emitter
             return;
         }
         IReadOnlyList<IReadOnlyDictionary<string, MemberValueSyntax>> records;
-        if (DataSyntax.BracedOf(directive) is { } braced)
+        if (directive.Tail is BracedDataSyntax { Value: { } braced })
         {
             records = braced is ValueListSyntax list ? [.. list.Values.Select(ValuesIn)] : [ValuesIn(braced)];
         }
@@ -1149,7 +1149,8 @@ public sealed class Emitter
     /// <summary>The byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
     private long Fill(Symbol member) =>
         member.Data is DataDirectiveSyntax data && DataSyntax.NameOf(data) == ".res"
-        && data.Values is [_, var padding, ..] && model.ValueOf(padding, expansion).AsNumber() is { } fill
+        && data.Tail is InlineDataSyntax { Values: [_, var padding, ..] }
+        && model.ValueOf(padding, expansion).AsNumber() is { } fill
             ? fill & 0xff
             : 0;
 
@@ -1215,7 +1216,7 @@ public sealed class Emitter
             // An array member takes a braced list, and one no value names is zeros.
             if (element is { Count: not null })
             {
-                IReadOnlyList<SyntaxNode> items = given is ValueListSyntax list ? list.Values : [];
+                SeparatedSyntaxList<SyntaxNode> items = given is ValueListSyntax list ? list.Values : default;
                 if (member.Type is { IsLayout: true } records)
                 {
                     for (var i = 0; i < member.Count; i++)
@@ -1732,15 +1733,16 @@ public sealed class Emitter
                     return;
 
                 // An element type's values, and a `.res` fill, are slots of a width.
-                if (DataSyntax.IsElementType(directive) && DataSyntax.BracedOf(directive) is null)
+                if (DataSyntax.IsElementType(directive) && directive.Tail is not BracedDataSyntax)
                 {
                     edits.Replace[directive.Directive.Position] = ForCa65(directive.Directive.Text);
                     var (width, bigEndian) = Slot(directive);
-                    foreach (var value in DataSyntax.ValuesOf(directive))
+                    foreach (var value in DataLengths.ElementsOf(directive))
                         InPlace(value, width, bigEndian, edits);
                     return;
                 }
-                if (DataSyntax.NameOf(directive) == ".res" && directive.Values is [var count, var fill])
+                if (DataSyntax.NameOf(directive) == ".res"
+                    && directive.Tail is InlineDataSyntax { Values: [var count, var fill] })
                 {
                     Substitute(count, edits, nested: false);
                     InPlace(fill, 1, bigEndian: false, edits);
@@ -1876,7 +1878,7 @@ public sealed class Emitter
             return;
 
         edits.Replace[directive.Directive.Position] = ".byte";
-        var last = directive.Values.LastOrDefault() is { } argument && Tokens(argument) is [.., var token]
+        var last = directive.Tail is InlineDataSyntax { Values: [.., var argument] } && Tokens(argument) is [.., var token]
             ? token.Position
             : directive.Directive.Position;
         edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", $00";
@@ -1891,12 +1893,13 @@ public sealed class Emitter
     {
         if (!directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase))
             return false;
-        if (directive.Values.FirstOrDefault() is { } path
+        var values = directive.Tail is InlineDataSyntax inline ? inline.Values : default;
+        if (values is [var path, ..]
             && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
         {
             Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"", edits);
         }
-        foreach (var argument in directive.Values.Skip(1))
+        foreach (var argument in values.Skip(1))
             Substitute(argument, edits, nested: false);
         return true;
     }

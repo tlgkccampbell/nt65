@@ -148,7 +148,7 @@ public static class UnusedSymbols
         SymbolKind.Label or SymbolKind.Macro or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union => true,
         SymbolKind.Constant => symbol.Scope.Kind != ScopeKind.Type,
         SymbolKind.Data => symbol.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element)
-            && DataSyntax.ValuesOf(element).Count == 0 && DataSyntax.BracedOf(element) is null
+            && element.Tail is not (InlineDataSyntax or BracedDataSyntax)
             && DataSyntax.BodyOf(element) is null,
         _ => false,
     };

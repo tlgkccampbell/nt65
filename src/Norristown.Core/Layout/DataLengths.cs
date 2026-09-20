@@ -55,11 +55,12 @@ public static class DataLengths
     /// The values a directive or a line of a body gives, one element each: its operands, the
     /// values of a braced list, or a line's values. A record is one element.
     /// </summary>
-    public static IReadOnlyList<SyntaxNode> ElementsOf(StatementSyntax directive) => directive switch
+    public static SeparatedSyntaxList<SyntaxNode> ElementsOf(StatementSyntax directive) => directive switch
     {
         DataValuesSyntax values => values.Values,
-        DataDirectiveSyntax data => DataSyntax.BracedOf(data) is ValueListSyntax list ? list.Values : DataSyntax.ValuesOf(data),
-        _ => [],
+        DataDirectiveSyntax { Tail: InlineDataSyntax inline } => inline.Values,
+        DataDirectiveSyntax { Tail: BracedDataSyntax { Value: ValueListSyntax list } } => list.Values,
+        _ => default,
     };
 
     /// <summary>
@@ -173,7 +174,7 @@ public static class DataLengths
     /// declared <c>inline .strz</c> among them, would stop there.
     /// </summary>
     private static void Terminated(
-        StatementSyntax directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        StatementSyntax directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
     {
         if (operands.Count != 1 || TextOf(operands[0], model, on) is not { } text)
@@ -219,7 +220,7 @@ public static class DataLengths
         var (declared, given) = model.ElementsOf(directive, on);
         if (count.Count is not { } written)
         {
-            if (given is null && DataSyntax.BracedOf(directive) is null && DataSyntax.BodyOf(directive) is null)
+            if (given is null && directive.Tail is not BracedDataSyntax && DataSyntax.BodyOf(directive) is null)
             {
                 Report(count, model, diagnostics, on,
                     $"`[]` counts the values given, and there are none: `{directive.Directive.Text}[n]` holds n");
@@ -241,12 +242,12 @@ public static class DataLengths
     /// and one record written over several lines is the block the directive's line opens.
     /// </summary>
     private static void Records(
-        Symbol type, StatementSyntax directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model,
+        Symbol type, StatementSyntax directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model,
         List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (directive is DataDirectiveSyntax data)
         {
-            if (DataSyntax.BracedOf(data) is RecordValuesSyntax one)
+            if (data.Tail is BracedDataSyntax { Value: RecordValuesSyntax one })
             {
                 Initialized(type, one.Members, model, diagnostics, on);
                 return;
@@ -268,7 +269,7 @@ public static class DataLengths
     }
 
     private static void Values(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         (long Low, long High)? limit, Expansion? on)
     {
         foreach (var operand in operands)
@@ -438,7 +439,7 @@ public static class DataLengths
     /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
     /// </summary>
     private static void NoFarAddresses(
-        string directive, IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
+        string directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
     {
         foreach (var operand in operands)
@@ -455,7 +456,7 @@ public static class DataLengths
 
     /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant.</summary>
     private static void Reserved(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+        SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (operands.Count == 0)
             return;
@@ -471,7 +472,7 @@ public static class DataLengths
 
     /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
     private static void Alignment(
-        IReadOnlyList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+        SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (operands.Count == 0)
             return;

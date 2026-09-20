@@ -3,9 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a data directive's syntax says: its element type, its count, its values and the body
-/// it opens. Binding, evaluation, layout and emission all read the same pieces, so they are
-/// read in one place.
+/// What a data directive's syntax says beyond its slots: whether it is an element type, and
+/// the body it opens, which is a block rather than a piece of the line. Binding, evaluation,
+/// layout and emission all ask the same questions, so they are answered in one place.
 /// </summary>
 public static class DataSyntax
 {
@@ -19,25 +19,13 @@ public static class DataSyntax
     public static bool IsElementType(DataDirectiveSyntax directive) =>
         directive.IsRecord || SyntaxFacts.ElementSize(NameOf(directive)) is not null;
 
-    /// <summary>The braced values written on the directive's line, <c>{ 1, 2 }</c> or <c>{ x = 1 }</c>, or null.</summary>
-    public static SyntaxNode? BracedOf(DataDirectiveSyntax directive) =>
-        directive.ChildNodes.FirstOrDefault(c => c is ValueListSyntax or RecordValuesSyntax);
-
-    /// <summary>
-    /// The values written after the directive on its line: its operands for any directive that
-    /// is not an element type, and the unbraced values of one that is. Tokens the parser had to
-    /// skip are no value, however they were written.
-    /// </summary>
-    public static IReadOnlyList<SyntaxNode> ValuesOf(DataDirectiveSyntax directive) =>
-        [.. directive.Values.Where(c => c is not (ValueListSyntax or RecordValuesSyntax))];
-
     /// <summary>
     /// The block of values or <c>member = value</c> lines the directive's line opens, or null
     /// when it opens none.
     /// </summary>
     public static BlockSyntax? BodyOf(DataDirectiveSyntax directive)
     {
-        if (directive.OpenBraceToken is null)
+        if (directive.Tail is not DataBodySyntax)
             return null;
         var line = directive.FirstAncestorOrSelf<LineSyntax>();
         return line?.Parent is BlockSyntax { BlockKind: BlockKind.DataBody or BlockKind.RecordInitializer } block

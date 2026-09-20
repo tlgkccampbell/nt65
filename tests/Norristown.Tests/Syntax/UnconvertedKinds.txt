@@ -1,7 +1,6 @@
 # The kinds the parser still builds the generic green node for, one to a line, sorted. Remove a
 # kind's line in the same change that fixes its slots; ShapeTests reads the list strictly both
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
-DataDirective
 ModuleDirective
 NameExpression
 UseDirective

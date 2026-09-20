@@ -433,7 +433,7 @@ public static class Compiler
             foreach (var directive in file.Tree.Root.DescendantNodes().OfType<DataDirectiveSyntax>())
             {
                 if (directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
-                    && directive.Values.FirstOrDefault() is { } operand
+                    && directive.Tail is InlineDataSyntax { Values: [var operand, ..] }
                     && file.ValueOf(operand) is { Kind: ValueKind.String, Text: { } included })
                 {
                     named.Add(Paths.Beside(file.Tree.Path, included));

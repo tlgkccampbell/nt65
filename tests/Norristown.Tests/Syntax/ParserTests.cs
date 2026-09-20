@@ -336,7 +336,8 @@ public sealed class ParserTests
 
     /// <summary>The operand of a <c>.word</c>, which is the shortest line an expression fits on.</summary>
     private static SyntaxNode Expression(string expression) =>
-        Assert.Single(Assert.IsType<DataDirectiveSyntax>(Statement(".word " + expression)).Values);
+        Assert.Single(Assert.IsType<InlineDataSyntax>(
+            Assert.IsType<DataDirectiveSyntax>(Statement(".word " + expression)).Tail).Values);
 
     private static string[] Errors(string line) => [.. Parse(line).Diagnostics.Select(d => d.Message)];
 }

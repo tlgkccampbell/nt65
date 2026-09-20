@@ -104,7 +104,8 @@ public sealed class SeparatedListParsingTests
     }
 
     private static CallExpressionSyntax Call(string call) =>
-        Assert.Single(Assert.IsType<DataDirectiveSyntax>(Line(".word " + call).Statement).Values)
+        Assert.Single(Assert.IsType<InlineDataSyntax>(
+            Assert.IsType<DataDirectiveSyntax>(Line(".word " + call).Statement).Tail).Values)
             as CallExpressionSyntax ?? throw new InvalidOperationException($"`{call}` is no call");
 
     private static LineSyntax Line(string source) =>

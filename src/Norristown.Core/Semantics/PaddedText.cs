@@ -36,7 +36,7 @@ public static class PaddedText
     /// </summary>
     private static SyntaxNode? OnlyValueOf(DataDirectiveSyntax directive)
     {
-        if (DataSyntax.BracedOf(directive) is ValueListSyntax list)
+        if (directive.Tail is BracedDataSyntax { Value: ValueListSyntax list })
             return list.Values is [var braced] ? braced : null;
         if (DataSyntax.BodyOf(directive) is not { } body)
             return null;
