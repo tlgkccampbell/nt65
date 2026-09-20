@@ -43,7 +43,8 @@
   of the line that may be absent altogether: a piece the line always has a place for is required,
   and stands in its slot as a missing token or an error node when the source leaves it out. A piece
   inside an optional group stays optional, and is missing rather than absent when the group is
-  there and it is not.
+  there and it is not. A list field is never optional: the property is always a list, and a list
+  with no items is a slot holding nothing.
 
   Until a kind is converted the parser builds the generic node for it, so Today gives the type the
   property still has and Read the search it still makes; a field whose property can be read either
