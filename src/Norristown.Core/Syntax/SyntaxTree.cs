@@ -61,8 +61,9 @@ public sealed class SyntaxTree
     /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
     internal ImmutableArray<GreenLine> Lines { get; }
 
-    /// <summary>The root node, created on first use.</summary>
-    public FileSyntax Root => root ??= new FileSyntax(this, null, green, 0);
+    /// <summary>The root node, created on first use, and the same one whoever asks first.</summary>
+    public FileSyntax Root =>
+        root ?? Interlocked.CompareExchange(ref root, new FileSyntax(this, null, green, 0), null) ?? root;
 
     /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;

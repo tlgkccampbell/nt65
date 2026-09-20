@@ -1334,8 +1334,11 @@ public sealed class Emitter
     {
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
-        var last = Tokens(statement.Condition)[^1].Position;
-        edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", lderror";
+
+        // A condition nobody wrote has no token to put the level after, and the line has been
+        // reported on already.
+        if (Tokens(statement.Condition) is [.., var end])
+            edits.After[end.Position] = edits.After.GetValueOrDefault(end.Position, "") + ", lderror";
         Code(line, Render(statement, edits), 0, located: true);
     }
 
@@ -1713,6 +1716,10 @@ public sealed class Emitter
     private static void Replace(SyntaxNode node, string text, Edits edits, bool around = true)
     {
         var tokens = Tokens(node);
+
+        // A node nobody wrote, the value after a last comma, has no place to write anything.
+        if (tokens.Count == 0)
+            return;
         for (var i = 0; i < tokens.Count; i++)
         {
             edits.Replace[tokens[i].Position] = "";

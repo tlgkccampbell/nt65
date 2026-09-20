@@ -69,6 +69,17 @@ public sealed class BrokenSourceTests
             return;
         }
 
+        // A program that is already wrong is written out all the same, so the emitter reads
+        // half-typed lines as everything before it does.
+        try
+        {
+            Compiler.Emit(analysis, ProjectSettings.None);
+        }
+        catch (Exception e)
+        {
+            problems.Add($"{where}: emitting throws {Told(e)}");
+        }
+
         WholeFile(analysis, model, where, problems);
         for (var line = 0; line < tree.LineCount && problems.Count < Most; line++)
             OnLine(analysis, model, line, where, problems);
