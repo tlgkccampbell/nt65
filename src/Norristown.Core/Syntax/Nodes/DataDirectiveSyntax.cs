@@ -34,7 +34,7 @@ public sealed class DataDirectiveSyntax : StatementSyntax
         get
         {
             if (values.IsDefault)
-                ImmutableInterlocked.InterlockedInitialize(ref values, [.. ChildNodes.Where(node => node != Type && node is not (ElementCountSyntax or SkippedTokensSyntax))]);
+                ImmutableInterlocked.InterlockedInitialize(ref values, [.. ChildNodes.Where(node => node != Type && node is not ElementCountSyntax)]);
             return values;
         }
     }

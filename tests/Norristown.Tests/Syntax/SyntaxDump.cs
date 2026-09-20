@@ -37,16 +37,15 @@ internal static class SyntaxDump
 
     /// <summary>
     /// The statement trees, one node per row, indented by depth: <c>InstructionStatement</c>,
-    /// then <c>Mnemonic "lda"</c> for each token. Line breaks are left out, since every
-    /// statement ends with one.
+    /// then <c>Mnemonic "lda"</c> for each token. The pieces the line holds rather than the
+    /// statement — the <c>.export</c> before a declaration and whatever the statement could not
+    /// take — are written with it; line breaks are left out, since every line ends with one.
     /// </summary>
     public static string Statements(SyntaxTree tree)
     {
         var builder = new StringBuilder();
         void Walk(GreenNode node, int depth)
         {
-            if (node.Kind == SyntaxKind.EndOfLine)
-                return;
             builder.Append(' ', depth * 2).Append(node.Kind);
             if (node is GreenToken token)
                 builder.Append(' ').Append(Escape(token.Text));
@@ -54,8 +53,14 @@ internal static class SyntaxDump
             for (var i = 0; i < node.SlotCount; i++)
                 Walk(node.GetSlot(i), depth + 1);
         }
-        for (var i = 0; i < tree.Lines.Length; i++)
-            Walk(tree.Statement(i), 0);
+        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
+        {
+            if (line.ExportKeyword is { } export)
+                Walk(export.Green, 0);
+            Walk(line.Statement.Green, 0);
+            if (line.SkippedTokens is { } skipped)
+                Walk(skipped.Green, 0);
+        }
         return builder.ToString();
     }
 

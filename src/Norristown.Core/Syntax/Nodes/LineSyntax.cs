@@ -4,12 +4,15 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// One source line. Its tokens are reachable both directly and through its
-/// <see cref="Statement"/>, which holds the same tokens in the same order.
+/// One source line, in the pieces it is written in: the <c>.export</c> that exports what it
+/// declares, its <see cref="Statement"/>, whatever the statement could not take, and the line
+/// break that ends it. Its tokens are reachable both directly and through those pieces, which
+/// between them hold the same tokens in the same order.
 /// </summary>
 public sealed class LineSyntax : SyntaxNode
 {
     private StatementSyntax? statement;
+    private SkippedTokensSyntax? skipped;
 
     internal LineSyntax(SyntaxTree tree, SyntaxNode? parent, GreenLine green, int position)
         : base(tree, parent, green, position)
@@ -29,20 +32,28 @@ public sealed class LineSyntax : SyntaxNode
     public BlockKind OpensBlockKind => Green.OpensBlockKind;
 
     /// <summary>
-    /// What the line's tokens parse to.
-    /// <para>
-    /// A declaration written after <c>.export</c> is the line's statement, so it reads as the
-    /// same declaration without it; <see cref="StatementSyntax.IsExported"/> says the
-    /// <c>.export</c> is there.
-    /// </para>
+    /// The <c>.export</c> written before a declaration, which exports what the line declares, or
+    /// null. It belongs to the line rather than to the declaration, as the line break does, so
+    /// the declaration reads as the same one written without it;
+    /// <see cref="StatementSyntax.IsExported"/> says the <c>.export</c> is there.
     /// </summary>
-    public StatementSyntax Statement => statement ??= Parsed();
+    public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : ChildTokens[0];
 
-    private protected override ImmutableArray<SyntaxNode> CreateChildNodes() => [Statement];
+    /// <summary>What the line's own tokens parse to.</summary>
+    public StatementSyntax Statement => statement ??= (StatementSyntax)Parsed.Node.CreateRed(
+        Tree, this, Position + (Parsed.ExportKeyword?.FullWidth ?? 0));
 
-    private StatementSyntax Parsed()
-    {
-        var parsed = (StatementSyntax)Tree.Statement(LineIndex).CreateRed(Tree, this, Position);
-        return parsed is ExportedDeclarationSyntax exported ? exported.Declaration : parsed;
-    }
+    /// <summary>What was left on the line that the statement could not take, or null.</summary>
+    public SkippedTokensSyntax? SkippedTokens =>
+        skipped ??= Parsed.SkippedTokens is { } left
+            ? (SkippedTokensSyntax)left.CreateRed(Tree, this, Statement.FullSpan.End)
+            : null;
+
+    /// <summary>The line break that ends the line, which is the statement's terminator.</summary>
+    public SyntaxToken EndOfLineToken => ChildTokens[^1];
+
+    private Parser.Result Parsed => Tree.Parsed(LineIndex);
+
+    private protected override ImmutableArray<SyntaxNode> CreateChildNodes() =>
+        SkippedTokens is { } left ? [Statement, left] : [Statement];
 }

@@ -219,12 +219,6 @@ public enum SyntaxKind : byte
     /// <summary>One item of an <c>.export</c> list: a name or a path, and its size or linker name.</summary>
     ExportItem,
 
-    /// <summary>
-    /// <c>.export</c> written before a declaration, <c>.export .proc init {</c>. The line's
-    /// statement is the declaration, whose parent this is.
-    /// </summary>
-    ExportedDeclaration,
-
     /// <summary><c>.module hw::vic</c>: the name of the module a file is.</summary>
     ModuleDirective,
 

@@ -8,10 +8,11 @@ namespace Norristown.Syntax.InternalSyntax;
 /// line and its statement survives an edit anywhere else in the file.
 /// <para>
 /// The parser never aborts a line: whatever it cannot read becomes a
-/// <see cref="SyntaxKind.SkippedTokens"/> child with a diagnostic, and the next line parses
-/// normally. It never invents a token either, so a statement's text is exactly its line's
-/// text and a piece the parser expected and did not find is simply absent from the node.
-/// Everything above the parser therefore has to allow for a missing child.
+/// <see cref="SyntaxKind.SkippedTokens"/> node with a diagnostic, which the line holds as it
+/// holds the line break and the <c>.export</c> before a declaration. A statement is therefore
+/// only its own tokens, wherever it is written. The parser never invents a token either, so a
+/// piece it expected and did not find is simply absent from the node, and everything above the
+/// parser has to allow for a missing child.
 /// </para>
 /// </summary>
 internal sealed class Parser
@@ -27,6 +28,11 @@ internal sealed class Parser
     private readonly bool opensBlock;
     private readonly List<Error> errors = [];
     private int index;
+
+    // The line's own pieces, which no statement holds: the `.export` that exports what the line
+    // declares, and the tokens the statement could not take.
+    private GreenToken? exportKeyword;
+    private GreenNode? skippedTokens;
 
     // Whether an operand is being read inside the braces of a macro argument, where `}` ends
     // it as the end of a line does elsewhere.
@@ -69,7 +75,8 @@ internal sealed class Parser
     {
         var parser = new Parser(line, context);
         var node = parser.ParseLine(line.LineKind);
-        return new Result(context, node, [.. parser.errors]);
+        return new Result(
+            context, parser.exportKeyword, node, parser.skippedTokens, [.. parser.errors]);
     }
 
     /// <summary>The next token, which stays put once the end-of-line token is reached.</summary>
@@ -115,10 +122,7 @@ internal sealed class Parser
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
             Report(colon, "an unnamed label is written `@name`: a cheap local, private to the routine around it");
-            var line = ImmutableArray.CreateBuilder<GreenNode>();
-            line.AddRange(TakeRest());
-            line.Add(Advance());
-            return new GreenSyntax(SyntaxKind.ErrorLine, line.ToImmutable());
+            return new GreenSyntax(SyntaxKind.ErrorLine, TakeRest());
         }
 
         // Blocks with a line grammar of their own. A struct or union member
@@ -158,40 +162,47 @@ internal sealed class Parser
         };
     }
 
-    /// <summary>The statement, then anything left over, then the line break that ends the line.</summary>
+    /// <summary>The statement, with whatever is left on the line kept aside for the line to hold.</summary>
     private GreenNode Finish(SyntaxKind kind, ImmutableArray<GreenNode> children)
     {
-        var all = ImmutableArray.CreateBuilder<GreenNode>(children.Length + 2);
-        all.AddRange(children);
-        if (!AtEnd)
-        {
-            // One diagnostic per line is enough: where the parser has already said what it
-            // wanted, the tokens it then walks past are the same problem said twice.
-            //
-            // A block written on one line, `.data name { .byte 1 }`, is that one thing: the
-            // `{` was read as the opener it is, and what follows it is the body, on the wrong
-            // line rather than unexpected.
-            if (errors.Count == 0)
-            {
-                Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
-                    ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
-                    : $"unexpected {Describe(Current)}");
-            }
-            all.Add(new GreenSyntax(SyntaxKind.SkippedTokens, TakeRest()));
-        }
-        all.Add(Advance());
-        return new GreenSyntax(kind, all.ToImmutable());
+        SkipRest();
+        return new GreenSyntax(kind, children);
     }
 
-    private GreenNode Finish(GreenSyntax statement) => Finish(statement.Kind, statement.Children);
+    private GreenNode Finish(GreenSyntax statement)
+    {
+        SkipRest();
+        return statement;
+    }
+
+    /// <summary>
+    /// Anything the statement could not take, kept for the line as
+    /// <see cref="SyntaxKind.SkippedTokens"/>.
+    /// </summary>
+    private void SkipRest()
+    {
+        if (AtEnd)
+            return;
+
+        // One diagnostic per line is enough: where the parser has already said what it
+        // wanted, the tokens it then walks past are the same problem said twice.
+        //
+        // A block written on one line, `.data name { .byte 1 }`, is that one thing: the
+        // `{` was read as the opener it is, and what follows it is the body, on the wrong
+        // line rather than unexpected.
+        if (errors.Count == 0)
+        {
+            Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
+                ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
+                : $"unexpected {Describe(Current)}");
+        }
+        skippedTokens = new GreenSyntax(SyntaxKind.SkippedTokens, TakeRest());
+    }
 
     private GreenNode ErrorLine(string message, DiagnosticFix? fix = null)
     {
         Report(index, message, fix);
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.AddRange(TakeRest());
-        children.Add(Advance());
-        return new GreenSyntax(SyntaxKind.ErrorLine, children.ToImmutable());
+        return new GreenSyntax(SyntaxKind.ErrorLine, TakeRest());
     }
 
     /// <summary>Every token up to, but not including, the end-of-line token.</summary>
@@ -1223,13 +1234,17 @@ internal sealed class Parser
 
     /// <summary>
     /// <c>.export</c> before a declaration, which exports what it declares, or a list of names:
-    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>.
+    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>. A declaration reads as the same
+    /// declaration written without the <c>.export</c>, which the line holds instead.
     /// </summary>
     private GreenSyntax ParseExport()
     {
         var export = Advance();
         if (Kind == SyntaxKind.Directive && ParseExportable() is { } declaration)
-            return new GreenSyntax(SyntaxKind.ExportedDeclaration, [export, declaration]);
+        {
+            exportKeyword = export;
+            return declaration;
+        }
         if (Kind == SyntaxKind.Directive)
         {
             Report($"`.export` goes before a declaration, and `{Current.Text}` declares nothing to export");
@@ -1237,10 +1252,10 @@ internal sealed class Parser
         }
         if (AtName && Next == SyntaxKind.Equals)
         {
+            exportKeyword = export;
             var name = Advance();
             var equals = Advance();
-            return new GreenSyntax(SyntaxKind.ExportedDeclaration,
-                [export, new GreenSyntax(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()])]);
+            return new GreenSyntax(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()]);
         }
 
         var children = ImmutableArray.CreateBuilder<GreenNode>();
@@ -1934,8 +1949,15 @@ internal sealed class Parser
     public readonly record struct Error(int Token, string Message, DiagnosticFix? Fix = null);
 
     /// <summary>
-    /// One line's statement, the errors found in it, and the block kind it was parsed in, so
-    /// a line whose surroundings have not changed can keep the node it already has.
+    /// One line's parse, and the block kind it was parsed in, so a line whose surroundings have
+    /// not changed can keep the nodes it already has.
     /// </summary>
-    public sealed record Result(BlockKind Context, GreenNode Node, ImmutableArray<Error> Errors);
+    /// <param name="Context">The kind of block the line was read in.</param>
+    /// <param name="ExportKeyword">The <c>.export</c> before a declaration the line exports, or null.</param>
+    /// <param name="Node">What the line's own tokens parse to.</param>
+    /// <param name="SkippedTokens">What the statement could not take, or null when nothing was left.</param>
+    /// <param name="Errors">The errors found in the line.</param>
+    public sealed record Result(
+        BlockKind Context, GreenToken? ExportKeyword, GreenNode Node, GreenNode? SkippedTokens,
+        ImmutableArray<Error> Errors);
 }

@@ -45,7 +45,7 @@ public sealed class UseDirectiveSyntax : StatementSyntax
         Path.Length > 0 && TokenAfter(Path[^1]) is { Kind: SyntaxKind.Identifier } word && word.Text.Equals("as", StringComparison.OrdinalIgnoreCase) ? word : null;
 
     /// <summary>The name the path's last name is brought in as, or null.</summary>
-    public SyntaxToken? Alias => TokenAfter(AsKeyword) is { Kind: not SyntaxKind.EndOfLine } alias ? alias : null;
+    public SyntaxToken? Alias => TokenAfter(AsKeyword);
 
     private ImmutableArray<SyntaxToken> ReadPath()
     {

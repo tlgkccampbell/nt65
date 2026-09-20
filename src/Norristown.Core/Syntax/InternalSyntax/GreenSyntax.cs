@@ -40,7 +40,6 @@ public sealed class GreenSyntax(SyntaxKind kind, ImmutableArray<GreenNode> child
         SyntaxKind.CpuDirective => new CpuDirectiveSyntax(tree, parent, this, position),
         SyntaxKind.ExportDirective => new ExportDirectiveSyntax(tree, parent, this, position),
         SyntaxKind.ExportItem => new ExportItemSyntax(tree, parent, this, position),
-        SyntaxKind.ExportedDeclaration => new ExportedDeclarationSyntax(tree, parent, this, position),
         SyntaxKind.ModuleDirective => new ModuleDirectiveSyntax(tree, parent, this, position),
         SyntaxKind.UseDirective => new UseDirectiveSyntax(tree, parent, this, position),
         SyntaxKind.UseItem => new UseItemSyntax(tree, parent, this, position),

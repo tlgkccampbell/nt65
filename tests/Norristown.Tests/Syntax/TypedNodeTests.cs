@@ -43,8 +43,10 @@ public sealed class TypedNodeTests
         var tree = SyntaxTree.Parse("test.nt65", ".export .proc main {\n}\n");
         var line = Assert.IsType<LineSyntax>(Assert.IsType<BlockSyntax>(tree.Root.Members[0]).Opener);
         var proc = Assert.IsType<ProcDeclarationSyntax>(line.Statement);
+        Assert.Equal(".export", line.ExportKeyword?.Text);
         Assert.True(proc.IsExported);
         Assert.Equal(".export", proc.ExportToken?.Text);
+        Assert.Equal(".proc main {", proc.GetText());
         Assert.Equal("main", proc.Name?.Text);
         Assert.Null(proc.Signature);
     }

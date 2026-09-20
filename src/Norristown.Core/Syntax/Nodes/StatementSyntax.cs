@@ -3,9 +3,11 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// What a line parses to: a declaration, a directive, an instruction, a member of a body.
-/// A few of them are also written inside another statement, as an instruction is after a
-/// label and a declaration after <c>.export</c>; the line break then belongs to the outer one.
+/// What a line's tokens parse to: a declaration, a directive, an instruction, a member of a body.
+/// A few of them are also written inside another statement, as an instruction is after a label
+/// and a data directive after <c>.data name:</c>. A statement is only its own tokens wherever it
+/// is written: the line break, whatever the statement could not take and the <c>.export</c>
+/// before a declaration all belong to the line (<see cref="LineSyntax"/>).
 /// </summary>
 public abstract class StatementSyntax : SyntaxNode
 {
@@ -14,15 +16,9 @@ public abstract class StatementSyntax : SyntaxNode
     {
     }
 
-    /// <summary>The line break that ends the statement's line, or null for a statement written inside another.</summary>
-    public SyntaxToken? EndOfLineToken => FirstToken(SyntaxKind.EndOfLine);
-
-    /// <summary>What was left on the line that the statement could not take, or null.</summary>
-    public SkippedTokensSyntax? SkippedTokens => FirstNode<SkippedTokensSyntax>();
-
     /// <summary>Whether this is a declaration written after <c>.export</c>.</summary>
-    public bool IsExported => Parent is ExportedDeclarationSyntax;
+    public bool IsExported => ExportToken is not null;
 
-    /// <summary>The <c>.export</c> a declaration is written after, or null.</summary>
-    public SyntaxToken? ExportToken => (Parent as ExportedDeclarationSyntax)?.ExportKeyword;
+    /// <summary>The <c>.export</c> the line writes before this declaration, or null.</summary>
+    public SyntaxToken? ExportToken => (Parent as LineSyntax)?.ExportKeyword;
 }

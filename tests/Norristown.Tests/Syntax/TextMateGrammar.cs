@@ -229,8 +229,9 @@ internal static class TextMateGrammar
     }
 
     /// <summary>
-    /// Every token of a line in source order, which is every token of its statement; an
-    /// exported declaration's include the <c>.export</c> before it.
+    /// Every token of a line in source order, taken from the pieces it is written in: the
+    /// <c>.export</c> that exports what it declares, its statement, whatever the statement could
+    /// not take, and the line break that ends it.
     /// </summary>
     private static List<SyntaxToken> Tokens(LineSyntax line)
     {
@@ -245,8 +246,12 @@ internal static class TextMateGrammar
                     tokens.Add(child.AsToken());
             }
         }
-        var statement = line.Statement;
-        Walk(statement.IsExported ? statement.Parent! : statement);
+        if (line.ExportKeyword is { } export)
+            tokens.Add(export);
+        Walk(line.Statement);
+        if (line.SkippedTokens is { } skipped)
+            Walk(skipped);
+        tokens.Add(line.EndOfLineToken);
         return tokens;
     }
 

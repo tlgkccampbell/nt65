@@ -14,5 +14,5 @@ public sealed class CpuDirectiveSyntax : StatementSyntax
     public SyntaxToken Keyword => ChildTokens[0];
 
     /// <summary>The CPU's name, or null.</summary>
-    public SyntaxToken? Cpu => TokenAt(1) is { Kind: not SyntaxKind.EndOfLine } cpu ? cpu : null;
+    public SyntaxToken? Cpu => TokenAt(1);
 }

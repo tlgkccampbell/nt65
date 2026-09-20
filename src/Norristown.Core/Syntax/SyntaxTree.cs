@@ -116,6 +116,12 @@ public sealed class SyntaxTree
     /// <summary>The statement parsed from line <paramref name="line"/>, 0-based.</summary>
     public GreenNode Statement(int line) => statements[line].Node;
 
+    /// <summary>
+    /// Everything line <paramref name="line"/> parsed to, 0-based: its statement and the pieces
+    /// the line holds rather than the statement.
+    /// </summary>
+    internal Parser.Result Parsed(int line) => statements[line];
+
     /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
     public int GetLineIndex(int position)
     {

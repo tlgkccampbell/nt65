@@ -242,6 +242,26 @@ public sealed class ParserTests
         Assert.Empty(tree.Diagnostics);
     }
 
+    /// <summary>
+    /// A statement is only its own tokens. The line break that ends it, the tokens it could not
+    /// take and the <c>.export</c> that exports what it declares are the line's, so a statement
+    /// written inside another reads the same as one written on a line of its own.
+    /// </summary>
+    [Fact]
+    public void TheLineHoldsWhatIsNoPartOfTheStatement()
+    {
+        var left = Line("lda #1 junk");
+        Assert.Equal("lda #1", left.Statement.GetText());
+        Assert.Equal("junk", left.SkippedTokens?.GetText());
+        Assert.Equal(SyntaxKind.EndOfLine, left.EndOfLineToken.Kind);
+        Assert.Null(left.ExportKeyword);
+
+        var exported = Line(".export .proc main {");
+        Assert.Equal(".export", exported.ExportKeyword?.Text);
+        Assert.Equal(".proc main {", exported.Statement.GetText());
+        Assert.Null(exported.SkippedTokens);
+    }
+
     /// <summary>A bad line is one line's problem: the next one parses as if nothing happened.</summary>
     [Fact]
     public void ABadLineDoesNotDisturbTheNextOne()
@@ -304,8 +324,13 @@ public sealed class ParserTests
     private static StatementSyntax Statement(string line) => Statement(Parse(line), 0);
 
     /// <summary>What line <paramref name="line"/> of a tree parses to, 0-based.</summary>
-    private static StatementSyntax Statement(SyntaxTree tree, int line) =>
-        tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(line).Statement;
+    private static StatementSyntax Statement(SyntaxTree tree, int line) => Line(tree, line).Statement;
+
+    private static LineSyntax Line(string line) => Line(Parse(line), 0);
+
+    /// <summary>Line <paramref name="line"/> of a tree, 0-based.</summary>
+    private static LineSyntax Line(SyntaxTree tree, int line) =>
+        tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(line);
 
     /// <summary>The operand of a <c>.word</c>, which is the shortest line an expression fits on.</summary>
     private static SyntaxNode Expression(string expression) =>
