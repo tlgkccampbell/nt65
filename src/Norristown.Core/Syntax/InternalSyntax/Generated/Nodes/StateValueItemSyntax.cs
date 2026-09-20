@@ -11,12 +11,12 @@ internal sealed class StateValueItemSyntax : StateItemSyntax
 {
     private readonly GreenToken name;
     private readonly GreenToken? equalsToken;
-    private readonly ExpressionSyntax value;
+    private readonly GreenNode value;
 
     internal StateValueItemSyntax(
         GreenToken name,
         GreenToken? equalsToken,
-        ExpressionSyntax value)
+        GreenNode value)
         : base(SyntaxKind.StateValueItem, name.FullWidth + (equalsToken?.FullWidth ?? 0) + value.FullWidth)
     {
         this.name = name;

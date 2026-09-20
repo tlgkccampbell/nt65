@@ -10,7 +10,7 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class IndexedIndirectOperandSyntax : OperandSyntax
 {
     private readonly GreenToken openParenToken;
-    private readonly ExpressionSyntax address;
+    private readonly GreenNode address;
     private readonly GreenToken commaToken;
     private readonly GreenToken innerRegister;
     private readonly GreenToken closeParenToken;
@@ -19,7 +19,7 @@ internal sealed class IndexedIndirectOperandSyntax : OperandSyntax
 
     internal IndexedIndirectOperandSyntax(
         GreenToken openParenToken,
-        ExpressionSyntax address,
+        GreenNode address,
         GreenToken commaToken,
         GreenToken innerRegister,
         GreenToken closeParenToken,

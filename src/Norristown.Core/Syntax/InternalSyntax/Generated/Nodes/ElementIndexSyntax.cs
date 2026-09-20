@@ -10,12 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ElementIndexSyntax : GreenNode
 {
     private readonly GreenToken openBracketToken;
-    private readonly ExpressionSyntax index;
+    private readonly GreenNode index;
     private readonly GreenToken closeBracketToken;
 
     internal ElementIndexSyntax(
         GreenToken openBracketToken,
-        ExpressionSyntax index,
+        GreenNode index,
         GreenToken closeBracketToken)
         : base(SyntaxKind.ElementIndex, openBracketToken.FullWidth + index.FullWidth + closeBracketToken.FullWidth)
     {

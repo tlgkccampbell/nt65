@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class IdentifierNameSyntax : GreenNode
 {
     private readonly GreenToken name;
-    private readonly ElementIndexSyntax? index;
+    private readonly GreenNode? index;
 
     internal IdentifierNameSyntax(
         GreenToken name,
-        ElementIndexSyntax? index)
+        GreenNode? index)
         : base(SyntaxKind.IdentifierName, name.FullWidth + (index?.FullWidth ?? 0))
     {
         this.name = name;

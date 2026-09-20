@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class UnaryExpressionSyntax : ExpressionSyntax
 {
     private readonly GreenToken operatorToken;
-    private readonly ExpressionSyntax operand;
+    private readonly GreenNode operand;
 
     internal UnaryExpressionSyntax(
         GreenToken operatorToken,
-        ExpressionSyntax operand)
+        GreenNode operand)
         : base(SyntaxKind.UnaryExpression, operatorToken.FullWidth + operand.FullWidth)
     {
         this.operatorToken = operatorToken;

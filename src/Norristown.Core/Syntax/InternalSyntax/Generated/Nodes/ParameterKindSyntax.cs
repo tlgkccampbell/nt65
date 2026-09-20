@@ -12,14 +12,14 @@ internal sealed class ParameterKindSyntax : GreenNode
     private readonly GreenToken keyword;
     private readonly GreenToken? openParenToken;
     private readonly GreenSeparatedList? words;
-    private readonly ParameterKindSyntax? element;
+    private readonly GreenNode? element;
     private readonly GreenToken? closeParenToken;
 
     internal ParameterKindSyntax(
         GreenToken keyword,
         GreenToken? openParenToken,
         GreenSeparatedList? words,
-        ParameterKindSyntax? element,
+        GreenNode? element,
         GreenToken? closeParenToken)
         : base(SyntaxKind.ParameterKind, keyword.FullWidth + (openParenToken?.FullWidth ?? 0) + (words?.FullWidth ?? 0) + (element?.FullWidth ?? 0) + (closeParenToken?.FullWidth ?? 0))
     {

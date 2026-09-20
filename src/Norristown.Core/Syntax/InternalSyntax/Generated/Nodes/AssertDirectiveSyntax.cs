@@ -10,7 +10,7 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class AssertDirectiveSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
-    private readonly ExpressionSyntax condition;
+    private readonly GreenNode condition;
     private readonly GreenToken? commaToken;
     private readonly GreenToken? level;
     private readonly GreenToken? levelCommaToken;
@@ -18,7 +18,7 @@ internal sealed class AssertDirectiveSyntax : StatementSyntax
 
     internal AssertDirectiveSyntax(
         GreenToken keyword,
-        ExpressionSyntax condition,
+        GreenNode condition,
         GreenToken? commaToken,
         GreenToken? level,
         GreenToken? levelCommaToken,

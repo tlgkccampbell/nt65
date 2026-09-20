@@ -12,14 +12,14 @@ internal sealed class DataDeclarationSyntax : StatementSyntax
     private readonly GreenToken keyword;
     private readonly GreenToken name;
     private readonly GreenToken? colonToken;
-    private readonly DataDirectiveSyntax? directive;
+    private readonly GreenNode? directive;
     private readonly GreenToken? openBraceToken;
 
     internal DataDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
         GreenToken? colonToken,
-        DataDirectiveSyntax? directive,
+        GreenNode? directive,
         GreenToken? openBraceToken)
         : base(SyntaxKind.DataDeclaration, keyword.FullWidth + name.FullWidth + (colonToken?.FullWidth ?? 0) + (directive?.FullWidth ?? 0) + (openBraceToken?.FullWidth ?? 0))
     {

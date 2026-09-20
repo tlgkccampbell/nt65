@@ -9,9 +9,9 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class StateSetItemSyntax : StateItemSyntax
 {
-    private readonly NameExpressionSyntax name;
+    private readonly GreenNode name;
 
-    internal StateSetItemSyntax(NameExpressionSyntax name)
+    internal StateSetItemSyntax(GreenNode name)
         : base(SyntaxKind.StateSetItem, name.FullWidth)
     {
         this.name = name;

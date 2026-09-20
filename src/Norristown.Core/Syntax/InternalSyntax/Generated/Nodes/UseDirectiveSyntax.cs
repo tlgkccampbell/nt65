@@ -10,7 +10,7 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class UseDirectiveSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
-    private readonly NameExpressionSyntax path;
+    private readonly GreenNode path;
     private readonly GreenToken? colonColonToken;
     private readonly GreenToken? starToken;
     private readonly GreenToken? openBraceToken;
@@ -21,7 +21,7 @@ internal sealed class UseDirectiveSyntax : StatementSyntax
 
     internal UseDirectiveSyntax(
         GreenToken keyword,
-        NameExpressionSyntax path,
+        GreenNode path,
         GreenToken? colonColonToken,
         GreenToken? starToken,
         GreenToken? openBraceToken,

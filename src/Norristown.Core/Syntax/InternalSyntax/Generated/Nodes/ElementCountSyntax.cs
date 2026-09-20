@@ -10,12 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ElementCountSyntax : GreenNode
 {
     private readonly GreenToken openBracketToken;
-    private readonly ExpressionSyntax? count;
+    private readonly GreenNode? count;
     private readonly GreenToken closeBracketToken;
 
     internal ElementCountSyntax(
         GreenToken openBracketToken,
-        ExpressionSyntax? count,
+        GreenNode? count,
         GreenToken closeBracketToken)
         : base(SyntaxKind.ElementCount, openBracketToken.FullWidth + (count?.FullWidth ?? 0) + closeBracketToken.FullWidth)
     {

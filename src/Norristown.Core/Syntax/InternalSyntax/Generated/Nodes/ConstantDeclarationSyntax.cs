@@ -11,12 +11,12 @@ internal sealed class ConstantDeclarationSyntax : StatementSyntax
 {
     private readonly GreenToken name;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax value;
+    private readonly GreenNode value;
 
     internal ConstantDeclarationSyntax(
         GreenToken name,
         GreenToken equalsToken,
-        ExpressionSyntax value)
+        GreenNode value)
         : base(SyntaxKind.ConstantDeclaration, name.FullWidth + equalsToken.FullWidth + value.FullWidth)
     {
         this.name = name;

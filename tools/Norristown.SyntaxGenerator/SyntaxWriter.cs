@@ -41,7 +41,7 @@ public static class SyntaxWriter
 
         // The repository is LF throughout, whatever the platform the generator runs on.
         foreach (var path in files.Keys.ToList())
-            files[path] = files[path].ReplaceLineEndings("\n");
+            files[path] = files[path].Replace("\r\n", "\n").Replace("\r", "\n");
         return files;
     }
 
@@ -73,7 +73,7 @@ public static class SyntaxWriter
         text.AppendLine(Header);
         if (!node.IsHandWritten)
         {
-            if (members.Any(member => member.Contains("ImmutableArray<", StringComparison.Ordinal)))
+            if (members.Any(member => member.IndexOf("ImmutableArray<", StringComparison.Ordinal) >= 0))
                 text.AppendLine("using System.Collections.Immutable;");
             text.AppendLine("using Norristown.Syntax.InternalSyntax;");
         }

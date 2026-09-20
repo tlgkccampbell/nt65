@@ -10,14 +10,14 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class LongIndirectOperandSyntax : OperandSyntax
 {
     private readonly GreenToken openBracketToken;
-    private readonly ExpressionSyntax address;
+    private readonly GreenNode address;
     private readonly GreenToken closeBracketToken;
     private readonly GreenToken? commaToken;
     private readonly GreenToken? indexRegister;
 
     internal LongIndirectOperandSyntax(
         GreenToken openBracketToken,
-        ExpressionSyntax address,
+        GreenNode address,
         GreenToken closeBracketToken,
         GreenToken? commaToken,
         GreenToken? indexRegister)

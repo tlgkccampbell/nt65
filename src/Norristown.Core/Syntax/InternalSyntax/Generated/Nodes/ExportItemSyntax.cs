@@ -9,14 +9,14 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class ExportItemSyntax : GreenNode
 {
-    private readonly NameExpressionSyntax name;
+    private readonly GreenNode name;
     private readonly GreenToken? colonToken;
     private readonly GreenToken? addressSize;
     private readonly GreenToken? asKeyword;
     private readonly GreenToken? linkerName;
 
     internal ExportItemSyntax(
-        NameExpressionSyntax name,
+        GreenNode name,
         GreenToken? colonToken,
         GreenToken? addressSize,
         GreenToken? asKeyword,

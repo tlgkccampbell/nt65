@@ -11,12 +11,12 @@ internal sealed class EnumMemberSyntax : StatementSyntax
 {
     private readonly GreenToken name;
     private readonly GreenToken? equalsToken;
-    private readonly ExpressionSyntax? value;
+    private readonly GreenNode? value;
 
     internal EnumMemberSyntax(
         GreenToken name,
         GreenToken? equalsToken,
-        ExpressionSyntax? value)
+        GreenNode? value)
         : base(SyntaxKind.EnumMember, name.FullWidth + (equalsToken?.FullWidth ?? 0) + (value?.FullWidth ?? 0))
     {
         this.name = name;

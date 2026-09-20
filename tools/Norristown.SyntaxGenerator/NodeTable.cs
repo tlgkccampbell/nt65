@@ -35,7 +35,7 @@ public static class NodeTable
             node = null;
         }
 
-        foreach (var raw in text.ReplaceLineEndings("\n").Split('\n'))
+        foreach (var raw in text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
         {
             var line = raw.TrimEnd();
             if (line.Length == 0 || line.TrimStart().StartsWith('#'))

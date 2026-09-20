@@ -10,12 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ParenthesizedExpressionSyntax : ExpressionSyntax
 {
     private readonly GreenToken openParenToken;
-    private readonly ExpressionSyntax expression;
+    private readonly GreenNode expression;
     private readonly GreenToken closeParenToken;
 
     internal ParenthesizedExpressionSyntax(
         GreenToken openParenToken,
-        ExpressionSyntax expression,
+        GreenNode expression,
         GreenToken closeParenToken)
         : base(SyntaxKind.ParenthesizedExpression, openParenToken.FullWidth + expression.FullWidth + closeParenToken.FullWidth)
     {

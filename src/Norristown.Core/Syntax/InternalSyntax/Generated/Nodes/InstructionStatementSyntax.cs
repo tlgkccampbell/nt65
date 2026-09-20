@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class InstructionStatementSyntax : StatementSyntax
 {
     private readonly GreenToken mnemonic;
-    private readonly OperandSyntax? operand;
+    private readonly GreenNode? operand;
 
     internal InstructionStatementSyntax(
         GreenToken mnemonic,
-        OperandSyntax? operand)
+        GreenNode? operand)
         : base(SyntaxKind.InstructionStatement, mnemonic.FullWidth + (operand?.FullWidth ?? 0))
     {
         this.mnemonic = mnemonic;

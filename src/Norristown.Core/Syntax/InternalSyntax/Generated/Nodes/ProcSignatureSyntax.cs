@@ -10,15 +10,15 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ProcSignatureSyntax : GreenNode
 {
     private readonly GreenToken colonToken;
-    private readonly StateListSyntax entry;
+    private readonly GreenNode entry;
     private readonly GreenToken? arrowToken;
-    private readonly StateListSyntax? exit;
+    private readonly GreenNode? exit;
 
     internal ProcSignatureSyntax(
         GreenToken colonToken,
-        StateListSyntax entry,
+        GreenNode entry,
         GreenToken? arrowToken,
-        StateListSyntax? exit)
+        GreenNode? exit)
         : base(SyntaxKind.ProcSignature, colonToken.FullWidth + entry.FullWidth + (arrowToken?.FullWidth ?? 0) + (exit?.FullWidth ?? 0))
     {
         this.colonToken = colonToken;

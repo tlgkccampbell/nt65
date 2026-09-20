@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ModuleDirectiveSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
-    private readonly NameExpressionSyntax name;
+    private readonly GreenNode name;
 
     internal ModuleDirectiveSyntax(
         GreenToken keyword,
-        NameExpressionSyntax name)
+        GreenNode name)
         : base(SyntaxKind.ModuleDirective, keyword.FullWidth + name.FullWidth)
     {
         this.keyword = keyword;

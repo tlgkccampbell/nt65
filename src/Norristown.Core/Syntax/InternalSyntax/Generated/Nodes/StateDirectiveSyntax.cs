@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class StateDirectiveSyntax : StateListDirectiveSyntax
 {
     private readonly GreenToken keyword;
-    private readonly StateListSyntax items;
+    private readonly GreenNode items;
 
     internal StateDirectiveSyntax(
         GreenToken keyword,
-        StateListSyntax items)
+        GreenNode items)
         : base(SyntaxKind.StateDirective, keyword.FullWidth + items.FullWidth)
     {
         this.keyword = keyword;

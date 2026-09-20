@@ -11,7 +11,7 @@ internal sealed class SegmentAttributeSyntax : GreenNode
 {
     private readonly GreenToken name;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax? value;
+    private readonly GreenNode? value;
     private readonly GreenToken? openBracketToken;
     private readonly GreenSeparatedList? ranges;
     private readonly GreenToken? closeBracketToken;
@@ -19,7 +19,7 @@ internal sealed class SegmentAttributeSyntax : GreenNode
     internal SegmentAttributeSyntax(
         GreenToken name,
         GreenToken equalsToken,
-        ExpressionSyntax? value,
+        GreenNode? value,
         GreenToken? openBracketToken,
         GreenSeparatedList? ranges,
         GreenToken? closeBracketToken)

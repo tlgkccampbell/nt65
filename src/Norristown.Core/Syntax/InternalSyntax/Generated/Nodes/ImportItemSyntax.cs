@@ -11,18 +11,18 @@ internal sealed class ImportItemSyntax : GreenNode
 {
     private readonly GreenToken name;
     private readonly GreenToken? equalsToken;
-    private readonly ExpressionSyntax? value;
+    private readonly GreenNode? value;
     private readonly GreenToken? colonToken;
     private readonly GreenToken? addressSize;
-    private readonly ImportSignatureSyntax? signature;
+    private readonly GreenNode? signature;
 
     internal ImportItemSyntax(
         GreenToken name,
         GreenToken? equalsToken,
-        ExpressionSyntax? value,
+        GreenNode? value,
         GreenToken? colonToken,
         GreenToken? addressSize,
-        ImportSignatureSyntax? signature)
+        GreenNode? signature)
         : base(SyntaxKind.ImportItem, name.FullWidth + (equalsToken?.FullWidth ?? 0) + (value?.FullWidth ?? 0) + (colonToken?.FullWidth ?? 0) + (addressSize?.FullWidth ?? 0) + (signature?.FullWidth ?? 0))
     {
         this.name = name;

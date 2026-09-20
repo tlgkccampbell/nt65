@@ -9,12 +9,12 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class LabeledLineSyntax : StatementSyntax
 {
-    private readonly LabelSyntax label;
-    private readonly StatementSyntax? statement;
+    private readonly GreenNode label;
+    private readonly GreenNode? statement;
 
     internal LabeledLineSyntax(
-        LabelSyntax label,
-        StatementSyntax? statement)
+        GreenNode label,
+        GreenNode? statement)
         : base(SyntaxKind.LabeledLine, label.FullWidth + (statement?.FullWidth ?? 0))
     {
         this.label = label;

@@ -11,14 +11,14 @@ internal sealed class MacroParameterSyntax : GreenNode
 {
     private readonly GreenToken name;
     private readonly GreenToken? colonToken;
-    private readonly ParameterKindSyntax? parameterKind;
+    private readonly GreenNode? parameterKind;
     private readonly GreenToken? equalsToken;
     private readonly GreenNode? @default;
 
     internal MacroParameterSyntax(
         GreenToken name,
         GreenToken? colonToken,
-        ParameterKindSyntax? parameterKind,
+        GreenNode? parameterKind,
         GreenToken? equalsToken,
         GreenNode? @default)
         : base(SyntaxKind.MacroParameter, name.FullWidth + (colonToken?.FullWidth ?? 0) + (parameterKind?.FullWidth ?? 0) + (equalsToken?.FullWidth ?? 0) + (@default?.FullWidth ?? 0))

@@ -10,12 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class BracedOperandSyntax : GreenNode
 {
     private readonly GreenToken openBraceToken;
-    private readonly OperandSyntax operand;
+    private readonly GreenNode operand;
     private readonly GreenToken closeBraceToken;
 
     internal BracedOperandSyntax(
         GreenToken openBraceToken,
-        OperandSyntax operand,
+        GreenNode operand,
         GreenToken closeBraceToken)
         : base(SyntaxKind.BracedOperand, openBraceToken.FullWidth + operand.FullWidth + closeBraceToken.FullWidth)
     {

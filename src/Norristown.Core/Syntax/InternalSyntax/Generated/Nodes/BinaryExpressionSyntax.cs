@@ -9,14 +9,14 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class BinaryExpressionSyntax : ExpressionSyntax
 {
-    private readonly ExpressionSyntax left;
+    private readonly GreenNode left;
     private readonly GreenToken operatorToken;
-    private readonly ExpressionSyntax right;
+    private readonly GreenNode right;
 
     internal BinaryExpressionSyntax(
-        ExpressionSyntax left,
+        GreenNode left,
         GreenToken operatorToken,
-        ExpressionSyntax right)
+        GreenNode right)
         : base(SyntaxKind.BinaryExpression, left.FullWidth + operatorToken.FullWidth + right.FullWidth)
     {
         this.left = left;

@@ -10,17 +10,17 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class ImmediateOperandSyntax : OperandSyntax
 {
     private readonly GreenToken hashToken;
-    private readonly ExpressionSyntax value;
+    private readonly GreenNode value;
     private readonly GreenToken? commaToken;
     private readonly GreenToken? secondHashToken;
-    private readonly ExpressionSyntax? secondValue;
+    private readonly GreenNode? secondValue;
 
     internal ImmediateOperandSyntax(
         GreenToken hashToken,
-        ExpressionSyntax value,
+        GreenNode value,
         GreenToken? commaToken,
         GreenToken? secondHashToken,
-        ExpressionSyntax? secondValue)
+        GreenNode? secondValue)
         : base(SyntaxKind.ImmediateOperand, hashToken.FullWidth + value.FullWidth + (commaToken?.FullWidth ?? 0) + (secondHashToken?.FullWidth ?? 0) + (secondValue?.FullWidth ?? 0))
     {
         this.hashToken = hashToken;

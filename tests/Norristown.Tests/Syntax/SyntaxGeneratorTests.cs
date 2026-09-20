@@ -80,6 +80,35 @@ public sealed class SyntaxGeneratorTests
         }
     }
 
+    /// <summary>
+    /// A node slot takes a bare green node until every kind it may hold builds its own, so a kind
+    /// can have its slots fixed without waiting for whatever it holds.
+    /// </summary>
+    [Fact]
+    public void ANodeSlotTakesItsOwnGreenClassOnceWhatItHoldsBuildsOne()
+    {
+        const string holder = """
+            node LidSyntax : SyntaxNode
+              kind Lid
+              summary A lid.
+              slot Keyword : SyntaxToken
+                summary The word.
+                kinds Directive
+                read ChildTokens[0]
+            node BoxSyntax : SyntaxNode
+              kind Box
+              summary A box.
+              slot Lid : LidSyntax?
+                summary The lid, or null.
+                read FirstNode<LidSyntax>()
+            """;
+        Assert.Contains("GreenNode? lid)", Box(holder));
+        Assert.Contains("LidSyntax? lid)", Box(holder.Replace("kind Lid", "kind Lid\n  converted")));
+
+        static string Box(string table) =>
+            Files(table)["src/Norristown.Core/Syntax/InternalSyntax/Generated/Nodes/BoxSyntax.cs"];
+    }
+
     /// <summary>A node says its slot order where its own slots come between the ones above it.</summary>
     [Fact]
     public void ALayoutPutsTheSlotsOfTheClassesAboveWhereTheSourceWritesThem()

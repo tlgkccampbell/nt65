@@ -12,13 +12,13 @@ internal sealed class SignatureDeclarationSyntax : StatementSyntax
     private readonly GreenToken keyword;
     private readonly GreenToken name;
     private readonly GreenToken equalsToken;
-    private readonly StateListSyntax items;
+    private readonly GreenNode items;
 
     internal SignatureDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
         GreenToken equalsToken,
-        StateListSyntax items)
+        GreenNode items)
         : base(SyntaxKind.SignatureDeclaration, keyword.FullWidth + name.FullWidth + equalsToken.FullWidth + items.FullWidth)
     {
         this.keyword = keyword;

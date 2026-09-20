@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class PatchDirectiveSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
-    private readonly NameExpressionSyntax target;
+    private readonly GreenNode target;
 
     internal PatchDirectiveSyntax(
         GreenToken keyword,
-        NameExpressionSyntax target)
+        GreenNode target)
         : base(SyntaxKind.PatchDirective, keyword.FullWidth + target.FullWidth)
     {
         this.keyword = keyword;

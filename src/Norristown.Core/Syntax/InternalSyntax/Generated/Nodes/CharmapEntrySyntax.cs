@@ -9,18 +9,18 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class CharmapEntrySyntax : StatementSyntax
 {
-    private readonly ExpressionSyntax first;
+    private readonly GreenNode first;
     private readonly GreenToken? dotDotToken;
-    private readonly ExpressionSyntax? last;
+    private readonly GreenNode? last;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax value;
+    private readonly GreenNode value;
 
     internal CharmapEntrySyntax(
-        ExpressionSyntax first,
+        GreenNode first,
         GreenToken? dotDotToken,
-        ExpressionSyntax? last,
+        GreenNode? last,
         GreenToken equalsToken,
-        ExpressionSyntax value)
+        GreenNode value)
         : base(SyntaxKind.CharmapEntry, first.FullWidth + (dotDotToken?.FullWidth ?? 0) + (last?.FullWidth ?? 0) + equalsToken.FullWidth + value.FullWidth)
     {
         this.first = first;

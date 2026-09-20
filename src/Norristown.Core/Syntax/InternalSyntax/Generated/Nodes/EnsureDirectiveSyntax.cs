@@ -10,11 +10,11 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class EnsureDirectiveSyntax : StateListDirectiveSyntax
 {
     private readonly GreenToken keyword;
-    private readonly StateListSyntax items;
+    private readonly GreenNode items;
 
     internal EnsureDirectiveSyntax(
         GreenToken keyword,
-        StateListSyntax items)
+        GreenNode items)
         : base(SyntaxKind.EnsureDirective, keyword.FullWidth + items.FullWidth)
     {
         this.keyword = keyword;

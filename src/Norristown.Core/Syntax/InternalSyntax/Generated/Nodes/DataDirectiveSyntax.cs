@@ -10,14 +10,14 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class DataDirectiveSyntax : StatementSyntax
 {
     private readonly GreenToken directive;
-    private readonly NameExpressionSyntax? type;
-    private readonly ElementCountSyntax? count;
+    private readonly GreenNode? type;
+    private readonly GreenNode? count;
     private readonly DataTailSyntax? tail;
 
     internal DataDirectiveSyntax(
         GreenToken directive,
-        NameExpressionSyntax? type,
-        ElementCountSyntax? count,
+        GreenNode? type,
+        GreenNode? count,
         DataTailSyntax? tail)
         : base(SyntaxKind.DataDirective, directive.FullWidth + (type?.FullWidth ?? 0) + (count?.FullWidth ?? 0) + (tail?.FullWidth ?? 0))
     {

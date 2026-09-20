@@ -11,13 +11,13 @@ internal sealed class ElseIfDirectiveSyntax : ConditionalDirectiveSyntax
 {
     private readonly GreenToken closeBraceToken;
     private readonly GreenToken keyword;
-    private readonly ExpressionSyntax condition;
+    private readonly GreenNode condition;
     private readonly GreenToken openBraceToken;
 
     internal ElseIfDirectiveSyntax(
         GreenToken closeBraceToken,
         GreenToken keyword,
-        ExpressionSyntax condition,
+        GreenNode condition,
         GreenToken openBraceToken)
         : base(SyntaxKind.ElseIfDirective, closeBraceToken.FullWidth + keyword.FullWidth + condition.FullWidth + openBraceToken.FullWidth)
     {

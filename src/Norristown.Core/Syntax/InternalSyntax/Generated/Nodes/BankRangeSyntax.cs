@@ -9,14 +9,14 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class BankRangeSyntax : GreenNode
 {
-    private readonly ExpressionSyntax first;
+    private readonly GreenNode first;
     private readonly GreenToken? dotDotToken;
-    private readonly ExpressionSyntax? last;
+    private readonly GreenNode? last;
 
     internal BankRangeSyntax(
-        ExpressionSyntax first,
+        GreenNode first,
         GreenToken? dotDotToken,
-        ExpressionSyntax? last)
+        GreenNode? last)
         : base(SyntaxKind.BankRange, first.FullWidth + (dotDotToken?.FullWidth ?? 0) + (last?.FullWidth ?? 0))
     {
         this.first = first;

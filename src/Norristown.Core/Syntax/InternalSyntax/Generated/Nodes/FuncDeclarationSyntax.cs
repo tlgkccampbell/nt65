@@ -11,16 +11,16 @@ internal sealed class FuncDeclarationSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
     private readonly GreenToken name;
-    private readonly ParameterListSyntax parameters;
+    private readonly GreenNode parameters;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax body;
+    private readonly GreenNode body;
 
     internal FuncDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
-        ParameterListSyntax parameters,
+        GreenNode parameters,
         GreenToken equalsToken,
-        ExpressionSyntax body)
+        GreenNode body)
         : base(SyntaxKind.FuncDeclaration, keyword.FullWidth + name.FullWidth + parameters.FullWidth + equalsToken.FullWidth + body.FullWidth)
     {
         this.keyword = keyword;

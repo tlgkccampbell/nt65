@@ -11,13 +11,13 @@ internal sealed class ProcDeclarationSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
     private readonly GreenToken name;
-    private readonly ProcSignatureSyntax? signature;
+    private readonly GreenNode? signature;
     private readonly GreenToken openBraceToken;
 
     internal ProcDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
-        ProcSignatureSyntax? signature,
+        GreenNode? signature,
         GreenToken openBraceToken)
         : base(SyntaxKind.ProcDeclaration, keyword.FullWidth + name.FullWidth + (signature?.FullWidth ?? 0) + openBraceToken.FullWidth)
     {

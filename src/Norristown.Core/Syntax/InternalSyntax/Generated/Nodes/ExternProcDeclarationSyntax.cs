@@ -12,15 +12,15 @@ internal sealed class ExternProcDeclarationSyntax : StatementSyntax
     private readonly GreenToken keyword;
     private readonly GreenToken name;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax address;
-    private readonly ProcSignatureSyntax? signature;
+    private readonly GreenNode address;
+    private readonly GreenNode? signature;
 
     internal ExternProcDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
         GreenToken equalsToken,
-        ExpressionSyntax address,
-        ProcSignatureSyntax? signature)
+        GreenNode address,
+        GreenNode? signature)
         : base(SyntaxKind.ExternProcDeclaration, keyword.FullWidth + name.FullWidth + equalsToken.FullWidth + address.FullWidth + (signature?.FullWidth ?? 0))
     {
         this.keyword = keyword;

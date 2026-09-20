@@ -12,13 +12,13 @@ internal sealed class ConfigDeclarationSyntax : StatementSyntax
     private readonly GreenToken keyword;
     private readonly GreenToken name;
     private readonly GreenToken equalsToken;
-    private readonly ExpressionSyntax value;
+    private readonly GreenNode value;
 
     internal ConfigDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
         GreenToken equalsToken,
-        ExpressionSyntax value)
+        GreenNode value)
         : base(SyntaxKind.ConfigDeclaration, keyword.FullWidth + name.FullWidth + equalsToken.FullWidth + value.FullWidth)
     {
         this.keyword = keyword;

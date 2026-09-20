@@ -11,13 +11,13 @@ internal sealed class MacroCallSyntax : StatementSyntax
 {
     private readonly GreenToken name;
     private readonly GreenToken bangToken;
-    private readonly ArgumentListSyntax arguments;
+    private readonly GreenNode arguments;
     private readonly GreenToken? openBraceToken;
 
     internal MacroCallSyntax(
         GreenToken name,
         GreenToken bangToken,
-        ArgumentListSyntax arguments,
+        GreenNode arguments,
         GreenToken? openBraceToken)
         : base(SyntaxKind.MacroCall, name.FullWidth + bangToken.FullWidth + arguments.FullWidth + (openBraceToken?.FullWidth ?? 0))
     {

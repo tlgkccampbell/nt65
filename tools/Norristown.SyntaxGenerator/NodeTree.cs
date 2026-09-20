@@ -51,8 +51,9 @@ public sealed class NodeTree
 
         if (!node.Layout.IsEmpty)
         {
-            if (!node.Layout.Order(StringComparer.Ordinal)
-                    .SequenceEqual(pieces.Select(piece => piece.Slot.Name).Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            if (!node.Layout.OrderBy(name => name, StringComparer.Ordinal).SequenceEqual(
+                    pieces.Select(piece => piece.Slot.Name).OrderBy(name => name, StringComparer.Ordinal),
+                    StringComparer.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"{node.Name}'s layout must name each of its slots exactly once");
@@ -70,16 +71,27 @@ public sealed class NodeTree
     public string GreenBase(NodeRow node) =>
         byName.TryGetValue(node.Base, out var row) && !row.IsHandWritten ? node.Base : "GreenNode";
 
-    /// <summary>The green type of <paramref name="slot"/>: what the typed constructor takes for it.</summary>
+    /// <summary>
+    /// The green type of <paramref name="slot"/>: what the typed constructor takes for it. A node
+    /// slot takes the green class of its own type once every kind that class covers builds one,
+    /// and a bare green node until then, so a kind can have its slots fixed without waiting for
+    /// whatever it holds.
+    /// </summary>
     /// <param name="slot">The slot.</param>
     public string GreenType(NodeSlot slot) => slot.List switch
     {
         ListShape.Separated => "GreenSeparatedList?",
         ListShape.Nodes or ListShape.Tokens => "GreenList?",
         _ when slot.IsToken => slot.IsRequired ? "GreenToken" : "GreenToken?",
-        _ => (byName.TryGetValue(slot.BareType, out var row) && !row.IsHandWritten ? slot.BareType : "GreenNode")
-            + (slot.IsRequired ? "" : "?"),
+        _ => (Typed(slot.BareType) ? slot.BareType : "GreenNode") + (slot.IsRequired ? "" : "?"),
     };
+
+    /// <summary>Whether every node <paramref name="name"/> covers is built as its own green class.</summary>
+    /// <param name="name">The name of a red class a slot may hold.</param>
+    public bool Typed(string name) =>
+        byName.TryGetValue(name, out var row) && !row.IsHandWritten
+        && Nodes.Where(below => !below.IsAbstract && !below.IsHandWritten && Ancestry(below).Contains(row))
+            .All(ReadsSlots);
 
     /// <summary>
     /// Whether <paramref name="slot"/> has the name of a property a class above

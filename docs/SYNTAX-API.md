@@ -303,7 +303,7 @@ Most kinds map to slots directly. These do not, and need a design each:
 
 Each step builds and passes `scripts/gate.ps1` on its own, and is a commit.
 
-Done so far: steps 1, 2, 3 and 4. What they decided, where it differs from the text above:
+Done so far: steps 1, 2, 3, 4, 5 and 6. What they decided, where it differs from the text above:
 
 - **The line is `[ExportKeyword?, Statement, SkippedTokens?, EndOfLineToken]`.** `.export`
   before a declaration went on the *line* (`LineSyntax.ExportKeyword`), not on each
@@ -352,6 +352,48 @@ Done so far: steps 1, 2, 3 and 4. What they decided, where it differs from the t
   `ChildNodes`; it visits no tokens, because a line's tokens are also its statement's and a
   token walk would see each of them twice until the slots are fixed. Nothing but the tests uses
   a visitor yet.
+- **A slot may hold nothing**: `GreenNode.GetSlot` returns null for an optional piece not written
+  and for a list with no items, and everything that walks slots allows for it. `GreenNode` carries
+  `IsMissing`, which a token and an `ErrorExpression` set; `ContainsDiagnostics` waits for step 9.
+- **`ChildSyntaxList` flattens a list slot**, as Roslyn does, and so do `ChildNodes`,
+  `ChildTokens`, `DescendantNodes` and the walker: a list shows its items and its separators where
+  the list itself would be, a slot holding nothing shows no child, and `SyntaxListNode` is never
+  anyone's parent — the items hang from the node that holds the list, which is where an analyzer
+  expects them. It keeps the red nodes of the items all the same.
+- **`.export` stays on the line.** Moving it into a slot of each exportable declaration would add
+  a slot to fourteen kinds and buy a consumer nothing: `StatementSyntax.IsExported` and
+  `ExportToken` already answer the only question anyone asks, and `LineSyntax` and `Fidelity` are
+  simpler for owning it.
+- **The table says each kind's target layout, and one word converts a kind.** A slot's type is what
+  its property returns once the kind is converted, and its trailing `?` means the piece belongs to
+  a part of the line that may be absent altogether; a piece the line always has a place for is
+  required and stands in its slot as a missing token when the source leaves it out. A piece inside
+  an optional group stays optional — `a: ` writes the `:` and misses the size, and `a` writes
+  neither. `today` gives the type a property still has, `read` the search it still makes, `legacy`
+  a property that goes when the kind converts, and a slot with no `read` one the parser does not
+  write yet. `kinds` names the kinds a token slot may hold and `layout` the slot order where a
+  node's own slots come between the ones a class above it writes (only `ElseIfDirective`).
+- **The generated green class is the target shape from the start**, and `converted` on a row is the
+  whole of what a kind's conversion costs the generator: every property then reads its slot and its
+  required pieces stop being nullable. Until then a property reads its slot when the green node is
+  the typed one and searches when it is the generic node, so a typed node can be built by hand and
+  read back before its production is converted. A slot declared by an abstract class is abstract
+  there and overridden by every concrete class, which is why a kind converts with the family that
+  writes the slots it inherits; the generator says so rather than writing what will not compile.
+  A node slot takes a bare `GreenNode` until every kind it may hold builds its own green class, so
+  no kind waits for what it holds.
+- **The irregular kinds' designs are written down and generated, marked `unbuilt`**: a data
+  directive's tail is one slot holding a `DataBody`, a `BracedData` or an `InlineData`; a state item
+  splits into `StateFlagItem`, `StateValueItem`, `StateInlineItem`, `StateKeepsItem`, `StateSetItem`
+  and `StateUnknownItem` under `StateItemSyntax`; a name is a `GlobalToken?` and a separated list of
+  `IdentifierName` parts, each a name and the `[i]` after it, which is the separated-list option
+  rather than a `QualifiedName` tree because it keeps `NameExpressionSyntax` one sealed class; a
+  `.func`'s parameters become `Parameter` nodes, and a `keeps`'s registers and a `one(...)`'s words
+  become `IdentifierName`s. `.use`'s path and `.module`'s name become one `NameExpression`.
+- **The shape test is `ShapeTests`**, over every source and every cut-line variant, with the kinds
+  the parser still builds the generic node for in `tests/Norristown.Tests/Syntax/UnconvertedKinds.txt`,
+  one to a line, sorted. It is read strictly both ways, so a line cannot outlive its work. It runs
+  in under half a second.
 
 1. **The broken-source sweep** (above), as a baseline. Fix whatever it finds today.
 2. **Move the line break and skipped tokens to the line.** Alone, with no slot work:
@@ -371,11 +413,11 @@ Done so far: steps 1, 2, 3 and 4. What they decided, where it differs from the t
    the red class's slot-based properties. Nothing constructs them yet: `GreenSyntax` still
    makes every node, so the build and every test are unchanged. A red class reads slots when
    its green node is the typed one and searches when it is a `GreenSyntax`, until step 7 has
-   reached its kind.
+   reached its kind. Done.
 6. **A shape test.** For every node in every source and cut-line variant: the green node is
    its kind's typed class, not a `GreenSyntax`, and a required slot holds a node or a token
    (missing or not), never null. It fails for every kind at first; give it an allow-list of
-   unconverted kinds that shrinks to empty.
+   unconverted kinds that shrinks to empty. Done.
 7. **Convert the parser one production at a time**, regular ones first. For each: replace
    `new GreenSyntax(kind, children)` with the typed constructor, replace "report and leave it
    out" with "report and add a missing token", delete the red class's search path, make the
@@ -405,6 +447,81 @@ Steps 1–6 do not change the tree's shape and can be reviewed quickly. Step 7 i
 and parallelises by production, provided steps 3 and 5 are done: what made the typed-node migration
 parallelisable was that consumers were split by file with no shared edits, and the generated
 table would otherwise be the one file everyone touches. Give each worker its kinds' rows.
+
+### Step 7, kind by kind
+
+**What a worker does for one kind**, start to finish:
+
+1. **Edit its block in the table**: add `converted`, drop every `today` and every `read`, `nodes`
+   and `cache` from its slots, and take "or null" out of the summary of a slot that is now
+   required. Nothing else in the table is touched, so two workers never meet in it.
+2. **`pwsh scripts/generate-syntax.ps1`.** The red class's properties now read slots and its
+   required pieces are no longer nullable; the green class was already the target shape.
+3. **Convert the production**: build the typed green node instead of filling an
+   `ImmutableArray<GreenNode>.Builder`, and where it reported a piece and left it out, call
+   `Expect(kind, message)` and put the missing token in its slot. A slot the source genuinely does
+   not have stays null.
+4. **Fix the consumers the compiler points at.** Mostly `?.` and `is { } x` that can go; each time,
+   ask whether the consumer now wants an `IsMissing` test it did not want before — a symbol is
+   never declared from a missing name.
+5. **Delete the kind's line from `tests/Norristown.Tests/Syntax/UnconvertedKinds.txt`.**
+6. **`pwsh scripts/test.ps1`**, and `pwsh scripts/gate.ps1` before the commit. Fixture output must
+   not move by a byte.
+
+`Parser.Expect` and `Parser.ExpectOpenBrace()` are there already, and every production that returns
+a node returns a `GreenNode`, so no worker changes a signature anyone else reads. Whoever first
+wants `ExpectName(message)` — a name, or the missing identifier that stands where one belongs —
+adds it beside `Expect`.
+
+**The groups.** Five, chosen so that they touch disjoint parser productions and, as far as they
+can, disjoint consumer files:
+
+- **A — expressions.** `BinaryExpression`, `UnaryExpression`, `ParenthesizedExpression`,
+  `NumberExpression`, `CharacterExpression`, `StringExpression`, `CpuNameExpression`,
+  `CurrentAddressExpression`, `ErrorExpression`, `CallExpression`, `ElementIndex`.
+  `ParseBinary`/`ParseUnary`/`ParsePrimary`/`ParseParenthesized`/`ParseBuiltinCall`/`ParseElementIndex`,
+  and the parser's own `OperatorOf` and `RightmostByteOperator`, which become `binary.OperatorToken`
+  and `binary.Right`. Consumers: `Semantics/Evaluator.cs`, `Semantics/Annotations.cs`.
+- **B — operands, instructions and the plain lines.** `InstructionStatement`, `AbsoluteOperand`,
+  `AccumulatorOperand`, `AddressPrefix`, `ImmediateOperand`, `IndirectOperand`,
+  `IndexedIndirectOperand`, `LongIndirectOperand`, `BracedOperand`, `Label`, `LabeledLine`,
+  `BlockSplice`, `BlockCloseLine`, `BlockContinuation`, `BlankLine`.
+  `ParseInstruction`, `ParseOperand` and everything under it, `ParseLabeledLine`, `ParseBlockClose`.
+  `TryParseIndirect` backtracks, and must throw away the missing tokens of a failed attempt with
+  the errors it already throws away. Consumers: `Layout/CodeLayout.cs`, `Flow/`, `Emit/Emitter.cs`'s
+  operand rendering, `Semantics/MacroArgument.cs`.
+- **C — routines, scopes and macros.** `ProcDeclaration`, `ExternProcDeclaration`,
+  `MultiProcDeclaration`, `ScopeDeclaration`, `ProcSignature`, `MacroDeclaration`, `MacroCall`,
+  `MacroParameter`, `EmptyBlock`, `NamedArgument`, `FuncDeclaration`, `SignatureDeclaration`,
+  `FrameDirective`, `PatchDirective`. Consumers: `Semantics/Macros.cs`,
+  `Semantics/MacroInvocation.cs`, `Semantics/ProgramModel.cs`, `Syntax/Outline.cs`,
+  `Flow/RegisterKeeps.cs`.
+- **D — types, data and constants.** `EnumDeclaration`, `StructDeclaration`, `UnionDeclaration`,
+  `CharmapDeclaration`, `ListDeclaration`, `EnumMember`, `CharmapEntry`, `MemberValue`,
+  `DataDeclaration`, `ElementCount`, `ConstantDeclaration`, `ConfigDeclaration`. Consumers:
+  `Semantics/DataSyntax.cs`, `Semantics/Configuration.cs`, `Layout/`.
+- **E — conditionals, repetition, state and the one-line directives.** `IfDirective`,
+  `ElseIfDirective`, `ElseDirective`, `RepeatDirective`, `EachDirective`, `StateDirective`,
+  `EnsureDirective`, `AssertDirective`, `ErrorDirective`, `CpuDirective`, `ImportItem`,
+  `ImportSignature`, `ExportItem`, `UseItem`, `BankRange`. Consumers:
+  `Semantics/Repetitions.cs`, `Semantics/SemanticModel.cs`, `Semantics/FileInterface.cs`,
+  `Semantics/Binder.cs`.
+
+**Set aside for step 8**, because each needs a list or a kind that does not exist yet: every
+holder of a comma-separated list (`ArgumentList`, `ExportDirective`, `ImportDirective`,
+`ListItems`, `MacroParameterList`, `NextDirective`, `ParameterList`, `ParameterKind`,
+`RecordValues`, `StateList`, `ValueList`, `DataValues`), the token lists (`ErrorLine`,
+`SkippedTokens`), `DataDirective` with its three tails, `StateItem` with its six, `NameExpression`
+with `IdentifierName`, `ModuleDirective`, `UseDirective`, and the whole `.segment` family
+(`SegmentDeclaration`, `SegmentBlock`, `SegmentRegion`, `SegmentAttribute`) — the declaration holds
+two lists, and its two siblings share the abstract class that writes its first two slots.
+
+**What ties the groups.** A kind converts with the family that writes the slots it inherits, and
+the generator refuses anything else: `LiteralExpression` with its four (A), `TypeDeclaration` with
+its five (D), and `ConditionalDirective`, `RepetitionDirective` and `StateListDirective` each with
+their two (E). Nothing else is ordered: a node slot takes a bare green node until every kind it may
+hold builds its own, so a group never waits for another. `ParseName` and `ParseCommaSeparated` are
+step 8's and no one in step 7 touches them.
 
 ## Rules of the road
 

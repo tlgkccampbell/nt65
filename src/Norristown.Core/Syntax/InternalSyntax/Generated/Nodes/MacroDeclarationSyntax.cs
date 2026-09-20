@@ -11,15 +11,15 @@ internal sealed class MacroDeclarationSyntax : StatementSyntax
 {
     private readonly GreenToken keyword;
     private readonly GreenToken name;
-    private readonly MacroParameterListSyntax parameters;
-    private readonly ProcSignatureSyntax? signature;
+    private readonly GreenNode parameters;
+    private readonly GreenNode? signature;
     private readonly GreenToken openBraceToken;
 
     internal MacroDeclarationSyntax(
         GreenToken keyword,
         GreenToken name,
-        MacroParameterListSyntax parameters,
-        ProcSignatureSyntax? signature,
+        GreenNode parameters,
+        GreenNode? signature,
         GreenToken openBraceToken)
         : base(SyntaxKind.MacroDeclaration, keyword.FullWidth + name.FullWidth + parameters.FullWidth + (signature?.FullWidth ?? 0) + openBraceToken.FullWidth)
     {

@@ -41,7 +41,7 @@ public sealed record NodeSlot(
     public bool IsPiece => Role == SlotRole.Slot;
 
     /// <summary>Whether the slot must hold a node or a token, missing or not, in every node of its kind.</summary>
-    public bool IsRequired => !Type.EndsWith('?');
+    public bool IsRequired => !Type.EndsWith("?", StringComparison.Ordinal);
 
     /// <summary>The property's type until the kind is converted.</summary>
     public string PropertyType => Today ?? Type;

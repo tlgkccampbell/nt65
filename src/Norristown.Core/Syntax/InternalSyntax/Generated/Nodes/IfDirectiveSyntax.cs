@@ -10,12 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class IfDirectiveSyntax : ConditionalDirectiveSyntax
 {
     private readonly GreenToken keyword;
-    private readonly ExpressionSyntax condition;
+    private readonly GreenNode condition;
     private readonly GreenToken openBraceToken;
 
     internal IfDirectiveSyntax(
         GreenToken keyword,
-        ExpressionSyntax condition,
+        GreenNode condition,
         GreenToken openBraceToken)
         : base(SyntaxKind.IfDirective, keyword.FullWidth + condition.FullWidth + openBraceToken.FullWidth)
     {

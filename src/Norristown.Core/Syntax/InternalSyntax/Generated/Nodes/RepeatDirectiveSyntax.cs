@@ -10,14 +10,14 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed class RepeatDirectiveSyntax : RepetitionDirectiveSyntax
 {
     private readonly GreenToken keyword;
-    private readonly ExpressionSyntax expression;
+    private readonly GreenNode expression;
     private readonly GreenToken? commaToken;
     private readonly GreenToken? name;
     private readonly GreenToken openBraceToken;
 
     internal RepeatDirectiveSyntax(
         GreenToken keyword,
-        ExpressionSyntax expression,
+        GreenNode expression,
         GreenToken? commaToken,
         GreenToken? name,
         GreenToken openBraceToken)

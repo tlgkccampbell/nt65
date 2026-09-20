@@ -9,14 +9,14 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class CallExpressionSyntax : ExpressionSyntax
 {
-    private readonly NameExpressionSyntax? callee;
+    private readonly GreenNode? callee;
     private readonly GreenToken? function;
-    private readonly ArgumentListSyntax arguments;
+    private readonly GreenNode arguments;
 
     internal CallExpressionSyntax(
-        NameExpressionSyntax? callee,
+        GreenNode? callee,
         GreenToken? function,
-        ArgumentListSyntax arguments)
+        GreenNode arguments)
         : base(SyntaxKind.CallExpression, (callee?.FullWidth ?? 0) + (function?.FullWidth ?? 0) + arguments.FullWidth)
     {
         this.callee = callee;

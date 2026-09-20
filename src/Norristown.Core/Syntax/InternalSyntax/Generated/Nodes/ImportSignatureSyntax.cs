@@ -11,17 +11,17 @@ internal sealed class ImportSignatureSyntax : GreenNode
 {
     private readonly GreenToken procKeyword;
     private readonly GreenToken openParenToken;
-    private readonly StateListSyntax? entry;
+    private readonly GreenNode? entry;
     private readonly GreenToken? arrowToken;
-    private readonly StateListSyntax? exit;
+    private readonly GreenNode? exit;
     private readonly GreenToken closeParenToken;
 
     internal ImportSignatureSyntax(
         GreenToken procKeyword,
         GreenToken openParenToken,
-        StateListSyntax? entry,
+        GreenNode? entry,
         GreenToken? arrowToken,
-        StateListSyntax? exit,
+        GreenNode? exit,
         GreenToken closeParenToken)
         : base(SyntaxKind.ImportSignature, procKeyword.FullWidth + openParenToken.FullWidth + (entry?.FullWidth ?? 0) + (arrowToken?.FullWidth ?? 0) + (exit?.FullWidth ?? 0) + closeParenToken.FullWidth)
     {

@@ -169,7 +169,7 @@ internal sealed class Parser
         return new GreenSyntax(kind, children);
     }
 
-    private GreenNode Finish(GreenSyntax statement)
+    private GreenNode Finish(GreenNode statement)
     {
         SkipRest();
         return statement;
@@ -361,7 +361,7 @@ internal sealed class Parser
     /// <c>[]</c>, and then values: after it on the line, in braces on the line, or in the body
     /// the line opens. Any other directive takes its operands as ca65's does.
     /// </summary>
-    private GreenSyntax ParseDataDirective()
+    private GreenNode ParseDataDirective()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         var directive = Advance();
@@ -431,7 +431,7 @@ internal sealed class Parser
     /// required: data is declared to be named, and the segment of the same name is written
     /// <c>.segment DATA</c>.
     /// </summary>
-    private GreenSyntax ParseDataDeclaration()
+    private GreenNode ParseDataDeclaration()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -534,7 +534,7 @@ internal sealed class Parser
 
     /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>
     private GreenNode ParseMemberValueLine() =>
-        ParseMemberValue() is GreenSyntax value
+        ParseMemberValue() is { } value
             ? Finish(value)
             : ErrorLine("expected `member = value`");
 
@@ -544,7 +544,7 @@ internal sealed class Parser
     /// anonymous enum or struct declares into the scope around it, and a charmap or
     /// a list is only ever used by name.
     /// </summary>
-    private GreenSyntax ParseTypeBlock(SyntaxKind kind, bool named)
+    private GreenNode ParseTypeBlock(SyntaxKind kind, bool named)
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -601,7 +601,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
-    private GreenSyntax ParseFunc()
+    private GreenNode ParseFunc()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -622,7 +622,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
-    private GreenSyntax ParseSignatureDeclaration()
+    private GreenNode ParseSignatureDeclaration()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -643,7 +643,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
-    private GreenSyntax ParseConfig()
+    private GreenNode ParseConfig()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -688,7 +688,7 @@ internal sealed class Parser
     /// <c>.macro name(params) {</c>, with the processor state it expects and leaves. The
     /// body is ordinary nt65 and parses on its own, so only the opener is read here.
     /// </summary>
-    private GreenSyntax ParseMacro()
+    private GreenNode ParseMacro()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -799,7 +799,7 @@ internal sealed class Parser
     /// An argument's syntax never depends on the kind of the parameter it binds to, so every
     /// argument is read the same way and the kinds are checked once names are resolved.
     /// </summary>
-    private GreenSyntax ParseMacroCall()
+    private GreenNode ParseMacroCall()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -868,7 +868,7 @@ internal sealed class Parser
     /// build configuration, so it is an ordinary expression here and what it may name is
     /// settled once the configuration is known.
     /// </summary>
-    private GreenSyntax ParseIf(SyntaxKind kind, params ReadOnlySpan<GreenNode> leading)
+    private GreenNode ParseIf(SyntaxKind kind, params ReadOnlySpan<GreenNode> leading)
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.AddRange(leading);
@@ -879,7 +879,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>} .else {</c>, which takes no condition.</summary>
-    private GreenSyntax ParseElse(GreenNode brace)
+    private GreenNode ParseElse(GreenNode brace)
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(brace);
@@ -892,7 +892,7 @@ internal sealed class Parser
     /// <c>.repeat count, name {</c> or <c>.each what, name {</c>. The name is bound to the
     /// index or the item, and a body that does not use it may leave the name out.
     /// </summary>
-    private GreenSyntax ParseRepetition(SyntaxKind kind)
+    private GreenNode ParseRepetition(SyntaxKind kind)
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -913,7 +913,7 @@ internal sealed class Parser
     /// <c>.assert expr, "message"</c>, whose message may be left out. There is no level: a
     /// failed assertion is an error, and nt65 decides when it can be checked.
     /// </summary>
-    private GreenSyntax ParseAssert()
+    private GreenNode ParseAssert()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -943,7 +943,7 @@ internal sealed class Parser
     /// <c>.error "message"</c>, a configuration this file refuses to be built in, or
     /// <c>.warning "message"</c>, one it builds in and has something to say about.
     /// </summary>
-    private GreenSyntax ParseError()
+    private GreenNode ParseError()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -954,15 +954,29 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.ErrorDirective, children.ToImmutable());
     }
 
-    private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
+    /// <summary>
+    /// The token of <paramref name="kind"/> written here, or the missing token that stands where
+    /// one belongs, with <paramref name="message"/> reported there. A slot the source does not
+    /// fill is filled from here and nowhere else.
+    /// </summary>
+    private GreenToken Expect(SyntaxKind kind, string message)
     {
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `{`");
+        if (Kind == kind)
+            return Advance();
+        ReportOnce(message);
+        return GreenToken.Missing(kind);
     }
 
-    private GreenSyntax ParseCpuDirective()
+    /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
+    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
+
+    private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
+    {
+        if (ExpectOpenBrace() is { IsMissing: false } brace)
+            children.Add(brace);
+    }
+
+    private GreenNode ParseCpuDirective()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -979,7 +993,7 @@ internal sealed class Parser
     /// brace and the size decide which. A segment name is an identifier: segments are a table
     /// of their own, and share no namespace with symbols.
     /// </summary>
-    private GreenSyntax ParseSegment()
+    private GreenNode ParseSegment()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1081,7 +1095,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.BankRange, children.ToImmutable());
     }
 
-    private GreenSyntax ParseProc()
+    private GreenNode ParseProc()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1117,7 +1131,7 @@ internal sealed class Parser
     /// repetition's opener and then a routine's signature. The name to bind is what the
     /// routines are named from, so it is not optional as a repetition's is.
     /// </summary>
-    private GreenSyntax ParseMultiProc()
+    private GreenNode ParseMultiProc()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1140,7 +1154,7 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.MultiProcDeclaration, children.ToImmutable());
     }
 
-    private GreenSyntax ParseScope()
+    private GreenNode ParseScope()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1157,7 +1171,7 @@ internal sealed class Parser
     /// <c>.next @a, gfx::init</c>, the labels flow reaches after the statement above, or
     /// <c>.next ?</c>, which ends the path and checks nothing beyond it.
     /// </summary>
-    private GreenSyntax ParseNext()
+    private GreenNode ParseNext()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1172,7 +1186,7 @@ internal sealed class Parser
     /// <c>.state a16, i8</c>: the items of a signature, asserted and set at one point. Which
     /// items describe a routine rather than a point is the analysis's to say.
     /// </summary>
-    private GreenSyntax ParseState()
+    private GreenNode ParseState()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1184,7 +1198,7 @@ internal sealed class Parser
     /// <c>.ensure a16, i8</c>: the widths to make hold. It takes the items of a signature, and
     /// which of them it accepts is the analysis's to say.
     /// </summary>
-    private GreenSyntax ParseEnsure()
+    private GreenNode ParseEnsure()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1193,7 +1207,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
-    private GreenSyntax ParseFrame()
+    private GreenNode ParseFrame()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1214,7 +1228,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
-    private GreenSyntax ParsePatch()
+    private GreenNode ParsePatch()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1237,7 +1251,7 @@ internal sealed class Parser
     /// <c>.export a, outer::inner, K: abs, init as "_init"</c>. A declaration reads as the same
     /// declaration written without the <c>.export</c>, which the line holds instead.
     /// </summary>
-    private GreenSyntax ParseExport()
+    private GreenNode ParseExport()
     {
         var export = Advance();
         if (Kind == SyntaxKind.Directive && ParseExportable() is { } declaration)
@@ -1265,7 +1279,7 @@ internal sealed class Parser
     }
 
     /// <summary>The declaration after <c>.export</c>, or null when the directive declares nothing that can be exported.</summary>
-    private GreenSyntax? ParseExportable() => SyntaxFacts.LineDirectiveKind(Current.Text) switch
+    private GreenNode? ParseExportable() => SyntaxFacts.LineDirectiveKind(Current.Text) switch
     {
         SyntaxKind.DataDeclaration => ParseDataDeclaration(),
         SyntaxKind.ProcDeclaration => ParseProc(),
@@ -1315,7 +1329,7 @@ internal sealed class Parser
     }
 
     /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
-    private GreenSyntax ParseModule()
+    private GreenNode ParseModule()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1331,7 +1345,7 @@ internal sealed class Parser
     /// path is always written from the root of the modules, and names at least a module and
     /// one name in it, or a module.
     /// </summary>
-    private GreenSyntax ParseUse()
+    private GreenNode ParseUse()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1404,7 +1418,7 @@ internal sealed class Parser
         return true;
     }
 
-    private GreenSyntax ParseImport()
+    private GreenNode ParseImport()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
@@ -1599,7 +1613,7 @@ internal sealed class Parser
         }
     }
 
-    private GreenSyntax ParseInstruction()
+    private GreenNode ParseInstruction()
     {
         var mnemonic = Advance();
         return AtEnd

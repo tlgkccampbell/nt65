@@ -9,18 +9,18 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class AbsoluteOperandSyntax : OperandSyntax
 {
-    private readonly AddressPrefixSyntax? prefix;
-    private readonly ExpressionSyntax address;
+    private readonly GreenNode? prefix;
+    private readonly GreenNode address;
     private readonly GreenToken? commaToken;
     private readonly GreenToken? indexRegister;
-    private readonly ExpressionSyntax? second;
+    private readonly GreenNode? second;
 
     internal AbsoluteOperandSyntax(
-        AddressPrefixSyntax? prefix,
-        ExpressionSyntax address,
+        GreenNode? prefix,
+        GreenNode address,
         GreenToken? commaToken,
         GreenToken? indexRegister,
-        ExpressionSyntax? second)
+        GreenNode? second)
         : base(SyntaxKind.AbsoluteOperand, (prefix?.FullWidth ?? 0) + address.FullWidth + (commaToken?.FullWidth ?? 0) + (indexRegister?.FullWidth ?? 0) + (second?.FullWidth ?? 0))
     {
         this.prefix = prefix;

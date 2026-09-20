@@ -12,13 +12,13 @@ internal sealed class FrameDirectiveSyntax : StatementSyntax
     private readonly GreenToken keyword;
     private readonly GreenToken name;
     private readonly GreenToken colonToken;
-    private readonly ExpressionSyntax type;
+    private readonly GreenNode type;
 
     internal FrameDirectiveSyntax(
         GreenToken keyword,
         GreenToken name,
         GreenToken colonToken,
-        ExpressionSyntax type)
+        GreenNode type)
         : base(SyntaxKind.FrameDirective, keyword.FullWidth + name.FullWidth + colonToken.FullWidth + type.FullWidth)
     {
         this.keyword = keyword;
