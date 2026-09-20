@@ -925,12 +925,6 @@ internal sealed class Parser
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
 
-    private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
-    {
-        if (ExpectOpenBrace() is { IsMissing: false } brace)
-            children.Add(brace);
-    }
-
     private GreenNode ParseCpuDirective()
     {
         var keyword = Advance();

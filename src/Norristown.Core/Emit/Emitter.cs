@@ -914,8 +914,8 @@ public sealed class Emitter
             foreach (var value in list.Values)
                 InPlace(value, width, bigEndian, edits);
             edits.Replace[list.OpenBraceToken.Position] = "";
-            if (list.CloseBraceToken is { } close)
-                edits.Replace[close.Position] = "";
+            if (!list.CloseBraceToken.IsMissing)
+                edits.Replace[list.CloseBraceToken.Position] = "";
             text = $"{ForCa65(directive.Directive.Text)} {Bare(list, edits, out comment)}";
         }
         else if (DataSyntax.ValuesOf(directive).Count > 0)

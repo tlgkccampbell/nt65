@@ -1187,11 +1187,13 @@ internal sealed class Binder
             // One written anywhere but at file level has been reported, and declares nothing.
             case ConfigDeclarationSyntax written:
                 var setting = written.Value;
-                if (written.Name is { } configured && Configuration.AtFileLevel(written)
-                    && Declare(configured, SymbolKind.Constant) is { } config)
+                if (Configuration.AtFileLevel(written)
+                    && Declare(written.Name, SymbolKind.Constant) is { } config)
                 {
                     config.IsConfig = true;
-                    config.Value = configuration.SettingOf(tree, configured.Text) is { } given ? Value.Of(given) : Value.Unknown;
+                    config.Value = configuration.SettingOf(tree, written.Name.Text) is { } given
+                        ? Value.Of(given)
+                        : Value.Unknown;
                 }
                 CollectUses(setting, uses, words: true);
                 break;
