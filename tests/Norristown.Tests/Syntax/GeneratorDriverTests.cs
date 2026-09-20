@@ -46,6 +46,36 @@ public sealed class GeneratorDriverTests
         Assert.Empty(run.GeneratedSources);
     }
 
+    /// <summary>
+    /// An edit to the project that is not an edit to the table writes nothing again: the pipeline
+    /// hangs off the table's text, which is what keeps an editor from regenerating a hundred
+    /// classes on every keystroke.
+    /// </summary>
+    [Fact]
+    public void AnEditThatIsNotToTheTableRegeneratesNothing()
+    {
+        var table = new Table(Repo.Path(NodeTable.File.Split('/')), Repo.ReadText(Repo.Path(NodeTable.File.Split('/'))));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new SyntaxSourceGenerator().AsSourceGenerator()],
+            additionalTexts: [table],
+            parseOptions: null,
+            optionsProvider: null,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+        var token = TestContext.Current.CancellationToken;
+        var compilation = CSharpCompilation.Create("Norristown.Core.Table");
+        driver = driver.RunGenerators(compilation, token);
+        var edited = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText("class Unrelated;", cancellationToken: token));
+        var again = driver.RunGenerators(edited, token);
+
+        var outputs = again.GetRunResult().Results.Single().TrackedOutputSteps
+            .SelectMany(step => step.Value)
+            .SelectMany(step => step.Outputs)
+            .ToList();
+        Assert.NotEmpty(outputs);
+        Assert.All(outputs, output => Assert.Equal(IncrementalStepRunReason.Cached, output.Reason));
+    }
+
     private static GeneratorRunResult Run(string table)
     {
         var driver = CSharpGeneratorDriver
