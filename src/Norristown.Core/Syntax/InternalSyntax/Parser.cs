@@ -576,7 +576,7 @@ internal sealed class Parser
     {
         var keyword = Advance();
         var name = ExpectName("expected a function name");
-        GreenNode? parameters = null;
+        ParameterListSyntax? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
             parameters = ParseParameterList();
         else
@@ -625,25 +625,23 @@ internal sealed class Parser
                 new ErrorExpressionSyntax(null));
     }
 
-    private GreenNode ParseParameterList()
+    private ParameterListSyntax ParseParameterList()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseParen && !AtEnd)
-        {
-            children.AddRange(ParseCommaSeparated(() =>
-            {
-                if (AtName)
-                    return Advance();
-                Report("expected a parameter name");
-                return null;
-            }));
-        }
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            Report("expected `)`");
-        return new GreenSyntax(SyntaxKind.ParameterList, children.ToImmutable());
+        var openParen = Advance();
+        var parameters = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseParameter) : null;
+        var closeParen = Kind == SyntaxKind.CloseParen
+            ? Advance()
+            : Missing(SyntaxKind.CloseParen, "expected `)`");
+        return new ParameterListSyntax(openParen, parameters, closeParen);
+    }
+
+    /// <summary>One parameter of a <c>.func</c>, which is only its name.</summary>
+    private GreenNode? ParseParameter()
+    {
+        if (AtName)
+            return new ParameterSyntax(Advance());
+        Report("expected a parameter name");
+        return null;
     }
 
     /// <summary>
@@ -654,7 +652,7 @@ internal sealed class Parser
     {
         var keyword = Advance();
         var name = ExpectName("expected a macro name");
-        GreenNode? parameters = null;
+        MacroParameterListSyntax? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
             parameters = ParseMacroParameterList();
         else
@@ -663,17 +661,12 @@ internal sealed class Parser
         return new MacroDeclarationSyntax(keyword, name, parameters, signature, ExpectOpenBrace());
     }
 
-    private GreenNode ParseMacroParameterList()
+    private MacroParameterListSyntax ParseMacroParameterList()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseParen && !AtEnd)
-            children.AddRange(ParseCommaSeparated(ParseMacroParameter));
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `)`");
-        return new GreenSyntax(SyntaxKind.MacroParameterList, children.ToImmutable());
+        var openParen = Advance();
+        var parameters = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseMacroParameter) : null;
+        return new MacroParameterListSyntax(
+            openParen, parameters, Expect(SyntaxKind.CloseParen, "expected `)`"));
     }
 
     /// <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
@@ -686,7 +679,7 @@ internal sealed class Parser
         }
         var name = Advance();
         GreenToken? colon = null;
-        GreenNode? parameterKind = null;
+        ParameterKindSyntax? parameterKind = null;
         if (Kind == SyntaxKind.Colon)
         {
             colon = Advance();
@@ -711,48 +704,44 @@ internal sealed class Parser
     /// What a parameter takes: one of the fixed words, the listed words of a
     /// <c>one(...)</c>, or a <c>list(...)</c> of one of those.
     /// </summary>
-    private GreenNode ParseParameterKind()
+    private ParameterKindSyntax ParseParameterKind()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
         if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsParameterKind(Current.Text))
         {
             Report("expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`");
-            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+            return new ParameterKindSyntax(GreenToken.Missing(SyntaxKind.Identifier), null, null, null, null);
         }
 
         var listed = AtWord("one");
         var nested = AtWord("list");
-        children.Add(Advance());
-        if (!listed && !nested)
-            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+        var keyword = Advance();
 
+        // Only a `one` and a `list` say what they take, in parentheses after the word.
+        if (!listed && !nested)
+            return new ParameterKindSyntax(keyword, null, null, null, null);
         if (Kind != SyntaxKind.OpenParen)
         {
             Report("expected `(`");
-            return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+            return new ParameterKindSyntax(keyword, null, null, null, null);
         }
-        children.Add(Advance());
-        if (listed)
-        {
-            // The words a `one` accepts are never looked up, so a register or a mnemonic
-            // among them is a word like any other.
-            children.AddRange(ParseCommaSeparated(() =>
-            {
-                if (AtName)
-                    return Advance();
-                Report("expected a word");
-                return null;
-            }));
-        }
-        else
-        {
-            children.Add(ParseParameterKind());
-        }
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `)`");
-        return new GreenSyntax(SyntaxKind.ParameterKind, children.ToImmutable());
+
+        var openParen = Advance();
+
+        // The words a `one` accepts are never looked up, so a register or a mnemonic
+        // among them is a word like any other.
+        var words = listed ? ParseSeparatedList(ParseListedWord) : null;
+        var element = listed ? null : ParseParameterKind();
+        return new ParameterKindSyntax(
+            keyword, openParen, words, element, Expect(SyntaxKind.CloseParen, "expected `)`"));
+    }
+
+    /// <summary>One of the words a <c>one(...)</c> accepts.</summary>
+    private GreenNode? ParseListedWord()
+    {
+        if (AtName)
+            return new IdentifierNameSyntax(Advance(), null);
+        Report("expected a word");
+        return null;
     }
 
     /// <summary>
@@ -764,7 +753,7 @@ internal sealed class Parser
     {
         var name = Advance();
         var bang = Advance();
-        GreenNode? arguments = null;
+        ArgumentListSyntax? arguments = null;
         if (Kind == SyntaxKind.OpenParen)
             arguments = ParseMacroArguments();
         else
@@ -772,17 +761,11 @@ internal sealed class Parser
         return new MacroCallSyntax(name, bang, arguments, Kind == SyntaxKind.OpenBrace ? Advance() : null);
     }
 
-    private GreenNode ParseMacroArguments()
+    private ArgumentListSyntax ParseMacroArguments()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseParen && !AtEnd)
-            children.AddRange(ParseCommaSeparated(ParseArgument));
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `)`");
-        return new GreenSyntax(SyntaxKind.ArgumentList, children.ToImmutable());
+        var openParen = Advance();
+        var arguments = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseArgument) : null;
+        return new ArgumentListSyntax(openParen, arguments, Expect(SyntaxKind.CloseParen, "expected `)`"));
     }
 
     /// <summary>
@@ -1785,17 +1768,14 @@ internal sealed class Parser
         return new ErrorExpressionSyntax(name);
     }
 
-    private GreenNode ParseArgumentList()
+    private ArgumentListSyntax ParseArgumentList()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind is not SyntaxKind.CloseParen && !AtEnd)
-            children.AddRange(ParseCommaSeparated(ParseExpression));
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            Report("expected `)`");
-        return new GreenSyntax(SyntaxKind.ArgumentList, children.ToImmutable());
+        var openParen = Advance();
+        var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseExpression) : null;
+        var closeParen = Kind == SyntaxKind.CloseParen
+            ? Advance()
+            : Missing(SyntaxKind.CloseParen, "expected `)`");
+        return new ArgumentListSyntax(openParen, arguments, closeParen);
     }
 
     /// <summary>

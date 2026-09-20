@@ -211,7 +211,7 @@ internal static class TextMateGrammar
             MacroParameterSyntax when first => Parameter,
             ImportItemSyntax item when first => item.EqualsToken is not null ? Constant : Variable,
             RepeatDirectiveSyntax or EachDirectiveSyntax or MultiProcDeclarationSyntax => Constant,
-            ParameterListSyntax => Parameter,
+            ParameterSyntax => Parameter,
             EnumDeclarationSyntax when first => Enum,
             StructDeclarationSyntax or UnionDeclarationSyntax when first => Struct,
             ScopeDeclarationSyntax when first => Namespace,
@@ -231,7 +231,8 @@ internal static class TextMateGrammar
     /// <summary>
     /// Every token of a line in source order, taken from the pieces it is written in: the
     /// <c>.export</c> that exports what it declares, its statement, whatever the statement could
-    /// not take, and the line break that ends it.
+    /// not take, and the line break that ends it. A missing token is nowhere in the text, so it
+    /// is nothing for the grammar to have painted.
     /// </summary>
     private static List<SyntaxToken> Tokens(LineSyntax line)
     {
@@ -242,8 +243,8 @@ internal static class TextMateGrammar
             {
                 if (child.AsNode() is { } inner)
                     Walk(inner);
-                else
-                    tokens.Add(child.AsToken());
+                else if (child.AsToken() is { IsMissing: false } token)
+                    tokens.Add(token);
             }
         }
         if (line.ExportKeyword is { } export)

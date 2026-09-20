@@ -661,7 +661,7 @@ internal sealed class Evaluator
         // reads the binding rather than evaluating what is written.
         if (name is ".mode" or ".empty")
         {
-            if (arguments.Length != 1 || Argument(arguments[0]) is not { } about)
+            if (arguments.Count != 1 || Argument(arguments[0]) is not { } about)
                 return Value.Unknown;
             return name == ".mode"
                 ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
@@ -674,7 +674,7 @@ internal sealed class Evaluator
         // file out can supply it.
         if (name is ".endof" or ".spanof")
         {
-            if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } laid)
+            if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } laid)
                 return Value.Unknown;
             if (NotAnExtent(laid, name, arguments[0]))
                 return Value.Unknown;
@@ -689,7 +689,7 @@ internal sealed class Evaluator
 
         if (name is ".sizeof" or ".countof")
         {
-            if (arguments.Length != 1 || SymbolOf(arguments[0]) is not { } measured)
+            if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } measured)
                 return Value.Unknown;
 
             // `.countof(p)` of a `list` parameter is how many arguments the call gave it.
@@ -727,7 +727,7 @@ internal sealed class Evaluator
         // `.addrsize` asks about the shape of its argument rather than its value.
         if (name == ".addrsize")
         {
-            return arguments.Length == 1 && SizeOf(arguments[0], null) is { } size
+            return arguments.Count == 1 && SizeOf(arguments[0], null) is { } size
                 ? Value.Of((long)size)
                 : Value.Unknown;
         }
@@ -1349,7 +1349,7 @@ internal sealed class Evaluator
         }
 
         var given = call.Arguments.Arguments;
-        if (given.Length != 1)
+        if (given.Count != 1)
             return null;
         var text = Evaluate(given[0]);
         var characters = text.Kind switch

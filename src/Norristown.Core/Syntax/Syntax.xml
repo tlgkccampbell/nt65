@@ -119,7 +119,7 @@
     </Field>
   </Node>
 
-  <Node Name="ArgumentListSyntax" Base="SyntaxNode">
+  <Node Name="ArgumentListSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ArgumentList"/>
     <TypeComment>
       <summary><c>(a, b)</c>: the arguments of a call or of a macro call.</summary>
@@ -129,20 +129,17 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Arguments" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;" Today="ImmutableArray&lt;SyntaxNode&gt;">
+    <Field Name="Arguments" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
         <summary>The arguments. A call's are expressions; a macro call's may also be braced operands and named arguments.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes]]></Read>
     </Field>
-    <Field Name="CloseParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 
@@ -1030,7 +1027,7 @@
     </Field>
   </Node>
 
-  <Node Name="IdentifierNameSyntax" Base="SyntaxNode" Unbuilt="true">
+  <Node Name="IdentifierNameSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="IdentifierName"/>
     <TypeComment>
       <summary>One name, and the <c>[i]</c> after it when it has one: a part of a path, a parameter's word, a register.</summary>
@@ -1491,7 +1488,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroParameterListSyntax" Base="SyntaxNode">
+  <Node Name="MacroParameterListSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="MacroParameterList"/>
     <TypeComment>
       <summary><c>(a, b: expr, c = 1)</c>: the parameters of a macro.</summary>
@@ -1501,20 +1498,17 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Parameters" Type="SeparatedSyntaxList&lt;MacroParameterSyntax&gt;" Today="ImmutableArray&lt;MacroParameterSyntax&gt;">
+    <Field Name="Parameters" Type="SeparatedSyntaxList&lt;MacroParameterSyntax&gt;">
       <PropertyComment>
         <summary>The parameters.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
-    <Field Name="CloseParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 
@@ -1746,47 +1740,42 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="ParameterKindSyntax" Base="SyntaxNode">
+  <Node Name="ParameterKindSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ParameterKind"/>
     <TypeComment>
       <summary>What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, or a <c>list(...)</c> of one of those.</summary>
     </TypeComment>
-    <Field Name="Keyword" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The kind's word, or null when none was written.</summary>
+        <summary>The kind's word.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(0)]]></Read>
     </Field>
     <Field Name="OpenParenToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>(</c> of a <c>one</c> or a <c>list</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenParen)]]></Read>
     </Field>
-    <Field Name="Words" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;" Today="ImmutableArray&lt;SyntaxToken&gt;">
+    <Field Name="Words" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
         <summary>The words a <c>one(...)</c> accepts.</summary>
       </PropertyComment>
-      <Cache><![CDATA[[.. ChildTokens.Skip(2).Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]]]></Cache>
     </Field>
     <Field Name="Element" Type="ParameterKindSyntax" Optional="true">
       <PropertyComment>
         <summary>What each item of a <c>list(...)</c> is, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ParameterKindSyntax>()]]></Read>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>)</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="ParameterListSyntax" Base="SyntaxNode">
+  <Node Name="ParameterListSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ParameterList"/>
     <TypeComment>
       <summary><c>(a, b)</c>: the parameters of a <c>.func</c>.</summary>
@@ -1796,24 +1785,21 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Parameters" Type="SeparatedSyntaxList&lt;ParameterSyntax&gt;" Today="ImmutableArray&lt;SyntaxToken&gt;">
+    <Field Name="Parameters" Type="SeparatedSyntaxList&lt;ParameterSyntax&gt;">
       <PropertyComment>
-        <summary>The parameters' names.</summary>
+        <summary>The parameters.</summary>
       </PropertyComment>
-      <Cache><![CDATA[[.. ChildTokens.Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]]]></Cache>
     </Field>
-    <Field Name="CloseParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="ParameterSyntax" Base="SyntaxNode" Unbuilt="true">
+  <Node Name="ParameterSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="Parameter"/>
     <TypeComment>
       <summary>One parameter of a <c>.func</c>: its name.</summary>

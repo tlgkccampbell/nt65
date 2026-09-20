@@ -404,7 +404,7 @@ public sealed class Configuration
             // Only the value the condition chooses is read, so it alone has to be a define.
             if (name == ".select")
             {
-                if (given.Length != 3)
+                if (given.Count != 3)
                 {
                     Report(function.Span, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
                     return Value.Unknown;

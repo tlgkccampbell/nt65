@@ -843,7 +843,8 @@ internal sealed class Binder
 
         // A default is written in the header, so it resolves where the macro is declared
         // rather than in the body it is used in.
-        var declarations = declaration.Parameters?.Parameters ?? [];
+        IReadOnlyList<MacroParameterSyntax> declarations =
+            declaration.Parameters is { } list ? list.Parameters : [];
         foreach (var parameter in declarations)
             CollectUses(Macros.DefaultOf(parameter));
 
@@ -888,11 +889,12 @@ internal sealed class Binder
     /// every remaining positional argument, and the blocks after it, which are written after
     /// the parentheses and so cannot be positional at all.
     /// </summary>
-    private void CheckParameterOrder(ImmutableArray<MacroParameterSyntax> written, IReadOnlyList<MacroParameter> parameters)
+    private void CheckParameterOrder(
+        IReadOnlyList<MacroParameterSyntax> written, IReadOnlyList<MacroParameter> parameters)
     {
         MacroParameter? list = null;
         MacroParameter? block = null;
-        for (var i = 0; i < parameters.Count && i < written.Length; i++)
+        for (var i = 0; i < parameters.Count && i < written.Count; i++)
         {
             var parameter = parameters[i];
             var at = written[i].Span;
@@ -1512,9 +1514,10 @@ internal sealed class Binder
         var outer = scope;
         scope = inside;
         var parameters = new List<Symbol>();
-        foreach (var token in statement.Parameters?.Parameters ?? [])
+        IReadOnlyList<ParameterSyntax> written = statement.Parameters is { } list ? list.Parameters : [];
+        foreach (var declared in written)
         {
-            if (Declare(token, SymbolKind.Constant) is { } parameter)
+            if (Declare(declared.Name, SymbolKind.Constant) is { } parameter)
                 parameters.Add(parameter);
         }
         symbol.ParameterSymbols = parameters;

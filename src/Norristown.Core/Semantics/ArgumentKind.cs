@@ -30,10 +30,11 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
     /// </summary>
     public static ArgumentKind Read(ParameterKindSyntax? written)
     {
-        if (written?.Keyword is not { } keyword)
+        // A `:` with no kind after it, or one the parser could not read, leaves the word missing.
+        if (written is null || written.Keyword.IsMissing)
             return Expression;
 
-        var kind = keyword.Text.ToLowerInvariant() switch
+        var kind = written.Keyword.Text.ToLowerInvariant() switch
         {
             "const" => ParameterKind.Const,
             "ident" => ParameterKind.Ident,
@@ -46,9 +47,8 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
 
         if (kind == ParameterKind.One)
         {
-            // Every name inside the parentheses is a word it accepts; the `one` itself is the
-            // first token, and the punctuation carries nothing.
-            return new ArgumentKind(kind, [.. written.Words.Select(word => word.Text)], null);
+            // Every name inside the parentheses is a word it accepts.
+            return new ArgumentKind(kind, [.. written.Words.Select(word => word.Name.Text)], null);
         }
         if (kind == ParameterKind.List)
             return new ArgumentKind(kind, [], Read(written.Element));

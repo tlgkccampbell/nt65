@@ -50,9 +50,9 @@ public static class Operands
             // `.byteof(p, n)` stands where the operand may, and is byte n of its value.
             case CallExpressionSyntax call when IsByteOf(call):
                 var arguments = call.Arguments.Arguments;
-                if (arguments.Length < 1 || Bound(model, arguments[0], on) is not { } whole)
+                if (arguments.Count < 1 || Bound(model, arguments[0], on) is not { } whole)
                     return null;
-                var byteAt = arguments.Length > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
+                var byteAt = arguments.Count > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
                 return new OperandSubstitution(whole.Parameter, whole.Operand, byteAt, true, expression);
 
             default:
