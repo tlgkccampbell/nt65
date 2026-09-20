@@ -1,6 +1,7 @@
 using System.Text;
 using Norristown.Syntax;
-using Norristown.Syntax.InternalSyntax;
+using Green = Norristown.Syntax.InternalSyntax;
+using GreenSeparatedList = Norristown.Syntax.InternalSyntax.GreenSeparatedList;
 
 namespace Norristown.Tests.Syntax;
 
@@ -14,15 +15,15 @@ public sealed class ChildSyntaxListTests
     public void ChildrenAreNodesAndTokensTogether()
     {
         var tokens = HandBuilt.Tokens("(a, b)");
-        var arguments = HandBuilt.Node("(a, b)", SyntaxKind.ArgumentList, tokens[0],
-            new GreenSeparatedList([HandBuilt.Name(tokens[1]), tokens[2], HandBuilt.Name(tokens[3])]), tokens[4]);
+        var arguments = HandBuilt.Over("(a, b)", new Green.ArgumentListSyntax(tokens[0],
+            new GreenSeparatedList([HandBuilt.Name(tokens[1]), tokens[2], HandBuilt.Name(tokens[3])]), tokens[4]));
 
         var children = arguments.ChildNodesAndTokens();
         Assert.Equal(5, children.Count);
         Assert.Equal(
             [
-                SyntaxKind.OpenParen, SyntaxKind.NameExpression, SyntaxKind.Comma,
-                SyntaxKind.NameExpression, SyntaxKind.CloseParen,
+                SyntaxKind.OpenParen, SyntaxKind.IdentifierName, SyntaxKind.Comma,
+                SyntaxKind.IdentifierName, SyntaxKind.CloseParen,
             ],
             children.Select(child => child.Kind));
         Assert.True(children[0].IsToken);
@@ -64,12 +65,12 @@ public sealed class ChildSyntaxListTests
     public void ANodeAndATokenAreBothChildren()
     {
         var tokens = HandBuilt.Tokens("(a)");
-        var arguments = HandBuilt.Node("(a)", SyntaxKind.ArgumentList,
-            tokens[0], HandBuilt.Name(tokens[1]), tokens[2]);
+        var arguments = HandBuilt.Over("(a)", new Green.ArgumentListSyntax(
+            tokens[0], new GreenSeparatedList([HandBuilt.Name(tokens[1])]), tokens[2]));
 
         SyntaxNodeOrToken node = arguments.ChildNodes[0];
         SyntaxNodeOrToken token = arguments.ChildTokens[0];
-        Assert.Equal(SyntaxKind.NameExpression, node.Kind);
+        Assert.Equal(SyntaxKind.IdentifierName, node.Kind);
         Assert.Equal(arguments.ChildNodes[0].FullSpan, node.FullSpan);
         Assert.Equal(SyntaxKind.OpenParen, token.Kind);
         Assert.Equal("(", token.ToFullString());
@@ -79,13 +80,13 @@ public sealed class ChildSyntaxListTests
     public void ChildrenMatchListAndSlicePatterns()
     {
         var tokens = HandBuilt.Tokens("(a)");
-        var arguments = HandBuilt.Node("(a)", SyntaxKind.ArgumentList,
-            tokens[0], HandBuilt.Name(tokens[1]), tokens[2]);
+        var arguments = HandBuilt.Over("(a)", new Green.ArgumentListSyntax(
+            tokens[0], new GreenSeparatedList([HandBuilt.Name(tokens[1])]), tokens[2]));
 
         var children = arguments.ChildNodesAndTokens();
         Assert.True(children is [{ Kind: SyntaxKind.OpenParen }, _, { Kind: SyntaxKind.CloseParen }]);
         var rest = children is [_, .. var tail] ? tail : [];
-        Assert.Equal([SyntaxKind.NameExpression, SyntaxKind.CloseParen], rest.Select(child => child.Kind));
+        Assert.Equal([SyntaxKind.IdentifierName, SyntaxKind.CloseParen], rest.Select(child => child.Kind));
         Assert.Equal(2, children.Slice(1, 2).Length);
     }
 

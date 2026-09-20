@@ -1533,14 +1533,8 @@ internal sealed class Parser
         text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 
     /// <summary>
-    /// One or more items separated by commas, as the one list that holds them; null for a list
-    /// with no items, which is what a slot with nothing in it reads as.
-    /// </summary>
-    private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem) =>
-        ParseCommaSeparated(parseItem) is { Length: > 0 } pieces ? new GreenSeparatedList(pieces) : null;
-
-    /// <summary>
-    /// The items of a comma-separated list and the commas between them, in source order. A
+    /// The items of a comma-separated list and the commas between them, as the one list that holds
+    /// them; null for a list with no items, which is what a slot with nothing in it reads as. A
     /// separated list alternates an item and the comma after it, so a comma is taken only after
     /// an item already in the list, and the first item that cannot be read ends the list: the
     /// comma before it is the list's last piece and the rest of the line is the line's to hold.
@@ -1549,11 +1543,11 @@ internal sealed class Parser
     /// items are written some other way stops at the gap instead. Either way nothing is invented
     /// to stand between two commas.
     /// </summary>
-    private ImmutableArray<GreenNode> ParseCommaSeparated(Func<GreenNode?> parseItem)
+    private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem)
     {
-        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
         if (parseItem() is not { } first)
-            return pieces.ToImmutable();
+            return null;
+        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
         pieces.Add(first);
         while (Kind == SyntaxKind.Comma)
         {
@@ -1562,7 +1556,7 @@ internal sealed class Parser
                 break;
             pieces.Add(next);
         }
-        return pieces.ToImmutable();
+        return new GreenSeparatedList(pieces.ToImmutable());
     }
 
     private InstructionStatementSyntax ParseInstruction()

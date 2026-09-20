@@ -227,73 +227,6 @@ public abstract class SyntaxNode
     /// <summary>The tokens of the list in slot <paramref name="index"/>.</summary>
     private protected SyntaxTokenList SlotTokenList(int index) => new(SlotRed(index));
 
-    /// <summary>The token at <paramref name="index"/> among <see cref="ChildTokens"/>, or null when there are not that many.</summary>
-    private protected SyntaxToken? TokenAt(int index) => index < ChildTokens.Length ? ChildTokens[index] : null;
-
-    /// <summary>The token at <paramref name="index"/> when it is one a name may be written as, or null.</summary>
-    private protected SyntaxToken? NameAt(int index) =>
-        TokenAt(index) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null;
-
-    /// <summary>The first token of <paramref name="kind"/> directly under this node, or null.</summary>
-    private protected SyntaxToken? FirstToken(SyntaxKind kind)
-    {
-        foreach (var token in ChildTokens)
-        {
-            if (token.Kind == kind)
-                return token;
-        }
-        return null;
-    }
-
-    /// <summary>The first contextual word <paramref name="word"/> directly under this node, such as <c>as</c>, or null.</summary>
-    private protected SyntaxToken? FirstWord(string word)
-    {
-        foreach (var token in ChildTokens)
-        {
-            if (token.Kind == SyntaxKind.Identifier && token.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
-                return token;
-        }
-        return null;
-    }
-
-    /// <summary>The first child node of type <typeparamref name="T"/>, or null.</summary>
-    private protected T? FirstNode<T>() where T : SyntaxNode
-    {
-        foreach (var node in ChildNodes)
-        {
-            if (node is T found)
-                return found;
-        }
-        return null;
-    }
-
-    /// <summary>Every child node of type <typeparamref name="T"/>, made once and kept in <paramref name="cache"/>.</summary>
-    private protected ImmutableArray<T> Nodes<T>(ref ImmutableArray<T> cache) where T : SyntaxNode
-    {
-        if (cache.IsDefault)
-            ImmutableInterlocked.InterlockedInitialize(ref cache, [.. ChildNodes.OfType<T>()]);
-        return cache;
-    }
-
-    /// <summary>The child written straight after <paramref name="token"/> when it is a node, or null.</summary>
-    private protected SyntaxNode? NodeAfter(SyntaxToken? token) =>
-        Locate(token) is var (slot, nodes, _) && slot + 1 < Green.SlotCount
-        && Green.GetSlot(slot + 1) is not (null or GreenToken)
-            ? ChildNodes[nodes]
-            : null;
-
-    /// <summary>The child written straight before <paramref name="token"/> when it is a node, or null.</summary>
-    private protected SyntaxNode? NodeBefore(SyntaxToken? token) =>
-        Locate(token) is var (slot, nodes, _) && slot > 0 && Green.GetSlot(slot - 1) is not (null or GreenToken)
-            ? ChildNodes[nodes - 1]
-            : null;
-
-    /// <summary>The child written straight after <paramref name="token"/> when it is a token, or null.</summary>
-    private protected SyntaxToken? TokenAfter(SyntaxToken? token) =>
-        Locate(token) is var (slot, _, tokens) && slot + 1 < Green.SlotCount && Green.GetSlot(slot + 1) is GreenToken
-            ? ChildTokens[tokens + 1]
-            : null;
-
     /// <summary>The first token's text start and the last non-line-break token's text end.</summary>
     private static void Measure(GreenNode node, int position, ref int start, ref int end)
     {
@@ -316,33 +249,5 @@ public abstract class SyntaxNode
             Measure(slot, position, ref start, ref end);
             position += slot.FullWidth;
         }
-    }
-
-    /// <summary>
-    /// Where a token of this node sits among its children: its slot, and how many nodes and
-    /// how many tokens come before it. Null for no token, or one that is not this node's own.
-    /// </summary>
-    private (int Slot, int Nodes, int Tokens)? Locate(SyntaxToken? token)
-    {
-        if (token is not { } sought || !ReferenceEquals(sought.Parent, this))
-            return null;
-        int nodes = 0, tokens = 0, position = Position;
-        for (var i = 0; i < Green.SlotCount; i++)
-        {
-            if (Green.GetSlot(i) is not { } slot)
-                continue;
-            if (slot is GreenToken)
-            {
-                if (position == sought.Position && ReferenceEquals(slot, sought.Green))
-                    return (i, nodes, tokens);
-                tokens++;
-            }
-            else
-            {
-                nodes++;
-            }
-            position += slot.FullWidth;
-        }
-        return null;
     }
 }

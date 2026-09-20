@@ -1,4 +1,5 @@
 using Norristown.Syntax;
+using Green = Norristown.Syntax.InternalSyntax;
 using GreenCache = Norristown.Syntax.InternalSyntax.GreenCache;
 using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 using Lexer = Norristown.Syntax.InternalSyntax.Lexer;
@@ -76,24 +77,25 @@ public sealed class MissingTokenTests
     [Fact]
     public void AMissingTokenDoesNotStretchANodesSpan()
     {
-        // The operand of `lda` is missing, and where it belongs is past the comment, so a node
+        // The `:` of the label is missing, and where it belongs is past the comment, so a node
         // measured from its text must not reach that far.
-        var tokens = HandBuilt.Tokens("lda  ; note");
-        var instruction = (InstructionStatementSyntax)HandBuilt.Node("lda  ; note",
-            SyntaxKind.InstructionStatement, tokens[0], GreenToken.Missing(SyntaxKind.Identifier));
+        var tokens = HandBuilt.Tokens("loop  ; note");
+        var label = (LabelSyntax)HandBuilt.Over("loop  ; note",
+            new Green.LabelSyntax(tokens[0], GreenToken.Missing(SyntaxKind.Colon)));
 
-        Assert.Equal("lda  ; note", instruction.ToFullString());
-        Assert.Equal(new TextSpan(0, 11), instruction.FullSpan);
-        Assert.Equal(new TextSpan(0, 3), instruction.Span);
-        Assert.Equal(new TextSpan(11, 0), instruction.ChildTokens[1].Span);
+        Assert.Equal("loop  ; note", label.ToFullString());
+        Assert.Equal(new TextSpan(0, 12), label.FullSpan);
+        Assert.Equal(new TextSpan(0, 4), label.Span);
+        Assert.Equal(new TextSpan(12, 0), label.ChildTokens[1].Span);
     }
 
     [Fact]
-    public void ANodeOfNothingButAMissingTokenIsEmptyWhereItBelongs()
+    public void ANodeOfNothingButMissingTokensIsEmptyWhereItBelongs()
     {
-        var operand = HandBuilt.Node("lda ", SyntaxKind.AbsoluteOperand, GreenToken.Missing(SyntaxKind.Identifier));
-        Assert.Equal("", operand.ToFullString());
-        Assert.Equal(new TextSpan(0, 0), operand.Span);
-        Assert.Equal(new TextSpan(0, 0), operand.FullSpan);
+        var label = HandBuilt.Over("loop:", new Green.LabelSyntax(
+            GreenToken.Missing(SyntaxKind.Identifier), GreenToken.Missing(SyntaxKind.Colon)));
+        Assert.Equal("", label.ToFullString());
+        Assert.Equal(new TextSpan(0, 0), label.Span);
+        Assert.Equal(new TextSpan(0, 0), label.FullSpan);
     }
 }

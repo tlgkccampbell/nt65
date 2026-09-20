@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The node table: one description of every class in the red tree, and the only place a new kind
-  of node is written down. Building Norristown.Core runs the source generator in
-  src/Norristown.SyntaxGenerator over it, which writes the red node classes, the green classes,
-  the kind-to-class switch and the visitors into src/Norristown.Core/Generated, where they are
-  git-ignored and there to be read.
+  The node table: one description of every class in both trees, and the only place a new kind of
+  node is written down. Building Norristown.Core runs the source generator in
+  src/Norristown.SyntaxGenerator over it, which writes the red node classes, the green classes and
+  the visitors into src/Norristown.Core/Generated, where they are git-ignored and there to be read.
 
   A block per node, in the order the files list, so two people adding kinds touch two places.
   Where a concept is one Roslyn's own Syntax.xml has, the names are the ones Roslyn uses:
@@ -24,36 +23,23 @@
     ... Internal="true"               the class is internal: it gets an Accept, but no visitor method
     ... HandWritten="true"            the class is written by hand; only its Accept is generated
     ... Partial="true"                a hand-written half holds members the table cannot say
-    ... Converted="true"              the parser builds this kind's typed green node
-    ... Unbuilt="true"                nothing builds this kind yet: a design waiting for its parser
     ... Missing="true"                a node of this kind stands where one belongs that the source lacks
     ... Layout="A B C"                the field order, when it is not the base's fields and then this
                                       node's own
       <Member Name="N" Type="T">      a property that is not a piece of the node
-      <Legacy Name="N" Type="T">      a property that stands in for fields, and goes when the kind
-                                      converts
-        Today="T"                     the property's type until the kind is converted, where it differs
-        <Read><![CDATA[expr]]>        what the property returns
-        <Nodes/>                      every child node of the item type, made once and kept
-        <Cache><![CDATA[expr]]>       the expression, worked out once and kept
+        <Read><![CDATA[expr]]>        what that property returns
 
-  The fields of a node are its fixed layout, written in source order; Layout says the order where
-  a node interleaves its own fields with the ones a class above it writes. A field's type is what
-  the property returns once the kind is converted, and Optional means the piece belongs to a part
-  of the line that may be absent altogether: a piece the line always has a place for is required,
-  and stands in its slot as a missing token or an error node when the source leaves it out. A piece
-  inside an optional group stays optional, and is missing rather than absent when the group is
-  there and it is not. A list field is never optional: the property is always a list, and a list
-  with no items is a slot holding nothing.
-
-  Until a kind is converted the parser builds the generic node for it, so Today gives the type the
-  property still has and Read the search it still makes; a field whose property can be read either
-  way reads the slot when the green node is the typed one. A field with no Read is one the parser
-  does not write yet, and has no property until the kind converts.
+  The fields of a node are its fixed layout, written in source order, and each is read from its
+  slot; Layout says the order where a node interleaves its own fields with the ones a class above
+  it writes. Optional means the piece belongs to a part of the line that may be absent altogether:
+  a piece the line always has a place for is required, and stands in its slot as a missing token or
+  an error node when the source leaves it out. A piece inside an optional group stays optional, and
+  is missing rather than absent when the group is there and it is not. A list field is never
+  optional: the property is always a list, and a list with no items is a slot holding nothing.
 -->
 <Tree>
 
-  <Node Name="AbsoluteOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="AbsoluteOperandSyntax" Base="OperandSyntax">
     <Kind Name="AbsoluteOperand"/>
     <TypeComment>
       <summary><c>expr</c>, <c>expr,x</c>, <c>z:expr</c>, or the <c>expr, expr</c> of a bit branch.</summary>
@@ -87,7 +73,7 @@
     </Field>
   </Node>
 
-  <Node Name="AccumulatorOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="AccumulatorOperandSyntax" Base="OperandSyntax">
     <Kind Name="AccumulatorOperand"/>
     <TypeComment>
       <summary>The <c>a</c> of <c>asl a</c>.</summary>
@@ -100,7 +86,7 @@
     </Field>
   </Node>
 
-  <Node Name="AddressPrefixSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="AddressPrefixSyntax" Base="SyntaxNode">
     <Kind Name="AddressPrefix"/>
     <TypeComment>
       <summary><c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> before an address.</summary>
@@ -120,7 +106,7 @@
     </Field>
   </Node>
 
-  <Node Name="ArgumentListSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ArgumentListSyntax" Base="SyntaxNode">
     <Kind Name="ArgumentList"/>
     <TypeComment>
       <summary><c>(a, b)</c>: the arguments of a call or of a macro call.</summary>
@@ -144,7 +130,7 @@
     </Field>
   </Node>
 
-  <Node Name="AssertDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="AssertDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="AssertDirective"/>
     <TypeComment>
       <summary><c>.assert expr, "message"</c>, whose message may be left out.</summary>
@@ -188,7 +174,7 @@
     </Field>
   </Node>
 
-  <Node Name="BankRangeSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="BankRangeSyntax" Base="SyntaxNode">
     <Kind Name="BankRange"/>
     <TypeComment>
       <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>
@@ -211,7 +197,7 @@
     </Field>
   </Node>
 
-  <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="BinaryExpression"/>
     <TypeComment>
       <summary><c>left op right</c>.</summary>
@@ -252,14 +238,14 @@
     </Field>
   </Node>
 
-  <Node Name="BlankLineSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="BlankLineSyntax" Base="StatementSyntax">
     <Kind Name="BlankLine"/>
     <TypeComment>
       <summary>A line holding nothing, or nothing but a comment.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="BlockCloseLineSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="BlockCloseLineSyntax" Base="StatementSyntax">
     <Kind Name="BlockCloseLine"/>
     <TypeComment>
       <summary>A <c>}</c> on its own line.</summary>
@@ -272,7 +258,7 @@
     </Field>
   </Node>
 
-  <Node Name="BlockContinuationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="BlockContinuationSyntax" Base="StatementSyntax">
     <Kind Name="BlockContinuation"/>
     <TypeComment>
       <summary><c>} name {</c>: the line that closes one block argument of a macro call and opens the next.</summary>
@@ -299,7 +285,7 @@
     </Field>
   </Node>
 
-  <Node Name="BlockSpliceSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="BlockSpliceSyntax" Base="StatementSyntax">
     <Kind Name="BlockSplice"/>
     <TypeComment>
       <summary>A name on its own line, which splices a <c>block</c> parameter.</summary>
@@ -316,7 +302,7 @@
     <Kind Name="Block"/>
   </Node>
 
-  <Node Name="BracedDataSyntax" Base="DataTailSyntax" Converted="true">
+  <Node Name="BracedDataSyntax" Base="DataTailSyntax">
     <Kind Name="BracedData"/>
     <TypeComment>
       <summary>The one braced value of a counted or record data directive, written on its line.</summary>
@@ -328,7 +314,7 @@
     </Field>
   </Node>
 
-  <Node Name="BracedOperandSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="BracedOperandSyntax" Base="SyntaxNode">
     <Kind Name="BracedOperand"/>
     <TypeComment>
       <summary><c>{buf,x}</c>: a whole operand as a macro argument.</summary>
@@ -352,7 +338,7 @@
     </Field>
   </Node>
 
-  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="CallExpression"/>
     <TypeComment>
       <summary><c>name(args)</c> or <c>.function(args)</c>.</summary>
@@ -375,21 +361,21 @@
     </Field>
   </Node>
 
-  <Node Name="CharacterExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
+  <Node Name="CharacterExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="CharacterExpression"/>
     <TypeComment>
       <summary>A character in single quotes.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
+  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="CharmapDeclaration"/>
     <TypeComment>
       <summary><c>.charmap name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapEntrySyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="CharmapEntrySyntax" Base="StatementSyntax">
     <Kind Name="CharmapEntry"/>
     <TypeComment>
       <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
@@ -423,7 +409,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="ConditionalDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <AbstractNode Name="ConditionalDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
       <summary>A line that opens a branch with a condition: <c>.if expr {</c> or <c>} .elseif expr {</c>.</summary>
     </TypeComment>
@@ -446,7 +432,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ConfigDeclaration"/>
     <TypeComment>
       <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
@@ -476,7 +462,7 @@
     </Field>
   </Node>
 
-  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ConstantDeclaration"/>
     <TypeComment>
       <summary><c>name = expr</c>.</summary>
@@ -503,7 +489,7 @@
     </Field>
   </Node>
 
-  <Node Name="CpuDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="CpuDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="CpuDirective"/>
     <TypeComment>
       <summary><c>.cpu name</c>.</summary>
@@ -524,14 +510,14 @@
     </Field>
   </Node>
 
-  <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
+  <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="CpuNameExpression"/>
     <TypeComment>
       <summary>A CPU's name, where an expression is read.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="CurrentAddressExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <Node Name="CurrentAddressExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="CurrentAddressExpression"/>
     <TypeComment>
       <summary><c>*</c>: the address of the statement it is written in.</summary>
@@ -544,7 +530,7 @@
     </Field>
   </Node>
 
-  <Node Name="DataBodySyntax" Base="DataTailSyntax" Converted="true">
+  <Node Name="DataBodySyntax" Base="DataTailSyntax">
     <Kind Name="DataBody"/>
     <TypeComment>
       <summary>The <c>{</c> of a data directive whose values are written on the lines it opens.</summary>
@@ -557,7 +543,7 @@
     </Field>
   </Node>
 
-  <Node Name="DataDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="DataDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="DataDeclaration"/>
     <TypeComment>
       <summary><c>.data name: element</c>, or <c>.data name {</c> for mixed data.</summary>
@@ -595,7 +581,7 @@
     </Field>
   </Node>
 
-  <Node Name="DataDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="DataDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="DataDirective"/>
     <TypeComment>
       <summary>A data directive: <c>.byte 1, 2</c>, <c>.word[4] { … }</c>, <c>.type T { x = 1 }</c>, <c>.incbin "f"</c>.</summary>
@@ -629,13 +615,13 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="DataTailSyntax" Base="SyntaxNode" Converted="true">
+  <AbstractNode Name="DataTailSyntax" Base="SyntaxNode">
     <TypeComment>
       <summary>Where a data directive's values are: the body it opens, one braced value, or the values on its line.</summary>
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="DataValuesSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="DataValuesSyntax" Base="StatementSyntax">
     <Kind Name="DataValues"/>
     <TypeComment>
       <summary>One line of a data body: values separated by commas, one element each.</summary>
@@ -647,14 +633,14 @@
     </Field>
   </Node>
 
-  <Node Name="EachDirectiveSyntax" Base="RepetitionDirectiveSyntax" Converted="true">
+  <Node Name="EachDirectiveSyntax" Base="RepetitionDirectiveSyntax">
     <Kind Name="EachDirective"/>
     <TypeComment>
       <summary><c>.each what, name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="ElementCountSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ElementCountSyntax" Base="SyntaxNode">
     <Kind Name="ElementCount"/>
     <TypeComment>
       <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
@@ -678,7 +664,7 @@
     </Field>
   </Node>
 
-  <Node Name="ElementIndexSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ElementIndexSyntax" Base="SyntaxNode">
     <Kind Name="ElementIndex"/>
     <TypeComment>
       <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
@@ -702,7 +688,7 @@
     </Field>
   </Node>
 
-  <Node Name="ElseDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ElseDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ElseDirective"/>
     <TypeComment>
       <summary><c>} .else {</c>.</summary>
@@ -727,7 +713,7 @@
     </Field>
   </Node>
 
-  <Node Name="ElseIfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Converted="true" Layout="CloseBraceToken Keyword Condition OpenBraceToken">
+  <Node Name="ElseIfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Layout="CloseBraceToken Keyword Condition OpenBraceToken">
     <Kind Name="ElseIfDirective"/>
     <TypeComment>
       <summary><c>} .elseif expr {</c>.</summary>
@@ -740,7 +726,7 @@
     </Field>
   </Node>
 
-  <Node Name="EmptyBlockSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="EmptyBlockSyntax" Base="SyntaxNode">
     <Kind Name="EmptyBlock"/>
     <TypeComment>
       <summary><c>{}</c>: the default of a block parameter a call may leave out.</summary>
@@ -759,21 +745,21 @@
     </Field>
   </Node>
 
-  <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax" Converted="true">
+  <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="EnsureDirective"/>
     <TypeComment>
       <summary><c>.ensure a16, i8</c>: the widths to make hold.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
+  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="EnumDeclaration"/>
     <TypeComment>
       <summary><c>.enum name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="EnumMemberSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="EnumMemberSyntax" Base="StatementSyntax">
     <Kind Name="EnumMember"/>
     <TypeComment>
       <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
@@ -799,7 +785,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ErrorDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ErrorDirective"/>
     <TypeComment>
       <summary><c>.error "message"</c> or <c>.warning "message"</c>.</summary>
@@ -818,7 +804,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorExpressionSyntax" Base="ExpressionSyntax" Missing="true" Converted="true">
+  <Node Name="ErrorExpressionSyntax" Base="ExpressionSyntax" Missing="true">
     <Kind Name="ErrorExpression"/>
     <TypeComment>
       <summary>Where an expression was expected and none could be read.</summary>
@@ -831,7 +817,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorLineSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ErrorLineSyntax" Base="StatementSyntax">
     <Kind Name="ErrorLine"/>
     <TypeComment>
       <summary>A line the parser could not read as any statement: its tokens, as they are.</summary>
@@ -843,7 +829,7 @@
     </Field>
   </Node>
 
-  <Node Name="ExportDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ExportDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ExportDirective"/>
     <TypeComment>
       <summary><c>.export a, outer::inner, K: abs, init as "_init"</c>: a list of names to export.</summary>
@@ -861,7 +847,7 @@
     </Field>
   </Node>
 
-  <Node Name="ExportItemSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ExportItemSyntax" Base="SyntaxNode">
     <Kind Name="ExportItem"/>
     <TypeComment>
       <summary><c>name</c> or <c>outer::inner</c>, then <c>: size</c> or <c>as "linker_name"</c>.</summary>
@@ -903,7 +889,7 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="ExternProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ExternProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ExternProcDeclaration"/>
     <TypeComment>
       <summary><c>.proc name = address: entry -&gt; exit</c>: a routine with no body.</summary>
@@ -944,7 +930,7 @@
     <Kind Name="File"/>
   </Node>
 
-  <Node Name="FrameDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="FrameDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="FrameDirective"/>
     <TypeComment>
       <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
@@ -974,7 +960,7 @@
     </Field>
   </Node>
 
-  <Node Name="FuncDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="FuncDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="FuncDeclaration"/>
     <TypeComment>
       <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
@@ -1011,7 +997,7 @@
     </Field>
   </Node>
 
-  <Node Name="IdentifierNameSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="IdentifierNameSyntax" Base="SyntaxNode">
     <Kind Name="IdentifierName"/>
     <TypeComment>
       <summary>One name, and the <c>[i]</c> after it when it has one: a part of a path, a parameter's word, a register.</summary>
@@ -1032,14 +1018,14 @@
     </Field>
   </Node>
 
-  <Node Name="IfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Converted="true">
+  <Node Name="IfDirectiveSyntax" Base="ConditionalDirectiveSyntax">
     <Kind Name="IfDirective"/>
     <TypeComment>
       <summary><c>.if expr {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="ImmediateOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="ImmediateOperandSyntax" Base="OperandSyntax">
     <Kind Name="ImmediateOperand"/>
     <TypeComment>
       <summary><c>#expr</c>, or the <c>#src, #dst</c> of a block move.</summary>
@@ -1074,7 +1060,7 @@
     </Field>
   </Node>
 
-  <Node Name="ImportDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ImportDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ImportDirective"/>
     <TypeComment>
       <summary><c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.</summary>
@@ -1092,7 +1078,7 @@
     </Field>
   </Node>
 
-  <Node Name="ImportItemSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ImportItemSyntax" Base="SyntaxNode">
     <Kind Name="ImportItem"/>
     <TypeComment>
       <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
@@ -1135,7 +1121,7 @@
     </Field>
   </Node>
 
-  <Node Name="ImportSignatureSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ImportSignatureSyntax" Base="SyntaxNode">
     <Kind Name="ImportSignature"/>
     <TypeComment>
       <summary><c>proc(entry -&gt; exit)</c>: the signature of an imported routine.</summary>
@@ -1176,7 +1162,7 @@
     </Field>
   </Node>
 
-  <Node Name="IndexedIndirectOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="IndexedIndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="IndexedIndirectOperand"/>
     <TypeComment>
       <summary><c>(expr,x)</c> or <c>(expr,s),y</c>.</summary>
@@ -1224,7 +1210,7 @@
     </Field>
   </Node>
 
-  <Node Name="IndirectOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="IndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="IndirectOperand"/>
     <TypeComment>
       <summary><c>(expr)</c> or <c>(expr),y</c>.</summary>
@@ -1260,7 +1246,7 @@
     </Field>
   </Node>
 
-  <Node Name="InlineDataSyntax" Base="DataTailSyntax" Converted="true">
+  <Node Name="InlineDataSyntax" Base="DataTailSyntax">
     <Kind Name="InlineData"/>
     <TypeComment>
       <summary>The values of a data directive, written on its own line after the element type.</summary>
@@ -1272,7 +1258,7 @@
     </Field>
   </Node>
 
-  <Node Name="InstructionStatementSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="InstructionStatementSyntax" Base="StatementSyntax">
     <Kind Name="InstructionStatement"/>
     <TypeComment>
       <summary>A mnemonic and its operand, if it takes one.</summary>
@@ -1290,7 +1276,7 @@
     </Field>
   </Node>
 
-  <Node Name="LabelSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="LabelSyntax" Base="SyntaxNode">
     <Kind Name="Label"/>
     <TypeComment>
       <summary><c>name:</c> at the start of a line.</summary>
@@ -1312,7 +1298,7 @@
     </Field>
   </Node>
 
-  <Node Name="LabeledLineSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="LabeledLineSyntax" Base="StatementSyntax">
     <Kind Name="LabeledLine"/>
     <TypeComment>
       <summary>A label, and the instruction, data directive or macro call written after it, if any.</summary>
@@ -1333,14 +1319,14 @@
     <Kind Name="Line"/>
   </Node>
 
-  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
+  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="ListDeclaration"/>
     <TypeComment>
       <summary><c>.list name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="ListItemsSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ListItemsSyntax" Base="StatementSyntax">
     <Kind Name="ListItems"/>
     <TypeComment>
       <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
@@ -1352,7 +1338,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="LiteralExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <AbstractNode Name="LiteralExpressionSyntax" Base="ExpressionSyntax">
     <TypeComment>
       <summary>An expression that is one token.</summary>
     </TypeComment>
@@ -1367,7 +1353,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="LongIndirectOperandSyntax" Base="OperandSyntax" Converted="true">
+  <Node Name="LongIndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="LongIndirectOperand"/>
     <TypeComment>
       <summary><c>[expr]</c> or <c>[expr],y</c>.</summary>
@@ -1403,7 +1389,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroCallSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="MacroCallSyntax" Base="StatementSyntax">
     <Kind Name="MacroCall"/>
     <TypeComment>
       <summary><c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.</summary>
@@ -1433,7 +1419,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="MacroDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="MacroDeclaration"/>
     <TypeComment>
       <summary><c>.macro name(params): entry -&gt; exit {</c>.</summary>
@@ -1470,7 +1456,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroParameterListSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="MacroParameterListSyntax" Base="SyntaxNode">
     <Kind Name="MacroParameterList"/>
     <TypeComment>
       <summary><c>(a, b: expr, c = 1)</c>: the parameters of a macro.</summary>
@@ -1494,7 +1480,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroParameterSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="MacroParameterSyntax" Base="SyntaxNode">
     <Kind Name="MacroParameter"/>
     <TypeComment>
       <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
@@ -1531,7 +1517,7 @@
     </Field>
   </Node>
 
-  <Node Name="MemberValueSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="MemberValueSyntax" Base="StatementSyntax">
     <Kind Name="MemberValue"/>
     <TypeComment>
       <summary><c>member = value</c>, in a braced record or on a line of its own in a multi-line initializer.</summary>
@@ -1557,7 +1543,7 @@
     </Field>
   </Node>
 
-  <Node Name="ModuleDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ModuleDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ModuleDirective"/>
     <TypeComment>
       <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
@@ -1575,7 +1561,7 @@
     </Field>
   </Node>
 
-  <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="MultiProcDeclaration"/>
     <TypeComment>
       <summary><c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>.</summary>
@@ -1618,7 +1604,7 @@
     </Field>
   </Node>
 
-  <Node Name="NameExpressionSyntax" Base="ExpressionSyntax" Partial="true" Converted="true">
+  <Node Name="NameExpressionSyntax" Base="ExpressionSyntax" Partial="true">
     <Kind Name="NameExpression"/>
     <TypeComment>
       <summary>A name: <c>label</c>, <c>@local</c>, <c>gfx::init</c>, <c>::top_level</c>, <c>table[2]::x</c>.</summary>
@@ -1640,7 +1626,7 @@
     </Field>
   </Node>
 
-  <Node Name="NamedArgumentSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="NamedArgumentSyntax" Base="SyntaxNode">
     <Kind Name="NamedArgument"/>
     <TypeComment>
       <summary><c>name = argument</c>: a macro argument given by name.</summary>
@@ -1666,7 +1652,7 @@
     </Field>
   </Node>
 
-  <Node Name="NextDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="NextDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="NextDirective"/>
     <TypeComment>
       <summary><c>.next @a, gfx::init</c>, or <c>.next ?</c>.</summary>
@@ -1690,7 +1676,7 @@
     </Field>
   </Node>
 
-  <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
+  <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="NumberExpression"/>
     <TypeComment>
       <summary>A number.</summary>
@@ -1703,7 +1689,7 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="ParameterKindSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ParameterKindSyntax" Base="SyntaxNode">
     <Kind Name="ParameterKind"/>
     <TypeComment>
       <summary>What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, or a <c>list(...)</c> of one of those.</summary>
@@ -1738,7 +1724,7 @@
     </Field>
   </Node>
 
-  <Node Name="ParameterListSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ParameterListSyntax" Base="SyntaxNode">
     <Kind Name="ParameterList"/>
     <TypeComment>
       <summary><c>(a, b)</c>: the parameters of a <c>.func</c>.</summary>
@@ -1762,7 +1748,7 @@
     </Field>
   </Node>
 
-  <Node Name="ParameterSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ParameterSyntax" Base="SyntaxNode">
     <Kind Name="Parameter"/>
     <TypeComment>
       <summary>One parameter of a <c>.func</c>: its name.</summary>
@@ -1777,7 +1763,7 @@
     </Field>
   </Node>
 
-  <Node Name="ParenthesizedExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <Node Name="ParenthesizedExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="ParenthesizedExpression"/>
     <TypeComment>
       <summary><c>(expr)</c>.</summary>
@@ -1801,7 +1787,7 @@
     </Field>
   </Node>
 
-  <Node Name="PatchDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="PatchDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="PatchDirective"/>
     <TypeComment>
       <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
@@ -1819,7 +1805,7 @@
     </Field>
   </Node>
 
-  <Node Name="ProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ProcDeclaration"/>
     <TypeComment>
       <summary><c>.proc name: entry -&gt; exit {</c>.</summary>
@@ -1851,7 +1837,7 @@
     </Field>
   </Node>
 
-  <Node Name="ProcSignatureSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ProcSignatureSyntax" Base="SyntaxNode">
     <Kind Name="ProcSignature"/>
     <TypeComment>
       <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
@@ -1880,7 +1866,7 @@
     </Field>
   </Node>
 
-  <Node Name="RecordValuesSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="RecordValuesSyntax" Base="SyntaxNode">
     <Kind Name="RecordValues"/>
     <TypeComment>
       <summary><c>{ member = value, … }</c>: a record's values.</summary>
@@ -1904,14 +1890,14 @@
     </Field>
   </Node>
 
-  <Node Name="RepeatDirectiveSyntax" Base="RepetitionDirectiveSyntax" Converted="true">
+  <Node Name="RepeatDirectiveSyntax" Base="RepetitionDirectiveSyntax">
     <Kind Name="RepeatDirective"/>
     <TypeComment>
       <summary><c>.repeat count, name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <AbstractNode Name="RepetitionDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <AbstractNode Name="RepetitionDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
       <summary>The line that opens a repetition: <c>.repeat count, name {</c> or <c>.each what, name {</c>.</summary>
     </TypeComment>
@@ -1948,7 +1934,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ScopeDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="ScopeDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ScopeDeclaration"/>
     <TypeComment>
       <summary><c>.scope name {</c>.</summary>
@@ -1975,7 +1961,7 @@
     </Field>
   </Node>
 
-  <Node Name="SegmentAttributeSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="SegmentAttributeSyntax" Base="SyntaxNode">
     <Kind Name="SegmentAttribute"/>
     <TypeComment>
       <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
@@ -2016,7 +2002,7 @@
     </Field>
   </Node>
 
-  <Node Name="SegmentBlockSyntax" Base="SegmentStatementSyntax" Converted="true">
+  <Node Name="SegmentBlockSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentBlock"/>
     <TypeComment>
       <summary><c>.segment NAME {</c>: the line that opens a segment block.</summary>
@@ -2029,7 +2015,7 @@
     </Field>
   </Node>
 
-  <Node Name="SegmentDeclarationSyntax" Base="SegmentStatementSyntax" Converted="true">
+  <Node Name="SegmentDeclarationSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentDeclaration"/>
     <TypeComment>
       <summary><c>.segment NAME: size</c>, with its attributes.</summary>
@@ -2059,7 +2045,7 @@
     </Field>
   </Node>
 
-  <Node Name="SegmentRegionSyntax" Base="SegmentStatementSyntax" Converted="true">
+  <Node Name="SegmentRegionSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentRegion"/>
     <TypeComment>
       <summary><c>.segment NAME</c>: a region line, which puts what follows it in the segment.</summary>
@@ -2072,7 +2058,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="SegmentStatementSyntax" Base="StatementSyntax" Converted="true">
+  <AbstractNode Name="SegmentStatementSyntax" Base="StatementSyntax">
     <TypeComment>
       <summary>A line that starts with <c>.segment</c>: a declaration, a block's opener or a region line.</summary>
     </TypeComment>
@@ -2093,7 +2079,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="SignatureDeclaration"/>
     <TypeComment>
       <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
@@ -2125,7 +2111,7 @@
     </Field>
   </Node>
 
-  <Node Name="SkippedTokensSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="SkippedTokensSyntax" Base="SyntaxNode">
     <Kind Name="SkippedTokens"/>
     <TypeComment>
       <summary>What was left on a line after its statement: tokens the parser walked past.</summary>
@@ -2137,14 +2123,14 @@
     </Field>
   </Node>
 
-  <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax" Converted="true">
+  <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="StateDirective"/>
     <TypeComment>
       <summary><c>.state a16, i8</c>: the items of a signature, asserted and set at one point.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="StateFlagItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateFlagItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateFlagItem"/>
     <TypeComment>
       <summary>A state word and the <c>*</c> or <c>?</c> after it: <c>a16</c>, <c>i*</c>, <c>e?</c>.</summary>
@@ -2165,7 +2151,7 @@
     </Field>
   </Node>
 
-  <Node Name="StateInlineItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateInlineItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateInlineItem"/>
     <TypeComment>
       <summary><c>inline .strz</c>: the data after each call is a zero-terminated string.</summary>
@@ -2184,7 +2170,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="StateItemSyntax" Base="SyntaxNode" Converted="true">
+  <AbstractNode Name="StateItemSyntax" Base="SyntaxNode">
     <TypeComment>
       <summary>
         One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
@@ -2193,7 +2179,7 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="StateKeepsItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateKeepsItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateKeepsItem"/>
     <TypeComment>
       <summary><c>keeps a, x</c>: the registers a routine leaves as it found them.</summary>
@@ -2211,7 +2197,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="StateListDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <AbstractNode Name="StateListDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
       <summary>A directive that takes the items of a signature: <c>.state</c> or <c>.ensure</c>.</summary>
     </TypeComment>
@@ -2228,7 +2214,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="StateListSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="StateListSyntax" Base="SyntaxNode">
     <Kind Name="StateList"/>
     <TypeComment>
       <summary>Processor-state items separated by commas.</summary>
@@ -2240,7 +2226,7 @@
     </Field>
   </Node>
 
-  <Node Name="StateSetItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateSetItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateSetItem"/>
     <TypeComment>
       <summary>The name of a signature set, which stands for the items it was declared with.</summary>
@@ -2252,7 +2238,7 @@
     </Field>
   </Node>
 
-  <Node Name="StateUnknownItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateUnknownItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateUnknownItem"/>
     <TypeComment>
       <summary><c>?</c> on its own: every tracked part of the processor state is unknown.</summary>
@@ -2265,7 +2251,7 @@
     </Field>
   </Node>
 
-  <Node Name="StateValueItemSyntax" Base="StateItemSyntax" Converted="true">
+  <Node Name="StateValueItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateValueItem"/>
     <TypeComment>
       <summary>A state word and the value it is given: <c>dp = $2100</c>, <c>args 2</c>, <c>inline 4</c>.</summary>
@@ -2314,14 +2300,14 @@
     </Member>
   </AbstractNode>
 
-  <Node Name="StringExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
+  <Node Name="StringExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="StringExpression"/>
     <TypeComment>
       <summary>A string in double quotes.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
+  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="StructDeclaration"/>
     <TypeComment>
       <summary><c>.struct name {</c>.</summary>
@@ -2333,7 +2319,7 @@
     <Kind Name="SeparatedList"/>
   </Node>
 
-  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax" Converted="true">
+  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax">
     <TypeComment>
       <summary>The line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or <c>.list</c>.</summary>
     </TypeComment>
@@ -2359,7 +2345,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="UnaryExpressionSyntax" Base="ExpressionSyntax" Converted="true">
+  <Node Name="UnaryExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="UnaryExpression"/>
     <TypeComment>
       <summary><c>op operand</c>.</summary>
@@ -2383,14 +2369,14 @@
     </Field>
   </Node>
 
-  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
+  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="UnionDeclaration"/>
     <TypeComment>
       <summary><c>.union name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="UseDirectiveSyntax" Base="StatementSyntax" Converted="true">
+  <Node Name="UseDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="UseDirective"/>
     <TypeComment>
       <summary><c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>.</summary>
@@ -2451,7 +2437,7 @@
     </Field>
   </Node>
 
-  <Node Name="UseItemSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="UseItemSyntax" Base="SyntaxNode">
     <Kind Name="UseItem"/>
     <TypeComment>
       <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
@@ -2480,7 +2466,7 @@
     </Field>
   </Node>
 
-  <Node Name="ValueListSyntax" Base="SyntaxNode" Converted="true">
+  <Node Name="ValueListSyntax" Base="SyntaxNode">
     <Kind Name="ValueList"/>
     <TypeComment>
       <summary><c>{ value, … }</c>: a list of elements.</summary>

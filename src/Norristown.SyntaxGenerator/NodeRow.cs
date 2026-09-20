@@ -11,8 +11,6 @@ namespace Norristown.SyntaxGenerator;
 /// <param name="IsInternal">Whether the class is internal, and so has no visitor method.</param>
 /// <param name="IsHandWritten">Whether the class is written by hand and only its <c>Accept</c> generated.</param>
 /// <param name="IsPartial">Whether a hand-written half holds members the table cannot say.</param>
-/// <param name="IsConverted">Whether the parser builds this kind's typed green node.</param>
-/// <param name="IsUnbuilt">Whether nothing builds this kind yet: it is a design waiting for its parser.</param>
 /// <param name="IsMissingNode">Whether a node of this kind stands where one belongs that the source lacks.</param>
 /// <param name="Layout">The slot order, by name, when it is not the base's slots and then this node's own.</param>
 /// <param name="Slots">The class's properties, in the order they are written.</param>
@@ -25,8 +23,6 @@ public sealed record NodeRow(
     bool IsInternal,
     bool IsHandWritten,
     bool IsPartial,
-    bool IsConverted,
-    bool IsUnbuilt,
     bool IsMissingNode,
     ImmutableArray<string> Layout,
     ImmutableArray<NodeSlot> Slots)

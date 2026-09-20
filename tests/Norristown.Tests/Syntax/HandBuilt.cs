@@ -1,6 +1,9 @@
 using System.Collections.Immutable;
 using Norristown.Syntax;
-using Norristown.Syntax.InternalSyntax;
+using Green = Norristown.Syntax.InternalSyntax;
+using GreenNode = Norristown.Syntax.InternalSyntax.GreenNode;
+using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
+using Lexer = Norristown.Syntax.InternalSyntax.Lexer;
 
 namespace Norristown.Tests.Syntax;
 
@@ -16,19 +19,12 @@ internal static class HandBuilt
     public static ImmutableArray<GreenToken> Tokens(string text) =>
         [.. Lexer.LexLine(text).Tokens.Where(token => token.Kind != SyntaxKind.EndOfLine)];
 
-    /// <summary>A <c>NameExpression</c> over one identifier, the simplest node an item can be.</summary>
-    public static GreenNode Name(GreenToken identifier) => new GreenSyntax(SyntaxKind.NameExpression, [identifier]);
-
-    /// <summary>
-    /// The red node of <paramref name="kind"/> over <paramref name="children"/>, at the start
-    /// of a file holding <paramref name="text"/>.
-    /// </summary>
-    public static SyntaxNode Node(string text, SyntaxKind kind, params GreenNode[] children) =>
-        new GreenSyntax(kind, [.. children]).CreateRed(SyntaxTree.Parse("test.nt65", text), null, 0);
+    /// <summary>An <c>IdentifierName</c> over one identifier, the simplest node an item can be.</summary>
+    public static GreenNode Name(GreenToken identifier) => new Green.IdentifierNameSyntax(identifier, null);
 
     /// <summary>
     /// The red node over <paramref name="green"/>, at the start of a file holding
-    /// <paramref name="text"/>: the way a typed green node is read back.
+    /// <paramref name="text"/>: the way a green node is read back.
     /// </summary>
     public static SyntaxNode Over(string text, GreenNode green) =>
         green.CreateRed(SyntaxTree.Parse("test.nt65", text), null, 0);
