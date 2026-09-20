@@ -365,7 +365,7 @@ internal sealed class Parser
         if (!record && SyntaxFacts.ElementSize(directive.Text) is null)
             return new DataDirectiveSyntax(directive, null, null, AtEnd ? null : ParseInlineData());
 
-        GreenNode? type = null;
+        NameExpressionSyntax? type = null;
         if (record)
         {
             if (AtName || Kind == SyntaxKind.ColonColon)
@@ -562,7 +562,7 @@ internal sealed class Parser
     {
         var first = ParseExpression();
         GreenToken? dotDot = null;
-        GreenNode? last = null;
+        ExpressionSyntax? last = null;
         if (Kind == SyntaxKind.DotDot)
         {
             dotDot = Advance();
@@ -750,7 +750,7 @@ internal sealed class Parser
     /// An argument's syntax never depends on the kind of the parameter it binds to, so every
     /// argument is read the same way and the kinds are checked once names are resolved.
     /// </summary>
-    private GreenNode ParseMacroCall()
+    private MacroCallSyntax ParseMacroCall()
     {
         var name = Advance();
         var bang = Advance();
@@ -1158,7 +1158,7 @@ internal sealed class Parser
     }
 
     /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>
-    private GreenNode? ParseTarget(string expected)
+    private NameExpressionSyntax? ParseTarget(string expected)
     {
         if (AtName || Kind is SyntaxKind.CheapLocal or SyntaxKind.ColonColon)
             return ParseName();
@@ -1252,13 +1252,16 @@ internal sealed class Parser
     /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
     private GreenNode ParseModule()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
+
+        // The quotes are the mistake, not the name, so the string is left for the line to hold
+        // rather than read as a name it is not.
         if (Kind == SyntaxKind.StringLiteral)
+        {
             Report("a module name is written without quotes: `.module hw::vic`");
-        else
-            ParsePath(children, "expected the module's name: `.module name`");
-        return new GreenSyntax(SyntaxKind.ModuleDirective, children.ToImmutable());
+            return new ModuleDirectiveSyntax(keyword, MissingName());
+        }
+        return new ModuleDirectiveSyntax(keyword, ParsePath("expected the module's name: `.module name`"));
     }
 
     /// <summary>
@@ -1268,33 +1271,33 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseUse()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!ParsePath(children, "expected what to use: `.use module::name`"))
-            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+        var keyword = Advance();
+
+        // With no path there is nothing for the rest of the line to name a part of, so what
+        // follows is the line's to hold rather than the directive's.
+        var named = AtName;
+        var path = ParsePath("expected what to use: `.use module::name`");
+        if (!named)
+            return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, null, null);
 
         if (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Star or SyntaxKind.OpenBrace)
         {
-            children.Add(Advance());
+            var colonColon = Advance();
             if (Kind == SyntaxKind.Star)
-            {
-                children.Add(Advance());
-                return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
-            }
-            children.Add(Advance());
-            children.AddRange(ParseCommaSeparated(ParseUseItem));
+                return new UseDirectiveSyntax(keyword, path, colonColon, Advance(), null, null, null, null, null);
+
+            var openBrace = Advance();
+            var items = ParseSeparatedList(ParseUseItem);
+            GreenToken? closeBrace = null;
             if (Kind == SyntaxKind.CloseBrace)
-                children.Add(Advance());
+                closeBrace = Advance();
             else
                 ReportOnce("expected `}`");
-            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+            return new UseDirectiveSyntax(
+                keyword, path, colonColon, null, openBrace, items, closeBrace, null, null);
         }
         var (asKeyword, alias) = ParseUseAlias();
-        if (asKeyword is { } written)
-            children.Add(written);
-        if (alias is { } name)
-            children.Add(name);
-        return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+        return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, asKeyword, alias);
     }
 
     /// <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
@@ -1323,23 +1326,26 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// <c>a::b::c</c> as tokens, stopping before a <c>::</c> that is not followed by a name.
-    /// False when not even the first name is there.
+    /// <c>a::b::c</c> as a name, stopping before a <c>::</c> that is not followed by a name: the
+    /// <c>::</c> of a <c>::*</c> or a <c>::{</c> is the directive's to take, and any other is the
+    /// line's. The name that stands where one belongs when not even the first is written, with
+    /// <paramref name="expected"/> reported there.
     /// </summary>
-    private bool ParsePath(ImmutableArray<GreenNode>.Builder children, string expected)
+    private NameExpressionSyntax ParsePath(string expected)
     {
         if (!AtName)
         {
             Report(expected);
-            return false;
+            return MissingName();
         }
-        children.Add(Advance());
+        var parts = ImmutableArray.CreateBuilder<GreenNode>();
+        parts.Add(new IdentifierNameSyntax(Advance(), null));
         while (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
         {
-            children.Add(Advance());
-            children.Add(Advance());
+            parts.Add(Advance());
+            parts.Add(new IdentifierNameSyntax(Advance(), null));
         }
-        return true;
+        return new NameExpressionSyntax(null, new GreenSeparatedList(parts.ToImmutable()));
     }
 
     private GreenNode ParseImport()
@@ -1358,7 +1364,7 @@ internal sealed class Parser
         }
         var name = Advance();
         GreenToken? equals = null;
-        GreenNode? value = null;
+        ExpressionSyntax? value = null;
         GreenToken? colon = null;
         GreenToken? addressSize = null;
         ImportSignatureSyntax? signature = null;
@@ -1682,9 +1688,9 @@ internal sealed class Parser
         index + offset < tokens.Length && tokens[index + offset].Kind == SyntaxKind.Register
         && tokens[index + offset].Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
-    private GreenNode ParseExpression() => ParseBinary(LowestPrecedence);
+    private ExpressionSyntax ParseExpression() => ParseBinary(LowestPrecedence);
 
-    private GreenNode ParseBinary(int level)
+    private ExpressionSyntax ParseBinary(int level)
     {
         if (level < TightestPrecedence)
             return ParseUnary();
@@ -1701,7 +1707,7 @@ internal sealed class Parser
         return left;
     }
 
-    private GreenNode ParseUnary()
+    private ExpressionSyntax ParseUnary()
     {
         if (!SyntaxFacts.IsUnaryOperator(Kind))
             return ParsePrimary();
@@ -1709,7 +1715,7 @@ internal sealed class Parser
         return new UnaryExpressionSyntax(op, ParseUnary());
     }
 
-    private GreenNode ParsePrimary()
+    private ExpressionSyntax ParsePrimary()
     {
         switch (Kind)
         {
@@ -1739,14 +1745,14 @@ internal sealed class Parser
         }
     }
 
-    private GreenNode ParseParenthesized()
+    private ExpressionSyntax ParseParenthesized()
     {
         var open = Advance();
         var expression = ParseExpression();
         return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, "expected `)`"));
     }
 
-    private GreenNode ParseBuiltinCall()
+    private ExpressionSyntax ParseBuiltinCall()
     {
         if (!SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
@@ -1775,53 +1781,62 @@ internal sealed class Parser
     /// <paramref name="indexed"/> allows <c>[i]</c> after a component, which only an expression
     /// does: after the <c>T</c> of a <c>.type T[n]</c> the brackets are the declaration's count.
     /// </summary>
-    private GreenNode ParseName(bool indexed = false)
+    private NameExpressionSyntax ParseName(bool indexed = false)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        if (Kind == SyntaxKind.ColonColon)
-            children.Add(Advance());
+        var global = Kind == SyntaxKind.ColonColon ? Advance() : null;
+
         // A register or a mnemonic is kept as a name rather than refused here: inside a macro
         // body it is a word, and everywhere else the binder's reserved-word error says more
         // than the parser could.
-        if (Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
-            or SyntaxKind.Register or SyntaxKind.Mnemonic)
-        {
-            children.Add(Advance());
-        }
-        else
+        if (Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
+            or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
             Report("expected a name");
-            return new GreenSyntax(SyntaxKind.NameExpression, children.ToImmutable());
+            return new NameExpressionSyntax(global, MissingParts());
         }
-        if (indexed && Kind == SyntaxKind.OpenBracket)
-            children.Add(ParseElementIndex());
 
+        var parts = ImmutableArray.CreateBuilder<GreenNode>();
+        parts.Add(ParseNamePart(indexed));
         while (Kind == SyntaxKind.ColonColon)
         {
-            children.Add(Advance());
+            var separator = Advance();
 
             // A member of a named struct, union or enum may be spelled like a register or a
             // mnemonic: after `::` there is nothing else it could be.
-            if (Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
-            {
-                children.Add(Advance());
-            }
-            else
+            if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
                 Report("expected a name after `::`");
+                parts.Add(separator);
+                parts.Add(MissingPart());
                 break;
             }
-            if (indexed && Kind == SyntaxKind.OpenBracket)
-                children.Add(ParseElementIndex());
+            parts.Add(separator);
+            parts.Add(ParseNamePart(indexed));
         }
-        return new GreenSyntax(SyntaxKind.NameExpression, children.ToImmutable());
+        return new NameExpressionSyntax(global, new GreenSeparatedList(parts.ToImmutable()));
     }
 
+    /// <summary>One name of a path, with the <c>[i]</c> after it where an expression allows one.</summary>
+    private IdentifierNameSyntax ParseNamePart(bool indexed)
+    {
+        var name = Advance();
+        return new IdentifierNameSyntax(name, indexed && Kind == SyntaxKind.OpenBracket ? ParseElementIndex() : null);
+    }
+
+    /// <summary>The part that stands where a name belongs the source does not have.</summary>
+    private static IdentifierNameSyntax MissingPart() => new(GreenToken.Missing(SyntaxKind.Identifier), null);
+
+    /// <summary>A path of one part, that part being only the place a name belongs.</summary>
+    private static GreenSeparatedList MissingParts() => new([MissingPart()]);
+
+    /// <summary>The name that stands where one belongs the source does not have.</summary>
+    private static NameExpressionSyntax MissingName() => new(null, MissingParts());
+
     /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
-    private GreenNode ParseElementIndex()
+    private ElementIndexSyntax ParseElementIndex()
     {
         var open = Advance();
-        GreenNode index;
+        ExpressionSyntax index;
         if (Kind != SyntaxKind.CloseBracket && !AtEnd)
         {
             index = ParseExpression();

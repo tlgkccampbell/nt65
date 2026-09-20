@@ -144,7 +144,9 @@ public sealed class SemanticModel
             return family.InstanceAt(on);
         foreach (var token in header.ChildTokens)
         {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+            // A missing token declares nothing, and it starts where the token after it does, so
+            // taking one would answer with whatever is declared there.
+            if (!token.IsMissing && token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                 or SyntaxKind.Register or SyntaxKind.Mnemonic)
             {
                 return SymbolAt(token);

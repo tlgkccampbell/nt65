@@ -109,7 +109,7 @@ public sealed class Configuration
         switch (name)
         {
             case ".target":
-                if (given.Count != 1 || given[0].ChildTokens is not [var written] || CpuNames.Parse(written.Text) is not { } named)
+                if (given.Count != 1 || Alone(given[0]) is not { } written || CpuNames.Parse(written.Text) is not { } named)
                 {
                     report(function.Span, $"`.target` takes {CpuNames.Listed}");
                     return Value.Unknown;
@@ -119,7 +119,7 @@ public sealed class Configuration
             // Whether the CPU has an instruction, whichever it is: a program that runs on more
             // than one asks this rather than listing the CPUs that have it.
             case ".has":
-                if (given.Count != 1 || given[0] is not NameExpressionSyntax { ChildTokens: [{ Kind: SyntaxKind.Mnemonic } mnemonic] })
+                if (given.Count != 1 || given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
                     report(function.Span, "`.has` takes a mnemonic, such as `.has(phx)`");
                     return Value.Unknown;
@@ -130,6 +130,15 @@ public sealed class Configuration
                 return null;
         }
     }
+
+    /// <summary>
+    /// The one token an argument is written as — a CPU name, a number, or a name of a single
+    /// component — or null where it is written as anything more.
+    /// </summary>
+    private static SyntaxToken? Alone(SyntaxNode argument) =>
+        argument is NameExpressionSyntax name ? name.SimpleName
+        : argument.ChildTokens is [var only] ? only
+        : null;
 
     /// <summary>Whether a statement is written at file level, outside every block, exported or not.</summary>
     internal static bool AtFileLevel(StatementSyntax statement) =>
@@ -363,7 +372,7 @@ public sealed class Configuration
         private Value ValueOfName(NameExpressionSyntax name)
         {
             var written = name.GetText().Trim();
-            if (name.ChildTokens is [var only] && defines.TryGetValue(only.Text, out var value))
+            if (name.SimpleName is { } only && defines.TryGetValue(only.Text, out var value))
                 return Value.Of(value);
             var (setting, reported) = settings.Find(tree, name, Report);
             if (setting is not null)
@@ -393,7 +402,7 @@ public sealed class Configuration
             // and one that is not a define is the answer rather than a mistake.
             if (name == ".defined")
             {
-                return given is [NameExpressionSyntax { ChildTokens: [var asked] }]
+                return given is [NameExpressionSyntax { SimpleName: { } asked }]
                     ? Value.Of(defines.ContainsKey(asked.Text))
                     : Value.Unknown;
             }
@@ -632,7 +641,7 @@ public sealed class Configuration
             foreach (var child in tree.Root.Members)
             {
                 if (child is LineSyntax { Statement: ModuleDirectiveSyntax module })
-                    return string.Concat(module.ChildTokens.Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.ColonColon).Select(token => token.Text));
+                    return string.Join("::", module.Name.Names.Select(part => part.Text));
             }
             return "";
         }
@@ -647,7 +656,7 @@ public sealed class Configuration
                     continue;
                 foreach (var item in export.Items)
                 {
-                    if (item.Name.ChildTokens is [{ Kind: SyntaxKind.Identifier } name])
+                    if (item.Name.SimpleName is { Kind: SyntaxKind.Identifier } name)
                         names.Add(name.Text);
                 }
             }
@@ -664,24 +673,14 @@ public sealed class Configuration
             {
                 if (child is not LineSyntax { Statement: UseDirectiveSyntax use })
                     continue;
-                var tokens = use.ChildTokens;
-                var path = new List<string>();
-                var i = 1;
-                for (; i < tokens.Length; i++)
-                {
-                    if (tokens[i].Kind == SyntaxKind.Identifier && !(tokens[i].Text == "as" && path.Count > 0 && tokens[i - 1].Kind != SyntaxKind.ColonColon))
-                        path.Add(tokens[i].Text);
-                    else if (tokens[i].Kind != SyntaxKind.ColonColon || i + 1 >= tokens.Length || tokens[i + 1].Kind != SyntaxKind.Identifier)
-                        break;
-                }
-                var rest = tokens.Skip(i).ToList();
-                if (rest is [{ Kind: SyntaxKind.ColonColon }, { Kind: SyntaxKind.Star }, ..])
+                var path = use.Path.Names.Select(part => part.Text).ToList();
+                if (use.StarToken is not null)
                 {
                     if (byName.GetValueOrDefault((string.Join("::", path), name)) is { IsExported: true } everything)
                         return everything;
                     continue;
                 }
-                if (rest is [{ Kind: SyntaxKind.ColonColon }, { Kind: SyntaxKind.OpenBrace }, ..])
+                if (use.OpenBraceToken is not null)
                 {
                     foreach (var item in use.Items)
                     {
@@ -693,7 +692,7 @@ public sealed class Configuration
                 }
                 if (path.Count < 2)
                     continue;
-                var brought = rest is [_, var renamed, ..] ? renamed.Text : path[^1];
+                var brought = use.Alias?.Text ?? path[^1];
                 if (brought == name && byName.GetValueOrDefault((string.Join("::", path.SkipLast(1)), path[^1])) is { } one)
                     return one;
             }

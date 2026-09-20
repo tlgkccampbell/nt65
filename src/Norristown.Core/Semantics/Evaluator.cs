@@ -160,7 +160,7 @@ internal sealed class Evaluator
         foreach (var node in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
-                && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.ChildTokens[^1].Text == scope.Name)
+                && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.LastPart?.Name.Text == scope.Name)
                 Report(name, $"`{scope.Name}` is a scope, which has no address: a routine or data inside it does");
         }
         Evaluate(operand);
@@ -455,7 +455,7 @@ internal sealed class Evaluator
         {
             // Binding left a name in a value `.select` chooses between to whichever evaluation
             // chooses it.
-            if (choosing > 0 && name.ChildTokens is [{ Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone])
+            if (choosing > 0 && name.SimpleName is { Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone)
                 Report(alone, $"`{alone.Text}` is not declared");
             return Value.Unknown;
         }
@@ -472,7 +472,7 @@ internal sealed class Evaluator
     /// </summary>
     private Value Indexed(NameExpressionSyntax name, Value value)
     {
-        if (name.Indexes.Length == 0)
+        if (!name.IsIndexed)
             return value;
         return IndexOffset(name) is { } stepped && value.AsNumber() is { } at
             ? Value.Of(at + stepped)
@@ -541,7 +541,7 @@ internal sealed class Evaluator
     private Value OffsetAlong(NameExpressionSyntax name)
     {
         long offset = 0;
-        foreach (var token in name.ChildTokens)
+        foreach (var token in name.Names)
         {
             if (!resolved.TryGetValue((name.Tree, token.Span.Start), out var part))
                 continue;
@@ -565,7 +565,7 @@ internal sealed class Evaluator
     /// <summary>The address a path of members starts from, such as the instance of <c>pos::y</c>, or null.</summary>
     private Symbol? AddressAlong(NameExpressionSyntax name)
     {
-        foreach (var token in name.ChildTokens)
+        foreach (var token in name.Names)
         {
             if (resolved.TryGetValue((name.Tree, token.Span.Start), out var part) && part.IsAddress)
             {
@@ -614,7 +614,7 @@ internal sealed class Evaluator
     /// </summary>
     private static string? WordOf(Value value, ExpressionSyntax written) => value.IsWord
         ? value.Text
-        : written is NameExpressionSyntax { ChildTokens: [var word] }
+        : written is NameExpressionSyntax { SimpleName: { } word }
             ? word.Text
             : null;
 
@@ -821,7 +821,7 @@ internal sealed class Evaluator
     /// </summary>
     private bool NotAnExtent(Symbol symbol, string function, SyntaxNode at)
     {
-        if (at is NameExpressionSyntax { Indexes.Length: > 0 })
+        if (at is NameExpressionSyntax { IsIndexed: true })
         {
             Report(at, $"`{function}` measures a declaration, and `{at.GetText().Trim()}` is a place in one");
             return true;
@@ -1260,7 +1260,7 @@ internal sealed class Evaluator
             return null;
         foreach (var name in block.DescendantNodes().OfType<NameExpressionSyntax>())
         {
-            foreach (var token in name.ChildTokens)
+            foreach (var token in name.Names)
             {
                 if (resolved.TryGetValue((name.Tree, token.Span.Start), out var symbol)
                     && symbol.Kind == SymbolKind.Binding && symbol.Tree == block.Tree
@@ -1450,11 +1450,14 @@ internal sealed class Evaluator
         if (BoundItem(name) is NameExpressionSyntax item)
             return SymbolOf(item);
 
-        var tokens = name.ChildTokens;
-        for (var i = tokens.Length - 1; i >= 0; i--)
+        // A name written from the top level is already a path, so its first part is no more the
+        // whole of it than a second part would be.
+        var reached = name.GlobalToken is not null;
+        var names = name.Names;
+        for (var i = names.Length - 1; i >= 0; i--)
         {
-            if (resolved.TryGetValue((name.Tree, tokens[i].Span.Start), out var symbol))
-                return i > 0 && symbol.Kind == SymbolKind.Binding ? Namesake(name, i, symbol) : symbol;
+            if (resolved.TryGetValue((name.Tree, names[i].Span.Start), out var symbol))
+                return (i > 0 || reached) && symbol.Kind == SymbolKind.Binding ? Namesake(name, i, symbol) : symbol;
         }
         return null;
     }
@@ -1470,9 +1473,9 @@ internal sealed class Evaluator
     private Symbol? Namesake(NameExpressionSyntax name, int last, Symbol binding)
     {
         Symbol? container = null;
-        var tokens = name.ChildTokens;
+        var names = name.Names;
         for (var i = last - 1; i >= 0 && container is null; i--)
-            resolved.TryGetValue((name.Tree, tokens[i].Span.Start), out container);
+            resolved.TryGetValue((name.Tree, names[i].Span.Start), out container);
         if (container?.Body is not { } body)
             return null;
 
@@ -1494,7 +1497,7 @@ internal sealed class Evaluator
     /// <summary>The item a written name is bound to on this turn, or null when it is bound to none.</summary>
     private SyntaxNode? BoundItem(NameExpressionSyntax name)
     {
-        if (items.Count == 0 || name.ChildTokens is not [var only])
+        if (items.Count == 0 || name.SimpleName is not { } only)
             return null;
         return resolved.TryGetValue((name.Tree, only.Span.Start), out var symbol)
             && items.TryGetValue(symbol, out var item)

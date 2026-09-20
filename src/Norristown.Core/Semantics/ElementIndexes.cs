@@ -16,16 +16,10 @@ public static class ElementIndexes
     /// </summary>
     public static IEnumerable<(SyntaxToken Part, ElementIndexSyntax Index)> Of(NameExpressionSyntax name)
     {
-        foreach (var index in name.Indexes)
+        foreach (var part in name.Parts)
         {
-            SyntaxToken? part = null;
-            foreach (var token in name.Names)
-            {
-                if (token.Span.Start < index.Span.Start)
-                    part = token;
-            }
-            if (part is { } component)
-                yield return (component, index);
+            if (!part.Name.IsMissing && part.Index is { } index)
+                yield return (part.Name, index);
         }
     }
 

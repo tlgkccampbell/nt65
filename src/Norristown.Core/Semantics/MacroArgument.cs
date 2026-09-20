@@ -21,7 +21,7 @@ public sealed record MacroArgument(
 {
     /// <summary>The word a <c>one</c> parameter was given, or null when it is not one.</summary>
     public string? Word =>
-        Parameter.Kind == ParameterKind.One && Value is NameExpressionSyntax { ChildTokens: [var word] }
+        Parameter.Kind == ParameterKind.One && Value is NameExpressionSyntax { SimpleName: { } word }
             ? word.Text
             : null;
 

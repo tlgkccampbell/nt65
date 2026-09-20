@@ -141,7 +141,9 @@ public static class Repetitions
 
     /// <summary>The word an item was written as, for a list of them.</summary>
     private static string Word(SyntaxNode item) =>
-        item.ChildTokens is [var first, ..] ? first.Text : item.GetText().Trim();
+        item is NameExpressionSyntax { Names: [var name, ..] } ? name.Text
+        : item.ChildTokens is [var first, ..] ? first.Text
+        : item.GetText().Trim();
 
     private static void Report(
         SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, string message) =>

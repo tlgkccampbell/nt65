@@ -116,8 +116,13 @@ internal static class FileInterface
         {
             foreach (var token in node.ChildTokens)
             {
-                if (!resolved.TryGetValue((node.Tree, token.Span.Start), out var named) || named == symbol)
+                // A missing token starts where the token after it does, so looking one up would
+                // find whatever is named there.
+                if (token.IsMissing
+                    || !resolved.TryGetValue((node.Tree, token.Span.Start), out var named) || named == symbol)
+                {
                     continue;
+                }
                 text.Append($"{indent}names {named.Tree.Path} {named.QualifiedName}\n");
                 Describe(named, resolved, text, described, indent + "  ");
             }

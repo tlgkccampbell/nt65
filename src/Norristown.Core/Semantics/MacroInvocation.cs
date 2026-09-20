@@ -223,7 +223,7 @@ public sealed class MacroInvocation
                     break;
 
                 case ParameterKind.One:
-                    var word = value is NameExpressionSyntax { ChildTokens: [var only] } ? only.Text : null;
+                    var word = value is NameExpressionSyntax { SimpleName: { } only } ? only.Text : null;
 
                     // A word may be passed on from a `one` parameter of the macro whose body
                     // writes the call, so long as this list holds everything that one allows
