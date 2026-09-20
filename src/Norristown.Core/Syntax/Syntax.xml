@@ -1572,7 +1572,7 @@
     </Field>
   </Node>
 
-  <Node Name="ModuleDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="ModuleDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ModuleDirective"/>
     <TypeComment>
       <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
@@ -1582,19 +1582,12 @@
         <summary>The <c>.module</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
         <summary>The module's name, which is a path from the root of the modules.</summary>
       </PropertyComment>
     </Field>
-    <Legacy Name="Names" Type="ImmutableArray&lt;SyntaxToken&gt;">
-      <PropertyComment>
-        <summary>The names of the module's path, outermost first.</summary>
-      </PropertyComment>
-      <Cache><![CDATA[[.. ChildTokens.Skip(1).Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]]]></Cache>
-    </Legacy>
   </Node>
 
   <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
@@ -2461,7 +2454,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="UseDirectiveSyntax" Base="StatementSyntax" Partial="true">
+  <Node Name="UseDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="UseDirective"/>
     <TypeComment>
       <summary><c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>.</summary>
@@ -2471,13 +2464,11 @@
         <summary>The <c>.use</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Path" Type="NameExpressionSyntax" Today="ImmutableArray&lt;SyntaxToken&gt;">
+    <Field Name="Path" Type="NameExpressionSyntax">
       <PropertyComment>
         <summary>The path, outermost name first: everything before a <c>::*</c>, a <c>::{</c> or an <c>as</c>.</summary>
       </PropertyComment>
-      <Cache><![CDATA[ReadPath()]]></Cache>
     </Field>
     <Field Name="ColonColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2490,34 +2481,29 @@
         <summary>The <c>*</c> of <c>a::*</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Star"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Star)]]></Read>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>{</c> of <c>a::{b, c}</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;" Today="ImmutableArray&lt;UseItemSyntax&gt;">
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;">
       <PropertyComment>
         <summary>The names in the braces of <c>a::{b, c}</c>.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>}</c> of <c>a::{b, c}</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBrace)]]></Read>
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>as</c> of <c>a::b as c</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[Path.Length > 0 && TokenAfter(Path[^1]) is { Kind: SyntaxKind.Identifier } word && word.Text.Equals("as", StringComparison.OrdinalIgnoreCase) ? word : null]]></Read>
     </Field>
     <Field Name="Alias" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2526,7 +2512,6 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[TokenAfter(AsKeyword)]]></Read>
     </Field>
   </Node>
 

@@ -1240,13 +1240,16 @@ internal sealed class Parser
     /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
     private GreenNode ParseModule()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
+
+        // The quotes are the mistake, not the name, so the string is left for the line to hold
+        // rather than read as a name it is not.
         if (Kind == SyntaxKind.StringLiteral)
+        {
             Report("a module name is written without quotes: `.module hw::vic`");
-        else
-            ParsePath(children, "expected the module's name: `.module name`");
-        return new GreenSyntax(SyntaxKind.ModuleDirective, children.ToImmutable());
+            return new ModuleDirectiveSyntax(keyword, MissingName());
+        }
+        return new ModuleDirectiveSyntax(keyword, ParsePath("expected the module's name: `.module name`"));
     }
 
     /// <summary>
@@ -1256,33 +1259,33 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseUse()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!ParsePath(children, "expected what to use: `.use module::name`"))
-            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+        var keyword = Advance();
+
+        // With no path there is nothing for the rest of the line to name a part of, so what
+        // follows is the line's to hold rather than the directive's.
+        var named = AtName;
+        var path = ParsePath("expected what to use: `.use module::name`");
+        if (!named)
+            return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, null, null);
 
         if (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Star or SyntaxKind.OpenBrace)
         {
-            children.Add(Advance());
+            var colonColon = Advance();
             if (Kind == SyntaxKind.Star)
-            {
-                children.Add(Advance());
-                return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
-            }
-            children.Add(Advance());
-            children.AddRange(ParseCommaSeparated(ParseUseItem));
+                return new UseDirectiveSyntax(keyword, path, colonColon, Advance(), null, null, null, null, null);
+
+            var openBrace = Advance();
+            var items = ParseSeparatedList(ParseUseItem);
+            GreenToken? closeBrace = null;
             if (Kind == SyntaxKind.CloseBrace)
-                children.Add(Advance());
+                closeBrace = Advance();
             else
                 ReportOnce("expected `}`");
-            return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+            return new UseDirectiveSyntax(
+                keyword, path, colonColon, null, openBrace, items, closeBrace, null, null);
         }
         var (asKeyword, alias) = ParseUseAlias();
-        if (asKeyword is { } written)
-            children.Add(written);
-        if (alias is { } name)
-            children.Add(name);
-        return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
+        return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, asKeyword, alias);
     }
 
     /// <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
@@ -1311,23 +1314,26 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// <c>a::b::c</c> as tokens, stopping before a <c>::</c> that is not followed by a name.
-    /// False when not even the first name is there.
+    /// <c>a::b::c</c> as a name, stopping before a <c>::</c> that is not followed by a name: the
+    /// <c>::</c> of a <c>::*</c> or a <c>::{</c> is the directive's to take, and any other is the
+    /// line's. The name that stands where one belongs when not even the first is written, with
+    /// <paramref name="expected"/> reported there.
     /// </summary>
-    private bool ParsePath(ImmutableArray<GreenNode>.Builder children, string expected)
+    private NameExpressionSyntax ParsePath(string expected)
     {
         if (!AtName)
         {
             Report(expected);
-            return false;
+            return MissingName();
         }
-        children.Add(Advance());
+        var parts = ImmutableArray.CreateBuilder<GreenNode>();
+        parts.Add(new IdentifierNameSyntax(Advance(), null));
         while (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
         {
-            children.Add(Advance());
-            children.Add(Advance());
+            parts.Add(Advance());
+            parts.Add(new IdentifierNameSyntax(Advance(), null));
         }
-        return true;
+        return new NameExpressionSyntax(null, new GreenSeparatedList(parts.ToImmutable()));
     }
 
     private GreenNode ParseImport()
@@ -1776,7 +1782,7 @@ internal sealed class Parser
             or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
             Report("expected a name");
-            return new NameExpressionSyntax(global, MissingPart());
+            return new NameExpressionSyntax(global, MissingParts());
         }
 
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
@@ -1791,7 +1797,7 @@ internal sealed class Parser
             {
                 Report("expected a name after `::`");
                 parts.Add(separator);
-                parts.Add(MissingNamePart());
+                parts.Add(MissingPart());
                 break;
             }
             parts.Add(separator);
@@ -1808,10 +1814,13 @@ internal sealed class Parser
     }
 
     /// <summary>The part that stands where a name belongs the source does not have.</summary>
-    private static IdentifierNameSyntax MissingNamePart() => new(GreenToken.Missing(SyntaxKind.Identifier), null);
+    private static IdentifierNameSyntax MissingPart() => new(GreenToken.Missing(SyntaxKind.Identifier), null);
 
     /// <summary>A path of one part, that part being only the place a name belongs.</summary>
-    private static GreenSeparatedList MissingPart() => new([MissingNamePart()]);
+    private static GreenSeparatedList MissingParts() => new([MissingPart()]);
+
+    /// <summary>The name that stands where one belongs the source does not have.</summary>
+    private static NameExpressionSyntax MissingName() => new(null, MissingParts());
 
     /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
     private ElementIndexSyntax ParseElementIndex()

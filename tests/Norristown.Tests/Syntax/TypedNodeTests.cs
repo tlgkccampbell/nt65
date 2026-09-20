@@ -65,7 +65,7 @@ public sealed class TypedNodeTests
         Assert.Equal("4", repeat.Expression.GetText());
 
         var use = Assert.IsType<UseDirectiveSyntax>(((LineSyntax)tree.Root.Members[2]).Statement);
-        Assert.Equal(["a", "b"], use.Path.Select(name => name.Text));
+        Assert.Equal(["a", "b"], use.Path.Names.Select(name => name.Text));
         Assert.Equal("as", use.AsKeyword?.Text);
         Assert.Null(use.Alias);
     }

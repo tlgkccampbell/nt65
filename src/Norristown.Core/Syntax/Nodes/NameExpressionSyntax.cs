@@ -10,8 +10,8 @@ public sealed partial class NameExpressionSyntax
     private ImmutableArray<SyntaxToken> names;
 
     /// <summary>
-    /// The names between the <c>::</c> that the source wrote, outermost first: the names of
-    /// <see cref="Parts"/>, without a part that is only the place one belongs. Empty when not even
+    /// The names between the <c>::</c>, outermost first: the name of each of <see cref="Parts"/>
+    /// the source wrote, leaving out a part that is only the place one belongs. Empty when not even
     /// the first name was written.
     /// </summary>
     public ImmutableArray<SyntaxToken> Names

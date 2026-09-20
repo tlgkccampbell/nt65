@@ -2151,7 +2151,7 @@ internal sealed class Binder
     /// </summary>
     private void BindModule(ModuleDirectiveSyntax statement)
     {
-        var parts = statement.Names;
+        var parts = statement.Name.Names;
         if (parts.Length == 0)
             return;
         var span = new TextSpan(parts[0].Span.Start, parts[^1].Span.End - parts[0].Span.Start);
@@ -2182,10 +2182,10 @@ internal sealed class Binder
         useDirectives.Add(statement);
         if (!statement.IsExported)
             return;
-        var path = statement.Path;
+        var path = statement.Path.Names;
         if (path.Length == 0 || statement.StarToken is not null)
             return;
-        if (statement.Items.Length == 0)
+        if (statement.Items.Count == 0)
         {
             reexports.Add(new ProgramSymbols.Reexport((statement.Alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]));
             return;
@@ -2201,7 +2201,7 @@ internal sealed class Binder
     /// </summary>
     private void ResolveUse(UseDirectiveSyntax statement)
     {
-        var path = statement.Path;
+        var path = statement.Path.Names;
         var glob = statement.StarToken is not null;
         var items = statement.Items;
         var alias = statement.Alias;
@@ -2210,7 +2210,7 @@ internal sealed class Binder
         Place? place = null;
         for (var i = 0; i < path.Length && (i == 0 || place is not null); i++)
         {
-            var last = i == path.Length - 1 && !glob && items.Length == 0;
+            var last = i == path.Length - 1 && !glob && items.Count == 0;
             place = i == 0 ? ModuleRoot(path[i], report)
                 : place!.Value.Module is { } prefix ? InModule(path[i], prefix, last, report)
                 : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Place(CheckExported(path[i], member, last))
@@ -2239,7 +2239,7 @@ internal sealed class Binder
             }
             return;
         }
-        if (items.Length == 0)
+        if (items.Count == 0)
         {
             BringIn(alias ?? path[^1], target, alias is not null, statement.IsExported);
             return;

@@ -641,7 +641,7 @@ public sealed class Configuration
             foreach (var child in tree.Root.Members)
             {
                 if (child is LineSyntax { Statement: ModuleDirectiveSyntax module })
-                    return string.Join("::", module.Names.Select(part => part.Text));
+                    return string.Join("::", module.Name.Names.Select(part => part.Text));
             }
             return "";
         }
@@ -673,24 +673,14 @@ public sealed class Configuration
             {
                 if (child is not LineSyntax { Statement: UseDirectiveSyntax use })
                     continue;
-                var tokens = use.ChildTokens;
-                var path = new List<string>();
-                var i = 1;
-                for (; i < tokens.Length; i++)
-                {
-                    if (tokens[i].Kind == SyntaxKind.Identifier && !(tokens[i].Text == "as" && path.Count > 0 && tokens[i - 1].Kind != SyntaxKind.ColonColon))
-                        path.Add(tokens[i].Text);
-                    else if (tokens[i].Kind != SyntaxKind.ColonColon || i + 1 >= tokens.Length || tokens[i + 1].Kind != SyntaxKind.Identifier)
-                        break;
-                }
-                var rest = tokens.Skip(i).ToList();
-                if (rest is [{ Kind: SyntaxKind.ColonColon }, { Kind: SyntaxKind.Star }, ..])
+                var path = use.Path.Names.Select(part => part.Text).ToList();
+                if (use.StarToken is not null)
                 {
                     if (byName.GetValueOrDefault((string.Join("::", path), name)) is { IsExported: true } everything)
                         return everything;
                     continue;
                 }
-                if (rest is [{ Kind: SyntaxKind.ColonColon }, { Kind: SyntaxKind.OpenBrace }, ..])
+                if (use.OpenBraceToken is not null)
                 {
                     foreach (var item in use.Items)
                     {
@@ -702,7 +692,7 @@ public sealed class Configuration
                 }
                 if (path.Count < 2)
                     continue;
-                var brought = rest is [_, var renamed, ..] ? renamed.Text : path[^1];
+                var brought = use.Alias?.Text ?? path[^1];
                 if (brought == name && byName.GetValueOrDefault((string.Join("::", path.SkipLast(1)), path[^1])) is { } one)
                     return one;
             }

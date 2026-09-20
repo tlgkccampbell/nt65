@@ -2,10 +2,8 @@
 # kind's line in the same change that fixes its slots; ShapeTests reads the list strictly both
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
 DataDirective
-ModuleDirective
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration
 SegmentRegion
 StateItem
-UseDirective
