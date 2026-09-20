@@ -21,8 +21,6 @@ ExternProcDeclaration
 FrameDirective
 FuncDeclaration
 ImportDirective
-ImportItem
-ImportSignature
 ListDeclaration
 ListItems
 MacroCall

@@ -1161,7 +1161,7 @@
     </Field>
   </Node>
 
-  <Node Name="ImportItemSyntax" Base="SyntaxNode">
+  <Node Name="ImportItemSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ImportItem"/>
     <TypeComment>
       <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
@@ -1173,44 +1173,38 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>=</c> before a checked value, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The value the import is checked against, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>:</c> before a size or a signature, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
     <Field Name="AddressSize" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null]]></Read>
     </Field>
     <Field Name="Signature" Type="ImportSignatureSyntax" Optional="true">
       <PropertyComment>
         <summary>The <c>proc(...)</c> after the <c>:</c>, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ImportSignatureSyntax>()]]></Read>
     </Field>
   </Node>
 
-  <Node Name="ImportSignatureSyntax" Base="SyntaxNode">
+  <Node Name="ImportSignatureSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ImportSignature"/>
     <TypeComment>
       <summary><c>proc(entry -&gt; exit)</c>: the signature of an imported routine.</summary>
@@ -1220,40 +1214,34 @@
         <summary>The <c>proc</c>.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="OpenParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>, or null.</summary>
+        <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenParen)]]></Read>
     </Field>
     <Field Name="Entry" Type="StateListSyntax" Optional="true">
       <PropertyComment>
         <summary>The state on entry, or null when it is left out.</summary>
       </PropertyComment>
-      <Read><![CDATA[ArrowToken is { } arrow ? NodeBefore(arrow) as StateListSyntax : FirstNode<StateListSyntax>()]]></Read>
     </Field>
     <Field Name="ArrowToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>-&gt;</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Arrow"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Arrow)]]></Read>
     </Field>
     <Field Name="Exit" Type="StateListSyntax" Optional="true">
       <PropertyComment>
         <summary>The state on exit, or null when it is left out.</summary>
       </PropertyComment>
-      <Read><![CDATA[NodeAfter(ArrowToken) as StateListSyntax]]></Read>
     </Field>
-    <Field Name="CloseParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 

@@ -1438,57 +1438,72 @@ internal sealed class Parser
     /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
     private GreenNode? ParseImportItem()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
         if (!AtName)
         {
             Report("expected a name to import");
             return null;
         }
-        children.Add(Advance());
+        var name = Advance();
+        GreenToken? equals = null;
+        GreenNode? value = null;
+        GreenToken? colon = null;
+        GreenToken? addressSize = null;
+        ImportSignatureSyntax? signature = null;
 
         if (Kind == SyntaxKind.Equals)
         {
-            children.Add(Advance());
-            children.Add(ParseExpression());
+            equals = Advance();
+            value = ParseExpression();
         }
         else if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
+            colon = Advance();
             if (AtWord("proc"))
-                children.Add(ParseImportSignature());
+                signature = ParseImportSignature();
             else if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
-                children.Add(Advance());
+                addressSize = Advance();
             else
                 Report("expected `zp`, `abs`, `far` or `proc(...)`");
         }
-        return new GreenSyntax(SyntaxKind.ImportItem, children.ToImmutable());
+        return new ImportItemSyntax(name, equals, value, colon, addressSize, signature);
     }
 
-    private GreenNode ParseImportSignature()
+    private ImportSignatureSyntax ParseImportSignature()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
         if (Kind != SyntaxKind.OpenParen)
         {
             Report("expected `(`");
-            return new GreenSyntax(SyntaxKind.ImportSignature, children.ToImmutable());
+            return new ImportSignatureSyntax(
+                keyword, GreenToken.Missing(SyntaxKind.OpenParen), null, null, null,
+                GreenToken.Missing(SyntaxKind.CloseParen));
         }
-        children.Add(Advance());
+        var openParen = Advance();
 
         // Both halves are optional: on the 6502 and its CMOS variants a routine's signature may be empty.
+        GreenNode? entry = null;
+        GreenToken? arrow = null;
+        GreenNode? exit = null;
         if (Kind is not (SyntaxKind.CloseParen or SyntaxKind.Arrow))
-            children.Add(ParseStateList());
+            entry = ParseStateList();
         if (Kind == SyntaxKind.Arrow)
         {
-            children.Add(Advance());
+            arrow = Advance();
             if (Kind != SyntaxKind.CloseParen)
-                children.Add(ParseStateList());
+                exit = ParseStateList();
         }
+
+        GreenToken closeParen;
         if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
+        {
+            closeParen = Advance();
+        }
         else
+        {
             Report("expected `)`");
-        return new GreenSyntax(SyntaxKind.ImportSignature, children.ToImmutable());
+            closeParen = GreenToken.Missing(SyntaxKind.CloseParen);
+        }
+        return new ImportSignatureSyntax(keyword, openParen, entry, arrow, exit, closeParen);
     }
 
     /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
