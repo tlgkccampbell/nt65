@@ -3,7 +3,7 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>A token with its parent and absolute position.</summary>
-/// <param name="Parent">The line the token is on.</param>
+/// <param name="Parent">The node the token is a piece of, which for a line's own is the line.</param>
 /// <param name="Green">The green token this one wraps.</param>
 /// <param name="Position">Where the token starts in the file's text, trivia included.</param>
 public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, int Position)
@@ -52,6 +52,10 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;
 
+    /// <summary>Whether <paramref name="token"/> is the one written where <paramref name="sought"/> is.</summary>
+    private static bool Written(SyntaxToken token, SyntaxToken sought) =>
+        token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
+
     /// <summary>
     /// The token one step along from this one, forwards or backwards. A line is the unit walked:
     /// it holds few enough tokens to read them all, and a token asked for past either end of one
@@ -88,8 +92,4 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
         var beyond = line.Tree.GetLine(next).DescendantTokens().ToList();
         return beyond.Count == 0 ? null : beyond[direction > 0 ? 0 : ^1];
     }
-
-    /// <summary>Whether <paramref name="token"/> is the one written where <paramref name="sought"/> is.</summary>
-    private static bool Written(SyntaxToken token, SyntaxToken sought) =>
-        token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
 }

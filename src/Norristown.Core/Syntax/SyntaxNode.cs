@@ -247,8 +247,13 @@ public abstract class SyntaxNode
     /// span holds the position. The whitespace and the comment after a token belong to it, and
     /// the indentation before the first token of a line belongs to that token, so a caret in
     /// either finds the token the trivia is written beside, as it does in Roslyn. A missing token
-    /// has no width and so holds no position and is never the answer. The end of the file, and
-    /// the end of any node, is past everything written in it and gives its last token.
+    /// has no width and so holds no position: nothing is ever written in one, and one is never
+    /// the answer.
+    /// <para>
+    /// The end of a node is past everything written in it and holds nothing, and the answer there
+    /// is the node's last token: the line break at the end of a file, or, in a node whose last
+    /// piece the source leaves out, the missing token standing for it.
+    /// </para>
     /// </summary>
     /// <param name="position">An offset from this node's start to its end.</param>
     public SyntaxToken FindToken(int position)
