@@ -14,8 +14,6 @@ DataDirective
 DataValues
 EachDirective
 ElementCount
-ElseDirective
-ElseIfDirective
 EmptyBlock
 EnsureDirective
 EnumDeclaration
@@ -27,7 +25,6 @@ ExportItem
 ExternProcDeclaration
 FrameDirective
 FuncDeclaration
-IfDirective
 ImportDirective
 ImportItem
 ImportSignature

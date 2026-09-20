@@ -236,7 +236,7 @@ internal sealed class Parser
 
         return SyntaxFacts.LineDirectiveKind(Current.Text) switch
         {
-            SyntaxKind.ElseIfDirective => Finish(ParseIf(SyntaxKind.ElseIfDirective, brace)),
+            SyntaxKind.ElseIfDirective => Finish(ParseIf(brace)),
             SyntaxKind.ElseDirective => Finish(ParseElse(brace)),
             _ => Finish(new BlockCloseLineSyntax(brace)),
         };
@@ -304,7 +304,7 @@ internal sealed class Parser
             SyntaxKind.SignatureDeclaration => Finish(ParseSignatureDeclaration()),
             SyntaxKind.ConfigDeclaration => Finish(ParseConfig()),
             SyntaxKind.MacroDeclaration => Finish(ParseMacro()),
-            SyntaxKind.IfDirective => Finish(ParseIf(SyntaxKind.IfDirective)),
+            SyntaxKind.IfDirective => Finish(ParseIf()),
             SyntaxKind.RepeatDirective => Finish(ParseRepetition(SyntaxKind.RepeatDirective)),
             SyntaxKind.EachDirective => Finish(ParseRepetition(SyntaxKind.EachDirective)),
             SyntaxKind.AssertDirective => Finish(ParseAssert()),
@@ -868,28 +868,25 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// <c>.if expr {</c>, or the <c>.elseif</c> that continues one. The condition tests the
-    /// build configuration, so it is an ordinary expression here and what it may name is
-    /// settled once the configuration is known.
+    /// <c>.if expr {</c>, or, with <paramref name="closeBrace"/>, the <c>} .elseif expr {</c>
+    /// that continues one. The condition tests the build configuration, so it is an ordinary
+    /// expression here and what it may name is settled once the configuration is known.
     /// </summary>
-    private GreenNode ParseIf(SyntaxKind kind, params ReadOnlySpan<GreenNode> leading)
+    private GreenNode ParseIf(GreenToken? closeBrace = null)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.AddRange(leading);
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(kind, children.ToImmutable());
+        var keyword = Advance();
+        var condition = ParseExpression();
+        var openBrace = ExpectOpenBrace();
+        return closeBrace is { } shut
+            ? new ElseIfDirectiveSyntax(shut, keyword, condition, openBrace)
+            : new IfDirectiveSyntax(keyword, condition, openBrace);
     }
 
     /// <summary><c>} .else {</c>, which takes no condition.</summary>
-    private GreenNode ParseElse(GreenNode brace)
+    private GreenNode ParseElse(GreenToken closeBrace)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(brace);
-        children.Add(Advance());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(SyntaxKind.ElseDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new ElseDirectiveSyntax(closeBrace, keyword, ExpectOpenBrace());
     }
 
     /// <summary>

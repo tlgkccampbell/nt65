@@ -437,7 +437,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="ConditionalDirectiveSyntax" Base="StatementSyntax">
+  <AbstractNode Name="ConditionalDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <TypeComment>
       <summary>A line that opens a branch with a condition: <c>.if expr {</c> or <c>} .elseif expr {</c>.</summary>
     </TypeComment>
@@ -446,20 +446,17 @@
         <summary>The <c>.if</c> or <c>.elseif</c>.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Directive)!.Value]]></Read>
     </Field>
     <Field Name="Condition" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The condition the branch is taken on.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </AbstractNode>
 
@@ -752,7 +749,7 @@
     </Field>
   </Node>
 
-  <Node Name="ElseDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="ElseDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ElseDirective"/>
     <TypeComment>
       <summary><c>} .else {</c>.</summary>
@@ -762,25 +759,22 @@
         <summary>The <c>}</c> that closes the branch before.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>.else</c>.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="ElseIfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Layout="CloseBraceToken Keyword Condition OpenBraceToken">
+  <Node Name="ElseIfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Converted="true" Layout="CloseBraceToken Keyword Condition OpenBraceToken">
     <Kind Name="ElseIfDirective"/>
     <TypeComment>
       <summary><c>} .elseif expr {</c>.</summary>
@@ -790,7 +784,6 @@
         <summary>The <c>}</c> that closes the branch before.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </Node>
 
@@ -1114,7 +1107,7 @@
     </Field>
   </Node>
 
-  <Node Name="IfDirectiveSyntax" Base="ConditionalDirectiveSyntax">
+  <Node Name="IfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Converted="true">
     <Kind Name="IfDirective"/>
     <TypeComment>
       <summary><c>.if expr {</c>.</summary>
