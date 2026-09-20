@@ -188,8 +188,10 @@ Still true for anyone changing the tree.
 - Incremental parsing must not get slower in kind: an edit still lexes the lines it touches and
   reparses only those, and lines whose block context changed. `scripts/test.ps1 -Benchmark` prints
   what an edit costs.
-- `scripts/test.ps1` is the edit loop, about eleven seconds; `scripts/gate.ps1` once per unit of
-  work. The sweeps run over 142 sources times eight variants; keep them parallel
-  (`Repo.CollectFailures`).
+- `scripts/test.ps1` is the edit loop, about ten seconds; `scripts/gate.ps1` once per unit of work,
+  about eleven. Five sweeps run over 142 sources times eight variants — the broken-source sweep,
+  the shape test, the typed-node test, navigation and the tree's diagnostics — and each parses
+  those 1,136 trees for itself. Keep them parallel (`Repo.CollectFailures`), and if the loop grows,
+  one sweep that parses once and runs every check over that parse is the saving to take.
 - `CLAUDE.md` holds the C# rules. Generated files are one type per file like any other.
 - `DESIGN.md` defines the language, not the API.
