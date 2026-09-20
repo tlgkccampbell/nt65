@@ -895,19 +895,22 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseRepetition(SyntaxKind kind)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
+        var keyword = Advance();
+        var expression = ParseExpression();
+        GreenToken? comma = null;
+        GreenToken? name = null;
         if (Kind == SyntaxKind.Comma)
         {
-            children.Add(Advance());
+            comma = Advance();
             if (AtName)
-                children.Add(Advance());
+                name = Advance();
             else
                 Report("expected the name to bind");
         }
-        ExpectOpenBrace(children);
-        return new GreenSyntax(kind, children.ToImmutable());
+        var openBrace = ExpectOpenBrace();
+        return kind == SyntaxKind.RepeatDirective
+            ? new RepeatDirectiveSyntax(keyword, expression, comma, name, openBrace)
+            : new EachDirectiveSyntax(keyword, expression, comma, name, openBrace);
     }
 
     /// <summary>

@@ -12,7 +12,6 @@ CpuDirective
 DataDeclaration
 DataDirective
 DataValues
-EachDirective
 ElementCount
 EmptyBlock
 EnsureDirective
@@ -46,7 +45,6 @@ PatchDirective
 ProcDeclaration
 ProcSignature
 RecordValues
-RepeatDirective
 ScopeDeclaration
 SegmentAttribute
 SegmentBlock
