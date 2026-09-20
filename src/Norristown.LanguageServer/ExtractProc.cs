@@ -207,15 +207,8 @@ internal static class ExtractProc
         model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
 
     /// <summary>The statement parsed from <paramref name="line"/>, or null where the file has no such line.</summary>
-    private static StatementSyntax? StatementOn(SyntaxTree tree, int line)
-    {
-        foreach (var node in tree.Root.DescendantNodes())
-        {
-            if (node is LineSyntax found && found.LineIndex == line)
-                return found.Statement;
-        }
-        return null;
-    }
+    private static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
+        line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
 
     /// <summary>Where a line's text ends, the line break included.</summary>
     private static int LineEnd(SyntaxTree tree, int line) =>

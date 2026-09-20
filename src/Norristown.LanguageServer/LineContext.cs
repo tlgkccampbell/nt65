@@ -1,4 +1,3 @@
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
@@ -171,7 +170,9 @@ internal sealed class LineContext
 
     /// <summary>A whole line's tokens, but for its line break, with where each starts in the file.</summary>
     public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
-        Lexed(tree, tree.LineStarts[line], line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length);
+        [.. tree.GetLine(line).Tokens
+            .Where(token => token.Kind != SyntaxKind.EndOfLine)
+            .Select(token => (token.Kind, token.Text, token.Span.Start))];
 
     /// <summary>Where the code on a line ends, before any comment: its start, for a line with none.</summary>
     public static int CodeEnd(SyntaxTree tree, int line) =>
@@ -189,23 +190,9 @@ internal sealed class LineContext
     private static Surrounding Around(SyntaxTree tree, int line)
     {
         var found = new Surrounding(Place.Item, false, false, false, null);
-        for (SyntaxNode node = tree.Root; Innermost(node, line) is { } block; node = block)
+        foreach (var block in Edits.BlockAround(tree, line)?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
             found = found.Within(block);
         return found;
-    }
-
-    /// <summary>The child block of <paramref name="node"/> that holds <paramref name="line"/>, or null.</summary>
-    private static BlockSyntax? Innermost(SyntaxNode node, int line)
-    {
-        foreach (var child in node.ChildNodes)
-        {
-            if (child is BlockSyntax block && block.LineIndex < line
-                && line <= block.Tree.GetLineIndex(block.FullSpan.End - 1))
-            {
-                return block;
-            }
-        }
-        return null;
     }
 
     /// <summary>
@@ -237,18 +224,16 @@ internal sealed class LineContext
         return quote != '\0';
     }
 
-    private static List<(SyntaxKind Kind, string Text, int Start)> Lexed(SyntaxTree tree, int start, int end)
-    {
-        var tokens = new List<(SyntaxKind Kind, string Text, int Start)>();
-        var at = start;
-        foreach (var token in Lexer.LexLine(tree.Text.AsSpan(start, end - start)).Tokens)
-        {
-            if (token.Kind != SyntaxKind.EndOfLine)
-                tokens.Add((token.Kind, token.Text, at + token.LeadingWidth));
-            at += token.FullWidth;
-        }
-        return tokens;
-    }
+    /// <summary>
+    /// The line's text from <paramref name="start"/> to <paramref name="end"/> read on its own,
+    /// with where each token starts in the file. It is read again rather than taken off the tree
+    /// because the caret cuts the line: what the file has as <c>$10</c> is <c>$1</c> to someone
+    /// who has typed that far, and it is what they have typed that a completion is about.
+    /// </summary>
+    private static List<(SyntaxKind Kind, string Text, int Start)> Lexed(SyntaxTree tree, int start, int end) =>
+        [.. SyntaxTree.Parse(tree.Path, tree.Text[start..end]).GetLine(0).Tokens
+            .Where(token => token.Kind != SyntaxKind.EndOfLine)
+            .Select(token => (token.Kind, token.Text, start + token.Span.Start))];
 
     /// <summary>What the blocks around a line say about what may be written in it.</summary>
     /// <param name="Place">The kind of place the innermost block makes.</param>
@@ -269,23 +254,24 @@ internal sealed class LineContext
             BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
             BlockKind.Data => this with { Place = Place.Data },
             BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Place = Place.Values },
-            BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener.Green) },
+            BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener) },
             BlockKind.Enum => this with { Place = Place.EnumMembers },
             BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
             _ => this with { Place = Place.Unknown },
         };
 
         /// <summary>The path written after the <c>.type</c> of a record initializer's opener.</summary>
-        private static IReadOnlyList<string>? TypeOf(GreenLine opener)
+        private static IReadOnlyList<string>? TypeOf(LineSyntax opener)
         {
+            var tokens = opener.Tokens;
             var at = 0;
-            while (at < opener.Tokens.Length && !opener.Tokens[at].Text.Equals(".type", StringComparison.OrdinalIgnoreCase))
+            while (at < tokens.Length && !tokens[at].Text.Equals(".type", StringComparison.OrdinalIgnoreCase))
                 at++;
             var parts = new List<string>();
-            for (at++; at < opener.Tokens.Length && IsWord(opener.Tokens[at].Kind); at += 2)
+            for (at++; at < tokens.Length && IsWord(tokens[at].Kind); at += 2)
             {
-                parts.Add(opener.Tokens[at].Text);
-                if (at + 1 >= opener.Tokens.Length || opener.Tokens[at + 1].Kind != SyntaxKind.ColonColon)
+                parts.Add(tokens[at].Text);
+                if (at + 1 >= tokens.Length || tokens[at + 1].Kind != SyntaxKind.ColonColon)
                     break;
             }
             return parts.Count > 0 ? parts : null;

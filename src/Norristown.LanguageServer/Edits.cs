@@ -80,41 +80,26 @@ internal static class Edits
     }
 
     /// <summary>The line a block ends on, for the line that opens it; that same line for one that opens none.</summary>
-    public static int BlockEnd(SyntaxTree tree, int line)
-    {
-        foreach (var node in tree.Root.DescendantNodes())
-        {
-            if (node is BlockSyntax && node.LineIndex == line)
-                return tree.GetLineIndex(node.FullSpan.End - 1);
-        }
-        return line;
-    }
+    public static int BlockEnd(SyntaxTree tree, int line) =>
+        BlockOpenedBy(tree, line) is { } block ? tree.GetLineIndex(block.FullSpan.End - 1) : line;
 
     /// <summary>The block <paramref name="line"/> opens, as a range of the file; null for a line that opens none.</summary>
-    public static TextSpan? BodyOf(SyntaxTree tree, int line)
-    {
-        foreach (var node in tree.Root.DescendantNodes())
-        {
-            if (node is BlockSyntax && node.LineIndex == line)
-                return node.FullSpan;
-        }
-        return null;
-    }
+    public static TextSpan? BodyOf(SyntaxTree tree, int line) => BlockOpenedBy(tree, line)?.FullSpan;
 
     /// <summary>The block that holds <paramref name="line"/>, innermost first, or null at a file's top level.</summary>
     public static BlockSyntax? BlockAround(SyntaxTree tree, int line)
     {
-        BlockSyntax? found = null;
-        foreach (var block in tree.Root.DescendantNodes().OfType<BlockSyntax>())
-        {
-            if (block.LineIndex < line && line <= tree.GetLineIndex(block.FullSpan.End - 1)
-                && (found is null || block.LineIndex > found.LineIndex))
-            {
-                found = block;
-            }
-        }
-        return found;
+        // A line that opens a block is written in the block around it, not in the one it opens.
+        var block = tree.GetLine(line).Parent as BlockSyntax;
+        return block is not null && block.LineIndex == line ? block.Parent as BlockSyntax : block;
     }
+
+    /// <summary>
+    /// The block <paramref name="line"/> opens, or null for a line that opens none. A block's
+    /// opener is the first line written in it, so the block is what that line hangs from.
+    /// </summary>
+    public static BlockSyntax? BlockOpenedBy(SyntaxTree tree, int line) =>
+        tree.GetLine(line).Parent is BlockSyntax block && block.LineIndex == line ? block : null;
 
     /// <summary>Writing <paramref name="symbol"/> as <paramref name="name"/> everywhere its file writes it.</summary>
     public static IReadOnlyList<Edit> Rename(SemanticModel model, Symbol symbol, string name) =>

@@ -225,9 +225,9 @@ internal static class Fixes
 
         var data = new List<string>();
         var last = line;
-        for (var next = line + 1; next < tree.LineStarts.Length; next++)
+        for (var next = line + 1; next < tree.LineCount; next++)
         {
-            if (tree.Statement(next).Kind != SyntaxKind.DataDirective)
+            if (tree.GetLine(next).Statement.Kind != SyntaxKind.DataDirective)
                 break;
             data.Add(tree.Text[(tree.LineStarts[next] + Edits.IndentOf(tree, next).Length)..LineContext.CodeEnd(tree, next)]);
             last = next;
@@ -328,9 +328,7 @@ internal static class Fixes
     private static IEnumerable<Change> Parenthesized(SyntaxTree tree, Diagnostic diagnostic)
     {
         var at = Edits.SpanOf(tree, diagnostic.Span).Start;
-        var outer = tree.Root.DescendantNodes().OfType<BinaryExpressionSyntax>()
-            .FirstOrDefault(binary => binary.OperatorToken.Span.Start == at);
-        if (outer is null)
+        if (tree.Root.FindToken(at).Parent is not BinaryExpressionSyntax outer || outer.OperatorToken.Span.Start != at)
             yield break;
 
         var readings = new List<(int Open, int Close)>();

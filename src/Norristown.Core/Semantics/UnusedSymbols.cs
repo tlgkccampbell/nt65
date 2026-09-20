@@ -114,11 +114,12 @@ public static class UnusedSymbols
     private static HashSet<string> Written(SyntaxTree tree)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
-        for (var line = 0; line < tree.Lines.Length; line++)
+        for (var index = 0; index < tree.LineCount; index++)
         {
-            if (tree.Statement(line).Kind == SyntaxKind.UseDirective)
+            var line = tree.GetLine(index);
+            if (line.Statement.Kind == SyntaxKind.UseDirective)
                 continue;
-            var tokens = tree.Lines[line].Tokens;
+            var tokens = line.Tokens;
             for (var at = 0; at < tokens.Length; at++)
             {
                 if (at == 0 || tokens[at - 1].Kind != SyntaxKind.ColonColon)

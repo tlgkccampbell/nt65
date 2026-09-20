@@ -373,16 +373,12 @@ internal static class Lsp
             ? model.ValueOf(immediate.Value).AsNumber()
             : null;
 
-    /// <summary>The statement on the line <paramref name="position"/> is in, or null.</summary>
-    private static StatementSyntax? Statement(SyntaxTree tree, int position)
-    {
-        foreach (var node in tree.Root.DescendantNodes())
-        {
-            if (node is LineSyntax line && position >= line.Position && position < line.FullSpan.End)
-                return line.Statement;
-        }
-        return null;
-    }
+    /// <summary>
+    /// The statement on the line <paramref name="position"/> is in, or null past the end of the
+    /// file, where there is no line and so nothing to say anything about.
+    /// </summary>
+    private static StatementSyntax? Statement(SyntaxTree tree, int position) =>
+        position < tree.Text.Length ? tree.GetLine(tree.GetLineIndex(position)).Statement : null;
 
     /// <summary>The block a statement is in, wherever in the file it was written.</summary>
     private static BasicBlock? Around(ControlFlow? flow, StatementSyntax statement) =>
