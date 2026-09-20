@@ -12,10 +12,11 @@ public sealed class UnaryExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The operator.</summary>
-    public SyntaxToken OperatorToken => ChildTokens[0];
+    public SyntaxToken OperatorToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>What the operator applies to.</summary>
-    public ExpressionSyntax Operand => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax Operand =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitUnaryExpression(this);

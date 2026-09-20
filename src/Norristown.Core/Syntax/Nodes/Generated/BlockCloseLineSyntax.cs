@@ -12,7 +12,7 @@ public sealed class BlockCloseLineSyntax : StatementSyntax
     }
 
     /// <summary>The <c>}</c>.</summary>
-    public SyntaxToken CloseBraceToken => ChildTokens[0];
+    public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitBlockCloseLine(this);

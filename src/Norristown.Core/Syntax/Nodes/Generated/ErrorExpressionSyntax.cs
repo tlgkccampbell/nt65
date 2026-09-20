@@ -12,7 +12,7 @@ public sealed class ErrorExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The directive that was read as far as it went, or null.</summary>
-    public SyntaxToken? Token => TokenAt(0);
+    public SyntaxToken? Token => Green is GreenSyntax ? TokenAt(0) : SlotTokenOrNull(0);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitErrorExpression(this);

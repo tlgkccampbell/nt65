@@ -12,10 +12,10 @@ public sealed class AddressPrefixSyntax : SyntaxNode
     }
 
     /// <summary>The letter.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>:</c>.</summary>
-    public SyntaxToken ColonToken => ChildTokens[1];
+    public SyntaxToken ColonToken => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitAddressPrefix(this);

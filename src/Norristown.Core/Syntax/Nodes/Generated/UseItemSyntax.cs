@@ -12,13 +12,13 @@ public sealed class UseItemSyntax : SyntaxNode
     }
 
     /// <summary>The name used.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>as</c>, or null.</summary>
-    public SyntaxToken? AsKeyword => TokenAt(1);
+    public SyntaxToken? AsKeyword => Green is GreenSyntax ? TokenAt(1) : SlotTokenOrNull(1);
 
     /// <summary>The name it is brought in as, or null.</summary>
-    public SyntaxToken? Alias => TokenAt(2);
+    public SyntaxToken? Alias => Green is GreenSyntax ? TokenAt(2) : SlotTokenOrNull(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitUseItem(this);

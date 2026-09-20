@@ -12,7 +12,7 @@ public sealed class CurrentAddressExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The <c>*</c>.</summary>
-    public SyntaxToken StarToken => ChildTokens[0];
+    public SyntaxToken StarToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitCurrentAddressExpression(this);

@@ -12,10 +12,11 @@ public sealed class LabeledLineSyntax : StatementSyntax
     }
 
     /// <summary>The label.</summary>
-    public LabelSyntax Label => (LabelSyntax)ChildNodes[0];
+    public LabelSyntax Label => Green is GreenSyntax ? (LabelSyntax)ChildNodes[0] : SlotNode<LabelSyntax>(0);
 
     /// <summary>What is written after the label, or null.</summary>
-    public StatementSyntax? Statement => ChildNodes.Length > 1 ? ChildNodes[1] as StatementSyntax : null;
+    public StatementSyntax? Statement =>
+        Green is GreenSyntax ? ChildNodes.Length > 1 ? ChildNodes[1] as StatementSyntax : null : SlotNodeOrNull<StatementSyntax>(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitLabeledLine(this);

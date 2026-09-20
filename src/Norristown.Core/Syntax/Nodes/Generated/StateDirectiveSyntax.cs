@@ -12,6 +12,13 @@ public sealed class StateDirectiveSyntax : StateListDirectiveSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override StateListSyntax Items =>
+        Green is GreenSyntax ? FirstNode<StateListSyntax>()! : SlotNode<StateListSyntax>(1);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitStateDirective(this);
 
     /// <inheritdoc/>

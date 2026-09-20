@@ -1,6 +1,8 @@
 using System.Text;
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using GreenLine = Norristown.Syntax.InternalSyntax.GreenLine;
+using GreenNode = Norristown.Syntax.InternalSyntax.GreenNode;
+using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 
 namespace Norristown.Tests.Syntax;
 

@@ -12,19 +12,20 @@ public sealed class IndexedIndirectOperandSyntax : OperandSyntax
     }
 
     /// <summary>The <c>(</c>.</summary>
-    public SyntaxToken OpenParenToken => ChildTokens[0];
+    public SyntaxToken OpenParenToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The address of the pointer.</summary>
-    public ExpressionSyntax Address => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax Address =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>x</c> or <c>s</c> inside the parentheses.</summary>
-    public SyntaxToken InnerRegister => ChildTokens[2];
+    public SyntaxToken InnerRegister => Green is GreenSyntax ? ChildTokens[2] : SlotToken(3);
 
     /// <summary>The <c>)</c>.</summary>
-    public SyntaxToken CloseParenToken => ChildTokens[3];
+    public SyntaxToken CloseParenToken => Green is GreenSyntax ? ChildTokens[3] : SlotToken(4);
 
     /// <summary>The <c>y</c> after the parentheses, or null.</summary>
-    public SyntaxToken? OuterRegister => TokenAt(5);
+    public SyntaxToken? OuterRegister => Green is GreenSyntax ? TokenAt(5) : SlotTokenOrNull(6);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitIndexedIndirectOperand(this);

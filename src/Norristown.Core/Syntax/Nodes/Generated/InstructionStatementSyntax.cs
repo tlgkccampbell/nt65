@@ -12,10 +12,11 @@ public sealed class InstructionStatementSyntax : StatementSyntax
     }
 
     /// <summary>The mnemonic.</summary>
-    public SyntaxToken Mnemonic => ChildTokens[0];
+    public SyntaxToken Mnemonic => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The operand, or null for an instruction written without one.</summary>
-    public OperandSyntax? Operand => FirstNode<OperandSyntax>();
+    public OperandSyntax? Operand =>
+        Green is GreenSyntax ? FirstNode<OperandSyntax>() : SlotNodeOrNull<OperandSyntax>(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitInstructionStatement(this);

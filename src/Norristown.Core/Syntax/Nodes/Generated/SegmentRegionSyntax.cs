@@ -12,6 +12,13 @@ public sealed class SegmentRegionSyntax : SegmentStatementSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? Name =>
+        Green is GreenSyntax ? TokenAt(1) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral } name ? name : null : SlotToken(1);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitSegmentRegion(this);
 
     /// <inheritdoc/>

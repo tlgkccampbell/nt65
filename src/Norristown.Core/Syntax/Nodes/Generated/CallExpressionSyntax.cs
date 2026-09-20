@@ -12,13 +12,16 @@ public sealed class CallExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The <c>.func</c> called, or null for a built-in function.</summary>
-    public NameExpressionSyntax? Callee => ChildNodes[0] as NameExpressionSyntax;
+    public NameExpressionSyntax? Callee =>
+        Green is GreenSyntax ? ChildNodes[0] as NameExpressionSyntax : SlotNodeOrNull<NameExpressionSyntax>(0);
 
     /// <summary>The built-in function called, or null for a <c>.func</c>.</summary>
-    public SyntaxToken? Function => TokenAt(0) is { Kind: SyntaxKind.Directive } function ? function : null;
+    public SyntaxToken? Function =>
+        Green is GreenSyntax ? TokenAt(0) is { Kind: SyntaxKind.Directive } function ? function : null : SlotTokenOrNull(1);
 
     /// <summary>The arguments.</summary>
-    public ArgumentListSyntax Arguments => FirstNode<ArgumentListSyntax>()!;
+    public ArgumentListSyntax Arguments =>
+        Green is GreenSyntax ? FirstNode<ArgumentListSyntax>()! : SlotNode<ArgumentListSyntax>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitCallExpression(this);

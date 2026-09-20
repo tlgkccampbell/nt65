@@ -63,20 +63,45 @@ public sealed class GeneratedSyntaxTests
     }
 
     /// <summary>
-    /// What the table records about a piece of a node besides how it is read today: its type,
-    /// and whether it is optional. A list is never optional — nothing written is an empty list,
-    /// not a missing one — and a piece kept in a field is always a list.
+    /// What the table records about a piece of a node: its target type, whether it is required,
+    /// and the kinds a token may be. A list is always required — nothing written is an empty
+    /// list, not a missing one — and a piece kept in a field is always an array today.
     /// </summary>
     [Fact]
-    public void APieceSaysItsTypeAndWhetherItIsOptional()
+    public void APieceSaysItsTypeAndItsKinds()
     {
         foreach (var piece in Table().SelectMany(node => node.Slots).Where(slot => slot.IsPiece))
         {
             Assert.NotEqual("", piece.Type);
-            if (piece.ItemType is not null)
-                Assert.False(piece.IsOptional, $"{piece.Name} is a list and optional");
+            if (piece.List != ListShape.None)
+                Assert.True(piece.IsRequired, $"{piece.Name} is a list and optional");
             if (piece.Form is "nodes" or "cache")
                 Assert.NotNull(piece.ItemType);
+            Assert.Equal(piece.IsToken, piece.Kinds.Length > 0);
+        }
+    }
+
+    /// <summary>
+    /// Every slot of every node's layout can be read from the node: a slot written by a class
+    /// above it is abstract there and overridden here, so the property reads the right place.
+    /// </summary>
+    [Fact]
+    public void EverySlotOfALayoutIsAPropertyOfTheClass()
+    {
+        var tree = new NodeTree(Table());
+        var assembly = typeof(SyntaxNode).Assembly;
+        foreach (var node in tree.Nodes.Where(node => !node.IsAbstract && !node.IsHandWritten))
+        {
+            var type = assembly.GetType($"Norristown.Syntax.{node.Name}")!;
+            var green = assembly.GetType($"Norristown.Syntax.InternalSyntax.{node.Name}");
+            Assert.NotNull(green);
+            var slots = tree.Layout(node);
+            Assert.Contains(
+                green.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic),
+                constructor => constructor.GetParameters().Length == slots.Length);
+            var properties = type.GetProperties().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
+            foreach (var (_, slot, _) in slots.Where(laid => laid.Slot.Form != "none" || NodeTree.ReadsSlots(node)))
+                Assert.Contains(slot.Name, properties);
         }
     }
 

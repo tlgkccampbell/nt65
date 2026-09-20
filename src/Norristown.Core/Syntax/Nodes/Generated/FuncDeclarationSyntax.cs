@@ -12,19 +12,21 @@ public sealed class FuncDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.func</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The function's name, or null.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotToken(1);
 
     /// <summary>The parameters, or null.</summary>
-    public ParameterListSyntax? Parameters => FirstNode<ParameterListSyntax>();
+    public ParameterListSyntax? Parameters =>
+        Green is GreenSyntax ? FirstNode<ParameterListSyntax>() : SlotNode<ParameterListSyntax>(2);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotToken(3);
 
     /// <summary>The expression the function stands for.</summary>
-    public ExpressionSyntax Body => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Body =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitFuncDeclaration(this);

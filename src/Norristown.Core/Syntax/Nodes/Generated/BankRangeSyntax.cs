@@ -12,13 +12,15 @@ public sealed class BankRangeSyntax : SyntaxNode
     }
 
     /// <summary>The bank, or the first of the range.</summary>
-    public ExpressionSyntax First => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax First =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(0);
 
     /// <summary>The <c>..</c>, or null.</summary>
-    public SyntaxToken? DotDotToken => FirstToken(SyntaxKind.DotDot);
+    public SyntaxToken? DotDotToken => Green is GreenSyntax ? FirstToken(SyntaxKind.DotDot) : SlotTokenOrNull(1);
 
     /// <summary>The last bank of the range, or null.</summary>
-    public ExpressionSyntax? Last => ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null;
+    public ExpressionSyntax? Last =>
+        Green is GreenSyntax ? ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null : SlotNodeOrNull<ExpressionSyntax>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitBankRange(this);

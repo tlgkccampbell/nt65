@@ -12,10 +12,11 @@ public sealed class PatchDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.patch</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The label of the instruction written to, or null.</summary>
-    public NameExpressionSyntax? Target => FirstNode<NameExpressionSyntax>();
+    public NameExpressionSyntax? Target =>
+        Green is GreenSyntax ? FirstNode<NameExpressionSyntax>() : SlotNode<NameExpressionSyntax>(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitPatchDirective(this);

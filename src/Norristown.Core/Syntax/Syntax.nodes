@@ -1,7 +1,8 @@
 # The node table: one description of every class in the red tree, and the only place a new kind
 # of node is written down. `pwsh scripts/generate-syntax.ps1` turns it into the classes under
-# Syntax/Nodes/Generated/, the kind-to-class switch in Syntax/InternalSyntax/Generated/, and the
-# visitors in Syntax/Generated/. A test fails when what is checked in no longer matches.
+# Syntax/Nodes/Generated/, the green classes under Syntax/InternalSyntax/Generated/Nodes/, the
+# kind-to-class switch in Syntax/InternalSyntax/Generated/, and the visitors in Syntax/Generated/.
+# A test fails when what is checked in no longer matches.
 #
 # A block per node, in the order the files list, so two people adding kinds touch two places:
 #
@@ -12,17 +13,32 @@
 #     internal                       the class is internal: it gets an Accept, but no visitor method
 #     handwritten                    the class is written by hand; only its Accept is generated
 #     partial                        a hand-written half holds members the table cannot say
+#     converted                      the parser builds this kind's typed green node
+#     unbuilt                        nothing builds this kind yet: the layout is a design waiting for it
+#     missing                        a node of this kind stands where one belongs that the source lacks
+#     layout <Name>...               the slot order, when it is not the base's slots and then this node's
 #     slot <Name> : <Type>           a piece of the node, as the property that reads it
 #       summary <text>               the property's summary; repeatable as above
+#       kinds <Kind>...              the kinds a token slot may hold
+#       today <Type>                 the property's type until the kind is converted, where it differs
 #       read <expression>            what the property returns
 #       nodes                        every child node of the item type, made once and kept
 #       cache <expression>           the expression, worked out once and kept
 #     member <Name> : <Type>         a property that is not a piece of the node
+#     legacy <Name> : <Type>         a property that stands in for slots, and goes when the kind converts
 #
-# A slot's type is the property's type, so a trailing `?` is the whole of what optional means
-# today: the parser never invents a piece, and a piece it did not find is absent and reads as
-# null. The `read` of every slot is a search among the children for that reason; when the slots
-# become fixed, the reads go and the type stays.
+# The slots of a node are its fixed layout, written in source order; `layout` says the order
+# where a node interleaves its own slots with the ones a class above it writes. A slot's type is
+# what the property returns once the kind is converted, and its trailing `?` means the piece
+# belongs to a part of the line that may be absent altogether: a piece the line always has a
+# place for is required, and stands in its slot as a missing token or an error node when the
+# source leaves it out. A piece inside an optional group stays optional, and is missing rather
+# than absent when the group is there and it is not.
+#
+# Until a kind is converted the parser builds the generic node for it, so `today` gives the type
+# the property still has and `read` the search it still makes; a slot whose property can be read
+# either way reads the slot when the green node is the typed one. A slot with no `read` is one the
+# parser does not write yet, and has no property until the kind converts.
 
 node AbsoluteOperandSyntax : OperandSyntax
   kind AbsoluteOperand
@@ -35,9 +51,11 @@ node AbsoluteOperandSyntax : OperandSyntax
     read FirstNode<ExpressionSyntax>()!
   slot CommaToken : SyntaxToken?
     summary The <c>,</c>, or null.
+    kinds Comma
     read FirstToken(SyntaxKind.Comma)
   slot IndexRegister : SyntaxToken?
     summary The <c>x</c>, <c>y</c> or <c>s</c> after the <c>,</c>, or null.
+    kinds Register
     read FirstToken(SyntaxKind.Register)
   slot Second : ExpressionSyntax?
     summary The second expression of a bit branch, or null.
@@ -48,6 +66,7 @@ node AccumulatorOperandSyntax : OperandSyntax
   summary The <c>a</c> of <c>asl a</c>.
   slot Register : SyntaxToken
     summary The <c>a</c>.
+    kinds Register
     read ChildTokens[0]
 
 node AddressPrefixSyntax : SyntaxNode
@@ -55,9 +74,11 @@ node AddressPrefixSyntax : SyntaxNode
   summary <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> before an address.
   slot Name : SyntaxToken
     summary The letter.
+    kinds Identifier Register
     read ChildTokens[0]
   slot ColonToken : SyntaxToken
     summary The <c>:</c>.
+    kinds Colon
     read ChildTokens[1]
 
 node ArgumentListSyntax : SyntaxNode
@@ -65,12 +86,16 @@ node ArgumentListSyntax : SyntaxNode
   summary <c>(a, b)</c>: the arguments of a call or of a macro call.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
-  slot Arguments : ImmutableArray<SyntaxNode>
+  slot Arguments : SeparatedSyntaxList<SyntaxNode>
     summary The arguments. A call's are expressions; a macro call's may also be braced operands and named arguments.
+    today ImmutableArray<SyntaxNode>
     read ChildNodes
-  slot CloseParenToken : SyntaxToken?
+  slot CloseParenToken : SyntaxToken
     summary The <c>)</c>, or null.
+    kinds CloseParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseParen)
 
 node AssertDirectiveSyntax : StatementSyntax
@@ -78,15 +103,24 @@ node AssertDirectiveSyntax : StatementSyntax
   summary <c>.assert expr, "message"</c>, whose message may be left out.
   slot Keyword : SyntaxToken
     summary The <c>.assert</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Condition : ExpressionSyntax
     summary What is asserted.
     read FirstNode<ExpressionSyntax>()!
+  slot CommaToken : SyntaxToken?
+    summary The <c>,</c> before what else is written, or null.
+    kinds Comma
   slot Level : SyntaxToken?
     summary ca65's level, which nt65 reports, or null.
+    kinds Identifier Register Mnemonic
     read FirstToken(SyntaxKind.Identifier) ?? FirstToken(SyntaxKind.Register) ?? FirstToken(SyntaxKind.Mnemonic)
+  slot LevelCommaToken : SyntaxToken?
+    summary The <c>,</c> after ca65's level, or null.
+    kinds Comma
   slot Message : SyntaxToken?
     summary The quoted message, or null.
+    kinds StringLiteral
     read FirstToken(SyntaxKind.StringLiteral)
 
 node BankRangeSyntax : SyntaxNode
@@ -97,6 +131,7 @@ node BankRangeSyntax : SyntaxNode
     read (ExpressionSyntax)ChildNodes[0]
   slot DotDotToken : SyntaxToken?
     summary The <c>..</c>, or null.
+    kinds DotDot
     read FirstToken(SyntaxKind.DotDot)
   slot Last : ExpressionSyntax?
     summary The last bank of the range, or null.
@@ -110,6 +145,7 @@ node BinaryExpressionSyntax : ExpressionSyntax
     read (ExpressionSyntax)ChildNodes[0]
   slot OperatorToken : SyntaxToken
     summary The operator.
+    kinds Plus Minus Star Slash Ampersand AmpersandAmpersand Bar BarBar Caret CaretCaret LessLess GreaterGreater Less LessEquals Greater GreaterEquals EqualsEquals BangEquals Directive
     read ChildTokens[0]
   slot Right : ExpressionSyntax
     summary The right operand.
@@ -124,6 +160,7 @@ node BlockCloseLineSyntax : StatementSyntax
   summary A <c>}</c> on its own line.
   slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>.
+    kinds CloseBrace
     read ChildTokens[0]
 
 node BlockContinuationSyntax : StatementSyntax
@@ -131,12 +168,15 @@ node BlockContinuationSyntax : StatementSyntax
   summary <c>} name {</c>: the line that closes one block argument of a macro call and opens the next.
   slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>.
+    kinds CloseBrace
     read ChildTokens[0]
   slot Name : SyntaxToken
     summary The parameter the next block is given to.
+    kinds Identifier Register Mnemonic
     read ChildTokens[1]
   slot OpenBraceToken : SyntaxToken
     summary The <c>{</c>.
+    kinds OpenBrace
     read ChildTokens[2]
 
 node BlockSpliceSyntax : StatementSyntax
@@ -144,23 +184,34 @@ node BlockSpliceSyntax : StatementSyntax
   summary A name on its own line, which splices a <c>block</c> parameter.
   slot Name : SyntaxToken
     summary The parameter spliced.
+    kinds Identifier
     read ChildTokens[0]
 
 node BlockSyntax : SyntaxNode
   kind Block
   handwritten
 
+node BracedDataSyntax : DataTailSyntax
+  kind BracedData
+  unbuilt
+  summary The one braced value of a counted or record data directive, written on its line.
+  slot Value : SyntaxNode
+    summary The value: a <see cref="ValueListSyntax"/> or a <see cref="RecordValuesSyntax"/>.
+
 node BracedOperandSyntax : SyntaxNode
   kind BracedOperand
   summary <c>{buf,x}</c>: a whole operand as a macro argument.
   slot OpenBraceToken : SyntaxToken
     summary The <c>{</c>.
+    kinds OpenBrace
     read ChildTokens[0]
   slot Operand : OperandSyntax
     summary The operand.
     read (OperandSyntax)ChildNodes[0]
-  slot CloseBraceToken : SyntaxToken?
+  slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>, or null.
+    kinds CloseBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBrace)
 
 node CallExpressionSyntax : ExpressionSyntax
@@ -171,6 +222,7 @@ node CallExpressionSyntax : ExpressionSyntax
     read ChildNodes[0] as NameExpressionSyntax
   slot Function : SyntaxToken?
     summary The built-in function called, or null for a <c>.func</c>.
+    kinds Directive
     read TokenAt(0) is { Kind: SyntaxKind.Directive } function ? function : null
   slot Arguments : ArgumentListSyntax
     summary The arguments.
@@ -192,12 +244,15 @@ node CharmapEntrySyntax : StatementSyntax
     read (ExpressionSyntax)ChildNodes[0]
   slot DotDotToken : SyntaxToken?
     summary The <c>..</c>, or null.
+    kinds DotDot
     read FirstToken(SyntaxKind.DotDot)
   slot Last : ExpressionSyntax?
     summary The last character of the range, or null.
     read DotDotToken is null ? null : (ExpressionSyntax)ChildNodes[1]
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
   slot Value : ExpressionSyntax
     summary The value the first character maps to.
@@ -208,12 +263,15 @@ node ConditionalDirectiveSyntax : StatementSyntax
   summary A line that opens a branch with a condition: <c>.if expr {</c> or <c>} .elseif expr {</c>.
   slot Keyword : SyntaxToken
     summary The <c>.if</c> or <c>.elseif</c>.
+    kinds Directive
     read FirstToken(SyntaxKind.Directive)!.Value
   slot Condition : ExpressionSyntax
     summary The condition the branch is taken on.
     read FirstNode<ExpressionSyntax>()!
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node ConfigDeclarationSyntax : StatementSyntax
@@ -221,15 +279,21 @@ node ConfigDeclarationSyntax : StatementSyntax
   summary <c>.config NAME = value</c>: a setting, whose value the build may give instead.
   slot Keyword : SyntaxToken
     summary The <c>.config</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The setting's name, or null.
+    kinds Identifier
+    today SyntaxToken?
     read TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
-  slot Value : ExpressionSyntax?
+  slot Value : ExpressionSyntax
     summary The setting's value, or null.
+    today ExpressionSyntax?
     read FirstNode<ExpressionSyntax>()
 
 node ConstantDeclarationSyntax : StatementSyntax
@@ -237,9 +301,11 @@ node ConstantDeclarationSyntax : StatementSyntax
   summary <c>name = expr</c>.
   slot Name : SyntaxToken
     summary The constant's name.
+    kinds Identifier CheapLocal Register Mnemonic
     read ChildTokens[0]
   slot EqualsToken : SyntaxToken
     summary The <c>=</c>.
+    kinds Equals
     read ChildTokens[1]
   slot Value : ExpressionSyntax
     summary The constant's value.
@@ -250,9 +316,12 @@ node CpuDirectiveSyntax : StatementSyntax
   summary <c>.cpu name</c>.
   slot Keyword : SyntaxToken
     summary The <c>.cpu</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Cpu : SyntaxToken?
+  slot Cpu : SyntaxToken
     summary The CPU's name, or null.
+    kinds CpuName NumberLiteral Identifier
+    today SyntaxToken?
     read TokenAt(1)
 
 node CpuNameExpressionSyntax : LiteralExpressionSyntax
@@ -264,25 +333,39 @@ node CurrentAddressExpressionSyntax : ExpressionSyntax
   summary <c>*</c>: the address of the statement it is written in.
   slot StarToken : SyntaxToken
     summary The <c>*</c>.
+    kinds Star
     read ChildTokens[0]
+
+node DataBodySyntax : DataTailSyntax
+  kind DataBody
+  unbuilt
+  summary The <c>{</c> of a data directive whose values are written on the lines it opens.
+  slot OpenBraceToken : SyntaxToken
+    summary The <c>{</c>.
+    kinds OpenBrace
 
 node DataDeclarationSyntax : StatementSyntax
   kind DataDeclaration
   summary <c>.data name: element</c>, or <c>.data name {</c> for mixed data.
   slot Keyword : SyntaxToken
     summary The <c>.data</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The declared name, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read NameAt(1)
   slot ColonToken : SyntaxToken?
     summary The <c>:</c> before what the data is, or null.
+    kinds Colon
     read FirstToken(SyntaxKind.Colon)
   slot Directive : DataDirectiveSyntax?
     summary What the data is, or null.
     read FirstNode<DataDirectiveSyntax>()
   slot OpenBraceToken : SyntaxToken?
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
     read FirstToken(SyntaxKind.OpenBrace)
 
 node DataDirectiveSyntax : StatementSyntax
@@ -290,6 +373,7 @@ node DataDirectiveSyntax : StatementSyntax
   summary A data directive: <c>.byte 1, 2</c>, <c>.word[4] { … }</c>, <c>.type T { x = 1 }</c>, <c>.incbin "f"</c>.
   slot Directive : SyntaxToken
     summary The directive.
+    kinds Directive
     read ChildTokens[0]
   member IsRecord : bool
     summary Whether the directive is <c>.type</c>, whose element is a named type.
@@ -300,18 +384,25 @@ node DataDirectiveSyntax : StatementSyntax
   slot Count : ElementCountSyntax?
     summary The <c>[n]</c> or <c>[]</c> after the element type, or null.
     read FirstNode<ElementCountSyntax>()
-  slot OpenBraceToken : SyntaxToken?
+  slot Tail : DataTailSyntax?
+    summary Where the values are: a body this line opens, one braced value, or values on the line.
+  legacy OpenBraceToken : SyntaxToken?
     summary The <c>{</c> that opens a body holding the values, or null.
     read FirstToken(SyntaxKind.OpenBrace)
-  slot Values : ImmutableArray<SyntaxNode>
+  legacy Values : ImmutableArray<SyntaxNode>
     summary What is written after the element type and its count: expressions, or one braced list or record.
     cache [.. ChildNodes.Where(node => node != Type && node is not ElementCountSyntax)]
+
+node DataTailSyntax : SyntaxNode
+  abstract
+  summary Where a data directive's values are: the body it opens, one braced value, or the values on its line.
 
 node DataValuesSyntax : StatementSyntax
   kind DataValues
   summary One line of a data body: values separated by commas, one element each.
-  slot Values : ImmutableArray<SyntaxNode>
+  slot Values : SeparatedSyntaxList<SyntaxNode>
     summary The values: expressions and braced lists or records.
+    today ImmutableArray<SyntaxNode>
     read ChildNodes
 
 node EachDirectiveSyntax : RepetitionDirectiveSyntax
@@ -323,12 +414,15 @@ node ElementCountSyntax : SyntaxNode
   summary <c>[n]</c>, or <c>[]</c> for as many elements as the values given.
   slot OpenBracketToken : SyntaxToken
     summary The <c>[</c>.
+    kinds OpenBracket
     read ChildTokens[0]
   slot Count : ExpressionSyntax?
     summary The count, or null for <c>[]</c>.
     read FirstNode<ExpressionSyntax>()
-  slot CloseBracketToken : SyntaxToken?
+  slot CloseBracketToken : SyntaxToken
     summary The <c>]</c>, or null.
+    kinds CloseBracket
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBracket)
 
 node ElementIndexSyntax : SyntaxNode
@@ -336,12 +430,16 @@ node ElementIndexSyntax : SyntaxNode
   summary <c>[i]</c> after a name: which element of a counted declaration it stands for.
   slot OpenBracketToken : SyntaxToken
     summary The <c>[</c>.
+    kinds OpenBracket
     read ChildTokens[0]
-  slot Index : ExpressionSyntax?
+  slot Index : ExpressionSyntax
     summary The element, or null.
+    today ExpressionSyntax?
     read FirstNode<ExpressionSyntax>()
-  slot CloseBracketToken : SyntaxToken?
+  slot CloseBracketToken : SyntaxToken
     summary The <c>]</c>, or null.
+    kinds CloseBracket
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBracket)
 
 node ElseDirectiveSyntax : StatementSyntax
@@ -349,19 +447,25 @@ node ElseDirectiveSyntax : StatementSyntax
   summary <c>} .else {</c>.
   slot CloseBraceToken : SyntaxToken
     summary The <c>}</c> that closes the branch before.
+    kinds CloseBrace
     read ChildTokens[0]
   slot Keyword : SyntaxToken
     summary The <c>.else</c>.
+    kinds Directive
     read ChildTokens[1]
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node ElseIfDirectiveSyntax : ConditionalDirectiveSyntax
   kind ElseIfDirective
   summary <c>} .elseif expr {</c>.
+  layout CloseBraceToken Keyword Condition OpenBraceToken
   slot CloseBraceToken : SyntaxToken
     summary The <c>}</c> that closes the branch before.
+    kinds CloseBrace
     read ChildTokens[0]
 
 node EmptyBlockSyntax : SyntaxNode
@@ -369,9 +473,11 @@ node EmptyBlockSyntax : SyntaxNode
   summary <c>{}</c>: the default of a block parameter a call may leave out.
   slot OpenBraceToken : SyntaxToken
     summary The <c>{</c>.
+    kinds OpenBrace
     read ChildTokens[0]
   slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>.
+    kinds CloseBrace
     read ChildTokens[1]
 
 node EnsureDirectiveSyntax : StateListDirectiveSyntax
@@ -387,9 +493,11 @@ node EnumMemberSyntax : StatementSyntax
   summary One member of an <c>.enum</c>: a name, or a name and the value it is given.
   slot Name : SyntaxToken
     summary The member's name.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
   slot EqualsToken : SyntaxToken?
     summary The <c>=</c>, or null.
+    kinds Equals
     read FirstToken(SyntaxKind.Equals)
   slot Value : ExpressionSyntax?
     summary The value the member is given, or null.
@@ -400,30 +508,39 @@ node ErrorDirectiveSyntax : StatementSyntax
   summary <c>.error "message"</c> or <c>.warning "message"</c>.
   slot Keyword : SyntaxToken
     summary The <c>.error</c> or <c>.warning</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Message : SyntaxToken?
+  slot Message : SyntaxToken
     summary The quoted message, or null.
+    kinds StringLiteral
+    today SyntaxToken?
     read FirstToken(SyntaxKind.StringLiteral)
 
 node ErrorExpressionSyntax : ExpressionSyntax
   kind ErrorExpression
+  missing
   summary Where an expression was expected and none could be read.
   slot Token : SyntaxToken?
     summary The directive that was read as far as it went, or null.
+    kinds Directive
     read TokenAt(0)
 
 node ErrorLineSyntax : StatementSyntax
   kind ErrorLine
   summary A line the parser could not read as any statement: its tokens, as they are.
+  slot Tokens : SyntaxTokenList
+    summary The line's tokens, as they are.
 
 node ExportDirectiveSyntax : StatementSyntax
   kind ExportDirective
   summary <c>.export a, outer::inner, K: abs, init as "_init"</c>: a list of names to export.
   slot Keyword : SyntaxToken
     summary The <c>.export</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Items : ImmutableArray<ExportItemSyntax>
+  slot Items : SeparatedSyntaxList<ExportItemSyntax>
     summary The names exported.
+    today ImmutableArray<ExportItemSyntax>
     nodes
 
 node ExportItemSyntax : SyntaxNode
@@ -434,15 +551,19 @@ node ExportItemSyntax : SyntaxNode
     read (NameExpressionSyntax)ChildNodes[0]
   slot ColonToken : SyntaxToken?
     summary The <c>:</c> before the address size, or null.
+    kinds Colon
     read FirstToken(SyntaxKind.Colon)
   slot AddressSize : SyntaxToken?
     summary The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.
+    kinds Identifier
     read TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null
   slot AsKeyword : SyntaxToken?
     summary The <c>as</c> before the linker name, or null.
+    kinds Identifier
     read FirstWord("as")
   slot LinkerName : SyntaxToken?
     summary The quoted name the linker sees, or null.
+    kinds StringLiteral
     read FirstToken(SyntaxKind.StringLiteral)
 
 node ExpressionSyntax : SyntaxNode
@@ -454,12 +575,15 @@ node ExternProcDeclarationSyntax : StatementSyntax
   summary <c>.proc name = address: entry -&gt; exit</c>: a routine with no body.
   slot Keyword : SyntaxToken
     summary The <c>.proc</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Name : SyntaxToken
     summary The routine's name.
+    kinds Identifier Register Mnemonic
     read ChildTokens[1]
   slot EqualsToken : SyntaxToken
     summary The <c>=</c>.
+    kinds Equals
     read ChildTokens[2]
   slot Address : ExpressionSyntax
     summary Where the routine is.
@@ -477,15 +601,21 @@ node FrameDirectiveSyntax : StatementSyntax
   summary <c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.
   slot Keyword : SyntaxToken
     summary The <c>.frame</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The frame's name, or null.
+    kinds Identifier
+    today SyntaxToken?
     read TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null
-  slot ColonToken : SyntaxToken?
+  slot ColonToken : SyntaxToken
     summary The <c>:</c>, or null.
+    kinds Colon
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Colon)
-  slot Type : ExpressionSyntax?
+  slot Type : ExpressionSyntax
     summary The struct the frame is laid out as, or null.
+    today ExpressionSyntax?
     read FirstNode<ExpressionSyntax>()
 
 node FuncDeclarationSyntax : StatementSyntax
@@ -493,19 +623,35 @@ node FuncDeclarationSyntax : StatementSyntax
   summary <c>.func name(a, b) = expr</c>: a pure expression function.
   slot Keyword : SyntaxToken
     summary The <c>.func</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The function's name, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read NameAt(1)
-  slot Parameters : ParameterListSyntax?
+  slot Parameters : ParameterListSyntax
     summary The parameters, or null.
+    today ParameterListSyntax?
     read FirstNode<ParameterListSyntax>()
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
   slot Body : ExpressionSyntax
     summary The expression the function stands for.
     read FirstNode<ExpressionSyntax>()!
+
+node IdentifierNameSyntax : SyntaxNode
+  kind IdentifierName
+  unbuilt
+  summary One name, and the <c>[i]</c> after it when it has one: a part of a path, a parameter's word, a register.
+  slot Name : SyntaxToken
+    summary The name.
+    kinds Identifier CheapLocal Register Mnemonic
+  slot Index : ElementIndexSyntax?
+    summary The <c>[i]</c> after the name, or null.
 
 node IfDirectiveSyntax : ConditionalDirectiveSyntax
   kind IfDirective
@@ -516,15 +662,18 @@ node ImmediateOperandSyntax : OperandSyntax
   summary <c>#expr</c>, or the <c>#src, #dst</c> of a block move.
   slot HashToken : SyntaxToken
     summary The <c>#</c>.
+    kinds Hash
     read ChildTokens[0]
   slot Value : ExpressionSyntax
     summary The value.
     read (ExpressionSyntax)ChildNodes[0]
   slot CommaToken : SyntaxToken?
     summary The <c>,</c> before a second value, or null.
+    kinds Comma
     read FirstToken(SyntaxKind.Comma)
   slot SecondHashToken : SyntaxToken?
     summary The <c>#</c> of a second value, or null.
+    kinds Hash
     read TokenAt(2)
   slot SecondValue : ExpressionSyntax?
     summary The second bank of a block move, or null.
@@ -535,9 +684,11 @@ node ImportDirectiveSyntax : StatementSyntax
   summary <c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.
   slot Keyword : SyntaxToken
     summary The <c>.import</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Items : ImmutableArray<ImportItemSyntax>
+  slot Items : SeparatedSyntaxList<ImportItemSyntax>
     summary The names imported.
+    today ImmutableArray<ImportItemSyntax>
     nodes
 
 node ImportItemSyntax : SyntaxNode
@@ -545,18 +696,22 @@ node ImportItemSyntax : SyntaxNode
   summary <c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.
   slot Name : SyntaxToken
     summary The name imported.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
   slot EqualsToken : SyntaxToken?
     summary The <c>=</c> before a checked value, or null.
+    kinds Equals
     read FirstToken(SyntaxKind.Equals)
   slot Value : ExpressionSyntax?
     summary The value the import is checked against, or null.
     read FirstNode<ExpressionSyntax>()
   slot ColonToken : SyntaxToken?
     summary The <c>:</c> before a size or a signature, or null.
+    kinds Colon
     read FirstToken(SyntaxKind.Colon)
   slot AddressSize : SyntaxToken?
     summary The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.
+    kinds Identifier
     read TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null
   slot Signature : ImportSignatureSyntax?
     summary The <c>proc(...)</c> after the <c>:</c>, or null.
@@ -567,21 +722,27 @@ node ImportSignatureSyntax : SyntaxNode
   summary <c>proc(entry -&gt; exit)</c>: the signature of an imported routine.
   slot ProcKeyword : SyntaxToken
     summary The <c>proc</c>.
+    kinds Identifier
     read ChildTokens[0]
-  slot OpenParenToken : SyntaxToken?
+  slot OpenParenToken : SyntaxToken
     summary The <c>(</c>, or null.
+    kinds OpenParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenParen)
   slot Entry : StateListSyntax?
     summary The state on entry, or null when it is left out.
     read ArrowToken is { } arrow ? NodeBefore(arrow) as StateListSyntax : FirstNode<StateListSyntax>()
   slot ArrowToken : SyntaxToken?
     summary The <c>-&gt;</c>, or null.
+    kinds Arrow
     read FirstToken(SyntaxKind.Arrow)
   slot Exit : StateListSyntax?
     summary The state on exit, or null when it is left out.
     read NodeAfter(ArrowToken) as StateListSyntax
-  slot CloseParenToken : SyntaxToken?
+  slot CloseParenToken : SyntaxToken
     summary The <c>)</c>, or null.
+    kinds CloseParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseParen)
 
 node IndexedIndirectOperandSyntax : OperandSyntax
@@ -589,18 +750,28 @@ node IndexedIndirectOperandSyntax : OperandSyntax
   summary <c>(expr,x)</c> or <c>(expr,s),y</c>.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
   slot Address : ExpressionSyntax
     summary The address of the pointer.
     read (ExpressionSyntax)ChildNodes[0]
+  slot CommaToken : SyntaxToken
+    summary The <c>,</c> inside the parentheses.
+    kinds Comma
   slot InnerRegister : SyntaxToken
     summary The <c>x</c> or <c>s</c> inside the parentheses.
+    kinds Register
     read ChildTokens[2]
   slot CloseParenToken : SyntaxToken
     summary The <c>)</c>.
+    kinds CloseParen
     read ChildTokens[3]
+  slot OuterCommaToken : SyntaxToken?
+    summary The <c>,</c> after the parentheses, or null.
+    kinds Comma
   slot OuterRegister : SyntaxToken?
     summary The <c>y</c> after the parentheses, or null.
+    kinds Register
     read TokenAt(5)
 
 node IndirectOperandSyntax : OperandSyntax
@@ -608,22 +779,36 @@ node IndirectOperandSyntax : OperandSyntax
   summary <c>(expr)</c> or <c>(expr),y</c>.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
   slot Address : ExpressionSyntax
     summary The address of the pointer.
     read (ExpressionSyntax)ChildNodes[0]
   slot CloseParenToken : SyntaxToken
     summary The <c>)</c>.
+    kinds CloseParen
     read ChildTokens[1]
+  slot CommaToken : SyntaxToken?
+    summary The <c>,</c> before the index register, or null.
+    kinds Comma
   slot IndexRegister : SyntaxToken?
     summary The <c>y</c> after the parentheses, or null.
+    kinds Register
     read FirstToken(SyntaxKind.Register)
+
+node InlineDataSyntax : DataTailSyntax
+  kind InlineData
+  unbuilt
+  summary The values of a data directive, written on its own line after the element type.
+  slot Values : SeparatedSyntaxList<SyntaxNode>
+    summary The values.
 
 node InstructionStatementSyntax : StatementSyntax
   kind InstructionStatement
   summary A mnemonic and its operand, if it takes one.
   slot Mnemonic : SyntaxToken
     summary The mnemonic.
+    kinds Mnemonic
     read ChildTokens[0]
   slot Operand : OperandSyntax?
     summary The operand, or null for an instruction written without one.
@@ -634,9 +819,11 @@ node LabelSyntax : SyntaxNode
   summary <c>name:</c> at the start of a line.
   slot Name : SyntaxToken
     summary The label's name.
+    kinds Identifier CheapLocal Register Mnemonic
     read ChildTokens[0]
   slot ColonToken : SyntaxToken
     summary The <c>:</c>.
+    kinds Colon
     read ChildTokens[1]
 
 node LabeledLineSyntax : StatementSyntax
@@ -660,8 +847,9 @@ node ListDeclarationSyntax : TypeDeclarationSyntax
 node ListItemsSyntax : StatementSyntax
   kind ListItems
   summary One line of a <c>.list</c>, which holds one or more comma-separated items.
-  slot Items : ImmutableArray<ExpressionSyntax>
+  slot Items : SeparatedSyntaxList<ExpressionSyntax>
     summary The items.
+    today ImmutableArray<ExpressionSyntax>
     nodes
 
 node LiteralExpressionSyntax : ExpressionSyntax
@@ -669,6 +857,7 @@ node LiteralExpressionSyntax : ExpressionSyntax
   summary An expression that is one token.
   slot Token : SyntaxToken
     summary The token the expression is.
+    kinds NumberLiteral CharacterLiteral StringLiteral CpuName
     read ChildTokens[0]
 
 node LongIndirectOperandSyntax : OperandSyntax
@@ -676,15 +865,22 @@ node LongIndirectOperandSyntax : OperandSyntax
   summary <c>[expr]</c> or <c>[expr],y</c>.
   slot OpenBracketToken : SyntaxToken
     summary The <c>[</c>.
+    kinds OpenBracket
     read ChildTokens[0]
   slot Address : ExpressionSyntax
     summary The address of the pointer.
     read (ExpressionSyntax)ChildNodes[0]
-  slot CloseBracketToken : SyntaxToken?
+  slot CloseBracketToken : SyntaxToken
     summary The <c>]</c>, or null.
+    kinds CloseBracket
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBracket)
+  slot CommaToken : SyntaxToken?
+    summary The <c>,</c> before the index register, or null.
+    kinds Comma
   slot IndexRegister : SyntaxToken?
     summary The <c>y</c> after the brackets, or null.
+    kinds Register
     read FirstToken(SyntaxKind.Register)
 
 node MacroCallSyntax : StatementSyntax
@@ -692,15 +888,19 @@ node MacroCallSyntax : StatementSyntax
   summary <c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.
   slot Name : SyntaxToken
     summary The macro's name.
+    kinds Identifier
     read ChildTokens[0]
   slot BangToken : SyntaxToken
     summary The <c>!</c>.
+    kinds Bang
     read ChildTokens[1]
-  slot Arguments : ArgumentListSyntax?
+  slot Arguments : ArgumentListSyntax
     summary The arguments, or null.
+    today ArgumentListSyntax?
     read FirstNode<ArgumentListSyntax>()
   slot OpenBraceToken : SyntaxToken?
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
     read FirstToken(SyntaxKind.OpenBrace)
 
 node MacroDeclarationSyntax : StatementSyntax
@@ -708,18 +908,24 @@ node MacroDeclarationSyntax : StatementSyntax
   summary <c>.macro name(params): entry -&gt; exit {</c>.
   slot Keyword : SyntaxToken
     summary The <c>.macro</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The macro's name, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read NameAt(1)
-  slot Parameters : MacroParameterListSyntax?
+  slot Parameters : MacroParameterListSyntax
     summary The parameters, or null.
+    today MacroParameterListSyntax?
     read FirstNode<MacroParameterListSyntax>()
   slot Signature : ProcSignatureSyntax?
     summary The processor state the macro expects and leaves, or null.
     read FirstNode<ProcSignatureSyntax>()
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node MacroParameterListSyntax : SyntaxNode
@@ -727,12 +933,16 @@ node MacroParameterListSyntax : SyntaxNode
   summary <c>(a, b: expr, c = 1)</c>: the parameters of a macro.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
-  slot Parameters : ImmutableArray<MacroParameterSyntax>
+  slot Parameters : SeparatedSyntaxList<MacroParameterSyntax>
     summary The parameters.
+    today ImmutableArray<MacroParameterSyntax>
     nodes
-  slot CloseParenToken : SyntaxToken?
+  slot CloseParenToken : SyntaxToken
     summary The <c>)</c>, or null.
+    kinds CloseParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseParen)
 
 node MacroParameterSyntax : SyntaxNode
@@ -740,15 +950,18 @@ node MacroParameterSyntax : SyntaxNode
   summary <c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.
   slot Name : SyntaxToken
     summary The parameter's name.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
   slot ColonToken : SyntaxToken?
     summary The <c>:</c> before the kind, or null.
+    kinds Colon
     read FirstToken(SyntaxKind.Colon)
   slot ParameterKind : ParameterKindSyntax?
     summary What the parameter takes, or null.
     read FirstNode<ParameterKindSyntax>()
   slot EqualsToken : SyntaxToken?
     summary The <c>=</c> before the default, or null.
+    kinds Equals
     read FirstToken(SyntaxKind.Equals)
   slot Default : SyntaxNode?
     summary The default: an expression, or the <c>{}</c> of a block parameter. Null when there is none.
@@ -759,9 +972,12 @@ node MemberValueSyntax : StatementSyntax
   summary <c>member = value</c>, in a braced record or on a line of its own in a multi-line initializer.
   slot Name : SyntaxToken
     summary The member's name.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
   slot Value : SyntaxNode
     summary The value: an expression, or a braced list or record.
@@ -772,8 +988,11 @@ node ModuleDirectiveSyntax : StatementSyntax
   summary <c>.module name</c> or <c>.module outer::inner</c>.
   slot Keyword : SyntaxToken
     summary The <c>.module</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Names : ImmutableArray<SyntaxToken>
+  slot Name : NameExpressionSyntax
+    summary The module's name, which is a path from the root of the modules.
+  legacy Names : ImmutableArray<SyntaxToken>
     summary The names of the module's path, outermost first.
     cache [.. ChildTokens.Skip(1).Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]
 
@@ -782,21 +1001,28 @@ node MultiProcDeclarationSyntax : StatementSyntax
   summary <c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>.
   slot Keyword : SyntaxToken
     summary The <c>.multiproc</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Expression : ExpressionSyntax
     summary The enum whose members the routines are named from.
     read FirstNode<ExpressionSyntax>()!
-  slot CommaToken : SyntaxToken?
+  slot CommaToken : SyntaxToken
     summary The <c>,</c> before the name, or null.
+    kinds Comma
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Comma)
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The name bound to the member, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null
   slot Signature : ProcSignatureSyntax?
     summary The signature, or null.
     read FirstNode<ProcSignatureSyntax>()
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node NameExpressionSyntax : ExpressionSyntax
@@ -805,11 +1031,14 @@ node NameExpressionSyntax : ExpressionSyntax
   summary A name: <c>label</c>, <c>@local</c>, <c>gfx::init</c>, <c>::top_level</c>, <c>table[2]::x</c>.
   slot GlobalToken : SyntaxToken?
     summary The leading <c>::</c> of a name written from the top level, or null.
+    kinds ColonColon
     read TokenAt(0) is { Kind: SyntaxKind.ColonColon } global ? global : null
-  slot Names : ImmutableArray<SyntaxToken>
+  slot Parts : SeparatedSyntaxList<IdentifierNameSyntax>
+    summary The names between the <c>::</c>, outermost first, each with the <c>[i]</c> after it.
+  legacy Names : ImmutableArray<SyntaxToken>
     summary The names between the <c>::</c>, outermost first. Empty when not even the first name was written.
     cache [.. ChildTokens.Where(token => token.Kind != SyntaxKind.ColonColon)]
-  slot Indexes : ImmutableArray<ElementIndexSyntax>
+  legacy Indexes : ImmutableArray<ElementIndexSyntax>
     summary Every <c>[i]</c> written in the name.
     nodes
 
@@ -818,12 +1047,15 @@ node NamedArgumentSyntax : SyntaxNode
   summary <c>name = argument</c>: a macro argument given by name.
   slot Name : SyntaxToken
     summary The parameter's name.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
   slot EqualsToken : SyntaxToken
     summary The <c>=</c>.
+    kinds Equals
     read ChildTokens[1]
-  slot Value : SyntaxNode?
+  slot Value : SyntaxNode
     summary What the parameter is given, or null.
+    today SyntaxNode?
     read ChildNodes.Length > 0 ? ChildNodes[0] : null
 
 node NextDirectiveSyntax : StatementSyntax
@@ -831,12 +1063,15 @@ node NextDirectiveSyntax : StatementSyntax
   summary <c>.next @a, gfx::init</c>, or <c>.next ?</c>.
   slot Keyword : SyntaxToken
     summary The <c>.next</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot QuestionToken : SyntaxToken?
     summary The <c>?</c> of <c>.next ?</c>, or null.
+    kinds Question
     read FirstToken(SyntaxKind.Question)
-  slot Targets : ImmutableArray<NameExpressionSyntax>
+  slot Targets : SeparatedSyntaxList<NameExpressionSyntax>
     summary The labels flow continues at.
+    today ImmutableArray<NameExpressionSyntax>
     nodes
 
 node NumberExpressionSyntax : LiteralExpressionSyntax
@@ -850,20 +1085,25 @@ node OperandSyntax : SyntaxNode
 node ParameterKindSyntax : SyntaxNode
   kind ParameterKind
   summary What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, or a <c>list(...)</c> of one of those.
-  slot Keyword : SyntaxToken?
+  slot Keyword : SyntaxToken
     summary The kind's word, or null when none was written.
+    kinds Identifier
+    today SyntaxToken?
     read TokenAt(0)
   slot OpenParenToken : SyntaxToken?
     summary The <c>(</c> of a <c>one</c> or a <c>list</c>, or null.
+    kinds OpenParen
     read FirstToken(SyntaxKind.OpenParen)
-  slot Words : ImmutableArray<SyntaxToken>
+  slot Words : SeparatedSyntaxList<IdentifierNameSyntax>
     summary The words a <c>one(...)</c> accepts.
+    today ImmutableArray<SyntaxToken>
     cache [.. ChildTokens.Skip(2).Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]
   slot Element : ParameterKindSyntax?
     summary What each item of a <c>list(...)</c> is, or null.
     read FirstNode<ParameterKindSyntax>()
   slot CloseParenToken : SyntaxToken?
     summary The <c>)</c>, or null.
+    kinds CloseParen
     read FirstToken(SyntaxKind.CloseParen)
 
 node ParameterListSyntax : SyntaxNode
@@ -871,25 +1111,40 @@ node ParameterListSyntax : SyntaxNode
   summary <c>(a, b)</c>: the parameters of a <c>.func</c>.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
-  slot Parameters : ImmutableArray<SyntaxToken>
+  slot Parameters : SeparatedSyntaxList<ParameterSyntax>
     summary The parameters' names.
+    today ImmutableArray<SyntaxToken>
     cache [.. ChildTokens.Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)]
-  slot CloseParenToken : SyntaxToken?
+  slot CloseParenToken : SyntaxToken
     summary The <c>)</c>, or null.
+    kinds CloseParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseParen)
+
+node ParameterSyntax : SyntaxNode
+  kind Parameter
+  unbuilt
+  summary One parameter of a <c>.func</c>: its name.
+  slot Name : SyntaxToken
+    summary The parameter's name.
+    kinds Identifier Register Mnemonic
 
 node ParenthesizedExpressionSyntax : ExpressionSyntax
   kind ParenthesizedExpression
   summary <c>(expr)</c>.
   slot OpenParenToken : SyntaxToken
     summary The <c>(</c>.
+    kinds OpenParen
     read ChildTokens[0]
   slot Expression : ExpressionSyntax
     summary The expression in the parentheses.
     read (ExpressionSyntax)ChildNodes[0]
-  slot CloseParenToken : SyntaxToken?
+  slot CloseParenToken : SyntaxToken
     summary The <c>)</c>, or null.
+    kinds CloseParen
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseParen)
 
 node PatchDirectiveSyntax : StatementSyntax
@@ -897,9 +1152,11 @@ node PatchDirectiveSyntax : StatementSyntax
   summary <c>.patch @op</c>: the one instruction the store above writes into.
   slot Keyword : SyntaxToken
     summary The <c>.patch</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Target : NameExpressionSyntax?
+  slot Target : NameExpressionSyntax
     summary The label of the instruction written to, or null.
+    today NameExpressionSyntax?
     read FirstNode<NameExpressionSyntax>()
 
 node ProcDeclarationSyntax : StatementSyntax
@@ -907,15 +1164,20 @@ node ProcDeclarationSyntax : StatementSyntax
   summary <c>.proc name: entry -&gt; exit {</c>.
   slot Keyword : SyntaxToken
     summary The <c>.proc</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The routine's name, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read NameAt(1)
   slot Signature : ProcSignatureSyntax?
     summary The signature, or null.
     read FirstNode<ProcSignatureSyntax>()
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node ProcSignatureSyntax : SyntaxNode
@@ -923,12 +1185,14 @@ node ProcSignatureSyntax : SyntaxNode
   summary The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.
   slot ColonToken : SyntaxToken
     summary The <c>:</c>.
+    kinds Colon
     read ChildTokens[0]
   slot Entry : StateListSyntax
     summary The state on entry.
     read (StateListSyntax)ChildNodes[0]
   slot ArrowToken : SyntaxToken?
     summary The <c>-&gt;</c>, or null.
+    kinds Arrow
     read FirstToken(SyntaxKind.Arrow)
   slot Exit : StateListSyntax?
     summary The state on exit, or null.
@@ -939,12 +1203,16 @@ node RecordValuesSyntax : SyntaxNode
   summary <c>{ member = value, … }</c>: a record's values.
   slot OpenBraceToken : SyntaxToken
     summary The <c>{</c>.
+    kinds OpenBrace
     read ChildTokens[0]
-  slot Members : ImmutableArray<MemberValueSyntax>
+  slot Members : SeparatedSyntaxList<MemberValueSyntax>
     summary The members given a value.
+    today ImmutableArray<MemberValueSyntax>
     nodes
-  slot CloseBraceToken : SyntaxToken?
+  slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>, or null.
+    kinds CloseBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBrace)
 
 node RepeatDirectiveSyntax : RepetitionDirectiveSyntax
@@ -956,18 +1224,23 @@ node RepetitionDirectiveSyntax : StatementSyntax
   summary The line that opens a repetition: <c>.repeat count, name {</c> or <c>.each what, name {</c>.
   slot Keyword : SyntaxToken
     summary The <c>.repeat</c> or <c>.each</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Expression : ExpressionSyntax
     summary The count of a <c>.repeat</c>, or what an <c>.each</c> goes through.
     read FirstNode<ExpressionSyntax>()!
   slot CommaToken : SyntaxToken?
     summary The <c>,</c> before the name, or null.
+    kinds Comma
     read FirstToken(SyntaxKind.Comma)
   slot Name : SyntaxToken?
     summary The name bound to the index or the item, or null when it is left out.
+    kinds Identifier Register Mnemonic
     read TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node ScopeDeclarationSyntax : StatementSyntax
@@ -975,54 +1248,75 @@ node ScopeDeclarationSyntax : StatementSyntax
   summary <c>.scope name {</c>.
   slot Keyword : SyntaxToken
     summary The <c>.scope</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Name : SyntaxToken?
     summary The scope's name, or null for an anonymous scope.
+    kinds Identifier Register Mnemonic
     read NameAt(1)
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node SegmentAttributeSyntax : SyntaxNode
   kind SegmentAttribute
   summary <c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The <c>dp</c>, <c>bank</c> or <c>mirrors</c>, or null.
+    kinds Identifier
+    today SyntaxToken?
     read TokenAt(0)
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
   slot Value : ExpressionSyntax?
     summary The value of a <c>dp</c> or a <c>bank</c>, or null.
     read FirstNode<ExpressionSyntax>()
   slot OpenBracketToken : SyntaxToken?
     summary The <c>[</c> of a <c>mirrors</c>, or null.
+    kinds OpenBracket
     read FirstToken(SyntaxKind.OpenBracket)
-  slot Ranges : ImmutableArray<BankRangeSyntax>
+  slot Ranges : SeparatedSyntaxList<BankRangeSyntax>
     summary The banks of a <c>mirrors</c>.
+    today ImmutableArray<BankRangeSyntax>
     nodes
   slot CloseBracketToken : SyntaxToken?
     summary The <c>]</c> of a <c>mirrors</c>, or null.
+    kinds CloseBracket
     read FirstToken(SyntaxKind.CloseBracket)
 
 node SegmentBlockSyntax : SegmentStatementSyntax
   kind SegmentBlock
   summary <c>.segment NAME {</c>: the line that opens a segment block.
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node SegmentDeclarationSyntax : SegmentStatementSyntax
   kind SegmentDeclaration
   summary <c>.segment NAME: size</c>, with its attributes.
-  slot ColonToken : SyntaxToken?
+  slot ColonToken : SyntaxToken
     summary The <c>:</c> before the address size, or null.
+    kinds Colon
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Colon)
-  slot AddressSize : SyntaxToken?
+  slot AddressSize : SyntaxToken
     summary The <c>zp</c>, <c>abs</c> or <c>far</c>, or null.
+    kinds Identifier
+    today SyntaxToken?
     read TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size ? size : null
-  slot Attributes : ImmutableArray<SegmentAttributeSyntax>
+  slot CommaToken : SyntaxToken?
+    summary The <c>,</c> between the address size and the attributes, or null.
+    kinds Comma
+  slot Attributes : SeparatedSyntaxList<SegmentAttributeSyntax>
     summary The attributes after the address size.
+    today ImmutableArray<SegmentAttributeSyntax>
     nodes
 
 node SegmentRegionSyntax : SegmentStatementSyntax
@@ -1034,9 +1328,12 @@ node SegmentStatementSyntax : StatementSyntax
   summary A line that starts with <c>.segment</c>: a declaration, a block's opener or a region line.
   slot Keyword : SyntaxToken
     summary The <c>.segment</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The segment's name, or null. A quoted name is an error, and is still the name.
+    kinds Identifier Register Mnemonic StringLiteral
+    today SyntaxToken?
     read TokenAt(1) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral } name ? name : null
 
 node SignatureDeclarationSyntax : StatementSyntax
@@ -1044,56 +1341,97 @@ node SignatureDeclarationSyntax : StatementSyntax
   summary <c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.
   slot Keyword : SyntaxToken
     summary The <c>.signature</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Name : SyntaxToken?
+  slot Name : SyntaxToken
     summary The set's name, or null.
+    kinds Identifier Register Mnemonic
+    today SyntaxToken?
     read NameAt(1)
-  slot EqualsToken : SyntaxToken?
+  slot EqualsToken : SyntaxToken
     summary The <c>=</c>, or null.
+    kinds Equals
+    today SyntaxToken?
     read FirstToken(SyntaxKind.Equals)
-  slot Items : StateListSyntax?
+  slot Items : StateListSyntax
     summary The items the name stands for, or null.
+    today StateListSyntax?
     read FirstNode<StateListSyntax>()
 
 node SkippedTokensSyntax : SyntaxNode
   kind SkippedTokens
   summary What was left on a line after its statement: tokens the parser walked past.
+  slot Tokens : SyntaxTokenList
+    summary The tokens the parser walked past.
 
 node StateDirectiveSyntax : StateListDirectiveSyntax
   kind StateDirective
   summary <c>.state a16, i8</c>: the items of a signature, asserted and set at one point.
 
+node StateFlagItemSyntax : StateItemSyntax
+  kind StateFlagItem
+  unbuilt
+  summary A state word and the <c>*</c> or <c>?</c> after it: <c>a16</c>, <c>i*</c>, <c>e?</c>.
+  slot Name : SyntaxToken
+    summary The item's word.
+    kinds Identifier Register
+  slot SuffixToken : SyntaxToken?
+    summary The <c>*</c> or <c>?</c> after the word, or null.
+    kinds Star Question
+
+node StateInlineItemSyntax : StateItemSyntax
+  kind StateInlineItem
+  unbuilt
+  summary <c>inline .strz</c>: the data after each call is a zero-terminated string.
+  slot Name : SyntaxToken
+    summary The <c>inline</c>.
+    kinds Identifier
+  slot StrzToken : SyntaxToken
+    summary The <c>.strz</c>.
+    kinds Directive
+
 node StateItemSyntax : SyntaxNode
   kind StateItem
   summary One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
   summary <c>?</c> on its own, or the name of a signature set.
-  slot SetName : NameExpressionSyntax?
+  legacy SetName : NameExpressionSyntax?
     summary The signature set the item names, or null for an item that is a word of its own.
     read ChildTokens.Length == 0 ? FirstNode<NameExpressionSyntax>() : null
-  slot Name : SyntaxToken?
+  legacy Name : SyntaxToken?
     summary The item's word, or null for a set's name or a <c>?</c> on its own.
     read TokenAt(0) is { Kind: not SyntaxKind.Question } name ? name : null
-  slot AllUnknownToken : SyntaxToken?
+  legacy AllUnknownToken : SyntaxToken?
     summary The <c>?</c> that is the whole item, or null.
     read TokenAt(0) is { Kind: SyntaxKind.Question } question ? question : null
-  slot Suffix : SyntaxToken?
+  legacy Suffix : SyntaxToken?
     summary The <c>*</c>, <c>?</c> or <c>=</c> after the word, or null.
     read Name is not null && TokenAt(1) is { Kind: SyntaxKind.Star or SyntaxKind.Question or SyntaxKind.Equals } suffix ? suffix : null
-  slot Value : ExpressionSyntax?
+  legacy Value : ExpressionSyntax?
     summary The expression after the word: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>. Null when there is none.
     read FirstNode<ExpressionSyntax>()
-  slot StrzToken : SyntaxToken?
+  legacy StrzToken : SyntaxToken?
     summary The <c>.strz</c> of <c>inline .strz</c>, or null.
     read FirstToken(SyntaxKind.Directive)
-  slot Registers : ImmutableArray<SyntaxToken>
+  legacy Registers : ImmutableArray<SyntaxToken>
     summary The registers a <c>keeps</c> names.
     cache [.. ChildTokens.Skip(1).Where(token => token.Kind is SyntaxKind.Identifier or SyntaxKind.Register)]
+
+node StateKeepsItemSyntax : StateItemSyntax
+  kind StateKeepsItem
+  unbuilt
+  summary <c>keeps a, x</c>: the registers a routine leaves as it found them.
+  slot Name : SyntaxToken
+    summary The <c>keeps</c>.
+    kinds Identifier
+  slot Registers : SeparatedSyntaxList<IdentifierNameSyntax>
+    summary The registers it keeps.
 
 node StateListDirectiveSyntax : StatementSyntax
   abstract
   summary A directive that takes the items of a signature: <c>.state</c> or <c>.ensure</c>.
   slot Keyword : SyntaxToken
     summary The <c>.state</c> or <c>.ensure</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Items : StateListSyntax
     summary The items.
@@ -1102,9 +1440,38 @@ node StateListDirectiveSyntax : StatementSyntax
 node StateListSyntax : SyntaxNode
   kind StateList
   summary Processor-state items separated by commas.
-  slot Items : ImmutableArray<StateItemSyntax>
+  slot Items : SeparatedSyntaxList<StateItemSyntax>
     summary The items.
+    today ImmutableArray<StateItemSyntax>
     nodes
+
+node StateSetItemSyntax : StateItemSyntax
+  kind StateSetItem
+  unbuilt
+  summary The name of a signature set, which stands for the items it was declared with.
+  slot Name : NameExpressionSyntax
+    summary The set's name.
+
+node StateUnknownItemSyntax : StateItemSyntax
+  kind StateUnknownItem
+  unbuilt
+  summary <c>?</c> on its own: every tracked part of the processor state is unknown.
+  slot QuestionToken : SyntaxToken
+    summary The <c>?</c>.
+    kinds Question
+
+node StateValueItemSyntax : StateItemSyntax
+  kind StateValueItem
+  unbuilt
+  summary A state word and the value it is given: <c>dp = $2100</c>, <c>args 2</c>, <c>inline 4</c>.
+  slot Name : SyntaxToken
+    summary The item's word.
+    kinds Identifier Register
+  slot EqualsToken : SyntaxToken?
+    summary The <c>=</c> before the value, or null where the word takes one without.
+    kinds Equals
+  slot Value : ExpressionSyntax
+    summary The value.
 
 node StatementSyntax : SyntaxNode
   abstract
@@ -1138,12 +1505,16 @@ node TypeDeclarationSyntax : StatementSyntax
   summary The line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or <c>.list</c>.
   slot Keyword : SyntaxToken
     summary The <c>.enum</c>, <c>.struct</c> or the like that starts the line.
+    kinds Directive
     read ChildTokens[0]
   slot Name : SyntaxToken?
     summary The declared name, or null for an anonymous declaration.
+    kinds Identifier Register Mnemonic
     read NameAt(1)
-  slot OpenBraceToken : SyntaxToken?
+  slot OpenBraceToken : SyntaxToken
     summary The <c>{</c> that opens the block, or null when it is not written.
+    kinds OpenBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.OpenBrace)
 
 node UnaryExpressionSyntax : ExpressionSyntax
@@ -1151,6 +1522,7 @@ node UnaryExpressionSyntax : ExpressionSyntax
   summary <c>op operand</c>.
   slot OperatorToken : SyntaxToken
     summary The operator.
+    kinds Plus Minus Tilde Bang Less Greater Caret
     read ChildTokens[0]
   slot Operand : ExpressionSyntax
     summary What the operator applies to.
@@ -1166,27 +1538,38 @@ node UseDirectiveSyntax : StatementSyntax
   summary <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>.
   slot Keyword : SyntaxToken
     summary The <c>.use</c> that starts the line.
+    kinds Directive
     read ChildTokens[0]
-  slot Path : ImmutableArray<SyntaxToken>
-    summary The names of the path, outermost first: everything before a <c>::*</c>, a <c>::{</c> or an <c>as</c>.
+  slot Path : NameExpressionSyntax
+    summary The path, outermost name first: everything before a <c>::*</c>, a <c>::{</c> or an <c>as</c>.
+    today ImmutableArray<SyntaxToken>
     cache ReadPath()
+  slot ColonColonToken : SyntaxToken?
+    summary The <c>::</c> before a <c>*</c> or a <c>{</c>, or null.
+    kinds ColonColon
   slot StarToken : SyntaxToken?
     summary The <c>*</c> of <c>a::*</c>, or null.
+    kinds Star
     read FirstToken(SyntaxKind.Star)
   slot OpenBraceToken : SyntaxToken?
     summary The <c>{</c> of <c>a::{b, c}</c>, or null.
+    kinds OpenBrace
     read FirstToken(SyntaxKind.OpenBrace)
-  slot Items : ImmutableArray<UseItemSyntax>
+  slot Items : SeparatedSyntaxList<UseItemSyntax>
     summary The names in the braces of <c>a::{b, c}</c>.
+    today ImmutableArray<UseItemSyntax>
     nodes
   slot CloseBraceToken : SyntaxToken?
     summary The <c>}</c> of <c>a::{b, c}</c>, or null.
+    kinds CloseBrace
     read FirstToken(SyntaxKind.CloseBrace)
   slot AsKeyword : SyntaxToken?
     summary The <c>as</c> of <c>a::b as c</c>, or null.
+    kinds Identifier
     read Path.Length > 0 && TokenAfter(Path[^1]) is { Kind: SyntaxKind.Identifier } word && word.Text.Equals("as", StringComparison.OrdinalIgnoreCase) ? word : null
   slot Alias : SyntaxToken?
     summary The name the path's last name is brought in as, or null.
+    kinds Identifier Register Mnemonic
     read TokenAfter(AsKeyword)
 
 node UseItemSyntax : SyntaxNode
@@ -1194,12 +1577,15 @@ node UseItemSyntax : SyntaxNode
   summary One name in the braces of a <c>.use</c>, and the name it is brought in as.
   slot Name : SyntaxToken
     summary The name used.
+    kinds Identifier Register Mnemonic
     read ChildTokens[0]
   slot AsKeyword : SyntaxToken?
     summary The <c>as</c>, or null.
+    kinds Identifier
     read TokenAt(1)
   slot Alias : SyntaxToken?
     summary The name it is brought in as, or null.
+    kinds Identifier Register Mnemonic
     read TokenAt(2)
 
 node ValueListSyntax : SyntaxNode
@@ -1207,10 +1593,14 @@ node ValueListSyntax : SyntaxNode
   summary <c>{ value, … }</c>: a list of elements.
   slot OpenBraceToken : SyntaxToken
     summary The <c>{</c>.
+    kinds OpenBrace
     read ChildTokens[0]
-  slot Values : ImmutableArray<SyntaxNode>
+  slot Values : SeparatedSyntaxList<SyntaxNode>
     summary The values: expressions and braced lists or records.
+    today ImmutableArray<SyntaxNode>
     read ChildNodes
-  slot CloseBraceToken : SyntaxToken?
+  slot CloseBraceToken : SyntaxToken
     summary The <c>}</c>, or null.
+    kinds CloseBrace
+    today SyntaxToken?
     read FirstToken(SyntaxKind.CloseBrace)

@@ -15,10 +15,10 @@ public sealed class ParameterKindSyntax : SyntaxNode
     }
 
     /// <summary>The kind's word, or null when none was written.</summary>
-    public SyntaxToken? Keyword => TokenAt(0);
+    public SyntaxToken? Keyword => Green is GreenSyntax ? TokenAt(0) : SlotToken(0);
 
     /// <summary>The <c>(</c> of a <c>one</c> or a <c>list</c>, or null.</summary>
-    public SyntaxToken? OpenParenToken => FirstToken(SyntaxKind.OpenParen);
+    public SyntaxToken? OpenParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenParen) : SlotTokenOrNull(1);
 
     /// <summary>The words a <c>one(...)</c> accepts.</summary>
     public ImmutableArray<SyntaxToken> Words
@@ -32,10 +32,12 @@ public sealed class ParameterKindSyntax : SyntaxNode
     }
 
     /// <summary>What each item of a <c>list(...)</c> is, or null.</summary>
-    public ParameterKindSyntax? Element => FirstNode<ParameterKindSyntax>();
+    public ParameterKindSyntax? Element =>
+        Green is GreenSyntax ? FirstNode<ParameterKindSyntax>() : SlotNodeOrNull<ParameterKindSyntax>(3);
 
     /// <summary>The <c>)</c>, or null.</summary>
-    public SyntaxToken? CloseParenToken => FirstToken(SyntaxKind.CloseParen);
+    public SyntaxToken? CloseParenToken =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.CloseParen) : SlotTokenOrNull(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitParameterKind(this);

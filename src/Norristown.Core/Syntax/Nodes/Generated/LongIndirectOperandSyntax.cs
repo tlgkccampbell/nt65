@@ -12,16 +12,17 @@ public sealed class LongIndirectOperandSyntax : OperandSyntax
     }
 
     /// <summary>The <c>[</c>.</summary>
-    public SyntaxToken OpenBracketToken => ChildTokens[0];
+    public SyntaxToken OpenBracketToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The address of the pointer.</summary>
-    public ExpressionSyntax Address => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax Address =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>]</c>, or null.</summary>
-    public SyntaxToken? CloseBracketToken => FirstToken(SyntaxKind.CloseBracket);
+    public SyntaxToken? CloseBracketToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseBracket) : SlotToken(2);
 
     /// <summary>The <c>y</c> after the brackets, or null.</summary>
-    public SyntaxToken? IndexRegister => FirstToken(SyntaxKind.Register);
+    public SyntaxToken? IndexRegister => Green is GreenSyntax ? FirstToken(SyntaxKind.Register) : SlotTokenOrNull(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitLongIndirectOperand(this);

@@ -12,19 +12,20 @@ public sealed class DataDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.data</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The declared name, or null.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotToken(1);
 
     /// <summary>The <c>:</c> before what the data is, or null.</summary>
-    public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
+    public SyntaxToken? ColonToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Colon) : SlotTokenOrNull(2);
 
     /// <summary>What the data is, or null.</summary>
-    public DataDirectiveSyntax? Directive => FirstNode<DataDirectiveSyntax>();
+    public DataDirectiveSyntax? Directive =>
+        Green is GreenSyntax ? FirstNode<DataDirectiveSyntax>() : SlotNodeOrNull<DataDirectiveSyntax>(3);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotTokenOrNull(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitDataDeclaration(this);

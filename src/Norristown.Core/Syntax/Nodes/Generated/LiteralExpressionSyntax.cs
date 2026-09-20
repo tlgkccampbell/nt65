@@ -12,5 +12,5 @@ public abstract class LiteralExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The token the expression is.</summary>
-    public SyntaxToken Token => ChildTokens[0];
+    public abstract SyntaxToken Token { get; }
 }

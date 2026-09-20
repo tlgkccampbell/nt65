@@ -15,10 +15,10 @@ public sealed class NextDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.next</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>?</c> of <c>.next ?</c>, or null.</summary>
-    public SyntaxToken? QuestionToken => FirstToken(SyntaxKind.Question);
+    public SyntaxToken? QuestionToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Question) : SlotTokenOrNull(1);
 
     /// <summary>The labels flow continues at.</summary>
     public ImmutableArray<NameExpressionSyntax> Targets => Nodes(ref targets);

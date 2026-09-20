@@ -12,19 +12,22 @@ public sealed class AbsoluteOperandSyntax : OperandSyntax
     }
 
     /// <summary>The <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c>, or null.</summary>
-    public AddressPrefixSyntax? Prefix => FirstNode<AddressPrefixSyntax>();
+    public AddressPrefixSyntax? Prefix =>
+        Green is GreenSyntax ? FirstNode<AddressPrefixSyntax>() : SlotNodeOrNull<AddressPrefixSyntax>(0);
 
     /// <summary>The address.</summary>
-    public ExpressionSyntax Address => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Address =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>,</c>, or null.</summary>
-    public SyntaxToken? CommaToken => FirstToken(SyntaxKind.Comma);
+    public SyntaxToken? CommaToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Comma) : SlotTokenOrNull(2);
 
     /// <summary>The <c>x</c>, <c>y</c> or <c>s</c> after the <c>,</c>, or null.</summary>
-    public SyntaxToken? IndexRegister => FirstToken(SyntaxKind.Register);
+    public SyntaxToken? IndexRegister => Green is GreenSyntax ? FirstToken(SyntaxKind.Register) : SlotTokenOrNull(3);
 
     /// <summary>The second expression of a bit branch, or null.</summary>
-    public ExpressionSyntax? Second => NodeAfter(CommaToken) as ExpressionSyntax;
+    public ExpressionSyntax? Second =>
+        Green is GreenSyntax ? NodeAfter(CommaToken) as ExpressionSyntax : SlotNodeOrNull<ExpressionSyntax>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitAbsoluteOperand(this);

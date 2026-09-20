@@ -15,17 +15,18 @@ public sealed class DataDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The directive.</summary>
-    public SyntaxToken Directive => ChildTokens[0];
-
-    /// <summary>Whether the directive is <c>.type</c>, whose element is a named type.</summary>
-    public bool IsRecord => Directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
+    public SyntaxToken Directive => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>T</c> of <c>.type T</c>, or null.</summary>
     public NameExpressionSyntax? Type =>
-        IsRecord && ChildNodes.Length > 0 ? ChildNodes[0] as NameExpressionSyntax : null;
+        Green is GreenSyntax ? IsRecord && ChildNodes.Length > 0 ? ChildNodes[0] as NameExpressionSyntax : null : SlotNodeOrNull<NameExpressionSyntax>(1);
 
     /// <summary>The <c>[n]</c> or <c>[]</c> after the element type, or null.</summary>
-    public ElementCountSyntax? Count => FirstNode<ElementCountSyntax>();
+    public ElementCountSyntax? Count =>
+        Green is GreenSyntax ? FirstNode<ElementCountSyntax>() : SlotNodeOrNull<ElementCountSyntax>(2);
+
+    /// <summary>Whether the directive is <c>.type</c>, whose element is a named type.</summary>
+    public bool IsRecord => Directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The <c>{</c> that opens a body holding the values, or null.</summary>
     public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);

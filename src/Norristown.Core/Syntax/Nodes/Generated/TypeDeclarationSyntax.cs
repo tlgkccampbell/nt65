@@ -12,11 +12,11 @@ public abstract class TypeDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.enum</c>, <c>.struct</c> or the like that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public abstract SyntaxToken Keyword { get; }
 
     /// <summary>The declared name, or null for an anonymous declaration.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public abstract SyntaxToken? Name { get; }
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public abstract SyntaxToken? OpenBraceToken { get; }
 }

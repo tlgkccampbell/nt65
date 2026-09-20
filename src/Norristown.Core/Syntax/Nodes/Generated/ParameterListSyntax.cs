@@ -15,7 +15,7 @@ public sealed class ParameterListSyntax : SyntaxNode
     }
 
     /// <summary>The <c>(</c>.</summary>
-    public SyntaxToken OpenParenToken => ChildTokens[0];
+    public SyntaxToken OpenParenToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The parameters' names.</summary>
     public ImmutableArray<SyntaxToken> Parameters
@@ -29,7 +29,7 @@ public sealed class ParameterListSyntax : SyntaxNode
     }
 
     /// <summary>The <c>)</c>, or null.</summary>
-    public SyntaxToken? CloseParenToken => FirstToken(SyntaxKind.CloseParen);
+    public SyntaxToken? CloseParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseParen) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitParameterList(this);

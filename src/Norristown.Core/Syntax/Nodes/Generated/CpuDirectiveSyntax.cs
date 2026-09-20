@@ -12,10 +12,10 @@ public sealed class CpuDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.cpu</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The CPU's name, or null.</summary>
-    public SyntaxToken? Cpu => TokenAt(1);
+    public SyntaxToken? Cpu => Green is GreenSyntax ? TokenAt(1) : SlotToken(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitCpuDirective(this);

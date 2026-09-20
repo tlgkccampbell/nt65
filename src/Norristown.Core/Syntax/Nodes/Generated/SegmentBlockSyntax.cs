@@ -11,8 +11,15 @@ public sealed class SegmentBlockSyntax : SegmentStatementSyntax
     {
     }
 
+    /// <inheritdoc/>
+    public override SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? Name =>
+        Green is GreenSyntax ? TokenAt(1) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral } name ? name : null : SlotToken(1);
+
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitSegmentBlock(this);

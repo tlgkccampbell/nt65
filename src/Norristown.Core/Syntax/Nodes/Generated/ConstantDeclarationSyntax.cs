@@ -12,13 +12,14 @@ public sealed class ConstantDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The constant's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>=</c>.</summary>
-    public SyntaxToken EqualsToken => ChildTokens[1];
+    public SyntaxToken EqualsToken => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <summary>The constant's value.</summary>
-    public ExpressionSyntax Value => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Value =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitConstantDeclaration(this);

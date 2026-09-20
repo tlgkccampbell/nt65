@@ -12,6 +12,24 @@ public sealed class EachDirectiveSyntax : RepetitionDirectiveSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override ExpressionSyntax Expression =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(1);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? CommaToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Comma) : SlotTokenOrNull(2);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? Name =>
+        Green is GreenSyntax ? TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null : SlotTokenOrNull(3);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? OpenBraceToken =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(4);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitEachDirective(this);
 
     /// <inheritdoc/>

@@ -15,7 +15,7 @@ public sealed class ImportDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.import</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The names imported.</summary>
     public ImmutableArray<ImportItemSyntax> Items => Nodes(ref items);

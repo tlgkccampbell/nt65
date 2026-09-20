@@ -4,8 +4,8 @@ using System.Text;
 using Norristown.Layout;
 using Norristown.Project;
 using Norristown.Semantics;
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using GreenTrivia = Norristown.Syntax.InternalSyntax.GreenTrivia;
 
 namespace Norristown.Emit;
 

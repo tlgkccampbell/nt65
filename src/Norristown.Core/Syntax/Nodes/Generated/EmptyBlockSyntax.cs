@@ -12,10 +12,10 @@ public sealed class EmptyBlockSyntax : SyntaxNode
     }
 
     /// <summary>The <c>{</c>.</summary>
-    public SyntaxToken OpenBraceToken => ChildTokens[0];
+    public SyntaxToken OpenBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>}</c>.</summary>
-    public SyntaxToken CloseBraceToken => ChildTokens[1];
+    public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitEmptyBlock(this);

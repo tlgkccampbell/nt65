@@ -12,16 +12,17 @@ public sealed class MacroCallSyntax : StatementSyntax
     }
 
     /// <summary>The macro's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>!</c>.</summary>
-    public SyntaxToken BangToken => ChildTokens[1];
+    public SyntaxToken BangToken => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <summary>The arguments, or null.</summary>
-    public ArgumentListSyntax? Arguments => FirstNode<ArgumentListSyntax>();
+    public ArgumentListSyntax? Arguments =>
+        Green is GreenSyntax ? FirstNode<ArgumentListSyntax>() : SlotNode<ArgumentListSyntax>(2);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotTokenOrNull(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitMacroCall(this);

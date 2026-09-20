@@ -12,23 +12,25 @@ public sealed class MultiProcDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.multiproc</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The enum whose members the routines are named from.</summary>
-    public ExpressionSyntax Expression => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Expression =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>,</c> before the name, or null.</summary>
-    public SyntaxToken? CommaToken => FirstToken(SyntaxKind.Comma);
+    public SyntaxToken? CommaToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Comma) : SlotToken(2);
 
     /// <summary>The name bound to the member, or null.</summary>
     public SyntaxToken? Name =>
-        TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null;
+        Green is GreenSyntax ? TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null : SlotToken(3);
 
     /// <summary>The signature, or null.</summary>
-    public ProcSignatureSyntax? Signature => FirstNode<ProcSignatureSyntax>();
+    public ProcSignatureSyntax? Signature =>
+        Green is GreenSyntax ? FirstNode<ProcSignatureSyntax>() : SlotNodeOrNull<ProcSignatureSyntax>(4);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(5);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitMultiProcDeclaration(this);

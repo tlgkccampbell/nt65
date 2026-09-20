@@ -1,5 +1,7 @@
 using Norristown.Syntax;
-using Norristown.Syntax.InternalSyntax;
+using GreenCache = Norristown.Syntax.InternalSyntax.GreenCache;
+using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
+using Lexer = Norristown.Syntax.InternalSyntax.Lexer;
 
 namespace Norristown.Tests.Syntax;
 

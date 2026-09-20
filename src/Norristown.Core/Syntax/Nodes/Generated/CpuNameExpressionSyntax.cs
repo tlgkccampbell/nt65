@@ -12,6 +12,9 @@ public sealed class CpuNameExpressionSyntax : LiteralExpressionSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Token => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitCpuNameExpression(this);
 
     /// <inheritdoc/>

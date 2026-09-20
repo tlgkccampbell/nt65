@@ -12,18 +12,17 @@ public abstract class RepetitionDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.repeat</c> or <c>.each</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public abstract SyntaxToken Keyword { get; }
 
     /// <summary>The count of a <c>.repeat</c>, or what an <c>.each</c> goes through.</summary>
-    public ExpressionSyntax Expression => FirstNode<ExpressionSyntax>()!;
+    public abstract ExpressionSyntax Expression { get; }
 
     /// <summary>The <c>,</c> before the name, or null.</summary>
-    public SyntaxToken? CommaToken => FirstToken(SyntaxKind.Comma);
+    public abstract SyntaxToken? CommaToken { get; }
 
     /// <summary>The name bound to the index or the item, or null when it is left out.</summary>
-    public SyntaxToken? Name =>
-        TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null;
+    public abstract SyntaxToken? Name { get; }
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public abstract SyntaxToken? OpenBraceToken { get; }
 }

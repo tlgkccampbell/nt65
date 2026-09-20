@@ -12,6 +12,9 @@ public sealed class StringExpressionSyntax : LiteralExpressionSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Token => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitStringExpression(this);
 
     /// <inheritdoc/>

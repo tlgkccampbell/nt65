@@ -12,16 +12,18 @@ public sealed class ProcSignatureSyntax : SyntaxNode
     }
 
     /// <summary>The <c>:</c>.</summary>
-    public SyntaxToken ColonToken => ChildTokens[0];
+    public SyntaxToken ColonToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The state on entry.</summary>
-    public StateListSyntax Entry => (StateListSyntax)ChildNodes[0];
+    public StateListSyntax Entry =>
+        Green is GreenSyntax ? (StateListSyntax)ChildNodes[0] : SlotNode<StateListSyntax>(1);
 
     /// <summary>The <c>-&gt;</c>, or null.</summary>
-    public SyntaxToken? ArrowToken => FirstToken(SyntaxKind.Arrow);
+    public SyntaxToken? ArrowToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Arrow) : SlotTokenOrNull(2);
 
     /// <summary>The state on exit, or null.</summary>
-    public StateListSyntax? Exit => ChildNodes.Length > 1 ? (StateListSyntax)ChildNodes[1] : null;
+    public StateListSyntax? Exit =>
+        Green is GreenSyntax ? ChildNodes.Length > 1 ? (StateListSyntax)ChildNodes[1] : null : SlotNodeOrNull<StateListSyntax>(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitProcSignature(this);

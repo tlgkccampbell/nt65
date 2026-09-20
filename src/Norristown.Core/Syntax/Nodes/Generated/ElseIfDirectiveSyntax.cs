@@ -12,7 +12,19 @@ public sealed class ElseIfDirectiveSyntax : ConditionalDirectiveSyntax
     }
 
     /// <summary>The <c>}</c> that closes the branch before.</summary>
-    public SyntaxToken CloseBraceToken => ChildTokens[0];
+    public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override SyntaxToken Keyword =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.Directive)!.Value : SlotToken(1);
+
+    /// <inheritdoc/>
+    public override ExpressionSyntax Condition =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(2);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? OpenBraceToken =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitElseIfDirective(this);

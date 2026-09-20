@@ -12,20 +12,21 @@ public sealed class ExportItemSyntax : SyntaxNode
     }
 
     /// <summary>The name exported.</summary>
-    public NameExpressionSyntax Name => (NameExpressionSyntax)ChildNodes[0];
+    public NameExpressionSyntax Name =>
+        Green is GreenSyntax ? (NameExpressionSyntax)ChildNodes[0] : SlotNode<NameExpressionSyntax>(0);
 
     /// <summary>The <c>:</c> before the address size, or null.</summary>
-    public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
+    public SyntaxToken? ColonToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Colon) : SlotTokenOrNull(1);
 
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
     public SyntaxToken? AddressSize =>
-        TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null;
+        Green is GreenSyntax ? TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null : SlotTokenOrNull(2);
 
     /// <summary>The <c>as</c> before the linker name, or null.</summary>
-    public SyntaxToken? AsKeyword => FirstWord("as");
+    public SyntaxToken? AsKeyword => Green is GreenSyntax ? FirstWord("as") : SlotTokenOrNull(3);
 
     /// <summary>The quoted name the linker sees, or null.</summary>
-    public SyntaxToken? LinkerName => FirstToken(SyntaxKind.StringLiteral);
+    public SyntaxToken? LinkerName => Green is GreenSyntax ? FirstToken(SyntaxKind.StringLiteral) : SlotTokenOrNull(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitExportItem(this);

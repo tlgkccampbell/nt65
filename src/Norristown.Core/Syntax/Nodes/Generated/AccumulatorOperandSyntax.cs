@@ -12,7 +12,7 @@ public sealed class AccumulatorOperandSyntax : OperandSyntax
     }
 
     /// <summary>The <c>a</c>.</summary>
-    public SyntaxToken Register => ChildTokens[0];
+    public SyntaxToken Register => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitAccumulatorOperand(this);

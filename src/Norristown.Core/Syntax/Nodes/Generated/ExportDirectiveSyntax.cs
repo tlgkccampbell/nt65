@@ -15,7 +15,7 @@ public sealed class ExportDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.export</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The names exported.</summary>
     public ImmutableArray<ExportItemSyntax> Items => Nodes(ref items);

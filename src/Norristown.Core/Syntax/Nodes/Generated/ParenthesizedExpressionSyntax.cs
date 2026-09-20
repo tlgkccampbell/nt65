@@ -12,13 +12,14 @@ public sealed class ParenthesizedExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The <c>(</c>.</summary>
-    public SyntaxToken OpenParenToken => ChildTokens[0];
+    public SyntaxToken OpenParenToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The expression in the parentheses.</summary>
-    public ExpressionSyntax Expression => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax Expression =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>)</c>, or null.</summary>
-    public SyntaxToken? CloseParenToken => FirstToken(SyntaxKind.CloseParen);
+    public SyntaxToken? CloseParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseParen) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitParenthesizedExpression(this);

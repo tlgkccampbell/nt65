@@ -12,16 +12,18 @@ public sealed class FrameDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.frame</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The frame's name, or null.</summary>
-    public SyntaxToken? Name => TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null;
+    public SyntaxToken? Name =>
+        Green is GreenSyntax ? TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null : SlotToken(1);
 
     /// <summary>The <c>:</c>, or null.</summary>
-    public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
+    public SyntaxToken? ColonToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Colon) : SlotToken(2);
 
     /// <summary>The struct the frame is laid out as, or null.</summary>
-    public ExpressionSyntax? Type => FirstNode<ExpressionSyntax>();
+    public ExpressionSyntax? Type =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>() : SlotNode<ExpressionSyntax>(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitFrameDirective(this);

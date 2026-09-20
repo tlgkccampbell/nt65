@@ -16,7 +16,8 @@ public sealed partial class NameExpressionSyntax : ExpressionSyntax
     }
 
     /// <summary>The leading <c>::</c> of a name written from the top level, or null.</summary>
-    public SyntaxToken? GlobalToken => TokenAt(0) is { Kind: SyntaxKind.ColonColon } global ? global : null;
+    public SyntaxToken? GlobalToken =>
+        Green is GreenSyntax ? TokenAt(0) is { Kind: SyntaxKind.ColonColon } global ? global : null : SlotTokenOrNull(0);
 
     /// <summary>The names between the <c>::</c>, outermost first. Empty when not even the first name was written.</summary>
     public ImmutableArray<SyntaxToken> Names

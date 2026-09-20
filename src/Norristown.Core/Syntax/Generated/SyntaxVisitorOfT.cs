@@ -81,6 +81,11 @@ public abstract class SyntaxVisitor<TResult>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitBlock(BlockSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="BracedDataSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitBracedData(BracedDataSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="BracedOperandSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
@@ -130,6 +135,11 @@ public abstract class SyntaxVisitor<TResult>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitCurrentAddressExpression(CurrentAddressExpressionSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="DataBodySyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitDataBody(DataBodySyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="DataDeclarationSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
@@ -236,6 +246,11 @@ public abstract class SyntaxVisitor<TResult>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitFuncDeclaration(FuncDeclarationSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="IdentifierNameSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitIdentifierName(IdentifierNameSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="IfDirectiveSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
@@ -270,6 +285,11 @@ public abstract class SyntaxVisitor<TResult>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitIndirectOperand(IndirectOperandSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="InlineDataSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitInlineData(InlineDataSyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="InstructionStatementSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
@@ -371,6 +391,11 @@ public abstract class SyntaxVisitor<TResult>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitParameterList(ParameterListSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="ParameterSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitParameter(ParameterSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="ParenthesizedExpressionSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
@@ -441,15 +466,45 @@ public abstract class SyntaxVisitor<TResult>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitStateDirective(StateDirectiveSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="StateFlagItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateFlagItem(StateFlagItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateInlineItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateInlineItem(StateInlineItemSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="StateItemSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitStateItem(StateItemSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="StateKeepsItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateKeepsItem(StateKeepsItemSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="StateListSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     /// <returns>What visiting it worked out.</returns>
     public virtual TResult? VisitStateList(StateListSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateSetItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateSetItem(StateSetItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateUnknownItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateUnknownItem(StateUnknownItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateValueItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    /// <returns>What visiting it worked out.</returns>
+    public virtual TResult? VisitStateValueItem(StateValueItemSyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="StringExpressionSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>

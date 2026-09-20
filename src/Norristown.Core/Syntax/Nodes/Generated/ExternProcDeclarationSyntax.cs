@@ -12,19 +12,21 @@ public sealed class ExternProcDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.proc</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The routine's name.</summary>
-    public SyntaxToken Name => ChildTokens[1];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <summary>The <c>=</c>.</summary>
-    public SyntaxToken EqualsToken => ChildTokens[2];
+    public SyntaxToken EqualsToken => Green is GreenSyntax ? ChildTokens[2] : SlotToken(2);
 
     /// <summary>Where the routine is.</summary>
-    public ExpressionSyntax Address => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Address =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(3);
 
     /// <summary>The signature, or null.</summary>
-    public ProcSignatureSyntax? Signature => FirstNode<ProcSignatureSyntax>();
+    public ProcSignatureSyntax? Signature =>
+        Green is GreenSyntax ? FirstNode<ProcSignatureSyntax>() : SlotNodeOrNull<ProcSignatureSyntax>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitExternProcDeclaration(this);

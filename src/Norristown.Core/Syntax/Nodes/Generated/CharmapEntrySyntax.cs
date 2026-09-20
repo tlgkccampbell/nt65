@@ -12,19 +12,22 @@ public sealed class CharmapEntrySyntax : StatementSyntax
     }
 
     /// <summary>The character, or the first of the range.</summary>
-    public ExpressionSyntax First => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax First =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(0);
 
     /// <summary>The <c>..</c>, or null.</summary>
-    public SyntaxToken? DotDotToken => FirstToken(SyntaxKind.DotDot);
+    public SyntaxToken? DotDotToken => Green is GreenSyntax ? FirstToken(SyntaxKind.DotDot) : SlotTokenOrNull(1);
 
     /// <summary>The last character of the range, or null.</summary>
-    public ExpressionSyntax? Last => DotDotToken is null ? null : (ExpressionSyntax)ChildNodes[1];
+    public ExpressionSyntax? Last =>
+        Green is GreenSyntax ? DotDotToken is null ? null : (ExpressionSyntax)ChildNodes[1] : SlotNodeOrNull<ExpressionSyntax>(2);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotToken(3);
 
     /// <summary>The value the first character maps to.</summary>
-    public ExpressionSyntax Value => (ExpressionSyntax)ChildNodes[DotDotToken is null ? 1 : 2];
+    public ExpressionSyntax Value =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[DotDotToken is null ? 1 : 2] : SlotNode<ExpressionSyntax>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitCharmapEntry(this);

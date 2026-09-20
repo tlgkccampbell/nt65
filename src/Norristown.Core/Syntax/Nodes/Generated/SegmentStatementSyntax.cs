@@ -12,9 +12,8 @@ public abstract class SegmentStatementSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.segment</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public abstract SyntaxToken Keyword { get; }
 
     /// <summary>The segment's name, or null. A quoted name is an error, and is still the name.</summary>
-    public SyntaxToken? Name =>
-        TokenAt(1) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral } name ? name : null;
+    public abstract SyntaxToken? Name { get; }
 }

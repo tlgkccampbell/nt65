@@ -12,19 +12,21 @@ public sealed class ImmediateOperandSyntax : OperandSyntax
     }
 
     /// <summary>The <c>#</c>.</summary>
-    public SyntaxToken HashToken => ChildTokens[0];
+    public SyntaxToken HashToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The value.</summary>
-    public ExpressionSyntax Value => (ExpressionSyntax)ChildNodes[0];
+    public ExpressionSyntax Value =>
+        Green is GreenSyntax ? (ExpressionSyntax)ChildNodes[0] : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>,</c> before a second value, or null.</summary>
-    public SyntaxToken? CommaToken => FirstToken(SyntaxKind.Comma);
+    public SyntaxToken? CommaToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Comma) : SlotTokenOrNull(2);
 
     /// <summary>The <c>#</c> of a second value, or null.</summary>
-    public SyntaxToken? SecondHashToken => TokenAt(2);
+    public SyntaxToken? SecondHashToken => Green is GreenSyntax ? TokenAt(2) : SlotTokenOrNull(3);
 
     /// <summary>The second bank of a block move, or null.</summary>
-    public ExpressionSyntax? SecondValue => ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null;
+    public ExpressionSyntax? SecondValue =>
+        Green is GreenSyntax ? ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null : SlotNodeOrNull<ExpressionSyntax>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitImmediateOperand(this);

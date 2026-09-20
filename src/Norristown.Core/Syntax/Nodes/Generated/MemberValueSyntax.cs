@@ -12,13 +12,13 @@ public sealed class MemberValueSyntax : StatementSyntax
     }
 
     /// <summary>The member's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotToken(1);
 
     /// <summary>The value: an expression, or a braced list or record.</summary>
-    public SyntaxNode Value => ChildNodes[0];
+    public SyntaxNode Value => Green is GreenSyntax ? ChildNodes[0] : SlotNode<SyntaxNode>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitMemberValue(this);

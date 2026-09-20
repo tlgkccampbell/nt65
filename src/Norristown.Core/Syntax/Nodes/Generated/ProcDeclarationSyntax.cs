@@ -12,16 +12,17 @@ public sealed class ProcDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.proc</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The routine's name, or null.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotToken(1);
 
     /// <summary>The signature, or null.</summary>
-    public ProcSignatureSyntax? Signature => FirstNode<ProcSignatureSyntax>();
+    public ProcSignatureSyntax? Signature =>
+        Green is GreenSyntax ? FirstNode<ProcSignatureSyntax>() : SlotNodeOrNull<ProcSignatureSyntax>(2);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitProcDeclaration(this);

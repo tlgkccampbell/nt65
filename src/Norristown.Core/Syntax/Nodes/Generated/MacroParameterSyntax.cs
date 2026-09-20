@@ -12,19 +12,20 @@ public sealed class MacroParameterSyntax : SyntaxNode
     }
 
     /// <summary>The parameter's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>:</c> before the kind, or null.</summary>
-    public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
+    public SyntaxToken? ColonToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Colon) : SlotTokenOrNull(1);
 
     /// <summary>What the parameter takes, or null.</summary>
-    public ParameterKindSyntax? ParameterKind => FirstNode<ParameterKindSyntax>();
+    public ParameterKindSyntax? ParameterKind =>
+        Green is GreenSyntax ? FirstNode<ParameterKindSyntax>() : SlotNodeOrNull<ParameterKindSyntax>(2);
 
     /// <summary>The <c>=</c> before the default, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotTokenOrNull(3);
 
     /// <summary>The default: an expression, or the <c>{}</c> of a block parameter. Null when there is none.</summary>
-    public SyntaxNode? Default => NodeAfter(EqualsToken);
+    public SyntaxNode? Default => Green is GreenSyntax ? NodeAfter(EqualsToken) : SlotNodeOrNull<SyntaxNode>(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitMacroParameter(this);

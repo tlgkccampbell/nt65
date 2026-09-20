@@ -12,13 +12,14 @@ public sealed class EnumMemberSyntax : StatementSyntax
     }
 
     /// <summary>The member's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotTokenOrNull(1);
 
     /// <summary>The value the member is given, or null.</summary>
-    public ExpressionSyntax? Value => FirstNode<ExpressionSyntax>();
+    public ExpressionSyntax? Value =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>() : SlotNodeOrNull<ExpressionSyntax>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitEnumMember(this);

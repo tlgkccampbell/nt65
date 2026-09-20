@@ -12,16 +12,18 @@ public sealed class ConfigDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.config</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The setting's name, or null.</summary>
-    public SyntaxToken? Name => TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null;
+    public SyntaxToken? Name =>
+        Green is GreenSyntax ? TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null : SlotToken(1);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotToken(2);
 
     /// <summary>The setting's value, or null.</summary>
-    public ExpressionSyntax? Value => FirstNode<ExpressionSyntax>();
+    public ExpressionSyntax? Value =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>() : SlotNode<ExpressionSyntax>(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitConfigDeclaration(this);

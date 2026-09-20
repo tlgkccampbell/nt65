@@ -12,13 +12,13 @@ public sealed class ScopeDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.scope</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The scope's name, or null for an anonymous scope.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotTokenOrNull(1);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitScopeDeclaration(this);

@@ -12,23 +12,24 @@ public sealed class ImportSignatureSyntax : SyntaxNode
     }
 
     /// <summary>The <c>proc</c>.</summary>
-    public SyntaxToken ProcKeyword => ChildTokens[0];
+    public SyntaxToken ProcKeyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>(</c>, or null.</summary>
-    public SyntaxToken? OpenParenToken => FirstToken(SyntaxKind.OpenParen);
+    public SyntaxToken? OpenParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenParen) : SlotToken(1);
 
     /// <summary>The state on entry, or null when it is left out.</summary>
     public StateListSyntax? Entry =>
-        ArrowToken is { } arrow ? NodeBefore(arrow) as StateListSyntax : FirstNode<StateListSyntax>();
+        Green is GreenSyntax ? ArrowToken is { } arrow ? NodeBefore(arrow) as StateListSyntax : FirstNode<StateListSyntax>() : SlotNodeOrNull<StateListSyntax>(2);
 
     /// <summary>The <c>-&gt;</c>, or null.</summary>
-    public SyntaxToken? ArrowToken => FirstToken(SyntaxKind.Arrow);
+    public SyntaxToken? ArrowToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Arrow) : SlotTokenOrNull(3);
 
     /// <summary>The state on exit, or null when it is left out.</summary>
-    public StateListSyntax? Exit => NodeAfter(ArrowToken) as StateListSyntax;
+    public StateListSyntax? Exit =>
+        Green is GreenSyntax ? NodeAfter(ArrowToken) as StateListSyntax : SlotNodeOrNull<StateListSyntax>(4);
 
     /// <summary>The <c>)</c>, or null.</summary>
-    public SyntaxToken? CloseParenToken => FirstToken(SyntaxKind.CloseParen);
+    public SyntaxToken? CloseParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseParen) : SlotToken(5);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitImportSignature(this);

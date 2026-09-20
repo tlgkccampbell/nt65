@@ -12,7 +12,7 @@ public sealed class BlockSpliceSyntax : StatementSyntax
     }
 
     /// <summary>The parameter spliced.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitBlockSplice(this);

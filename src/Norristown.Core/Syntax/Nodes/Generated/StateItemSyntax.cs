@@ -8,7 +8,7 @@ namespace Norristown.Syntax;
 /// One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
 /// <c>?</c> on its own, or the name of a signature set.
 /// </summary>
-public sealed class StateItemSyntax : SyntaxNode
+public class StateItemSyntax : SyntaxNode
 {
     private ImmutableArray<SyntaxToken> registers;
 

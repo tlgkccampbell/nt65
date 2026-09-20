@@ -207,6 +207,15 @@ public enum SyntaxKind : byte
     /// <summary>One line of a data body: values separated by commas, one element each.</summary>
     DataValues,
 
+    /// <summary>The <c>{</c> of a data directive whose values are on the lines it opens.</summary>
+    DataBody,
+
+    /// <summary>The one braced value of a counted or record data directive.</summary>
+    BracedData,
+
+    /// <summary>The values of a data directive, written on its own line.</summary>
+    InlineData,
+
     /// <summary><c>{ 1, 2, 4 }</c>: values in braces, one element each.</summary>
     ValueList,
 
@@ -284,6 +293,9 @@ public enum SyntaxKind : byte
 
     /// <summary>The parenthesized parameter names of a <c>.func</c>.</summary>
     ParameterList,
+
+    /// <summary>One parameter of a <c>.func</c>.</summary>
+    Parameter,
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a named set of signature items.</summary>
     SignatureDeclaration,
@@ -389,6 +401,24 @@ public enum SyntaxKind : byte
     /// </summary>
     StateItem,
 
+    /// <summary>A state word and the <c>*</c> or <c>?</c> after it: <c>a16</c>, <c>i*</c>, <c>e?</c>.</summary>
+    StateFlagItem,
+
+    /// <summary>A state word and the value it is given: <c>dp = $2100</c>, <c>args 2</c>.</summary>
+    StateValueItem,
+
+    /// <summary><c>inline .strz</c>: the data after each call is a zero-terminated string.</summary>
+    StateInlineItem,
+
+    /// <summary><c>keeps a, x</c>: the registers a routine leaves as it found them.</summary>
+    StateKeepsItem,
+
+    /// <summary>The name of a signature set, which stands for the items it was declared with.</summary>
+    StateSetItem,
+
+    /// <summary><c>?</c> on its own: every tracked part of the processor state is unknown.</summary>
+    StateUnknownItem,
+
     // Expressions.
 
     /// <summary>Two operands and the operator between them.</summary>
@@ -414,6 +444,9 @@ public enum SyntaxKind : byte
 
     /// <summary>A name, possibly scoped: <c>gfx::init</c>, <c>::top</c>, <c>@loop</c>.</summary>
     NameExpression,
+
+    /// <summary>One part of a name, and the <c>[i]</c> after it when it has one.</summary>
+    IdentifierName,
 
     /// <summary><c>*</c>, the current address.</summary>
     CurrentAddressExpression,

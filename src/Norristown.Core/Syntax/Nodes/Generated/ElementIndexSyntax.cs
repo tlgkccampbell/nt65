@@ -12,13 +12,14 @@ public sealed class ElementIndexSyntax : SyntaxNode
     }
 
     /// <summary>The <c>[</c>.</summary>
-    public SyntaxToken OpenBracketToken => ChildTokens[0];
+    public SyntaxToken OpenBracketToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The element, or null.</summary>
-    public ExpressionSyntax? Index => FirstNode<ExpressionSyntax>();
+    public ExpressionSyntax? Index =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>() : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>The <c>]</c>, or null.</summary>
-    public SyntaxToken? CloseBracketToken => FirstToken(SyntaxKind.CloseBracket);
+    public SyntaxToken? CloseBracketToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseBracket) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitElementIndex(this);

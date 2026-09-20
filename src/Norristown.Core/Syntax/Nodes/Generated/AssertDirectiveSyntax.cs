@@ -12,17 +12,18 @@ public sealed class AssertDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.assert</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>What is asserted.</summary>
-    public ExpressionSyntax Condition => FirstNode<ExpressionSyntax>()!;
+    public ExpressionSyntax Condition =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(1);
 
     /// <summary>ca65's level, which nt65 reports, or null.</summary>
     public SyntaxToken? Level =>
-        FirstToken(SyntaxKind.Identifier) ?? FirstToken(SyntaxKind.Register) ?? FirstToken(SyntaxKind.Mnemonic);
+        Green is GreenSyntax ? FirstToken(SyntaxKind.Identifier) ?? FirstToken(SyntaxKind.Register) ?? FirstToken(SyntaxKind.Mnemonic) : SlotTokenOrNull(3);
 
     /// <summary>The quoted message, or null.</summary>
-    public SyntaxToken? Message => FirstToken(SyntaxKind.StringLiteral);
+    public SyntaxToken? Message => Green is GreenSyntax ? FirstToken(SyntaxKind.StringLiteral) : SlotTokenOrNull(5);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitAssertDirective(this);

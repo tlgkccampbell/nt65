@@ -12,8 +12,8 @@ public abstract class StateListDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.state</c> or <c>.ensure</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public abstract SyntaxToken Keyword { get; }
 
     /// <summary>The items.</summary>
-    public StateListSyntax Items => FirstNode<StateListSyntax>()!;
+    public abstract StateListSyntax Items { get; }
 }

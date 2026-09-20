@@ -15,13 +15,13 @@ public sealed class RecordValuesSyntax : SyntaxNode
     }
 
     /// <summary>The <c>{</c>.</summary>
-    public SyntaxToken OpenBraceToken => ChildTokens[0];
+    public SyntaxToken OpenBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The members given a value.</summary>
     public ImmutableArray<MemberValueSyntax> Members => Nodes(ref members);
 
     /// <summary>The <c>}</c>, or null.</summary>
-    public SyntaxToken? CloseBraceToken => FirstToken(SyntaxKind.CloseBrace);
+    public SyntaxToken? CloseBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseBrace) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitRecordValues(this);

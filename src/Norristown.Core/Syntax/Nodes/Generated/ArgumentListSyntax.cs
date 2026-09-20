@@ -13,13 +13,13 @@ public sealed class ArgumentListSyntax : SyntaxNode
     }
 
     /// <summary>The <c>(</c>.</summary>
-    public SyntaxToken OpenParenToken => ChildTokens[0];
+    public SyntaxToken OpenParenToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The arguments. A call's are expressions; a macro call's may also be braced operands and named arguments.</summary>
     public ImmutableArray<SyntaxNode> Arguments => ChildNodes;
 
     /// <summary>The <c>)</c>, or null.</summary>
-    public SyntaxToken? CloseParenToken => FirstToken(SyntaxKind.CloseParen);
+    public SyntaxToken? CloseParenToken => Green is GreenSyntax ? FirstToken(SyntaxKind.CloseParen) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitArgumentList(this);

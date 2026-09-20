@@ -12,13 +12,14 @@ public sealed class NamedArgumentSyntax : SyntaxNode
     }
 
     /// <summary>The parameter's name.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>=</c>.</summary>
-    public SyntaxToken EqualsToken => ChildTokens[1];
+    public SyntaxToken EqualsToken => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <summary>What the parameter is given, or null.</summary>
-    public SyntaxNode? Value => ChildNodes.Length > 0 ? ChildNodes[0] : null;
+    public SyntaxNode? Value =>
+        Green is GreenSyntax ? ChildNodes.Length > 0 ? ChildNodes[0] : null : SlotNode<SyntaxNode>(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitNamedArgument(this);

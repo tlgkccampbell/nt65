@@ -26,6 +26,13 @@ internal static class HandBuilt
     public static SyntaxNode Node(string text, SyntaxKind kind, params GreenNode[] children) =>
         new GreenSyntax(kind, [.. children]).CreateRed(SyntaxTree.Parse("test.nt65", text), null, 0);
 
+    /// <summary>
+    /// The red node over <paramref name="green"/>, at the start of a file holding
+    /// <paramref name="text"/>: the way a typed green node is read back.
+    /// </summary>
+    public static SyntaxNode Over(string text, GreenNode green) =>
+        green.CreateRed(SyntaxTree.Parse("test.nt65", text), null, 0);
+
     /// <summary>The list in slot <paramref name="slot"/> of <paramref name="parent"/>.</summary>
     public static SyntaxList<T> List<T>(SyntaxNode parent, int slot) where T : SyntaxNode =>
         new(parent.SlotRed(slot));

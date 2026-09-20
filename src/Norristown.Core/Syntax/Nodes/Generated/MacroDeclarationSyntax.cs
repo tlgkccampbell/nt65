@@ -12,19 +12,21 @@ public sealed class MacroDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.macro</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The macro's name, or null.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotToken(1);
 
     /// <summary>The parameters, or null.</summary>
-    public MacroParameterListSyntax? Parameters => FirstNode<MacroParameterListSyntax>();
+    public MacroParameterListSyntax? Parameters =>
+        Green is GreenSyntax ? FirstNode<MacroParameterListSyntax>() : SlotNode<MacroParameterListSyntax>(2);
 
     /// <summary>The processor state the macro expects and leaves, or null.</summary>
-    public ProcSignatureSyntax? Signature => FirstNode<ProcSignatureSyntax>();
+    public ProcSignatureSyntax? Signature =>
+        Green is GreenSyntax ? FirstNode<ProcSignatureSyntax>() : SlotNodeOrNull<ProcSignatureSyntax>(3);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(4);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitMacroDeclaration(this);

@@ -68,6 +68,10 @@ public abstract class SyntaxVisitor
     /// <param name="node">The node visited.</param>
     public virtual void VisitBlock(BlockSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="BracedDataSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitBracedData(BracedDataSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="BracedOperandSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitBracedOperand(BracedOperandSyntax node) => DefaultVisit(node);
@@ -107,6 +111,10 @@ public abstract class SyntaxVisitor
     /// <summary>Visits <see cref="CurrentAddressExpressionSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitCurrentAddressExpression(CurrentAddressExpressionSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="DataBodySyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitDataBody(DataBodySyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="DataDeclarationSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
@@ -192,6 +200,10 @@ public abstract class SyntaxVisitor
     /// <param name="node">The node visited.</param>
     public virtual void VisitFuncDeclaration(FuncDeclarationSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="IdentifierNameSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitIdentifierName(IdentifierNameSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="IfDirectiveSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitIfDirective(IfDirectiveSyntax node) => DefaultVisit(node);
@@ -219,6 +231,10 @@ public abstract class SyntaxVisitor
     /// <summary>Visits <see cref="IndirectOperandSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitIndirectOperand(IndirectOperandSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="InlineDataSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitInlineData(InlineDataSyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="InstructionStatementSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
@@ -300,6 +316,10 @@ public abstract class SyntaxVisitor
     /// <param name="node">The node visited.</param>
     public virtual void VisitParameterList(ParameterListSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="ParameterSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitParameter(ParameterSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="ParenthesizedExpressionSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitParenthesizedExpression(ParenthesizedExpressionSyntax node) => DefaultVisit(node);
@@ -356,13 +376,37 @@ public abstract class SyntaxVisitor
     /// <param name="node">The node visited.</param>
     public virtual void VisitStateDirective(StateDirectiveSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="StateFlagItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateFlagItem(StateFlagItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateInlineItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateInlineItem(StateInlineItemSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="StateItemSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitStateItem(StateItemSyntax node) => DefaultVisit(node);
 
+    /// <summary>Visits <see cref="StateKeepsItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateKeepsItem(StateKeepsItemSyntax node) => DefaultVisit(node);
+
     /// <summary>Visits <see cref="StateListSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>
     public virtual void VisitStateList(StateListSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateSetItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateSetItem(StateSetItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateUnknownItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateUnknownItem(StateUnknownItemSyntax node) => DefaultVisit(node);
+
+    /// <summary>Visits <see cref="StateValueItemSyntax"/>.</summary>
+    /// <param name="node">The node visited.</param>
+    public virtual void VisitStateValueItem(StateValueItemSyntax node) => DefaultVisit(node);
 
     /// <summary>Visits <see cref="StringExpressionSyntax"/>.</summary>
     /// <param name="node">The node visited.</param>

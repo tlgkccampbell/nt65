@@ -12,6 +12,18 @@ public sealed class IfDirectiveSyntax : ConditionalDirectiveSyntax
     }
 
     /// <inheritdoc/>
+    public override SyntaxToken Keyword =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.Directive)!.Value : SlotToken(0);
+
+    /// <inheritdoc/>
+    public override ExpressionSyntax Condition =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>()! : SlotNode<ExpressionSyntax>(1);
+
+    /// <inheritdoc/>
+    public override SyntaxToken? OpenBraceToken =>
+        Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(2);
+
+    /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitIfDirective(this);
 
     /// <inheritdoc/>

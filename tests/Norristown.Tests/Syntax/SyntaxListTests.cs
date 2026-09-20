@@ -1,5 +1,7 @@
 using Norristown.Syntax;
-using Norristown.Syntax.InternalSyntax;
+using GreenList = Norristown.Syntax.InternalSyntax.GreenList;
+using GreenListBuilder = Norristown.Syntax.InternalSyntax.GreenListBuilder;
+using GreenSeparatedList = Norristown.Syntax.InternalSyntax.GreenSeparatedList;
 
 namespace Norristown.Tests.Syntax;
 

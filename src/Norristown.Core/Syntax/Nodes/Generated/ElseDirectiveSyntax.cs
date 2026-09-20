@@ -12,13 +12,13 @@ public sealed class ElseDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>}</c> that closes the branch before.</summary>
-    public SyntaxToken CloseBraceToken => ChildTokens[0];
+    public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>.else</c>.</summary>
-    public SyntaxToken Keyword => ChildTokens[1];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[1] : SlotToken(1);
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public SyntaxToken? OpenBraceToken => Green is GreenSyntax ? FirstToken(SyntaxKind.OpenBrace) : SlotToken(2);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitElseDirective(this);

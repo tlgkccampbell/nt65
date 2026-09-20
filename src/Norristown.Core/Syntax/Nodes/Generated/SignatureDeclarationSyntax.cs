@@ -12,16 +12,16 @@ public sealed class SignatureDeclarationSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.signature</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The set's name, or null.</summary>
-    public SyntaxToken? Name => NameAt(1);
+    public SyntaxToken? Name => Green is GreenSyntax ? NameAt(1) : SlotToken(1);
 
     /// <summary>The <c>=</c>, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotToken(2);
 
     /// <summary>The items the name stands for, or null.</summary>
-    public StateListSyntax? Items => FirstNode<StateListSyntax>();
+    public StateListSyntax? Items => Green is GreenSyntax ? FirstNode<StateListSyntax>() : SlotNode<StateListSyntax>(3);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitSignatureDeclaration(this);

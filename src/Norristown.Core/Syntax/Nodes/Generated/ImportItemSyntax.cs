@@ -12,23 +12,25 @@ public sealed class ImportItemSyntax : SyntaxNode
     }
 
     /// <summary>The name imported.</summary>
-    public SyntaxToken Name => ChildTokens[0];
+    public SyntaxToken Name => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The <c>=</c> before a checked value, or null.</summary>
-    public SyntaxToken? EqualsToken => FirstToken(SyntaxKind.Equals);
+    public SyntaxToken? EqualsToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Equals) : SlotTokenOrNull(1);
 
     /// <summary>The value the import is checked against, or null.</summary>
-    public ExpressionSyntax? Value => FirstNode<ExpressionSyntax>();
+    public ExpressionSyntax? Value =>
+        Green is GreenSyntax ? FirstNode<ExpressionSyntax>() : SlotNodeOrNull<ExpressionSyntax>(2);
 
     /// <summary>The <c>:</c> before a size or a signature, or null.</summary>
-    public SyntaxToken? ColonToken => FirstToken(SyntaxKind.Colon);
+    public SyntaxToken? ColonToken => Green is GreenSyntax ? FirstToken(SyntaxKind.Colon) : SlotTokenOrNull(3);
 
     /// <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
     public SyntaxToken? AddressSize =>
-        TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null;
+        Green is GreenSyntax ? TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null : SlotTokenOrNull(4);
 
     /// <summary>The <c>proc(...)</c> after the <c>:</c>, or null.</summary>
-    public ImportSignatureSyntax? Signature => FirstNode<ImportSignatureSyntax>();
+    public ImportSignatureSyntax? Signature =>
+        Green is GreenSyntax ? FirstNode<ImportSignatureSyntax>() : SlotNodeOrNull<ImportSignatureSyntax>(5);
 
     /// <inheritdoc/>
     public override void Accept(SyntaxVisitor visitor) => visitor.VisitImportItem(this);

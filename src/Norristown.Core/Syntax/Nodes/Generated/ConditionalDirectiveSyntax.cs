@@ -12,11 +12,11 @@ public abstract class ConditionalDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.if</c> or <c>.elseif</c>.</summary>
-    public SyntaxToken Keyword => FirstToken(SyntaxKind.Directive)!.Value;
+    public abstract SyntaxToken Keyword { get; }
 
     /// <summary>The condition the branch is taken on.</summary>
-    public ExpressionSyntax Condition => FirstNode<ExpressionSyntax>()!;
+    public abstract ExpressionSyntax Condition { get; }
 
     /// <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
-    public SyntaxToken? OpenBraceToken => FirstToken(SyntaxKind.OpenBrace);
+    public abstract SyntaxToken? OpenBraceToken { get; }
 }

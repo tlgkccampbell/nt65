@@ -15,7 +15,7 @@ public sealed class ModuleDirectiveSyntax : StatementSyntax
     }
 
     /// <summary>The <c>.module</c> that starts the line.</summary>
-    public SyntaxToken Keyword => ChildTokens[0];
+    public SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);
 
     /// <summary>The names of the module's path, outermost first.</summary>
     public ImmutableArray<SyntaxToken> Names

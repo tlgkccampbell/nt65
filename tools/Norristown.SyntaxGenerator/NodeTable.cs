@@ -50,10 +50,15 @@ public static class NodeTable
                     var (name, derivesFrom) = SplitOn(value, " : ");
                     node = new Builder(name, derivesFrom);
                     break;
-                case 2 when key is "slot" or "member":
+                case 2 when key is "slot" or "member" or "legacy":
                     FinishSlot();
                     var (slotName, slotType) = SplitOn(value, " : ");
-                    slot = new SlotBuilder(slotName, slotType, key == "slot");
+                    slot = new SlotBuilder(slotName, slotType, key switch
+                    {
+                        "slot" => SlotRole.Slot,
+                        "member" => SlotRole.Member,
+                        _ => SlotRole.Legacy,
+                    });
                     break;
                 case 2:
                     Apply(Require(node, line), key, value);
@@ -92,6 +97,18 @@ public static class NodeTable
             case "partial":
                 node.IsPartial = true;
                 break;
+            case "converted":
+                node.IsConverted = true;
+                break;
+            case "unbuilt":
+                node.IsUnbuilt = true;
+                break;
+            case "missing":
+                node.IsMissingNode = true;
+                break;
+            case "layout":
+                node.Layout.AddRange(value.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                break;
             default:
                 throw new InvalidOperationException($"the node table does not understand the key `{key}`");
         }
@@ -110,6 +127,12 @@ public static class NodeTable
                 break;
             case "nodes":
                 slot.Form = key;
+                break;
+            case "kinds":
+                slot.Kinds.AddRange(value.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                break;
+            case "today":
+                slot.Today = value;
                 break;
             default:
                 throw new InvalidOperationException($"the node table does not understand the key `{key}`");
@@ -149,18 +172,31 @@ public static class NodeTable
 
         public bool IsPartial { get; set; }
 
+        public bool IsConverted { get; set; }
+
+        public bool IsUnbuilt { get; set; }
+
+        public bool IsMissingNode { get; set; }
+
+        public List<string> Layout { get; } = [];
+
         public NodeRow Build() => new(
-            name, derivesFrom, [.. Kinds], [.. Summary], IsAbstract, IsInternal, IsHandWritten, IsPartial, [.. Slots]);
+            name, derivesFrom, [.. Kinds], [.. Summary], IsAbstract, IsInternal, IsHandWritten, IsPartial,
+            IsConverted, IsUnbuilt, IsMissingNode, [.. Layout], [.. Slots]);
     }
 
-    private sealed class SlotBuilder(string name, string type, bool isPiece)
+    private sealed class SlotBuilder(string name, string type, SlotRole role)
     {
         public List<string> Summary { get; } = [];
 
-        public string Form { get; set; } = "read";
+        public string Form { get; set; } = "none";
 
         public string Read { get; set; } = "";
 
-        public NodeSlot Build() => new(name, type, [.. Summary], Form, Read, isPiece);
+        public List<string> Kinds { get; } = [];
+
+        public string? Today { get; set; }
+
+        public NodeSlot Build() => new(name, type, [.. Summary], Form, Read, role, [.. Kinds], Today);
     }
 }
