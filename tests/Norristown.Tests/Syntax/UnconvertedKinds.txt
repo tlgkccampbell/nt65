@@ -15,7 +15,6 @@ BlockSplice
 BracedOperand
 CallExpression
 CharacterExpression
-CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
 CpuDirective
@@ -30,7 +29,6 @@ ElseDirective
 ElseIfDirective
 EmptyBlock
 EnsureDirective
-EnumDeclaration
 ErrorDirective
 ErrorExpression
 ErrorLine
@@ -49,7 +47,6 @@ IndirectOperand
 InstructionStatement
 Label
 LabeledLine
-ListDeclaration
 ListItems
 LongIndirectOperand
 MacroCall
@@ -82,9 +79,7 @@ StateDirective
 StateItem
 StateList
 StringExpression
-StructDeclaration
 UnaryExpression
-UnionDeclaration
 UseDirective
 UseItem
 ValueList

@@ -413,7 +413,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="CharmapDeclaration"/>
     <TypeComment>
       <summary><c>.charmap name {</c>.</summary>
@@ -842,7 +842,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="EnumDeclaration"/>
     <TypeComment>
       <summary><c>.enum name {</c>.</summary>
@@ -1467,7 +1467,7 @@
     <Kind Name="Line"/>
   </Node>
 
-  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="ListDeclaration"/>
     <TypeComment>
       <summary><c>.list name {</c>.</summary>
@@ -2597,7 +2597,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="StructDeclaration"/>
     <TypeComment>
       <summary><c>.struct name {</c>.</summary>
@@ -2609,7 +2609,7 @@
     <Kind Name="SeparatedList"/>
   </Node>
 
-  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax">
+  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <TypeComment>
       <summary>The line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or <c>.list</c>.</summary>
     </TypeComment>
@@ -2618,7 +2618,6 @@
         <summary>The <c>.enum</c>, <c>.struct</c> or the like that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2627,14 +2626,12 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </AbstractNode>
 
@@ -2664,7 +2661,7 @@
     </Field>
   </Node>
 
-  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="UnionDeclaration"/>
     <TypeComment>
       <summary><c>.union name {</c>.</summary>

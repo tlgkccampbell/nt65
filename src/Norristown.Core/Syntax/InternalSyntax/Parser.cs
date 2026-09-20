@@ -540,17 +540,24 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseTypeBlock(SyntaxKind kind, bool named)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
+        GreenToken? name = null;
         if (AtName)
-            children.Add(Advance());
+            name = Advance();
         else if (named)
             Report("expected a name");
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            Report("expected `{`");
-        return new GreenSyntax(kind, children.ToImmutable());
+
+        // The name and the brace are separate news, so a line missing both is told about both.
+        var brace = ExpectOpenBrace(once: false);
+        return kind switch
+        {
+            SyntaxKind.EnumDeclaration => new EnumDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.StructDeclaration => new StructDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.UnionDeclaration => new UnionDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.CharmapDeclaration => new CharmapDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.ListDeclaration => new ListDeclarationSyntax(keyword, name, brace),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
     }
 
     /// <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
@@ -948,18 +955,23 @@ internal sealed class Parser
     /// <summary>
     /// The token of <paramref name="kind"/> written here, or the missing token that stands where
     /// one belongs, with <paramref name="message"/> reported there. A slot the source does not
-    /// fill is filled from here and nowhere else.
+    /// fill is filled from here and nowhere else. <paramref name="once"/> is
+    /// <see cref="ReportOnce"/>: a closer the parser has already asked for is the same news
+    /// twice, where a piece the line simply leaves out is news of its own.
     /// </summary>
-    private GreenToken Expect(SyntaxKind kind, string message)
+    private GreenToken Expect(SyntaxKind kind, string message, bool once = true)
     {
         if (Kind == kind)
             return Advance();
-        ReportOnce(message);
+        if (once)
+            ReportOnce(message);
+        else
+            Report(message);
         return GreenToken.Missing(kind);
     }
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
-    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
+    private GreenToken ExpectOpenBrace(bool once = true) => Expect(SyntaxKind.OpenBrace, "expected `{`", once);
 
     private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
     {
