@@ -503,7 +503,11 @@ internal sealed class Evaluator
             EvaluateSymbol(symbol);
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
-            if (index.Index is not { } written)
+
+            // An index the brackets hold nothing between stands in its slot with no text of its
+            // own, and what is missing has already been said where the brackets are.
+            var written = index.Index;
+            if (written.Span.Length == 0)
                 return null;
             if (Evaluate(written).AsNumber() is not { } at)
             {

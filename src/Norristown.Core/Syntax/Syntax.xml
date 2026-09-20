@@ -744,7 +744,7 @@
     </Field>
   </Node>
 
-  <Node Name="ElementIndexSyntax" Base="SyntaxNode">
+  <Node Name="ElementIndexSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ElementIndex"/>
     <TypeComment>
       <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
@@ -754,20 +754,17 @@
         <summary>The <c>[</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Index" Type="ExpressionSyntax" Today="ExpressionSyntax?">
+    <Field Name="Index" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The element, or null.</summary>
+        <summary>The element.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
-    <Field Name="CloseBracketToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>, or null.</summary>
+        <summary>The <c>]</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBracket)]]></Read>
     </Field>
   </Node>
 

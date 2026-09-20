@@ -2038,8 +2038,7 @@ public sealed class Emitter
         foreach (var (part, index) in ElementIndexes.Of(name))
         {
             if (model.SymbolAt(part) is { } indexed && ElementIndexes.Stride(indexed) is { } stride
-                && index.Index is { } written
-                && model.ValueOf(written, expansion).AsNumber() is { } element)
+                && model.ValueOf(index.Index, expansion).AsNumber() is { } element)
             {
                 offset += element * stride;
             }

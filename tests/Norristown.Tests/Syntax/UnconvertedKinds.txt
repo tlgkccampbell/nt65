@@ -22,7 +22,6 @@ DataDirective
 DataValues
 EachDirective
 ElementCount
-ElementIndex
 ElseDirective
 ElseIfDirective
 EmptyBlock

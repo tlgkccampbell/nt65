@@ -1896,17 +1896,18 @@ internal sealed class Parser
     /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
     private GreenNode ParseElementIndex()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var open = Advance();
+        GreenNode index;
         if (Kind != SyntaxKind.CloseBracket && !AtEnd)
-            children.Add(ParseExpression());
+        {
+            index = ParseExpression();
+        }
         else
+        {
             Report("expected the element: `name[i]` is the i-th of what `name` declares");
-        if (Kind == SyntaxKind.CloseBracket)
-            children.Add(Advance());
-        else
-            Report("expected `]`");
-        return new GreenSyntax(SyntaxKind.ElementIndex, children.ToImmutable());
+            index = new ErrorExpressionSyntax(null);
+        }
+        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, "expected `]`"));
     }
 
     /// <summary>
