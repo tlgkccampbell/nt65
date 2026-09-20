@@ -38,6 +38,8 @@ namespace Norristown.Semantics;
 /// </summary>
 internal sealed class Binder
 {
+    // What binding a statement dispatches through: one method per kind of statement.
+    private readonly Statements statements;
     private readonly SyntaxTree tree;
     private readonly SegmentTable segments;
     private readonly Configuration configuration;
@@ -116,6 +118,7 @@ internal sealed class Binder
 
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
     {
+        statements = new Statements(this);
         this.tree = tree;
         this.segments = segments;
         this.configuration = configuration;
@@ -1156,168 +1159,7 @@ internal sealed class Binder
     private void BindStatement(StatementSyntax statement)
     {
         CheckWidthsExist(statement);
-        switch (statement)
-        {
-            case LabeledLineSyntax labeled:
-                BindLabeledLine(labeled);
-                break;
-
-            case EnumMemberSyntax member:
-                BindEnumMember(member);
-                break;
-
-            case FuncDeclarationSyntax func:
-                BindFunc(func);
-                break;
-
-            // A signature set names its items, whose values and sets are read once the
-            // program's names and constants are.
-            case SignatureDeclarationSyntax signature:
-                var items = signature.Items;
-                var set = signature.Name;
-                if (SyntaxFacts.IsStateWord(set.Text))
-                    Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
-                else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
-                    declared.Definition = items;
-                CollectUses(items);
-                break;
-
-            // A setting is a constant whose value the build decided before anything was declared.
-            // One written anywhere but at file level has been reported, and declares nothing.
-            case ConfigDeclarationSyntax written:
-                var setting = written.Value;
-                if (Configuration.AtFileLevel(written)
-                    && Declare(written.Name, SymbolKind.Constant) is { } config)
-                {
-                    config.IsConfig = true;
-                    config.Value = configuration.SettingOf(tree, written.Name.Text) is { } given
-                        ? Value.Of(given)
-                        : Value.Unknown;
-                }
-                CollectUses(setting, uses, words: true);
-                break;
-
-            case ConstantDeclarationSyntax constant:
-                // A constant or an address alias: which one depends on the expression, so the
-                // kind is settled once the names in it resolve.
-                Declare(constant.Name, SymbolKind.Constant, constant.Value);
-                CollectUses(constant.Value);
-                break;
-
-            case ExternProcDeclarationSyntax routine:
-                if (Declare(routine.Name, SymbolKind.ExternProc, routine.Address) is { } externProc)
-                    externProc.Signature = ReadSignature(routine);
-                CollectUses(routine.Address);
-                break;
-
-            // A cheap local can neither be reached with `::` nor exported, and the parser has
-            // already refused one here.
-            case ExportDirectiveSyntax export:
-                foreach (var item in export.Items)
-                {
-                    exportItems.Add((item, scope));
-                    CollectUses(item.Name);
-                }
-                break;
-
-            case ModuleDirectiveSyntax module:
-                BindModule(module);
-                break;
-
-            case UseDirectiveSyntax use:
-                BindUse(use);
-                break;
-
-            case ImportDirectiveSyntax import:
-                foreach (var item in import.Items)
-                    BindImportItem(item);
-                break;
-
-            case BlockSpliceSyntax splice:
-                BindSplice(splice);
-                break;
-
-            case MacroCallSyntax call:
-                BindCall(call);
-                break;
-
-            case DataDeclarationSyntax data:
-                BindData(data);
-                break;
-
-            case InstructionStatementSyntax instruction:
-                CheckCodePlacement(instruction);
-                CollectUses(instruction);
-                break;
-
-            case DataDirectiveSyntax directive:
-                CheckDataPlacement(directive);
-                CollectUses(directive);
-                CollectRecords(directive);
-                break;
-
-            // The records of a `.type T` body, one or more to a line.
-            case DataValuesSyntax values:
-                CollectUses(values);
-                if (DataSyntax.DirectiveOfValues(values)?.Type is { } recordType)
-                    records.Add((recordType, values.Values));
-                break;
-
-            // A region line reached as a line is inside a block: one at file level opens the
-            // region it names, and is walked as that block's opener.
-            case SegmentRegionSyntax region:
-                Report(region.Keyword.Span, "a `.segment NAME` region belongs at file level, outside "
-                    + "every block: inside one, `.segment NAME { }` places what it holds");
-                break;
-
-            case AssertDirectiveSyntax:
-
-            // An annotation names labels and nothing else, so its names resolve as any
-            // other use does; that they name labels rather than constants is the flow
-            // analysis's business.
-            case NextDirectiveSyntax:
-            case PatchDirectiveSyntax:
-                CollectUses(statement);
-                break;
-
-            // The `dp = e` and `bank = e` of a segment declaration, and the `dp = e` and
-            // `dbr = e` of a `.state`, may name constants; so may every bank of a `mirrors`,
-            // which is a list of ranges rather than one value.
-            case SegmentDeclarationSyntax:
-            case StateDirectiveSyntax:
-                foreach (var item in statement.DescendantNodes())
-                {
-                    if (item is SegmentAttributeSyntax attribute)
-                    {
-                        CollectUses(attribute.Value);
-                        foreach (var range in attribute.Ranges)
-                        {
-                            CollectUses(range.First);
-                            CollectUses(range.Last);
-                        }
-                    }
-                    else if (item is StateValueItemSyntax valued)
-                    {
-                        CollectUses(valued.Value);
-                    }
-                    else if (item is StateSetItemSyntax named)
-                    {
-                        CollectUses(named.Name);
-                    }
-                }
-                break;
-
-            // A frame is named like data of a type, so its members are reached through it.
-            case FrameDirectiveSyntax frame:
-                Declare(frame.Name, SymbolKind.Frame, type: frame.Type);
-                CollectUses(frame.Type);
-                break;
-
-            // Everything else either declares nothing and names nothing — `.cpu`, a blank or
-            // closing line — or is read where its block is walked.
-            default:
-                break;
-        }
+        statements.Visit(statement);
     }
 
     /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
@@ -2457,5 +2299,201 @@ internal sealed class Binder
 
         /// <summary>Whether this is <see cref="Reported"/>.</summary>
         public bool IsReported => Symbol is null && Module is null;
+    }
+
+    /// <summary>
+    /// What binding one statement does, a method per kind. The work is the binder's own; this
+    /// says which of it each kind asks for. A kind with no method here either declares nothing
+    /// and names nothing — <c>.cpu</c>, a blank or a closing line — or is read where its block
+    /// is walked.
+    /// </summary>
+    /// <param name="binder">The binder whose file is being bound.</param>
+    private sealed class Statements(Binder binder) : SyntaxVisitor
+    {
+        /// <inheritdoc/>
+        public override void VisitLabeledLine(LabeledLineSyntax node) => binder.BindLabeledLine(node);
+
+        /// <inheritdoc/>
+        public override void VisitEnumMember(EnumMemberSyntax node) => binder.BindEnumMember(node);
+
+        /// <inheritdoc/>
+        public override void VisitFuncDeclaration(FuncDeclarationSyntax node) => binder.BindFunc(node);
+
+        /// <summary>
+        /// A signature set names its items, whose values and sets are read once the program's
+        /// names and constants are.
+        /// </summary>
+        /// <param name="node">The declaration.</param>
+        public override void VisitSignatureDeclaration(SignatureDeclarationSyntax node)
+        {
+            var items = node.Items;
+            var set = node.Name;
+            if (SyntaxFacts.IsStateWord(set.Text))
+                binder.Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
+            else if (binder.Declare(set, SymbolKind.SignatureSet) is { } declared)
+                declared.Definition = items;
+            binder.CollectUses(items);
+        }
+
+        /// <summary>
+        /// A setting is a constant whose value the build decided before anything was declared.
+        /// One written anywhere but at file level has been reported, and declares nothing.
+        /// </summary>
+        /// <param name="node">The declaration.</param>
+        public override void VisitConfigDeclaration(ConfigDeclarationSyntax node)
+        {
+            var setting = node.Value;
+            if (Configuration.AtFileLevel(node)
+                && binder.Declare(node.Name, SymbolKind.Constant) is { } config)
+            {
+                config.IsConfig = true;
+                config.Value = binder.configuration.SettingOf(binder.tree, node.Name.Text) is { } given
+                    ? Value.Of(given)
+                    : Value.Unknown;
+            }
+            binder.CollectUses(setting, binder.uses, words: true);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitConstantDeclaration(ConstantDeclarationSyntax node)
+        {
+            // A constant or an address alias: which one depends on the expression, so the
+            // kind is settled once the names in it resolve.
+            binder.Declare(node.Name, SymbolKind.Constant, node.Value);
+            binder.CollectUses(node.Value);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitExternProcDeclaration(ExternProcDeclarationSyntax node)
+        {
+            if (binder.Declare(node.Name, SymbolKind.ExternProc, node.Address) is { } externProc)
+                externProc.Signature = binder.ReadSignature(node);
+            binder.CollectUses(node.Address);
+        }
+
+        /// <summary>
+        /// The names an <c>.export</c> list exports. A cheap local can neither be reached with
+        /// <c>::</c> nor exported, and the parser has already refused one here.
+        /// </summary>
+        /// <param name="node">The directive.</param>
+        public override void VisitExportDirective(ExportDirectiveSyntax node)
+        {
+            foreach (var item in node.Items)
+            {
+                binder.exportItems.Add((item, binder.scope));
+                binder.CollectUses(item.Name);
+            }
+        }
+
+        /// <inheritdoc/>
+        public override void VisitModuleDirective(ModuleDirectiveSyntax node) => binder.BindModule(node);
+
+        /// <inheritdoc/>
+        public override void VisitUseDirective(UseDirectiveSyntax node) => binder.BindUse(node);
+
+        /// <inheritdoc/>
+        public override void VisitImportDirective(ImportDirectiveSyntax node)
+        {
+            foreach (var item in node.Items)
+                binder.BindImportItem(item);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitBlockSplice(BlockSpliceSyntax node) => binder.BindSplice(node);
+
+        /// <inheritdoc/>
+        public override void VisitMacroCall(MacroCallSyntax node) => binder.BindCall(node);
+
+        /// <inheritdoc/>
+        public override void VisitDataDeclaration(DataDeclarationSyntax node) => binder.BindData(node);
+
+        /// <inheritdoc/>
+        public override void VisitInstructionStatement(InstructionStatementSyntax node)
+        {
+            binder.CheckCodePlacement(node);
+            binder.CollectUses(node);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitDataDirective(DataDirectiveSyntax node)
+        {
+            binder.CheckDataPlacement(node);
+            binder.CollectUses(node);
+            binder.CollectRecords(node);
+        }
+
+        /// <summary>The records of a <c>.type T</c> body, one or more to a line.</summary>
+        /// <param name="node">The values.</param>
+        public override void VisitDataValues(DataValuesSyntax node)
+        {
+            binder.CollectUses(node);
+            if (DataSyntax.DirectiveOfValues(node)?.Type is { } recordType)
+                binder.records.Add((recordType, node.Values));
+        }
+
+        /// <summary>
+        /// A region line reached as a line is inside a block: one at file level opens the region
+        /// it names, and is walked as that block's opener.
+        /// </summary>
+        /// <param name="node">The region line.</param>
+        public override void VisitSegmentRegion(SegmentRegionSyntax node) =>
+            binder.Report(node.Keyword.Span, "a `.segment NAME` region belongs at file level, outside "
+                + "every block: inside one, `.segment NAME { }` places what it holds");
+
+        /// <inheritdoc/>
+        public override void VisitAssertDirective(AssertDirectiveSyntax node) => binder.CollectUses(node);
+
+        /// <summary>
+        /// An annotation names labels and nothing else, so its names resolve as any other use
+        /// does; that they name labels rather than constants is the flow analysis's business.
+        /// </summary>
+        /// <param name="node">The annotation.</param>
+        public override void VisitNextDirective(NextDirectiveSyntax node) => binder.CollectUses(node);
+
+        /// <inheritdoc cref="VisitNextDirective"/>
+        public override void VisitPatchDirective(PatchDirectiveSyntax node) => binder.CollectUses(node);
+
+        /// <inheritdoc/>
+        public override void VisitSegmentDeclaration(SegmentDeclarationSyntax node) => Valued(node);
+
+        /// <inheritdoc/>
+        public override void VisitStateDirective(StateDirectiveSyntax node) => Valued(node);
+
+        /// <summary>A frame is named like data of a type, so its members are reached through it.</summary>
+        /// <param name="node">The directive.</param>
+        public override void VisitFrameDirective(FrameDirectiveSyntax node)
+        {
+            binder.Declare(node.Name, SymbolKind.Frame, type: node.Type);
+            binder.CollectUses(node.Type);
+        }
+
+        /// <summary>
+        /// The <c>dp = e</c> and <c>bank = e</c> of a segment declaration, and the <c>dp = e</c>
+        /// and <c>dbr = e</c> of a <c>.state</c>, may name constants; so may every bank of a
+        /// <c>mirrors</c>, which is a list of ranges rather than one value.
+        /// </summary>
+        private void Valued(StatementSyntax statement)
+        {
+            foreach (var item in statement.DescendantNodes())
+            {
+                if (item is SegmentAttributeSyntax attribute)
+                {
+                    binder.CollectUses(attribute.Value);
+                    foreach (var range in attribute.Ranges)
+                    {
+                        binder.CollectUses(range.First);
+                        binder.CollectUses(range.Last);
+                    }
+                }
+                else if (item is StateValueItemSyntax valued)
+                {
+                    binder.CollectUses(valued.Value);
+                }
+                else if (item is StateSetItemSyntax named)
+                {
+                    binder.CollectUses(named.Name);
+                }
+            }
+        }
     }
 }

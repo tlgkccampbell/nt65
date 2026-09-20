@@ -42,6 +42,8 @@ public sealed class Emitter
     /// </summary>
     private const string Body = "    ";
 
+    // What writing a line dispatches through: one method per kind of statement.
+    private readonly Statements statements;
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly FlatNames names;
@@ -90,6 +92,7 @@ public sealed class Emitter
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
         string source, string output, IReadOnlySet<Symbol> measuredElsewhere)
     {
+        statements = new Statements(this);
         this.measuredElsewhere = measuredElsewhere;
         this.model = model;
         this.layout = layout;
@@ -562,100 +565,7 @@ public sealed class Emitter
         }
     }
 
-    private void WalkLine(LineSyntax line)
-    {
-        var statement = line.Statement;
-        switch (statement)
-        {
-            case BlankLineSyntax:
-                pendingBlank = true;
-                break;
-
-            case LabeledLineSyntax labeled:
-                LabeledLine(line, labeled);
-                break;
-
-            case ConstantDeclarationSyntax constant:
-                Constant(line, constant);
-                break;
-
-            // Data that names itself stands where its first byte does, and ends where its last
-            // byte does when anything measures it.
-            case DataDeclarationSyntax data:
-                Declared(line, data);
-                if (line.OpensBlockKind is not (BlockKind.Data or BlockKind.DataBody))
-                    End(data);
-                break;
-
-            case DataDirectiveSyntax directive when DataSyntax.IsElementType(directive):
-                Elements(line, directive, symbol: null);
-                break;
-
-            case DataDirectiveSyntax when layout.Of(statement, expansion) is null:
-                NotTranspiled(statement);
-                break;
-
-            case DataValuesSyntax values:
-                Values(line, values);
-                break;
-
-            case InstructionStatementSyntax instruction
-                when SyntaxFacts.LongBranches.Contains(instruction.Mnemonic.Text)
-                    && layout.Of(instruction, expansion) is { } laid:
-                Branch(line, instruction, laid);
-                break;
-
-            case InstructionStatementSyntax:
-            case DataDirectiveSyntax:
-                Source(line, statement, layout.Of(statement, expansion)?.Length ?? 0);
-                break;
-
-            case ExternProcDeclarationSyntax declared:
-                ExternProc(declared);
-                break;
-
-            // An assertion nt65 answered has been answered; one it could not depends on where
-            // things land, so it is written out for ld65 to check, with the level ca65 needs
-            // for that. An `.error` the build reached has already been reported, and never
-            // reaches ca65.
-            case AssertDirectiveSyntax assert
-                when model.ValueOf(assert.Condition, expansion, layout.SpanOf).AsNumber() is null:
-                Linked(line, assert);
-                break;
-
-            case AssertDirectiveSyntax:
-            case ErrorDirectiveSyntax:
-                break;
-
-            // A function, and the lines of the blocks above, exist for the analysis: a call is
-            // written as its body, and a type as the constants it names.
-            case FuncDeclarationSyntax:
-            case SignatureDeclarationSyntax:
-            case EnumMemberSyntax:
-            case CharmapEntrySyntax:
-            case ListItemsSyntax:
-            case MemberValueSyntax:
-                break;
-
-            case MacroCallSyntax call:
-                Expand(line, call);
-                break;
-
-            case EnsureDirectiveSyntax ensure:
-                Ensure(line, ensure);
-                break;
-
-            case BlockSpliceSyntax splice:
-                Splice(splice);
-                break;
-
-            // A `.cpu` item, a segment declaration, an `.export` or `.import` (both already
-            // written) and a closing brace all say something about the file without
-            // generating anything.
-            default:
-                break;
-        }
-    }
+    private void WalkLine(LineSyntax line) => statements.Walk(line);
 
     /// <summary>
     /// A call, written out as the body it expands to, with a comment naming it. nt65 expands
@@ -2227,5 +2137,112 @@ public sealed class Emitter
 
         /// <summary>Tokens written as part of the one before them, with no whitespace between the two.</summary>
         public HashSet<int> Joined { get; } = [];
+    }
+
+    /// <summary>
+    /// What writing one line's statement does, a method per kind. The work is the emitter's
+    /// own; this says which of it each kind asks for.
+    /// <para>
+    /// A kind with no method here writes nothing. A function, a signature set, an enum member,
+    /// a charmap entry, a list's items and a member's value exist for the analysis: a call is
+    /// written as its body, and a type as the constants it names. An <c>.error</c> the build
+    /// reached has already been reported, and never reaches ca65. A <c>.cpu</c> item, a segment
+    /// declaration, an <c>.export</c> or <c>.import</c> — both already written — and a closing
+    /// brace all say something about the file without generating anything.
+    /// </para>
+    /// </summary>
+    /// <param name="emitter">The emitter whose file is being written.</param>
+    private sealed class Statements(Emitter emitter) : SyntaxVisitor
+    {
+        // The line whose statement is being written. A macro call writes a body whose lines are
+        // walked from inside its own method, so the line is put back when that returns.
+        private LineSyntax? walked;
+
+        /// <summary>The line being written, which every method below is about.</summary>
+        private LineSyntax Line => walked!;
+
+        /// <summary>Writes what <paramref name="line"/> generates.</summary>
+        /// <param name="line">The line.</param>
+        public void Walk(LineSyntax line)
+        {
+            var outer = walked;
+            walked = line;
+            Visit(line.Statement);
+            walked = outer;
+        }
+
+        /// <inheritdoc/>
+        public override void VisitBlankLine(BlankLineSyntax node) => emitter.pendingBlank = true;
+
+        /// <inheritdoc/>
+        public override void VisitLabeledLine(LabeledLineSyntax node) => emitter.LabeledLine(Line, node);
+
+        /// <inheritdoc/>
+        public override void VisitConstantDeclaration(ConstantDeclarationSyntax node) =>
+            emitter.Constant(Line, node);
+
+        /// <summary>
+        /// Data that names itself stands where its first byte does, and ends where its last byte
+        /// does when anything measures it.
+        /// </summary>
+        /// <param name="node">The declaration.</param>
+        public override void VisitDataDeclaration(DataDeclarationSyntax node)
+        {
+            emitter.Declared(Line, node);
+            if (Line.OpensBlockKind is not (BlockKind.Data or BlockKind.DataBody))
+                emitter.End(node);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitDataDirective(DataDirectiveSyntax node)
+        {
+            if (DataSyntax.IsElementType(node))
+                emitter.Elements(Line, node, symbol: null);
+            else if (emitter.layout.Of(node, emitter.expansion) is null)
+                emitter.NotTranspiled(node);
+            else
+                emitter.Source(Line, node, emitter.layout.Of(node, emitter.expansion)?.Length ?? 0);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitDataValues(DataValuesSyntax node) => emitter.Values(Line, node);
+
+        /// <inheritdoc/>
+        public override void VisitInstructionStatement(InstructionStatementSyntax node)
+        {
+            if (SyntaxFacts.LongBranches.Contains(node.Mnemonic.Text)
+                && emitter.layout.Of(node, emitter.expansion) is { } laid)
+            {
+                emitter.Branch(Line, node, laid);
+            }
+            else
+            {
+                emitter.Source(Line, node, emitter.layout.Of(node, emitter.expansion)?.Length ?? 0);
+            }
+        }
+
+        /// <inheritdoc/>
+        public override void VisitExternProcDeclaration(ExternProcDeclarationSyntax node) =>
+            emitter.ExternProc(node);
+
+        /// <summary>
+        /// An assertion nt65 answered has been answered; one it could not depends on where things
+        /// land, so it is written out for ld65 to check, with the level ca65 needs for that.
+        /// </summary>
+        /// <param name="node">The assertion.</param>
+        public override void VisitAssertDirective(AssertDirectiveSyntax node)
+        {
+            if (emitter.model.ValueOf(node.Condition, emitter.expansion, emitter.layout.SpanOf).AsNumber() is null)
+                emitter.Linked(Line, node);
+        }
+
+        /// <inheritdoc/>
+        public override void VisitMacroCall(MacroCallSyntax node) => emitter.Expand(Line, node);
+
+        /// <inheritdoc/>
+        public override void VisitEnsureDirective(EnsureDirectiveSyntax node) => emitter.Ensure(Line, node);
+
+        /// <inheritdoc/>
+        public override void VisitBlockSplice(BlockSpliceSyntax node) => emitter.Splice(node);
     }
 }

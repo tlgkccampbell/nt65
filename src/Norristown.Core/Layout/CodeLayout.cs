@@ -24,6 +24,8 @@ public sealed class CodeLayout
     /// </summary>
     private const int MaximumStatements = 65536;
 
+    // What laying out a statement dispatches through: one method per kind of statement.
+    private readonly Statements statements;
     private readonly SemanticModel model;
     private readonly Cpu cpu;
 
@@ -96,6 +98,7 @@ public sealed class CodeLayout
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
         Dictionary<Symbol, long> settled)
     {
+        statements = new Statements(this);
         this.model = model;
         this.cpu = cpu;
         this.states = states;
@@ -470,74 +473,7 @@ public sealed class CodeLayout
             steps.Add(new Step(statement, outer, routine, Stream, segment, null, Closes: true));
     }
 
-    private void Statement(StatementSyntax statement)
-    {
-        switch (statement)
-        {
-            case InstructionStatementSyntax instruction:
-                Instruction(instruction);
-                break;
-            case DataDirectiveSyntax:
-            case DataValuesSyntax:
-                Data(statement);
-                break;
-
-            // A data declaration's name stands where its first byte does. What it holds is
-            // laid out on its own line, or in the body it opens.
-            case DataDeclarationSyntax data:
-                Mark(data);
-                if (data.Directive is { } element)
-                {
-                    Data(element);
-                    if (DataSyntax.BodyOf(element) is null && NameOf(data) is { } declared && measured.Contains(declared)
-                        && placements.GetValueOrDefault((element.Position, expansion)) is { Length: >= 0 } placed)
-                    {
-                        extents[declared] = placed.Length;
-                    }
-                }
-                break;
-            case AssertDirectiveSyntax assertion:
-                Assertion(assertion);
-                break;
-            case MacroCallSyntax call:
-                Expand(call);
-                break;
-            case BlockSpliceSyntax splice:
-                Splice(splice);
-                break;
-            case ErrorDirectiveSyntax error:
-                Refuse(error);
-                break;
-            case LabeledLineSyntax labeled:
-                Mark(labeled.Label);
-                if (labeled.Statement is { } labelled)
-                    Statement(labelled);
-                break;
-
-            // A routine's name stands where its first byte does, which is what a branch to
-            // it reaches. One turn of a `.multiproc` is a routine, and the member it is named
-            // after stands there.
-            case ProcDeclarationSyntax:
-            case MultiProcDeclarationSyntax:
-                Mark(statement);
-                break;
-
-            // An annotation generates nothing and is here for the flow analysis, which reads
-            // it off the statement above it. A `.state` generates nothing either, and says
-            // what the processor state is where it stands.
-            case NextDirectiveSyntax:
-            case PatchDirectiveSyntax:
-            case StateDirectiveSyntax:
-            case FrameDirectiveSyntax:
-                steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
-                break;
-            case EnsureDirectiveSyntax ensure:
-                Ensure(ensure);
-                break;
-            default:
-                break;
-        }
-    }
+    private void Statement(StatementSyntax statement) => statements.Visit(statement);
 
     /// <summary>Marks the routine being walked as one an instruction could not be laid out in.</summary>
     private void Unlayable()
@@ -1207,4 +1143,99 @@ public sealed class CodeLayout
     /// with. A long branch is here too, because the same distance is what decides its form.
     /// </summary>
     private readonly record struct Branch(InstructionStatementSyntax Statement, Expansion? On, ExpressionSyntax Target, bool Long);
+
+    /// <summary>
+    /// What laying out one statement does, a method per kind. The work is the layout's own;
+    /// this says which of it each kind asks for. A kind with no method here writes no bytes and
+    /// says nothing about the state: a declaration that only names something, a directive read
+    /// where its block is walked, a blank or a closing line.
+    /// </summary>
+    /// <param name="layout">The layout being built.</param>
+    private sealed class Statements(CodeLayout layout) : SyntaxVisitor
+    {
+        /// <inheritdoc/>
+        public override void VisitInstructionStatement(InstructionStatementSyntax node) =>
+            layout.Instruction(node);
+
+        /// <inheritdoc/>
+        public override void VisitDataDirective(DataDirectiveSyntax node) => layout.Data(node);
+
+        /// <inheritdoc/>
+        public override void VisitDataValues(DataValuesSyntax node) => layout.Data(node);
+
+        /// <summary>
+        /// A data declaration's name stands where its first byte does. What it holds is laid out
+        /// on its own line, or in the body it opens.
+        /// </summary>
+        /// <param name="node">The declaration.</param>
+        public override void VisitDataDeclaration(DataDeclarationSyntax node)
+        {
+            layout.Mark(node);
+            if (node.Directive is { } element)
+            {
+                layout.Data(element);
+                if (DataSyntax.BodyOf(element) is null && layout.NameOf(node) is { } declared
+                    && layout.measured.Contains(declared)
+                    && layout.placements.GetValueOrDefault((element.Position, layout.expansion)) is { Length: >= 0 } placed)
+                {
+                    layout.extents[declared] = placed.Length;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public override void VisitAssertDirective(AssertDirectiveSyntax node) => layout.Assertion(node);
+
+        /// <inheritdoc/>
+        public override void VisitMacroCall(MacroCallSyntax node) => layout.Expand(node);
+
+        /// <inheritdoc/>
+        public override void VisitBlockSplice(BlockSpliceSyntax node) => layout.Splice(node);
+
+        /// <inheritdoc/>
+        public override void VisitErrorDirective(ErrorDirectiveSyntax node) => layout.Refuse(node);
+
+        /// <inheritdoc/>
+        public override void VisitLabeledLine(LabeledLineSyntax node)
+        {
+            layout.Mark(node.Label);
+            if (node.Statement is { } labelled)
+                layout.Statement(labelled);
+        }
+
+        /// <summary>
+        /// A routine's name stands where its first byte does, which is what a branch to it
+        /// reaches. One turn of a <c>.multiproc</c> is a routine, and the member it is named
+        /// after stands there.
+        /// </summary>
+        /// <param name="node">The declaration.</param>
+        public override void VisitProcDeclaration(ProcDeclarationSyntax node) => layout.Mark(node);
+
+        /// <inheritdoc cref="VisitProcDeclaration"/>
+        public override void VisitMultiProcDeclaration(MultiProcDeclarationSyntax node) => layout.Mark(node);
+
+        /// <summary>
+        /// An annotation generates nothing and is here for the flow analysis, which reads it off
+        /// the statement above it. A <c>.state</c> generates nothing either, and says what the
+        /// processor state is where it stands.
+        /// </summary>
+        /// <param name="node">The directive.</param>
+        public override void VisitNextDirective(NextDirectiveSyntax node) => NoBytes(node);
+
+        /// <inheritdoc cref="VisitNextDirective"/>
+        public override void VisitPatchDirective(PatchDirectiveSyntax node) => NoBytes(node);
+
+        /// <inheritdoc cref="VisitNextDirective"/>
+        public override void VisitStateDirective(StateDirectiveSyntax node) => NoBytes(node);
+
+        /// <inheritdoc cref="VisitNextDirective"/>
+        public override void VisitFrameDirective(FrameDirectiveSyntax node) => NoBytes(node);
+
+        /// <inheritdoc/>
+        public override void VisitEnsureDirective(EnsureDirectiveSyntax node) => layout.Ensure(node);
+
+        /// <summary>A statement that writes no bytes and stands in the stream for what it says.</summary>
+        private void NoBytes(StatementSyntax statement) => layout.steps.Add(
+            new Step(statement, layout.expansion, layout.routine, layout.Stream, layout.segment, null));
+    }
 }
