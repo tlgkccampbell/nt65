@@ -3,7 +3,6 @@
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
 DataDirective
 ModuleDirective
-NameExpression
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration

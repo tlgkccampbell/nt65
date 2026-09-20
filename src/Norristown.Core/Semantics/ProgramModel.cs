@@ -491,7 +491,9 @@ public sealed class ProgramModel
         {
             foreach (var token in node.ChildTokens)
             {
-                if (resolved.TryGetValue((node.Tree, token.Span.Start), out var named))
+                // A missing token starts where the token after it does, so looking one up would
+                // find whatever is named there.
+                if (!token.IsMissing && resolved.TryGetValue((node.Tree, token.Span.Start), out var named))
                     yield return named;
             }
         }

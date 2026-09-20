@@ -162,6 +162,7 @@ public sealed class Emitter
         Collect(node, tokens);
         return tokens;
 
+        // A missing token is nowhere in the text, so there is nothing of it to write or to blank.
         static void Collect(SyntaxNode node, List<SyntaxToken> into)
         {
             var nodes = node.ChildNodes;
@@ -170,9 +171,13 @@ public sealed class Emitter
             while (i < nodes.Length || j < tokens.Length)
             {
                 if (j >= tokens.Length || (i < nodes.Length && nodes[i].Position < tokens[j].Position))
+                {
                     Collect(nodes[i++], into);
-                else
-                    into.Add(tokens[j++]);
+                }
+                else if (tokens[j++] is { IsMissing: false } token)
+                {
+                    into.Add(token);
+                }
             }
         }
     }
@@ -1471,12 +1476,12 @@ public sealed class Emitter
         }
         foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
         {
-            var tokens = name.ChildTokens;
-            if (tokens.Length == 0 || model.SymbolAt(tokens[0]) is not { Kind: SymbolKind.Frame })
+            if (name.GlobalToken is not null || name.Names is not [var first, ..]
+                || model.SymbolAt(first) is not { Kind: SymbolKind.Frame })
+            {
                 continue;
-            edits.Replace[tokens[0].Position] = slot.ToString(CultureInfo.InvariantCulture);
-            for (var i = 1; i < tokens.Length; i++)
-                edits.Replace[tokens[i].Position] = "";
+            }
+            ReplaceName(name, slot.ToString(CultureInfo.InvariantCulture), edits);
         }
     }
 
@@ -1903,8 +1908,6 @@ public sealed class Emitter
 
     private void Name(NameExpressionSyntax name, Edits edits)
     {
-        var tokens = name.ChildTokens;
-
         // A path names one symbol; the whole of it becomes that symbol's flat name. A body is
         // written out in every file that calls its macro, so what a name means is the
         // program's answer rather than this one file's.
@@ -1913,7 +1916,7 @@ public sealed class Emitter
         var reference = named;
 
         // A path that ends in a repetition's name names a different member on every turn.
-        if (named.Kind == SymbolKind.Binding && tokens.Length > 1)
+        if (named.Kind == SymbolKind.Binding && name.SimpleName is null)
         {
             if (model.SymbolOf(name, expansion) is not { } namesake)
                 return;
@@ -1923,9 +1926,7 @@ public sealed class Emitter
         // A list stands for its own items wherever data takes them.
         if (model.ItemsOf(name) is { Count: > 0 } items)
         {
-            edits.Replace[tokens[0].Position] = string.Join(", ", items.Select(item => Rendered(item, edits.Comments)));
-            for (var i = 1; i < tokens.Length; i++)
-                edits.Replace[tokens[i].Position] = "";
+            ReplaceName(name, string.Join(", ", items.Select(item => Rendered(item, edits.Comments))), edits);
             edits.Comments.Add(name.GetText().Trim());
             return;
         }
@@ -1933,7 +1934,7 @@ public sealed class Emitter
         // A member is an offset: the offsets along the path added up, on the address the
         // path starts from when it starts at an instance rather than at a type. An index along
         // the path is whole elements of the same sum.
-        if (reference.Kind == SymbolKind.Member || (name.Indexes.Length > 0 && reference.IsAddress))
+        if (reference.Kind == SymbolKind.Member || (name.IsIndexed && reference.IsAddress))
         {
             MemberPath(name, edits);
             return;
@@ -1946,9 +1947,7 @@ public sealed class Emitter
         {
             if (Parameter(symbol, edits.Comments) is not { } given)
                 return;
-            edits.Replace[tokens[0].Position] = given;
-            for (var i = 1; i < tokens.Length; i++)
-                edits.Replace[tokens[i].Position] = "";
+            ReplaceName(name, given, edits);
             return;
         }
 
@@ -1967,9 +1966,7 @@ public sealed class Emitter
             if (written is null)
                 return;
 
-            edits.Replace[tokens[0].Position] = written;
-            for (var i = 1; i < tokens.Length; i++)
-                edits.Replace[tokens[i].Position] = "";
+            ReplaceName(name, written, edits);
 
             // What the turn is worth is written into the line, so naming the binding as well
             // would only repeat it down every line an unrolled body writes.
@@ -1992,13 +1989,34 @@ public sealed class Emitter
         // is a value nt65 has already used in its own arithmetic.
         var byValue = (symbol.IsDefine || symbol.IsConfig || symbol.Kind == SymbolKind.ImportedConstant)
             && symbol.Value.AsNumber() is not null;
-        edits.Replace[tokens[0].Position] = byValue
-            ? Constant(symbol.Value.Number)
-            : Named(symbol);
-        for (var i = 1; i < tokens.Length; i++)
-            edits.Replace[tokens[i].Position] = "";
+        ReplaceName(name, byValue ? Constant(symbol.Value.Number) : Named(symbol), edits);
         if (byValue)
             edits.Comments.Add(symbol.QualifiedName);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="text"/> where the whole of <paramref name="name"/> stood: at the
+    /// first token the name itself is written with, with the rest of them blanked. An <c>[i]</c>
+    /// along the path is left as it stands, being a place in what the name names rather than part
+    /// of the name.
+    /// </summary>
+    private static void ReplaceName(NameExpressionSyntax name, string text, Edits edits)
+    {
+        var names = name.Names;
+        var first = name.GlobalToken;
+        if (first is null)
+        {
+            if (names.IsEmpty)
+                return;
+            first = names[0];
+        }
+        foreach (var token in names)
+            edits.Replace[token.Position] = "";
+
+        // What is left directly under the name are the `::` between its parts.
+        foreach (var token in name.ChildTokens)
+            edits.Replace[token.Position] = "";
+        edits.Replace[first.Value.Position] = text;
     }
 
     /// <summary>

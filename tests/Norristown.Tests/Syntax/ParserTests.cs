@@ -67,25 +67,27 @@ public sealed class ParserTests
     [InlineData("inx", "InstructionStatement(inx)")]
     [InlineData("asl a", "InstructionStatement(asl AccumulatorOperand(a))")]
     [InlineData("lda #$10", "InstructionStatement(lda ImmediateOperand(# NumberExpression($10)))")]
-    [InlineData("lda ptr", "InstructionStatement(lda AbsoluteOperand(NameExpression(ptr)))")]
+    [InlineData("lda ptr", "InstructionStatement(lda AbsoluteOperand(NameExpression(IdentifierName(ptr))))")]
     [InlineData("lda d:$2105",
         "InstructionStatement(lda AbsoluteOperand(AddressPrefix(d :) NumberExpression($2105)))")]
     [InlineData("lda z:ptr+1", "InstructionStatement(lda AbsoluteOperand(AddressPrefix(z :) "
-        + "BinaryExpression(NameExpression(ptr) + NumberExpression(1))))")]
-    [InlineData("lda buf,x", "InstructionStatement(lda AbsoluteOperand(NameExpression(buf) , x))")]
-    [InlineData("lda (ptr),y", "InstructionStatement(lda IndirectOperand(( NameExpression(ptr) ) , y))")]
-    [InlineData("lda (ptr,x)", "InstructionStatement(lda IndexedIndirectOperand(( NameExpression(ptr) , x )))")]
+        + "BinaryExpression(NameExpression(IdentifierName(ptr)) + NumberExpression(1))))")]
+    [InlineData("lda buf,x", "InstructionStatement(lda AbsoluteOperand(NameExpression(IdentifierName(buf)) , x))")]
+    [InlineData("lda (ptr),y", "InstructionStatement(lda IndirectOperand(( NameExpression(IdentifierName(ptr)) ) , y))")]
+    [InlineData("lda (ptr,x)",
+        "InstructionStatement(lda IndexedIndirectOperand(( NameExpression(IdentifierName(ptr)) , x )))")]
     [InlineData("lda (3,s),y", "InstructionStatement(lda IndexedIndirectOperand(( NumberExpression(3) , s ) , y))")]
-    [InlineData("jmp (vector)", "InstructionStatement(jmp IndirectOperand(( NameExpression(vector) )))")]
-    [InlineData("lda [dp]", "InstructionStatement(lda LongIndirectOperand([ NameExpression(dp) ]))")]
-    [InlineData("lda [dp],y", "InstructionStatement(lda LongIndirectOperand([ NameExpression(dp) ] , y))")]
-    [InlineData("bne @loop", "InstructionStatement(bne AbsoluteOperand(NameExpression(@loop)))")]
+    [InlineData("jmp (vector)", "InstructionStatement(jmp IndirectOperand(( NameExpression(IdentifierName(vector)) )))")]
+    [InlineData("lda [dp]", "InstructionStatement(lda LongIndirectOperand([ NameExpression(IdentifierName(dp)) ]))")]
+    [InlineData("lda [dp],y", "InstructionStatement(lda LongIndirectOperand([ NameExpression(IdentifierName(dp)) ] , y))")]
+    [InlineData("bne @loop", "InstructionStatement(bne AbsoluteOperand(NameExpression(IdentifierName(@loop))))")]
     [InlineData("mvn #1, #2", "InstructionStatement(mvn ImmediateOperand(# NumberExpression(1) , # NumberExpression(2)))")]
     [InlineData("bbr0 $12, skip",
-        "InstructionStatement(bbr0 AbsoluteOperand(NumberExpression($12) , NameExpression(skip)))")]
+        "InstructionStatement(bbr0 AbsoluteOperand(NumberExpression($12) , NameExpression(IdentifierName(skip))))")]
     // Parentheses around a whole operand are indirect; anything else is an expression.
     [InlineData("lda (hi + lo) * 2", "InstructionStatement(lda AbsoluteOperand(BinaryExpression("
-        + "ParenthesizedExpression(( BinaryExpression(NameExpression(hi) + NameExpression(lo)) )) * NumberExpression(2))))")]
+        + "ParenthesizedExpression(( BinaryExpression(NameExpression(IdentifierName(hi)) + "
+        + "NameExpression(IdentifierName(lo))) )) * NumberExpression(2))))")]
     public void EveryOperandFormParses(string line, string shape)
     {
         Assert.Equal(shape, SyntaxDump.Shape(Statement(line)));

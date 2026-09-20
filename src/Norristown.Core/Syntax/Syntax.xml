@@ -1640,7 +1640,7 @@
     </Field>
   </Node>
 
-  <Node Name="NameExpressionSyntax" Base="ExpressionSyntax" Partial="true">
+  <Node Name="NameExpressionSyntax" Base="ExpressionSyntax" Partial="true" Converted="true">
     <Kind Name="NameExpression"/>
     <TypeComment>
       <summary>A name: <c>label</c>, <c>@local</c>, <c>gfx::init</c>, <c>::top_level</c>, <c>table[2]::x</c>.</summary>
@@ -1650,25 +1650,16 @@
         <summary>The leading <c>::</c> of a name written from the top level, or null.</summary>
       </PropertyComment>
       <Kind Name="ColonColon"/>
-      <Read><![CDATA[TokenAt(0) is { Kind: SyntaxKind.ColonColon } global ? global : null]]></Read>
     </Field>
     <Field Name="Parts" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
-        <summary>The names between the <c>::</c>, outermost first, each with the <c>[i]</c> after it.</summary>
+        <summary>
+          The names between the <c>::</c>, outermost first, each with the <c>[i]</c> after it. There
+          is always at least one: a part the source did not write stands in the list as an
+          <c>IdentifierName</c> whose name is missing.
+        </summary>
       </PropertyComment>
     </Field>
-    <Legacy Name="Names" Type="ImmutableArray&lt;SyntaxToken&gt;">
-      <PropertyComment>
-        <summary>The names between the <c>::</c>, outermost first. Empty when not even the first name was written.</summary>
-      </PropertyComment>
-      <Cache><![CDATA[[.. ChildTokens.Where(token => token.Kind != SyntaxKind.ColonColon)]]]></Cache>
-    </Legacy>
-    <Legacy Name="Indexes" Type="ImmutableArray&lt;ElementIndexSyntax&gt;">
-      <PropertyComment>
-        <summary>Every <c>[i]</c> written in the name.</summary>
-      </PropertyComment>
-      <Nodes/>
-    </Legacy>
   </Node>
 
   <Node Name="NamedArgumentSyntax" Base="SyntaxNode" Converted="true">

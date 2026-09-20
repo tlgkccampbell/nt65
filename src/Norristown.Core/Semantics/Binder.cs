@@ -184,10 +184,9 @@ internal sealed class Binder
         // module's, and making it part of this one is a re-export, which says where it came from.
         foreach (var (item, _) in exportItems)
         {
-            var name = item.Name;
-            if (name.ChildTokens.Length == 0)
+            if (item.Name is not { LastPart: { } innermost } name)
                 continue;
-            var last = name.ChildTokens[^1];
+            var last = innermost.Name;
             var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
             if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
@@ -234,7 +233,9 @@ internal sealed class Binder
     {
         foreach (var token in statement.ChildTokens)
         {
-            if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+            // A missing token names nothing, and it starts where the token after it does, so
+            // taking one would name whatever is written there.
+            if (!token.IsMissing && token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                 or SyntaxKind.Register or SyntaxKind.Mnemonic)
             {
                 return token;
@@ -362,7 +363,7 @@ internal sealed class Binder
                 {
                     foreach (var argument in call.DescendantNodes().OfType<NameExpressionSyntax>())
                     {
-                        if (argument.ChildTokens is [{ Kind: SyntaxKind.Identifier } name])
+                        if (argument.SimpleName is { Kind: SyntaxKind.Identifier } name)
                             definedAsked.Add((name, scope));
                     }
                 }
@@ -651,20 +652,16 @@ internal sealed class Binder
     /// </summary>
     private Symbol? NamedByPath(ExpressionSyntax expression, Scope at)
     {
-        if (expression is not NameExpressionSyntax)
+        if (expression is not NameExpressionSyntax name)
             return null;
         Place? part = null;
-        var path = false;
-        var tokens = expression.ChildTokens;
-        for (var i = 0; i < tokens.Length; i++)
+        var path = name.GlobalToken is not null;
+        var parts = name.Parts;
+        for (var i = 0; i < parts.Count; i++)
         {
-            var token = tokens[i];
-            if (token.Kind == SyntaxKind.ColonColon)
-            {
-                path = true;
-                continue;
-            }
-            var last = i == tokens.Length - 1;
+            if (parts[i].Name is not { IsMissing: false } token)
+                break;
+            var last = i == parts.Count - 1;
             part = !path
                 ? at.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null)
                 : part is null ? ModuleRoot(token, null)
@@ -1078,7 +1075,7 @@ internal sealed class Binder
             .ToDictionary(group => group.Key, group => group.Last().Symbol);
         foreach (var (type, values) in records)
         {
-            if (type.ChildTokens.Length > 0 && named.GetValueOrDefault(type.ChildTokens[^1].Span.Start) is { IsLayout: true } layout)
+            if (type.LastPart is { } innermost && named.GetValueOrDefault(innermost.Name.Span.Start) is { IsLayout: true } layout)
                 ReferMembers(layout, values);
         }
     }
@@ -1638,21 +1635,13 @@ internal sealed class Binder
         {
             // A leading `::` starts the path at file scope, which the first name sees by
             // already being part of a path.
-            var path = false;
+            var path = name.GlobalToken is not null;
             var first = true;
-            foreach (var token in name.ChildTokens)
+            foreach (var token in name.Names)
             {
-                if (token.Kind == SyntaxKind.ColonColon)
-                {
-                    path = true;
-                }
-                else if (token.Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
-                    or SyntaxKind.Register or SyntaxKind.Mnemonic)
-                {
-                    into.Add(new Use(token, scope, path, first, Last: false, Word: words, Chosen: chosen));
-                    path = true;
-                    first = false;
-                }
+                into.Add(new Use(token, scope, path, first, Last: false, Word: words, Chosen: chosen));
+                path = true;
+                first = false;
             }
 
             // Which part is the last decides where an export is checked: another file has to
@@ -1662,8 +1651,11 @@ internal sealed class Binder
 
             // An `[i]` along the path is an expression of its own, whose names are looked up
             // where the path is written rather than inside whatever it leads to.
-            foreach (var index in name.Indexes)
-                CollectUses(index, into, words, chosen);
+            foreach (var part in name.Parts)
+            {
+                if (part.Index is { } index)
+                    CollectUses(index, into, words, chosen);
+            }
             return;
         }
         foreach (var child in node.ChildNodes)
@@ -2129,21 +2121,17 @@ internal sealed class Binder
     {
         if (symbol.Type is { } known)
             return known;
-        if (symbol.TypeExpression is not { } named)
+        if (symbol.TypeExpression is not NameExpressionSyntax named)
             return null;
 
         Place? part = null;
-        var path = false;
-        var tokens = named.ChildTokens;
-        for (var i = 0; i < tokens.Length; i++)
+        var path = named.GlobalToken is not null;
+        var parts = named.Parts;
+        for (var i = 0; i < parts.Count; i++)
         {
-            var token = tokens[i];
-            if (token.Kind == SyntaxKind.ColonColon)
-            {
-                path = true;
-                continue;
-            }
-            var last = i == tokens.Length - 1;
+            if (parts[i].Name is not { IsMissing: false } token)
+                break;
+            var last = i == parts.Count - 1;
             part = !path ? (symbol.Scope.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null))
                 : part is null ? ModuleRoot(token, null)
                 : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
