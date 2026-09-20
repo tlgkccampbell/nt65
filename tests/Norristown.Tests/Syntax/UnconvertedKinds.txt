@@ -14,7 +14,6 @@ DataDirective
 DataValues
 ElementCount
 EmptyBlock
-EnsureDirective
 EnumDeclaration
 EnumMember
 ErrorDirective
@@ -52,7 +51,6 @@ SegmentDeclaration
 SegmentRegion
 SignatureDeclaration
 SkippedTokens
-StateDirective
 StateItem
 StateList
 StructDeclaration

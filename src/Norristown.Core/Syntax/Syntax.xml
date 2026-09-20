@@ -808,7 +808,7 @@
     </Field>
   </Node>
 
-  <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax">
+  <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax" Converted="true">
     <Kind Name="EnsureDirective"/>
     <TypeComment>
       <summary><c>.ensure a16, i8</c>: the widths to make hold.</summary>
@@ -2309,7 +2309,7 @@
     </Field>
   </Node>
 
-  <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax">
+  <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax" Converted="true">
     <Kind Name="StateDirective"/>
     <TypeComment>
       <summary><c>.state a16, i8</c>: the items of a signature, asserted and set at one point.</summary>
@@ -2426,7 +2426,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="StateListDirectiveSyntax" Base="StatementSyntax">
+  <AbstractNode Name="StateListDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <TypeComment>
       <summary>A directive that takes the items of a signature: <c>.state</c> or <c>.ensure</c>.</summary>
     </TypeComment>
@@ -2435,13 +2435,11 @@
         <summary>The <c>.state</c> or <c>.ensure</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Items" Type="StateListSyntax">
       <PropertyComment>
         <summary>The items.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<StateListSyntax>()!]]></Read>
     </Field>
   </AbstractNode>
 

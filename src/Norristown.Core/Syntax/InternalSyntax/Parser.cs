@@ -1204,10 +1204,8 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseState()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseStateList());
-        return new GreenSyntax(SyntaxKind.StateDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new StateDirectiveSyntax(keyword, ParseStateList());
     }
 
     /// <summary>
@@ -1216,10 +1214,8 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseEnsure()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseStateList());
-        return new GreenSyntax(SyntaxKind.EnsureDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new EnsureDirectiveSyntax(keyword, ParseStateList());
     }
 
     /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
