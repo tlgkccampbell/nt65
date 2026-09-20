@@ -1814,14 +1814,9 @@ internal sealed class Parser
 
     private GreenNode ParseParenthesized()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.CloseParen)
-            children.Add(Advance());
-        else
-            Report("expected `)`");
-        return new GreenSyntax(SyntaxKind.ParenthesizedExpression, children.ToImmutable());
+        var open = Advance();
+        var expression = ParseExpression();
+        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, "expected `)`"));
     }
 
     private GreenNode ParseBuiltinCall()

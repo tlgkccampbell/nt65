@@ -1977,7 +1977,7 @@
     </Field>
   </Node>
 
-  <Node Name="ParenthesizedExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="ParenthesizedExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <Kind Name="ParenthesizedExpression"/>
     <TypeComment>
       <summary><c>(expr)</c>.</summary>
@@ -1987,20 +1987,17 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Expression" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The expression in the parentheses.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
-    <Field Name="CloseParenToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseParen)]]></Read>
     </Field>
   </Node>
 

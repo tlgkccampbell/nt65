@@ -63,7 +63,6 @@ NamedArgument
 NextDirective
 ParameterKind
 ParameterList
-ParenthesizedExpression
 PatchDirective
 ProcDeclaration
 ProcSignature
