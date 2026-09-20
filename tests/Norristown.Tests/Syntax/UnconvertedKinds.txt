@@ -53,12 +53,10 @@ LabeledLine
 ListDeclaration
 ListItems
 LongIndirectOperand
-MacroCall
 MacroParameterList
 MemberValue
 ModuleDirective
 NameExpression
-NamedArgument
 NextDirective
 NumberExpression
 ParameterKind

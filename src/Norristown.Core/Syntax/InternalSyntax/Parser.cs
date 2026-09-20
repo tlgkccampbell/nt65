@@ -800,16 +800,14 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMacroCall()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(Advance());
+        var name = Advance();
+        var bang = Advance();
+        GreenNode? arguments = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseMacroArguments());
+            arguments = ParseMacroArguments();
         else
             Report("expected `(` and the arguments");
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        return new GreenSyntax(SyntaxKind.MacroCall, children.ToImmutable());
+        return new MacroCallSyntax(name, bang, arguments, Kind == SyntaxKind.OpenBrace ? Advance() : null);
     }
 
     private GreenNode ParseMacroArguments()
@@ -829,17 +827,10 @@ internal sealed class Parser
     /// One argument: an expression, a braced operand, or a parameter named and then given
     /// one of those. <c>=</c> appears in no expression, so a named argument is unambiguous.
     /// </summary>
-    private GreenNode? ParseArgument()
+    private GreenNode ParseArgument()
     {
         if (AtName && Next == SyntaxKind.Equals)
-        {
-            var children = ImmutableArray.CreateBuilder<GreenNode>();
-            children.Add(Advance());
-            children.Add(Advance());
-            if (ParseArgument() is { } given)
-                children.Add(given);
-            return new GreenSyntax(SyntaxKind.NamedArgument, children.ToImmutable());
-        }
+            return new NamedArgumentSyntax(Advance(), Advance(), ParseArgument());
         return Kind == SyntaxKind.OpenBrace ? ParseBracedOperand() : ParseExpression();
     }
 

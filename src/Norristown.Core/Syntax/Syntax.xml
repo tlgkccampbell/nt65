@@ -1545,7 +1545,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroCallSyntax" Base="StatementSyntax">
+  <Node Name="MacroCallSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="MacroCall"/>
     <TypeComment>
       <summary><c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.</summary>
@@ -1555,27 +1555,23 @@
         <summary>The macro's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="BangToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>!</c>.</summary>
       </PropertyComment>
       <Kind Name="Bang"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
-    <Field Name="Arguments" Type="ArgumentListSyntax" Today="ArgumentListSyntax?">
+    <Field Name="Arguments" Type="ArgumentListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The arguments, or null.</summary>
+        <summary>The arguments, or null when not even the <c>(</c> was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ArgumentListSyntax>()]]></Read>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
@@ -1808,7 +1804,7 @@
     </Legacy>
   </Node>
 
-  <Node Name="NamedArgumentSyntax" Base="SyntaxNode">
+  <Node Name="NamedArgumentSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="NamedArgument"/>
     <TypeComment>
       <summary><c>name = argument</c>: a macro argument given by name.</summary>
@@ -1820,20 +1816,17 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
-    <Field Name="Value" Type="SyntaxNode" Today="SyntaxNode?">
+    <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
-        <summary>What the parameter is given, or null.</summary>
+        <summary>What the parameter is given.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes.Length > 0 ? ChildNodes[0] : null]]></Read>
     </Field>
   </Node>
 
