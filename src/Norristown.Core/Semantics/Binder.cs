@@ -697,8 +697,9 @@ internal sealed class Binder
             return new Scope(kind, null, scope, null);
         }
 
-        // `.scope { }` is anonymous, and declares nothing.
-        if (written is not { } name)
+        // `.scope { }` is anonymous, and a `.proc` whose name the source does not have declares
+        // nothing either: the scope it opens is nameless, as the routine is.
+        if (written is not { IsMissing: false } name)
             return new Scope(kind, null, scope, null);
 
         var symbol = Declare(name, symbolKind);

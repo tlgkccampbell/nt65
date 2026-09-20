@@ -47,7 +47,7 @@ public static class Outline
     {
         switch (opener)
         {
-            case ProcDeclarationSyntax { Name: { } name } proc:
+            case ProcDeclarationSyntax { Name: { IsMissing: false } name } proc:
                 return new OutlineItem(OutlineKind.Proc, name.Text, proc.Signature?.GetText(), block.Span, name.Span, children);
 
             // One block, however many routines it declares: the enum it walks and the

@@ -998,7 +998,7 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="ExternProcDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ExternProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ExternProcDeclaration"/>
     <TypeComment>
       <summary><c>.proc name = address: entry -&gt; exit</c>: a routine with no body.</summary>
@@ -1008,7 +1008,6 @@
         <summary>The <c>.proc</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
@@ -1017,26 +1016,22 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[ChildTokens[2]]]></Read>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>Where the routine is.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
         <summary>The signature, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ProcSignatureSyntax>()]]></Read>
     </Field>
   </Node>
 
@@ -2029,7 +2024,7 @@
     </Field>
   </Node>
 
-  <Node Name="ProcDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ProcDeclaration"/>
     <TypeComment>
       <summary><c>.proc name: entry -&gt; exit {</c>.</summary>
@@ -2039,29 +2034,25 @@
         <summary>The <c>.proc</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The routine's name, or null.</summary>
+        <summary>The routine's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
         <summary>The signature, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ProcSignatureSyntax>()]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 

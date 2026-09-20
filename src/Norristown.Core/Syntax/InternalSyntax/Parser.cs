@@ -967,6 +967,18 @@ internal sealed class Parser
         return GreenToken.Missing(kind);
     }
 
+    /// <summary>
+    /// The name written here, whichever token it is written as, or the missing identifier that
+    /// stands where one belongs, with <paramref name="message"/> reported there.
+    /// </summary>
+    private GreenToken ExpectName(string message)
+    {
+        if (AtName)
+            return Advance();
+        Report(message);
+        return GreenToken.Missing(SyntaxKind.Identifier);
+    }
+
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
 
@@ -1097,32 +1109,26 @@ internal sealed class Parser
 
     private GreenNode ParseProc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!AtName)
-        {
-            Report("expected a routine name");
-            return new GreenSyntax(SyntaxKind.ProcDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
+        var keyword = Advance();
+        var name = ExpectName("expected a routine name");
+
+        // An address and a signature are both written after the name, so a routine with none is
+        // read no further; the `{` after it still opens the block it opens.
+        if (name.IsMissing)
+            return new ProcDeclarationSyntax(keyword, name, null, ExpectOpenBrace());
 
         // `.proc name = expr` is an extern proc: a signature and an address, with no body.
         if (Kind == SyntaxKind.Equals)
         {
-            children.Add(Advance());
-            children.Add(ParseExpression());
-            if (Kind == SyntaxKind.Colon)
-                children.Add(ParseSignature());
-            return new GreenSyntax(SyntaxKind.ExternProcDeclaration, children.ToImmutable());
+            var equals = Advance();
+            var address = ParseExpression();
+            return new ExternProcDeclarationSyntax(
+                keyword, name, equals, address, Kind == SyntaxKind.Colon ? ParseSignature() : null);
         }
 
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else if (errors.Count == 0)
-            Report("expected `{`, or `= address` for a routine with no body");
-        return new GreenSyntax(SyntaxKind.ProcDeclaration, children.ToImmutable());
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new ProcDeclarationSyntax(keyword, name, signature,
+            Expect(SyntaxKind.OpenBrace, "expected `{`, or `= address` for a routine with no body"));
     }
 
     /// <summary>
@@ -1483,7 +1489,7 @@ internal sealed class Parser
     }
 
     /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
-    private GreenNode ParseSignature()
+    private ProcSignatureSyntax ParseSignature()
     {
         var colon = Advance();
         var entry = ParseStateList();

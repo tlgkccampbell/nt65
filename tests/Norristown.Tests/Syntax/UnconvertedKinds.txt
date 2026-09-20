@@ -39,7 +39,6 @@ ErrorExpression
 ErrorLine
 ExportDirective
 ExportItem
-ExternProcDeclaration
 FrameDirective
 FuncDeclaration
 IfDirective
@@ -70,7 +69,6 @@ ParameterKind
 ParameterList
 ParenthesizedExpression
 PatchDirective
-ProcDeclaration
 RecordValues
 RepeatDirective
 ScopeDeclaration
