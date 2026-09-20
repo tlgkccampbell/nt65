@@ -512,7 +512,7 @@ internal sealed class Parser
             return null;
         }
         var name = Advance();
-        var equals = Expect(SyntaxKind.Equals, "expected `=`", once: false);
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
@@ -538,7 +538,7 @@ internal sealed class Parser
             Report("expected a name");
 
         // The name and the brace are separate news, so a line missing both is told about both.
-        var brace = ExpectOpenBrace(once: false);
+        var brace = Kind == SyntaxKind.OpenBrace ? Advance() : Missing(SyntaxKind.OpenBrace, "expected `{`");
         return kind switch
         {
             SyntaxKind.EnumDeclaration => new EnumDeclarationSyntax(keyword, name, brace),
@@ -573,7 +573,7 @@ internal sealed class Parser
             dotDot = Advance();
             last = ParseExpression();
         }
-        var equals = Expect(SyntaxKind.Equals, "expected `=`", once: false);
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 
@@ -945,18 +945,25 @@ internal sealed class Parser
     /// <summary>
     /// The token of <paramref name="kind"/> written here, or the missing token that stands where
     /// one belongs, with <paramref name="message"/> reported there. A slot the source does not
-    /// fill is filled from here and nowhere else. <paramref name="once"/> is
-    /// <see cref="ReportOnce"/>: a closer the parser has already asked for is the same news
-    /// twice, where a piece the line simply leaves out is news of its own.
+    /// fill is filled from here and nowhere else.
     /// </summary>
-    private GreenToken Expect(SyntaxKind kind, string message, bool once = true)
+    private GreenToken Expect(SyntaxKind kind, string message)
     {
         if (Kind == kind)
             return Advance();
-        if (once)
-            ReportOnce(message);
-        else
-            Report(message);
+        ReportOnce(message);
+        return GreenToken.Missing(kind);
+    }
+
+    /// <summary>
+    /// The missing token of <paramref name="kind"/>, standing where one belongs that the source
+    /// does not have, with <paramref name="message"/> reported there whether or not the line has
+    /// been reported on already: what <see cref="Expect"/> does where the second piece missing on
+    /// a line is news of its own.
+    /// </summary>
+    private GreenToken Missing(SyntaxKind kind, string message)
+    {
+        Report(message);
         return GreenToken.Missing(kind);
     }
 
@@ -974,7 +981,7 @@ internal sealed class Parser
     }
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
-    private GreenToken ExpectOpenBrace(bool once = true) => Expect(SyntaxKind.OpenBrace, "expected `{`", once);
+    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
 
     private void ExpectOpenBrace(ImmutableArray<GreenNode>.Builder children)
     {
