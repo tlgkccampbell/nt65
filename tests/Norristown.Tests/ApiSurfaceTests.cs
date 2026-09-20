@@ -46,6 +46,33 @@ public sealed class ApiSurfaceTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
+    /// <summary>
+    /// A token, a trivia and a list are values: reading the same one twice gives two equal copies,
+    /// and reading a different one gives an unequal copy. The green token a token wraps is not part
+    /// of its public surface, but it is still part of what makes two of them the same token.
+    /// </summary>
+    [Fact]
+    public void ATokenIsAValue()
+    {
+        var tree = SyntaxTree.Parse("test.nt65", ".proc p {\n    nop\n}\n");
+        var proc = tree.GetLine(0).Statement;
+
+        Assert.Equal(proc.ChildTokens[0], proc.ChildTokens[0]);
+        Assert.True(proc.ChildTokens[0] == proc.ChildTokens[0]);
+        Assert.Equal(proc.ChildTokens[0].GetHashCode(), proc.ChildTokens[0].GetHashCode());
+        Assert.NotEqual(proc.ChildTokens[0], proc.ChildTokens[1]);
+
+        // Which node a token was read through is part of which value it is, which is what lets two
+        // pieces the source left out at the same place be told apart.
+        var nop = tree.GetLine(1).Tokens[0];
+        Assert.Equal(nop, tree.GetLine(1).Tokens[0]);
+        var read = tree.Root.FindToken(nop.Span.Start);
+        Assert.Equal(nop.Span, read.Span);
+        Assert.NotEqual(nop, read);
+        Assert.IsType<LineSyntax>(nop.Parent);
+        Assert.IsType<InstructionStatementSyntax>(read.Parent);
+    }
+
     /// <summary>Every member a type declares, at every accessibility, so that each can be judged.</summary>
     private static BindingFlags Everything =>
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
