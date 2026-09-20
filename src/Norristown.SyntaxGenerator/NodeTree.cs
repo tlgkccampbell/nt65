@@ -21,7 +21,13 @@ public sealed class NodeTree
         byName = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         derivedFrom = [.. nodes.Select(node => node.Base)];
         foreach (var node in nodes)
+        {
             CheckConversion(node);
+
+            // Every layout is worked out here, so reading one later is a lookup and several
+            // readers at once are no trouble.
+            layouts[node.Name] = Laid(node);
+        }
     }
 
     /// <summary>The table, in the order it writes its nodes.</summary>
@@ -40,31 +46,7 @@ public sealed class NodeTree
 
     /// <summary>The node's slots in source order, each with the row that writes it.</summary>
     /// <param name="node">The node.</param>
-    public ImmutableArray<LaidOutSlot> Layout(NodeRow node)
-    {
-        if (layouts.TryGetValue(node.Name, out var held))
-            return held;
-
-        var pieces = new List<(NodeRow Declarer, NodeSlot Slot)>();
-        foreach (var row in Ancestry(node))
-            pieces.AddRange(row.Pieces.Select(piece => (row, piece)));
-
-        if (!node.Layout.IsEmpty)
-        {
-            if (!node.Layout.OrderBy(name => name, StringComparer.Ordinal).SequenceEqual(
-                    pieces.Select(piece => piece.Slot.Name).OrderBy(name => name, StringComparer.Ordinal),
-                    StringComparer.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"{node.Name}'s layout must name each of its slots exactly once");
-            }
-            pieces = [.. node.Layout.Select(name => pieces.First(piece => piece.Slot.Name == name))];
-        }
-
-        var laid = pieces.Select((piece, index) => new LaidOutSlot(piece.Declarer, piece.Slot, index)).ToImmutableArray();
-        layouts[node.Name] = laid;
-        return laid;
-    }
+    public ImmutableArray<LaidOutSlot> Layout(NodeRow node) => layouts[node.Name];
 
     /// <summary>The green class <paramref name="node"/>'s green class derives from.</summary>
     /// <param name="node">The node.</param>
@@ -110,6 +92,28 @@ public sealed class NodeTree
         for (var row = node; row is not null; row = byName.TryGetValue(row.Base, out var above) ? above : null)
             chain.Insert(0, row);
         return chain;
+    }
+
+    /// <summary>The node's slots in source order, worked out.</summary>
+    private ImmutableArray<LaidOutSlot> Laid(NodeRow node)
+    {
+        var pieces = new List<(NodeRow Declarer, NodeSlot Slot)>();
+        foreach (var row in Ancestry(node))
+            pieces.AddRange(row.Pieces.Select(piece => (row, piece)));
+
+        if (!node.Layout.IsEmpty)
+        {
+            if (!node.Layout.OrderBy(name => name, StringComparer.Ordinal).SequenceEqual(
+                    pieces.Select(piece => piece.Slot.Name).OrderBy(name => name, StringComparer.Ordinal),
+                    StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"{node.Name}'s layout must name each of its slots exactly once");
+            }
+            pieces = [.. node.Layout.Select(name => pieces.First(piece => piece.Slot.Name == name))];
+        }
+
+        return [.. pieces.Select((piece, index) => new LaidOutSlot(piece.Declarer, piece.Slot, index))];
     }
 
     /// <summary>

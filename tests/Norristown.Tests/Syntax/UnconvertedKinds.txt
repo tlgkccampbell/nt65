@@ -3,17 +3,14 @@
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
 ArgumentList
 DataDirective
-DataValues
 ExportDirective
 ImportDirective
-ListItems
 MacroParameterList
 ModuleDirective
 NameExpression
 NextDirective
 ParameterKind
 ParameterList
-RecordValues
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration
@@ -21,4 +18,3 @@ SegmentRegion
 StateItem
 StateList
 UseDirective
-ValueList

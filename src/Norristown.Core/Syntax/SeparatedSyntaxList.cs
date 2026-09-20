@@ -15,7 +15,7 @@ namespace Norristown.Syntax;
 /// </para>
 /// </summary>
 /// <typeparam name="T">What the items are.</typeparam>
-public readonly struct SeparatedSyntaxList<T> : IEnumerable<T> where T : SyntaxNode
+public readonly struct SeparatedSyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
 {
     private readonly SyntaxNode? list;
 

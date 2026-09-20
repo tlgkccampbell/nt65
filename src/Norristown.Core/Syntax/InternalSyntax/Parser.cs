@@ -137,7 +137,7 @@ internal sealed class Parser
             case BlockKind.Charmap:
                 return ParseCharmapEntry();
             case BlockKind.List:
-                return Finish(SyntaxKind.ListItems, ParseListItems());
+                return Finish(new ListItemsSyntax(ParseSeparatedList(ParseExpression)));
             case BlockKind.RecordInitializer:
                 return ParseMemberValueLine();
             case BlockKind.DataBody:
@@ -163,12 +163,6 @@ internal sealed class Parser
     }
 
     /// <summary>The statement, with whatever is left on the line kept aside for the line to hold.</summary>
-    private GreenNode Finish(SyntaxKind kind, ImmutableArray<GreenNode> children)
-    {
-        SkipRest();
-        return new GreenSyntax(kind, children);
-    }
-
     private GreenNode Finish(GreenNode statement)
     {
         SkipRest();
@@ -373,7 +367,7 @@ internal sealed class Parser
         if (!record && SyntaxFacts.ElementSize(directive.Text) is null)
         {
             if (!AtEnd)
-                ParseCommaSeparated(children, ParseExpression);
+                children.AddRange(ParseCommaSeparated(ParseExpression));
             return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
         }
 
@@ -410,7 +404,7 @@ internal sealed class Parser
                     ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
                     : "a record's values go in braces: `.type T { member = value }`");
             }
-            ParseCommaSeparated(children, ParseExpression);
+            children.AddRange(ParseCommaSeparated(ParseExpression));
         }
         return new GreenSyntax(SyntaxKind.DataDirective, children.ToImmutable());
     }
@@ -473,9 +467,7 @@ internal sealed class Parser
             return ErrorLine($"a data body holds values, and `{Current.Text}` is a directive: "
                 + "what the values are is the declaration's to say");
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        ParseCommaSeparated(children, ParseDataValue);
-        return Finish(SyntaxKind.DataValues, children.ToImmutable());
+        return Finish(new DataValuesSyntax(ParseSeparatedList(ParseDataValue)));
     }
 
     /// <summary>A value: an expression, or a braced record or list.</summary>
@@ -492,15 +484,14 @@ internal sealed class Parser
             || (index + 2 < tokens.Length
                 && tokens[index + 1].Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
                 && tokens[index + 2].Kind == SyntaxKind.Equals);
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseBrace && !AtEnd)
-            ParseCommaSeparated(children, record ? ParseMemberValue : ParseDataValue);
-        if (Kind == SyntaxKind.CloseBrace)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `}`");
-        return new GreenSyntax(record ? SyntaxKind.RecordValues : SyntaxKind.ValueList, children.ToImmutable());
+        var openBrace = Advance();
+        var items = Kind != SyntaxKind.CloseBrace && !AtEnd
+            ? ParseSeparatedList(record ? ParseMemberValue : ParseDataValue)
+            : null;
+        var closeBrace = Expect(SyntaxKind.CloseBrace, "expected `}`");
+        return record
+            ? new RecordValuesSyntax(openBrace, items, closeBrace)
+            : new ValueListSyntax(openBrace, items, closeBrace);
     }
 
     /// <summary>
@@ -580,14 +571,6 @@ internal sealed class Parser
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 
-    /// <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
-    private ImmutableArray<GreenNode> ParseListItems()
-    {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        ParseCommaSeparated(children, ParseExpression);
-        return children.ToImmutable();
-    }
-
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
     private GreenNode ParseFunc()
     {
@@ -648,13 +631,13 @@ internal sealed class Parser
         children.Add(Advance());
         if (Kind != SyntaxKind.CloseParen && !AtEnd)
         {
-            ParseCommaSeparated(children, () =>
+            children.AddRange(ParseCommaSeparated(() =>
             {
                 if (AtName)
                     return Advance();
                 Report("expected a parameter name");
                 return null;
-            });
+            }));
         }
         if (Kind == SyntaxKind.CloseParen)
             children.Add(Advance());
@@ -685,7 +668,7 @@ internal sealed class Parser
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         if (Kind != SyntaxKind.CloseParen && !AtEnd)
-            ParseCommaSeparated(children, ParseMacroParameter);
+            children.AddRange(ParseCommaSeparated(ParseMacroParameter));
         if (Kind == SyntaxKind.CloseParen)
             children.Add(Advance());
         else
@@ -753,13 +736,13 @@ internal sealed class Parser
         {
             // The words a `one` accepts are never looked up, so a register or a mnemonic
             // among them is a word like any other.
-            ParseCommaSeparated(children, () =>
+            children.AddRange(ParseCommaSeparated(() =>
             {
                 if (AtName)
                     return Advance();
                 Report("expected a word");
                 return null;
-            });
+            }));
         }
         else
         {
@@ -794,7 +777,7 @@ internal sealed class Parser
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         if (Kind != SyntaxKind.CloseParen && !AtEnd)
-            ParseCommaSeparated(children, ParseArgument);
+            children.AddRange(ParseCommaSeparated(ParseArgument));
         if (Kind == SyntaxKind.CloseParen)
             children.Add(Advance());
         else
@@ -1061,7 +1044,7 @@ internal sealed class Parser
         }
         children.Add(Advance());
         if (Kind != SyntaxKind.CloseBracket)
-            ParseCommaSeparated(children, ParseBankRange);
+            children.AddRange(ParseCommaSeparated(ParseBankRange));
         if (Kind == SyntaxKind.CloseBracket)
             children.Add(Advance());
         else
@@ -1144,7 +1127,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.Question)
             children.Add(Advance());
         else
-            ParseCommaSeparated(children, () => ParseTarget("expected a label flow continues at, or `?`"));
+            children.AddRange(ParseCommaSeparated(() => ParseTarget("expected a label flow continues at, or `?`")));
         return new GreenSyntax(SyntaxKind.NextDirective, children.ToImmutable());
     }
 
@@ -1224,7 +1207,7 @@ internal sealed class Parser
 
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(export);
-        ParseCommaSeparated(children, ParseExportItem);
+        children.AddRange(ParseCommaSeparated(ParseExportItem));
         return new GreenSyntax(SyntaxKind.ExportDirective, children.ToImmutable());
     }
 
@@ -1315,7 +1298,7 @@ internal sealed class Parser
                 return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
             }
             children.Add(Advance());
-            ParseCommaSeparated(children, ParseUseItem);
+            children.AddRange(ParseCommaSeparated(ParseUseItem));
             if (Kind == SyntaxKind.CloseBrace)
                 children.Add(Advance());
             else
@@ -1379,7 +1362,7 @@ internal sealed class Parser
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
-        ParseCommaSeparated(children, ParseImportItem);
+        children.AddRange(ParseCommaSeparated(ParseImportItem));
         return new GreenSyntax(SyntaxKind.ImportDirective, children.ToImmutable());
     }
 
@@ -1472,7 +1455,7 @@ internal sealed class Parser
     private GreenNode ParseStateList()
     {
         var children = ImmutableArray.CreateBuilder<GreenNode>();
-        ParseCommaSeparated(children, ParseStateItem);
+        children.AddRange(ParseCommaSeparated(ParseStateItem));
         return new GreenSyntax(SyntaxKind.StateList, children.ToImmutable());
     }
 
@@ -1569,21 +1552,36 @@ internal sealed class Parser
         text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 
     /// <summary>
-    /// One or more items separated by commas, with the commas kept. A parse that yields
-    /// nothing stops the list, so an unreadable item cannot loop.
+    /// One or more items separated by commas, as the one list that holds them; null for a list
+    /// with no items, which is what a slot with nothing in it reads as.
     /// </summary>
-    private void ParseCommaSeparated(ImmutableArray<GreenNode>.Builder children, Func<GreenNode?> parseItem)
+    private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem) =>
+        ParseCommaSeparated(parseItem) is { Length: > 0 } pieces ? new GreenSeparatedList(pieces) : null;
+
+    /// <summary>
+    /// The items of a comma-separated list and the commas between them, in source order. A
+    /// separated list alternates an item and the comma after it, so a comma is taken only after
+    /// an item already in the list, and the first item that cannot be read ends the list: the
+    /// comma before it is the list's last piece and the rest of the line is the line's to hold.
+    /// Where an item is an expression there is always one to take — the parser leaves the empty
+    /// expression where it could read none — so <c>1, , 2</c> keeps all three, and a list whose
+    /// items are written some other way stops at the gap instead. Either way nothing is invented
+    /// to stand between two commas.
+    /// </summary>
+    private ImmutableArray<GreenNode> ParseCommaSeparated(Func<GreenNode?> parseItem)
     {
+        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
         if (parseItem() is not { } first)
-            return;
-        children.Add(first);
+            return pieces.ToImmutable();
+        pieces.Add(first);
         while (Kind == SyntaxKind.Comma)
         {
-            children.Add(Advance());
+            pieces.Add(Advance());
             if (parseItem() is not { } next)
-                return;
-            children.Add(next);
+                break;
+            pieces.Add(next);
         }
+        return pieces.ToImmutable();
     }
 
     private InstructionStatementSyntax ParseInstruction()
@@ -1792,7 +1790,7 @@ internal sealed class Parser
         var children = ImmutableArray.CreateBuilder<GreenNode>();
         children.Add(Advance());
         if (Kind is not SyntaxKind.CloseParen && !AtEnd)
-            ParseCommaSeparated(children, ParseExpression);
+            children.AddRange(ParseCommaSeparated(ParseExpression));
         if (Kind == SyntaxKind.CloseParen)
             children.Add(Advance());
         else

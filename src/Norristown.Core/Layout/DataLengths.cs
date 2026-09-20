@@ -356,8 +356,8 @@ public static class DataLengths
             return;
         }
         var items = list.Values;
-        if (member.Count is { } count && items.Length != count)
-            Report(given, model, diagnostics, on, $"`{member.Name}` holds {count} {Elements(count)}, and this list gives {items.Length}");
+        if (member.Count is { } count && items.Count != count)
+            Report(given, model, diagnostics, on, $"`{member.Name}` holds {count} {Elements(count)}, and this list gives {items.Count}");
         foreach (var item in items)
         {
             if (member.Type is { IsLayout: true } inner)

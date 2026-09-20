@@ -652,16 +652,15 @@
     </TypeComment>
   </AbstractNode>
 
-  <Node Name="DataValuesSyntax" Base="StatementSyntax">
+  <Node Name="DataValuesSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="DataValues"/>
     <TypeComment>
       <summary>One line of a data body: values separated by commas, one element each.</summary>
     </TypeComment>
-    <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;" Today="ImmutableArray&lt;SyntaxNode&gt;">
+    <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
         <summary>The values: expressions and braced lists or records.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes]]></Read>
     </Field>
   </Node>
 
@@ -1362,16 +1361,15 @@
     </TypeComment>
   </Node>
 
-  <Node Name="ListItemsSyntax" Base="StatementSyntax">
+  <Node Name="ListItemsSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ListItems"/>
     <TypeComment>
       <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
     </TypeComment>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExpressionSyntax&gt;" Today="ImmutableArray&lt;ExpressionSyntax&gt;">
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExpressionSyntax&gt;">
       <PropertyComment>
         <summary>The items.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 
@@ -1933,7 +1931,7 @@
     </Field>
   </Node>
 
-  <Node Name="RecordValuesSyntax" Base="SyntaxNode">
+  <Node Name="RecordValuesSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="RecordValues"/>
     <TypeComment>
       <summary><c>{ member = value, … }</c>: a record's values.</summary>
@@ -1943,20 +1941,17 @@
         <summary>The <c>{</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Members" Type="SeparatedSyntaxList&lt;MemberValueSyntax&gt;" Today="ImmutableArray&lt;MemberValueSyntax&gt;">
+    <Field Name="Members" Type="SeparatedSyntaxList&lt;MemberValueSyntax&gt;">
       <PropertyComment>
         <summary>The members given a value.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
-    <Field Name="CloseBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>, or null.</summary>
+        <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBrace)]]></Read>
     </Field>
   </Node>
 
@@ -2594,7 +2589,7 @@
     </Field>
   </Node>
 
-  <Node Name="ValueListSyntax" Base="SyntaxNode">
+  <Node Name="ValueListSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ValueList"/>
     <TypeComment>
       <summary><c>{ value, … }</c>: a list of elements.</summary>
@@ -2604,20 +2599,17 @@
         <summary>The <c>{</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;" Today="ImmutableArray&lt;SyntaxNode&gt;">
+    <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
         <summary>The values: expressions and braced lists or records.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes]]></Read>
     </Field>
-    <Field Name="CloseBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>, or null.</summary>
+        <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBrace)]]></Read>
     </Field>
   </Node>
 </Tree>

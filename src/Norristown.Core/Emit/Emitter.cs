@@ -1215,15 +1215,15 @@ public sealed class Emitter
             // An array member takes a braced list, and one no value names is zeros.
             if (element is { Count: not null })
             {
-                var items = given is ValueListSyntax list ? list.Values : [];
+                IReadOnlyList<SyntaxNode> items = given is ValueListSyntax list ? list.Values : [];
                 if (member.Type is { IsLayout: true } records)
                 {
                     for (var i = 0; i < member.Count; i++)
-                        bytes += Fields(line, records, ValuesIn(i < items.Length ? items[i] : null), $"{named}[{i}]");
+                        bytes += Fields(line, records, ValuesIn(i < items.Count ? items[i] : null), $"{named}[{i}]");
                     continue;
                 }
                 var (width, bigEndian) = Slot(element);
-                Field(line, items.Length == 0
+                Field(line, items.Count == 0
                     ? $".res {size}"
                     : $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
                     named, size);

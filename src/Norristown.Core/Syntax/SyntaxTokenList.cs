@@ -11,7 +11,7 @@ namespace Norristown.Syntax;
 /// A default list is the empty one, which is what a slot with nothing in it reads as.
 /// </para>
 /// </summary>
-public readonly struct SyntaxTokenList : IEnumerable<SyntaxToken>
+public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
 {
     private readonly SyntaxNode? list;
 

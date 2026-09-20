@@ -109,7 +109,8 @@ public sealed class ShapeTests
         {
             if (green.GetSlot(index) is not { } held)
             {
-                if (slot.IsRequired)
+                // A list is never absent: a slot with nothing in it is the list with no items.
+                if (slot.IsRequired && slot.List == ListShape.None)
                     Fail($"{row.Name}.{slot.Name} is required and its slot is empty");
                 continue;
             }

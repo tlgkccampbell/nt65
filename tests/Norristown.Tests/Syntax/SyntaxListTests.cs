@@ -85,13 +85,10 @@ public sealed class SyntaxListTests
     [Fact]
     public void AnEmptyListHasNoItems()
     {
-        Assert.Equal(0, default(SyntaxList<SyntaxNode>).Count);
         Assert.Empty(default(SyntaxList<SyntaxNode>));
-        Assert.Equal(0, default(SyntaxTokenList).Count);
         Assert.Empty(default(SyntaxTokenList));
 
         var separated = default(SeparatedSyntaxList<SyntaxNode>);
-        Assert.Equal(0, separated.Count);
         Assert.Equal(0, separated.SeparatorCount);
         Assert.Empty(separated);
         Assert.Empty(separated.GetSeparators());
@@ -103,9 +100,9 @@ public sealed class SyntaxListTests
     {
         var tokens = HandBuilt.Tokens("()");
         var parent = HandBuilt.Node("()", SyntaxKind.ArgumentList, tokens[0], new GreenList([]), tokens[1]);
-        Assert.Equal(0, HandBuilt.List<SyntaxNode>(parent, 1).Count);
-        Assert.Equal(0, HandBuilt.SeparatedList<SyntaxNode>(parent, 1).Count);
-        Assert.Equal(0, HandBuilt.TokenList(parent, 1).Count);
+        Assert.Empty(HandBuilt.List<SyntaxNode>(parent, 1));
+        Assert.Empty(HandBuilt.SeparatedList<SyntaxNode>(parent, 1));
+        Assert.Empty(HandBuilt.TokenList(parent, 1));
 
         // The empty list sits where its items would have been written, and takes up nothing.
         Assert.Equal(new TextSpan(1, 0), parent.SlotRed(1)!.Span);

@@ -72,7 +72,7 @@ public sealed class TypedGreenNodeTests
         Assert.Equal([proc.Signature], proc.ChildNodes);
         var items = proc.Signature!.Entry.Items;
         Assert.Equal(["a8"], items.Select(item => item.GetText()));
-        Assert.Equal(1, HandBuilt.SeparatedList<StateItemSyntax>(proc.Signature!.Entry, 0).Count);
+        Assert.Single(HandBuilt.SeparatedList<StateItemSyntax>(proc.Signature!.Entry, 0));
         Assert.Same(proc.Signature!.Entry, items[0].Parent);
     }
 
@@ -138,7 +138,7 @@ public sealed class TypedGreenNodeTests
             HandBuilt.Over(".export", new Green.ExportDirectiveSyntax(tokens[0], null)));
 
         Assert.Empty(export.Items);
-        Assert.Equal(0, HandBuilt.SeparatedList<ExportItemSyntax>(export, 1).Count);
+        Assert.Empty(HandBuilt.SeparatedList<ExportItemSyntax>(export, 1));
         Assert.Equal([SyntaxKind.Directive], export.ChildNodesAndTokens().Select(child => child.Kind));
         Assert.Equal(".export", export.ToFullString());
     }
