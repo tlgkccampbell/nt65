@@ -97,17 +97,24 @@ public sealed class LexerTests
     }
 
     /// <summary>
-    /// The cache's tables are per-thread, so what this test sees is decided by its own two
-    /// calls and not by whatever else the suite is lexing beside it.
+    /// The cache's tables are per-thread, so what this test sees is decided by its own calls and
+    /// not by whatever else the suite is lexing beside it. They are also small and direct-mapped,
+    /// and where two tokens of one line want the same slot neither of them is shared — a property
+    /// of the table rather than of the sharing, and one that moves with the run, since the hash a
+    /// slot comes from is seeded afresh per process. So the sharing is asked of several lines and
+    /// wanted of one: a lexer that shares nothing fails every one of them.
     /// </summary>
     [Fact]
     public void CommonTokensAreShared()
     {
-        var first = Lexer.LexLine("    lda #1\n");
-        var second = Lexer.LexLine("    lda #1\n");
-        Assert.NotSame(first, second);
-        for (var i = 0; i < first.Tokens.Length; i++)
-            Assert.Same(first.Tokens[i], second.Tokens[i]);
+        string[] lines = ["    lda #1\n", "    sta $20,x\n", "    ldy #0\n", "  rts\n", "\tinx\n"];
+        Assert.Contains(lines, text =>
+        {
+            var first = Lexer.LexLine(text);
+            var second = Lexer.LexLine(text);
+            return !ReferenceEquals(first, second)
+                && first.Tokens.Select((token, i) => ReferenceEquals(token, second.Tokens[i])).All(same => same);
+        });
 
         // Comments are not shared, and neither is anything with an error.
         Assert.NotSame(Lexer.LexLine("rts ; x").Tokens[0], Lexer.LexLine("rts ; x").Tokens[0]);
