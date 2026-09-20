@@ -1666,33 +1666,37 @@ internal sealed class Parser
     /// parentheses turn out to be an ordinary expression: <c>lda (a + b) * 2</c> is not
     /// indirect. Only a whole operand in parentheses is, which is how ca65 reads it too.
     /// </summary>
-    private GreenNode? TryParseIndirect()
+    private OperandSyntax? TryParseIndirect()
     {
         var start = index;
         var errorCount = errors.Count;
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
+        var openParen = Advance();
+        var address = ParseExpression();
 
-        var kind = SyntaxKind.IndirectOperand;
+        (GreenToken Comma, GreenToken Register)? inner = null;
         if (Kind == SyntaxKind.Comma && (IsRegister(1, "x") || IsRegister(1, "s")))
-        {
-            kind = SyntaxKind.IndexedIndirectOperand;
-            children.Add(Advance());
-            children.Add(Advance());
-        }
+            inner = (Advance(), Advance());
         if (Kind == SyntaxKind.CloseParen)
         {
-            children.Add(Advance());
+            var closeParen = Advance();
+            GreenToken? comma = null, register = null;
             if (Kind == SyntaxKind.Comma && IsRegister(1, "y"))
             {
-                children.Add(Advance());
-                children.Add(Advance());
+                comma = Advance();
+                register = Advance();
             }
             if (AtOperandEnd)
-                return new GreenSyntax(kind, children.ToImmutable());
+            {
+                return inner is (var innerComma, var innerRegister)
+                    ? new IndexedIndirectOperandSyntax(
+                        openParen, address, innerComma, innerRegister, closeParen, comma, register)
+                    : new IndirectOperandSyntax(openParen, address, closeParen, comma, register);
+            }
         }
 
+        // An attempt that comes to nothing leaves nothing: the tokens it read are read again as
+        // an ordinary expression, and the nodes it built go with the errors reported over them,
+        // so no missing token it stood in for outlives it.
         index = start;
         errors.RemoveRange(errorCount, errors.Count - errorCount);
         return null;

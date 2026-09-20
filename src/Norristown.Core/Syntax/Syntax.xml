@@ -1275,7 +1275,7 @@
     </Field>
   </Node>
 
-  <Node Name="IndexedIndirectOperandSyntax" Base="OperandSyntax">
+  <Node Name="IndexedIndirectOperandSyntax" Base="OperandSyntax" Converted="true">
     <Kind Name="IndexedIndirectOperand"/>
     <TypeComment>
       <summary><c>(expr,x)</c> or <c>(expr,s),y</c>.</summary>
@@ -1285,13 +1285,11 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The address of the pointer.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken">
       <PropertyComment>
@@ -1304,14 +1302,12 @@
         <summary>The <c>x</c> or <c>s</c> inside the parentheses.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
-      <Read><![CDATA[ChildTokens[2]]]></Read>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[ChildTokens[3]]]></Read>
     </Field>
     <Field Name="OuterCommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -1324,11 +1320,10 @@
         <summary>The <c>y</c> after the parentheses, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
-      <Read><![CDATA[TokenAt(5)]]></Read>
     </Field>
   </Node>
 
-  <Node Name="IndirectOperandSyntax" Base="OperandSyntax">
+  <Node Name="IndirectOperandSyntax" Base="OperandSyntax" Converted="true">
     <Kind Name="IndirectOperand"/>
     <TypeComment>
       <summary><c>(expr)</c> or <c>(expr),y</c>.</summary>
@@ -1338,20 +1333,17 @@
         <summary>The <c>(</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The address of the pointer.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>)</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -1364,7 +1356,6 @@
         <summary>The <c>y</c> after the parentheses, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Register)]]></Read>
     </Field>
   </Node>
 

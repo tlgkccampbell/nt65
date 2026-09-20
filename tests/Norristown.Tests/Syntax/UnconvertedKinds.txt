@@ -32,8 +32,6 @@ IfDirective
 ImportDirective
 ImportItem
 ImportSignature
-IndexedIndirectOperand
-IndirectOperand
 InstructionStatement
 ListDeclaration
 ListItems
