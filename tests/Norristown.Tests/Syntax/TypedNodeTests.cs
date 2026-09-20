@@ -18,7 +18,7 @@ public sealed class TypedNodeTests
         {
             var text = Repo.ReadText(path);
             var problems = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var variant in Variants(text))
+            foreach (var variant in BrokenLines.Variants(text))
                 problems.UnionWith(Problems(SyntaxTree.Parse(Repo.Named(path), variant)));
             return problems.Take(5);
         });
@@ -66,32 +66,6 @@ public sealed class TypedNodeTests
         Assert.Equal(["a", "b"], use.Path.Select(name => name.Text));
         Assert.Equal("as", use.AsKeyword?.Text);
         Assert.Null(use.Alias);
-    }
-
-    private static IEnumerable<string> Variants(string text)
-    {
-        yield return text;
-        var lines = text.Split('\n');
-        for (var keep = 1; keep <= 5; keep++)
-            yield return string.Join('\n', lines.Select(line => Cut(line, keep)));
-        yield return string.Join('\n', lines.Select(line => Cut(line, -1)));
-        yield return string.Join('\n', lines.Select(line => Cut(line, -2)));
-    }
-
-    /// <summary>
-    /// The line's first <paramref name="keep"/> tokens, or all but its last −<paramref name="keep"/>.
-    /// A line that opens or closes a block keeps its brace, so the blocks stay what they were
-    /// and the lines inside them are still read in the grammar of their body.
-    /// </summary>
-    private static string Cut(string line, int keep)
-    {
-        var tokens = SyntaxTree.Parse("cut", line.TrimEnd('\r')).Root.DescendantNodes()
-            .OfType<LineSyntax>().First().ChildTokens.Where(token => token.Kind != SyntaxKind.EndOfLine).ToList();
-        if (tokens.Count == 0)
-            return line;
-        var count = keep > 0 ? Math.Min(keep, tokens.Count) : Math.Max(tokens.Count + keep, 1);
-        var cut = line[..tokens[count - 1].Span.End];
-        return count < tokens.Count && tokens[^1].Kind == SyntaxKind.OpenBrace ? cut + " {" : cut;
     }
 
     private static IEnumerable<SyntaxNode> Nodes(SyntaxTree tree) => tree.Root.DescendantNodes().Prepend(tree.Root);
