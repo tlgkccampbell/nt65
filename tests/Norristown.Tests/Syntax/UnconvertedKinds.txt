@@ -35,7 +35,6 @@ ImportSignature
 InstructionStatement
 ListDeclaration
 ListItems
-LongIndirectOperand
 MacroCall
 MacroDeclaration
 MacroParameter

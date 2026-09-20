@@ -976,6 +976,18 @@ internal sealed class Parser
         return GreenToken.Missing(kind);
     }
 
+    /// <summary>
+    /// The missing token of <paramref name="kind"/>, standing where one belongs that the source
+    /// does not have, with <paramref name="message"/> reported there whether or not the line has
+    /// been reported on already: what <see cref="Expect"/> does where the second piece missing on
+    /// a line is news of its own.
+    /// </summary>
+    private GreenToken Missing(SyntaxKind kind, string message)
+    {
+        Report(message);
+        return GreenToken.Missing(kind);
+    }
+
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
 
@@ -1702,21 +1714,16 @@ internal sealed class Parser
         return null;
     }
 
-    private GreenNode ParseLongIndirect()
+    private LongIndirectOperandSyntax ParseLongIndirect()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.CloseBracket)
-            children.Add(Advance());
-        else
-            Report("expected `]`");
-        if (Kind == SyntaxKind.Comma && IsRegister(1, "y"))
-        {
-            children.Add(Advance());
-            children.Add(Advance());
-        }
-        return new GreenSyntax(SyntaxKind.LongIndirectOperand, children.ToImmutable());
+        var openBracket = Advance();
+        var address = ParseExpression();
+        var closeBracket = Kind == SyntaxKind.CloseBracket
+            ? Advance()
+            : Missing(SyntaxKind.CloseBracket, "expected `]`");
+        return Kind == SyntaxKind.Comma && IsRegister(1, "y")
+            ? new LongIndirectOperandSyntax(openBracket, address, closeBracket, Advance(), Advance())
+            : new LongIndirectOperandSyntax(openBracket, address, closeBracket, null, null);
     }
 
     private AbsoluteOperandSyntax ParseAddressOperand()
