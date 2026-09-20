@@ -4,6 +4,13 @@ namespace Norristown.Tests.Syntax;
 
 public sealed class IncrementalTests
 {
+    /// <summary>
+    /// How many of the replay's edits are made before what they gave is checked. The edits are a
+    /// chain and are made one at a time, but what is asked of an edit is about that edit alone, so
+    /// a batch of them is checked at once and the batch is what bounds the trees held while it is.
+    /// </summary>
+    private const int Batch = 64;
+
     private static readonly string Corpus = string.Concat(DesignCorpus.Blocks.Select(b => b.Text));
 
     [Fact]
@@ -95,6 +102,12 @@ public sealed class IncrementalTests
     /// <summary>
     /// Replays random edits, including ones that join, split and half-delete line breaks,
     /// and after each compares the incremental tree with a full parse of the same text.
+    /// <para>
+    /// Making an edit costs almost nothing and comparing what it gave with a full parse costs
+    /// nearly all of the replay, so the edits are made a batch at a time and the batch's steps are
+    /// compared beside each other. The step reported is still the earliest one that has anything
+    /// wrong with it, which is the one the replay would have stopped at.
+    /// </para>
     /// </summary>
     [Fact]
     public void RandomEditsMatchAFullParse()
@@ -102,6 +115,7 @@ public sealed class IncrementalTests
         string[] inserts = ["", " ", "\n", "\r\n", "\r", "{", "}", "m!({", ".proc p {", "lda #1", "; c", "'", "\"", "$", "@"];
         var random = new Random(6502);
         var tree = SyntaxTree.Parse("main.nt65", Corpus.Replace("\n.proc", "\r\n.proc"));
+        var batch = new List<Step>();
 
         for (var step = 0; step < 400; step++)
         {
@@ -112,22 +126,51 @@ public sealed class IncrementalTests
                 : inserts[random.Next(inserts.Length)];
             var change = new TextChange(start, length, insert);
             var edited = tree.WithChange(change);
-
-            var expected = SyntaxTree.Parse("main.nt65", edited.Text);
-            if (SyntaxDump.Full(expected) != SyntaxDump.Full(edited))
-                Assert.Fail($"step {step}: {change} gives a different tree than a full parse");
-
-            // Lines clear of the change keep their nodes.
-            var shift = edited.Lines.Length - tree.Lines.Length;
-            for (var i = 0; i < tree.Lines.Length; i++)
-            {
-                var end = i + 1 < tree.Lines.Length ? tree.LineStarts[i + 1] : tree.Text.Length;
-                if (end < change.Start)
-                    Assert.Same(tree.Lines[i], edited.Lines[i]);
-                else if (tree.LineStarts[i] > change.Start + change.Length)
-                    Assert.Same(tree.Lines[i], edited.Lines[i + shift]);
-            }
+            batch.Add(new Step(step, change, tree, edited));
             tree = edited;
+
+            if (batch.Count < Batch)
+                continue;
+            Compare(batch);
+            batch.Clear();
+        }
+        Compare(batch);
+    }
+
+    /// <summary>Checks a batch's steps beside each other and fails on the earliest bad one.</summary>
+    private static void Compare(List<Step> batch)
+    {
+        var failures = Repo.CollectFailures(batch, step => Problems(step).Take(1));
+        if (failures.Count > 0)
+            Assert.Fail(failures[0]);
+    }
+
+    /// <summary>What is wrong with one step of the replay, if anything.</summary>
+    private static IEnumerable<string> Problems(Step step)
+    {
+        var (index, change, before, after) = step;
+        var expected = SyntaxTree.Parse("main.nt65", after.Text);
+        if (SyntaxDump.Full(expected) != SyntaxDump.Full(after))
+            yield return $"step {index}: {change} gives a different tree than a full parse";
+
+        // Lines clear of the change keep their nodes.
+        var shift = after.Lines.Length - before.Lines.Length;
+        for (var i = 0; i < before.Lines.Length; i++)
+        {
+            var end = i + 1 < before.Lines.Length ? before.LineStarts[i + 1] : before.Text.Length;
+            if (end < change.Start)
+            {
+                if (!ReferenceEquals(before.Lines[i], after.Lines[i]))
+                    yield return $"step {index}: {change} parsed line {i + 1} again, and it is before the edit";
+            }
+            else if (before.LineStarts[i] > change.Start + change.Length)
+            {
+                if (!ReferenceEquals(before.Lines[i], after.Lines[i + shift]))
+                    yield return $"step {index}: {change} parsed line {i + 1} again, and it is after the edit";
+            }
         }
     }
+
+    /// <summary>One edit of the replay: the tree it was made on, and the tree it gave.</summary>
+    private readonly record struct Step(int Index, TextChange Change, SyntaxTree Before, SyntaxTree After);
 }
