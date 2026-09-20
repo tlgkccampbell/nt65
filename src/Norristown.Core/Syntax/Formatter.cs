@@ -1,5 +1,4 @@
 using System.Text;
-using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -27,7 +26,7 @@ public static class Formatter
     /// <summary>The text of <paramref name="tree"/>, formatted.</summary>
     public static string Format(SyntaxTree tree)
     {
-        var changes = Changes(tree, 0, tree.Lines.Length - 1);
+        var changes = Changes(tree, 0, tree.LineCount - 1);
         if (changes.Count == 0)
             return tree.Text;
 
@@ -52,10 +51,10 @@ public static class Formatter
     {
         var formatted = Formatted(tree);
         var changes = new List<TextChange>();
-        for (var i = Math.Max(first, 0); i <= Math.Min(last, tree.Lines.Length - 1); i++)
+        for (var i = Math.Max(first, 0); i <= Math.Min(last, tree.LineCount - 1); i++)
         {
             var start = tree.LineStarts[i];
-            var length = Width(tree.Lines[i]);
+            var length = Width(tree.GetLine(i));
             if (!tree.Text.AsSpan(start, length).SequenceEqual(formatted[i]))
                 changes.Add(new TextChange(start, length, formatted[i]));
         }
@@ -65,19 +64,19 @@ public static class Formatter
     /// <summary>Every line of <paramref name="tree"/> as the formatter writes it, without its break.</summary>
     private static string[] Formatted(SyntaxTree tree)
     {
-        var depths = new int[tree.Lines.Length];
+        var depths = new int[tree.LineCount];
         var at = 0;
-        Walk(tree.Green, 0, depths, ref at);
+        Walk(tree.Root, 0, depths, ref at);
 
         // A line is its indent, the name it declares, and the rest. Only a named data line has
         // a name of its own here: every other line is one piece, written where it goes.
-        var indents = new int[tree.Lines.Length];
-        var names = new string?[tree.Lines.Length];
-        var rest = new string[tree.Lines.Length];
-        var comments = new bool[tree.Lines.Length];
-        for (var i = 0; i < tree.Lines.Length; i++)
+        var indents = new int[tree.LineCount];
+        var names = new string?[tree.LineCount];
+        var rest = new string[tree.LineCount];
+        var comments = new bool[tree.LineCount];
+        for (var i = 0; i < tree.LineCount; i++)
         {
-            var line = tree.Lines[i];
+            var line = tree.GetLine(i);
             var content = tree.Text.AsSpan(tree.LineStarts[i], Width(line)).TrimEnd(Blank);
             if (content.TrimStart(Blank).IsEmpty)
             {
@@ -95,8 +94,8 @@ public static class Formatter
                 comments[i] = line.LineKind == LineKind.Blank;
                 continue;
             }
-            names[i] = content[line.TextOffset(0)..(line.TextOffset(colon) + 1)].ToString();
-            rest[i] = content[line.TextOffset(colon + 1)..].ToString();
+            names[i] = content[TextOffset(line, 0)..(TextOffset(line, colon) + 1)].ToString();
+            rest[i] = content[TextOffset(line, colon + 1)..].ToString();
         }
         return Assembled(indents, names, rest, comments);
     }
@@ -138,16 +137,17 @@ public static class Formatter
     }
 
     /// <summary>How many blocks hold each line; the file's own lines are held by none.</summary>
-    private static void Walk(GreenNode node, int depth, int[] depths, ref int line)
+    private static void Walk(SyntaxNode node, int depth, int[] depths, ref int line)
     {
         // A region opens a block with no brace, holding the rest of its segment, so it is the
         // one block whose contents stay where the line that opened it is.
-        var block = node as GreenBlock;
+        var block = node as BlockSyntax;
         var inner = block is null || block.BlockKind == BlockKind.Region ? depth : depth + 1;
-        for (var i = 0; i < node.SlotCount; i++)
+        var members = node.ChildNodes;
+        for (var i = 0; i < members.Length; i++)
         {
-            var own = block is not null && (i == 0 || (block.HasCloser && i == node.SlotCount - 1)) ? depth : inner;
-            if (node.GetSlot(i) is GreenBlock child)
+            var own = block is not null && (i == 0 || (block.HasCloser && i == members.Length - 1)) ? depth : inner;
+            if (members[i] is BlockSyntax child)
                 Walk(child, own, depths, ref line);
             else
                 depths[line++] = own;
@@ -155,10 +155,13 @@ public static class Formatter
     }
 
     /// <summary>The width of a line's text, without the break that ends it.</summary>
-    private static int Width(GreenLine line) => line.FullWidth - line.Tokens[^1].Text.Length;
+    private static int Width(LineSyntax line) => line.FullSpan.Length - line.EndOfLineToken.Text.Length;
+
+    /// <summary>Offset of token <paramref name="index"/>'s text from the start of its line.</summary>
+    private static int TextOffset(LineSyntax line, int index) => line.Tokens[index].Span.Start - line.Position;
 
     /// <summary>Whether the line declares a cheap local, which sits at its routine's margin.</summary>
-    private static bool IsCheapLocal(GreenLine line) =>
+    private static bool IsCheapLocal(LineSyntax line) =>
         line.LineKind == LineKind.Label && line.Tokens[0].Kind == SyntaxKind.CheapLocal;
 
     /// <summary>
@@ -168,7 +171,7 @@ public static class Formatter
     /// of those with <c>.export</c> in front. A <c>:</c> anywhere else is an address-size prefix
     /// or the start of a signature, and what follows one of those is no directive.
     /// </summary>
-    private static int NamedData(GreenLine line)
+    private static int NamedData(LineSyntax line)
     {
         if (line.LineKind is not (LineKind.Label or LineKind.Directive))
             return -1;
@@ -183,7 +186,7 @@ public static class Formatter
         // through `::`, so a name here is whatever a line kind reads as one.
         return tokens[name].Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
                 or SyntaxKind.Register or SyntaxKind.Mnemonic
-            && colon + 1 < tokens.Length
+            && colon + 1 < tokens.Count
             && tokens[colon].Kind == SyntaxKind.Colon
             && tokens[colon + 1].Kind == SyntaxKind.Directive
                 ? colon
