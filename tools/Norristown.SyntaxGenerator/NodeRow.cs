@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 
-namespace Norristown.Tests.Syntax.Generation;
+namespace Norristown.SyntaxGenerator;
 
 /// <summary>One node of the table: the class to write, what it derives from, and its properties.</summary>
 /// <param name="Name">The class's name.</param>
@@ -12,7 +12,7 @@ namespace Norristown.Tests.Syntax.Generation;
 /// <param name="IsHandWritten">Whether the class is written by hand and only its <c>Accept</c> generated.</param>
 /// <param name="IsPartial">Whether a hand-written half holds members the table cannot say.</param>
 /// <param name="Slots">The class's properties, in the order they are written.</param>
-internal sealed record NodeRow(
+public sealed record NodeRow(
     string Name,
     string Base,
     ImmutableArray<string> Kinds,

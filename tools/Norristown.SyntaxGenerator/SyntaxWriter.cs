@@ -1,14 +1,14 @@
 using System.Collections.Immutable;
 using System.Text;
 
-namespace Norristown.Tests.Syntax.Generation;
+namespace Norristown.SyntaxGenerator;
 
 /// <summary>
 /// Writes the C# the node table describes: a class per node, the switch from kind to class, and
-/// the visitors. It builds strings, which is enough for a table this size, and every file it
-/// makes is checked in and compared against by <see cref="GeneratedSyntaxTests"/>.
+/// the visitors. It builds strings, which is enough for a table this size, and what it makes is
+/// checked in, so the tests can ask for it in memory and compare.
 /// </summary>
-internal static class SyntaxGenerator
+public static class SyntaxWriter
 {
     /// <summary>The folders every generated file goes in, relative to the repository.</summary>
     public static readonly ImmutableArray<string> Folders =
@@ -23,6 +23,7 @@ internal static class SyntaxGenerator
 
     /// <summary>Every file the table makes, by its path relative to the repository.</summary>
     /// <param name="nodes">The table.</param>
+    /// <returns>The text of each file, keyed by its path with <c>/</c> separators.</returns>
     public static SortedDictionary<string, string> Files(ImmutableArray<NodeRow> nodes)
     {
         var files = new SortedDictionary<string, string>(StringComparer.Ordinal);

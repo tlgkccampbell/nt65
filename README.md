@@ -65,7 +65,10 @@ fixture output, and `-Benchmark` measures what an edit costs in the language ser
 
 The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.nodes`, a table with
 a block per kind of node. Change the table, run `scripts/generate-syntax.ps1`, and commit what it
-writes under the `Generated` folders; a test fails when the two disagree.
+writes under the `Generated` folders; a test fails when the two disagree, and
+`scripts/generate-syntax.ps1 -Check` says the same thing without writing. The generator is
+`tools/Norristown.SyntaxGenerator`, which references nothing, so it runs whatever state the code
+it writes is in: change the table, regenerate, then fix what the compiler points at.
 
 ## The corpus programs
 

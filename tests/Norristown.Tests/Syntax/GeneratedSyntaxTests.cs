@@ -2,38 +2,20 @@ using System.Collections.Immutable;
 using System.Reflection;
 using System.Text;
 using Norristown.Syntax;
-using Norristown.Tests.Syntax.Generation;
+using Norristown.SyntaxGenerator;
 
 namespace Norristown.Tests.Syntax;
 
 public sealed class GeneratedSyntaxTests
 {
     /// <summary>
-    /// What the node table makes is what is checked in. NT65_SYNTAX_UPDATE
-    /// (<c>scripts/generate-syntax.ps1</c>) writes the files instead of comparing them, which is
-    /// how they are made in the first place.
+    /// What the node table makes is what is checked in. The generator writes the files; this only
+    /// ever reads them, and asks the same code for the same text in memory.
     /// </summary>
     [Fact]
     public void GeneratedFilesMatchTheTable()
     {
-        var files = SyntaxGenerator.Files(Table());
-        var updating = Environment.GetEnvironmentVariable("NT65_SYNTAX_UPDATE") is { Length: > 0 };
-        if (updating)
-        {
-            foreach (var folder in SyntaxGenerator.Folders)
-            {
-                Directory.CreateDirectory(Repo.Path(folder.Split('/')));
-                foreach (var stale in Directory.GetFiles(Repo.Path(folder.Split('/')), "*.cs"))
-                {
-                    if (!files.ContainsKey(Repo.Named(stale)))
-                        File.Delete(stale);
-                }
-            }
-            foreach (var (path, text) in files)
-                File.WriteAllText(Repo.Path(path.Split('/')), text, new UTF8Encoding(false));
-            return;
-        }
-
+        var files = SyntaxWriter.Files(Table());
         var problems = new List<string>();
         foreach (var (path, text) in files)
         {
@@ -43,7 +25,7 @@ public sealed class GeneratedSyntaxTests
             else if (!File.ReadAllBytes(full).AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(text)))
                 problems.Add($"{path} is not what the table makes");
         }
-        foreach (var folder in SyntaxGenerator.Folders)
+        foreach (var folder in SyntaxWriter.Folders)
         {
             var full = Repo.Path(folder.Split('/'));
             problems.AddRange(Directory.Exists(full)

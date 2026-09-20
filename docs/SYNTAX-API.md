@@ -328,12 +328,16 @@ Done so far: steps 1, 2, 3 and 4. What they decided, where it differs from the t
   (`abstract`, `internal`, `handwritten`, `partial`); a `slot` says a name, the property's type
   — whose trailing `?` is the whole of what optional means while nothing is invented — its
   summary, and how it is read. A property that is not a piece of the node is a `member`. Two
-  people adding kinds touch two blocks. The generator is part of the test project
-  (`tests/Norristown.Tests/Syntax/Generation/`), so the gate and the edit loop build nothing
-  extra; `pwsh scripts/generate-syntax.ps1` runs the one test that writes the files instead of
-  comparing them, and `GeneratedSyntaxTests` fails when what is checked in is stale, when a kind
-  has no row, or when a walk misses a node. Generated files sit in a `Generated` folder beside
-  the hand-written ones they belong with.
+  people adding kinds touch two blocks. Generated files sit in a `Generated` folder beside the
+  hand-written ones they belong with.
+- **The generator is `tools/Norristown.SyntaxGenerator`, and references nothing**, because the
+  order of work from step 5 on is: change the table, regenerate, fix what the compiler then
+  points at. A generator that needed `Norristown.Core` to build could not be run in the state
+  its own output had just left the tree in. `pwsh scripts/generate-syntax.ps1` writes the files
+  and deletes the ones the table no longer describes; `-Check` compares instead and fails. The
+  test project references the tool, so `GeneratedSyntaxTests` asks the same code for the same
+  text in memory and never writes anything; it fails when what is checked in is stale, when a
+  kind has no row, or when a walk misses a node.
 - **The accessors ride along as they are.** A slot's `read` is today's search expression,
   verbatim; `nodes` and `cache` are the two shapes that need a field, and the field is named
   after the property. Step 5 adds what it needs per slot — the kinds a token may be, a list type

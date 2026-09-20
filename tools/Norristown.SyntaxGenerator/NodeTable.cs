@@ -1,13 +1,13 @@
 using System.Collections.Immutable;
 
-namespace Norristown.Tests.Syntax.Generation;
+namespace Norristown.SyntaxGenerator;
 
 /// <summary>
 /// The node table, read from <c>src/Norristown.Core/Syntax/Syntax.nodes</c>. The format is a
 /// block per node, a line per key, and nesting by indentation; the table's own header says what
 /// the keys mean.
 /// </summary>
-internal static class NodeTable
+public static class NodeTable
 {
     /// <summary>Where the table is, relative to the repository.</summary>
     public const string File = "src/Norristown.Core/Syntax/Syntax.nodes";

@@ -7,4 +7,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Norristown.Tests/Norristown.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Norristown.SyntaxGenerator/Norristown.SyntaxGenerator.csproj" />
+  </Folder>
 </Solution>
