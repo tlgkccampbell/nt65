@@ -1959,10 +1959,10 @@ internal sealed class Parser
     {
         while (node is BinaryExpressionSyntax binary)
             node = binary.GetSlot(BinaryRight)!;
-        return node is UnaryExpressionSyntax unary
-            && (GreenToken)unary.GetSlot(UnaryOperator)! is { } op && SyntaxFacts.IsByteOperator(op.Kind)
-            ? op
-            : null;
+        if (node is not UnaryExpressionSyntax unary)
+            return null;
+        var op = (GreenToken)unary.GetSlot(UnaryOperator)!;
+        return SyntaxFacts.IsByteOperator(op.Kind) ? op : null;
     }
 
     /// <summary>
