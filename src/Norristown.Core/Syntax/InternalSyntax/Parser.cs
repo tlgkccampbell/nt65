@@ -953,13 +953,8 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseError()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.StringLiteral)
-            children.Add(Advance());
-        else
-            Report("expected the message, in quotes");
-        return new GreenSyntax(SyntaxKind.ErrorDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, "expected the message, in quotes"));
     }
 
     /// <summary>
@@ -998,13 +993,11 @@ internal sealed class Parser
 
     private GreenNode ParseCpuDirective()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
         if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier && SyntaxFacts.IsCpuName(Current.Text))
-            children.Add(Advance());
-        else
-            Report($"expected {Project.CpuNames.Listed}");
-        return new GreenSyntax(SyntaxKind.CpuDirective, children.ToImmutable());
+            return new CpuDirectiveSyntax(keyword, Advance());
+        Report($"expected {Project.CpuNames.Listed}");
+        return new CpuDirectiveSyntax(keyword, GreenToken.Missing(SyntaxKind.CpuName));
     }
 
     /// <summary>

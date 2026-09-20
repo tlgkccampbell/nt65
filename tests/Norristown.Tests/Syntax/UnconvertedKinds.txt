@@ -7,7 +7,6 @@ CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
 ConstantDeclaration
-CpuDirective
 DataDeclaration
 DataDirective
 DataValues
@@ -15,7 +14,6 @@ ElementCount
 EmptyBlock
 EnumDeclaration
 EnumMember
-ErrorDirective
 ErrorLine
 ExportDirective
 ExportItem

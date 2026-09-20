@@ -520,7 +520,7 @@
     </Field>
   </Node>
 
-  <Node Name="CpuDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="CpuDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="CpuDirective"/>
     <TypeComment>
       <summary><c>.cpu name</c>.</summary>
@@ -530,16 +530,14 @@
         <summary>The <c>.cpu</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Cpu" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Cpu" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The CPU's name, or null.</summary>
+        <summary>The CPU's name.</summary>
       </PropertyComment>
       <Kind Name="CpuName"/>
       <Kind Name="NumberLiteral"/>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(1)]]></Read>
     </Field>
   </Node>
 
@@ -847,7 +845,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="ErrorDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ErrorDirective"/>
     <TypeComment>
       <summary><c>.error "message"</c> or <c>.warning "message"</c>.</summary>
@@ -857,14 +855,12 @@
         <summary>The <c>.error</c> or <c>.warning</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Message" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Message" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The quoted message, or null.</summary>
+        <summary>The quoted message.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.StringLiteral)]]></Read>
     </Field>
   </Node>
 

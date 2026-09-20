@@ -35,6 +35,8 @@ public static class Constructs
     public static string? SegmentOf(StatementSyntax opener) =>
         opener is SegmentStatementSyntax { Name: { } name } ? SegmentNames.Of(name) : null;
 
+    // A message the line does not write is no message: an `.assert` leaves the slot empty, and
+    // an `.error` holds the missing token that stands where the quotes belong.
     private static string? MessageOf(SyntaxToken? message) =>
-        message is { } written ? Literals.Text(written.Text) : null;
+        message is { IsMissing: false } written ? Literals.Text(written.Text) : null;
 }

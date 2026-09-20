@@ -51,8 +51,8 @@ public static class ProgramCpu
     {
         foreach (var directive in tree.Root.DescendantNodes().OfType<CpuDirectiveSyntax>())
         {
-            if (directive.Cpu is { } name && CpuNames.Parse(name.Text) is { } cpu)
-                yield return (cpu, name.Span);
+            if (CpuNames.Parse(directive.Cpu.Text) is { } cpu)
+                yield return (cpu, directive.Cpu.Span);
         }
     }
 }
