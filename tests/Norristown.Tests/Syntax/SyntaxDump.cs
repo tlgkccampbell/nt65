@@ -134,20 +134,9 @@ internal static class SyntaxDump
         return builder.ToString();
     }
 
-    /// <summary>A node's child nodes and tokens rendered in source order, which is the order of their positions.</summary>
-    private static IEnumerable<string> Children(SyntaxNode node, Func<SyntaxNode, string> ofNode, Func<SyntaxToken, string> ofToken)
-    {
-        var tokens = node.ChildTokens;
-        var next = 0;
-        foreach (var child in node.ChildNodes)
-        {
-            while (next < tokens.Length && tokens[next].Position < child.Position)
-                yield return ofToken(tokens[next++]);
-            yield return ofNode(child);
-        }
-        while (next < tokens.Length)
-            yield return ofToken(tokens[next++]);
-    }
+    /// <summary>A node's child nodes and tokens rendered in source order.</summary>
+    private static IEnumerable<string> Children(SyntaxNode node, Func<SyntaxNode, string> ofNode, Func<SyntaxToken, string> ofToken) =>
+        node.ChildNodesAndTokens().Select(child => child.AsNode() is { } inner ? ofNode(inner) : ofToken(child.AsToken()));
 
     private static string Escape(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
 }

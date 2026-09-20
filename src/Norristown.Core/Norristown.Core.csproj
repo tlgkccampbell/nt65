@@ -2,4 +2,7 @@
   <PropertyGroup>
     <RootNamespace>Norristown</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Norristown.Tests" />
+  </ItemGroup>
 </Project>

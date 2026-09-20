@@ -237,16 +237,13 @@ internal static class TextMateGrammar
         var tokens = new List<SyntaxToken>();
         void Walk(SyntaxNode node)
         {
-            var own = node.ChildTokens;
-            var next = 0;
-            foreach (var child in node.ChildNodes)
+            foreach (var child in node.ChildNodesAndTokens())
             {
-                while (next < own.Length && own[next].Position < child.Position)
-                    tokens.Add(own[next++]);
-                Walk(child);
+                if (child.AsNode() is { } inner)
+                    Walk(inner);
+                else
+                    tokens.Add(child.AsToken());
             }
-            while (next < own.Length)
-                tokens.Add(own[next++]);
         }
         var statement = line.Statement;
         Walk(statement.IsExported ? statement.Parent! : statement);

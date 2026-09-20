@@ -96,6 +96,9 @@ public abstract class SyntaxNode
         }
     }
 
+    /// <summary>This node's children, nodes and tokens together, in source order.</summary>
+    public ChildSyntaxList ChildNodesAndTokens() => new(this);
+
     /// <summary>Every node below this one, parents before children.</summary>
     public IEnumerable<SyntaxNode> DescendantNodes()
     {
@@ -213,6 +216,9 @@ public abstract class SyntaxNode
     {
         if (node is GreenToken token)
         {
+            // A missing token is nowhere in the text, so it neither starts nor ends the range.
+            if (token.IsMissing)
+                return;
             var text = position + token.LeadingWidth;
             if (start < 0)
                 start = text;

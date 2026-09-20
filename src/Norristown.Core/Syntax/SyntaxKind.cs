@@ -162,6 +162,12 @@ public enum SyntaxKind : byte
     /// <summary>A whole file: the lines and blocks at its top level.</summary>
     File,
 
+    /// <summary>A list-valued child of a node: its items, under one slot of that node.</summary>
+    List,
+
+    /// <summary>A list whose items are written with a separator between them, nearly always a comma.</summary>
+    SeparatedList,
+
     // Statements. One line parses to exactly one of these, whose last child is the line's
     // end-of-line token, so a statement's text is its whole line.
 

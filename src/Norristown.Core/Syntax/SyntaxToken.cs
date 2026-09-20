@@ -14,11 +14,23 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
     /// <summary>The token's text, exactly as in the source.</summary>
     public string Text => Green.Text;
 
+    /// <summary>
+    /// Whether the token stands where one belongs that the source does not have. Its text is
+    /// empty and its span is the empty span where it would have been written.
+    /// </summary>
+    public bool IsMissing => Green.IsMissing;
+
     /// <summary>The token's range, without trivia.</summary>
     public TextSpan Span => new(Position + Green.LeadingWidth, Green.Text.Length);
 
     /// <summary>The token's range including its trivia.</summary>
     public TextSpan FullSpan => new(Position, Green.FullWidth);
+
+    /// <summary>The whitespace before the token; only the first token on a line has any.</summary>
+    public SyntaxTriviaList LeadingTrivia => new(this, Green.LeadingTrivia, Position);
+
+    /// <summary>The whitespace and comment after the token, up to the end of its line.</summary>
+    public SyntaxTriviaList TrailingTrivia => new(this, Green.TrailingTrivia, Span.End);
 
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;
