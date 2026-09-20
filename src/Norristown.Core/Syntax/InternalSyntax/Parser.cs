@@ -1485,15 +1485,16 @@ internal sealed class Parser
     /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
     private GreenNode ParseSignature()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseStateList());
+        var colon = Advance();
+        var entry = ParseStateList();
+        GreenToken? arrow = null;
+        GreenNode? exit = null;
         if (Kind == SyntaxKind.Arrow)
         {
-            children.Add(Advance());
-            children.Add(ParseStateList());
+            arrow = Advance();
+            exit = ParseStateList();
         }
-        return new GreenSyntax(SyntaxKind.ProcSignature, children.ToImmutable());
+        return new ProcSignatureSyntax(colon, entry, arrow, exit);
     }
 
     private GreenNode ParseStateList()

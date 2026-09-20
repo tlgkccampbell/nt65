@@ -71,7 +71,6 @@ ParameterList
 ParenthesizedExpression
 PatchDirective
 ProcDeclaration
-ProcSignature
 RecordValues
 RepeatDirective
 ScopeDeclaration

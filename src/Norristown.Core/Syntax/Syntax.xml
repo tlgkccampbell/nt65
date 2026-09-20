@@ -2065,7 +2065,7 @@
     </Field>
   </Node>
 
-  <Node Name="ProcSignatureSyntax" Base="SyntaxNode">
+  <Node Name="ProcSignatureSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ProcSignature"/>
     <TypeComment>
       <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
@@ -2075,26 +2075,22 @@
         <summary>The <c>:</c>.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Entry" Type="StateListSyntax">
       <PropertyComment>
         <summary>The state on entry.</summary>
       </PropertyComment>
-      <Read><![CDATA[(StateListSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="ArrowToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>-&gt;</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Arrow"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Arrow)]]></Read>
     </Field>
     <Field Name="Exit" Type="StateListSyntax" Optional="true">
       <PropertyComment>
         <summary>The state on exit, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes.Length > 1 ? (StateListSyntax)ChildNodes[1] : null]]></Read>
     </Field>
   </Node>
 
