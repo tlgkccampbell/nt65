@@ -1804,11 +1804,11 @@ internal sealed class Parser
                 or SyntaxKind.Register or SyntaxKind.Mnemonic:
                 var name = ParseName(indexed: true);
                 return Kind == SyntaxKind.OpenParen
-                    ? new GreenSyntax(SyntaxKind.CallExpression, [name, ParseArgumentList()])
+                    ? new CallExpressionSyntax(name, null, ParseArgumentList())
                     : name;
             default:
                 Report("expected an expression");
-                return new GreenSyntax(SyntaxKind.ErrorExpression, []);
+                return new ErrorExpressionSyntax(null);
         }
     }
 
@@ -1824,13 +1824,13 @@ internal sealed class Parser
         if (!SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
             Report($"`{Current.Text}` is not a function");
-            return new GreenSyntax(SyntaxKind.ErrorExpression, [Advance()]);
+            return new ErrorExpressionSyntax(Advance());
         }
         var name = Advance();
         if (Kind == SyntaxKind.OpenParen)
-            return new GreenSyntax(SyntaxKind.CallExpression, [name, ParseArgumentList()]);
+            return new CallExpressionSyntax(null, name, ParseArgumentList());
         Report($"expected `(` after `{name.Text}`");
-        return new GreenSyntax(SyntaxKind.ErrorExpression, [name]);
+        return new ErrorExpressionSyntax(name);
     }
 
     private GreenNode ParseArgumentList()

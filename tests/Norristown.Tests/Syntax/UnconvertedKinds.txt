@@ -12,7 +12,6 @@ BlockCloseLine
 BlockContinuation
 BlockSplice
 BracedOperand
-CallExpression
 CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
@@ -31,7 +30,6 @@ EnsureDirective
 EnumDeclaration
 EnumMember
 ErrorDirective
-ErrorExpression
 ErrorLine
 ExportDirective
 ExportItem

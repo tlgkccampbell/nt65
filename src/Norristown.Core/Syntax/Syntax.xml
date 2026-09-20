@@ -377,7 +377,7 @@
     </Field>
   </Node>
 
-  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <Kind Name="CallExpression"/>
     <TypeComment>
       <summary><c>name(args)</c> or <c>.function(args)</c>.</summary>
@@ -386,20 +386,17 @@
       <PropertyComment>
         <summary>The <c>.func</c> called, or null for a built-in function.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes[0] as NameExpressionSyntax]]></Read>
     </Field>
     <Field Name="Function" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The built-in function called, or null for a <c>.func</c>.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[TokenAt(0) is { Kind: SyntaxKind.Directive } function ? function : null]]></Read>
     </Field>
     <Field Name="Arguments" Type="ArgumentListSyntax">
       <PropertyComment>
         <summary>The arguments.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ArgumentListSyntax>()!]]></Read>
     </Field>
   </Node>
 
@@ -901,7 +898,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorExpressionSyntax" Base="ExpressionSyntax" Missing="true">
+  <Node Name="ErrorExpressionSyntax" Base="ExpressionSyntax" Missing="true" Converted="true">
     <Kind Name="ErrorExpression"/>
     <TypeComment>
       <summary>Where an expression was expected and none could be read.</summary>
@@ -911,7 +908,6 @@
         <summary>The directive that was read as far as it went, or null.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[TokenAt(0)]]></Read>
     </Field>
   </Node>
 
