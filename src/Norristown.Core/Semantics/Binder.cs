@@ -762,7 +762,7 @@ internal sealed class Binder
     /// </summary>
     private Scope OpenData(StatementSyntax opener, BlockSyntax block)
     {
-        if (opener is not DataDeclarationSyntax { Name: { } name })
+        if (opener is not DataDeclarationSyntax { Name: { IsMissing: false } name })
             return new Scope(ScopeKind.Data, null, scope, null);
         var symbol = Declare(name, SymbolKind.Data);
         var body = new Scope(ScopeKind.Data, symbol?.Name ?? name.Text, scope, symbol);
@@ -1373,9 +1373,9 @@ internal sealed class Binder
         {
             AddFamily(each, statement, scope, SymbolKind.Data, null, element, element.Type);
         }
-        else if (statement.Name is { } name && element is not null)
+        else if (element is not null)
         {
-            Declare(name, SymbolKind.Data, data: element, type: element.Type);
+            Declare(statement.Name, SymbolKind.Data, data: element, type: element.Type);
         }
         CollectUses(element);
         CollectRecords(element);

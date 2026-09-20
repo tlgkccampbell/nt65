@@ -2,30 +2,20 @@
 # kind's line in the same change that fixes its slots; ShapeTests reads the list strictly both
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
 ArgumentList
-CharmapDeclaration
-CharmapEntry
-ConfigDeclaration
-ConstantDeclaration
-DataDeclaration
 DataDirective
 DataValues
-ElementCount
 EmptyBlock
-EnumDeclaration
-EnumMember
 ErrorLine
 ExportDirective
 ExternProcDeclaration
 FrameDirective
 FuncDeclaration
 ImportDirective
-ListDeclaration
 ListItems
 MacroCall
 MacroDeclaration
 MacroParameter
 MacroParameterList
-MemberValue
 ModuleDirective
 MultiProcDeclaration
 NameExpression
@@ -46,7 +36,5 @@ SignatureDeclaration
 SkippedTokens
 StateItem
 StateList
-StructDeclaration
-UnionDeclaration
 UseDirective
 ValueList

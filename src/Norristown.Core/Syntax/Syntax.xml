@@ -384,14 +384,14 @@
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="CharmapDeclaration"/>
     <TypeComment>
       <summary><c>.charmap name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="CharmapEntrySyntax" Base="StatementSyntax">
+  <Node Name="CharmapEntrySyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="CharmapEntry"/>
     <TypeComment>
       <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
@@ -400,33 +400,28 @@
       <PropertyComment>
         <summary>The character, or the first of the range.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>..</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.DotDot)]]></Read>
     </Field>
     <Field Name="Last" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The last character of the range, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[DotDotToken is null ? null : (ExpressionSyntax)ChildNodes[1]]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The value the first character maps to.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[DotDotToken is null ? 1 : 2]]]></Read>
     </Field>
   </Node>
 
@@ -453,7 +448,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ConfigDeclaration"/>
     <TypeComment>
       <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
@@ -463,31 +458,27 @@
         <summary>The <c>.config</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The setting's name, or null.</summary>
+        <summary>The setting's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
-    <Field Name="Value" Type="ExpressionSyntax" Today="ExpressionSyntax?">
+    <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The setting's value, or null.</summary>
+        <summary>The setting's value.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 
-  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ConstantDeclaration"/>
     <TypeComment>
       <summary><c>name = expr</c>.</summary>
@@ -500,20 +491,17 @@
       <Kind Name="CheapLocal"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The constant's value.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
   </Node>
 
@@ -571,7 +559,7 @@
     </Field>
   </Node>
 
-  <Node Name="DataDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="DataDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="DataDeclaration"/>
     <TypeComment>
       <summary><c>.data name: element</c>, or <c>.data name {</c> for mixed data.</summary>
@@ -581,36 +569,31 @@
         <summary>The <c>.data</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The declared name, or null.</summary>
+        <summary>The declared name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>:</c> before what the data is, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
     <Field Name="Directive" Type="DataDirectiveSyntax" Optional="true">
       <PropertyComment>
         <summary>What the data is, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<DataDirectiveSyntax>()]]></Read>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
@@ -689,7 +672,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="ElementCountSyntax" Base="SyntaxNode">
+  <Node Name="ElementCountSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ElementCount"/>
     <TypeComment>
       <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
@@ -699,20 +682,17 @@
         <summary>The <c>[</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Count" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The count, or null for <c>[]</c>.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
-    <Field Name="CloseBracketToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>, or null.</summary>
+        <summary>The <c>]</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBracket)]]></Read>
     </Field>
   </Node>
 
@@ -806,14 +786,14 @@
     </TypeComment>
   </Node>
 
-  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="EnumDeclaration"/>
     <TypeComment>
       <summary><c>.enum name {</c>.</summary>
     </TypeComment>
   </Node>
 
-  <Node Name="EnumMemberSyntax" Base="StatementSyntax">
+  <Node Name="EnumMemberSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="EnumMember"/>
     <TypeComment>
       <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
@@ -825,20 +805,17 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>=</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The value the member is given, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 
@@ -1394,7 +1371,7 @@
     <Kind Name="Line"/>
   </Node>
 
-  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="ListDeclaration"/>
     <TypeComment>
       <summary><c>.list name {</c>.</summary>
@@ -1610,7 +1587,7 @@
     </Field>
   </Node>
 
-  <Node Name="MemberValueSyntax" Base="StatementSyntax">
+  <Node Name="MemberValueSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="MemberValue"/>
     <TypeComment>
       <summary><c>member = value</c>, in a braced record or on a line of its own in a multi-line initializer.</summary>
@@ -1622,20 +1599,17 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
         <summary>The value: an expression, or a braced list or record.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes[0]]]></Read>
     </Field>
   </Node>
 
@@ -2509,7 +2483,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="StructDeclaration"/>
     <TypeComment>
       <summary><c>.struct name {</c>.</summary>
@@ -2521,7 +2495,7 @@
     <Kind Name="SeparatedList"/>
   </Node>
 
-  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax">
+  <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <TypeComment>
       <summary>The line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or <c>.list</c>.</summary>
     </TypeComment>
@@ -2530,7 +2504,6 @@
         <summary>The <c>.enum</c>, <c>.struct</c> or the like that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2539,14 +2512,12 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </AbstractNode>
 
@@ -2574,7 +2545,7 @@
     </Field>
   </Node>
 
-  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax">
+  <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax" Converted="true">
     <Kind Name="UnionDeclaration"/>
     <TypeComment>
       <summary><c>.union name {</c>.</summary>

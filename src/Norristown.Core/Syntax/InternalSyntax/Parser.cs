@@ -276,7 +276,7 @@ internal sealed class Parser
     {
         var name = Advance();
         var equals = Advance();
-        return Finish(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()]);
+        return Finish(new ConstantDeclarationSyntax(name, equals, ParseExpression()));
     }
 
     private GreenNode ParseDirectiveLine()
@@ -424,15 +424,9 @@ internal sealed class Parser
     /// <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
     private GreenNode ParseElementCount()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseBracket && !AtEnd)
-            children.Add(ParseExpression());
-        if (Kind == SyntaxKind.CloseBracket)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `]`");
-        return new GreenSyntax(SyntaxKind.ElementCount, children.ToImmutable());
+        var bracket = Advance();
+        var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
+        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, "expected `]`"));
     }
 
     /// <summary>
@@ -442,25 +436,20 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseDataDeclaration()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-        {
-            children.Add(Advance());
-        }
-        else
-        {
-            Report(Kind == SyntaxKind.OpenBrace
-                ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
-                : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
-        }
+        var keyword = Advance();
+        var name = ExpectName(Kind == SyntaxKind.OpenBrace
+            ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
+            : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
 
+        GreenToken? colon = null;
+        GreenNode? element = null;
+        GreenToken? brace = null;
         if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
+            colon = Advance();
             if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
             {
-                children.Add(ParseDataDirective());
+                element = ParseDataDirective();
             }
             else
             {
@@ -473,13 +462,13 @@ internal sealed class Parser
         }
         else if (Kind == SyntaxKind.OpenBrace)
         {
-            children.Add(Advance());
+            brace = Advance();
         }
         else
         {
             ReportOnce("expected `:` and what the data is, or `{` for mixed data");
         }
-        return new GreenSyntax(SyntaxKind.DataDeclaration, children.ToImmutable());
+        return new DataDeclarationSyntax(keyword, name, colon, element, brace);
     }
 
     /// <summary>One line of a data body: values separated by commas, one element each.</summary>
@@ -531,14 +520,9 @@ internal sealed class Parser
             Report("expected a member name");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
-            Report("expected `=`");
-        children.Add(ParseDataValue());
-        return new GreenSyntax(SyntaxKind.MemberValue, children.ToImmutable());
+        var name = Advance();
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
+        return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
     /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>
@@ -555,17 +539,24 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseTypeBlock(SyntaxKind kind, bool named)
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
+        GreenToken? name = null;
         if (AtName)
-            children.Add(Advance());
+            name = Advance();
         else if (named)
             Report("expected a name");
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            Report("expected `{`");
-        return new GreenSyntax(kind, children.ToImmutable());
+
+        // The name and the brace are separate news, so a line missing both is told about both.
+        var brace = Kind == SyntaxKind.OpenBrace ? Advance() : Missing(SyntaxKind.OpenBrace, "expected `{`");
+        return kind switch
+        {
+            SyntaxKind.EnumDeclaration => new EnumDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.StructDeclaration => new StructDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.UnionDeclaration => new UnionDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.CharmapDeclaration => new CharmapDeclarationSyntax(keyword, name, brace),
+            SyntaxKind.ListDeclaration => new ListDeclarationSyntax(keyword, name, brace),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
     }
 
     /// <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
@@ -573,32 +564,26 @@ internal sealed class Parser
     {
         if (!AtName)
             return ErrorLine("expected a member name, or `name = expr`");
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind == SyntaxKind.Equals)
-        {
-            children.Add(Advance());
-            children.Add(ParseExpression());
-        }
-        return Finish(SyntaxKind.EnumMember, children.ToImmutable());
+        var name = Advance();
+        if (Kind != SyntaxKind.Equals)
+            return Finish(new EnumMemberSyntax(name, null, null));
+        var equals = Advance();
+        return Finish(new EnumMemberSyntax(name, equals, ParseExpression()));
     }
 
     /// <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
     private GreenNode ParseCharmapEntry()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(ParseExpression());
+        var first = ParseExpression();
+        GreenToken? dotDot = null;
+        GreenNode? last = null;
         if (Kind == SyntaxKind.DotDot)
         {
-            children.Add(Advance());
-            children.Add(ParseExpression());
+            dotDot = Advance();
+            last = ParseExpression();
         }
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
-            Report("expected `=`");
-        children.Add(ParseExpression());
-        return Finish(SyntaxKind.CharmapEntry, children.ToImmutable());
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
+        return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 
     /// <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
@@ -654,22 +639,25 @@ internal sealed class Parser
     /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
     private GreenNode ParseConfig()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
         if (Kind != SyntaxKind.Identifier)
         {
             Report("expected the setting's name: `.config NAME = value`");
-            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+            return Unwritten(GreenToken.Missing(SyntaxKind.Identifier));
         }
-        children.Add(Advance());
+        var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
             Report("expected `=` and the setting's value: `.config NAME = value`");
-            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+            return Unwritten(name);
         }
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+        return new ConfigDeclarationSyntax(keyword, name, Advance(), ParseExpression());
+
+        // A line that stops short has a place for the `=` and the value all the same, and what
+        // has been said about the piece it stopped at is news enough for one line.
+        GreenNode Unwritten(GreenToken setting) =>
+            new ConfigDeclarationSyntax(keyword, setting, GreenToken.Missing(SyntaxKind.Equals),
+                new ErrorExpressionSyntax(null));
     }
 
     private GreenNode ParseParameterList()
@@ -982,6 +970,19 @@ internal sealed class Parser
         return GreenToken.Missing(kind);
     }
 
+    /// <summary>
+    /// The name written here, or the missing identifier that stands where one belongs, with
+    /// <paramref name="message"/> reported there. A name may be spelled as an identifier, a
+    /// register or a mnemonic, which is why it is not one kind for <see cref="Expect"/>.
+    /// </summary>
+    private GreenToken ExpectName(string message)
+    {
+        if (AtName)
+            return Advance();
+        ReportOnce(message);
+        return GreenToken.Missing(SyntaxKind.Identifier);
+    }
+
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
 
@@ -1275,7 +1276,7 @@ internal sealed class Parser
             exportKeyword = export;
             var name = Advance();
             var equals = Advance();
-            return new GreenSyntax(SyntaxKind.ConstantDeclaration, [name, equals, ParseExpression()]);
+            return new ConstantDeclarationSyntax(name, equals, ParseExpression());
         }
 
         var children = ImmutableArray.CreateBuilder<GreenNode>();
