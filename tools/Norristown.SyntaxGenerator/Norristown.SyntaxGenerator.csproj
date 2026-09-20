@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <RootNamespace>Norristown.SyntaxGenerator</RootNamespace>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
-  <!-- No project references, deliberately: the generator has to run when the code it writes
-       does not compile, which is the state a change to the table leaves the tree in. -->
-</Project>

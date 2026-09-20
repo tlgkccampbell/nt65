@@ -3,11 +3,9 @@
     <Project Path="src/Norristown.Cli/Norristown.Cli.csproj" />
     <Project Path="src/Norristown.Core/Norristown.Core.csproj" />
     <Project Path="src/Norristown.LanguageServer/Norristown.LanguageServer.csproj" />
+    <Project Path="src/Norristown.SyntaxGenerator/Norristown.SyntaxGenerator.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Norristown.Tests/Norristown.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tools/">
-    <Project Path="tools/Norristown.SyntaxGenerator/Norristown.SyntaxGenerator.csproj" />
   </Folder>
 </Solution>

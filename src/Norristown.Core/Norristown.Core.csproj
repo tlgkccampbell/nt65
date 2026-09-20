@@ -1,8 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Norristown</RootNamespace>
+    <!-- The syntax classes are written by the generator on every build; keeping them on disk is
+         what lets anyone grep or read them. They are git-ignored, and excluded from Compile
+         below because the compiler already has them. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Norristown.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The node table, and the generator that turns it into the red and green classes, the
+         kind-to-class switch and the visitors. -->
+    <AdditionalFiles Include="Syntax\Syntax.xml" />
+    <ProjectReference Include="..\Norristown.SyntaxGenerator\Norristown.SyntaxGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Generated\**" />
   </ItemGroup>
 </Project>

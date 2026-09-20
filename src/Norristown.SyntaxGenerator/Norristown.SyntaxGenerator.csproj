@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- A Roslyn component runs inside the compiler, which is netstandard2.0. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Norristown.SyntaxGenerator</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- Release tracking is for an analyzer package with users to keep faith with; this one is
+         built beside the code it writes and has one diagnostic. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Pinned below the compiler the SDK ships, which is what has to load this. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

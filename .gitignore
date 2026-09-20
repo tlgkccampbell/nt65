@@ -2,6 +2,9 @@
 .vs/
 bin/
 obj/
+
+# The syntax classes the source generator writes from Syntax/Syntax.xml, kept on disk to be read.
+src/Norristown.Core/Generated/
 node_modules/
 
 # scripts/package.ps1: the packages, and the server it publishes into the extension.

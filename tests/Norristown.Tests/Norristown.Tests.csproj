@@ -9,6 +9,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.1" />
+    <!-- A generator driver, to run the syntax generator the way the compiler does. The version
+         is the one the generator itself is built against. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
@@ -17,8 +20,8 @@
     <ProjectReference Include="..\..\src\Norristown.Core\Norristown.Core.csproj" />
     <ProjectReference Include="..\..\src\Norristown.LanguageServer\Norristown.LanguageServer.csproj" />
     <ProjectReference Include="..\..\src\Norristown.Cli\Norristown.Cli.csproj" />
-    <!-- The syntax generator, so the test that says the generated code is not stale can ask it
-         for the files in memory. The tool itself references nothing. -->
-    <ProjectReference Include="..\..\tools\Norristown.SyntaxGenerator\Norristown.SyntaxGenerator.csproj" />
+    <!-- The syntax generator as an ordinary library, so the tests can read the node table, ask
+         for the files it makes in memory, and run it through a generator driver. -->
+    <ProjectReference Include="..\..\src\Norristown.SyntaxGenerator\Norristown.SyntaxGenerator.csproj" />
   </ItemGroup>
 </Project>

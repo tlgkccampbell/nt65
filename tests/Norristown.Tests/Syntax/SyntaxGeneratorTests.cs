@@ -113,7 +113,7 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("LidSyntax? lid)", Box(Converted(holder, "LidSyntax")));
 
         static string Box(string table) =>
-            Files(table)["src/Norristown.Core/Syntax/InternalSyntax/Generated/Nodes/BoxSyntax.cs"];
+            Files(table)["InternalSyntax/BoxSyntax.g.cs"];
     }
 
     /// <summary>A node says its slot order where its own slots come between the ones above it.</summary>
@@ -139,11 +139,11 @@ public sealed class SyntaxGeneratorTests
               </Field>
             </Node>
             """;
-        var shut = Files(family)["src/Norristown.Core/Syntax/Nodes/Generated/ShutLidSyntax.cs"];
+        var shut = Files(family)["Nodes/ShutLidSyntax.g.cs"];
         Assert.Contains("public SyntaxToken CloseBraceToken => Green is GreenSyntax ? ChildTokens[0] : SlotToken(0);", shut);
         Assert.Contains("public override SyntaxToken Keyword => Green is GreenSyntax ? ChildTokens[0] : SlotToken(1);", shut);
         Assert.Contains("public abstract SyntaxToken Keyword { get; }",
-            Files(family)["src/Norristown.Core/Syntax/Nodes/Generated/LidSyntax.cs"]);
+            Files(family)["Nodes/LidSyntax.g.cs"]);
     }
 
     /// <summary>A kind cannot convert without the class that writes the slots it inherits.</summary>
@@ -194,8 +194,8 @@ public sealed class SyntaxGeneratorTests
         table.Replace($"Name=\"{node}\"", $"Name=\"{node}\" Converted=\"true\"");
 
     private static string Red(string table) =>
-        Files(table)["src/Norristown.Core/Syntax/Nodes/Generated/WidgetSyntax.cs"];
+        Files(table)["Nodes/WidgetSyntax.g.cs"];
 
     private static string Green(string table) =>
-        Files(table)["src/Norristown.Core/Syntax/InternalSyntax/Generated/Nodes/WidgetSyntax.cs"];
+        Files(table)["InternalSyntax/WidgetSyntax.g.cs"];
 }
