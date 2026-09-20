@@ -20,6 +20,12 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
     /// </summary>
     public bool IsMissing => Green.IsMissing;
 
+    /// <summary>
+    /// Whether the token carries a diagnostic: a lexical error over its text, or, on a missing
+    /// token, what the line wanted where it stands.
+    /// </summary>
+    public bool ContainsDiagnostics => Green.ContainsDiagnostics;
+
     /// <summary>The token's range, without trivia.</summary>
     public TextSpan Span => new(Position + Green.LeadingWidth, Green.Text.Length);
 
@@ -48,6 +54,14 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
     /// the last of the line above, and null at the start of the file.
     /// </summary>
     public SyntaxToken? GetPreviousToken() => Step(-1);
+
+    /// <summary>The syntax diagnostics on this token, in source order.</summary>
+    public IReadOnlyList<Diagnostic> GetDiagnostics()
+    {
+        var result = new List<Diagnostic>();
+        Parent.Tree.Collect(Green, Position, result);
+        return result;
+    }
 
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;

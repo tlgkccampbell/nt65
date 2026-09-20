@@ -217,44 +217,65 @@ public sealed class SyntaxTree
     private static ReadOnlySpan<char> LineText(string text, ImmutableArray<int> starts, int line) =>
         text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
 
+    /// <summary>
+    /// The diagnostics <paramref name="green"/> and everything under it carry, as spans in the
+    /// file, where <paramref name="position"/> is where the node starts. Only a subtree that says
+    /// it holds one is walked at all.
+    /// </summary>
+    internal void Collect(GreenNode green, int position, List<Diagnostic> result)
+    {
+        if (!green.ContainsDiagnostics)
+            return;
+        foreach (var diagnostic in green.Diagnostics)
+        {
+            var span = GetSpan(new TextSpan(position + diagnostic.Offset, diagnostic.Width));
+            result.Add(new Diagnostic(span, Severity.Error, diagnostic.Message) { Fix = diagnostic.Fix });
+        }
+        for (var i = 0; i < green.SlotCount; i++)
+        {
+            if (green.GetSlot(i) is not { } slot)
+                continue;
+            Collect(slot, position, result);
+            position += slot.FullWidth;
+        }
+    }
+
     private List<Diagnostic> CollectDiagnostics(List<Blocks.Error> blockErrors)
     {
         var result = new List<Diagnostic>();
-        Diagnostic At(int line, int token, string message, DiagnosticFix? fix = null)
-        {
-            var green = Lines[line];
-            var tokens = green.Tokens;
-
-            // A diagnostic on the end-of-line token is about something the line does not
-            // have, so it belongs where that something would have been written: just past
-            // the last real token, ahead of the whitespace and comment that follow it. The
-            // line break itself is the wrong place — the caret would drift to the right as
-            // trailing spaces were typed, and sit past the end of a trailing comment.
-            if (tokens[token].Kind == SyntaxKind.EndOfLine && token > 0)
-            {
-                var caret = green.TextOffset(token - 1) + tokens[token - 1].Text.Length + 1;
-                return new Diagnostic(new Span(Path, line + 1, caret, caret), Severity.Error, message) { Fix = fix };
-            }
-
-            // Otherwise the token is the problem, and the diagnostic covers it. A line with
-            // no tokens at all leaves a caret where its text would start.
-            var column = green.TextOffset(token) + 1;
-            var width = tokens[token].Kind == SyntaxKind.EndOfLine ? 0 : tokens[token].Text.Length;
-            return new Diagnostic(new Span(Path, line + 1, column, column + width), Severity.Error, message) { Fix = fix };
-        }
-
         for (var i = 0; i < Lines.Length; i++)
         {
-            var tokens = Lines[i].Tokens;
-            for (var t = 0; t < tokens.Length; t++)
+            // A line's tokens are its statement's as well, so the line itself is not walked:
+            // the pieces it is written in hold every token of it exactly once between them, and
+            // the statement holds besides them the missing tokens and the nodes that carry what
+            // the parser said.
+            var line = Lines[i];
+            var parsed = statements[i];
+            var at = LineStarts[i];
+            if (parsed.ExportKeyword is { } export)
             {
-                if (tokens[t].Error is { } error)
-                    result.Add(At(i, t, error));
+                Collect(export, at, result);
+                at += export.FullWidth;
             }
-            foreach (var error in statements[i].Errors)
-                result.Add(At(i, error.Token, error.Message, error.Fix));
+            Collect(parsed.Node, at, result);
+            if (parsed.SkippedTokens is { } skipped)
+                Collect(skipped, at + parsed.Node.FullWidth, result);
+
+            // The line break is the line's own, and the last of its tokens.
+            var end = line.Tokens[^1];
+            Collect(end, LineStarts[i] + line.FullWidth - end.FullWidth, result);
         }
-        result.AddRange(blockErrors.Select(e => At(e.Line, e.Token, e.Message)));
+
+        // A block error is about the braces over the lines rather than about anything in one, so
+        // it names its line and the token on it that the diagnostic covers.
+        result.AddRange(blockErrors.Select(error =>
+        {
+            var token = Lines[error.Line].Tokens[error.Token];
+            var column = Lines[error.Line].TextOffset(error.Token) + 1;
+            var width = token.Kind == SyntaxKind.EndOfLine ? 0 : token.Text.Length;
+            return new Diagnostic(
+                new Span(Path, error.Line + 1, column, column + width), Severity.Error, error.Message);
+        }));
         return [.. result
             .OrderBy(d => d.Span.Line)
             .ThenBy(d => d.Span.StartColumn)

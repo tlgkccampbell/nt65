@@ -37,7 +37,7 @@ public static class NodeTable
 
     private static NodeRow ReadNode(XElement element, bool isAbstract)
     {
-        Known(element, "Name", "Base", "Internal", "HandWritten", "Partial", "Converted", "Unbuilt", "Missing", "Layout");
+        Known(element, "Name", "Base", "Internal", "HandWritten", "Partial", "Missing", "Layout");
         var slots = ImmutableArray.CreateBuilder<NodeSlot>();
         foreach (var child in element.Elements())
         {
@@ -45,7 +45,6 @@ public static class NodeTable
             {
                 "Field" => SlotRole.Slot,
                 "Member" => SlotRole.Member,
-                "Legacy" => SlotRole.Legacy,
                 "Kind" or "TypeComment" => (SlotRole?)null,
                 _ => throw Bad(child, $"the node table does not understand <{child.Name.LocalName}>"),
             };
@@ -62,8 +61,6 @@ public static class NodeTable
             Flag(element, "Internal"),
             Flag(element, "HandWritten"),
             Flag(element, "Partial"),
-            Flag(element, "Converted"),
-            Flag(element, "Unbuilt"),
             Flag(element, "Missing"),
             Words(element.Attribute("Layout")?.Value),
             slots.ToImmutable());
@@ -71,23 +68,14 @@ public static class NodeTable
 
     private static NodeSlot ReadSlot(XElement element, SlotRole role)
     {
-        Known(element, "Name", "Type", "Optional", "Today");
-        var form = "none";
+        Known(element, "Name", "Type", "Optional");
         var read = "";
         foreach (var child in element.Elements())
         {
             switch (child.Name.LocalName)
             {
                 case "Read":
-                    form = "read";
                     read = child.Value;
-                    break;
-                case "Cache":
-                    form = "cache";
-                    read = child.Value;
-                    break;
-                case "Nodes":
-                    form = "nodes";
                     break;
                 case "Kind" or "PropertyComment":
                     break;
@@ -96,15 +84,21 @@ public static class NodeTable
             }
         }
 
+        // A slot is read from the node's layout; anything else has to say what it returns.
+        if ((read.Length > 0) != (role == SlotRole.Member))
+        {
+            throw Bad(element, role == SlotRole.Member
+                ? $"<Member> {Required(element, "Name")} wants a <Read>"
+                : $"<Field> {Required(element, "Name")} reads its slot, and takes no <Read>");
+        }
+
         return new NodeSlot(
             Required(element, "Name"),
             Required(element, "Type") + (Flag(element, "Optional") ? "?" : ""),
             Summary(element, "PropertyComment"),
-            form,
             read,
             role,
-            Kinds(element),
-            element.Attribute("Today")?.Value);
+            Kinds(element));
     }
 
     /// <summary>The kinds <paramref name="element"/> names, which a node and a token field both do.</summary>

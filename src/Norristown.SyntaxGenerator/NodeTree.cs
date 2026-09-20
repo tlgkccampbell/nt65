@@ -20,14 +20,11 @@ public sealed class NodeTree
         Nodes = nodes;
         byName = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         derivedFrom = [.. nodes.Select(node => node.Base)];
-        foreach (var node in nodes)
-        {
-            CheckConversion(node);
 
-            // Every layout is worked out here, so reading one later is a lookup and several
-            // readers at once are no trouble.
+        // Every layout is worked out here, so reading one later is a lookup and several readers
+        // at once are no trouble.
+        foreach (var node in nodes)
             layouts[node.Name] = Laid(node);
-        }
     }
 
     /// <summary>The table, in the order it writes its nodes.</summary>
@@ -36,13 +33,6 @@ public sealed class NodeTree
     /// <summary>Whether another node derives from <paramref name="node"/>, which is what keeps it unsealed.</summary>
     /// <param name="node">The node.</param>
     public bool HasHeirs(NodeRow node) => derivedFrom.Contains(node.Name);
-
-    /// <summary>
-    /// Whether the node's properties read its slots outright: the parser builds the typed green
-    /// node, or nothing builds the node at all and there is nothing else to read.
-    /// </summary>
-    /// <param name="node">The node.</param>
-    public static bool ReadsSlots(NodeRow node) => node.IsConverted || node.IsUnbuilt;
 
     /// <summary>The node's slots in source order, each with the row that writes it.</summary>
     /// <param name="node">The node.</param>
@@ -55,9 +45,8 @@ public sealed class NodeTree
 
     /// <summary>
     /// The green type of <paramref name="slot"/>: what the typed constructor takes for it. A node
-    /// slot takes the green class of its own type once every kind that class covers builds one,
-    /// and a bare green node until then, so a kind can have its slots fixed without waiting for
-    /// whatever it holds.
+    /// slot takes the green class of its own type, or a bare green node where the type is one the
+    /// table gives no green class of its own — <c>SyntaxNode</c>, or a class written by hand.
     /// </summary>
     /// <param name="slot">The slot.</param>
     public string GreenType(NodeSlot slot) => slot.List switch
@@ -68,12 +57,9 @@ public sealed class NodeTree
         _ => (Typed(slot.BareType) ? slot.BareType : "GreenNode") + (slot.IsRequired ? "" : "?"),
     };
 
-    /// <summary>Whether every node <paramref name="name"/> covers is built as its own green class.</summary>
+    /// <summary>Whether <paramref name="name"/> is a class the table writes a green class for.</summary>
     /// <param name="name">The name of a red class a slot may hold.</param>
-    public bool Typed(string name) =>
-        byName.TryGetValue(name, out var row) && !row.IsHandWritten
-        && Nodes.Where(below => !below.IsAbstract && !below.IsHandWritten && Ancestry(below).Contains(row))
-            .All(ReadsSlots);
+    public bool Typed(string name) => byName.TryGetValue(name, out var row) && !row.IsHandWritten;
 
     /// <summary>
     /// Whether <paramref name="slot"/> has the name of a property a class above
@@ -114,30 +100,5 @@ public sealed class NodeTree
         }
 
         return [.. pieces.Select((piece, index) => new LaidOutSlot(piece.Declarer, piece.Slot, index))];
-    }
-
-    /// <summary>
-    /// A kind converts with the family that writes its slots: a property declared above it has
-    /// one type, so the class that declares it and every class that overrides it agree.
-    /// </summary>
-    private void CheckConversion(NodeRow node)
-    {
-        if (ReadsSlots(node))
-        {
-            foreach (var above in Ancestry(node).Where(row => row != node && row.Pieces.Any() && !ReadsSlots(row)))
-            {
-                throw new InvalidOperationException(
-                    $"{node.Name} reads its slots but {above.Name}, which writes some of them, does not");
-            }
-        }
-
-        if (!node.IsAbstract || !node.Pieces.Any() || !ReadsSlots(node))
-            return;
-        foreach (var below in Nodes.Where(row =>
-            !row.IsAbstract && row != node && Ancestry(row).Contains(node) && !ReadsSlots(row)))
-        {
-            throw new InvalidOperationException(
-                $"{node.Name} reads its slots, so {below.Name}, which derives from it, must too");
-        }
     }
 }

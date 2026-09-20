@@ -14,6 +14,17 @@ namespace Norristown.Syntax.InternalSyntax;
 /// piece it expected and did not find is simply absent from the node, and everything above the
 /// parser has to allow for a missing child.
 /// </para>
+/// <para>
+/// A diagnostic goes over the token the parser is looking at. Where that is the end of the line —
+/// where there is nothing written, because the piece the line wants was never typed — it goes at
+/// the end of the last token the source does have, ahead of the whitespace and the comment after
+/// it: that is where the piece belongs, and a caret there neither drifts right as trailing spaces
+/// are typed nor lands past a trailing comment. That is the one rule, and
+/// <see cref="Caret"/> is the whole of it. A diagnostic about a piece the line does not have rides
+/// on the missing token that stands in its slot, reaching back over the trivia between them with a
+/// negative offset where it must; anything else is reported over its token and given to the
+/// innermost node the parser finishes that holds it.
+/// </para>
 /// </summary>
 internal sealed class Parser
 {
@@ -26,7 +37,12 @@ internal sealed class Parser
     private readonly ImmutableArray<GreenToken> tokens;
     private readonly BlockKind context;
     private readonly bool opensBlock;
-    private readonly List<Error> errors = [];
+
+    // The diagnostics reported over a token, placed in the line and waiting for the node that
+    // holds them, and how many diagnostics the line has been given in all, missing tokens'
+    // included, which is what "nothing has been said about this line yet" reads.
+    private readonly List<Pending> pending = [];
+    private int reported;
     private int index;
 
     // The line's own pieces, which no statement holds: the `.export` that exports what the line
@@ -75,8 +91,8 @@ internal sealed class Parser
     {
         var parser = new Parser(line, context);
         var node = parser.ParseLine(line.LineKind);
-        return new Result(
-            context, parser.exportKeyword, node, parser.skippedTokens, [.. parser.errors]);
+        parser.Settle(node);
+        return new Result(context, parser.exportKeyword, node, parser.skippedTokens);
     }
 
     /// <summary>The next token, which stays put once the end-of-line token is reached.</summary>
@@ -88,10 +104,8 @@ internal sealed class Parser
         return token;
     }
 
-    private void Report(string message) => Report(index, message);
-
-    /// <summary>Reports at the current token, with the change the message names as its fix.</summary>
-    private void Report(string message, DiagnosticFix fix) => Report(index, message, fix);
+    /// <summary>Reports over the current token, with the change the message names as its fix.</summary>
+    private void Report(string message, DiagnosticFix? fix = null) => Report(index, message, fix);
 
     /// <summary>
     /// Reports only when nothing has been said about this line yet. A half-typed
@@ -100,12 +114,82 @@ internal sealed class Parser
     /// </summary>
     private void ReportOnce(string message, DiagnosticFix? fix = null)
     {
-        if (errors.Count == 0)
+        if (reported == 0)
             Report(index, message, fix);
     }
 
-    private void Report(int token, string message, DiagnosticFix? fix = null) =>
-        errors.Add(new Error(token, message, fix));
+    /// <summary>Reports over the token at <paramref name="token"/>, wherever it sits in the line.</summary>
+    private void Report(int token, string message, DiagnosticFix? fix = null)
+    {
+        var (start, width) = Caret(token);
+        pending.Add(new Pending(start, width, message, fix));
+        reported++;
+    }
+
+    /// <summary>
+    /// Gives <paramref name="node"/> the diagnostics reported over the text it holds. The parser
+    /// has just finished reading it, so it ends where the parser now stands; a diagnostic inside
+    /// it is one it is about, and one the parser has not placed yet.
+    /// </summary>
+    private T Own<T>(T node) where T : GreenNode
+    {
+        // Nearly every line reports nothing, and working out where a node starts costs a walk of
+        // the tokens before it, so a line with nothing to place does not pay for one.
+        if (pending.Count == 0)
+            return node;
+        var start = FullStart(index) - node.FullWidth;
+        var end = start + node.FullWidth;
+        for (var i = 0; i < pending.Count;)
+        {
+            var held = pending[i];
+            if (held.Start < start || held.Start + held.Width > end)
+            {
+                i++;
+                continue;
+            }
+            node.Report(new GreenDiagnostic(held.Start - start, held.Width, held.Message, held.Fix));
+            pending.RemoveAt(i);
+        }
+        return node;
+    }
+
+    /// <summary>
+    /// Gives the statement whatever no piece of the line claimed: a diagnostic over a token the
+    /// statement holds that no one node of it stands for, and the rare one about a place outside it.
+    /// </summary>
+    private void Settle(GreenNode statement)
+    {
+        if (pending.Count == 0)
+            return;
+        var start = exportKeyword?.FullWidth ?? 0;
+        foreach (var held in pending)
+            statement.Report(new GreenDiagnostic(held.Start - start, held.Width, held.Message, held.Fix));
+        pending.Clear();
+    }
+
+    /// <summary>
+    /// Where a diagnostic about the token at <paramref name="at"/> goes, from the start of the
+    /// line: over the token, or, where the line has run out, at the end of the last token it does
+    /// have, which is where the piece it wants belongs.
+    /// </summary>
+    private (int Start, int Width) Caret(int at)
+    {
+        var token = tokens[at];
+        if (token.Kind != SyntaxKind.EndOfLine)
+            return (FullStart(at) + token.LeadingWidth, token.Text.Length);
+        return at > 0
+            ? (FullStart(at) - tokens[at - 1].TrailingWidth, 0)
+            : (FullStart(at) + token.LeadingWidth, 0);
+    }
+
+    /// <summary>Where token <paramref name="at"/> starts in the line, its leading trivia included.</summary>
+    private int FullStart(int at)
+    {
+        var offset = 0;
+        for (var i = 0; i < at; i++)
+            offset += tokens[i].FullWidth;
+        return offset;
+    }
 
     private static string Describe(GreenToken token) => $"`{token.Text}`";
 
@@ -122,7 +206,7 @@ internal sealed class Parser
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
             Report(colon, "an unnamed label is written `@name`: a cheap local, private to the routine around it");
-            return new ErrorLineSyntax(TakeRest());
+            return Own(new ErrorLineSyntax(TakeRest()));
         }
 
         // Blocks with a line grammar of their own. A struct or union member
@@ -184,19 +268,19 @@ internal sealed class Parser
         // A block written on one line, `.data name { .byte 1 }`, is that one thing: the
         // `{` was read as the opener it is, and what follows it is the body, on the wrong
         // line rather than unexpected.
-        if (errors.Count == 0)
+        if (reported == 0)
         {
             Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
                 ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
                 : $"unexpected {Describe(Current)}");
         }
-        skippedTokens = new SkippedTokensSyntax(TakeRest());
+        skippedTokens = Own(new SkippedTokensSyntax(TakeRest()));
     }
 
     private GreenNode ErrorLine(string message, DiagnosticFix? fix = null)
     {
         Report(index, message, fix);
-        return new ErrorLineSyntax(TakeRest());
+        return Own(new ErrorLineSyntax(TakeRest()));
     }
 
     /// <summary>
@@ -584,10 +668,10 @@ internal sealed class Parser
             Report("expected `(` and the parameter names");
 
         // The `=` and the body are two pieces, and a line that writes neither is missing both.
-        if (Kind != SyntaxKind.Equals)
-            Report("expected `=` and the body");
-        return new FuncDeclarationSyntax(
-            keyword, name, parameters, Expect(SyntaxKind.Equals), ParseExpression());
+        var equals = Kind == SyntaxKind.Equals
+            ? Advance()
+            : Missing(SyntaxKind.Equals, "expected `=` and the body");
+        return new FuncDeclarationSyntax(keyword, name, parameters, equals, ParseExpression());
     }
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
@@ -608,22 +692,22 @@ internal sealed class Parser
         var keyword = Advance();
         if (Kind != SyntaxKind.Identifier)
         {
-            Report("expected the setting's name: `.config NAME = value`");
-            return Unwritten(GreenToken.Missing(SyntaxKind.Identifier));
+            return Unwritten(
+                Missing(SyntaxKind.Identifier, "expected the setting's name: `.config NAME = value`"),
+                GreenToken.Missing(SyntaxKind.Equals));
         }
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
-            Report("expected `=` and the setting's value: `.config NAME = value`");
-            return Unwritten(name);
+            return Unwritten(
+                name, Missing(SyntaxKind.Equals, "expected `=` and the setting's value: `.config NAME = value`"));
         }
         return new ConfigDeclarationSyntax(keyword, name, Advance(), ParseExpression());
 
         // A line that stops short has a place for the `=` and the value all the same, and what
         // has been said about the piece it stopped at is news enough for one line.
-        GreenNode Unwritten(GreenToken setting) =>
-            new ConfigDeclarationSyntax(keyword, setting, GreenToken.Missing(SyntaxKind.Equals),
-                new ErrorExpressionSyntax(null));
+        GreenNode Unwritten(GreenToken setting, GreenToken equals) =>
+            new ConfigDeclarationSyntax(keyword, setting, equals, new ErrorExpressionSyntax(null));
     }
 
     private ParameterListSyntax ParseParameterList()
@@ -709,8 +793,10 @@ internal sealed class Parser
     {
         if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsParameterKind(Current.Text))
         {
-            Report("expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`");
-            return new ParameterKindSyntax(GreenToken.Missing(SyntaxKind.Identifier), null, null, null, null);
+            return new ParameterKindSyntax(
+                Missing(SyntaxKind.Identifier,
+                    "expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`"),
+                null, null, null, null);
         }
 
         var listed = AtWord("one");
@@ -886,41 +972,45 @@ internal sealed class Parser
 
     /// <summary>
     /// The token of <paramref name="kind"/> written here, or the missing token that stands where
-    /// one belongs. A slot the source does not fill is filled from here and nowhere else.
+    /// one belongs and says nothing, which is for a slot something else on the line has already
+    /// been reported for.
     /// </summary>
     private GreenToken Expect(SyntaxKind kind) => Kind == kind ? Advance() : GreenToken.Missing(kind);
 
-    /// <summary>The same, with <paramref name="message"/> reported where the token belongs.</summary>
+    /// <summary>
+    /// The same, with <paramref name="message"/> on the missing token, where nothing has been said
+    /// about this line yet.
+    /// </summary>
     private GreenToken Expect(SyntaxKind kind, string message)
     {
-        if (Kind != kind)
-            ReportOnce(message);
-        return Expect(kind);
+        if (Kind == kind)
+            return Advance();
+        return reported == 0 ? Missing(kind, message) : GreenToken.Missing(kind);
     }
 
     /// <summary>
-    /// The name written here, or the missing identifier that stands where one belongs, with
-    /// <paramref name="message"/> reported there. A name may be spelled as an identifier, a
-    /// register or a mnemonic, which is why it is not one kind for <see cref="Expect(SyntaxKind, string)"/>.
+    /// The name written here, or the missing identifier that stands where one belongs, carrying
+    /// <paramref name="message"/>. A name may be spelled as an identifier, a register or a
+    /// mnemonic, which is why it is not one kind for <see cref="Expect(SyntaxKind, string)"/>.
     /// </summary>
-    private GreenToken ExpectName(string message)
-    {
-        if (AtName)
-            return Advance();
-        Report(message);
-        return GreenToken.Missing(SyntaxKind.Identifier);
-    }
+    private GreenToken ExpectName(string message) =>
+        AtName ? Advance() : Missing(SyntaxKind.Identifier, message);
 
     /// <summary>
     /// The missing token of <paramref name="kind"/>, standing where one belongs that the source
-    /// does not have, with <paramref name="message"/> reported there whether or not the line has
-    /// been reported on already: what <see cref="Expect(SyntaxKind, string)"/> does where the second piece missing on
-    /// a line is news of its own.
+    /// does not have and carrying <paramref name="message"/> whether or not the line has been
+    /// reported on already: what <see cref="Expect(SyntaxKind, string)"/> does where the second
+    /// piece missing on a line is news of its own.
+    /// <para>
+    /// The token sits after the trivia that follows the token before it, and the caret belongs
+    /// where that token's text ends, so the diagnostic reaches back over the trivia.
+    /// </para>
     /// </summary>
-    private GreenToken Missing(SyntaxKind kind, string message)
+    private GreenToken Missing(SyntaxKind kind, string message, DiagnosticFix? fix = null)
     {
-        Report(message);
-        return GreenToken.Missing(kind);
+        var (start, width) = Caret(index);
+        reported++;
+        return GreenToken.Missing(kind, new GreenDiagnostic(start - FullStart(index), width, message, fix));
     }
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
@@ -931,8 +1021,7 @@ internal sealed class Parser
         var keyword = Advance();
         if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier && SyntaxFacts.IsCpuName(Current.Text))
             return new CpuDirectiveSyntax(keyword, Advance());
-        Report($"expected {Project.CpuNames.Listed}");
-        return new CpuDirectiveSyntax(keyword, GreenToken.Missing(SyntaxKind.CpuName));
+        return new CpuDirectiveSyntax(keyword, Missing(SyntaxKind.CpuName, $"expected {Project.CpuNames.Listed}"));
     }
 
     /// <summary>
@@ -959,8 +1048,7 @@ internal sealed class Parser
         {
             // A line that does not name its segment is read no further: what is written where
             // the name belongs is the whole news about it.
-            Report("expected a segment name");
-            name = GreenToken.Missing(SyntaxKind.Identifier);
+            name = Missing(SyntaxKind.Identifier, "expected a segment name");
             return opensBlock
                 ? new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace))
                 : declaration
@@ -979,17 +1067,15 @@ internal sealed class Parser
 
         if (Kind != SyntaxKind.Colon)
         {
-            Report("expected `:` and an address size");
             return new SegmentDeclarationSyntax(
-                keyword, name, GreenToken.Missing(SyntaxKind.Colon),
+                keyword, name, Missing(SyntaxKind.Colon, "expected `:` and an address size"),
                 GreenToken.Missing(SyntaxKind.Identifier), null, null);
         }
         var colon = Advance();
         if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsAddressSize(Current.Text))
         {
-            Report("expected `zp`, `abs` or `far`");
             return new SegmentDeclarationSyntax(
-                keyword, name, colon, GreenToken.Missing(SyntaxKind.Identifier), null, null);
+                keyword, name, colon, Missing(SyntaxKind.Identifier, "expected `zp`, `abs` or `far`"), null, null);
         }
         var size = Advance();
 
@@ -1010,17 +1096,16 @@ internal sealed class Parser
     {
         if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors"))
         {
-            Report("expected `dp`, `bank` or `mirrors`");
             return new SegmentAttributeSyntax(
-                GreenToken.Missing(SyntaxKind.Identifier), GreenToken.Missing(SyntaxKind.Equals),
-                null, null, null, null);
+                Missing(SyntaxKind.Identifier, "expected `dp`, `bank` or `mirrors`"),
+                GreenToken.Missing(SyntaxKind.Equals), null, null, null, null);
         }
         var mirrors = AtWord("mirrors");
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
-            Report("expected `=`");
-            return new SegmentAttributeSyntax(name, GreenToken.Missing(SyntaxKind.Equals), null, null, null, null);
+            return new SegmentAttributeSyntax(
+                name, Missing(SyntaxKind.Equals, "expected `=`"), null, null, null, null);
         }
         var equals = Advance();
         if (!mirrors)
@@ -1259,7 +1344,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.StringLiteral)
         {
             Report("a module name is written without quotes: `.module hw::vic`");
-            return new ModuleDirectiveSyntax(keyword, MissingName());
+            return new ModuleDirectiveSyntax(keyword, MissingName(null));
         }
         return new ModuleDirectiveSyntax(keyword, ParsePath("expected the module's name: `.module name`"));
     }
@@ -1334,10 +1419,7 @@ internal sealed class Parser
     private NameExpressionSyntax ParsePath(string expected)
     {
         if (!AtName)
-        {
-            Report(expected);
-            return MissingName();
-        }
+            return MissingName(expected);
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
         parts.Add(new IdentifierNameSyntax(Advance(), null));
         while (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic)
@@ -1392,9 +1474,8 @@ internal sealed class Parser
         var keyword = Advance();
         if (Kind != SyntaxKind.OpenParen)
         {
-            Report("expected `(`");
             return new ImportSignatureSyntax(
-                keyword, GreenToken.Missing(SyntaxKind.OpenParen), null, null, null,
+                keyword, Missing(SyntaxKind.OpenParen, "expected `(`"), null, null, null,
                 GreenToken.Missing(SyntaxKind.CloseParen));
         }
         var openParen = Advance();
@@ -1412,16 +1493,9 @@ internal sealed class Parser
                 exit = ParseStateList();
         }
 
-        GreenToken closeParen;
-        if (Kind == SyntaxKind.CloseParen)
-        {
-            closeParen = Advance();
-        }
-        else
-        {
-            Report("expected `)`");
-            closeParen = GreenToken.Missing(SyntaxKind.CloseParen);
-        }
+        var closeParen = Kind == SyntaxKind.CloseParen
+            ? Advance()
+            : Missing(SyntaxKind.CloseParen, "expected `)`");
         return new ImportSignatureSyntax(keyword, openParen, entry, arrow, exit, closeParen);
     }
 
@@ -1475,13 +1549,16 @@ internal sealed class Parser
             var given = ParseExpression();
             if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
                 Report(nameIndex, $"`{name.Text}` is not a processor-state item");
-            return new StateValueItemSyntax(name, equals, given);
+
+            // The item is what a misspelled word is an item of, so it takes what was said of it.
+            return Own(new StateValueItemSyntax(name, equals, given));
         }
 
         GreenToken? suffix = Kind is SyntaxKind.Star or SyntaxKind.Question ? Advance() : null;
         if (!SyntaxFacts.IsStateItem(name.Text, suffix?.Kind ?? SyntaxKind.None))
         {
             Report(nameIndex, $"`{name.Text}` is not a processor-state item");
+            return Own(new StateFlagItemSyntax(name, suffix));
         }
         else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
         {
@@ -1533,14 +1610,8 @@ internal sealed class Parser
         text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 
     /// <summary>
-    /// One or more items separated by commas, as the one list that holds them; null for a list
-    /// with no items, which is what a slot with nothing in it reads as.
-    /// </summary>
-    private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem) =>
-        ParseCommaSeparated(parseItem) is { Length: > 0 } pieces ? new GreenSeparatedList(pieces) : null;
-
-    /// <summary>
-    /// The items of a comma-separated list and the commas between them, in source order. A
+    /// The items of a comma-separated list and the commas between them, as the one list that holds
+    /// them; null for a list with no items, which is what a slot with nothing in it reads as. A
     /// separated list alternates an item and the comma after it, so a comma is taken only after
     /// an item already in the list, and the first item that cannot be read ends the list: the
     /// comma before it is the list's last piece and the rest of the line is the line's to hold.
@@ -1549,11 +1620,11 @@ internal sealed class Parser
     /// items are written some other way stops at the gap instead. Either way nothing is invented
     /// to stand between two commas.
     /// </summary>
-    private ImmutableArray<GreenNode> ParseCommaSeparated(Func<GreenNode?> parseItem)
+    private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem)
     {
-        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
         if (parseItem() is not { } first)
-            return pieces.ToImmutable();
+            return null;
+        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
         pieces.Add(first);
         while (Kind == SyntaxKind.Comma)
         {
@@ -1562,7 +1633,7 @@ internal sealed class Parser
                 break;
             pieces.Add(next);
         }
-        return pieces.ToImmutable();
+        return new GreenSeparatedList(pieces.ToImmutable());
     }
 
     private InstructionStatementSyntax ParseInstruction()
@@ -1610,7 +1681,8 @@ internal sealed class Parser
     private OperandSyntax? TryParseIndirect()
     {
         var start = index;
-        var errorCount = errors.Count;
+        var said = reported;
+        var placed = pending.Count;
         var openParen = Advance();
         var address = ParseExpression();
 
@@ -1636,10 +1708,12 @@ internal sealed class Parser
         }
 
         // An attempt that comes to nothing leaves nothing: the tokens it read are read again as
-        // an ordinary expression, and the nodes it built go with the errors reported over them,
+        // an ordinary expression, and the nodes it built go with the diagnostics they were given,
         // so no missing token it stood in for outlives it.
         index = start;
-        errors.RemoveRange(errorCount, errors.Count - errorCount);
+        if (pending.Count > placed)
+            pending.RemoveRange(placed, pending.Count - placed);
+        reported = said;
         return null;
     }
 
@@ -1702,7 +1776,10 @@ internal sealed class Parser
             var op = Advance();
             var right = ParseBinary(level - 1);
             CheckRequiredParentheses(operatorIndex, op, left, right);
-            left = new BinaryExpressionSyntax(left, op, right);
+
+            // The expression is the node the missing parentheses are about, so it takes what was
+            // said over its operator, and whatever an operand of it was reported for.
+            left = Own(new BinaryExpressionSyntax(left, op, right));
         }
         return left;
     }
@@ -1791,8 +1868,7 @@ internal sealed class Parser
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
             or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
-            Report("expected a name");
-            return new NameExpressionSyntax(global, MissingParts());
+            return new NameExpressionSyntax(global, MissingParts("expected a name"));
         }
 
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
@@ -1805,9 +1881,8 @@ internal sealed class Parser
             // mnemonic: after `::` there is nothing else it could be.
             if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
-                Report("expected a name after `::`");
                 parts.Add(separator);
-                parts.Add(MissingPart());
+                parts.Add(MissingPart("expected a name after `::`"));
                 break;
             }
             parts.Add(separator);
@@ -1823,14 +1898,19 @@ internal sealed class Parser
         return new IdentifierNameSyntax(name, indexed && Kind == SyntaxKind.OpenBracket ? ParseElementIndex() : null);
     }
 
-    /// <summary>The part that stands where a name belongs the source does not have.</summary>
-    private static IdentifierNameSyntax MissingPart() => new(GreenToken.Missing(SyntaxKind.Identifier), null);
+    /// <summary>
+    /// The part that stands where a name belongs the source does not have, saying so unless
+    /// <paramref name="message"/> is null, which is where something else has said it better.
+    /// </summary>
+    private IdentifierNameSyntax MissingPart(string? message) =>
+        new(message is null ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, message),
+            null);
 
     /// <summary>A path of one part, that part being only the place a name belongs.</summary>
-    private static GreenSeparatedList MissingParts() => new([MissingPart()]);
+    private GreenSeparatedList MissingParts(string? message) => new([MissingPart(message)]);
 
     /// <summary>The name that stands where one belongs the source does not have.</summary>
-    private static NameExpressionSyntax MissingName() => new(null, MissingParts());
+    private NameExpressionSyntax MissingName(string? message) => new(null, MissingParts(message));
 
     /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
     private ElementIndexSyntax ParseElementIndex()
@@ -1902,21 +1982,24 @@ internal sealed class Parser
     }
 
     /// <summary>
-    /// A parser error: the index of the token it is reported on, the message, and the change
-    /// the message names as its fix, for an editor to offer, where it names one.
-    /// </summary>
-    public readonly record struct Error(int Token, string Message, DiagnosticFix? Fix = null);
-
-    /// <summary>
     /// One line's parse, and the block kind it was parsed in, so a line whose surroundings have
-    /// not changed can keep the nodes it already has.
+    /// not changed can keep the nodes it already has. The diagnostics are part of those nodes, so
+    /// a line kept across an edit keeps what was said about it.
     /// </summary>
     /// <param name="Context">The kind of block the line was read in.</param>
     /// <param name="ExportKeyword">The <c>.export</c> before a declaration the line exports, or null.</param>
     /// <param name="Node">What the line's own tokens parse to.</param>
     /// <param name="SkippedTokens">What the statement could not take, or null when nothing was left.</param>
-    /// <param name="Errors">The errors found in the line.</param>
     public sealed record Result(
-        BlockKind Context, GreenToken? ExportKeyword, GreenNode Node, GreenNode? SkippedTokens,
-        ImmutableArray<Error> Errors);
+        BlockKind Context, GreenToken? ExportKeyword, GreenNode Node, GreenNode? SkippedTokens);
+
+    /// <summary>
+    /// A diagnostic reported over a token and waiting for the node that holds it: where it sits in
+    /// the line, what it says, and the change the message names as its fix, where it names one.
+    /// </summary>
+    /// <param name="Start">Where it starts, from the start of the line.</param>
+    /// <param name="Width">How many characters it covers.</param>
+    /// <param name="Message">What to tell the programmer.</param>
+    /// <param name="Fix">The change the message names as its fix, or null.</param>
+    private readonly record struct Pending(int Start, int Width, string Message, DiagnosticFix? Fix);
 }

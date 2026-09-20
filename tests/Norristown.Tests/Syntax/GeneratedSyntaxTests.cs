@@ -31,9 +31,9 @@ public sealed class GeneratedSyntaxTests
     }
 
     /// <summary>
-    /// What the table records about a piece of a node: its target type, whether it is required,
-    /// and the kinds a token may be. A list is always required — nothing written is an empty
-    /// list, not a missing one — and a piece kept in a field is always an array today.
+    /// What the table records about a piece of a node: its type, whether it is required, and the
+    /// kinds a token may be. A list is always required — nothing written is an empty list, not a
+    /// missing one.
     /// </summary>
     [Fact]
     public void APieceSaysItsTypeAndItsKinds()
@@ -43,8 +43,6 @@ public sealed class GeneratedSyntaxTests
             Assert.NotEqual("", piece.Type);
             if (piece.List != ListShape.None)
                 Assert.True(piece.IsRequired, $"{piece.Name} is a list and optional");
-            if (piece.Form is "nodes" or "cache")
-                Assert.NotNull(piece.ItemType);
             Assert.Equal(piece.IsToken, piece.Kinds.Length > 0);
         }
     }
@@ -68,7 +66,7 @@ public sealed class GeneratedSyntaxTests
                 green.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic),
                 constructor => constructor.GetParameters().Length == slots.Length);
             var properties = type.GetProperties().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
-            foreach (var (_, slot, _) in slots.Where(laid => laid.Slot.Form != "none" || NodeTree.ReadsSlots(node)))
+            foreach (var (_, slot, _) in slots)
                 Assert.Contains(slot.Name, properties);
         }
     }

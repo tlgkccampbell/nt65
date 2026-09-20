@@ -30,7 +30,6 @@ public static class SyntaxWriter
             if (!node.IsHandWritten)
                 files[$"InternalSyntax/{node.Name}.g.cs"] = GreenFile(table, node);
         }
-        files["InternalSyntax/GreenSyntax.g.cs"] = CreateRedFile(nodes);
         files["SyntaxVisitor.g.cs"] = VisitorFile(nodes, generic: false);
         files["SyntaxVisitorOfT.g.cs"] = VisitorFile(nodes, generic: true);
 
@@ -47,21 +46,19 @@ public static class SyntaxWriter
         {
             foreach (var (declarer, slot, index) in table.Layout(node))
             {
-                if (!Emits(node, slot))
-                    continue;
                 if (declarer == node)
                 {
                     members.Add(node.IsAbstract
-                        ? Declaration(node, slot)
-                        : Property(node, slot, index, "", table.Hides(node, slot) ? "new " : ""));
+                        ? Declaration(slot)
+                        : Property(slot, index, "", table.Hides(node, slot) ? "new " : ""));
                 }
                 else if (declarer.IsAbstract)
                 {
-                    members.Add(Property(node, slot, index, "override "));
+                    members.Add(Property(slot, index, "override "));
                 }
             }
-            members.AddRange(node.Slots.Where(slot => !slot.IsPiece && Emits(node, slot))
-                .Select(slot => Property(node, slot, -1, "")));
+            members.AddRange(node.Slots.Where(slot => !slot.IsPiece)
+                .Select(slot => Property(slot, -1, "")));
         }
 
         var text = new StringBuilder();
@@ -87,15 +84,6 @@ public static class SyntaxWriter
         var ordered = new List<string>();
         if (!node.IsHandWritten)
         {
-            var kept = node.Slots
-                .Where(slot => Emits(node, slot) && slot.Form is "nodes" or "cache"
-                    && !(slot.IsPiece && NodeTree.ReadsSlots(node)))
-                .ToList();
-            foreach (var slot in kept)
-                text.AppendLine($"    private ImmutableArray<{slot.ItemType}> {slot.Field};");
-            if (kept.Count > 0)
-                text.AppendLine();
-
             var ctor = node.IsAbstract ? "private protected" : "internal";
             text.AppendLine($"    {ctor} {node.Name}(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)");
             text.AppendLine("        : base(tree, parent, green, position)");
@@ -125,63 +113,22 @@ public static class SyntaxWriter
         return text.ToString();
     }
 
-    /// <summary>Whether the red class carries <paramref name="slot"/> as a property.</summary>
-    private static bool Emits(NodeRow node, NodeSlot slot) => slot.Role switch
-    {
-        SlotRole.Legacy => !node.IsConverted,
-        SlotRole.Member => true,
-        _ => slot.IsWritten || node.IsConverted || node.IsUnbuilt,
-    };
-
     /// <summary>The property an abstract class declares for a slot its subclasses place themselves.</summary>
-    private static string Declaration(NodeRow node, NodeSlot slot) =>
-        Summary(slot.Summary, "    ") + $"    public abstract {Type(node, slot)} {slot.Name} {{ get; }}\n";
+    private static string Declaration(NodeSlot slot) =>
+        Summary(slot.Summary, "    ") + $"    public abstract {slot.Type} {slot.Name} {{ get; }}\n";
 
-    private static string Property(NodeRow node, NodeSlot slot, int index, string overriding, string hiding = "")
+    private static string Property(NodeSlot slot, int index, string overriding, string hiding = "")
     {
         var text = new StringBuilder();
         text.Append(overriding.Length > 0 ? "    /// <inheritdoc/>\n" : Summary(slot.Summary, "    "));
-        var declaration = $"    public {overriding}{hiding}{Type(node, slot)} {slot.Name}";
-
-        if (slot.IsPiece && NodeTree.ReadsSlots(node))
-        {
-            text.AppendLine($"{declaration} => {SlotRead(slot, index)};");
-            return text.ToString();
-        }
-
-        switch (slot.Form)
-        {
-            case "nodes":
-                text.AppendLine($"{declaration} => Nodes(ref {slot.Field});");
-                return text.ToString();
-            case "cache":
-                text.AppendLine(declaration);
-                text.AppendLine("    {");
-                text.AppendLine("        get");
-                text.AppendLine("        {");
-                text.AppendLine($"            if ({slot.Field}.IsDefault)");
-                text.AppendLine($"                ImmutableInterlocked.InterlockedInitialize(ref {slot.Field}, {slot.Read});");
-                text.AppendLine($"            return {slot.Field};");
-                text.AppendLine("        }");
-                text.AppendLine("    }");
-                return text.ToString();
-            default:
-                // A slot reads itself when the green node is the typed one and searches when it
-                // is the generic node the parser still builds for this kind.
-                var body = slot.ReadsEitherWay
-                    ? $"Green is GreenSyntax ? {slot.Read} : {SlotRead(slot, index)}"
-                    : slot.Read;
-                var line = $"{declaration} => {body};";
-                text.AppendLine(line.Length <= 120 ? line : $"{declaration} =>\n        {body};");
-                return text.ToString();
-        }
+        var declaration = $"    public {overriding}{hiding}{slot.Type} {slot.Name}";
+        var body = slot.IsPiece ? SlotRead(slot, index) : slot.Read;
+        var line = $"{declaration} => {body};";
+        text.AppendLine(line.Length <= 120 ? line : $"{declaration} =>\n        {body};");
+        return text.ToString();
     }
 
-    /// <summary>The type of the property for <paramref name="slot"/> on <paramref name="node"/>.</summary>
-    private static string Type(NodeRow node, NodeSlot slot) =>
-        slot.IsPiece && NodeTree.ReadsSlots(node) ? slot.Type : slot.PropertyType;
-
-    /// <summary>How the property reads slot <paramref name="index"/> of a typed green node.</summary>
+    /// <summary>How the property reads slot <paramref name="index"/> of its green node.</summary>
     private static string SlotRead(NodeSlot slot, int index) => slot.List switch
     {
         ListShape.Nodes => $"SlotList<{slot.ListItemType}>({index})",
@@ -232,6 +179,11 @@ public static class SyntaxWriter
         text.AppendLine("    {");
         foreach (var (_, slot, _) in slots)
             text.AppendLine($"        {slot.Name} = {slot.Field};");
+
+        // A node holds what its children hold, so a walk for diagnostics need only follow the
+        // slots that lead to one.
+        if (slots.Length > 0)
+            text.Append(RolledUp(slots));
         text.AppendLine("    }");
 
         if (table.HasHeirs(node))
@@ -284,6 +236,28 @@ public static class SyntaxWriter
         return text.ToString();
     }
 
+    /// <summary>
+    /// The assignment that rolls <c>ContainsDiagnostics</c> up from <paramref name="slots"/>, one
+    /// slot to a line once it will not fit on one.
+    /// </summary>
+    private static string RolledUp(ImmutableArray<LaidOutSlot> slots)
+    {
+        var terms = slots.Select(s =>
+            s.Slot.IsRequired && s.Slot.List == ListShape.None
+                ? $"{s.Slot.Field}.ContainsDiagnostics"
+                : $"{s.Slot.Field} is {{ ContainsDiagnostics: true }}").ToList();
+        var line = $"        ContainsDiagnostics = {string.Join(" || ", terms)};";
+        if (line.Length <= 118)
+            return line + "\n";
+        var text = new StringBuilder("        ContainsDiagnostics =\n");
+        for (var i = 0; i < terms.Count; i++)
+        {
+            text.Append("            ").Append(i > 0 ? "|| " : "").Append(terms[i]);
+            text.Append(i < terms.Count - 1 ? "\n" : ";\n");
+        }
+        return text.ToString();
+    }
+
     /// <summary>A constructor signature too long for one line, one parameter to a line.</summary>
     private static string Wrapped(string signature)
     {
@@ -293,29 +267,6 @@ public static class SyntaxWriter
         var text = new StringBuilder(head).Append('\n');
         for (var i = 0; i < parameters.Length; i++)
             text.Append("        ").Append(parameters[i]).Append(i < parameters.Length - 1 ? ",\n" : ")");
-        return text.ToString();
-    }
-
-    private static string CreateRedFile(ImmutableArray<NodeRow> nodes)
-    {
-        var text = new StringBuilder();
-        text.AppendLine(Header);
-        text.AppendLine("using Red = Norristown.Syntax;");
-        text.AppendLine();
-        text.AppendLine("namespace Norristown.Syntax.InternalSyntax;");
-        text.AppendLine();
-        text.AppendLine("public sealed partial class GreenSyntax");
-        text.AppendLine("{");
-        text.AppendLine("    internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) => Kind switch");
-        text.AppendLine("    {");
-        foreach (var node in nodes.Where(node => !node.IsHandWritten))
-        {
-            foreach (var kind in node.Kinds)
-                text.AppendLine($"        SyntaxKind.{kind} => new Red.{node.Name}(tree, parent, this, position),");
-        }
-        text.AppendLine("        _ => throw new InvalidOperationException($\"{Kind} is not the kind of a parsed node\"),");
-        text.AppendLine("    };");
-        text.AppendLine("}");
         return text.ToString();
     }
 
