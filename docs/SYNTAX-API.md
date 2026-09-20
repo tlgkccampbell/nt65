@@ -86,7 +86,8 @@ new MyWalker().Visit(tree.Root) // SyntaxWalker with a VisitProcDeclaration to o
    does. `ApiSurfaceTests` reflects over the assembly and fails if a signature a consumer can see
    names a green type, or anything else non-public.
 6. **Navigation.** Done.
-7. **Visitors.** Done.
+7. **Visitors.** Done, and what the binder, the emitter and the code layout dispatch a statement
+   through.
 8. **Diagnostics on the tree.** Done.
 9. **One description of the grammar.** Done.
 
@@ -164,11 +165,29 @@ Where the code does not already say it.
   means "there is none". `FindToken` never answers with a missing token, because a token of no
   width holds no position and nothing is ever written in one; at the very end of a node, where
   nothing is written at all, the answer is its last token.
-- **Two places inside the compiler still read the green lines**, and say so where they are: the
-  formatter, which lays out a whole file from the lines the lexer made, and
-  `UnusedSymbols.Written`, whose red walk measured about seven milliseconds a keystroke slower.
-  Both are inside `Norristown.Core`, which is the boundary that matters. Everything else in the
-  compiler, the language server and the CLI is on the red tree.
+- **Nothing outside the syntax layer reads the green lines.** The formatter and
+  `UnusedSymbols.Written` were the two that did, and both now read `SyntaxTree.GetLine`,
+  `LineSyntax.Tokens` and the blocks over them. What made the red walk cost about seven
+  milliseconds a keystroke was `LineSyntax.Tokens` building and keeping an
+  `ImmutableArray<SyntaxToken>` for every line; it is a `SyntaxTokenList` over the line's own
+  slots now, which makes a token as it is asked for and never makes a statement, so walking a
+  file's tokens allocates nothing. `SyntaxTree.Green` is a private field, `Lines` is the syntax
+  layer's own, and `ApiSurfaceTests` reads the source of everything in `Norristown.Core` outside
+  `Syntax/` and fails if one of them names a green type or reaches for `tree.Lines`.
+- **`UnusedSymbols.Written` is lexical because binding cannot answer it.** "Was this `.use`
+  item's name written anywhere" has to count a name in a branch this build leaves out, and
+  binding returns at such a branch without reading a line of it; a name written where a bare word
+  may stand is never looked up; a `.defined` asks about a name without naming it; and a reference
+  records the symbol it reached rather than the spelling it was written as, so it cannot tell `b`
+  written as `a::b` from the `c` that `.use a::b as c` brought in. The tokens are what all of
+  those have in common, which is why the scan reads them.
+- **The big statement switches are visitors.** `Binder.BindStatement`, `Emitter.WalkLine` and
+  `CodeLayout.Statement` each dispatch through a nested private `SyntaxVisitor` with a method per
+  kind — twenty-four, twelve and sixteen of them — which is what the visitors are for. A kind with
+  no method is what the `default:` arm was, and each class says so. The smaller switches are
+  still switches: an expression switch answering from a handful of cases, a dispatch that carries
+  arguments besides the node and falls out of the switch into a shared tail, and a switch whose
+  arms `continue` the loop around it all read worse as a visitor, and say so where they are.
 - **Completion reads the line lexed as far as the caret**, not the tree, and that is deliberate:
   the caret cuts the line in the middle of what is being typed, so the file's `$10` is the
   typist's `$1` and `.byt` is not yet `.byte`, and it is what has been typed that a completion is

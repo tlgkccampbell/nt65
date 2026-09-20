@@ -131,6 +131,11 @@ items: adding an argument, deleting an item with its comma, counting commas up t
 `SeparatorCount` is one fewer than `Count`, or as many when the source wrote a trailing separator.
 The lists give `Count`, an indexer, `Slice` (so C# slice patterns work) and enumeration.
 
+`SyntaxTokenList` is also what a line's own tokens read as: `tree.GetLine(i).Tokens` is a view over
+the line, and walking it makes each token as it is asked for without building an array or making the
+line's statement. So a pass over every token of a file — which is what a lexical question about the
+whole of it needs — costs no allocation, and its `foreach` allocates no enumerator either.
+
 Items are always nodes, never bare tokens: a `.func`'s parameters are `ParameterSyntax`, and a
 `keeps`'s registers and a `one(...)`'s words are `IdentifierNameSyntax`. That is what an analyzer
 wants, because the symbol a name refers to is looked up through its node.
@@ -217,8 +222,12 @@ counter.Visit(tree.Root);
 counter.Found;   // "lda", "sta", "rts"
 ```
 
-A walker is the right tool when a feature is about a few kinds among many. A `switch` on the node is
-the right tool when it is about all of them at once, which is what the binder and the emitter do.
+A walker is the right tool when a feature is about a few kinds among many. A plain
+`SyntaxVisitor` is the right tool when a component is about all of them at once, one method per
+kind: the binder, the emitter and the code layout each hand a statement to a nested private one,
+and a kind with no method there is a kind that asks for nothing. A `switch` is still the right
+tool for a handful of cases that answer with a value, and for a dispatch whose arms turn on
+pattern guards and the order they are written in.
 
 ## Diagnostics on the tree
 
