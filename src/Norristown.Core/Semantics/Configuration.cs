@@ -510,7 +510,8 @@ public sealed class Configuration
                 var exported = ExportedNames(tree);
                 foreach (var declaration in SettingsIn(tree))
                 {
-                    if (declaration.Name is not { } name)
+                    // A setting is known by its name, so a line that writes none declares nothing.
+                    if (declaration.Name is not { IsMissing: false } name)
                         continue;
                     if (!Configuration.AtFileLevel(declaration))
                     {

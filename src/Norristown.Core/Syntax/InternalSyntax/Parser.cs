@@ -630,22 +630,25 @@ internal sealed class Parser
     /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
     private GreenNode ParseConfig()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
         if (Kind != SyntaxKind.Identifier)
         {
             Report("expected the setting's name: `.config NAME = value`");
-            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+            return Unwritten(GreenToken.Missing(SyntaxKind.Identifier));
         }
-        children.Add(Advance());
+        var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
             Report("expected `=` and the setting's value: `.config NAME = value`");
-            return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+            return Unwritten(name);
         }
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.ConfigDeclaration, children.ToImmutable());
+        return new ConfigDeclarationSyntax(keyword, name, Advance(), ParseExpression());
+
+        // A line that stops short has a place for the `=` and the value all the same, and what
+        // has been said about the piece it stopped at is news enough for one line.
+        GreenNode Unwritten(GreenToken setting) =>
+            new ConfigDeclarationSyntax(keyword, setting, GreenToken.Missing(SyntaxKind.Equals),
+                new ErrorExpressionSyntax(null));
     }
 
     private GreenNode ParseParameterList()

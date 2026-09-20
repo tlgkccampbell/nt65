@@ -480,7 +480,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ConfigDeclaration"/>
     <TypeComment>
       <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
@@ -490,27 +490,23 @@
         <summary>The <c>.config</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The setting's name, or null.</summary>
+        <summary>The setting's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c>.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
-    <Field Name="Value" Type="ExpressionSyntax" Today="ExpressionSyntax?">
+    <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The setting's value, or null.</summary>
+        <summary>The setting's value.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 
