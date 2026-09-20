@@ -57,19 +57,17 @@ pwsh scripts/test.ps1               # the fast suite: units, fixtures and the se
 pwsh scripts/test.ps1 -Ca65         # the output assembled with the pinned ca65
 pwsh scripts/gate.ps1               # all of the above, and the extension's client
 pwsh scripts/package.ps1            # the tool package and the extension, into artifacts
-pwsh scripts/generate-syntax.ps1    # the syntax classes, after editing the node table
 ```
 
 `scripts/test.ps1 -Fixture name` runs one fixture or corpus program, `-Update` accepts changed
 fixture output, and `-Benchmark` measures what an edit costs in the language server.
 
 The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.xml`, a table with a
-block per kind of node, after Roslyn's own `Syntax.xml`. Change the table, run
-`scripts/generate-syntax.ps1`, and commit what it
-writes under the `Generated` folders; a test fails when the two disagree, and
-`scripts/generate-syntax.ps1 -Check` says the same thing without writing. The generator is
-`tools/Norristown.SyntaxGenerator`, which references nothing, so it runs whatever state the code
-it writes is in: change the table, regenerate, then fix what the compiler points at.
+block per kind of node, after Roslyn's own `Syntax.xml`. The source generator in
+`src/Norristown.SyntaxGenerator` reads it as `Norristown.Core` builds, so the way to work is:
+change the table, build, then fix what the compiler points at. Nothing is checked in and nothing
+can be stale. The classes it writes are on disk under `src/Norristown.Core/Generated`, one file
+per type and git-ignored, to be read and grepped like any other code.
 
 ## The corpus programs
 

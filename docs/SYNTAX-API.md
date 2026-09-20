@@ -106,10 +106,10 @@ Concretely:
    base, its summary, and per slot a name, a type (a token and the kinds it may be, a node
    type, `SyntaxList<T>`, `SeparatedSyntaxList<T>`), whether it is optional, and its summary.
    From it come the green class and its constructor, the red class and its properties, the
-   `CreateRed` and `Accept` overrides, and the visitors. A table plus a generator that writes
-   checked-in `.cs` files (run by hand, with a test that fails when the output is stale)
-   avoids a build-time dependency; a source generator is the other way. Choose one early —
-   see the order below. The summaries on today's hand-written classes in `Nodes/` are the
+   `CreateRed` and `Accept` overrides, and the visitors. nt65's table is
+   `src/Norristown.Core/Syntax/Syntax.xml`, after Roslyn's own, and an incremental source
+   generator reads it as the compiler builds `Norristown.Core`: there is nothing to run and
+   nothing that can go stale. The summaries on today's hand-written classes in `Nodes/` are the
    table's first content; do not lose them.
 
 Deliberately **not** in scope yet: `SyntaxFactory` and `With…`/`Update` mutation,
@@ -328,18 +328,20 @@ Done so far: steps 1, 2, 3, 4, 5 and 6. What they decided, where it differs from
   its `<TypeComment>` and its markers (`Internal`, `HandWritten`, `Partial`); a `<Field>` says a
   name, the property's type — whose `Optional` is the whole of what optional means while nothing
   is invented — its `<PropertyComment>`, and how it is read. A property that is not a piece of
-  the node is a `<Member>`. Two people adding kinds touch two blocks. Generated files sit in a
-  `Generated` folder beside the hand-written ones they belong with.
-- **The generator is `tools/Norristown.SyntaxGenerator`, and references nothing**, because the
-  order of work from step 5 on is: change the table, regenerate, fix what the compiler then
-  points at. A generator that needed `Norristown.Core` to build could not be run in the state
-  its own output had just left the tree in. `pwsh scripts/generate-syntax.ps1` writes the files
-  and deletes the ones the table no longer describes; `-Check` compares instead and fails. The
-  test project references the tool, so `GeneratedSyntaxTests` asks the same code for the same
-  text in memory and never writes anything; it fails when what is checked in is stale, when a
-  kind has no row, or when a walk misses a node.
-- **The accessors ride along as they are.** A slot's `read` is today's search expression,
-  verbatim; `nodes` and `cache` are the two shapes that need a field, and the field is named
+  the node is a `<Member>`. Two people adding kinds touch two blocks.
+- **The generator is `src/Norristown.SyntaxGenerator`, an incremental source generator** that
+  `Norristown.Core` references as an analyzer with the table as an additional file, so the order
+  of work from step 5 on is: change the table, build, fix what the compiler then points at.
+  Nothing is run by hand and nothing is checked in, so nothing can be stale. It writes one file
+  per type — `Nodes/ProcDeclarationSyntax.g.cs`, `InternalSyntax/ProcDeclarationSyntax.g.cs` —
+  and `EmitCompilerGeneratedFiles` puts them on disk under `src/Norristown.Core/Generated`,
+  git-ignored, to be read and grepped like any other code. A table it cannot read is diagnostic
+  `NT1001` against `Syntax.xml`. The generator is a netstandard2.0 library, which is also what
+  lets the test project reference it outright: `GeneratedSyntaxTests` asks the same code for the
+  same text in memory and never writes anything, and `GeneratorDriverTests` runs it the way the
+  compiler does.
+- **The accessors ride along as they are.** A field's `<Read>` is today's search expression,
+  verbatim; `<Nodes/>` and `<Cache>` are the two shapes that need a field of their own, named
   after the property. Step 5 adds what it needs per slot — the kinds a token may be, a list type
   — without touching a line it does not own, and step 7 deletes the reads and keeps the types.
   What no vocabulary covers stays in a hand-written half of a `partial`: `UseDirectiveSyntax`'s
@@ -364,16 +366,17 @@ Done so far: steps 1, 2, 3, 4, 5 and 6. What they decided, where it differs from
   a slot to fourteen kinds and buy a consumer nothing: `StatementSyntax.IsExported` and
   `ExportToken` already answer the only question anyone asks, and `LineSyntax` and `Fidelity` are
   simpler for owning it.
-- **The table says each kind's target layout, and one word converts a kind.** A slot's type is what
-  its property returns once the kind is converted, and its trailing `?` means the piece belongs to
+- **The table says each kind's target layout, and one word converts a kind.** A field's type is what
+  its property returns once the kind is converted, and `Optional` means the piece belongs to
   a part of the line that may be absent altogether; a piece the line always has a place for is
   required and stands in its slot as a missing token when the source leaves it out. A piece inside
   an optional group stays optional — `a: ` writes the `:` and misses the size, and `a` writes
-  neither. `today` gives the type a property still has, `read` the search it still makes, `legacy`
-  a property that goes when the kind converts, and a slot with no `read` one the parser does not
-  write yet. `kinds` names the kinds a token slot may hold and `layout` the slot order where a
-  node's own slots come between the ones a class above it writes (only `ElseIfDirective`).
-- **The generated green class is the target shape from the start**, and `converted` on a row is the
+  neither. `Today` gives the type a property still has, `<Read>` the search it still makes,
+  `<Legacy>` a property that goes when the kind converts, and a field with no `<Read>` one the
+  parser does not write yet. A field's `<Kind>`s name the kinds a token slot may hold, and
+  `Layout` the slot order where a node's own slots come between the ones a class above it writes
+  (only `ElseIfDirective`).
+- **The generated green class is the target shape from the start**, and `Converted` on a node is the
   whole of what a kind's conversion costs the generator: every property then reads its slot and its
   required pieces stop being nullable. Until then a property reads its slot when the green node is
   the typed one and searches when it is the generic node, so a typed node can be built by hand and
@@ -382,7 +385,7 @@ Done so far: steps 1, 2, 3, 4, 5 and 6. What they decided, where it differs from
   writes the slots it inherits; the generator says so rather than writing what will not compile.
   A node slot takes a bare `GreenNode` until every kind it may hold builds its own green class, so
   no kind waits for what it holds.
-- **The irregular kinds' designs are written down and generated, marked `unbuilt`**: a data
+- **The irregular kinds' designs are written down and generated, marked `Unbuilt`**: a data
   directive's tail is one slot holding a `DataBody`, a `BracedData` or an `InlineData`; a state item
   splits into `StateFlagItem`, `StateValueItem`, `StateInlineItem`, `StateKeepsItem`, `StateSetItem`
   and `StateUnknownItem` under `StateItemSyntax`; a name is a `GlobalToken?` and a separated list of
@@ -452,20 +455,21 @@ table would otherwise be the one file everyone touches. Give each worker its kin
 
 **What a worker does for one kind**, start to finish:
 
-1. **Edit its block in the table**: add `converted`, drop every `today` and every `read`, `nodes`
-   and `cache` from its slots, and take "or null" out of the summary of a slot that is now
-   required. Nothing else in the table is touched, so two workers never meet in it.
-2. **`pwsh scripts/generate-syntax.ps1`.** The red class's properties now read slots and its
-   required pieces are no longer nullable; the green class was already the target shape.
-3. **Convert the production**: build the typed green node instead of filling an
+1. **Edit its block in the table**: add `Converted="true"`, drop every `Today` and every `<Read>`,
+   `<Nodes/>` and `<Cache>` from its fields, and take "or null" out of the summary of a field that
+   is now required. Nothing else in the table is touched, so two workers never meet in it.
+2. **Convert the production**: build the typed green node instead of filling an
    `ImmutableArray<GreenNode>.Builder`, and where it reported a piece and left it out, call
    `Expect(kind, message)` and put the missing token in its slot. A slot the source genuinely does
    not have stays null.
-4. **Fix the consumers the compiler points at.** Mostly `?.` and `is { } x` that can go; each time,
-   ask whether the consumer now wants an `IsMissing` test it did not want before — a symbol is
-   never declared from a missing name.
-5. **Delete the kind's line from `tests/Norristown.Tests/Syntax/UnconvertedKinds.txt`.**
-6. **`pwsh scripts/test.ps1`**, and `pwsh scripts/gate.ps1` before the commit. Fixture output must
+3. **Fix the consumers the compiler points at.** The build regenerates the classes, so the red
+   class's properties read slots and its required pieces are no longer nullable before the compiler
+   looks at anything else. Mostly `?.` and `is { } x` that can go; each time, ask whether the
+   consumer now wants an `IsMissing` test it did not want before — a symbol is never declared from
+   a missing name. The classes as generated are on disk under `src/Norristown.Core/Generated` to be
+   read.
+4. **Delete the kind's line from `tests/Norristown.Tests/Syntax/UnconvertedKinds.txt`.**
+5. **`pwsh scripts/test.ps1`**, and `pwsh scripts/gate.ps1` before the commit. Fixture output must
    not move by a byte.
 
 `Parser.Expect` and `Parser.ExpectOpenBrace()` are there already, and every production that returns
