@@ -1,6 +1,8 @@
 using System.Text;
 using Norristown.Syntax;
 using GreenLine = Norristown.Syntax.InternalSyntax.GreenLine;
+using GreenNode = Norristown.Syntax.InternalSyntax.GreenNode;
+using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 
 namespace Norristown.Tests.Syntax;
 
@@ -37,33 +39,41 @@ internal static class SyntaxDump
 
     /// <summary>
     /// The statement trees, one node or token per row, indented by depth:
-    /// <c>InstructionStatement</c>, then <c>Mnemonic "lda"</c> for each token. The pieces the line
-    /// holds rather than the statement — the <c>.export</c> before a declaration and whatever the
-    /// statement could not take — are written with it; line breaks are left out, since every line
-    /// ends with one.
+    /// <c>InstructionStatement</c>, then <c>Mnemonic "lda"</c> for each token, and a row for the
+    /// node a list slot holds. The pieces the line holds rather than the statement — the
+    /// <c>.export</c> before a declaration and whatever the statement could not take — are written
+    /// with it; line breaks are left out, since every line ends with one.
+    /// <para>
+    /// It walks the slots of the nodes the parse handed back, not the red tree over them. That is
+    /// what the trees being compared are made of — a reused statement is the same green node, and a
+    /// list slot is a node of its own — and it costs no red node for a dump that runs a few
+    /// thousand times over a whole corpus.
+    /// </para>
     /// </summary>
     public static string Statements(SyntaxTree tree)
     {
         var builder = new StringBuilder();
-        void Walk(SyntaxNodeOrToken piece, int depth)
+        void Walk(GreenNode node, int depth)
         {
-            builder.Append(' ', depth * 2).Append(piece.Kind);
-            if (piece.AsNode() is not { } node)
-            {
-                builder.Append(' ').Append(Escape(piece.AsToken().Text)).Append('\n');
-                return;
-            }
+            builder.Append(' ', depth * 2).Append(node.Kind);
+            if (node is GreenToken token)
+                builder.Append(' ').Append(Escape(token.Text));
             builder.Append('\n');
-            foreach (var child in node.ChildNodesAndTokens())
-                Walk(child, depth + 1);
-        }
-        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
-        {
-            foreach (var piece in line.ChildNodesAndTokens())
+            for (var i = 0; i < node.SlotCount; i++)
             {
-                if (piece.Kind != SyntaxKind.EndOfLine)
-                    Walk(piece, 0);
+                // A slot holding nothing is a piece that was not written, and writes nothing.
+                if (node.GetSlot(i) is { } slot)
+                    Walk(slot, depth + 1);
             }
+        }
+        for (var i = 0; i < tree.LineCount; i++)
+        {
+            var parsed = tree.Parsed(i);
+            if (parsed.ExportKeyword is { } export)
+                Walk(export, 0);
+            Walk(parsed.Node, 0);
+            if (parsed.SkippedTokens is { } skipped)
+                Walk(skipped, 0);
         }
         return builder.ToString();
     }
@@ -126,15 +136,21 @@ internal static class SyntaxDump
     public static string Full(SyntaxTree tree)
     {
         var builder = new StringBuilder();
-        foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
+        for (var i = 0; i < tree.LineCount; i++)
         {
+            var line = tree.GetLine(i);
             builder.Append($"{line.LineKind} {line.OpensBlockKind}:");
             foreach (var t in line.Tokens)
             {
                 builder.Append($" [{string.Concat(t.LeadingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
                 builder.Append($"{t.Kind}{Escape(t.Text)}{string.Concat(t.TrailingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
-                builder.Append(string.Concat(t.GetDiagnostics().Select(
-                    d => $" !{d.Span.StartColumn}-{d.Span.EndColumn} {d.Message}")));
+
+                // Nearly every token says nothing, and asking one that does not costs a list.
+                if (t.ContainsDiagnostics)
+                {
+                    builder.Append(string.Concat(t.GetDiagnostics().Select(
+                        d => $" !{d.Span.StartColumn}-{d.Span.EndColumn} {d.Message}")));
+                }
                 builder.Append(']');
             }
             builder.Append('\n');
