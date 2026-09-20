@@ -503,7 +503,7 @@ internal sealed class Binder
         var turns = new Scope(ScopeKind.Repetition, null, around, null);
         var outer = scope;
         scope = turns;
-        var binding = multiProc.Name is { } name ? Declare(name, SymbolKind.Binding) : null;
+        var binding = Declare(multiProc.Name, SymbolKind.Binding);
         CollectUses(signature);
         var body = new Scope(ScopeKind.Proc, binding?.Name, turns, null);
         if (binding is not null && declares)

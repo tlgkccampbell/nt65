@@ -60,7 +60,6 @@ MacroParameter
 MacroParameterList
 MemberValue
 ModuleDirective
-MultiProcDeclaration
 NameExpression
 NamedArgument
 NextDirective

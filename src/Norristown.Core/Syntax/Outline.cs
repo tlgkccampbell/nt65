@@ -52,7 +52,7 @@ public static class Outline
 
             // One block, however many routines it declares: the enum it walks and the
             // signature they share are what a reader needs beside the name it binds.
-            case MultiProcDeclarationSyntax { Name: { } bound } multiproc:
+            case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
                     multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
                     block.Span, bound.Span, children);

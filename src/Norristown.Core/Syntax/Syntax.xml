@@ -1746,7 +1746,7 @@
     </Legacy>
   </Node>
 
-  <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="MultiProcDeclaration"/>
     <TypeComment>
       <summary><c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>.</summary>
@@ -1756,42 +1756,36 @@
         <summary>The <c>.multiproc</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Expression" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The enum whose members the routines are named from.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
-    <Field Name="CommaToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CommaToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>,</c> before the name, or null.</summary>
+        <summary>The <c>,</c> before the name.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Comma)]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The name bound to the member, or null.</summary>
+        <summary>The name bound to the member.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[TokenAfter(CommaToken) is { Kind: SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic } name ? name : null]]></Read>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
         <summary>The signature, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ProcSignatureSyntax>()]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 

@@ -1139,25 +1139,17 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMultiProc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.Comma)
-        {
-            children.Add(Advance());
-            if (AtName)
-                children.Add(Advance());
-            else
-                Report("expected the name to bind, which each routine is named from");
-        }
-        else
-        {
-            ReportOnce("expected `,` and the name to bind: `.multiproc Channel, ch {`");
-        }
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(SyntaxKind.MultiProcDeclaration, children.ToImmutable());
+        var keyword = Advance();
+        var walked = ParseExpression();
+        var comma = Expect(SyntaxKind.Comma, "expected `,` and the name to bind: `.multiproc Channel, ch {`");
+
+        // The name is written after the `,`, so where there is no comma there is nowhere for it
+        // to have been written and the comma is the whole news about the line.
+        var name = comma.IsMissing
+            ? GreenToken.Missing(SyntaxKind.Identifier)
+            : ExpectName("expected the name to bind, which each routine is named from");
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new MultiProcDeclarationSyntax(keyword, walked, comma, name, signature, ExpectOpenBrace());
     }
 
     private GreenNode ParseScope()
