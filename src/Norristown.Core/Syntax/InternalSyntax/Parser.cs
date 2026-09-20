@@ -244,31 +244,31 @@ internal sealed class Parser
 
     private GreenNode ParseLabeledLine()
     {
-        var label = new GreenSyntax(SyntaxKind.Label, [Advance(), Advance()]);
+        var label = new LabelSyntax(Advance(), Advance());
         if (AtEnd)
-            return Finish(SyntaxKind.LabeledLine, [label]);
+            return Finish(new LabeledLineSyntax(label, null));
 
         // A label may be followed by an instruction, a data directive or a macro call.
         if (Kind == SyntaxKind.Mnemonic)
-            return Finish(SyntaxKind.LabeledLine, [label, ParseInstruction()]);
+            return Finish(new LabeledLineSyntax(label, ParseInstruction()));
         if (Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang)
-            return Finish(SyntaxKind.LabeledLine, [label, ParseMacroCall()]);
+            return Finish(new LabeledLineSyntax(label, ParseMacroCall()));
         if (Kind != SyntaxKind.Directive)
         {
             Report("expected an instruction, a data directive or a macro call after a label");
-            return Finish(SyntaxKind.LabeledLine, [label]);
+            return Finish(new LabeledLineSyntax(label, null));
         }
 
         switch (SyntaxFacts.LineDirectiveKind(Current.Text))
         {
             case SyntaxKind.DataDirective:
-                return Finish(SyntaxKind.LabeledLine, [label, ParseDataDirective()]);
+                return Finish(new LabeledLineSyntax(label, ParseDataDirective()));
             case SyntaxKind.None:
                 Report($"unknown directive `{Current.Text}`");
-                return Finish(SyntaxKind.LabeledLine, [label]);
+                return Finish(new LabeledLineSyntax(label, null));
             default:
                 Report($"`{Current.Text}` may not follow a label");
-                return Finish(SyntaxKind.LabeledLine, [label]);
+                return Finish(new LabeledLineSyntax(label, null));
         }
     }
 

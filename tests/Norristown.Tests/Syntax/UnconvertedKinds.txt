@@ -39,8 +39,6 @@ ImportSignature
 IndexedIndirectOperand
 IndirectOperand
 InstructionStatement
-Label
-LabeledLine
 ListDeclaration
 ListItems
 LongIndirectOperand

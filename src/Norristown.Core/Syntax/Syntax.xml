@@ -1413,7 +1413,7 @@
     </Field>
   </Node>
 
-  <Node Name="LabelSyntax" Base="SyntaxNode">
+  <Node Name="LabelSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="Label"/>
     <TypeComment>
       <summary><c>name:</c> at the start of a line.</summary>
@@ -1426,18 +1426,16 @@
       <Kind Name="CheapLocal"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>:</c>.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
   </Node>
 
-  <Node Name="LabeledLineSyntax" Base="StatementSyntax">
+  <Node Name="LabeledLineSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="LabeledLine"/>
     <TypeComment>
       <summary>A label, and the instruction, data directive or macro call written after it, if any.</summary>
@@ -1446,13 +1444,11 @@
       <PropertyComment>
         <summary>The label.</summary>
       </PropertyComment>
-      <Read><![CDATA[(LabelSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="Statement" Type="StatementSyntax" Optional="true">
       <PropertyComment>
         <summary>What is written after the label, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes.Length > 1 ? ChildNodes[1] as StatementSyntax : null]]></Read>
     </Field>
   </Node>
 
