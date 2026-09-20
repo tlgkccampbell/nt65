@@ -6,13 +6,15 @@ namespace Norristown.Syntax;
 /// <summary>
 /// One source line, in the pieces it is written in: the <c>.export</c> that exports what it
 /// declares, its <see cref="Statement"/>, whatever the statement could not take, and the line
-/// break that ends it. Its tokens are reachable both directly and through those pieces, which
-/// between them hold the same tokens in the same order.
+/// break that ends it. Those pieces are the line's children, so a walk of the tree meets each
+/// token once and under the node it is part of; <see cref="Tokens"/> is the same line read as the
+/// lexer read it, as a flat run of tokens belonging to the line.
 /// </summary>
 public sealed partial class LineSyntax : SyntaxNode
 {
     private StatementSyntax? statement;
     private SkippedTokensSyntax? skipped;
+    private ImmutableArray<SyntaxNodeOrToken> pieces;
 
     internal LineSyntax(SyntaxTree tree, SyntaxNode? parent, GreenLine green, int position)
         : base(tree, parent, green, position)
@@ -51,6 +53,34 @@ public sealed partial class LineSyntax : SyntaxNode
 
     /// <summary>The line break that ends the line, which is the statement's terminator.</summary>
     public SyntaxToken EndOfLineToken => ChildTokens[^1];
+
+    /// <summary>
+    /// The line's tokens as the lexer read them, the line break last. They belong to the line,
+    /// and the same tokens are held again by the pieces the line is written in, where they belong
+    /// to the node each is part of; the pieces hold a missing token as well, which the source does
+    /// not write and the lexer never read.
+    /// </summary>
+    public ImmutableArray<SyntaxToken> Tokens => ChildTokens;
+
+    /// <inheritdoc/>
+    internal override ImmutableArray<SyntaxNodeOrToken>? RedChildren
+    {
+        get
+        {
+            if (pieces.IsDefault)
+            {
+                var builder = ImmutableArray.CreateBuilder<SyntaxNodeOrToken>(4);
+                if (ExportKeyword is { } exported)
+                    builder.Add(exported);
+                builder.Add(Statement);
+                if (SkippedTokens is { } left)
+                    builder.Add(left);
+                builder.Add(EndOfLineToken);
+                ImmutableInterlocked.InterlockedInitialize(ref pieces, builder.ToImmutable());
+            }
+            return pieces;
+        }
+    }
 
     private Parser.Result Parsed => Tree.Parsed(LineIndex);
 

@@ -13,6 +13,10 @@ namespace Norristown.Syntax;
 /// separators rather than the node over them, as Roslyn's does: an analyzer walking a node's
 /// children never meets a list node.
 /// </para>
+/// <para>
+/// A line holds its tokens in its slots and shows the pieces it is written in, which hold those
+/// same tokens; every token of a file is therefore met once, under the node it is part of.
+/// </para>
 /// </summary>
 public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
 {
@@ -27,6 +31,8 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         {
             if (node is null)
                 return 0;
+            if (node.RedChildren is { } children)
+                return children.Length;
             var count = 0;
             for (var i = 0; i < node.Green.SlotCount; i++)
             {
@@ -68,6 +74,12 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
     {
         if (node is null)
             yield break;
+        if (node.RedChildren is { } shown)
+        {
+            foreach (var child in shown)
+                yield return child;
+            yield break;
+        }
         var green = node.Green;
         var position = node.Position;
         for (var i = 0; i < green.SlotCount; i++)

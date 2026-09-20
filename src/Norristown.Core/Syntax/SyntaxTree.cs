@@ -55,6 +55,9 @@ public sealed class SyntaxTree
     /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
 
+    /// <summary>How many lines the file has. A text with n line breaks has n + 1 lines.</summary>
+    public int LineCount => LineStarts.Length;
+
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
 
@@ -121,6 +124,14 @@ public sealed class SyntaxTree
     /// the line holds rather than the statement.
     /// </summary>
     internal Parser.Result Parsed(int line) => statements[line];
+
+    /// <summary>
+    /// Line <paramref name="line"/> of the file, 0-based, as a node of the tree: what it parsed
+    /// to, and the tokens it is written with. It is the same node the walk down from
+    /// <see cref="Root"/> reaches, so it knows the blocks it is written in.
+    /// </summary>
+    /// <param name="line">The 0-based line.</param>
+    public LineSyntax GetLine(int line) => Root.Lines[line];
 
     /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
     public int GetLineIndex(int position)

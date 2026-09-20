@@ -5,7 +5,6 @@ using Norristown.Layout;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
-using GreenTrivia = Norristown.Syntax.InternalSyntax.GreenTrivia;
 
 namespace Norristown.Emit;
 
@@ -155,32 +154,12 @@ public sealed class Emitter
         ? value.ToString(CultureInfo.InvariantCulture)
         : Hex(value, value < 0x100 ? 2 : value < 0x10000 ? 4 : 8);
 
-    /// <summary>The first and last tokens under a node, in source order.</summary>
-    private static List<SyntaxToken> Tokens(SyntaxNode node)
-    {
-        var tokens = new List<SyntaxToken>();
-        Collect(node, tokens);
-        return tokens;
-
-        // A missing token is nowhere in the text, so there is nothing of it to write or to blank.
-        static void Collect(SyntaxNode node, List<SyntaxToken> into)
-        {
-            var nodes = node.ChildNodes;
-            var tokens = node.ChildTokens;
-            int i = 0, j = 0;
-            while (i < nodes.Length || j < tokens.Length)
-            {
-                if (j >= tokens.Length || (i < nodes.Length && nodes[i].Position < tokens[j].Position))
-                {
-                    Collect(nodes[i++], into);
-                }
-                else if (tokens[j++] is { IsMissing: false } token)
-                {
-                    into.Add(token);
-                }
-            }
-        }
-    }
+    /// <summary>
+    /// The tokens under a node, in source order. A missing token is nowhere in the text, so
+    /// there is nothing of it to write or to blank and it is left out.
+    /// </summary>
+    private static List<SyntaxToken> Tokens(SyntaxNode node) =>
+        [.. node.DescendantTokens().Where(token => !token.IsMissing)];
 
     /// <summary>
     /// The routines and data declarations this file measures. The end of <c>f</c> is
@@ -1640,21 +1619,21 @@ public sealed class Emitter
             if (edits.Joined.Contains(token.Position))
             {
                 if (!edits.Joined.Contains(tokens[i - 1].Position))
-                    text.Length -= Width(tokens[i - 1].Green.TrailingTrivia);
+                    text.Length -= Width(tokens[i - 1].TrailingTrivia);
                 text.Append(edits.Before.GetValueOrDefault(token.Position, ""))
                     .Append(edits.Replace.GetValueOrDefault(token.Position, Spelt(token)))
                     .Append(edits.After.GetValueOrDefault(token.Position, ""));
                 if (i + 1 == tokens.Count || !edits.Joined.Contains(tokens[i + 1].Position))
-                    Whitespace(text, token.Green.TrailingTrivia);
+                    Whitespace(text, token.TrailingTrivia);
                 continue;
             }
-            Whitespace(text, token.Green.LeadingTrivia);
+            Whitespace(text, token.LeadingTrivia);
             if (edits.Before.TryGetValue(token.Position, out var before))
                 text.Append(before);
             text.Append(edits.Replace.TryGetValue(token.Position, out var replacement) ? replacement : Spelt(token));
             if (edits.After.TryGetValue(token.Position, out var after))
                 text.Append(after);
-            Whitespace(text, token.Green.TrailingTrivia);
+            Whitespace(text, token.TrailingTrivia);
         }
 
         var line = indent + text.ToString().Trim();
@@ -1677,10 +1656,10 @@ public sealed class Emitter
         return written.StartsWith('$') ? written.ToLowerInvariant() : written;
     }
 
-    private static int Width(IEnumerable<GreenTrivia> trivia) =>
+    private static int Width(SyntaxTriviaList trivia) =>
         trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);
 
-    private static void Whitespace(StringBuilder text, IEnumerable<GreenTrivia> trivia)
+    private static void Whitespace(StringBuilder text, SyntaxTriviaList trivia)
     {
         foreach (var piece in trivia)
         {

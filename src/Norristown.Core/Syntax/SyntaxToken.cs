@@ -32,6 +32,64 @@ public readonly record struct SyntaxToken(SyntaxNode Parent, GreenToken Green, i
     /// <summary>The whitespace and comment after the token, up to the end of its line.</summary>
     public SyntaxTriviaList TrailingTrivia => new(this, Green.TrailingTrivia, Span.End);
 
+    /// <summary>The token's text with its trivia, exactly as in the source.</summary>
+    public string ToFullString() => Green.ToFullString();
+
+    /// <summary>
+    /// The token written after this one, wherever it is: the next token of this line, or the
+    /// first of the line below, and null at the end of the file. It walks the same tokens as
+    /// <see cref="SyntaxNode.DescendantTokens"/>, missing ones included, and each of them belongs
+    /// to the node it is part of.
+    /// </summary>
+    public SyntaxToken? GetNextToken() => Step(1);
+
+    /// <summary>
+    /// The token written before this one, wherever it is: the token before it on this line, or
+    /// the last of the line above, and null at the start of the file.
+    /// </summary>
+    public SyntaxToken? GetPreviousToken() => Step(-1);
+
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;
+
+    /// <summary>
+    /// The token one step along from this one, forwards or backwards. A line is the unit walked:
+    /// it holds few enough tokens to read them all, and a token asked for past either end of one
+    /// is the first or last token of the line next door.
+    /// </summary>
+    /// <param name="direction">1 for the token after this one, −1 for the one before it.</param>
+    private SyntaxToken? Step(int direction)
+    {
+        // A token of a line that is a piece of a statement belongs to that statement's node, so
+        // the line it is written on is the one above it all.
+        var owner = Parent;
+        while (owner is not LineSyntax && owner.Parent is { } outer)
+            owner = outer;
+
+        // Two pieces the source leaves out stand at the same place with nothing between them —
+        // `f(g(1` misses two `)` — so which node a token hangs from is part of saying which it
+        // is. A token read off a line rather than off the pieces belongs to the line instead,
+        // and is the one written at its place.
+        var self = this;
+        var tokens = owner.DescendantTokens().ToList();
+        var at = tokens.FindIndex(token => Written(token, self) && ReferenceEquals(token.Parent, self.Parent));
+        if (at < 0)
+            at = tokens.FindIndex(token => Written(token, self));
+        if (at < 0)
+            return null;
+        if (at + direction >= 0 && at + direction < tokens.Count)
+            return tokens[at + direction];
+        if (owner is not LineSyntax line)
+            return null;
+
+        var next = line.LineIndex + direction;
+        if (next < 0 || next >= line.Tree.LineCount)
+            return null;
+        var beyond = line.Tree.GetLine(next).DescendantTokens().ToList();
+        return beyond.Count == 0 ? null : beyond[direction > 0 ? 0 : ^1];
+    }
+
+    /// <summary>Whether <paramref name="token"/> is the one written where <paramref name="sought"/> is.</summary>
+    private static bool Written(SyntaxToken token, SyntaxToken sought) =>
+        token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
 }

@@ -107,6 +107,14 @@ public abstract class SyntaxNode
     /// </summary>
     internal virtual SyntaxNode ChildParent => this;
 
+    /// <summary>
+    /// The children this node shows in place of its slots, or null where its slots are its
+    /// children. A line's slots are its tokens, and its children are the pieces it is written
+    /// in, which hold those same tokens: everything that walks the tree reads the pieces, so
+    /// that a token belongs to the node it is part of and is met once.
+    /// </summary>
+    internal virtual ImmutableArray<SyntaxNodeOrToken>? RedChildren => null;
+
     /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
     /// <param name="visitor">The visitor to hand it to.</param>
     public abstract void Accept(SyntaxVisitor visitor);
@@ -150,6 +158,156 @@ public abstract class SyntaxNode
 
     /// <summary>The node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
+
+    /// <summary>
+    /// Everything below this node, nodes and tokens together, a parent before its children and
+    /// siblings in source order.
+    /// </summary>
+    public IEnumerable<SyntaxNodeOrToken> DescendantNodesAndTokens()
+    {
+        foreach (var child in ChildNodesAndTokens())
+        {
+            yield return child;
+            if (child.AsNode() is { } node)
+            {
+                foreach (var descendant in node.DescendantNodesAndTokens())
+                    yield return descendant;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every token below this node, in source order, each of them once. A missing token is one
+    /// of them: it stands in the tree where the piece it names belongs, with no text.
+    /// </summary>
+    public IEnumerable<SyntaxToken> DescendantTokens()
+    {
+        foreach (var child in ChildNodesAndTokens())
+        {
+            if (child.AsNode() is { } node)
+            {
+                foreach (var token in node.DescendantTokens())
+                    yield return token;
+            }
+            else
+            {
+                yield return child.AsToken();
+            }
+        }
+    }
+
+    /// <summary>The nodes containing this one, innermost first.</summary>
+    public IEnumerable<SyntaxNode> Ancestors()
+    {
+        for (var node = Parent; node is not null; node = node.Parent)
+            yield return node;
+    }
+
+    /// <summary>This node and the nodes containing it, this one first.</summary>
+    public IEnumerable<SyntaxNode> AncestorsAndSelf()
+    {
+        for (SyntaxNode? node = this; node is not null; node = node.Parent)
+            yield return node;
+    }
+
+    /// <summary>
+    /// The first token of this node, or null when it has none. <paramref name="includeZeroWidth"/>
+    /// takes in the tokens that write nothing: a missing token, and the line break of a file that
+    /// ends without one.
+    /// </summary>
+    /// <param name="includeZeroWidth">Whether a token with no text counts.</param>
+    public SyntaxToken? GetFirstToken(bool includeZeroWidth = false)
+    {
+        foreach (var token in DescendantTokens())
+        {
+            if (includeZeroWidth || token.Span.Length > 0)
+                return token;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The last token of this node, or null when it has none.
+    /// <paramref name="includeZeroWidth"/> takes in the tokens that write nothing.
+    /// </summary>
+    /// <param name="includeZeroWidth">Whether a token with no text counts.</param>
+    public SyntaxToken? GetLastToken(bool includeZeroWidth = false)
+    {
+        SyntaxToken? found = null;
+        foreach (var token in DescendantTokens())
+        {
+            if (includeZeroWidth || token.Span.Length > 0)
+                found = token;
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// The token <paramref name="position"/> is written in, trivia and all: the token whose full
+    /// span holds the position. The whitespace and the comment after a token belong to it, and
+    /// the indentation before the first token of a line belongs to that token, so a caret in
+    /// either finds the token the trivia is written beside, as it does in Roslyn. A missing token
+    /// has no width and so holds no position and is never the answer. The end of the file, and
+    /// the end of any node, is past everything written in it and gives its last token.
+    /// </summary>
+    /// <param name="position">An offset from this node's start to its end.</param>
+    public SyntaxToken FindToken(int position)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(position, Position);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(position, FullSpan.End);
+        if (position == FullSpan.End)
+        {
+            return GetLastToken(includeZeroWidth: true)
+                ?? throw new ArgumentOutOfRangeException(nameof(position), position, "the node holds no token");
+        }
+
+        // A file is blocks of lines, so the line holding the position is found by binary search
+        // and the walk down starts there, rather than stepping over every block before it.
+        var node = Kind is SyntaxKind.File or SyntaxKind.Block ? Tree.GetLine(Tree.GetLineIndex(position)) : this;
+        while (true)
+        {
+            var child = node.ChildContaining(position);
+            if (child.AsNode() is not { } inner)
+                return child.AsToken();
+            node = inner;
+        }
+    }
+
+    /// <summary>
+    /// The whitespace or comment <paramref name="position"/> is written in, or null when the
+    /// position is in a token's own text.
+    /// </summary>
+    /// <param name="position">An offset from this node's start to its end.</param>
+    public SyntaxTrivia? FindTrivia(int position)
+    {
+        var token = FindToken(position);
+        foreach (var trivia in token.LeadingTrivia)
+        {
+            if (trivia.Span.Contains(position))
+                return trivia;
+        }
+        foreach (var trivia in token.TrailingTrivia)
+        {
+            if (trivia.Span.Contains(position))
+                return trivia;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The innermost node holding the whole of <paramref name="span"/>, which is what an editor
+    /// is asking about when it names a range. A span no child of this node holds whole gives this
+    /// node itself, and a span this node does not hold at all is an error. An empty span is a
+    /// caret rather than a selection: it belongs to what is written after it, not to what ends
+    /// where it stands.
+    /// </summary>
+    /// <param name="span">A range within this node.</param>
+    public SyntaxNode FindNode(TextSpan span)
+    {
+        if (!FullSpan.Contains(span))
+            throw new ArgumentOutOfRangeException(nameof(span), span, "the span is not inside the node");
+        return ChildHolding(span) ?? this;
+    }
 
     /// <summary>Where slot <paramref name="index"/> starts in the file's text, trivia included.</summary>
     internal int SlotPosition(int index)
@@ -316,6 +474,58 @@ public abstract class SyntaxNode
             Measure(slot, position, ref start, ref end);
             position += slot.FullWidth;
         }
+    }
+
+    /// <summary>
+    /// The child whose text holds <paramref name="position"/>, which the walk down to a token
+    /// goes on through; nothing when no child does. A child of no width holds no position, so a
+    /// missing token is never it.
+    /// </summary>
+    private SyntaxNodeOrToken ChildContaining(int position)
+    {
+        if (RedChildren is { } children)
+        {
+            foreach (var child in children)
+            {
+                if (child.FullSpan.Contains(position))
+                    return child;
+            }
+            return default;
+        }
+        var at = Position;
+        for (var i = 0; i < Green.SlotCount; i++)
+        {
+            if (Green.GetSlot(i) is not { } slot)
+                continue;
+            if (position < at + slot.FullWidth)
+            {
+                return slot is GreenToken token
+                    ? new SyntaxNodeOrToken(new SyntaxToken(ChildParent, token, at))
+                    : new SyntaxNodeOrToken(SlotRed(i)!);
+            }
+            at += slot.FullWidth;
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// The innermost node under this one holding the whole of <paramref name="span"/>, or null
+    /// when no child of it does. A span with a length is held by one child at most, and an empty
+    /// one is held both by what ends where it stands and by what starts there, so every child
+    /// that could hold it is followed down and the narrowest answer, latest written, is the one.
+    /// </summary>
+    private SyntaxNode? ChildHolding(TextSpan span)
+    {
+        SyntaxNode? best = null;
+        foreach (var child in ChildNodes)
+        {
+            if (!child.FullSpan.Contains(span))
+                continue;
+            var found = child.ChildHolding(span) ?? child;
+            if (best is null || found.FullSpan.Length <= best.FullSpan.Length)
+                best = found;
+        }
+        return best;
     }
 
     /// <summary>
