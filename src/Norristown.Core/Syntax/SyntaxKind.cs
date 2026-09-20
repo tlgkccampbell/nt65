@@ -395,12 +395,6 @@ public enum SyntaxKind : byte
     /// <summary>Comma-separated state items.</summary>
     StateList,
 
-    /// <summary>
-    /// One state item, such as <c>a16</c>, <c>i*</c> or <c>dp = $2100</c>, or the name of a
-    /// signature set, such as <c>std</c> or <c>snes::std</c>.
-    /// </summary>
-    StateItem,
-
     /// <summary>A state word and the <c>*</c> or <c>?</c> after it: <c>a16</c>, <c>i*</c>, <c>e?</c>.</summary>
     StateFlagItem,
 

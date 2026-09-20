@@ -1294,9 +1294,13 @@ internal sealed class Binder
                             CollectUses(range.Last);
                         }
                     }
-                    else if (item is StateItemSyntax)
+                    else if (item is StateValueItemSyntax valued)
                     {
-                        CollectUses(item.ChildNodes.FirstOrDefault());
+                        CollectUses(valued.Value);
+                    }
+                    else if (item is StateSetItemSyntax named)
+                    {
+                        CollectUses(named.Name);
                     }
                 }
                 break;

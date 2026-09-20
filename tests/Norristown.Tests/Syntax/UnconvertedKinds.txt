@@ -4,5 +4,4 @@
 DataDirective
 ModuleDirective
 NameExpression
-StateItem
 UseDirective

@@ -1442,13 +1442,13 @@ internal sealed class Parser
         if (Kind == SyntaxKind.ColonColon
             || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)))
         {
-            return new GreenSyntax(SyntaxKind.StateItem, [ParseName()]);
+            return new StateSetItemSyntax(ParseName());
         }
 
         // `?` on its own is every tracked part of the state unknown, the state a routine
         // reached from outside nt65 is entered in.
         if (Kind == SyntaxKind.Question)
-            return new GreenSyntax(SyntaxKind.StateItem, [Advance()]);
+            return new StateUnknownItemSyntax(Advance());
 
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
@@ -1457,46 +1457,42 @@ internal sealed class Parser
             return null;
         }
 
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
         var nameIndex = index;
         var name = Advance();
-        children.Add(name);
-        var suffix = SyntaxKind.None;
-        if (Kind is SyntaxKind.Star or SyntaxKind.Question)
+
+        // `dp = e` and `dbr = e` are the parts given a value with an `=`; the value is read
+        // before the word is checked, so that a misspelled part is the last news about the item.
+        if (Kind == SyntaxKind.Equals)
         {
-            suffix = Kind;
-            children.Add(Advance());
-        }
-        else if (Kind == SyntaxKind.Equals)
-        {
-            suffix = Kind;
-            children.Add(Advance());
-            children.Add(ParseExpression());
+            var equals = Advance();
+            var given = ParseExpression();
+            if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
+                Report(nameIndex, $"`{name.Text}` is not a processor-state item");
+            return new StateValueItemSyntax(name, equals, given);
         }
 
-        if (!SyntaxFacts.IsStateItem(name.Text, suffix))
+        GreenToken? suffix = Kind is SyntaxKind.Star or SyntaxKind.Question ? Advance() : null;
+        if (!SyntaxFacts.IsStateItem(name.Text, suffix?.Kind ?? SyntaxKind.None))
         {
             Report(nameIndex, $"`{name.Text}` is not a processor-state item");
         }
         else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
         {
             // `args n`: how many bytes the caller pushes before the call.
-            children.Add(ParseExpression());
+            return new StateValueItemSyntax(name, null, ParseExpression());
         }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
             // `inline n` or `inline .strz`: how much data follows each call.
-            if (Kind == SyntaxKind.Directive
-                && Current.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
-                children.Add(Advance());
-            else
-                children.Add(ParseExpression());
+            return Kind == SyntaxKind.Directive && Current.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase)
+                ? new StateInlineItemSyntax(name, Advance())
+                : new StateValueItemSyntax(name, null, ParseExpression());
         }
         else if (name.Text.Equals("keeps", StringComparison.OrdinalIgnoreCase))
         {
-            ParseKeptRegisters(children);
+            return new StateKeepsItemSyntax(name, ParseKeptRegisters());
         }
-        return new GreenSyntax(SyntaxKind.StateItem, children.ToImmutable());
+        return new StateFlagItemSyntax(name, suffix);
     }
 
     /// <summary>
@@ -1504,19 +1500,21 @@ internal sealed class Parser
     /// the list runs on through the commas that separate the signature's own items, and stops
     /// at the first comma that is followed by anything else.
     /// </summary>
-    private void ParseKeptRegisters(ImmutableArray<GreenNode>.Builder children)
+    private GreenSeparatedList? ParseKeptRegisters()
     {
         if (!AtKeptRegister(index))
         {
             Report("expected the registers it keeps: `keeps a`, `keeps x, y`");
-            return;
+            return null;
         }
-        children.Add(Advance());
+        var pieces = ImmutableArray.CreateBuilder<GreenNode>();
+        pieces.Add(new IdentifierNameSyntax(Advance(), null));
         while (Kind == SyntaxKind.Comma && AtKeptRegister(index + 1))
         {
-            children.Add(Advance());
-            children.Add(Advance());
+            pieces.Add(Advance());
+            pieces.Add(new IdentifierNameSyntax(Advance(), null));
         }
+        return new GreenSeparatedList(pieces.ToImmutable());
     }
 
     /// <summary>Whether the token at <paramref name="at"/> names a register a <c>keeps</c> may take.</summary>

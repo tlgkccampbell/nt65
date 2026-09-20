@@ -20,21 +20,23 @@ public readonly record struct StateItem(
     public string Text => Node.GetText().Trim();
 
     /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
-    public ExpressionSyntax? Expression => Node.Value;
+    public ExpressionSyntax? Expression => Node is StateValueItemSyntax valued ? valued.Value : null;
 
     /// <summary>Whether an <c>inline</c> item says <c>inline .strz</c>.</summary>
-    public bool IsStrz => Node.StrzToken is not null;
+    public bool IsStrz => Node is StateInlineItemSyntax;
 
     /// <summary>The registers a <see cref="StatePart.Keeps"/> item names; none for every other item.</summary>
     public Layout.Registers Registers
     {
         get
         {
+            if (Node is not StateKeepsItemSyntax keeps)
+                return Layout.Registers.None;
             var registers = Layout.Registers.None;
-            foreach (var token in Node.Registers)
+            foreach (var register in keeps.Registers)
             {
-                if (Layout.RegisterEffects.Named(token.Text) is { } register)
-                    registers |= register;
+                if (Layout.RegisterEffects.Named(register.Name.Text) is { } named)
+                    registers |= named;
             }
             return registers;
         }
@@ -58,7 +60,8 @@ public readonly record struct StateItem(
     }
 
     /// <summary>The name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
-    public NameExpressionSyntax? SetName => Part == StatePart.Set ? Node.SetName : null;
+    public NameExpressionSyntax? SetName =>
+        Part == StatePart.Set && Node is StateSetItemSyntax set ? set.Name : null;
 
     /// <summary>
     /// Whether a list says something and every item of it is a <c>keeps</c>. Such a list says
@@ -72,19 +75,27 @@ public readonly record struct StateItem(
     }
 
     /// <summary>One item, or null when its line did not parse into one.</summary>
-    private static StateItem? Of(StateItemSyntax node)
+    private static StateItem? Of(StateItemSyntax node) => node switch
     {
-        if (node.AllUnknownToken is not null)
-            return new StateItem(node, StatePart.AllUnknown, Width.Unknown, ProcessorMode.Unknown, false, false);
-        if (node.Name is not { } word)
-        {
-            return node.SetName is not null
-                ? new StateItem(node, StatePart.Set, Width.Unknown, ProcessorMode.Unknown, false, false)
-                : null;
-        }
+        StateUnknownItemSyntax =>
+            new StateItem(node, StatePart.AllUnknown, Width.Unknown, ProcessorMode.Unknown, false, false),
+        StateSetItemSyntax =>
+            new StateItem(node, StatePart.Set, Width.Unknown, ProcessorMode.Unknown, false, false),
+        StateFlagItemSyntax flag => Worded(node, flag.Name, flag.SuffixToken?.Kind ?? SyntaxKind.None),
+        StateValueItemSyntax valued =>
+            Worded(node, valued.Name, valued.EqualsToken is null ? SyntaxKind.None : SyntaxKind.Equals),
+        StateInlineItemSyntax inline => Worded(node, inline.Name, SyntaxKind.None),
+        StateKeepsItemSyntax keeps => Worded(node, keeps.Name, SyntaxKind.None),
+        _ => null,
+    };
 
+    /// <summary>
+    /// The item a state word and the <c>*</c>, <c>?</c> or <c>=</c> after it are about, or null
+    /// for a word that names no part of the state.
+    /// </summary>
+    private static StateItem? Worded(StateItemSyntax node, SyntaxToken word, SyntaxKind suffix)
+    {
         var name = word.Text.ToLowerInvariant();
-        var suffix = node.Suffix?.Kind ?? SyntaxKind.None;
         var width = suffix switch
         {
             SyntaxKind.Star => Width.Unchanged,
