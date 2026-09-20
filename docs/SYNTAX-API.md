@@ -303,6 +303,26 @@ Most kinds map to slots directly. These do not, and need a design each:
 
 Each step builds and passes `scripts/gate.ps1` on its own, and is a commit.
 
+Done so far: steps 1, 2 and 4. What they decided, where it differs from the text above:
+
+- **The line is `[ExportKeyword?, Statement, SkippedTokens?, EndOfLineToken]`.** `.export`
+  before a declaration went on the *line* (`LineSyntax.ExportKeyword`), not on each
+  declaration: the `ExportedDeclaration` kind and wrapper are gone, and
+  `StatementSyntax.IsExported`/`ExportToken` read the line. `ErrorLine` holds no line break
+  either. `Parser.Result` carries the line's own pieces beside the statement. Moving the
+  keyword into a slot of each exportable declaration is a change to the table once the
+  table exists, if it is still wanted.
+- **A list slot is one green node** (`GreenList`, `GreenSeparatedList`, items and separators
+  alternating in one array), with one internal red `SyntaxListNode` over it that caches the
+  red items; the list structs are views over that node, and an empty list is a null slot.
+  `ChildSyntaxList` shows a list slot as one child; Roslyn flattens it, and step 5 decides.
+- **A missing token** is `GreenToken.Missing(kind)`, one shared instance per kind, never in
+  `GreenCache`. It sits after the previous token's trailing trivia, and `Measure` skips it,
+  so a node's `Span` never stretches to one. Where the caret of "expected …" goes is step
+  9's to settle.
+- `BrokenSourceTests` is the broken-source sweep (about two seconds); `BrokenLines` holds
+  the cut-line variants it shares with `TypedNodeTests`.
+
 1. **The broken-source sweep** (above), as a baseline. Fix whatever it finds today.
 2. **Move the line break and skipped tokens to the line.** Alone, with no slot work:
    `Parser.Finish`, `LineSyntax`, `StatementSyntax`, `Fidelity`, and the few consumers that
