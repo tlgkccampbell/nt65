@@ -122,7 +122,7 @@ internal sealed class Parser
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
             Report(colon, "an unnamed label is written `@name`: a cheap local, private to the routine around it");
-            return new GreenSyntax(SyntaxKind.ErrorLine, TakeRest());
+            return new ErrorLineSyntax(TakeRest());
         }
 
         // Blocks with a line grammar of their own. A struct or union member
@@ -196,22 +196,25 @@ internal sealed class Parser
                 ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
                 : $"unexpected {Describe(Current)}");
         }
-        skippedTokens = new GreenSyntax(SyntaxKind.SkippedTokens, TakeRest());
+        skippedTokens = new SkippedTokensSyntax(TakeRest());
     }
 
     private GreenNode ErrorLine(string message, DiagnosticFix? fix = null)
     {
         Report(index, message, fix);
-        return new GreenSyntax(SyntaxKind.ErrorLine, TakeRest());
+        return new ErrorLineSyntax(TakeRest());
     }
 
-    /// <summary>Every token up to, but not including, the end-of-line token.</summary>
-    private ImmutableArray<GreenNode> TakeRest()
+    /// <summary>
+    /// Every token up to, but not including, the end-of-line token, as one list; null where
+    /// there are none, which is what an empty list is held as.
+    /// </summary>
+    private GreenList? TakeRest()
     {
-        var rest = ImmutableArray.CreateBuilder<GreenNode>();
+        var rest = new GreenListBuilder();
         while (!AtEnd)
             rest.Add(Advance());
-        return rest.ToImmutable();
+        return rest.ToList();
     }
 
     private GreenNode ParseBlockClose()

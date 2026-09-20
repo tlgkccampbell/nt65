@@ -4,7 +4,6 @@
 ArgumentList
 DataDirective
 DataValues
-ErrorLine
 ExportDirective
 ImportDirective
 ListItems
@@ -19,7 +18,6 @@ SegmentAttribute
 SegmentBlock
 SegmentDeclaration
 SegmentRegion
-SkippedTokens
 StateItem
 StateList
 UseDirective

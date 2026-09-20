@@ -849,7 +849,7 @@
     </Field>
   </Node>
 
-  <Node Name="ErrorLineSyntax" Base="StatementSyntax">
+  <Node Name="ErrorLineSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ErrorLine"/>
     <TypeComment>
       <summary>A line the parser could not read as any statement: its tokens, as they are.</summary>
@@ -2187,7 +2187,7 @@
     </Field>
   </Node>
 
-  <Node Name="SkippedTokensSyntax" Base="SyntaxNode">
+  <Node Name="SkippedTokensSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="SkippedTokens"/>
     <TypeComment>
       <summary>What was left on a line after its statement: tokens the parser walked past.</summary>

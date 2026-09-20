@@ -253,6 +253,7 @@ public sealed class ParserTests
         var left = Line("lda #1 junk");
         Assert.Equal("lda #1", left.Statement.GetText());
         Assert.Equal("junk", left.SkippedTokens?.GetText());
+        Assert.Equal(["junk"], left.SkippedTokens?.Tokens.Select(token => token.Text));
         Assert.Equal(SyntaxKind.EndOfLine, left.EndOfLineToken.Kind);
         Assert.Null(left.ExportKeyword);
 
@@ -268,7 +269,8 @@ public sealed class ParserTests
     {
         var tree = SyntaxTree.Parse("main.nt65", ".frobnicate\nlda #1\n");
         Assert.Single(tree.Diagnostics);
-        Assert.Equal(SyntaxKind.ErrorLine, Statement(tree, 0).Kind);
+        var bad = Assert.IsType<ErrorLineSyntax>(Statement(tree, 0));
+        Assert.Equal([".frobnicate"], bad.Tokens.Select(token => token.Text));
         Assert.Equal("InstructionStatement(lda ImmediateOperand(# NumberExpression(1)))", SyntaxDump.Shape(Statement(tree, 1)));
     }
 
