@@ -919,28 +919,32 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseAssert()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
+        var keyword = Advance();
+        var condition = ParseExpression();
         if (Kind != SyntaxKind.Comma)
-            return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
-        children.Add(Advance());
+            return new AssertDirectiveSyntax(keyword, condition, null, null, null, null);
+        var comma = Advance();
+
         // ca65's level is reported, and the message after it still read.
+        GreenToken? level = null;
+        GreenToken? levelComma = null;
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
         {
             Report($"`{Current.Text}` is ca65's: an nt65 assertion that fails is always an error, checked as soon as "
                 + "nt65 can and otherwise at link time, so `.assert` takes only the condition and the message",
                 new DiagnosticFix(FixKind.AssertLevel));
-            children.Add(Advance());
+            level = Advance();
             if (Kind != SyntaxKind.Comma)
-                return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
-            children.Add(Advance());
+                return new AssertDirectiveSyntax(keyword, condition, comma, level, null, null);
+            levelComma = Advance();
         }
+
+        GreenToken? message = null;
         if (Kind == SyntaxKind.StringLiteral)
-            children.Add(Advance());
+            message = Advance();
         else
             Report("expected the message, in quotes");
-        return new GreenSyntax(SyntaxKind.AssertDirective, children.ToImmutable());
+        return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, message);
     }
 
     /// <summary>

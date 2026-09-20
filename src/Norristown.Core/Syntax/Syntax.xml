@@ -146,7 +146,7 @@
     </Field>
   </Node>
 
-  <Node Name="AssertDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="AssertDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="AssertDirective"/>
     <TypeComment>
       <summary><c>.assert expr, "message"</c>, whose message may be left out.</summary>
@@ -156,13 +156,11 @@
         <summary>The <c>.assert</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Condition" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>What is asserted.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -177,7 +175,6 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Identifier) ?? FirstToken(SyntaxKind.Register) ?? FirstToken(SyntaxKind.Mnemonic)]]></Read>
     </Field>
     <Field Name="LevelCommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -190,7 +187,6 @@
         <summary>The quoted message, or null.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.StringLiteral)]]></Read>
     </Field>
   </Node>
 
