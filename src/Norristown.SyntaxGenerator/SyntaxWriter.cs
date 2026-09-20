@@ -179,6 +179,11 @@ public static class SyntaxWriter
         text.AppendLine("    {");
         foreach (var (_, slot, _) in slots)
             text.AppendLine($"        {slot.Name} = {slot.Field};");
+
+        // A node holds what its children hold, so a walk for diagnostics need only follow the
+        // slots that lead to one.
+        if (slots.Length > 0)
+            text.Append(RolledUp(slots));
         text.AppendLine("    }");
 
         if (table.HasHeirs(node))
@@ -228,6 +233,28 @@ public static class SyntaxWriter
         text.AppendLine("    internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>");
         text.AppendLine($"        new Red.{node.Name}(tree, parent, this, position);");
         text.AppendLine("}");
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// The assignment that rolls <c>ContainsDiagnostics</c> up from <paramref name="slots"/>, one
+    /// slot to a line once it will not fit on one.
+    /// </summary>
+    private static string RolledUp(ImmutableArray<LaidOutSlot> slots)
+    {
+        var terms = slots.Select(s =>
+            s.Slot.IsRequired && s.Slot.List == ListShape.None
+                ? $"{s.Slot.Field}.ContainsDiagnostics"
+                : $"{s.Slot.Field} is {{ ContainsDiagnostics: true }}").ToList();
+        var line = $"        ContainsDiagnostics = {string.Join(" || ", terms)};";
+        if (line.Length <= 118)
+            return line + "\n";
+        var text = new StringBuilder("        ContainsDiagnostics =\n");
+        for (var i = 0; i < terms.Count; i++)
+        {
+            text.Append("            ").Append(i > 0 ? "|| " : "").Append(terms[i]);
+            text.Append(i < terms.Count - 1 ? "\n" : ";\n");
+        }
         return text.ToString();
     }
 

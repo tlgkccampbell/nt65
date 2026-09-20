@@ -7,12 +7,18 @@ namespace Norristown.Syntax.InternalSyntax;
 /// that holds them. A list with nothing in it is a slot with no node at all, so a list node
 /// is normally not empty, and an empty one is still legal and reads as no items.
 /// </summary>
-/// <param name="children">The list's items, in source order.</param>
-public sealed class GreenList(ImmutableArray<GreenNode> children)
-    : GreenNode(SyntaxKind.List, SumWidths(children))
+public sealed class GreenList : GreenNode
 {
+    /// <summary>Wraps <paramref name="children"/>, the list's items in source order.</summary>
+    /// <param name="children">The list's items, in source order.</param>
+    public GreenList(ImmutableArray<GreenNode> children) : base(SyntaxKind.List, SumWidths(children))
+    {
+        Children = children;
+        ContainsDiagnostics = AnyDiagnostics(children);
+    }
+
     /// <summary>The list's items, in source order.</summary>
-    public ImmutableArray<GreenNode> Children { get; } = children;
+    public ImmutableArray<GreenNode> Children { get; }
 
     /// <inheritdoc/>
     public override int SlotCount => Children.Length;

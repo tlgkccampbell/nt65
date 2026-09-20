@@ -23,6 +23,7 @@ public sealed class GreenSeparatedList : GreenNode
                 throw new ArgumentException("a separated list alternates an item node and a separator token", nameof(children));
         }
         Children = children;
+        ContainsDiagnostics = AnyDiagnostics(children);
     }
 
     /// <summary>The items and the separators between them, in source order.</summary>

@@ -19,7 +19,7 @@ public sealed class MissingTokenTests
         Assert.Equal(0, brace.LeadingWidth);
         Assert.Empty(brace.LeadingTrivia);
         Assert.Empty(brace.TrailingTrivia);
-        Assert.Null(brace.Error);
+        Assert.False(brace.ContainsDiagnostics);
     }
 
     [Fact]

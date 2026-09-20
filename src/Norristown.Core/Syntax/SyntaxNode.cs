@@ -64,6 +64,11 @@ public abstract class SyntaxNode
     /// <summary>The 0-based line this node starts on.</summary>
     public int LineIndex => Tree.GetLineIndex(Position);
 
+    /// <summary>
+    /// Whether this node or anything under it carries a diagnostic, answered without walking.
+    /// </summary>
+    public bool ContainsDiagnostics => Green.ContainsDiagnostics;
+
     /// <summary>Child lines and blocks of a file or block, a line's statement, or the nodes a statement is made of.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
     {
@@ -119,6 +124,22 @@ public abstract class SyntaxNode
 
     /// <summary>This node's children, nodes and tokens together, in source order.</summary>
     public ChildSyntaxList ChildNodesAndTokens() => new(this);
+
+    /// <summary>
+    /// The syntax diagnostics of this node and everything under it, in source order. Nothing is
+    /// walked where <see cref="ContainsDiagnostics"/> says there is nothing to find.
+    /// <para>
+    /// A line, a block and a file hold a line's tokens rather than what they parse to, so what
+    /// they answer for is the lexical errors on those tokens; a statement and everything under it
+    /// answers for itself. <see cref="SyntaxTree.Diagnostics"/> is the file's whole answer.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<Diagnostic> GetDiagnostics()
+    {
+        var result = new List<Diagnostic>();
+        Tree.Collect(Green, Position, result);
+        return result;
+    }
 
     /// <summary>Every node below this one, parents before children.</summary>
     public IEnumerable<SyntaxNode> DescendantNodes()

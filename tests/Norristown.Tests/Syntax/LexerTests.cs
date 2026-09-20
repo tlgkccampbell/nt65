@@ -62,7 +62,13 @@ public sealed class LexerTests
         Assert.Equal(2, line.Tokens.Length);
         Assert.Equal(kind, line.Tokens[0].Kind.ToString());
         Assert.Equal(text, line.Tokens[0].Text);
-        Assert.Equal(error, line.Tokens[0].Error);
+
+        // A lexical error covers the token's text, and the line says it holds one.
+        Assert.True(line.ContainsDiagnostics);
+        var reported = Assert.Single(line.Tokens[0].Diagnostics);
+        Assert.Equal(error, reported.Message);
+        Assert.Equal(line.Tokens[0].LeadingWidth, reported.Offset);
+        Assert.Equal(text.Length, reported.Width);
     }
 
     [Fact]

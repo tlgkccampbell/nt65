@@ -115,7 +115,7 @@ public sealed class TextMateGrammarTests
                         if (scopes[at..].Any(s => s != TextMateGrammar.Comment))
                             failures.Add($"{name}:{l + 1}: comment `{comment.Text}` is not scoped as a comment");
                     }
-                    if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.Error is not null)
+                    if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.ContainsDiagnostics)
                         continue;
                     var expected = TextMateGrammar.Expected(syntax[l], t, bodies.GetValueOrDefault(l));
                     var actual = scopes[start..triviaStart].Distinct().ToList();

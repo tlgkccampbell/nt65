@@ -32,6 +32,34 @@ public sealed class IncrementalTests
     }
 
     /// <summary>
+    /// A broken line's diagnostics are part of the nodes its parse hands back, so an edit
+    /// somewhere else keeps them without parsing the line again — and their spans move with the
+    /// line, because what a green node holds is an offset within itself.
+    /// </summary>
+    [Fact]
+    public void AnEditElsewhereKeepsABrokenLineAndItsDiagnostics()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", "nop\n.proc p   ; note\nrts\n");
+        Assert.Equal(
+            [new Span("main.nt65", 2, 8, 8)],
+            tree.Diagnostics.Select(d => d.Span));
+
+        // A line inserted above it: the statement is the same object, and the diagnostic has
+        // moved down a line and nowhere else.
+        var edited = tree.WithChange(new TextChange(0, 0, "  sei\n"));
+        Assert.Same(tree.Lines[1], edited.Lines[2]);
+        Assert.Same(tree.Statement(1), edited.Statement(2));
+        Assert.Equal(
+            [new Span("main.nt65", 3, 8, 8)],
+            edited.Diagnostics.Select(d => d.Span));
+
+        // And text inserted on the line above it, which shifts nothing at all.
+        var indented = tree.WithChange(new TextChange(0, 0, "    "));
+        Assert.Same(tree.Statement(1), indented.Statement(1));
+        Assert.Equal(tree.Diagnostics, indented.Diagnostics);
+    }
+
+    /// <summary>
     /// A line whose enclosing block changes kind is parsed again, because that is the one
     /// thing outside a line that its syntax depends on.
     /// </summary>

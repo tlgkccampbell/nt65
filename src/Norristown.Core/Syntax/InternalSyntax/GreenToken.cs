@@ -6,10 +6,10 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <summary>One token and the trivia around it.</summary>
 public sealed class GreenToken : GreenNode
 {
-    // The missing token of each kind, which every node that wants one shares: a missing token
-    // has no text and no trivia of its own, so one per kind is all there is to have. They are
-    // held here and nowhere else, so the lexer's cache can never hand one out for a token the
-    // source really wrote. A kind is a byte, hence the size.
+    // The missing token of each kind that reports nothing, which every node that wants one
+    // shares: such a token has no text, no trivia and no diagnostic of its own, so one per kind
+    // is all there is to have. They are held here and nowhere else, so the lexer's cache can
+    // never hand one out for a token the source really wrote. A kind is a byte, hence the size.
     private static readonly GreenToken?[] missing = new GreenToken?[byte.MaxValue + 1];
 
     internal GreenToken(SyntaxKind kind, string text, ImmutableArray<GreenTrivia> leading,
@@ -19,15 +19,21 @@ public sealed class GreenToken : GreenNode
         Text = text;
         LeadingTrivia = leading;
         TrailingTrivia = trailing;
-        Error = error;
+
+        // A lexical error covers the token's text, and arrives with the token rather than after
+        // it: the cache never shares a token that has one, so it is one token's own.
+        if (error is not null)
+            Report(new GreenDiagnostic(TriviaWidth(leading), text.Length, error));
     }
 
-    private GreenToken(SyntaxKind kind) : base(kind, 0)
+    private GreenToken(SyntaxKind kind, GreenDiagnostic? diagnostic) : base(kind, 0)
     {
         Text = "";
         LeadingTrivia = [];
         TrailingTrivia = [];
         IsMissing = true;
+        if (diagnostic is not null)
+            Report(diagnostic);
     }
 
     /// <summary>The token's text, exactly as in the source.</summary>
@@ -39,9 +45,6 @@ public sealed class GreenToken : GreenNode
     /// <summary>Whitespace and a comment after the token, up to the end of its line.</summary>
     public ImmutableArray<GreenTrivia> TrailingTrivia { get; }
 
-    /// <summary>A lexical error covering the token's text, or null.</summary>
-    public string? Error { get; }
-
     /// <summary>
     /// Whether the token stands where one belongs that the source does not have. It has no
     /// text and no trivia, so it is nowhere in the file's text and takes up no width.
@@ -50,6 +53,9 @@ public sealed class GreenToken : GreenNode
 
     /// <summary>Width of the leading trivia, which is where the token's own text starts.</summary>
     public int LeadingWidth => TriviaWidth(LeadingTrivia);
+
+    /// <summary>Width of the trailing trivia, which is what stands between this token and the next.</summary>
+    public int TrailingWidth => TriviaWidth(TrailingTrivia);
 
     /// <summary>Always 0: a token has no children.</summary>
     public override int SlotCount => 0;
@@ -62,16 +68,25 @@ public sealed class GreenToken : GreenNode
 
     /// <summary>
     /// The missing token of <paramref name="kind"/>, for a piece a line needs and does not
-    /// have. One instance per kind is shared, since a missing token holds nothing of its own.
+    /// have. One instance per kind is shared, since such a token holds nothing of its own.
     /// </summary>
     internal static GreenToken Missing(SyntaxKind kind)
     {
         var index = (int)kind;
         if (missing[index] is { } shared)
             return shared;
-        var created = new GreenToken(kind);
+        var created = new GreenToken(kind, null);
         return Interlocked.CompareExchange(ref missing[index], created, null) ?? created;
     }
+
+    /// <summary>
+    /// The missing token of <paramref name="kind"/> that says why it is missing. It is an
+    /// instance of its own rather than the shared one, since what it reports is about the one
+    /// place it stands in.
+    /// </summary>
+    /// <param name="kind">The kind of token the source does not have.</param>
+    /// <param name="diagnostic">What to say about it, placed within the token.</param>
+    internal static GreenToken Missing(SyntaxKind kind, GreenDiagnostic diagnostic) => new(kind, diagnostic);
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>
         throw new InvalidOperationException("a token has no red node: it is a SyntaxToken of its parent");

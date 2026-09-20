@@ -3,11 +3,18 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>A whole file: the lines and blocks at its top level.</summary>
-/// <param name="children">The file's top-level lines and blocks, in source order.</param>
-public sealed class GreenFile(ImmutableArray<GreenNode> children) : GreenNode(SyntaxKind.File, SumWidths(children))
+public sealed class GreenFile : GreenNode
 {
+    /// <summary>Wraps <paramref name="children"/>, the file's top-level lines and blocks.</summary>
+    /// <param name="children">The file's top-level lines and blocks, in source order.</param>
+    internal GreenFile(ImmutableArray<GreenNode> children) : base(SyntaxKind.File, SumWidths(children))
+    {
+        Children = children;
+        ContainsDiagnostics = AnyDiagnostics(children);
+    }
+
     /// <summary>The file's top-level lines and blocks, in source order.</summary>
-    public ImmutableArray<GreenNode> Children { get; } = children;
+    public ImmutableArray<GreenNode> Children { get; }
 
     /// <inheritdoc/>
     public override int SlotCount => Children.Length;
