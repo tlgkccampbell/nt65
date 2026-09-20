@@ -16,7 +16,6 @@ EnumDeclaration
 EnumMember
 ErrorLine
 ExportDirective
-ExportItem
 ExternProcDeclaration
 FrameDirective
 FuncDeclaration
@@ -51,5 +50,4 @@ StateList
 StructDeclaration
 UnionDeclaration
 UseDirective
-UseItem
 ValueList

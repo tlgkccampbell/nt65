@@ -1316,25 +1316,29 @@ internal sealed class Parser
             Report("expected a name to export");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(ParseName());
+        var name = ParseName();
+        GreenToken? colon = null;
+        GreenToken? addressSize = null;
         if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
+            colon = Advance();
             if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
-                children.Add(Advance());
+                addressSize = Advance();
             else
                 Report("expected `zp`, `abs` or `far`");
         }
+
+        GreenToken? asKeyword = null;
+        GreenToken? linkerName = null;
         if (AtWord("as"))
         {
-            children.Add(Advance());
+            asKeyword = Advance();
             if (Kind == SyntaxKind.StringLiteral)
-                children.Add(Advance());
+                linkerName = Advance();
             else
                 Report("expected the linker name, in quotes: `as \"_name\"`");
         }
-        return new GreenSyntax(SyntaxKind.ExportItem, children.ToImmutable());
+        return new ExportItemSyntax(name, colon, addressSize, asKeyword, linkerName);
     }
 
     /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
@@ -1377,7 +1381,11 @@ internal sealed class Parser
                 ReportOnce("expected `}`");
             return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
         }
-        ParseUseAlias(children);
+        var (asKeyword, alias) = ParseUseAlias();
+        if (asKeyword is { } written)
+            children.Add(written);
+        if (alias is { } name)
+            children.Add(name);
         return new GreenSyntax(SyntaxKind.UseDirective, children.ToImmutable());
     }
 
@@ -1389,22 +1397,21 @@ internal sealed class Parser
             ReportOnce("expected a name");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        ParseUseAlias(children);
-        return new GreenSyntax(SyntaxKind.UseItem, children.ToImmutable());
+        var name = Advance();
+        var (asKeyword, alias) = ParseUseAlias();
+        return new UseItemSyntax(name, asKeyword, alias);
     }
 
-    /// <summary><c>as name</c>, when it is written.</summary>
-    private void ParseUseAlias(ImmutableArray<GreenNode>.Builder children)
+    /// <summary><c>as name</c>, when it is written, and the name it renames to.</summary>
+    private (GreenToken? AsKeyword, GreenToken? Alias) ParseUseAlias()
     {
         if (!AtWord("as"))
-            return;
-        children.Add(Advance());
+            return (null, null);
+        var keyword = Advance();
         if (AtName)
-            children.Add(Advance());
-        else
-            ReportOnce("expected the name to bring it in as: `as name`");
+            return (keyword, Advance());
+        ReportOnce("expected the name to bring it in as: `as name`");
+        return (keyword, null);
     }
 
     /// <summary>

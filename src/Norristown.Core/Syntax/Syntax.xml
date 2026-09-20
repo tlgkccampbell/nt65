@@ -909,7 +909,7 @@
     </Field>
   </Node>
 
-  <Node Name="ExportItemSyntax" Base="SyntaxNode">
+  <Node Name="ExportItemSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ExportItem"/>
     <TypeComment>
       <summary><c>name</c> or <c>outer::inner</c>, then <c>: size</c> or <c>as "linker_name"</c>.</summary>
@@ -918,35 +918,30 @@
       <PropertyComment>
         <summary>The name exported.</summary>
       </PropertyComment>
-      <Read><![CDATA[(NameExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>:</c> before the address size, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
     <Field Name="AddressSize" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAfter(ColonToken) is { Kind: SyntaxKind.Identifier } size && SyntaxFacts.IsAddressSize(size.Text) ? size : null]]></Read>
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>as</c> before the linker name, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[FirstWord("as")]]></Read>
     </Field>
     <Field Name="LinkerName" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The quoted name the linker sees, or null.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.StringLiteral)]]></Read>
     </Field>
   </Node>
 
@@ -2658,7 +2653,7 @@
     </Field>
   </Node>
 
-  <Node Name="UseItemSyntax" Base="SyntaxNode">
+  <Node Name="UseItemSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="UseItem"/>
     <TypeComment>
       <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
@@ -2670,14 +2665,12 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>as</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(1)]]></Read>
     </Field>
     <Field Name="Alias" Type="SyntaxToken" Optional="true">
       <PropertyComment>
@@ -2686,7 +2679,6 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[TokenAt(2)]]></Read>
     </Field>
   </Node>
 
