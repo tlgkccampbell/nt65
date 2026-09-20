@@ -1640,7 +1640,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.Register && Next != SyntaxKind.Colon
             && Current.Text.Equals("a", StringComparison.OrdinalIgnoreCase))
         {
-            return new GreenSyntax(SyntaxKind.AccumulatorOperand, [Advance()]);
+            return new AccumulatorOperandSyntax(Advance());
         }
 
         if (Kind == SyntaxKind.OpenParen && TryParseIndirect() is { } indirect)
@@ -1720,20 +1720,18 @@ internal sealed class Parser
         return new GreenSyntax(SyntaxKind.LongIndirectOperand, children.ToImmutable());
     }
 
-    private GreenNode ParseAddressOperand()
+    private AbsoluteOperandSyntax ParseAddressOperand()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        if (TryAddressPrefix() is { } prefix)
-            children.Add(prefix);
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.Comma)
-        {
-            children.Add(Advance());
+        var prefix = TryAddressPrefix();
+        var address = ParseExpression();
+        if (Kind != SyntaxKind.Comma)
+            return new AbsoluteOperandSyntax(prefix, address, null, null, null);
+        var comma = Advance();
 
-            // `,x`, `,y` and `,s` index; a second expression is what `bbr`/`bbs` take.
-            children.Add(Kind == SyntaxKind.Register ? Advance() : ParseExpression());
-        }
-        return new GreenSyntax(SyntaxKind.AbsoluteOperand, children.ToImmutable());
+        // `,x`, `,y` and `,s` index; a second expression is what `bbr`/`bbs` take.
+        return Kind == SyntaxKind.Register
+            ? new AbsoluteOperandSyntax(prefix, address, comma, Advance(), null)
+            : new AbsoluteOperandSyntax(prefix, address, comma, null, ParseExpression());
     }
 
     /// <summary>
@@ -1741,14 +1739,14 @@ internal sealed class Parser
     /// and the parser decides by position; here, in operand position, nothing else can
     /// be written, so a name followed by <c>:</c> is a prefix.
     /// </summary>
-    private GreenNode? TryAddressPrefix()
+    private AddressPrefixSyntax? TryAddressPrefix()
     {
         if (Next != SyntaxKind.Colon || Kind is not (SyntaxKind.Identifier or SyntaxKind.Register)
             || !SyntaxFacts.IsAddressPrefix(Current.Text))
         {
             return null;
         }
-        return new GreenSyntax(SyntaxKind.AddressPrefix, [Advance(), Advance()]);
+        return new AddressPrefixSyntax(Advance(), Advance());
     }
 
     private bool IsRegister(int offset, string name) =>

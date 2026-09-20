@@ -52,7 +52,7 @@
 -->
 <Tree>
 
-  <Node Name="AbsoluteOperandSyntax" Base="OperandSyntax">
+  <Node Name="AbsoluteOperandSyntax" Base="OperandSyntax" Converted="true">
     <Kind Name="AbsoluteOperand"/>
     <TypeComment>
       <summary><c>expr</c>, <c>expr,x</c>, <c>z:expr</c>, or the <c>expr, expr</c> of a bit branch.</summary>
@@ -61,37 +61,32 @@
       <PropertyComment>
         <summary>The <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c>, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<AddressPrefixSyntax>()]]></Read>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The address.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>,</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Comma)]]></Read>
     </Field>
     <Field Name="IndexRegister" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>x</c>, <c>y</c> or <c>s</c> after the <c>,</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Register)]]></Read>
     </Field>
     <Field Name="Second" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The second expression of a bit branch, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[NodeAfter(CommaToken) as ExpressionSyntax]]></Read>
     </Field>
   </Node>
 
-  <Node Name="AccumulatorOperandSyntax" Base="OperandSyntax">
+  <Node Name="AccumulatorOperandSyntax" Base="OperandSyntax" Converted="true">
     <Kind Name="AccumulatorOperand"/>
     <TypeComment>
       <summary>The <c>a</c> of <c>asl a</c>.</summary>
@@ -101,11 +96,10 @@
         <summary>The <c>a</c>.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </Node>
 
-  <Node Name="AddressPrefixSyntax" Base="SyntaxNode">
+  <Node Name="AddressPrefixSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="AddressPrefix"/>
     <TypeComment>
       <summary><c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> before an address.</summary>
@@ -116,14 +110,12 @@
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>:</c>.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
   </Node>
 
