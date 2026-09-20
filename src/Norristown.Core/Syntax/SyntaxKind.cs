@@ -168,8 +168,9 @@ public enum SyntaxKind : byte
     /// <summary>A list whose items are written with a separator between them, nearly always a comma.</summary>
     SeparatedList,
 
-    // Statements. One line parses to exactly one of these, whose last child is the line's
-    // end-of-line token, so a statement's text is its whole line.
+    // Statements. One line parses to exactly one of these, and a statement is only its own
+    // tokens: the line break, the `.export` before a declaration and whatever the statement
+    // could not take belong to the line.
 
     /// <summary>A line with no tokens of its own.</summary>
     BlankLine,
@@ -451,7 +452,10 @@ public enum SyntaxKind : byte
     /// <summary>The parenthesized arguments of a call.</summary>
     ArgumentList,
 
-    /// <summary>An expression the parser could not read; empty where nothing was written at all.</summary>
+    /// <summary>
+    /// An expression the parser could not read, which holds nothing: it stands where an expression
+    /// belongs, as a missing token stands where a token does.
+    /// </summary>
     ErrorExpression,
 
     // Operands. Which ones an instruction and a CPU allow is decided in layout.

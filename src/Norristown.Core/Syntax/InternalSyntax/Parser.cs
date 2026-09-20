@@ -10,9 +10,12 @@ namespace Norristown.Syntax.InternalSyntax;
 /// The parser never aborts a line: whatever it cannot read becomes a
 /// <see cref="SyntaxKind.SkippedTokens"/> node with a diagnostic, which the line holds as it
 /// holds the line break and the <c>.export</c> before a declaration. A statement is therefore
-/// only its own tokens, wherever it is written. The parser never invents a token either, so a
-/// piece it expected and did not find is simply absent from the node, and everything above the
-/// parser has to allow for a missing child.
+/// only its own tokens, wherever it is written. A node's shape does not depend on what the source
+/// wrote either: a piece the line has a place for and does not write stands in its slot as a
+/// missing token, of no width and with no text, so a required property is never null and what
+/// reads the tree asks <see cref="GreenNode.IsMissing"/> where it cares. A piece belonging to a
+/// part of the line the source left out altogether — a signature, an operand, an <c>as</c> — is
+/// null, and that is the whole of what null means.
 /// </para>
 /// <para>
 /// A diagnostic goes over the token the parser is looking at. Where that is the end of the line —

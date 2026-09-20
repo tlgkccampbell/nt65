@@ -25,11 +25,8 @@ internal sealed class GreenBlock : GreenNode
     /// <summary>The kind of block, from the statement its opener line ends with.</summary>
     public BlockKind BlockKind => Opener.OpensBlockKind;
 
-    /// <summary>The line that opens the block.</summary>
+    /// <summary>The line that opens the block, which is what says what kind of block it is.</summary>
     public GreenLine Opener => (GreenLine)Children[0];
-
-    /// <summary>The closing <c>}</c> line, or null when a continuation line ends the block.</summary>
-    public GreenLine? Closer => HasCloser ? (GreenLine)Children[^1] : null;
 
     /// <inheritdoc/>
     public override int SlotCount => Children.Length;

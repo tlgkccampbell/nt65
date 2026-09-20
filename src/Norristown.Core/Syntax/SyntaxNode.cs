@@ -9,9 +9,12 @@ namespace Norristown.Syntax;
 /// has: a <see cref="BinaryExpressionSyntax"/> has a left and a right, a
 /// <see cref="ProcDeclarationSyntax"/> a name and a signature.
 /// <para>
-/// The parser never invents a token, so a piece it expected and did not find is absent from
-/// the node, and the property that names it is null. A property is non-null only where no
-/// line can parse to the node without the piece.
+/// A node's shape is fixed: it has a slot for each piece the kind is written with, in source
+/// order, and a required piece stands in its slot whether or not the source wrote it. So a
+/// required property is never null, and a piece the source left out is a
+/// <see cref="SyntaxToken"/> with <see cref="SyntaxToken.IsMissing"/> set, of no width, placed
+/// where it belongs. A nullable property means one thing: the piece belongs to a part of the
+/// line the source did not write at all.
 /// </para>
 /// </summary>
 public abstract class SyntaxNode

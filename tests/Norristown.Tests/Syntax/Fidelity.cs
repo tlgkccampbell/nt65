@@ -4,9 +4,10 @@ namespace Norristown.Tests.Syntax;
 
 /// <summary>
 /// The full-fidelity check: a tree's text is its source, and so is every line's. The parser never
-/// drops a token and never invents one, so the pieces a line is written in — the <c>.export</c>
-/// that exports what it declares, its statement, whatever the statement could not take, and the
-/// line break that ends it — read back as that line, comments, whitespace, error nodes and all.
+/// drops a token, and a token it puts where the source wrote none has no text, so the pieces a
+/// line is written in — the <c>.export</c> that exports what it declares, its statement, whatever
+/// the statement could not take, and the line break that ends it — read back as that line,
+/// comments, whitespace, missing tokens, error nodes and all.
 /// </summary>
 internal static class Fidelity
 {
