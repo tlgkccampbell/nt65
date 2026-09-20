@@ -1677,6 +1677,14 @@ internal sealed class Binder
         IReadOnlyList<CharmapEntrySyntax>? entries = null,
         bool follows = false)
     {
+        // A name the source does not have declares nothing. The parser stands a missing token
+        // in the slot so that the declaration keeps its shape, and that token has no text: a
+        // symbol made from one would be called "", shadow the last such symbol and answer to
+        // nothing anyone wrote. Every declaration in the file comes through here, so this is
+        // the one place that has to say so.
+        if (name.IsMissing)
+            return null;
+
         // A member of a named type may be called after a register or a mnemonic: it is only
         // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. Any
         // other reserved name is reported, and declared all the same, so that what uses it and
