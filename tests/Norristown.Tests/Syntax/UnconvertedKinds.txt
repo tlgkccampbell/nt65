@@ -29,7 +29,6 @@ ExternProcDeclaration
 FrameDirective
 FuncDeclaration
 IfDirective
-ImmediateOperand
 ImportDirective
 ImportItem
 ImportSignature

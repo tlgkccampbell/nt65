@@ -1124,7 +1124,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="ImmediateOperandSyntax" Base="OperandSyntax">
+  <Node Name="ImmediateOperandSyntax" Base="OperandSyntax" Converted="true">
     <Kind Name="ImmediateOperand"/>
     <TypeComment>
       <summary><c>#expr</c>, or the <c>#src, #dst</c> of a block move.</summary>
@@ -1134,33 +1134,28 @@
         <summary>The <c>#</c>.</summary>
       </PropertyComment>
       <Kind Name="Hash"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The value.</summary>
       </PropertyComment>
-      <Read><![CDATA[(ExpressionSyntax)ChildNodes[0]]]></Read>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>,</c> before a second value, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Comma)]]></Read>
     </Field>
     <Field Name="SecondHashToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>#</c> of a second value, or null.</summary>
       </PropertyComment>
       <Kind Name="Hash"/>
-      <Read><![CDATA[TokenAt(2)]]></Read>
     </Field>
     <Field Name="SecondValue" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The second bank of a block move, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[ChildNodes.Length > 1 ? (ExpressionSyntax)ChildNodes[1] : null]]></Read>
     </Field>
   </Node>
 

@@ -1650,20 +1650,15 @@ internal sealed class Parser
         return ParseAddressOperand();
     }
 
-    private GreenNode ParseImmediate()
+    private ImmediateOperandSyntax ParseImmediate()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
+        var hash = Advance();
+        var value = ParseExpression();
 
         // `mvn #src, #dst` and `mvp` take two bank bytes, written as immediates.
-        if (Kind == SyntaxKind.Comma && Next == SyntaxKind.Hash)
-        {
-            children.Add(Advance());
-            children.Add(Advance());
-            children.Add(ParseExpression());
-        }
-        return new GreenSyntax(SyntaxKind.ImmediateOperand, children.ToImmutable());
+        return Kind == SyntaxKind.Comma && Next == SyntaxKind.Hash
+            ? new ImmediateOperandSyntax(hash, value, Advance(), Advance(), ParseExpression())
+            : new ImmediateOperandSyntax(hash, value, null, null, null);
     }
 
     /// <summary>
