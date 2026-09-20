@@ -38,8 +38,6 @@ ErrorExpression
 ErrorLine
 ExportDirective
 ExportItem
-FrameDirective
-FuncDeclaration
 IfDirective
 ImmediateOperand
 ImportDirective
@@ -62,14 +60,12 @@ NumberExpression
 ParameterKind
 ParameterList
 ParenthesizedExpression
-PatchDirective
 RecordValues
 RepeatDirective
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration
 SegmentRegion
-SignatureDeclaration
 SkippedTokens
 StateDirective
 StateItem

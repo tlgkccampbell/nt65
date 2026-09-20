@@ -111,7 +111,7 @@ public static class Outline
                     line.Span, data.Span, []));
                 break;
 
-            case FuncDeclarationSyntax { Name: { } function }:
+            case FuncDeclarationSyntax { Name: { IsMissing: false } function }:
                 items.Add(new OutlineItem(OutlineKind.Function, function.Text, TextAfter(statement, function),
                     line.Span, function.Span, []));
                 break;

@@ -1173,13 +1173,11 @@ internal sealed class Binder
             // program's names and constants are.
             case SignatureDeclarationSyntax signature:
                 var items = signature.Items;
-                if (signature.Name is { } set)
-                {
-                    if (SyntaxFacts.IsStateWord(set.Text))
-                        Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
-                    else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
-                        declared.Definition = items;
-                }
+                var set = signature.Name;
+                if (SyntaxFacts.IsStateWord(set.Text))
+                    Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
+                else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
+                    declared.Definition = items;
                 CollectUses(items);
                 break;
 
@@ -1304,8 +1302,7 @@ internal sealed class Binder
 
             // A frame is named like data of a type, so its members are reached through it.
             case FrameDirectiveSyntax frame:
-                if (frame.Name is { } frameName)
-                    Declare(frameName, SymbolKind.Frame, type: frame.Type);
+                Declare(frame.Name, SymbolKind.Frame, type: frame.Type);
                 CollectUses(frame.Type);
                 break;
 
@@ -1506,11 +1503,7 @@ internal sealed class Binder
     private void BindFunc(FuncDeclarationSyntax statement)
     {
         var body = statement.Body;
-        if (statement.Name is not { } name)
-            return;
-
-        var symbol = Declare(name, SymbolKind.Func, value: null, items: [body]);
-        if (symbol is null)
+        if (Declare(statement.Name, SymbolKind.Func, value: null, items: [body]) is not { } symbol)
             return;
 
         var inside = new Scope(ScopeKind.Type, null, scope, symbol);

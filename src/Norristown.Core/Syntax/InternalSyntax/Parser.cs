@@ -603,43 +603,31 @@ internal sealed class Parser
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
     private GreenNode ParseFunc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        else
-            Report("expected a function name");
+        var keyword = Advance();
+        var name = ExpectName("expected a function name");
+        GreenNode? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseParameterList());
+            parameters = ParseParameterList();
         else
             Report("expected `(` and the parameter names");
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
+
+        // The `=` and the body are two pieces, and a line that writes neither is missing both.
+        if (Kind != SyntaxKind.Equals)
             Report("expected `=` and the body");
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.FuncDeclaration, children.ToImmutable());
+        return new FuncDeclarationSyntax(
+            keyword, name, parameters, Expect(SyntaxKind.Equals), ParseExpression());
     }
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
     private GreenNode ParseSignatureDeclaration()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!AtName)
-        {
-            Report("expected a name for the signature set");
-            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Equals)
-        {
-            Report("expected `=` and the items: `.signature std = a8, i16`");
-            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
-        children.Add(ParseStateList());
-        return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
+        var keyword = Advance();
+        var name = ExpectName("expected a name for the signature set");
+        var equals = Expect(SyntaxKind.Equals, "expected `=` and the items: `.signature std = a8, i16`");
+
+        // The items are written after the `=`, so a line without one names nothing to read them as.
+        return new SignatureDeclarationSyntax(
+            keyword, name, equals, equals.IsMissing ? null : ParseStateList());
     }
 
     /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
@@ -946,15 +934,16 @@ internal sealed class Parser
 
     /// <summary>
     /// The token of <paramref name="kind"/> written here, or the missing token that stands where
-    /// one belongs, with <paramref name="message"/> reported there. A slot the source does not
-    /// fill is filled from here and nowhere else.
+    /// one belongs. A slot the source does not fill is filled from here and nowhere else.
     /// </summary>
+    private GreenToken Expect(SyntaxKind kind) => Kind == kind ? Advance() : GreenToken.Missing(kind);
+
+    /// <summary>The same, with <paramref name="message"/> reported where the token belongs.</summary>
     private GreenToken Expect(SyntaxKind kind, string message)
     {
-        if (Kind == kind)
-            return Advance();
-        ReportOnce(message);
-        return GreenToken.Missing(kind);
+        if (Kind != kind)
+            ReportOnce(message);
+        return Expect(kind);
     }
 
     /// <summary>
@@ -1193,32 +1182,20 @@ internal sealed class Parser
     /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
     private GreenNode ParseFrame()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Identifier)
-        {
-            Report("expected a name for the frame");
-            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
-        }
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Colon)
-        {
-            Report("expected `:` and the struct the frame is laid out as");
-            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
-        }
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
+        var keyword = Advance();
+        var name = Expect(SyntaxKind.Identifier, "expected a name for the frame");
+        var colon = Expect(SyntaxKind.Colon, "expected `:` and the struct the frame is laid out as");
+
+        // The struct is written after the `:`, so a line without one says nothing about it.
+        return new FrameDirectiveSyntax(keyword, name, colon, colon.IsMissing ? null : ParseExpression());
     }
 
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
     private GreenNode ParsePatch()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (ParseTarget("expected the label of the instruction being written to") is { } target)
-            children.Add(target);
-        return new GreenSyntax(SyntaxKind.PatchDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new PatchDirectiveSyntax(
+            keyword, ParseTarget("expected the label of the instruction being written to"));
     }
 
     /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>

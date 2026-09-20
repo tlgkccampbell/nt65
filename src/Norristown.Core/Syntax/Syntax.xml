@@ -1037,7 +1037,7 @@
     <Kind Name="File"/>
   </Node>
 
-  <Node Name="FrameDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="FrameDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="FrameDirective"/>
     <TypeComment>
       <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
@@ -1047,31 +1047,27 @@
         <summary>The <c>.frame</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The frame's name, or null.</summary>
+        <summary>The frame's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
-      <Read><![CDATA[TokenAt(1) is { Kind: SyntaxKind.Identifier } name ? name : null]]></Read>
     </Field>
-    <Field Name="ColonToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c>, or null.</summary>
+        <summary>The <c>:</c> before the struct.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
-    <Field Name="Type" Type="ExpressionSyntax" Today="ExpressionSyntax?">
+    <Field Name="Type" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The struct the frame is laid out as, or null.</summary>
+        <summary>The struct the frame is laid out as, or null when not even the <c>:</c> was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 
-  <Node Name="FuncDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="FuncDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="FuncDeclaration"/>
     <TypeComment>
       <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
@@ -1081,35 +1077,30 @@
         <summary>The <c>.func</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The function's name, or null.</summary>
+        <summary>The function's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="Parameters" Type="ParameterListSyntax" Today="ParameterListSyntax?">
+    <Field Name="Parameters" Type="ParameterListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The parameters, or null.</summary>
+        <summary>The parameters, or null when not even the <c>(</c> was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ParameterListSyntax>()]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c> before the body.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Body" Type="ExpressionSyntax">
       <PropertyComment>
         <summary>The expression the function stands for.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()!]]></Read>
     </Field>
   </Node>
 
@@ -1979,7 +1970,7 @@
     </Field>
   </Node>
 
-  <Node Name="PatchDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="PatchDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="PatchDirective"/>
     <TypeComment>
       <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
@@ -1989,13 +1980,11 @@
         <summary>The <c>.patch</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Target" Type="NameExpressionSyntax" Today="NameExpressionSyntax?">
+    <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The label of the instruction written to, or null.</summary>
+        <summary>The label of the instruction written to, or null when no name was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<NameExpressionSyntax>()]]></Read>
     </Field>
   </Node>
 
@@ -2287,7 +2276,7 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="SignatureDeclaration"/>
     <TypeComment>
       <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
@@ -2297,29 +2286,25 @@
         <summary>The <c>.signature</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The set's name, or null.</summary>
+        <summary>The set's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>The <c>=</c> before the items.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
-    <Field Name="Items" Type="StateListSyntax" Today="StateListSyntax?">
+    <Field Name="Items" Type="StateListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The items the name stands for, or null.</summary>
+        <summary>The items the name stands for, or null when not even the <c>=</c> was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<StateListSyntax>()]]></Read>
     </Field>
   </Node>
 
