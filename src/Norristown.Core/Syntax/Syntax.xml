@@ -857,7 +857,7 @@
     </Field>
   </Node>
 
-  <Node Name="ExportDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="ExportDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ExportDirective"/>
     <TypeComment>
       <summary><c>.export a, outer::inner, K: abs, init as "_init"</c>: a list of names to export.</summary>
@@ -867,13 +867,11 @@
         <summary>The <c>.export</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;" Today="ImmutableArray&lt;ExportItemSyntax&gt;">
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;">
       <PropertyComment>
         <summary>The names exported.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 
@@ -1090,7 +1088,7 @@
     </Field>
   </Node>
 
-  <Node Name="ImportDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="ImportDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="ImportDirective"/>
     <TypeComment>
       <summary><c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.</summary>
@@ -1100,13 +1098,11 @@
         <summary>The <c>.import</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;" Today="ImmutableArray&lt;ImportItemSyntax&gt;">
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;">
       <PropertyComment>
         <summary>The names imported.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 
@@ -1700,7 +1696,7 @@
     </Field>
   </Node>
 
-  <Node Name="NextDirectiveSyntax" Base="StatementSyntax">
+  <Node Name="NextDirectiveSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="NextDirective"/>
     <TypeComment>
       <summary><c>.next @a, gfx::init</c>, or <c>.next ?</c>.</summary>
@@ -1710,20 +1706,17 @@
         <summary>The <c>.next</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="QuestionToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>?</c> of <c>.next ?</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Question"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Question)]]></Read>
     </Field>
-    <Field Name="Targets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;" Today="ImmutableArray&lt;NameExpressionSyntax&gt;">
+    <Field Name="Targets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
       <PropertyComment>
         <summary>The labels flow continues at.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 
@@ -2314,16 +2307,15 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="StateListSyntax" Base="SyntaxNode">
+  <Node Name="StateListSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="StateList"/>
     <TypeComment>
       <summary>Processor-state items separated by commas.</summary>
     </TypeComment>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;StateItemSyntax&gt;" Today="ImmutableArray&lt;StateItemSyntax&gt;">
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;StateItemSyntax&gt;">
       <PropertyComment>
         <summary>The items.</summary>
       </PropertyComment>
-      <Nodes/>
     </Field>
   </Node>
 

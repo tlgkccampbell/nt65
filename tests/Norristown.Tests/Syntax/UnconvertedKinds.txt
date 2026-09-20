@@ -2,15 +2,11 @@
 # kind's line in the same change that fixes its slots; ShapeTests reads the list strictly both
 # ways, so a line that no longer stands for anything fails as loudly as a missing one.
 DataDirective
-ExportDirective
-ImportDirective
 ModuleDirective
 NameExpression
-NextDirective
 SegmentAttribute
 SegmentBlock
 SegmentDeclaration
 SegmentRegion
 StateItem
-StateList
 UseDirective

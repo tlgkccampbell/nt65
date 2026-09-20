@@ -1105,13 +1105,11 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseNext()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var keyword = Advance();
         if (Kind == SyntaxKind.Question)
-            children.Add(Advance());
-        else
-            children.AddRange(ParseCommaSeparated(() => ParseTarget("expected a label flow continues at, or `?`")));
-        return new GreenSyntax(SyntaxKind.NextDirective, children.ToImmutable());
+            return new NextDirectiveSyntax(keyword, Advance(), null);
+        return new NextDirectiveSyntax(
+            keyword, null, ParseSeparatedList(() => ParseTarget("expected a label flow continues at, or `?`")));
     }
 
     /// <summary>
@@ -1178,7 +1176,7 @@ internal sealed class Parser
         if (Kind == SyntaxKind.Directive)
         {
             Report($"`.export` goes before a declaration, and `{Current.Text}` declares nothing to export");
-            return new GreenSyntax(SyntaxKind.ExportDirective, [export]);
+            return new ExportDirectiveSyntax(export, null);
         }
         if (AtName && Next == SyntaxKind.Equals)
         {
@@ -1188,10 +1186,7 @@ internal sealed class Parser
             return new ConstantDeclarationSyntax(name, equals, ParseExpression());
         }
 
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(export);
-        children.AddRange(ParseCommaSeparated(ParseExportItem));
-        return new GreenSyntax(SyntaxKind.ExportDirective, children.ToImmutable());
+        return new ExportDirectiveSyntax(export, ParseSeparatedList(ParseExportItem));
     }
 
     /// <summary>The declaration after <c>.export</c>, or null when the directive declares nothing that can be exported.</summary>
@@ -1343,10 +1338,8 @@ internal sealed class Parser
 
     private GreenNode ParseImport()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.AddRange(ParseCommaSeparated(ParseImportItem));
-        return new GreenSyntax(SyntaxKind.ImportDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new ImportDirectiveSyntax(keyword, ParseSeparatedList(ParseImportItem));
     }
 
     /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
@@ -1395,9 +1388,9 @@ internal sealed class Parser
         var openParen = Advance();
 
         // Both halves are optional: on the 6502 and its CMOS variants a routine's signature may be empty.
-        GreenNode? entry = null;
+        StateListSyntax? entry = null;
         GreenToken? arrow = null;
-        GreenNode? exit = null;
+        StateListSyntax? exit = null;
         if (Kind is not (SyntaxKind.CloseParen or SyntaxKind.Arrow))
             entry = ParseStateList();
         if (Kind == SyntaxKind.Arrow)
@@ -1426,7 +1419,7 @@ internal sealed class Parser
         var colon = Advance();
         var entry = ParseStateList();
         GreenToken? arrow = null;
-        GreenNode? exit = null;
+        StateListSyntax? exit = null;
         if (Kind == SyntaxKind.Arrow)
         {
             arrow = Advance();
@@ -1435,12 +1428,7 @@ internal sealed class Parser
         return new ProcSignatureSyntax(colon, entry, arrow, exit);
     }
 
-    private GreenNode ParseStateList()
-    {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.AddRange(ParseCommaSeparated(ParseStateItem));
-        return new GreenSyntax(SyntaxKind.StateList, children.ToImmutable());
-    }
+    private StateListSyntax ParseStateList() => new(ParseSeparatedList(ParseStateItem));
 
     private GreenNode? ParseStateItem()
     {

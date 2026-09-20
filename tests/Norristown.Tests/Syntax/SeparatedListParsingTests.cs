@@ -34,6 +34,27 @@ public sealed class SeparatedListParsingTests
     }
 
     /// <summary>
+    /// A list whose items are written some other way has no item to stand between two commas,
+    /// so it ends at the gap, the comma before it is its last piece, and the rest of the line
+    /// is what the line holds as it holds any other leftovers.
+    /// </summary>
+    [Theory]
+    [InlineData(".export a, b", 2, 1, "")]
+    [InlineData(".export a,", 1, 1, "")]
+    [InlineData(".export a,,b", 1, 1, ",b")]
+    [InlineData(".export a, b,,c", 2, 2, ",c")]
+    [InlineData(".export ,a", 0, 0, ",a")]
+    [InlineData(".export", 0, 0, "")]
+    public void AListOfWrittenItemsEndsAtTheFirstGap(string source, int items, int separators, string left)
+    {
+        var line = Line(source);
+        var export = Assert.IsType<ExportDirectiveSyntax>(line.Statement);
+        Assert.Equal(items, export.Items.Count);
+        Assert.Equal(separators, export.Items.SeparatorCount);
+        Assert.Equal(left, line.SkippedTokens?.GetText() ?? "");
+    }
+
+    /// <summary>
     /// The items and the commas are the holder's own children, in source order, so a walk of the
     /// tree meets them where the list itself is and never meets the node over the list.
     /// </summary>
