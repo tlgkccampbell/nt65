@@ -57,10 +57,15 @@ pwsh scripts/test.ps1               # the fast suite: units, fixtures and the se
 pwsh scripts/test.ps1 -Ca65         # the output assembled with the pinned ca65
 pwsh scripts/gate.ps1               # all of the above, and the extension's client
 pwsh scripts/package.ps1            # the tool package and the extension, into artifacts
+pwsh scripts/generate-syntax.ps1    # the syntax classes, after editing the node table
 ```
 
 `scripts/test.ps1 -Fixture name` runs one fixture or corpus program, `-Update` accepts changed
 fixture output, and `-Benchmark` measures what an edit costs in the language server.
+
+The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.nodes`, a table with
+a block per kind of node. Change the table, run `scripts/generate-syntax.ps1`, and commit what it
+writes under the `Generated` folders; a test fails when the two disagree.
 
 ## The corpus programs
 

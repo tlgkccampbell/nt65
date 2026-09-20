@@ -8,7 +8,7 @@ namespace Norristown.Syntax;
 /// one. A block closed by a continuation line (<c>} .else {</c>) has no closer: that line
 /// is the opener of the next block.
 /// </summary>
-public sealed class BlockSyntax : SyntaxNode
+public sealed partial class BlockSyntax : SyntaxNode
 {
     internal BlockSyntax(SyntaxTree tree, SyntaxNode? parent, GreenBlock green, int position)
         : base(tree, parent, green, position)

@@ -4,7 +4,7 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>A whole file: the lines and blocks at its top level.</summary>
-public sealed class FileSyntax : SyntaxNode
+public sealed partial class FileSyntax : SyntaxNode
 {
     internal FileSyntax(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
         : base(tree, parent, green, position)

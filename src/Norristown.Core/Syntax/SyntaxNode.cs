@@ -96,6 +96,16 @@ public abstract class SyntaxNode
         }
     }
 
+    /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
+    /// <param name="visitor">The visitor to hand it to.</param>
+    public abstract void Accept(SyntaxVisitor visitor);
+
+    /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
+    /// <typeparam name="TResult">What visiting a node works out.</typeparam>
+    /// <param name="visitor">The visitor to hand it to.</param>
+    /// <returns>What that method worked out.</returns>
+    public abstract TResult? Accept<TResult>(SyntaxVisitor<TResult> visitor);
+
     /// <summary>This node's children, nodes and tokens together, in source order.</summary>
     public ChildSyntaxList ChildNodesAndTokens() => new(this);
 

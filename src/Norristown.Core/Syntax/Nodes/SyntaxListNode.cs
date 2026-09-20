@@ -8,7 +8,7 @@ namespace Norristown.Syntax;
 /// <see cref="SyntaxTokenList"/> read them from it; a consumer asks the node that holds the
 /// list for one of those rather than for this node.
 /// </summary>
-internal sealed class SyntaxListNode : SyntaxNode
+internal sealed partial class SyntaxListNode : SyntaxNode
 {
     internal SyntaxListNode(SyntaxTree tree, SyntaxNode? parent, GreenNode green, int position)
         : base(tree, parent, green, position)

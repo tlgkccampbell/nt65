@@ -303,7 +303,7 @@ Most kinds map to slots directly. These do not, and need a design each:
 
 Each step builds and passes `scripts/gate.ps1` on its own, and is a commit.
 
-Done so far: steps 1, 2 and 4. What they decided, where it differs from the text above:
+Done so far: steps 1, 2, 3 and 4. What they decided, where it differs from the text above:
 
 - **The line is `[ExportKeyword?, Statement, SkippedTokens?, EndOfLineToken]`.** `.export`
   before a declaration went on the *line* (`LineSyntax.ExportKeyword`), not on each
@@ -322,6 +322,32 @@ Done so far: steps 1, 2 and 4. What they decided, where it differs from the text
   9's to settle.
 - `BrokenSourceTests` is the broken-source sweep (about two seconds); `BrokenLines` holds
   the cut-line variants it shares with `TypedNodeTests`.
+- **The description is a plain-text table**, `src/Norristown.Core/Syntax/Syntax.nodes`: a block
+  per node in the order the files list, a line per key, nesting by indentation, and its own
+  header for the format. A node says its base, its kinds, its summary and its markers
+  (`abstract`, `internal`, `handwritten`, `partial`); a `slot` says a name, the property's type
+  — whose trailing `?` is the whole of what optional means while nothing is invented — its
+  summary, and how it is read. A property that is not a piece of the node is a `member`. Two
+  people adding kinds touch two blocks. The generator is part of the test project
+  (`tests/Norristown.Tests/Syntax/Generation/`), so the gate and the edit loop build nothing
+  extra; `pwsh scripts/generate-syntax.ps1` runs the one test that writes the files instead of
+  comparing them, and `GeneratedSyntaxTests` fails when what is checked in is stale, when a kind
+  has no row, or when a walk misses a node. Generated files sit in a `Generated` folder beside
+  the hand-written ones they belong with.
+- **The accessors ride along as they are.** A slot's `read` is today's search expression,
+  verbatim; `nodes` and `cache` are the two shapes that need a field, and the field is named
+  after the property. Step 5 adds what it needs per slot — the kinds a token may be, a list type
+  — without touching a line it does not own, and step 7 deletes the reads and keeps the types.
+  What no vocabulary covers stays in a hand-written half of a `partial`: `UseDirectiveSyntax`'s
+  `ReadPath` and `NameExpressionSyntax`'s `IndexAfter`. `LineSyntax`, `BlockSyntax`,
+  `FileSyntax` and `SyntaxListNode` sit over hand-written green types and stay hand-written; the
+  table lists them so their `Accept` and their visitor methods come from it like everyone
+  else's.
+- **The visitors are `SyntaxVisitor`, `SyntaxVisitor<TResult>` and `SyntaxWalker`**, with an
+  `Accept` pair on `SyntaxNode` that every concrete class overrides. The walker descends through
+  `ChildNodes`; it visits no tokens, because a line's tokens are also its statement's and a
+  token walk would see each of them twice until the slots are fixed. Nothing but the tests uses
+  a visitor yet.
 
 1. **The broken-source sweep** (above), as a baseline. Fix whatever it finds today.
 2. **Move the line break and skipped tokens to the line.** Alone, with no slot work:

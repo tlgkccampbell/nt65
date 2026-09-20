@@ -9,7 +9,7 @@ namespace Norristown.Syntax;
 /// break that ends it. Its tokens are reachable both directly and through those pieces, which
 /// between them hold the same tokens in the same order.
 /// </summary>
-public sealed class LineSyntax : SyntaxNode
+public sealed partial class LineSyntax : SyntaxNode
 {
     private StatementSyntax? statement;
     private SkippedTokensSyntax? skipped;
