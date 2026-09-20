@@ -52,11 +52,11 @@ public sealed class MissingTokenTests
     [Fact]
     public void AMissingTokenSitsWhereItBelongsAndIsEmptyThere()
     {
-        var tokens = HandBuilt.Tokens(".proc {");
-        var proc = (ProcDeclarationSyntax)HandBuilt.Node(".proc {", SyntaxKind.ProcDeclaration,
-            tokens[0], GreenToken.Missing(SyntaxKind.Identifier), tokens[1]);
+        var tree = SyntaxTree.Parse("test.nt65", ".proc {\n}\n");
+        var opener = Assert.IsType<LineSyntax>(Assert.IsType<BlockSyntax>(tree.Root.Members[0]).Opener);
+        var proc = Assert.IsType<ProcDeclarationSyntax>(opener.Statement);
 
-        var name = proc.Name!.Value;
+        var name = proc.Name;
         Assert.True(name.IsMissing);
         Assert.Equal("", name.Text);
         Assert.Equal(new TextSpan(6, 0), name.Span);
@@ -66,8 +66,8 @@ public sealed class MissingTokenTests
 
         // The token after it is where it would be without the missing one, and the node still
         // reads back as its line.
-        Assert.False(proc.OpenBraceToken!.Value.IsMissing);
-        Assert.Equal(new TextSpan(6, 1), proc.OpenBraceToken!.Value.Span);
+        Assert.False(proc.OpenBraceToken.IsMissing);
+        Assert.Equal(new TextSpan(6, 1), proc.OpenBraceToken.Span);
         Assert.Equal(".proc {", proc.ToFullString());
         Assert.Equal(new TextSpan(0, 7), proc.FullSpan);
         Assert.Equal(new TextSpan(0, 7), proc.Span);

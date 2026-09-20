@@ -47,7 +47,7 @@ public sealed class TypedNodeTests
         Assert.True(proc.IsExported);
         Assert.Equal(".export", proc.ExportToken?.Text);
         Assert.Equal(".proc main {", proc.GetText());
-        Assert.Equal("main", proc.Name?.Text);
+        Assert.Equal("main", proc.Name.Text);
         Assert.Null(proc.Signature);
     }
 

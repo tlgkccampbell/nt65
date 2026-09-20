@@ -597,43 +597,31 @@ internal sealed class Parser
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
     private GreenNode ParseFunc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        else
-            Report("expected a function name");
+        var keyword = Advance();
+        var name = ExpectName("expected a function name");
+        GreenNode? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseParameterList());
+            parameters = ParseParameterList();
         else
             Report("expected `(` and the parameter names");
-        if (Kind == SyntaxKind.Equals)
-            children.Add(Advance());
-        else
+
+        // The `=` and the body are two pieces, and a line that writes neither is missing both.
+        if (Kind != SyntaxKind.Equals)
             Report("expected `=` and the body");
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.FuncDeclaration, children.ToImmutable());
+        return new FuncDeclarationSyntax(
+            keyword, name, parameters, Expect(SyntaxKind.Equals), ParseExpression());
     }
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
     private GreenNode ParseSignatureDeclaration()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!AtName)
-        {
-            Report("expected a name for the signature set");
-            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Equals)
-        {
-            Report("expected `=` and the items: `.signature std = a8, i16`");
-            return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
-        children.Add(ParseStateList());
-        return new GreenSyntax(SyntaxKind.SignatureDeclaration, children.ToImmutable());
+        var keyword = Advance();
+        var name = ExpectName("expected a name for the signature set");
+        var equals = Expect(SyntaxKind.Equals, "expected `=` and the items: `.signature std = a8, i16`");
+
+        // The items are written after the `=`, so a line without one names nothing to read them as.
+        return new SignatureDeclarationSyntax(
+            keyword, name, equals, equals.IsMissing ? null : ParseStateList());
     }
 
     /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
@@ -687,20 +675,15 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMacro()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        else
-            Report("expected a macro name");
+        var keyword = Advance();
+        var name = ExpectName("expected a macro name");
+        GreenNode? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseMacroParameterList());
+            parameters = ParseMacroParameterList();
         else
             ReportOnce("expected `(` and the parameters");
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(SyntaxKind.MacroDeclaration, children.ToImmutable());
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new MacroDeclarationSyntax(keyword, name, parameters, signature, ExpectOpenBrace());
     }
 
     private GreenNode ParseMacroParameterList()
@@ -724,23 +707,27 @@ internal sealed class Parser
             Report("expected a parameter name");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var name = Advance();
+        GreenToken? colon = null;
+        GreenNode? parameterKind = null;
         if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
-            children.Add(ParseParameterKind());
+            colon = Advance();
+            parameterKind = ParseParameterKind();
         }
+
+        GreenToken? equals = null;
+        GreenNode? given = null;
         if (Kind == SyntaxKind.Equals)
         {
-            children.Add(Advance());
+            equals = Advance();
 
             // `= {}`: a block parameter a call may leave out, which is empty when it does.
-            children.Add(Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
-                ? new GreenSyntax(SyntaxKind.EmptyBlock, [Advance(), Advance()])
-                : ParseExpression());
+            given = Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
+                ? new EmptyBlockSyntax(Advance(), Advance())
+                : ParseExpression();
         }
-        return new GreenSyntax(SyntaxKind.MacroParameter, children.ToImmutable());
+        return new MacroParameterSyntax(name, colon, parameterKind, equals, given);
     }
 
     /// <summary>
@@ -798,16 +785,14 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMacroCall()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(Advance());
+        var name = Advance();
+        var bang = Advance();
+        GreenNode? arguments = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseMacroArguments());
+            arguments = ParseMacroArguments();
         else
             Report("expected `(` and the arguments");
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        return new GreenSyntax(SyntaxKind.MacroCall, children.ToImmutable());
+        return new MacroCallSyntax(name, bang, arguments, Kind == SyntaxKind.OpenBrace ? Advance() : null);
     }
 
     private GreenNode ParseMacroArguments()
@@ -827,17 +812,10 @@ internal sealed class Parser
     /// One argument: an expression, a braced operand, or a parameter named and then given
     /// one of those. <c>=</c> appears in no expression, so a named argument is unambiguous.
     /// </summary>
-    private GreenNode? ParseArgument()
+    private GreenNode ParseArgument()
     {
         if (AtName && Next == SyntaxKind.Equals)
-        {
-            var children = ImmutableArray.CreateBuilder<GreenNode>();
-            children.Add(Advance());
-            children.Add(Advance());
-            if (ParseArgument() is { } given)
-                children.Add(given);
-            return new GreenSyntax(SyntaxKind.NamedArgument, children.ToImmutable());
-        }
+            return new NamedArgumentSyntax(Advance(), Advance(), ParseArgument());
         return Kind == SyntaxKind.OpenBrace ? ParseBracedOperand() : ParseExpression();
     }
 
@@ -947,40 +925,41 @@ internal sealed class Parser
 
     /// <summary>
     /// The token of <paramref name="kind"/> written here, or the missing token that stands where
-    /// one belongs, with <paramref name="message"/> reported there. A slot the source does not
-    /// fill is filled from here and nowhere else.
+    /// one belongs. A slot the source does not fill is filled from here and nowhere else.
     /// </summary>
+    private GreenToken Expect(SyntaxKind kind) => Kind == kind ? Advance() : GreenToken.Missing(kind);
+
+    /// <summary>The same, with <paramref name="message"/> reported where the token belongs.</summary>
     private GreenToken Expect(SyntaxKind kind, string message)
     {
-        if (Kind == kind)
+        if (Kind != kind)
+            ReportOnce(message);
+        return Expect(kind);
+    }
+
+    /// <summary>
+    /// The name written here, or the missing identifier that stands where one belongs, with
+    /// <paramref name="message"/> reported there. A name may be spelled as an identifier, a
+    /// register or a mnemonic, which is why it is not one kind for <see cref="Expect(SyntaxKind, string)"/>.
+    /// </summary>
+    private GreenToken ExpectName(string message)
+    {
+        if (AtName)
             return Advance();
-        ReportOnce(message);
-        return GreenToken.Missing(kind);
+        Report(message);
+        return GreenToken.Missing(SyntaxKind.Identifier);
     }
 
     /// <summary>
     /// The missing token of <paramref name="kind"/>, standing where one belongs that the source
     /// does not have, with <paramref name="message"/> reported there whether or not the line has
-    /// been reported on already: what <see cref="Expect"/> does where the second piece missing on
+    /// been reported on already: what <see cref="Expect(SyntaxKind, string)"/> does where the second piece missing on
     /// a line is news of its own.
     /// </summary>
     private GreenToken Missing(SyntaxKind kind, string message)
     {
         Report(message);
         return GreenToken.Missing(kind);
-    }
-
-    /// <summary>
-    /// The name written here, or the missing identifier that stands where one belongs, with
-    /// <paramref name="message"/> reported there. A name may be spelled as an identifier, a
-    /// register or a mnemonic, which is why it is not one kind for <see cref="Expect"/>.
-    /// </summary>
-    private GreenToken ExpectName(string message)
-    {
-        if (AtName)
-            return Advance();
-        ReportOnce(message);
-        return GreenToken.Missing(SyntaxKind.Identifier);
     }
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
@@ -1108,32 +1087,26 @@ internal sealed class Parser
 
     private GreenNode ParseProc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (!AtName)
-        {
-            Report("expected a routine name");
-            return new GreenSyntax(SyntaxKind.ProcDeclaration, children.ToImmutable());
-        }
-        children.Add(Advance());
+        var keyword = Advance();
+        var name = ExpectName("expected a routine name");
+
+        // An address and a signature are both written after the name, so a routine with none is
+        // read no further; the `{` after it still opens the block it opens.
+        if (name.IsMissing)
+            return new ProcDeclarationSyntax(keyword, name, null, ExpectOpenBrace());
 
         // `.proc name = expr` is an extern proc: a signature and an address, with no body.
         if (Kind == SyntaxKind.Equals)
         {
-            children.Add(Advance());
-            children.Add(ParseExpression());
-            if (Kind == SyntaxKind.Colon)
-                children.Add(ParseSignature());
-            return new GreenSyntax(SyntaxKind.ExternProcDeclaration, children.ToImmutable());
+            var equals = Advance();
+            var address = ParseExpression();
+            return new ExternProcDeclarationSyntax(
+                keyword, name, equals, address, Kind == SyntaxKind.Colon ? ParseSignature() : null);
         }
 
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else if (errors.Count == 0)
-            Report("expected `{`, or `= address` for a routine with no body");
-        return new GreenSyntax(SyntaxKind.ProcDeclaration, children.ToImmutable());
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new ProcDeclarationSyntax(keyword, name, signature,
+            Expect(SyntaxKind.OpenBrace, "expected `{`, or `= address` for a routine with no body"));
     }
 
     /// <summary>
@@ -1144,38 +1117,26 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMultiProc()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        if (Kind == SyntaxKind.Comma)
-        {
-            children.Add(Advance());
-            if (AtName)
-                children.Add(Advance());
-            else
-                Report("expected the name to bind, which each routine is named from");
-        }
-        else
-        {
-            ReportOnce("expected `,` and the name to bind: `.multiproc Channel, ch {`");
-        }
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(SyntaxKind.MultiProcDeclaration, children.ToImmutable());
+        var keyword = Advance();
+        var walked = ParseExpression();
+        var comma = Expect(SyntaxKind.Comma, "expected `,` and the name to bind: `.multiproc Channel, ch {`");
+
+        // The name is written after the `,`, so where there is no comma there is nowhere for it
+        // to have been written and the comma is the whole news about the line.
+        var name = comma.IsMissing
+            ? GreenToken.Missing(SyntaxKind.Identifier)
+            : ExpectName("expected the name to bind, which each routine is named from");
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new MultiProcDeclarationSyntax(keyword, walked, comma, name, signature, ExpectOpenBrace());
     }
 
     private GreenNode ParseScope()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        if (Kind == SyntaxKind.OpenBrace)
-            children.Add(Advance());
-        else
-            Report("expected `{`");
-        return new GreenSyntax(SyntaxKind.ScopeDeclaration, children.ToImmutable());
+        var keyword = Advance();
+
+        // `.scope { }` is anonymous: it opens a scope and declares no name for it.
+        var name = AtName ? Advance() : null;
+        return new ScopeDeclarationSyntax(keyword, name, ExpectOpenBrace());
     }
 
     /// <summary>
@@ -1216,32 +1177,20 @@ internal sealed class Parser
     /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
     private GreenNode ParseFrame()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Identifier)
-        {
-            Report("expected a name for the frame");
-            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
-        }
-        children.Add(Advance());
-        if (Kind != SyntaxKind.Colon)
-        {
-            Report("expected `:` and the struct the frame is laid out as");
-            return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
-        }
-        children.Add(Advance());
-        children.Add(ParseExpression());
-        return new GreenSyntax(SyntaxKind.FrameDirective, children.ToImmutable());
+        var keyword = Advance();
+        var name = Expect(SyntaxKind.Identifier, "expected a name for the frame");
+        var colon = Expect(SyntaxKind.Colon, "expected `:` and the struct the frame is laid out as");
+
+        // The struct is written after the `:`, so a line without one says nothing about it.
+        return new FrameDirectiveSyntax(keyword, name, colon, colon.IsMissing ? null : ParseExpression());
     }
 
     /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
     private GreenNode ParsePatch()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (ParseTarget("expected the label of the instruction being written to") is { } target)
-            children.Add(target);
-        return new GreenSyntax(SyntaxKind.PatchDirective, children.ToImmutable());
+        var keyword = Advance();
+        return new PatchDirectiveSyntax(
+            keyword, ParseTarget("expected the label of the instruction being written to"));
     }
 
     /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>
@@ -1512,17 +1461,18 @@ internal sealed class Parser
     }
 
     /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
-    private GreenNode ParseSignature()
+    private ProcSignatureSyntax ParseSignature()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        children.Add(ParseStateList());
+        var colon = Advance();
+        var entry = ParseStateList();
+        GreenToken? arrow = null;
+        GreenNode? exit = null;
         if (Kind == SyntaxKind.Arrow)
         {
-            children.Add(Advance());
-            children.Add(ParseStateList());
+            arrow = Advance();
+            exit = ParseStateList();
         }
-        return new GreenSyntax(SyntaxKind.ProcSignature, children.ToImmutable());
+        return new ProcSignatureSyntax(colon, entry, arrow, exit);
     }
 
     private GreenNode ParseStateList()

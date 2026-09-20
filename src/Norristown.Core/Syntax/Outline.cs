@@ -47,12 +47,12 @@ public static class Outline
     {
         switch (opener)
         {
-            case ProcDeclarationSyntax { Name: { } name } proc:
+            case ProcDeclarationSyntax { Name: { IsMissing: false } name } proc:
                 return new OutlineItem(OutlineKind.Proc, name.Text, proc.Signature?.GetText(), block.Span, name.Span, children);
 
             // One block, however many routines it declares: the enum it walks and the
             // signature they share are what a reader needs beside the name it binds.
-            case MultiProcDeclarationSyntax { Name: { } bound } multiproc:
+            case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
                     multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
                     block.Span, bound.Span, children);
@@ -62,7 +62,7 @@ public static class Outline
                 return new OutlineItem(OutlineKind.Scope, scope.Name?.Text ?? ".scope", null,
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 
-            case MacroDeclarationSyntax { Name: { } macro }:
+            case MacroDeclarationSyntax { Name: { IsMissing: false } macro }:
                 // The parameters are what a reader needs beside the name, and the signature
                 // after them where there is one: together they are the whole header.
                 return new OutlineItem(OutlineKind.Macro, macro.Text, TextAfter(opener, macro)?.TrimEnd('{').TrimEnd(),
@@ -111,7 +111,7 @@ public static class Outline
                     line.Span, data.Span, []));
                 break;
 
-            case FuncDeclarationSyntax { Name: { } function }:
+            case FuncDeclarationSyntax { Name: { IsMissing: false } function }:
                 items.Add(new OutlineItem(OutlineKind.Function, function.Text, TextAfter(statement, function),
                     line.Span, function.Span, []));
                 break;

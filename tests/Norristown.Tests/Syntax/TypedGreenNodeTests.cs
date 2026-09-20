@@ -29,12 +29,12 @@ public sealed class TypedGreenNodeTests
         Assert.Null(green.GetSlot(2));
         Assert.Equal(".proc", proc.Keyword.Text);
         Assert.Equal(new TextSpan(0, 5), proc.Keyword.Span);
-        Assert.True(proc.Name!.Value.IsMissing);
-        Assert.Equal("", proc.Name!.Value.Text);
-        Assert.Equal(new TextSpan(6, 0), proc.Name!.Value.Span);
+        Assert.True(proc.Name.IsMissing);
+        Assert.Equal("", proc.Name.Text);
+        Assert.Equal(new TextSpan(6, 0), proc.Name.Span);
         Assert.Null(proc.Signature);
-        Assert.Equal("{", proc.OpenBraceToken!.Value.Text);
-        Assert.Equal(new TextSpan(6, 1), proc.OpenBraceToken!.Value.Span);
+        Assert.Equal("{", proc.OpenBraceToken.Text);
+        Assert.Equal(new TextSpan(6, 1), proc.OpenBraceToken.Span);
 
         // The missing token takes up nothing, so the node still reads back as its line.
         Assert.Equal(text, proc.ToFullString());
@@ -61,7 +61,7 @@ public sealed class TypedGreenNodeTests
         var green = new Green.ProcDeclarationSyntax(tokens[0], tokens[1], signature, tokens[4]);
         var proc = Assert.IsType<ProcDeclarationSyntax>(HandBuilt.Over(text, green));
 
-        Assert.Equal("p", proc.Name!.Value.Text);
+        Assert.Equal("p", proc.Name.Text);
         Assert.Equal(": a8", proc.Signature!.GetText());
         Assert.Equal(new TextSpan(7, 4), proc.Signature!.Span);
         Assert.Null(proc.Signature!.ArrowToken);

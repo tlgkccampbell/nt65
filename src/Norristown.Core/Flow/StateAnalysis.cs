@@ -1142,7 +1142,7 @@ public sealed class StateAnalysis
     /// </summary>
     private FlowState Framed(Step step, FrameDirectiveSyntax directive, FlowState state)
     {
-        if (directive.Name is not { } name || model.SymbolAt(name) is not { Kind: SymbolKind.Frame } frame)
+        if (model.SymbolAt(directive.Name) is not { Kind: SymbolKind.Frame } frame)
             return state;
         if (directive.Type is not { } type
             || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })

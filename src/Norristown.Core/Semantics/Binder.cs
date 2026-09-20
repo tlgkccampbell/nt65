@@ -503,7 +503,7 @@ internal sealed class Binder
         var turns = new Scope(ScopeKind.Repetition, null, around, null);
         var outer = scope;
         scope = turns;
-        var binding = multiProc.Name is { } name ? Declare(name, SymbolKind.Binding) : null;
+        var binding = Declare(multiProc.Name, SymbolKind.Binding);
         CollectUses(signature);
         var body = new Scope(ScopeKind.Proc, binding?.Name, turns, null);
         if (binding is not null && declares)
@@ -697,8 +697,9 @@ internal sealed class Binder
             return new Scope(kind, null, scope, null);
         }
 
-        // `.scope { }` is anonymous, and declares nothing.
-        if (written is not { } name)
+        // `.scope { }` is anonymous, and a `.proc` whose name the source does not have declares
+        // nothing either: the scope it opens is nameless, as the routine is.
+        if (written is not { IsMissing: false } name)
             return new Scope(kind, null, scope, null);
 
         var symbol = Declare(name, symbolKind);
@@ -825,8 +826,12 @@ internal sealed class Binder
 
         CheckMacroPlacement(declaration);
         var written = declaration.Name;
-        var symbol = written is { } name ? Declare(name, SymbolKind.Macro) : null;
-        var body = new Scope(ScopeKind.Macro, symbol?.Name ?? written?.Text, scope, symbol);
+        var symbol = Declare(written, SymbolKind.Macro);
+
+        // What a body declares is named after the macro, so a macro the source did not name
+        // opens a nameless scope, as a routine with no name does.
+        var body = new Scope(
+            ScopeKind.Macro, symbol?.Name ?? (written.IsMissing ? null : written.Text), scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         if (symbol is not null && declaration.Signature is { } signature)
@@ -1168,13 +1173,11 @@ internal sealed class Binder
             // program's names and constants are.
             case SignatureDeclarationSyntax signature:
                 var items = signature.Items;
-                if (signature.Name is { } set)
-                {
-                    if (SyntaxFacts.IsStateWord(set.Text))
-                        Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
-                    else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
-                        declared.Definition = items;
-                }
+                var set = signature.Name;
+                if (SyntaxFacts.IsStateWord(set.Text))
+                    Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
+                else if (Declare(set, SymbolKind.SignatureSet) is { } declared)
+                    declared.Definition = items;
                 CollectUses(items);
                 break;
 
@@ -1299,8 +1302,7 @@ internal sealed class Binder
 
             // A frame is named like data of a type, so its members are reached through it.
             case FrameDirectiveSyntax frame:
-                if (frame.Name is { } frameName)
-                    Declare(frameName, SymbolKind.Frame, type: frame.Type);
+                Declare(frame.Name, SymbolKind.Frame, type: frame.Type);
                 CollectUses(frame.Type);
                 break;
 
@@ -1501,11 +1503,7 @@ internal sealed class Binder
     private void BindFunc(FuncDeclarationSyntax statement)
     {
         var body = statement.Body;
-        if (statement.Name is not { } name)
-            return;
-
-        var symbol = Declare(name, SymbolKind.Func, value: null, items: [body]);
-        if (symbol is null)
+        if (Declare(statement.Name, SymbolKind.Func, value: null, items: [body]) is not { } symbol)
             return;
 
         var inside = new Scope(ScopeKind.Type, null, scope, symbol);
@@ -1677,6 +1675,14 @@ internal sealed class Binder
         IReadOnlyList<CharmapEntrySyntax>? entries = null,
         bool follows = false)
     {
+        // A name the source does not have declares nothing. The parser stands a missing token
+        // in the slot so that the declaration keeps its shape, and that token has no text: a
+        // symbol made from one would be called "", shadow the last such symbol and answer to
+        // nothing anyone wrote. Every declaration in the file comes through here, so this is
+        // the one place that has to say so.
+        if (name.IsMissing)
+            return null;
+
         // A member of a named type may be called after a register or a mnemonic: it is only
         // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. Any
         // other reserved name is reported, and declared all the same, so that what uses it and
