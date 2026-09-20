@@ -47,6 +47,32 @@ public sealed class ApiSurfaceTests
     }
 
     /// <summary>
+    /// The compiler, the language server and the CLI read the red tree. The syntax layer owns the
+    /// green one, and everything above it — binding, layout, flow, emission — is written against
+    /// the API a consumer has, so this reads the source of everything in <c>Norristown.Core</c>
+    /// outside <c>Syntax/</c> and fails if one of them reaches past it.
+    /// </summary>
+    [Fact]
+    public void NothingAboveTheSyntaxLayerReadsTheGreenTree()
+    {
+        string[] reaches = ["InternalSyntax", "tree.Green", "tree.Lines", "Tree.Lines", "tree.Statement("];
+        var core = Repo.Path("src", "Norristown.Core");
+        var problems = new List<string>();
+        foreach (var file in Directory.GetFiles(core, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            var named = Repo.Named(file);
+            if (named.StartsWith("src/Norristown.Core/Syntax/", StringComparison.Ordinal)
+                || named.StartsWith("src/Norristown.Core/Generated/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            var text = Repo.ReadText(file);
+            problems.AddRange(reaches.Where(text.Contains).Select(reach => $"{named} names {reach}"));
+        }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>
     /// A token, a trivia and a list are values: reading the same one twice gives two equal copies,
     /// and reading a different one gives an unequal copy. The green token a token wraps is not part
     /// of its public surface, but it is still part of what makes two of them the same token.

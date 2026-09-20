@@ -109,24 +109,34 @@ public static class UnusedSymbols
     /// <summary>
     /// Every name the file writes outside the <c>.use</c> items themselves, and on its own
     /// rather than as a step on a path, which is what a name brought in is written as. One pass
-    /// answers for all of them, because a file with items to check has them all to check. It
-    /// reads the tokens the lexer left on each line rather than the nodes they parsed to, since
-    /// every name the file writes is wanted here and where each of them sits is not: this is one
-    /// of the two places inside the compiler that still read the lines the lexer made, and the
-    /// walk of the red tree that would do instead cost about seven milliseconds a keystroke.
+    /// answers for all of them, because a file with items to check has them all to check.
+    /// <para>
+    /// It reads each line's own tokens rather than the nodes they parse to, and it is lexical on
+    /// purpose. Binding cannot answer this: it returns at a branch the build leaves out without
+    /// reading a line of it, and a name written there counts as used; a name written where a bare
+    /// word may stand is never looked up; a <c>.defined</c> asks about a name without naming it;
+    /// and a reference records the symbol it reached rather than the spelling it was written as,
+    /// so it cannot tell <c>b</c> written as <c>a::b</c> from the <c>c</c> that
+    /// <c>.use a::b as c</c> brought in. The tokens are what every one of those has in common.
+    /// </para>
     /// </summary>
     private static HashSet<string> Written(SyntaxTree tree)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < tree.Lines.Length; index++)
+        for (var index = 0; index < tree.LineCount; index++)
         {
-            if (tree.Statement(index).Kind == SyntaxKind.UseDirective)
+            var line = tree.GetLine(index);
+            if (line.Statement.Kind == SyntaxKind.UseDirective)
                 continue;
-            var tokens = tree.Lines[index].Tokens;
-            for (var at = 0; at < tokens.Length; at++)
+
+            // A name is the file's own where nothing but a `::` before it makes it a step on
+            // somebody else's path.
+            var reached = false;
+            foreach (var token in line.Tokens)
             {
-                if (at == 0 || tokens[at - 1].Kind != SyntaxKind.ColonColon)
-                    names.Add(tokens[at].Text);
+                if (!reached)
+                    names.Add(token.Text);
+                reached = token.Kind == SyntaxKind.ColonColon;
             }
         }
         return names;

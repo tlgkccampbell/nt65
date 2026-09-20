@@ -26,7 +26,7 @@ public sealed class IncrementalTests
 
                 // A line's syntax depends on its tokens and the kind of block around it, and
                 // neither changed, so the statement is the same object too.
-                Assert.Same(tree.Statement(i), edited.Statement(i));
+                Assert.Same(tree.Parsed(i).Node, edited.Parsed(i).Node);
             }
         }
     }
@@ -48,14 +48,14 @@ public sealed class IncrementalTests
         // moved down a line and nowhere else.
         var edited = tree.WithChange(new TextChange(0, 0, "  sei\n"));
         Assert.Same(tree.Lines[1], edited.Lines[2]);
-        Assert.Same(tree.Statement(1), edited.Statement(2));
+        Assert.Same(tree.Parsed(1).Node, edited.Parsed(2).Node);
         Assert.Equal(
             [new Span("main.nt65", 3, 8, 8)],
             edited.Diagnostics.Select(d => d.Span));
 
         // And text inserted on the line above it, which shifts nothing at all.
         var indented = tree.WithChange(new TextChange(0, 0, "    "));
-        Assert.Same(tree.Statement(1), indented.Statement(1));
+        Assert.Same(tree.Parsed(1).Node, indented.Parsed(1).Node);
         Assert.Equal(tree.Diagnostics, indented.Diagnostics);
     }
 
@@ -67,12 +67,12 @@ public sealed class IncrementalTests
     public void ALineIsParsedAgainWhenItsBlockChangesKind()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".scope s {\ngreen = 5\n}\n");
-        Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Statement(1).Kind);
+        Assert.Equal(SyntaxKind.ConstantDeclaration, tree.Parsed(1).Node.Kind);
 
         // `.scope s {` becomes `.enum s {`, and the same line is now a member of it.
         var edited = tree.WithChange(new TextChange(0, 6, ".enum"));
         Assert.Same(tree.Lines[1], edited.Lines[1]);
-        Assert.Equal(SyntaxKind.EnumMember, edited.Statement(1).Kind);
+        Assert.Equal(SyntaxKind.EnumMember, edited.Parsed(1).Node.Kind);
         Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
     }
 

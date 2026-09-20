@@ -12,6 +12,9 @@ namespace Norristown.Syntax;
 public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
+
+    // The file's lines and blocks, which the root is the red node over.
+    private readonly GreenFile green;
     private readonly ImmutableArray<Parser.Result> statements;
     private readonly ImmutableArray<Blocks.Error> blockErrors;
     private readonly bool[] reported;
@@ -24,7 +27,7 @@ public sealed class SyntaxTree
         LineStarts = lineStarts;
         Lines = lines;
         var errors = new List<Blocks.Error>();
-        Green = Blocks.Build(lines, errors);
+        green = Blocks.Build(lines, errors);
         blockErrors = [.. errors];
 
         // Blocks come first because a line's syntax depends on the kind of block around it.
@@ -32,7 +35,7 @@ public sealed class SyntaxTree
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;
-        ParseLines(Green, BlockKind.None, parsed, ref line);
+        ParseLines(green, BlockKind.None, parsed, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
 
         // Which lines have something to say is worked out here, once, so that a node asked
@@ -58,11 +61,8 @@ public sealed class SyntaxTree
     /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
     internal ImmutableArray<GreenLine> Lines { get; }
 
-    /// <summary>The file's lines and blocks.</summary>
-    internal GreenFile Green { get; }
-
     /// <summary>The root node, created on first use.</summary>
-    public FileSyntax Root => root ??= new FileSyntax(this, null, Green, 0);
+    public FileSyntax Root => root ??= new FileSyntax(this, null, green, 0);
 
     /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
@@ -127,9 +127,6 @@ public sealed class SyntaxTree
             lines.Add(Lines[i]);
         return new SyntaxTree(Path, text, starts, lines.MoveToImmutable());
     }
-
-    /// <summary>The statement parsed from line <paramref name="line"/>, 0-based.</summary>
-    internal GreenNode Statement(int line) => statements[line].Node;
 
     /// <summary>
     /// Everything line <paramref name="line"/> parsed to, 0-based: its statement and the pieces
