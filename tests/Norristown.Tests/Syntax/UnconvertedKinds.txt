@@ -14,13 +14,11 @@ BlockContinuation
 BlockSplice
 BracedOperand
 CallExpression
-CharacterExpression
 CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
 ConstantDeclaration
 CpuDirective
-CpuNameExpression
 CurrentAddressExpression
 DataDeclaration
 DataDirective
@@ -65,7 +63,6 @@ MultiProcDeclaration
 NameExpression
 NamedArgument
 NextDirective
-NumberExpression
 ParameterKind
 ParameterList
 ParenthesizedExpression
@@ -84,7 +81,6 @@ SkippedTokens
 StateDirective
 StateItem
 StateList
-StringExpression
 StructDeclaration
 UnaryExpression
 UnionDeclaration

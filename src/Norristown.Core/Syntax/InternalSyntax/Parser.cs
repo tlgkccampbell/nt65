@@ -1778,13 +1778,13 @@ internal sealed class Parser
         switch (Kind)
         {
             case SyntaxKind.NumberLiteral:
-                return new GreenSyntax(SyntaxKind.NumberExpression, [Advance()]);
+                return new NumberExpressionSyntax(Advance());
             case SyntaxKind.CharacterLiteral:
-                return new GreenSyntax(SyntaxKind.CharacterExpression, [Advance()]);
+                return new CharacterExpressionSyntax(Advance());
             case SyntaxKind.StringLiteral:
-                return new GreenSyntax(SyntaxKind.StringExpression, [Advance()]);
+                return new StringExpressionSyntax(Advance());
             case SyntaxKind.CpuName:
-                return new GreenSyntax(SyntaxKind.CpuNameExpression, [Advance()]);
+                return new CpuNameExpressionSyntax(Advance());
             case SyntaxKind.Star:
                 return new GreenSyntax(SyntaxKind.CurrentAddressExpression, [Advance()]);
             case SyntaxKind.OpenParen:

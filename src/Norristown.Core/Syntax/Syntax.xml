@@ -406,7 +406,7 @@
     </Field>
   </Node>
 
-  <Node Name="CharacterExpressionSyntax" Base="LiteralExpressionSyntax">
+  <Node Name="CharacterExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
     <Kind Name="CharacterExpression"/>
     <TypeComment>
       <summary>A character in single quotes.</summary>
@@ -572,7 +572,7 @@
     </Field>
   </Node>
 
-  <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax">
+  <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
     <Kind Name="CpuNameExpression"/>
     <TypeComment>
       <summary>A CPU's name, where an expression is read.</summary>
@@ -1496,7 +1496,7 @@
     </Field>
   </Node>
 
-  <AbstractNode Name="LiteralExpressionSyntax" Base="ExpressionSyntax">
+  <AbstractNode Name="LiteralExpressionSyntax" Base="ExpressionSyntax" Converted="true">
     <TypeComment>
       <summary>An expression that is one token.</summary>
     </TypeComment>
@@ -1508,7 +1508,6 @@
       <Kind Name="CharacterLiteral"/>
       <Kind Name="StringLiteral"/>
       <Kind Name="CpuName"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
   </AbstractNode>
 
@@ -1887,7 +1886,7 @@
     </Field>
   </Node>
 
-  <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax">
+  <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
     <Kind Name="NumberExpression"/>
     <TypeComment>
       <summary>A number.</summary>
@@ -2599,7 +2598,7 @@
     </Member>
   </AbstractNode>
 
-  <Node Name="StringExpressionSyntax" Base="LiteralExpressionSyntax">
+  <Node Name="StringExpressionSyntax" Base="LiteralExpressionSyntax" Converted="true">
     <Kind Name="StringExpression"/>
     <TypeComment>
       <summary>A string in double quotes.</summary>
