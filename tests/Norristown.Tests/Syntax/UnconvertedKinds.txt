@@ -19,7 +19,6 @@ ConfigDeclaration
 CpuDirective
 CpuNameExpression
 CurrentAddressExpression
-DataDeclaration
 DataDirective
 DataValues
 EachDirective

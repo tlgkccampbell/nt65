@@ -427,25 +427,20 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseDataDeclaration()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-        {
-            children.Add(Advance());
-        }
-        else
-        {
-            Report(Kind == SyntaxKind.OpenBrace
-                ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
-                : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
-        }
+        var keyword = Advance();
+        var name = ExpectName(Kind == SyntaxKind.OpenBrace
+            ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
+            : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
 
+        GreenToken? colon = null;
+        GreenNode? element = null;
+        GreenToken? brace = null;
         if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
+            colon = Advance();
             if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
             {
-                children.Add(ParseDataDirective());
+                element = ParseDataDirective();
             }
             else
             {
@@ -458,13 +453,13 @@ internal sealed class Parser
         }
         else if (Kind == SyntaxKind.OpenBrace)
         {
-            children.Add(Advance());
+            brace = Advance();
         }
         else
         {
             ReportOnce("expected `:` and what the data is, or `{` for mixed data");
         }
-        return new GreenSyntax(SyntaxKind.DataDeclaration, children.ToImmutable());
+        return new DataDeclarationSyntax(keyword, name, colon, element, brace);
     }
 
     /// <summary>One line of a data body: values separated by commas, one element each.</summary>
@@ -960,6 +955,19 @@ internal sealed class Parser
         else
             Report(message);
         return GreenToken.Missing(kind);
+    }
+
+    /// <summary>
+    /// The name written here, or the missing identifier that stands where one belongs, with
+    /// <paramref name="message"/> reported there. A name may be spelled as an identifier, a
+    /// register or a mnemonic, which is why it is not one kind for <see cref="Expect"/>.
+    /// </summary>
+    private GreenToken ExpectName(string message)
+    {
+        if (AtName)
+            return Advance();
+        ReportOnce(message);
+        return GreenToken.Missing(SyntaxKind.Identifier);
     }
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>

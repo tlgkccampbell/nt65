@@ -854,7 +854,7 @@ public sealed class Emitter
     /// </summary>
     private void Declared(LineSyntax line, DataDeclarationSyntax declaration)
     {
-        if (declaration.Name is null || model.DeclaredBy(declaration, expansion) is not { } symbol)
+        if (model.DeclaredBy(declaration, expansion) is not { } symbol)
             return;
         if (declaration.Directive is not { } element)
         {

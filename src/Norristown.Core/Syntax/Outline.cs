@@ -75,7 +75,7 @@ public static class Outline
                 var segment = written.Name ?? written.Keyword;
                 return new OutlineItem(OutlineKind.Segment, segment.Text.Trim('"'), null, block.Span, segment.Span, children);
 
-            case DataDeclarationSyntax { Name: { } data }:
+            case DataDeclarationSyntax { Name: { IsMissing: false } data }:
                 return new OutlineItem(OutlineKind.Data, data.Text, TextAfter(opener, data)?.TrimStart(':').Trim().TrimEnd('{').TrimEnd() is { Length: > 0 } detail ? detail : null,
                     block.Span, data.Span, children);
 
@@ -106,7 +106,7 @@ public static class Outline
                     line.Span, constant.Name.Span, []));
                 break;
 
-            case DataDeclarationSyntax { Name: { } data }:
+            case DataDeclarationSyntax { Name: { IsMissing: false } data }:
                 items.Add(new OutlineItem(OutlineKind.Data, data.Text, TextAfter(statement, data)?.TrimStart(':').Trim(),
                     line.Span, data.Span, []));
                 break;

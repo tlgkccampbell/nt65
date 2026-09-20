@@ -598,7 +598,7 @@
     </Field>
   </Node>
 
-  <Node Name="DataDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="DataDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="DataDeclaration"/>
     <TypeComment>
       <summary><c>.data name: element</c>, or <c>.data name {</c> for mixed data.</summary>
@@ -608,36 +608,31 @@
         <summary>The <c>.data</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The declared name, or null.</summary>
+        <summary>The declared name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>:</c> before what the data is, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
     <Field Name="Directive" Type="DataDirectiveSyntax" Optional="true">
       <PropertyComment>
         <summary>What the data is, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<DataDirectiveSyntax>()]]></Read>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
