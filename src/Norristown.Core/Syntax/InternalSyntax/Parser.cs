@@ -877,8 +877,8 @@ internal sealed class Parser
         var keyword = Advance();
         var condition = ParseExpression();
         var openBrace = ExpectOpenBrace();
-        return closeBrace is { } shut
-            ? new ElseIfDirectiveSyntax(shut, keyword, condition, openBrace)
+        return closeBrace is { } closed
+            ? new ElseIfDirectiveSyntax(closed, keyword, condition, openBrace)
             : new IfDirectiveSyntax(keyword, condition, openBrace);
     }
 
@@ -1399,7 +1399,7 @@ internal sealed class Parser
         return new UseItemSyntax(name, asKeyword, alias);
     }
 
-    /// <summary><c>as name</c>, when it is written, and the name it renames to.</summary>
+    /// <summary>The <c>as</c> and the name after it, when they are written.</summary>
     private (GreenToken? AsKeyword, GreenToken? Alias) ParseUseAlias()
     {
         if (!AtWord("as"))
