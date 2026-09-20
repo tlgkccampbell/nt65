@@ -6,6 +6,12 @@
     <!-- Test classes and methods are public because the runner discovers them, not because
          they are an API, so they carry no XML documentation. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- The suite runs dozens of tests at once and the sweeps allocate a tree per variant, and
+         the workstation collector suspends all of them to gather each of those trees: it cost the
+         fast suite more than five seconds of its nine. This is the test runner's own setting; the
+         compiler, the server and the CLI collect as they always did, and `-Benchmark` puts the
+         runner back on the workstation collector so its numbers stay theirs. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.1" />
