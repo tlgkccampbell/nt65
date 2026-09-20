@@ -218,11 +218,6 @@ public static class SyntaxWriter
             return text.ToString();
         }
 
-        foreach (var (_, slot, _) in slots)
-            text.AppendLine($"    private readonly {table.GreenType(slot)} {slot.Field};");
-        if (slots.Length > 0)
-            text.AppendLine();
-
         var parameters = string.Join(", ", slots.Select(s => $"{table.GreenType(s.Slot)} {s.Slot.Field}"));
         var width = slots.Length == 0
             ? "0"
@@ -236,7 +231,7 @@ public static class SyntaxWriter
         text.AppendLine(chain);
         text.AppendLine("    {");
         foreach (var (_, slot, _) in slots)
-            text.AppendLine($"        this.{slot.Field} = {slot.Field};");
+            text.AppendLine($"        {slot.Name} = {slot.Field};");
         text.AppendLine("    }");
 
         if (table.HasHeirs(node))
@@ -245,8 +240,16 @@ public static class SyntaxWriter
             text.AppendLine($"    private protected {node.Name}(SyntaxKind kind, int fullWidth) : base(kind, fullWidth)");
             text.AppendLine("    {");
             foreach (var (_, slot, _) in slots)
-                text.AppendLine($"        {slot.Field} = default!;");
+                text.AppendLine($"        {slot.Name} = default!;");
             text.AppendLine("    }");
+        }
+
+        // The parser reads back what it built by name, as it wrote it, rather than by slot index.
+        foreach (var (_, slot, _) in slots)
+        {
+            text.AppendLine();
+            text.Append(Summary(slot.Summary, "    "));
+            text.AppendLine($"    public {table.GreenType(slot)} {slot.Name} {{ get; }}");
         }
 
         if (node.IsMissingNode)
@@ -270,7 +273,7 @@ public static class SyntaxWriter
             text.AppendLine("    public override GreenNode? GetSlot(int index) => index switch");
             text.AppendLine("    {");
             foreach (var (_, slot, i) in slots)
-                text.AppendLine($"        {i} => this.{slot.Field},");
+                text.AppendLine($"        {i} => {slot.Name},");
             text.AppendLine("        _ => throw new ArgumentOutOfRangeException(nameof(index)),");
             text.AppendLine("    };");
         }

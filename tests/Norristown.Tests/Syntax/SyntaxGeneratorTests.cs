@@ -78,9 +78,21 @@ public sealed class SyntaxGeneratorTests
                 + "+ (closeBraceToken?.FullWidth ?? 0))",
                 green);
             Assert.Contains("public override int SlotCount => 4;", green);
-            Assert.Contains("2 => this.parts,", green);
+            Assert.Contains("2 => Parts,", green);
             Assert.Contains("new Red.WidgetSyntax(tree, parent, this, position);", green);
         }
+    }
+
+    /// <summary>The parser reads back what it built by name, with the type the slot holds.</summary>
+    [Fact]
+    public void TheGreenClassNamesEachSlot()
+    {
+        var green = Green(Widget);
+        Assert.Contains("        Keyword = keyword;", green);
+        Assert.Contains("    /// <summary>The word.</summary>\n    public GreenToken Keyword { get; }", green);
+        Assert.Contains("    public GreenToken Name { get; }", green);
+        Assert.Contains("    public GreenSeparatedList? Parts { get; }", green);
+        Assert.Contains("    public GreenToken? CloseBraceToken { get; }", green);
     }
 
     /// <summary>

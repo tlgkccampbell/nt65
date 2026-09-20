@@ -23,15 +23,6 @@ internal sealed class Parser
     /// <summary>The tightest binding level that is still a binary operator.</summary>
     private const int TightestPrecedence = 3;
 
-    /// <summary>The slot a <see cref="BinaryExpressionSyntax"/> holds its operator in.</summary>
-    private const int BinaryOperator = 1;
-
-    /// <summary>The slot a <see cref="BinaryExpressionSyntax"/> holds its right operand in.</summary>
-    private const int BinaryRight = 2;
-
-    /// <summary>The slot a <see cref="UnaryExpressionSyntax"/> holds its operator in.</summary>
-    private const int UnaryOperator = 0;
-
     private readonly ImmutableArray<GreenToken> tokens;
     private readonly BlockKind context;
     private readonly bool opensBlock;
@@ -1902,12 +1893,9 @@ internal sealed class Parser
         }
     }
 
-    /// <summary>
-    /// The operator of <paramref name="node"/> when it is a binary expression, or null. A green
-    /// node names its pieces by slot, in the order its constructor takes them.
-    /// </summary>
+    /// <summary>The operator of <paramref name="node"/> when it is a binary expression, or null.</summary>
     private static GreenToken? OperatorOf(GreenNode node) =>
-        node is BinaryExpressionSyntax binary ? (GreenToken)binary.GetSlot(BinaryOperator)! : null;
+        node is BinaryExpressionSyntax binary ? binary.OperatorToken : null;
 
     /// <summary>
     /// The <c>&lt;</c>, <c>&gt;</c> or <c>^</c> at the right edge of an operand, if any.
@@ -1918,10 +1906,10 @@ internal sealed class Parser
     private static GreenToken? RightmostByteOperator(GreenNode node)
     {
         while (node is BinaryExpressionSyntax binary)
-            node = binary.GetSlot(BinaryRight)!;
+            node = binary.Right;
         if (node is not UnaryExpressionSyntax unary)
             return null;
-        var op = (GreenToken)unary.GetSlot(UnaryOperator)!;
+        var op = unary.OperatorToken;
         return SyntaxFacts.IsByteOperator(op.Kind) ? op : null;
     }
 
