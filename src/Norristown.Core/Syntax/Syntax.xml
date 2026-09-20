@@ -820,7 +820,7 @@
     </Field>
   </Node>
 
-  <Node Name="EmptyBlockSyntax" Base="SyntaxNode">
+  <Node Name="EmptyBlockSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="EmptyBlock"/>
     <TypeComment>
       <summary><c>{}</c>: the default of a block parameter a call may leave out.</summary>
@@ -830,14 +830,12 @@
         <summary>The <c>{</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
         <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[ChildTokens[1]]]></Read>
     </Field>
   </Node>
 
@@ -1581,7 +1579,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroDeclarationSyntax" Base="StatementSyntax">
+  <Node Name="MacroDeclarationSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="MacroDeclaration"/>
     <TypeComment>
       <summary><c>.macro name(params): entry -&gt; exit {</c>.</summary>
@@ -1591,35 +1589,30 @@
         <summary>The <c>.macro</c> that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
-    <Field Name="Name" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The macro's name, or null.</summary>
+        <summary>The macro's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[NameAt(1)]]></Read>
     </Field>
-    <Field Name="Parameters" Type="MacroParameterListSyntax" Today="MacroParameterListSyntax?">
+    <Field Name="Parameters" Type="MacroParameterListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The parameters, or null.</summary>
+        <summary>The parameters, or null when not even the <c>(</c> was written.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<MacroParameterListSyntax>()]]></Read>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
         <summary>The processor state the macro expects and leaves, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ProcSignatureSyntax>()]]></Read>
     </Field>
-    <Field Name="OpenBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>The <c>{</c> that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.OpenBrace)]]></Read>
     </Field>
   </Node>
 
@@ -1650,7 +1643,7 @@
     </Field>
   </Node>
 
-  <Node Name="MacroParameterSyntax" Base="SyntaxNode">
+  <Node Name="MacroParameterSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="MacroParameter"/>
     <TypeComment>
       <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
@@ -1662,33 +1655,28 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>:</c> before the kind, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Colon)]]></Read>
     </Field>
     <Field Name="ParameterKind" Type="ParameterKindSyntax" Optional="true">
       <PropertyComment>
         <summary>What the parameter takes, or null.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ParameterKindSyntax>()]]></Read>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>The <c>=</c> before the default, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.Equals)]]></Read>
     </Field>
     <Field Name="Default" Type="SyntaxNode" Optional="true">
       <PropertyComment>
         <summary>The default: an expression, or the <c>{}</c> of a block parameter. Null when there is none.</summary>
       </PropertyComment>
-      <Read><![CDATA[NodeAfter(EqualsToken)]]></Read>
     </Field>
   </Node>
 

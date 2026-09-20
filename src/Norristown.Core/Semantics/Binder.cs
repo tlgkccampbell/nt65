@@ -826,8 +826,12 @@ internal sealed class Binder
 
         CheckMacroPlacement(declaration);
         var written = declaration.Name;
-        var symbol = written is { } name ? Declare(name, SymbolKind.Macro) : null;
-        var body = new Scope(ScopeKind.Macro, symbol?.Name ?? written?.Text, scope, symbol);
+        var symbol = Declare(written, SymbolKind.Macro);
+
+        // What a body declares is named after the macro, so a macro the source did not name
+        // opens a nameless scope, as a routine with no name does.
+        var body = new Scope(
+            ScopeKind.Macro, symbol?.Name ?? (written.IsMissing ? null : written.Text), scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         if (symbol is not null && declaration.Signature is { } signature)

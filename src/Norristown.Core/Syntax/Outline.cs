@@ -62,7 +62,7 @@ public static class Outline
                 return new OutlineItem(OutlineKind.Scope, scope.Name?.Text ?? ".scope", null,
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 
-            case MacroDeclarationSyntax { Name: { } macro }:
+            case MacroDeclarationSyntax { Name: { IsMissing: false } macro }:
                 // The parameters are what a reader needs beside the name, and the signature
                 // after them where there is one: together they are the whole header.
                 return new OutlineItem(OutlineKind.Macro, macro.Text, TextAfter(opener, macro)?.TrimEnd('{').TrimEnd(),

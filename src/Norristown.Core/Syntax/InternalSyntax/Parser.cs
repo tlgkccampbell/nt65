@@ -690,20 +690,15 @@ internal sealed class Parser
     /// </summary>
     private GreenNode ParseMacro()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (AtName)
-            children.Add(Advance());
-        else
-            Report("expected a macro name");
+        var keyword = Advance();
+        var name = ExpectName("expected a macro name");
+        GreenNode? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
-            children.Add(ParseMacroParameterList());
+            parameters = ParseMacroParameterList();
         else
             ReportOnce("expected `(` and the parameters");
-        if (Kind == SyntaxKind.Colon)
-            children.Add(ParseSignature());
-        ExpectOpenBrace(children);
-        return new GreenSyntax(SyntaxKind.MacroDeclaration, children.ToImmutable());
+        var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
+        return new MacroDeclarationSyntax(keyword, name, parameters, signature, ExpectOpenBrace());
     }
 
     private GreenNode ParseMacroParameterList()
@@ -727,23 +722,27 @@ internal sealed class Parser
             Report("expected a parameter name");
             return null;
         }
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var name = Advance();
+        GreenToken? colon = null;
+        GreenNode? parameterKind = null;
         if (Kind == SyntaxKind.Colon)
         {
-            children.Add(Advance());
-            children.Add(ParseParameterKind());
+            colon = Advance();
+            parameterKind = ParseParameterKind();
         }
+
+        GreenToken? equals = null;
+        GreenNode? given = null;
         if (Kind == SyntaxKind.Equals)
         {
-            children.Add(Advance());
+            equals = Advance();
 
             // `= {}`: a block parameter a call may leave out, which is empty when it does.
-            children.Add(Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
-                ? new GreenSyntax(SyntaxKind.EmptyBlock, [Advance(), Advance()])
-                : ParseExpression());
+            given = Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
+                ? new EmptyBlockSyntax(Advance(), Advance())
+                : ParseExpression();
         }
-        return new GreenSyntax(SyntaxKind.MacroParameter, children.ToImmutable());
+        return new MacroParameterSyntax(name, colon, parameterKind, equals, given);
     }
 
     /// <summary>

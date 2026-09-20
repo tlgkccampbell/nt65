@@ -30,7 +30,6 @@ ElementCount
 ElementIndex
 ElseDirective
 ElseIfDirective
-EmptyBlock
 EnsureDirective
 EnumDeclaration
 EnumMember
@@ -55,8 +54,6 @@ ListDeclaration
 ListItems
 LongIndirectOperand
 MacroCall
-MacroDeclaration
-MacroParameter
 MacroParameterList
 MemberValue
 ModuleDirective
