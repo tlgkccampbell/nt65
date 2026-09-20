@@ -337,7 +337,7 @@
     </Field>
   </Node>
 
-  <Node Name="BracedOperandSyntax" Base="SyntaxNode">
+  <Node Name="BracedOperandSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="BracedOperand"/>
     <TypeComment>
       <summary><c>{buf,x}</c>: a whole operand as a macro argument.</summary>
@@ -347,20 +347,17 @@
         <summary>The <c>{</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Operand" Type="OperandSyntax">
       <PropertyComment>
         <summary>The operand.</summary>
       </PropertyComment>
-      <Read><![CDATA[(OperandSyntax)ChildNodes[0]]]></Read>
     </Field>
-    <Field Name="CloseBraceToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>, or null.</summary>
+        <summary>The <c>}</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBrace)]]></Read>
     </Field>
   </Node>
 
@@ -1371,7 +1368,7 @@
     </Field>
   </Node>
 
-  <Node Name="InstructionStatementSyntax" Base="StatementSyntax">
+  <Node Name="InstructionStatementSyntax" Base="StatementSyntax" Converted="true">
     <Kind Name="InstructionStatement"/>
     <TypeComment>
       <summary>A mnemonic and its operand, if it takes one.</summary>
@@ -1381,13 +1378,11 @@
         <summary>The mnemonic.</summary>
       </PropertyComment>
       <Kind Name="Mnemonic"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Operand" Type="OperandSyntax" Optional="true">
       <PropertyComment>
         <summary>The operand, or null for an instruction written without one.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<OperandSyntax>()]]></Read>
     </Field>
   </Node>
 

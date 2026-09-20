@@ -857,19 +857,14 @@ internal sealed class Parser
     /// <c>{buf,x}</c>: a whole operand as an argument. Only a braced one is an operand, so an
     /// unbraced <c>(ptr)</c> stays the expression it reads as.
     /// </summary>
-    private GreenNode ParseBracedOperand()
+    private BracedOperandSyntax ParseBracedOperand()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
+        var openBrace = Advance();
         var outer = braced;
         braced = true;
-        children.Add(ParseOperand());
+        var operand = ParseOperand();
         braced = outer;
-        if (Kind == SyntaxKind.CloseBrace)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `}`");
-        return new GreenSyntax(SyntaxKind.BracedOperand, children.ToImmutable());
+        return new BracedOperandSyntax(openBrace, operand, Expect(SyntaxKind.CloseBrace, "expected `}`"));
     }
 
     /// <summary>
@@ -1634,16 +1629,14 @@ internal sealed class Parser
         }
     }
 
-    private GreenNode ParseInstruction()
+    private InstructionStatementSyntax ParseInstruction()
     {
         var mnemonic = Advance();
-        return AtEnd
-            ? new GreenSyntax(SyntaxKind.InstructionStatement, [mnemonic])
-            : new GreenSyntax(SyntaxKind.InstructionStatement, [mnemonic, ParseOperand()]);
+        return new InstructionStatementSyntax(mnemonic, AtEnd ? null : ParseOperand());
     }
 
     /// <summary>The operand forms. Which ones each CPU and mnemonic allow is layout's to say.</summary>
-    private GreenNode ParseOperand()
+    private OperandSyntax ParseOperand()
     {
         if (Kind == SyntaxKind.Hash)
             return ParseImmediate();

@@ -4,7 +4,6 @@
 ArgumentList
 AssertDirective
 BankRange
-BracedOperand
 CharmapDeclaration
 CharmapEntry
 ConfigDeclaration
@@ -32,7 +31,6 @@ IfDirective
 ImportDirective
 ImportItem
 ImportSignature
-InstructionStatement
 ListDeclaration
 ListItems
 MacroCall
