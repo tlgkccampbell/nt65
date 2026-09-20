@@ -721,7 +721,7 @@
     </TypeComment>
   </Node>
 
-  <Node Name="ElementCountSyntax" Base="SyntaxNode">
+  <Node Name="ElementCountSyntax" Base="SyntaxNode" Converted="true">
     <Kind Name="ElementCount"/>
     <TypeComment>
       <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
@@ -731,20 +731,17 @@
         <summary>The <c>[</c>.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
-      <Read><![CDATA[ChildTokens[0]]]></Read>
     </Field>
     <Field Name="Count" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The count, or null for <c>[]</c>.</summary>
       </PropertyComment>
-      <Read><![CDATA[FirstNode<ExpressionSyntax>()]]></Read>
     </Field>
-    <Field Name="CloseBracketToken" Type="SyntaxToken" Today="SyntaxToken?">
+    <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>, or null.</summary>
+        <summary>The <c>]</c>.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
-      <Read><![CDATA[FirstToken(SyntaxKind.CloseBracket)]]></Read>
     </Field>
   </Node>
 

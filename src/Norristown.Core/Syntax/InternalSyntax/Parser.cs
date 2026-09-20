@@ -415,15 +415,9 @@ internal sealed class Parser
     /// <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
     private GreenNode ParseElementCount()
     {
-        var children = ImmutableArray.CreateBuilder<GreenNode>();
-        children.Add(Advance());
-        if (Kind != SyntaxKind.CloseBracket && !AtEnd)
-            children.Add(ParseExpression());
-        if (Kind == SyntaxKind.CloseBracket)
-            children.Add(Advance());
-        else
-            ReportOnce("expected `]`");
-        return new GreenSyntax(SyntaxKind.ElementCount, children.ToImmutable());
+        var bracket = Advance();
+        var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
+        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, "expected `]`"));
     }
 
     /// <summary>

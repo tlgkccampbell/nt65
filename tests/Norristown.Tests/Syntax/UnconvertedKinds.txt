@@ -25,7 +25,6 @@ DataDeclaration
 DataDirective
 DataValues
 EachDirective
-ElementCount
 ElementIndex
 ElseDirective
 ElseIfDirective
