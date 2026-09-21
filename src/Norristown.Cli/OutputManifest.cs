@@ -11,8 +11,7 @@ public static class OutputManifest
     public const string Name = ".nt65-outputs";
 
     /// <summary>How the file system tells two paths apart, which is not how nt65 tells two names apart.</summary>
-    private static readonly StringComparer Names =
-        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    private static readonly StringComparer Names = FilePaths.Comparer;
 
     /// <summary>
     /// Deletes what the record in <paramref name="directory"/> names and <paramref name="written"/>

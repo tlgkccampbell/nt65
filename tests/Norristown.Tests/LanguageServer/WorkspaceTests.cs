@@ -39,6 +39,28 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
+    /// And back again, the same way on every host. A rooted path is no URI to .NET's reader
+    /// unless it starts with a drive letter, and on Linux every path a workspace carries starts
+    /// with a <c>/</c> — the drive letter of an editor on Windows among them — so a path the
+    /// analysis names another file by has to be written out as one rather than handed over bare.
+    /// </summary>
+    [Fact]
+    public void ARootedPathComesBackAsAFileUriOnEveryHost()
+    {
+        Assert.Equal("file:///home/u/p/main.nt65", Lsp.ToUri("/home/u/p/main.nt65"));
+        Assert.Equal("file:///c:/work/main.nt65", Lsp.ToUri("/c:/work/main.nt65"));
+
+        // What a URI holds is escaped, whatever the file is called.
+        Assert.Equal("file:///home/u/my%20file.nt65", Lsp.ToUri("/home/u/my file.nt65"));
+        Assert.Equal("file:///home/u/a%23b.nt65", Lsp.ToUri("/home/u/a#b.nt65"));
+
+        // Not a path: an untitled document, and a file the editor named relatively, come back
+        // as they went in.
+        Assert.Equal("untitled:Untitled-1", Lsp.ToUri("untitled:Untitled-1"));
+        Assert.Equal("main.nt65", Lsp.ToUri("main.nt65"));
+    }
+
+    /// <summary>
     /// The editor's active configuration is the one the program is analyzed as: its defines over
     /// the project's, and a name the project does not have is reported.
     /// </summary>

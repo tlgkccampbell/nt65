@@ -857,9 +857,17 @@ internal static class Lsp
         _ => Protocol.SymbolKind.Field,
     };
 
-    /// <summary>A logical path back as a URI, for a diagnostic that points into another file.</summary>
+    /// <summary>
+    /// A logical path back as a URI, for a diagnostic that points into another file. A Windows
+    /// path reads as an absolute URI, drive letter and all, wherever nt65 is running; a rooted
+    /// Unix path reads as no URI at all, on any host, so it is written out as one. A relative
+    /// path is one the editor gave and is handed back as it came.
+    /// </summary>
     internal static string ToUri(string path) =>
-        Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri : path;
+        Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri
+            : path.StartsWith('/')
+                ? new UriBuilder(Uri.UriSchemeFile, string.Empty) { Path = path }.Uri.AbsoluteUri
+                : path;
 
     /// <summary>
     /// One hover's text, in the order it is read: the line under the caret in the language's

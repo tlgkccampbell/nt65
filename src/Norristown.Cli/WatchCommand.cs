@@ -32,7 +32,7 @@ internal static class WatchCommand
 
         // The watcher is started before the first build, so a file saved while that build is
         // running is a change it hears about rather than one it slept through.
-        var watched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var watched = new HashSet<string>(FilePaths.Comparer);
         using var changed = new SemaphoreSlim(0, 1);
         using var watcher = new FileSystemWatcher(root)
         {
