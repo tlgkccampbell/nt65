@@ -62,11 +62,27 @@ internal sealed class TestClient : IAsyncDisposable
         string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
         bool refreshesTokens = false) =>
         StartAsync(
-            refreshesTokens ? new { workspace = new { semanticTokens = new { refreshSupport = true } } } : new { },
-            cancellation,
-            rootUri: rootUri,
-            configuration: configuration,
-            name: name);
+            Capable(refreshesTokens), cancellation, rootUri: rootUri, configuration: configuration, name: name);
+
+    /// <summary>
+    /// What a client of the kind nt65 is written for declares: an outline as a tree, edits
+    /// against a named revision, snippets, and the folders it has open. It is what VS Code
+    /// declares, so it is what most of the suite asks as.
+    /// </summary>
+    public static object Capable(bool refreshesTokens = false) => new
+    {
+        workspace = new
+        {
+            workspaceEdit = new { documentChanges = true },
+            workspaceFolders = true,
+            semanticTokens = new { refreshSupport = refreshesTokens },
+        },
+        textDocument = new
+        {
+            documentSymbol = new { hierarchicalDocumentSymbolSupport = true },
+            completion = new { completionItem = new { snippetSupport = true } },
+        },
+    };
 
     /// <summary>
     /// Connects as a client that declares <paramref name="capabilities"/>, which is the object
@@ -112,6 +128,13 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.NotifyWithParameterObjectAsync("workspace/didChangeWatchedFiles",
             new DidChangeWatchedFilesParams([.. uris.Select(uri => new FileEvent(uri, FileChangeType.Changed))]));
 
+    /// <summary>Says that the folders the client has open have changed.</summary>
+    public Task FoldersChangedAsync(IEnumerable<string> added, IEnumerable<string> removed) =>
+        rpc.NotifyWithParameterObjectAsync("workspace/didChangeWorkspaceFolders",
+            new DidChangeWorkspaceFoldersParams(new WorkspaceFoldersChangeEvent(
+                [.. added.Select(uri => new WorkspaceFolder(uri, uri))],
+                [.. removed.Select(uri => new WorkspaceFolder(uri, uri))])));
+
     /// <summary>Says that the client's <c>nt65</c> settings now choose <paramref name="configuration"/>.</summary>
     public Task ConfigureAsync(string? configuration) =>
         rpc.NotifyWithParameterObjectAsync("workspace/didChangeConfiguration",
@@ -128,6 +151,15 @@ internal sealed class TestClient : IAsyncDisposable
     /// </summary>
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(CancellationToken cancellation) =>
         await notifications.Published.Reader.ReadAsync(cancellation);
+
+    /// <summary>Everything published and not yet read, taken off without waiting for any more.</summary>
+    public IReadOnlyList<PublishDiagnosticsParams> Pending()
+    {
+        var found = new List<PublishDiagnosticsParams>();
+        while (notifications.Published.Reader.TryRead(out var published))
+            found.Add(published);
+        return found;
+    }
 
     /// <summary>The next set published for <paramref name="uri"/>, passing over every other file's.</summary>
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(string uri, CancellationToken cancellation)
@@ -151,6 +183,11 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>The document's outline.</summary>
     public Task<IReadOnlyList<DocumentSymbol>> SymbolsAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentSymbol>>("textDocument/documentSymbol",
+            new DocumentSymbolParams(new TextDocumentIdentifier(uri)), cancellation);
+
+    /// <summary>The document's outline as a client that takes no tree gets it: one flat list.</summary>
+    public Task<IReadOnlyList<SymbolInformation>> FlatSymbolsAsync(string uri, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<SymbolInformation>>("textDocument/documentSymbol",
             new DocumentSymbolParams(new TextDocumentIdentifier(uri)), cancellation);
 
     /// <summary>The document's names, classified.</summary>

@@ -158,7 +158,7 @@ internal sealed class Server
     {
         await rpc!.NotifyWithParameterObjectAsync("window/logMessage",
             new LogMessageParams(MessageType.Info, "Norristown language server ready")).ConfigureAwait(false);
-        await PublishEverythingAsync(null, cancellation).ConfigureAwait(false);
+        await PublishEverythingAsync(null, cancellation, refresh: false).ConfigureAwait(false);
     }
 
     /// <summary>The client's settings changed: the project is read again as the configuration they now choose.</summary>
@@ -247,11 +247,17 @@ internal sealed class Server
         return PublishEverythingAsync(null, cancellation);
     }
 
+    /// <summary>
+    /// What a file declares. A client that takes a tree gets the one the segments and scopes
+    /// make; one that does not gets the flat list the protocol had first.
+    /// </summary>
     [JsonRpcMethod("textDocument/documentSymbol")]
-    public IReadOnlyList<DocumentSymbol> DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
+    public object DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : [];
+        return outgoing.Spell(
+            request.TextDocument.Uri,
+            workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : []);
     }
 
     [JsonRpcMethod("textDocument/foldingRange")]
@@ -492,7 +498,7 @@ internal sealed class Server
     private async Task PublishOwnAsync(string uri, CancellationToken cancellation)
     {
         if (workspace.ToPublish(uri) is { } file)
-            await SendAsync(file, always: true, cancellation).ConfigureAwait(false);
+            _ = await SendAsync(file, always: true, cancellation).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -512,7 +518,12 @@ internal sealed class Server
     /// and is passed over here; null when this is not an edit.
     /// </param>
     /// <param name="cancellation">Asked between files, since a program may hold hundreds.</param>
-    private async Task PublishEverythingAsync(string? changed, CancellationToken cancellation)
+    /// <param name="refresh">
+    /// Whether the client may be asked to fetch what it holds again. It is not worth asking as
+    /// the client connects, when it is holding nothing yet.
+    /// </param>
+    private async Task PublishEverythingAsync(
+        string? changed, CancellationToken cancellation, bool refresh = true)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
         foreach (var file in workspace.ToPublish())
@@ -520,7 +531,7 @@ internal sealed class Server
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
             if (file.Uri != changed)
-                await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
+                _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
         // The client holds what it was last told until it is told otherwise, so a file that
@@ -537,7 +548,7 @@ internal sealed class Server
         // What a name in another file refers to, and what a routine costs with its calls, moved
         // only if the edit reached past the file it was made in; the edited file is not asked
         // to fetch anything, because the client asks about the document it is showing itself.
-        if (changed is not null && !workspace.ReachedOtherFiles(Workspace.PathOf(changed)))
+        if (!refresh || (changed is not null && !workspace.ReachedOtherFiles(Workspace.PathOf(changed))))
             return;
         if (client.RefreshesTokens)
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
@@ -554,19 +565,21 @@ internal sealed class Server
     /// <param name="file">The file and what is wrong with it.</param>
     /// <param name="always">Whether to send even where nothing changed, which the edited file does.</param>
     /// <param name="cancellation">Asked before anything is sent.</param>
-    private async Task SendAsync(Published file, bool always, CancellationToken cancellation)
+    /// <returns>Whether the client was told anything.</returns>
+    private async Task<bool> SendAsync(Published file, bool always, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         if (file.Version is { } version && newest.TryGetValue(file.Uri, out var latest) && latest > version)
-            return;
+            return false;
         var diagnostics = outgoing.Spell(
             Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration));
         var said = Signature(diagnostics);
         if (!always && published.TryGetValue(file.Uri, out var before) && before == said)
-            return;
+            return false;
         published[file.Uri] = said;
         await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
             new PublishDiagnosticsParams(file.Uri, file.Version, diagnostics)).ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>

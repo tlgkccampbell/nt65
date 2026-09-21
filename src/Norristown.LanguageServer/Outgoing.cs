@@ -98,4 +98,22 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// <summary>A link from an <c>.incbin</c> to the file it names.</summary>
     public IReadOnlyList<DocumentLink> Spell(IReadOnlyList<DocumentLink> links) =>
         [.. links.Select(link => link with { Target = Spell(link.Target) })];
+
+    /// <summary>
+    /// A file's outline: the tree the segments and scopes make, for a client that takes one,
+    /// and the flat list the protocol had first for a client that does not, each entry naming
+    /// what it is written in.
+    /// </summary>
+    /// <param name="uri">The file the outline is of, as the client named it.</param>
+    /// <param name="outline">What the file declares.</param>
+    public object Spell(string uri, IReadOnlyList<DocumentSymbol> outline) =>
+        client.HierarchicalSymbols ? outline : Flat(Spell(uri), outline, null);
+
+    private static IReadOnlyList<SymbolInformation> Flat(
+        string uri, IReadOnlyList<DocumentSymbol> outline, string? container) =>
+        [.. outline.SelectMany(symbol => (IEnumerable<SymbolInformation>)
+            [
+                new SymbolInformation(symbol.Name, symbol.Kind, new Location(uri, symbol.Range), container),
+                .. Flat(uri, symbol.Children ?? [], symbol.Name),
+            ])];
 }
