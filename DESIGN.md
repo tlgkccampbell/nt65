@@ -1861,6 +1861,29 @@ nt65 evaluates every expression it can (anything built only from constants) and 
 the value for sizing and diagnostics. Expressions involving addresses are emitted
 symbolically for ca65 and ld65 to resolve.
 
+**Arithmetic is 64-bit and signed** while nt65 computes, so that what an expression passes
+through on its way to a value has room. Within that:
+
+- `/` truncates toward zero and `.mod` takes the sign of the dividend, so `-7 / 2` is `-3`
+  and `-7 .mod 2` is `-1`. A division or a remainder by zero is an error.
+- `>>` is arithmetic: the sign comes with it, so `-8 >> 1` is `-4`. A shift counts 0 to 63
+  places, and a count outside that is an error rather than a value of its own.
+- `+`, `-`, `*` and `<<` are errors where the result leaves 64 bits, as is negating the
+  smallest number there is. Nothing wraps: a wrapped number is one nobody wrote.
+- The comparisons and the logical operators are 1 or 0, and `&`, `|`, `^` and `~` are the
+  bits of the 64-bit value.
+
+**A value that reaches the output fits ca65's 32 bits.** ca65 computes in 32 bits, signed, and
+reads a number up to `$ffffffff`, so a value the output carries is at least `-$80000000` and at
+most `$ffffffff`. It is checked where it is declared, and so is every step of the expression it
+is declared with: the output writes that expression as the source wrote it (§13), so ca65 works
+the same steps out again and the two have to reach the same number. A condition and a count are
+nt65's own, reach no output, and have all 64 bits to move in.
+
+Together those give the invariant the output rests on: **an expression built only from
+constants is never written out as text for ca65 to work out**. Either nt65 has its value, or
+nt65 has said why it has none.
+
 ## 10. Conditional assembly and repetition
 
 ```nt65
@@ -3082,6 +3105,18 @@ Recorded so the reasoning survives. None is open.
   separate proc in a `.scope` gives the same privacy and namespace without that.
 - **No cycle-count built-ins.** A sum along one path cannot be a true bound once a loop
   or a call is on it.
+- **Sixty-four bits while nt65 computes, thirty-two where the output carries a value** (§9).
+  One width for both was weighed and refused from either end. ca65's 32 everywhere costs the
+  room an intermediate wants, and a language whose `.repeat` count and whose `.if` condition
+  overflow where the arithmetic is fine is a language explaining its backend. Sixty-four
+  everywhere is the bug the review found: `BIG = $7fffffffffffffff` built, and ca65 refused
+  the output. So nt65 computes wide and checks narrow, at the declaration, where there is a
+  name to say it about. Every step of a declaration's expression is checked with the result
+  because the output writes that expression as the source wrote it, and ca65 works the steps
+  out again — an intermediate the two disagree about would be a value that assembles as
+  something nt65 never said. Overflow is an error rather than a wrap for the same reason:
+  where an expression has no value nt65 can stand behind, the one thing that must not happen
+  is that it is written out for ca65 to answer instead.
 - **Conditions test only the configuration.** `.if` sees defines and never program
   symbols, as `#if` in C and C#, `#[cfg]` in Rust and `#if` in Swift do. A conditional
   that can test program constants (ca65's `.if`, D's `static if`) makes which

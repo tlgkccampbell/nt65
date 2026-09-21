@@ -6,9 +6,10 @@ namespace Norristown.Semantics;
 /// What an expression evaluates to: a number, a string, or nothing when the expression
 /// names an address or needs a layer that is not online yet.
 /// <para>
-/// Arithmetic is 64-bit and signed. The design does not fix a width, and ca65's own is
-/// 32 bits; whether a value fits where it is written is a question about that use, so the
-/// range check belongs to the stage that writes it out rather than here.
+/// Arithmetic is 64-bit and signed while nt65 computes, and what the output carries has to
+/// fit ca65's 32 bits. Where a value fits is a question about the place it is written — a
+/// slot, an immediate, a declaration — so every range check belongs to the stage that writes
+/// it rather than here.
 /// </para>
 /// </summary>
 /// <param name="Kind">What the value holds.</param>

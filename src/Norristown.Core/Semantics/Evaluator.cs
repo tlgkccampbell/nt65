@@ -57,7 +57,14 @@ internal sealed class Evaluator
     // Set when what is being evaluated is a build's own condition, which is read before there
     // are any declarations and so means something narrower by every name and every call.
     private readonly Conditions? conditions;
+
+    // The declarations already told that a value of theirs is wider than ca65 can hold. The
+    // steps around such a value are the same mistake, and the first of them is the one to name.
+    private readonly HashSet<Symbol> wide = [];
     private Symbol? owner;
+
+    // The symbol whose own value is being worked out, whose every step the output carries.
+    private Symbol? declaring;
 
     // How deep evaluation is inside values `.select` chose, whose names have to mean something,
     // and whether a function body is being read with nothing given, when no choice is known.
@@ -270,7 +277,33 @@ internal sealed class Evaluator
     /// conditions of a build — evaluates through here; one that only asks goes through
     /// <see cref="ValueOf"/>.
     /// </summary>
-    public Value Evaluate(SyntaxNode node)
+    public Value Evaluate(SyntaxNode node) => declaring is null ? Evaluated(node) : Carried(node, Evaluated(node));
+
+    /// <summary>
+    /// A value on its way into the output, checked against what ca65 can hold. ca65 computes
+    /// in 32 bits and the output writes a declaration's expression as the source wrote it, so
+    /// every step of one has to be a number ca65 reaches too.
+    /// </summary>
+    private Value Carried(SyntaxNode node, Value value)
+    {
+        // A name is worth what its own declaration says, and what does not fit there is said
+        // there rather than again at every name of it.
+        if (node is NameExpressionSyntax || declaring is not { } within)
+            return value;
+        if (value.AsNumber() is { } number && !FitsCa65(number) && wide.Add(within))
+            Report(node, TooWide(number));
+        return value;
+    }
+
+    /// <summary>What is wrong with a value ca65 has no room for.</summary>
+    private static string TooWide(long number) =>
+        $"{Value.Of(number)} does not fit the 32 bits ca65 computes in: a value the output carries is "
+        + "at least -$80000000 and at most $ffffffff";
+
+    /// <summary>Whether ca65 can hold a value: its own arithmetic is 32 bits, and it reads one unsigned.</summary>
+    private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
+
+    private Value Evaluated(SyntaxNode node)
     {
         // A literal the lexer refused is worth nothing, the way an undeclared name is: what is
         // wrong with it has been said once, where it is written, and reading it for a value
@@ -392,6 +425,8 @@ internal sealed class Evaluator
                 return;
             case SymbolKind.Constant when symbol.FollowsPrevious:
                 symbol.Value = Number(Follows(symbol));
+                if (symbol.Value.AsNumber() is { } counted && !FitsCa65(counted) && wide.Add(symbol))
+                    Report(symbol.DeclarationSpan, TooWide(counted), []);
                 return;
             default:
                 break;
@@ -401,6 +436,10 @@ internal sealed class Evaluator
         // is what `.sizeof` and `.countof` answer for it. Mixed data has bytes and no elements.
         if (symbol.Kind == SymbolKind.Data)
         {
+            // How much room a declaration takes is nt65's own arithmetic, whatever is being
+            // declared around it: what the output carries of it is the count of a `.res`.
+            var outerSizing = declaring;
+            declaring = null;
             evaluating.Add(symbol);
             symbol.Type ??= (symbol.Data as DataDirectiveSyntax)?.Type is { } typed ? SymbolOf(typed) : null;
             if (symbol.Data is { } element && RoomFor(element) is { } room)
@@ -413,6 +452,7 @@ internal sealed class Evaluator
                 symbol.Size = RoomForMixed(block);
             }
             evaluating.RemoveAt(evaluating.Count - 1);
+            declaring = outerSizing;
         }
 
         if (symbol.ValueExpression is not { } expression)
@@ -427,8 +467,13 @@ internal sealed class Evaluator
             return;
         }
 
+        // What the symbol is worth is what the output carries, and so is every step of the
+        // expression it is written with: ca65 works those steps out again from the text.
         evaluating.Add(symbol);
+        var outerDeclaring = declaring;
+        declaring = symbol;
         symbol.Value = Evaluate(expression);
+        declaring = outerDeclaring;
         evaluating.RemoveAt(evaluating.Count - 1);
 
         // `NAME = expr` is a constant if the expression names no address, and an address
@@ -634,7 +679,11 @@ internal sealed class Evaluator
     {
         if (operand.AsNumber() is not { } value)
             return Reject(op, operand);
-        return Operators.Unary(op.Kind, value) is { } result ? Value.Of(result) : Value.Unknown;
+        if (Operators.Unary(op.Kind, value, out var refused) is { } result)
+            return Value.Of(result);
+        if (refused is not null)
+            Report(op, refused);
+        return Value.Unknown;
     }
 
     /// <summary>
@@ -656,7 +705,11 @@ internal sealed class Evaluator
             Report(op, "division by zero");
             return Value.Unknown;
         }
-        return Operators.Binary(op, a, b) is { } result ? Value.Of(result) : Value.Unknown;
+        if (Operators.Binary(op, a, b, out var refused) is { } result)
+            return Value.Of(result);
+        if (refused is not null)
+            Report(op, refused);
+        return Value.Unknown;
     }
 
     /// <summary>An operand that is a string where a number belongs; there is no string arithmetic.</summary>

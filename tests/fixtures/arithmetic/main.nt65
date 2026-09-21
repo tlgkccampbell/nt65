@@ -1,0 +1,47 @@
+; nt65 computes in 64 signed bits, and what the output carries has to fit ca65's 32.
+; Nothing wraps: where an expression has no value, the reason is said here rather than
+; left for ca65 to work out from the text.
+.module main
+
+; Division truncates toward zero and `.mod` takes the dividend's sign.
+.assert -7 / 2 == -3, "a quotient truncates toward zero"
+.assert 7 / -2 == -3, "whichever side the sign is on"
+.assert -7 .mod 2 == -1, "a remainder takes the sign of the dividend"
+.assert 7 .mod -2 == 1, "and not that of the divisor"
+.assert -7 .mod -1 == 0, "a remainder by -1 is nothing at all"
+
+; `>>` keeps the sign, and 63 places are there to shift through.
+.assert -8 >> 1 == -4, "a shift right is arithmetic"
+.assert (1 << 62) >> 62 == 1, "and a shift left reaches the top bit but one"
+
+; An expression that leaves 64 bits has no value, and says so. None of these is declared,
+; so what refuses them is the width nt65 computes in rather than the width ca65 holds.
+.assert $7fffffffffffffff + 1 == 0, "no wrap" ;! error: $7fffffffffffffff + 1 overflows the 64 bits nt65 computes in
+.assert (0 - $7fffffffffffffff) - 2 == 0, "nor down" ;! error: -9223372036854775807 - 2 overflows the 64 bits nt65 computes in
+.assert $ffffffff * $ffffffff == 0, "nor a product" ;! error: $ffffffff * $ffffffff overflows the 64 bits nt65 computes in
+.assert 1 << 63 == 0, "nor a shift"     ;! error: 1 << 63 overflows the 64 bits nt65 computes in
+.assert -(0 - $7fffffffffffffff - 1) == 0, "no positive" ;! error: negating -9223372036854775808 overflows the 64 bits nt65 computes in
+.assert (0 - $7fffffffffffffff - 1) / -1 == 0, "nor a quotient" ;! error: -9223372036854775808 / -1 overflows the 64 bits nt65 computes in
+
+; A shift counts places, and only the places a 64-bit value has.
+.assert 1 << 70 == 0, "no bit 70"       ;! error: a shift counts 0 to 63 places, and this one counts 70
+.assert 1 >> -1 == 0, "no count below 0" ;! error: a shift counts 0 to 63 places, and this one counts -1
+
+; What is declared reaches the output, and ca65 has 32 bits for it — for the value, and
+; for every step of the expression it is written with, which ca65 works out again.
+BIG    = $7fffffffffffffff          ;! error: $7fffffffffffffff does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+SUM    = $ffffffff + 1              ;! error: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+STEP   = ($ffffffff + 1) / 2        ;! error: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+ROOM   = (1 << 40) >> 20            ;! error: $10000000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+LOWEST = 0 - $80000001              ;! error: -2147483649 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+
+; The edges of what ca65 holds are values like any other.
+LIMIT  = $ffffffff
+FLOOR  = 0 - $80000000
+
+.enum Counted {
+    near = $ffffffff
+    far                             ;! error: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+}
+
+.export LIMIT, FLOOR, Counted
