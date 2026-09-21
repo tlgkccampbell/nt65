@@ -61,21 +61,58 @@ internal static class Completion
     /// </summary>
     private static readonly Protocol.Command Again = new("Suggest", "editor.action.triggerSuggest");
 
-    /// <summary>What could be written at <paramref name="position"/> in the file <paramref name="model"/> is of.</summary>
-    public static IReadOnlyList<Protocol.CompletionItem> At(
-        ProgramModel program, SemanticModel model, Cpu cpu, int position)
+    /// <summary>
+    /// What could be written at <paramref name="position"/> in the file <paramref name="model"/>
+    /// is of, and what each of them is for, which is fetched for the one item the caret is on
+    /// rather than sent with all of them.
+    /// </summary>
+    /// <param name="program">Every file, for the names a path leads to and what a block opener writes.</param>
+    /// <param name="model">The file the caret is in.</param>
+    /// <param name="cpu">The processor, which decides the instructions and the shape of a routine.</param>
+    /// <param name="position">Where in the file's text.</param>
+    /// <param name="snippets">Whether the client takes text with stops in it.</param>
+    public static (IReadOnlyList<Protocol.CompletionItem> Items, IReadOnlyDictionary<string, string> About) At(
+        ProgramModel program, SemanticModel model, Cpu cpu, int position, bool snippets)
     {
         var line = LineContext.At(model.Tree, position);
         var items = new Dictionary<string, Suggestion>(StringComparer.Ordinal);
         if (!line.InText)
             Collect(program, model, line, cpu, items);
+        if (snippets)
+            Shaped(program, cpu, items);
         var range = Lsp.ToRange(model.Tree, line.Replaced);
-        return [.. items
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => new Protocol.CompletionItem(item.Key, item.Value.Kind, item.Value.Detail,
-                new Protocol.TextEdit(range, item.Value.Text),
-                Unfinished(item.Value.Text) ? Again : null,
-                item.Value.Documentation is { } written ? Protocol.MarkupContent.Markdown(written) : null))];
+        var about = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (label, suggestion) in items)
+        {
+            if (suggestion.Documentation is { Length: > 0 } written)
+                about[label] = written;
+        }
+        return (
+            [.. items
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Select(item => new Protocol.CompletionItem(item.Key, item.Value.Kind, item.Value.Detail,
+                    new Protocol.TextEdit(range, item.Value.Text),
+                    Unfinished(item.Value.Text) ? Again : null,
+                    null,
+                    item.Value.SortText(item.Key),
+                    item.Value.IsSnippet ? Protocol.InsertTextFormat.Snippet : null))],
+            about);
+    }
+
+    /// <summary>
+    /// The directives that open a block, written as the block rather than as the word, for a
+    /// client that takes stops. Nothing else is a snippet.
+    /// </summary>
+    private static void Shaped(ProgramModel program, Cpu cpu, Dictionary<string, Suggestion> items)
+    {
+        foreach (var (name, suggestion) in items.ToList())
+        {
+            if (suggestion.Kind == Protocol.CompletionItemKind.Keyword
+                && Snippets.Of(name, program, cpu) is { } written)
+            {
+                items[name] = suggestion with { Text = written, IsSnippet = true };
+            }
+        }
     }
 
     /// <summary>
@@ -198,7 +235,11 @@ internal static class Completion
             && Callee(model, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
         {
             foreach (var parameter in macro.Parameters)
-                items.TryAdd(parameter.Symbol.Name, new Suggestion(Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = "));
+            {
+                items.TryAdd(parameter.Symbol.Name, new Suggestion(
+                    Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}",
+                    parameter.Symbol.Name + " = ", Band: Suggestion.InScope));
+            }
         }
 
         if (!Ends(before[^1].Kind))
@@ -232,7 +273,9 @@ internal static class Completion
                     if (!Instructions.Writable(cpu, mnemonic))
                         continue;
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
-                    items.TryAdd(mnemonic, new Suggestion(Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic));
+                    items.TryAdd(mnemonic, new Suggestion(
+                        Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic,
+                        Band: Suggestion.Instruction));
                 }
                 AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro
                     || (symbol.Kind == SymbolKind.MacroParameter && symbol.Parameter is { IsBlock: true }));
@@ -471,7 +514,11 @@ internal static class Completion
                 foreach (var declared in module.FileScope.Symbols.Where(declared => !declared.IsCheapLocal && (own || declared.IsExported)))
                     Add(declared, items);
                 foreach (var reexport in module.Reexports)
-                    items.TryAdd(reexport.Name, new Suggestion(Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`", reexport.Name));
+                {
+                    items.TryAdd(reexport.Name, new Suggestion(
+                        Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`",
+                        reexport.Name, Band: Suggestion.InScope));
+                }
             }
             return;
         }
@@ -494,7 +541,9 @@ internal static class Completion
                 continue;
             var rest = name[prefix.Length..];
             var next = rest.Split("::")[0];
-            items.TryAdd(next, new Suggestion(Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next));
+            items.TryAdd(next, new Suggestion(
+                Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next,
+                Band: Suggestion.Module));
         }
     }
 
@@ -529,16 +578,23 @@ internal static class Completion
         SemanticModel model, int position,
         Dictionary<string, Suggestion> items, Func<Symbol, bool> wanted)
     {
+        var order = 0;
         foreach (var (name, means) in model.LookupNames(position))
         {
+            order++;
             if (means.Symbol is { } symbol)
             {
                 if (wanted(symbol))
-                    items.TryAdd(name, new Suggestion(KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol)));
+                {
+                    items.TryAdd(name, new Suggestion(
+                        KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol), Suggestion.InScope, order));
+                }
             }
             else if (means.Module is { } module)
             {
-                items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Module, $"module `{module}`", name));
+                items.TryAdd(name, new Suggestion(
+                    Protocol.CompletionItemKind.Module, $"module `{module}`", name,
+                    Band: Suggestion.InScope, Order: order));
             }
         }
     }
@@ -572,8 +628,8 @@ internal static class Completion
     }
 
     private static void Add(Symbol symbol, Dictionary<string, Suggestion> items) =>
-        items.TryAdd(symbol.DisplayName,
-            new Suggestion(KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol)));
+        items.TryAdd(symbol.DisplayName, new Suggestion(
+            KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol), Suggestion.InScope));
 
     private static string Detail(Symbol symbol) =>
         symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;

@@ -25,9 +25,9 @@ internal static class Directives
     /// <summary>What a file's top level holds, past the <c>.module</c> its first line may carry.</summary>
     private static readonly string[] Items =
     [
-        ".cpu", ".config", ".use", ".import", ".export", ".segment", ".proc", ".scope", ".macro", ".func",
-        ".signature", ".data", ".enum", ".struct", ".union", ".charmap", ".list", ".if", ".repeat", ".each",
-        ".assert", ".error", ".warning", ".res", ".align",
+        ".cpu", ".config", ".use", ".import", ".export", ".segment", ".proc", ".multiproc", ".scope", ".macro",
+        ".func", ".signature", ".data", ".enum", ".struct", ".union", ".charmap", ".list", ".if", ".repeat",
+        ".each", ".assert", ".error", ".warning", ".res", ".align",
     ];
 
     /// <summary>What only code holds: what the processor state is, and where control goes.</summary>
@@ -35,11 +35,11 @@ internal static class Directives
 
     /// <summary>What a macro body may not declare, because a macro is expanded rather than written once.</summary>
     private static readonly string[] NotInMacro =
-        [".cpu", ".export", ".import", ".segment", ".proc", ".macro", ".func", ".signature"];
+        [".cpu", ".export", ".import", ".segment", ".proc", ".multiproc", ".macro", ".func", ".signature"];
 
     /// <summary>What a repetition may not declare, because every turn would declare it again.</summary>
     private static readonly string[] NotInRepetition =
-        [".cpu", ".config", ".export", ".import", ".segment", ".proc", ".macro", ".func", ".signature"];
+        [".cpu", ".config", ".export", ".import", ".segment", ".proc", ".multiproc", ".macro", ".func", ".signature"];
 
     /// <summary>What a directive is for, in the few words a completion shows beside it.</summary>
     private static readonly Dictionary<string, string> details = new(StringComparer.Ordinal)
@@ -76,6 +76,7 @@ internal static class Directives
         [".long"] = "three-byte values",
         [".macro"] = "a macro",
         [".module"] = "the module this file is part of",
+        [".multiproc"] = "one routine per member of an enum",
         [".next"] = "where control goes from here",
         [".patch"] = "the target this instruction is patched to",
         [".proc"] = "a routine",
@@ -94,6 +95,12 @@ internal static class Directives
         [".word"] = "two-byte values",
     };
 
+    /// <summary>
+    /// Every directive these lists may offer anywhere. Nothing in the language ties them to
+    /// what the binder accepts, so this is what a test holds them to.
+    /// </summary>
+    public static IEnumerable<string> All => details.Keys;
+
     /// <summary>What every directive in <paramref name="names"/> is for, ready to be offered.</summary>
     public static IEnumerable<(string Name, string Detail)> Described(IEnumerable<string> names) =>
         names.Select(name => (name, details.GetValueOrDefault(name, "directive")));
@@ -111,7 +118,10 @@ internal static class Directives
             Place.EnumMembers => [".if"],
             _ => [],
         };
-        return Described(Without(names, line));
+
+        // What a routine holds is what a file holds and what data holds, and the two lists
+        // share `.res` and `.align`: one directive is offered once.
+        return Described(Without(names, line).Distinct(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -130,11 +140,17 @@ internal static class Directives
             return names;
         var barred = new HashSet<string>(StringComparer.Ordinal);
 
+        // What a module brings in is part of its interface, so a `.use` belongs where the
+        // interface is: at the top level, not under a block.
+        if (line.InProc || line.InMacro || line.InRepetition)
+            barred.Add(".use");
+
         // A macro declared in a routine would see its cheap locals, and a routine inside one
         // is code the outer routine's flow analysis cannot follow.
         if (line.InProc)
         {
             barred.Add(".proc");
+            barred.Add(".multiproc");
             barred.Add(".macro");
         }
         if (line.InMacro)

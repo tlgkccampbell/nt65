@@ -120,7 +120,7 @@ public sealed class BrokenSourceTests
         Answer("highlights", () => Lsp.ToHighlights(model, caret));
         Answer("prepare rename", () => Lsp.ToRenameRange(model, caret));
         Answer("rename", () => Lsp.ToRename(program, model, caret, "renamed"));
-        Answer("completion", () => Completion.At(program, model, analysis.Cpu, caret));
+        Answer("completion", () => Completion.At(program, model, analysis.Cpu, caret, snippets: true));
         Answer("signature help", () => CallHelp.At(program, model, caret));
         Answer("code actions", () =>
             CodeActions.In(analysis, model, new Range(new Position(line, 0), new Position(line, int.MaxValue))));

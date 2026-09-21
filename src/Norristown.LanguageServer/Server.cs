@@ -47,6 +47,11 @@ internal sealed class Server
     private HintSettings hints = HintSettings.Default;
     private bool? cyclesThisSession;
 
+    // What each item of the last list offered is for, kept until the next list replaces it: the
+    // client resolves an item of the list it is showing, which is always the one just answered.
+    private IReadOnlyDictionary<string, string> described =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     // The editor that started this server. It is watched rather than asked: an editor that
     // crashes never sends `exit`, and a server nobody is talking to should not outlive it.
     private Process? parent;
@@ -138,7 +143,10 @@ internal sealed class Server
             ReferencesProvider: true,
             DocumentHighlightProvider: true,
             RenameProvider: new RenameOptions(PrepareProvider: true),
-            CompletionProvider: new CompletionOptions([" ", ".", ":", "@", "!", "#", "(", "[", ","]),
+            // No commit characters: a completion that accepts itself on a `,` or a space, in a
+            // language where both follow a name on most lines, is wrong more often than right.
+            CompletionProvider: new CompletionOptions(
+                [" ", ".", ":", "@", "!", "#", "(", "[", ","], ResolveProvider: true),
             SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
             CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
@@ -363,10 +371,29 @@ internal sealed class Server
     }
 
     [JsonRpcMethod("textDocument/completion")]
-    public IReadOnlyList<CompletionItem> Completion(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked
-            ? LanguageServer.Completion.At(asked.Program, asked.Model, asked.Analysis.Cpu, asked.Position)
-            : [];
+    public IReadOnlyList<CompletionItem> Completion(TextDocumentPositionParams request, CancellationToken cancellation)
+    {
+        if (At(request, cancellation) is not { } asked)
+            return [];
+        var (items, about) = LanguageServer.Completion.At(
+            asked.Program, asked.Model, asked.Analysis.Cpu, asked.Position, client.Snippets);
+        described = about;
+        return items;
+    }
+
+    /// <summary>
+    /// What one item of the last list offered is for. A file's names carry a paragraph each,
+    /// and a list of hundreds would be mostly prose nobody is reading, so the comment above a
+    /// declaration is fetched for the one item the caret is on.
+    /// </summary>
+    [JsonRpcMethod("completionItem/resolve")]
+    public CompletionItem Resolve(CompletionItem request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        return described.TryGetValue(request.Label, out var written)
+            ? request with { Documentation = MarkupContent.Markdown(written) }
+            : request;
+    }
 
     [JsonRpcMethod("textDocument/signatureHelp")]
     public SignatureHelp? SignatureHelp(TextDocumentPositionParams request, CancellationToken cancellation) =>

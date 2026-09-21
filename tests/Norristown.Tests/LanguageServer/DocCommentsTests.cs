@@ -101,7 +101,11 @@ public sealed class DocCommentsTests
         Assert.Contains("Starts the channel it is named after.", hover.Contents.Value);
     }
 
-    /// <summary>A completion carries the comment too, so the list says what each name is for.</summary>
+    /// <summary>
+    /// A completion says what each name is for too, fetched for the one item the caret is on:
+    /// a file's names carry a paragraph each, and a list of hundreds would be mostly prose
+    /// nobody is reading.
+    /// </summary>
     [Fact]
     public async Task ACompletionCarriesTheComment()
     {
@@ -114,11 +118,17 @@ public sealed class DocCommentsTests
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
             new { textDocument = new { uri = Uri }, position = new Position(13, 10) }, timeout);
 
-        var clear = Assert.Single(items, item => item.Label == "clear");
+        // Nothing in the list carries prose; the one the caret lands on is resolved.
+        Assert.All(items, item => Assert.Null(item.Documentation));
+
+        var clear = await client.ResolveAsync(Assert.Single(items, item => item.Label == "clear"), timeout);
         Assert.NotNull(clear.Documentation);
         Assert.Equal("markdown", clear.Documentation.Kind);
         Assert.Equal("Clears the screen.\nThe border is left alone.", clear.Documentation.Value);
-        Assert.Null(Assert.Single(items, item => item.Label == "ROWS").Documentation);
+
+        // A name whose declaration has no comment above it resolves to itself.
+        var rows = Assert.Single(items, item => item.Label == "ROWS");
+        Assert.Null((await client.ResolveAsync(rows, timeout)).Documentation);
     }
 
     private static async Task<TestClient> OpenAsync(string text, CancellationToken timeout)

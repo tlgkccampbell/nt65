@@ -205,6 +205,10 @@ internal sealed class TestClient : IAsyncDisposable
                 new Range(new Position(first, 0), new Position(last, 0))),
             cancellation);
 
+    /// <summary>What one item of the last list offered is for.</summary>
+    public Task<CompletionItem> ResolveAsync(CompletionItem item, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<CompletionItem>("completionItem/resolve", item, cancellation);
+
     /// <summary>Turns the cycle counts on or off for the session, and answers which they now are.</summary>
     public Task<bool> ToggleCycleHintsAsync(CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<bool>("nt65/toggleCycleHints", new { }, cancellation);

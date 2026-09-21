@@ -3078,7 +3078,18 @@ alone and without an assembler:
   digits is written; in a signature or a `.state`
   its items and the signature sets; in a macro call its parameters as named arguments; and
   nothing at all inside a comment or a text. It also shows, inside a macro call, a `.func`
-  call or a `.select`, what it takes and which argument the caret is in;
+  call or a `.select`, what it takes and which argument the caret is in. What is offered is
+  ordered by how near it is: the labels of the routine the caret is in, then the file's names,
+  then what `.use` brought in and the other modules, then the words the language spells, and
+  the instructions last, alphabetical among themselves, because the thing meant is nearly
+  always the nearest. A directive that opens a block is written as the block, with the name as
+  the first stop and the body as the last, and on the 65816 a `.proc` stops on the signature
+  the program's other routines mostly start with; nothing else is written with stops, because
+  `lda ${1:operand}` fights the typing of someone who knows what they are writing, which in
+  assembly is everyone. Nothing has a commit character: a completion that accepts itself on a
+  `,` or a space, in a language where both follow a name on most lines, is wrong more often
+  than it is right. The comment above a declaration is fetched for the one item the caret is
+  on, so a list of hundreds is not mostly prose nobody is reading;
 - find a declaration anywhere in the workspace by name;
 - fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
   transfer or a routine runs off its end, `jsl` for a `jsr` to a far routine and the other way,
