@@ -19,6 +19,8 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="DocumentLinkProvider">How the server answers <c>textDocument/documentLink</c>, or null when it does not.</param>
 /// <param name="DocumentFormattingProvider">Whether the server lays a whole file out.</param>
 /// <param name="DocumentRangeFormattingProvider">Whether the server lays part of a file out.</param>
+/// <param name="PositionEncoding">How a character offset in a line is counted, which is UTF-16 code units.</param>
+/// <param name="Workspace">What the server does about the workspace itself, or null where it does nothing.</param>
 internal sealed record ServerCapabilities(
     TextDocumentSyncOptions TextDocumentSync,
     bool DocumentSymbolProvider,
@@ -37,4 +39,6 @@ internal sealed record ServerCapabilities(
     bool CallHierarchyProvider = false,
     DocumentLinkOptions? DocumentLinkProvider = null,
     bool DocumentFormattingProvider = false,
-    bool DocumentRangeFormattingProvider = false);
+    bool DocumentRangeFormattingProvider = false,
+    string? PositionEncoding = null,
+    WorkspaceServerCapabilities? Workspace = null);

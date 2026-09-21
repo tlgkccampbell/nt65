@@ -23,11 +23,15 @@ internal sealed class TestClient : IAsyncDisposable
     private readonly Task server;
     private readonly Notifications notifications = new();
 
-    private TestClient()
+    private TestClient(Delay? delay)
     {
         var (clientStream, serverStream) = FullDuplexStream.CreatePair();
         log = new ServerLog(logText);
-        server = Server.RunAsync(serverStream, serverStream, log);
+
+        // The wait between an edit and what the rest of the program has to say is the server's
+        // to decide and the test's to drive: the suite waits for no real time, and a test about
+        // the wait itself passes one it lets go of when it is ready.
+        server = Server.RunAsync(serverStream, serverStream, log, delay ?? Yield);
         rpc = new JsonRpc(new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
         rpc.AddLocalRpcTarget(notifications);
         rpc.StartListening();
@@ -39,6 +43,12 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>Everything the server wrote to its log.</summary>
     public string Log => logText.ToString();
 
+    /// <summary>Whether the server has asked for semantic tokens to be fetched again, without waiting for it to.</summary>
+    public bool AskedForTokensRefresh => notifications.TokensRefreshed.Reader.Count > 0;
+
+    /// <summary>Whether anything at all is waiting to be read, which is how a test says nothing came.</summary>
+    public bool Quiet => notifications.Published.Reader.Count == 0;
+
     /// <summary>Connects and completes the initialize handshake.</summary>
     public static Task<TestClient> StartAsync(CancellationToken cancellation, string name = "test-client") =>
         StartAsync(null, null, cancellation, name);
@@ -48,19 +58,32 @@ internal sealed class TestClient : IAsyncDisposable
     /// <paramref name="configuration"/> as the configuration its settings choose.
     /// <paramref name="refreshesTokens"/> says the client can be asked to fetch semantic tokens again.
     /// </summary>
-    public static async Task<TestClient> StartAsync(
+    public static Task<TestClient> StartAsync(
         string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
-        bool refreshesTokens = false)
+        bool refreshesTokens = false) =>
+        StartAsync(
+            refreshesTokens ? new { workspace = new { semanticTokens = new { refreshSupport = true } } } : new { },
+            cancellation,
+            rootUri: rootUri,
+            configuration: configuration,
+            name: name);
+
+    /// <summary>
+    /// Connects as a client that declares <paramref name="capabilities"/>, which is the object
+    /// the protocol's own <c>capabilities</c> is, so that a test says what it can take in the
+    /// spelling a real client would.
+    /// </summary>
+    public static async Task<TestClient> StartAsync(
+        object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
+        string name = "test-client", Delay? delay = null, int? processId = null)
     {
-        var client = new TestClient();
+        var client = new TestClient(delay);
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
             new
             {
-                processId = (int?)null,
+                processId,
                 clientInfo = new { name, version = "1.0" },
-                capabilities = refreshesTokens
-                    ? new { workspace = new { semanticTokens = new { refreshSupport = true } } }
-                    : (object)new { },
+                capabilities,
                 rootUri,
                 initializationOptions = new { configuration },
             },
@@ -183,6 +206,9 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.Dispose();
         log.Dispose();
     }
+
+    /// <summary>The wait the suite uses: no real time, and still not taken on the caller's own step.</summary>
+    private static async Task Yield(TimeSpan quiet) => await Task.Yield();
 
     /// <summary>What the server sends without being asked.</summary>
     private sealed class Notifications

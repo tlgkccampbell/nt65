@@ -1,0 +1,280 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
+using StreamJsonRpc;
+using StreamJsonRpc.Protocol;
+
+namespace Norristown.LanguageServer;
+
+/// <summary>
+/// The wire: LSP's <c>Content-Length</c> frames over a pair of streams, and the one place that
+/// decides what may cross. StreamJsonRpc's own handler reads a frame and hands it straight to
+/// the formatter, and anything the formatter dislikes — a body that is not JSON, a
+/// <c>"params": null</c> its request type cannot count the arguments of — comes out of the read
+/// loop as an exception and ends the connection. Nothing a client sends should end a server, so
+/// the frames are read here instead:
+/// <list type="bullet">
+/// <item>a body that is not JSON is answered <c>-32700</c> and the next frame is read;</item>
+/// <item><c>"params": null</c> is the same as no parameters at all, and is taken off;</item>
+/// <item>a request before <c>initialize</c> is answered <c>-32002</c> and one after
+/// <c>shutdown</c> <c>-32600</c>, and a notification at either point is dropped, which is what
+/// the protocol asks for.</item>
+/// </list>
+/// A frame says how long it is, so the frame after a bad one starts where the headers said it
+/// would: the only thing that cannot be recovered from is headers that give no length, and
+/// there the connection ends.
+/// </summary>
+internal sealed class Framing : MessageHandlerBase
+{
+    /// <summary>LSP's own code for a request that arrives before <c>initialize</c>.</summary>
+    private const JsonRpcErrorCode ServerNotInitialized = (JsonRpcErrorCode)(-32002);
+
+    private const string ContentLength = "Content-Length:";
+
+    /// <summary>What <see cref="NextLengthAsync"/> answers for a stream that has ended.</summary>
+    private const int StreamOver = -1;
+
+    /// <summary>What it answers for headers that name no length, which nothing can resynchronize.</summary>
+    private const int NoLength = -2;
+
+    private readonly Stream input;
+    private readonly Stream output;
+    private readonly byte[] buffer = new byte[8192];
+    private readonly List<byte> header = new(64);
+
+    // What of `buffer` has been read from the stream and not yet handed on.
+    private int at;
+    private int have;
+
+    /// <param name="input">Where the client's frames arrive.</param>
+    /// <param name="output">Where the server's frames go.</param>
+    /// <param name="formatter">What turns a frame's bytes into a message and back.</param>
+    public Framing(Stream input, Stream output, IJsonRpcMessageFormatter formatter)
+        : base(formatter)
+    {
+        this.input = input;
+        this.output = output;
+    }
+
+    /// <summary>Where the server is in its life, which the frames going past are what moves.</summary>
+    public ServerPhase Phase { get; private set; }
+
+    public override bool CanRead => true;
+
+    public override bool CanWrite => true;
+
+    protected override async ValueTask<JsonRpcMessage?> ReadCoreAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var length = await NextLengthAsync(cancellationToken).ConfigureAwait(false);
+            if (length == StreamOver)
+                return null;
+            if (length == NoLength)
+            {
+                await RefuseAsync(
+                    RequestId.Null, JsonRpcErrorCode.ParseError,
+                    "a frame must give its Content-Length", cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            var content = new byte[length];
+            if (!await FillAsync(content, cancellationToken).ConfigureAwait(false))
+                return null;
+            if (await PassedAsync(content, cancellationToken).ConfigureAwait(false) is { } passed)
+                return Formatter.Deserialize(new ReadOnlySequence<byte>(passed));
+        }
+    }
+
+    protected override async ValueTask WriteCoreAsync(JsonRpcMessage content, CancellationToken cancellationToken)
+    {
+        var written = new ArrayBufferWriter<byte>();
+        Formatter.Serialize(written, content);
+        var head = Encoding.ASCII.GetBytes($"{ContentLength} {written.WrittenCount}\r\n\r\n");
+        await output.WriteAsync(head, cancellationToken).ConfigureAwait(false);
+        await output.WriteAsync(written.WrittenMemory, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected override ValueTask FlushAsync(CancellationToken cancellationToken) =>
+        new(output.FlushAsync(cancellationToken));
+
+    protected override void DisposeReader() => input.Dispose();
+
+    protected override void DisposeWriter() => output.Dispose();
+
+    /// <summary>The id a message carries, or null for a notification and for one that names none.</summary>
+    private static RequestId? IdOf(JsonElement message) =>
+        !message.TryGetProperty("id", out var id) ? null : id.ValueKind switch
+        {
+            JsonValueKind.Number when id.TryGetInt64(out var number) => new RequestId(number),
+            JsonValueKind.String => new RequestId(id.GetString()),
+            JsonValueKind.Null => RequestId.Null,
+            _ => null,
+        };
+
+    /// <summary>
+    /// <paramref name="content"/> without a <c>params</c> that is null, which is how a client
+    /// spells a request that takes none and what the formatter's request type cannot read.
+    /// The frame comes back as it was where there is nothing to take off.
+    /// </summary>
+    private static byte[] WithoutNullParameters(JsonElement message, byte[] content)
+    {
+        if (!message.TryGetProperty("params", out var given) || given.ValueKind != JsonValueKind.Null)
+            return content;
+        var written = new ArrayBufferWriter<byte>(content.Length);
+        using (var writer = new Utf8JsonWriter(written))
+        {
+            writer.WriteStartObject();
+            foreach (var property in message.EnumerateObject())
+            {
+                if (property.NameEquals("params"))
+                    continue;
+                property.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+        return written.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// The frame to hand on, or null for one this layer has answered itself. What is passed on
+    /// is what moves the server's life along, so the phase is kept here.
+    /// </summary>
+    private async ValueTask<byte[]?> PassedAsync(byte[] content, CancellationToken cancellationToken)
+    {
+        JsonDocument message;
+        try
+        {
+            message = JsonDocument.Parse(content);
+        }
+        catch (JsonException e)
+        {
+            await RefuseAsync(RequestId.Null, JsonRpcErrorCode.ParseError, e.Message, cancellationToken)
+                .ConfigureAwait(false);
+            return null;
+        }
+
+        using (message)
+        {
+            if (message.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                await RefuseAsync(
+                    RequestId.Null, JsonRpcErrorCode.ParseError, "a message is a JSON object", cancellationToken)
+                    .ConfigureAwait(false);
+                return null;
+            }
+
+            // A message with no method is an answer to something the server asked, and is no
+            // business of the server's life.
+            if (!message.RootElement.TryGetProperty("method", out var named)
+                || named.ValueKind != JsonValueKind.String || named.GetString() is not { } method)
+            {
+                return content;
+            }
+
+            if (Refusal(method) is var (code, why))
+            {
+                // A notification nobody may answer is dropped, which is what the protocol says
+                // to do with one that arrives before the server is initialized.
+                if (IdOf(message.RootElement) is { } id)
+                    await RefuseAsync(id, code, why, cancellationToken).ConfigureAwait(false);
+                return null;
+            }
+
+            Phase = method switch
+            {
+                "initialize" => ServerPhase.Running,
+                "shutdown" => ServerPhase.ShuttingDown,
+                _ => Phase,
+            };
+            return WithoutNullParameters(message.RootElement, content);
+        }
+    }
+
+    /// <summary>Why <paramref name="method"/> may not be handled now, or null when it may.</summary>
+    private (JsonRpcErrorCode Code, string Why)? Refusal(string method) => (Phase, method) switch
+    {
+        (ServerPhase.Starting, not ("initialize" or "exit")) =>
+            (ServerNotInitialized, "the server has not been initialized"),
+        (ServerPhase.Running, "initialize") =>
+            (JsonRpcErrorCode.InvalidRequest, "the server is already initialized"),
+        (ServerPhase.ShuttingDown, not "exit") =>
+            (JsonRpcErrorCode.InvalidRequest, "the server has been shut down"),
+        _ => null,
+    };
+
+    /// <summary>Answers a frame this layer will not hand on. It goes out through the same lock every reply does.</summary>
+    private ValueTask RefuseAsync(
+        RequestId id, JsonRpcErrorCode code, string why, CancellationToken cancellationToken) =>
+        WriteAsync(
+            new JsonRpcError
+            {
+                RequestId = id,
+                Error = new JsonRpcError.ErrorDetail { Code = code, Message = why },
+            },
+            cancellationToken);
+
+    /// <summary>
+    /// How long the next frame's body is, from its headers; <see cref="StreamOver"/> at the end
+    /// of the stream and <see cref="NoLength"/> for headers that give no length. Headers a
+    /// server has no use for are read and passed over.
+    /// </summary>
+    private async ValueTask<int> NextLengthAsync(CancellationToken cancellationToken)
+    {
+        var length = NoLength;
+        header.Clear();
+        while (true)
+        {
+            var next = await NextByteAsync(cancellationToken).ConfigureAwait(false);
+            if (next < 0)
+                return StreamOver;
+            if (next != '\n')
+            {
+                if (next != '\r')
+                    header.Add((byte)next);
+                continue;
+            }
+            if (header.Count == 0)
+                return length;
+
+            var line = Encoding.ASCII.GetString([.. header]);
+            if (line.StartsWith(ContentLength, StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(line[ContentLength.Length..].Trim(), out var given) && given >= 0)
+            {
+                length = given;
+            }
+            header.Clear();
+        }
+    }
+
+    /// <summary>The next byte of the stream, or -1 once it has ended.</summary>
+    private async ValueTask<int> NextByteAsync(CancellationToken cancellationToken)
+    {
+        if (at == have && !await ReadMoreAsync(cancellationToken).ConfigureAwait(false))
+            return -1;
+        return buffer[at++];
+    }
+
+    /// <summary>Fills <paramref name="content"/> from the stream; false when it ended first.</summary>
+    private async ValueTask<bool> FillAsync(byte[] content, CancellationToken cancellationToken)
+    {
+        var written = 0;
+        while (written < content.Length)
+        {
+            if (at == have && !await ReadMoreAsync(cancellationToken).ConfigureAwait(false))
+                return false;
+            var take = Math.Min(have - at, content.Length - written);
+            buffer.AsSpan(at, take).CopyTo(content.AsSpan(written));
+            at += take;
+            written += take;
+        }
+        return true;
+    }
+
+    private async ValueTask<bool> ReadMoreAsync(CancellationToken cancellationToken)
+    {
+        at = 0;
+        have = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+        return have > 0;
+    }
+}

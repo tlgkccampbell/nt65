@@ -88,6 +88,26 @@ internal sealed class Workspace
     /// <summary>The same, for a client that opened one folder, or none.</summary>
     public void Load(string? rootUri, string? active = null) => Load(rootUri is null ? [] : [rootUri], active);
 
+    /// <summary>
+    /// The folders the client opened, with <paramref name="added"/> among them and
+    /// <paramref name="removed"/> no longer. The projects are looked for again in what is left,
+    /// because a folder that joined brings whatever projects are in it.
+    /// </summary>
+    /// <returns>The folders the workspace now has, as logical paths.</returns>
+    public IReadOnlyList<string> WithFolders(IEnumerable<string> added, IEnumerable<string> removed)
+    {
+        lock (gate)
+        {
+            var gone = removed.Select(PathOf).ToHashSet(StringComparer.Ordinal);
+            IReadOnlyList<string> folders = [.. roots.Where(root => !gone.Contains(root))
+                .Concat(added.Select(PathOf))
+                .Where(root => root.Length > 0)
+                .Distinct(StringComparer.Ordinal)];
+            Load(folders, configuration);
+            return folders;
+        }
+    }
+
     /// <summary>Builds every project as the named configuration from here on, or as its own settings for null.</summary>
     public void Configure(string? active)
     {
@@ -233,8 +253,57 @@ internal sealed class Workspace
     private Document? Opened(string path) =>
         open.Values.FirstOrDefault(document => document.Tree.Path == path);
 
-    /// <summary>How the client names a file: its own spelling where it has given one.</summary>
-    private string UriOf(string path) => named.GetValueOrDefault(path) ?? Lsp.ToUri(path);
+    /// <summary>
+    /// How the client names a file: its own spelling where it has given one. Every URI the
+    /// server sends goes through this, so that one file is one file to the editor however the
+    /// two of them would have written its path.
+    /// </summary>
+    public string UriOf(string path)
+    {
+        lock (gate)
+        {
+            return named.GetValueOrDefault(path) ?? Lsp.ToUri(path);
+        }
+    }
+
+    /// <summary>The revision the client holds of a document, or null for one it has not opened.</summary>
+    public int? VersionOf(string uri)
+    {
+        lock (gate)
+        {
+            return open.GetValueOrDefault(uri)?.Version;
+        }
+    }
+
+    /// <summary>
+    /// What is wrong with one open document, for the file the client has just asked about. It
+    /// is the answer of the program's analysis, so a mistake another file makes about this one
+    /// is in it; what is wrong with the other files is their own to publish.
+    /// </summary>
+    public Published? ToPublish(string uri)
+    {
+        lock (gate)
+        {
+            if (!open.TryGetValue(uri, out var document))
+                return null;
+            var path = document.Tree.Path;
+            var analysis = Owner(path) is { } project ? project.Analysis(open.Values) : Loose();
+            return new Published(
+                UriOf(path), document.Version, document.Tree,
+                analysis.DiagnosticsFor(path), analysis.Configuration);
+        }
+    }
+
+    /// <summary>
+    /// Whether the last analysis of the program <paramref name="path"/> belongs to had to read
+    /// more than that one file, which is exactly when what another file's names refer to, and
+    /// so its colours and its lenses, can have moved.
+    /// </summary>
+    public bool ReachedOtherFiles(string path)
+    {
+        var analysis = AnalysisFor(path);
+        return analysis.WholeProgram is not null || analysis.Reanalyzed > 1;
+    }
 
     /// <summary>
     /// Every file the editor is told about, with what is wrong with it: each file of each

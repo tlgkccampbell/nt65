@@ -13,11 +13,16 @@ internal static class WorkspaceSymbols
     private const int Most = 500;
 
     /// <summary>The declarations in <paramref name="files"/> that match <paramref name="query"/>, best matches first.</summary>
-    public static IReadOnlyList<Protocol.SymbolInformation> Matching(IEnumerable<SyntaxTree> files, string query)
+    /// <param name="files">Every file of the workspace, which may be hundreds.</param>
+    /// <param name="query">What the programmer typed.</param>
+    /// <param name="cancellation">Asked between files: a search the person has moved on from stops here.</param>
+    public static IReadOnlyList<Protocol.SymbolInformation> Matching(
+        IEnumerable<SyntaxTree> files, string query, CancellationToken cancellation = default)
     {
         var found = new List<(int Score, Protocol.SymbolInformation Symbol)>();
         foreach (var tree in files)
         {
+            cancellation.ThrowIfCancellationRequested();
             var module = ModuleOf(tree);
             Collect(tree, Outline.Build(tree), module, query, found);
         }
