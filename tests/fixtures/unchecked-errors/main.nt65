@@ -101,6 +101,42 @@
     jmp partly::halfway
 }
 
+; The stack is the part a declaration cannot give. What the path above such a label pushed is
+; not on the stack a jump in arrives with, so a `plp` below it finds no saved status.
+.proc saved_across: a8, i8 {
+    php
+    rep #$30
+    resumed:
+    .state a16, i16, native
+    plp
+    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump in has not pushed what the path above the label has: the pushes above `resumed` belong on the same side of it as what reads them, and `args n` on `saved_across` is how a second entry point says what its caller pushed
+    sep #$30
+    rts
+}
+
+.proc into_saved: a16, i16 {
+    jmp saved_across::resumed
+}
+
+; And a frame counts from a stack pointer that a jump in leaves somewhere else.
+.struct Local {
+    count: .word
+}
+
+.proc framed: a16, i16 {
+    pea 0
+    .frame local: Local
+    laid_out:
+    .state a16, i16, native
+    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is counted from the stack pointer, and how much is pushed is not known here, because `laid_out` can be entered from outside `framed`, and a jump in has not pushed what the path above the label has: the pushes above `laid_out` belong on the same side of it as what reads them, and `args n` on `framed` is how a second entry point says what its caller pushed
+    pla
+    rts
+}
+
+.proc into_framed: a16, i16 {
+    jmp framed::laid_out
+}
+
 ; A jump to a label on data.
 .proc onto_data: a8, i8 {
     beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes

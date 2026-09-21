@@ -25,6 +25,7 @@ public sealed class StateAnalysis
     private readonly CodeLayout layout;
     private readonly ControlFlow flow;
     private readonly StateChecks checks;
+    private readonly OutsideEntries outside;
     private readonly Dictionary<(int Position, Expansion? On), FlowState> reaching = [];
     private readonly Dictionary<(int Position, Expansion? On), int> slots = [];
 
@@ -32,16 +33,13 @@ public sealed class StateAnalysis
     // spliced into one, which is what the end of it is checked against and hands back.
     private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
 
-    // The labels this file names from a routine other than the one they are in, worked out the
-    // first time a declared label asks and kept for the rest of them.
-    private HashSet<Symbol>? namedFromOutside;
-
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
         this.model = model;
         this.layout = layout;
         this.flow = flow;
         checks = new StateChecks(model, layout, ranges);
+        outside = new OutsideEntries(model, layout);
     }
 
     /// <summary>What is wrong with the widths, the mode and the calls in this file.</summary>
@@ -103,17 +101,21 @@ public sealed class StateAnalysis
     /// What a routine's state is when it is entered: its declared entry, with nothing pushed but,
     /// for a routine that takes <c>args n</c>, the arguments and the return address above them.
     /// </summary>
-    private static FlowState Entry(Signature signature, Symbol routine) => new(
-        signature.Entry,
-        signature.Arguments > 0
-            ? AnalysisStack.Empty.Push(StackEntry.Opaque, signature.Arguments + (signature.IsFar ? 3 : 2))
-            : AnalysisStack.Empty)
+    private static FlowState Entry(Signature signature, Symbol routine) => new(signature.Entry, EntryStack(signature))
     {
         WhyA = signature.Entry.A == Width.Unknown ? EntryCause(signature, routine, "a?") : null,
         WhyIndex = signature.Entry.Index == Width.Unknown ? EntryCause(signature, routine, "i?") : null,
     };
 
-    private static WidthCause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
+    /// <summary>
+    /// What is on the analysis stack where a routine is entered: nothing, but, for a routine
+    /// that takes <c>args n</c>, the arguments and the return address above them.
+    /// </summary>
+    private static AnalysisStack EntryStack(Signature signature) => signature.Arguments > 0
+        ? AnalysisStack.Empty.Push(StackEntry.Opaque, signature.Arguments + (signature.IsFar ? 3 : 2))
+        : AnalysisStack.Empty;
+
+    private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
         : new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
 
@@ -175,7 +177,7 @@ public sealed class StateAnalysis
     }
 
     /// <summary>Why a width at a declared label is unknown: the declaration does not say.</summary>
-    private static WidthCause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
+    private static Cause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
             + $"say the width of {register}",
         $"the `.state` after `{label.DisplayName}` can say `{item}8` or `{item}16`");
@@ -207,8 +209,9 @@ public sealed class StateAnalysis
         Settle();
 
         // A label a `.state` declares is an entry point in its own right. One nothing reaches
-        // starts from what the directive says, over a state otherwise unknown. One some path
-        // already reaches is checked against that path, and, where the label can also be
+        // starts from what the directive says, over a state otherwise unknown, and over the
+        // stack a call to the routine leaves, since a jump in arrives as a call would. One some
+        // path already reaches is checked against that path, and, where the label can also be
         // entered from outside the routine, keeps only the parts the declaration gives: what
         // the paths inside leave is no promise to whoever jumps in.
         foreach (var block in blocks)
@@ -217,9 +220,9 @@ public sealed class StateAnalysis
                 continue;
             if (reached[block.Index] is null)
             {
-                reached[block.Index] = new FlowState(Outside(signature), null);
+                reached[block.Index] = new FlowState(Outside(signature), EntryStack(signature));
             }
-            else if (EnteredFromOutside(block))
+            else if (outside.Reaches(block))
             {
                 var entered = Entered(block, reached[block.Index]!, signature, region.Routine);
                 if (entered.Equals(reached[block.Index]))
@@ -283,49 +286,13 @@ public sealed class StateAnalysis
     }
 
     /// <summary>
-    /// Whether control may reach a declared label from outside the routine it is in: another
-    /// module may jump to an exported one, and this file may name one from another routine.
-    /// A sibling joined by <c>.next</c> is part of the same routine as far as state goes, so a
-    /// path from one is not from outside.
-    /// </summary>
-    private bool EnteredFromOutside(BasicBlock block)
-    {
-        if (block.Label is not { } label)
-            return false;
-        if (label.IsExported)
-            return true;
-        namedFromOutside ??= NamedFromOutside();
-        return namedFromOutside.Contains(label);
-    }
-
-    /// <summary>
-    /// Every label this file names from a routine other than the one the label is in: a jump
-    /// into another routine, and a path naming one as data.
-    /// </summary>
-    private HashSet<Symbol> NamedFromOutside()
-    {
-        var found = new HashSet<Symbol>();
-        foreach (var step in layout.Steps)
-        {
-            if (step.Routine is not { } routine)
-                continue;
-            foreach (var name in step.Statement.DescendantNodes().OfType<NameExpressionSyntax>())
-            {
-                if (Targets.Of(model, name, step.On)?.Symbol is { Kind: SymbolKind.Label, Routine: { } owner } label
-                    && owner != routine && !owner.IsSiblingOf(routine))
-                {
-                    found.Add(label);
-                }
-            }
-        }
-        return found;
-    }
-
-    /// <summary>
     /// The state at a declared label that can be entered from outside the routine: the parts
     /// its <c>.state</c> gives keep what reaches the label, which the directive itself then
     /// checks, and every part it leaves out becomes unknown, because a jump from outside is
-    /// checked for the parts the declaration gives and for nothing else.
+    /// checked for the parts the declaration gives and for nothing else. The stack is what a
+    /// call to the routine leaves, since that is what a jump in arrives with, and nothing where
+    /// the path above the label has pushed something else: a declaration cannot say what is on
+    /// the stack, so there is nothing to meet the two in the middle.
     /// </summary>
     private static FlowState Entered(
         BasicBlock block, FlowState reached, Signature signature, Symbol routine)
@@ -336,6 +303,7 @@ public sealed class StateAnalysis
         var label = block.Label!;
         var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
         var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
+        var stack = AnalysisStack.Merge(reached.Stack, EntryStack(signature));
         return reached with
         {
             Processor = new ProcessorState(
@@ -344,12 +312,14 @@ public sealed class StateAnalysis
                 given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown,
                 given.Contains(StatePart.DirectPage) ? here.D : StateValue.Merge(here.D, outside.D),
                 given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
+            Stack = stack,
             WhyA = a == Width.Unknown && !given.Contains(StatePart.A)
                 ? Undeclared(label, routine, "A", "a")
                 : reached.WhyA,
             WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
                 ? Undeclared(label, routine, "X and Y", "i")
                 : reached.WhyIndex,
+            WhyStack = stack is null ? OutsideEntries.Carried(label, routine) : reached.WhyStack,
         };
 
         static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
@@ -377,12 +347,12 @@ public sealed class StateAnalysis
     /// </summary>
     private FlowState Explained(Step step, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
     {
-        WhyA = Why(step, next, before.Processor.E, before.Processor.A, after.Processor.A, before.WhyA),
-        WhyIndex = Why(step, next, before.Processor.E, before.Processor.Index, after.Processor.Index, before.WhyIndex),
+        WhyA = Why(step, next, before, before.Processor.A, after.Processor.A, before.WhyA),
+        WhyIndex = Why(step, next, before, before.Processor.Index, after.Processor.Index, before.WhyIndex),
     };
 
-    private WidthCause? Why(
-        Step step, NextDirectiveSyntax? next, ProcessorMode mode, Width before, Width after, WidthCause? carried)
+    private Cause? Why(
+        Step step, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? carried)
     {
         if (after != Width.Unknown)
             return null;
@@ -393,9 +363,13 @@ public sealed class StateAnalysis
             return new("a `.state` says so", "the `.state` can say what it is");
         if (step.Statement is not InstructionStatementSyntax statement)
             return null;
+        var mode = state.Processor.E;
         var written = $"`{statement.GetText().Trim()}`";
         return statement.Mnemonic.Text.ToLowerInvariant() switch
         {
+            // A `plp` that finds no saved P because the stack itself is not known says what
+            // lost the stack, which is nearer the mistake than the `php` above it.
+            "plp" when state.Stack is null && state.WhyStack is { } lost => lost,
             "plp" => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
             "xce" => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
             "rep" when mode != ProcessorMode.Native && Constant(step) is not null
@@ -431,7 +405,7 @@ public sealed class StateAnalysis
             checks.CheckImmediate(
                 step, mnemonic, register, processor, register == WidthRegister.A ? state.WhyA : state.WhyIndex, routine);
         }
-        Slot(step, mode, stack);
+        Slot(step, mode, state);
         checks.CheckMemory(step, mnemonic, mode, processor, routine);
 
         switch (mnemonic)
@@ -892,10 +866,11 @@ public sealed class StateAnalysis
     /// A frame's member named in an operand, which is only a place on the stack: it is a
     /// stack-relative operand, and its offset counts every byte pushed since the frame.
     /// </summary>
-    private void Slot(Step step, AddressingMode? mode, AnalysisStack? stack)
+    private void Slot(Step step, AddressingMode? mode, FlowState state)
     {
         if ((step.Statement as InstructionStatementSyntax)?.Operand is not { } operand)
             return;
+        var stack = state.Stack;
         foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
         {
             if (name.GlobalToken is not null || name.Names is not [var first, ..]
@@ -912,7 +887,7 @@ public sealed class StateAnalysis
             }
             if (stack is null)
             {
-                checks.ReportAt(name, step, Catalogue.FrameDepthUnknown.Says(written));
+                checks.ReportAt(name, step, Catalogue.FrameDepthUnknown.Says(written, Cause.Because(state.WhyStack)));
                 continue;
             }
             if (stack.Above(frame) is not { } above)

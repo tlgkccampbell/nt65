@@ -92,7 +92,7 @@ internal sealed class StateChecks
     /// is what tells it, so the width has to be known here.
     /// </summary>
     public void CheckImmediate(
-        Step step, string mnemonic, WidthRegister register, ProcessorState state, WidthCause? why, Symbol routine)
+        Step step, string mnemonic, WidthRegister register, ProcessorState state, Cause? why, Symbol routine)
     {
         var width = state.Of(register);
         var item = register == WidthRegister.A ? "a" : "i";
@@ -110,8 +110,7 @@ internal sealed class StateChecks
                 Catalogue.WidthUnknown.Says(
                     mnemonic,
                     Spell(register),
-                    "it is not known here"
-                    + (why is null ? ": a `.state` says what it is" : $", because {why.Reason}: {why.Fix}")),
+                    "it is not known here" + (why is null ? ": a `.state` says what it is" : Cause.Because(why))),
                 Ensure(step, item));
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)

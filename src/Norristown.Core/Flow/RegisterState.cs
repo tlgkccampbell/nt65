@@ -20,10 +20,20 @@ public sealed record RegisterState(
 
     /// <summary>
     /// What is held where the analysis never saw control arrive: nothing known, of any
-    /// register or of the stack. This is what a label another routine may jump into starts from.
+    /// register or of the stack.
     /// </summary>
     public static RegisterState Unknown { get; } = new(
         RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, null);
+
+    /// <summary>
+    /// What a label another routine may jump into starts from: nothing known in the registers,
+    /// over the stack a call to the routine leaves, which is nothing, since whoever jumps in
+    /// arrives as a call would and has made no save of this routine's.
+    /// </summary>
+    public static RegisterState Outside { get; } = Unknown with { Stack = SavedStack.Empty };
+
+    /// <summary>Why the stack is unknown, where it is and the analysis can say.</summary>
+    public Cause? WhyStack { get; init; }
 
     /// <summary>What <paramref name="register"/> may hold.</summary>
     public RegisterValue Of(Registers register) => register switch
@@ -68,12 +78,19 @@ public sealed record RegisterState(
     }
 
     /// <summary>What two paths arriving at one place agree on: what either of them may have left.</summary>
-    public static RegisterState Merge(RegisterState? known, RegisterState arriving) => known is null
-        ? arriving
-        : new RegisterState(
+    public static RegisterState Merge(RegisterState? known, RegisterState arriving)
+    {
+        if (known is null)
+            return arriving;
+        var stack = SavedStack.Merge(known.Stack, arriving.Stack);
+        return new RegisterState(
             RegisterValue.Merge(known.A, arriving.A),
             RegisterValue.Merge(known.X, arriving.X),
             RegisterValue.Merge(known.Y, arriving.Y),
             RegisterValue.Merge(known.C, arriving.C),
-            SavedStack.Merge(known.Stack, arriving.Stack));
+            stack)
+        {
+            WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
+        };
+    }
 }

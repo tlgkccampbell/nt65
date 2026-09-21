@@ -14,6 +14,8 @@
 .export main__unknown
 .export main__entered
 .export main__adder
+.export main__twice
+.export main__reenter
 
 .segment "BSS": absolute
 total: .res 2
@@ -88,3 +90,19 @@ main__adder:
     ldx #$1234
     rts
 ; end of adder
+
+; .proc twice: a16, i16, args 2  main.nt65:98
+main__twice:
+    lda 3,s                         ; call::value
+    sta a:total
+twice__again:
+    lda 3,s                         ; back::value
+    sta a:total
+    rts
+; end of twice
+
+; .proc reenter: a16, i16  main.nt65:110
+main__reenter:
+    pea 0
+    jmp twice__again
+; end of reenter

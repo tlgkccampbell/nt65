@@ -38,7 +38,7 @@ plan as it was written, kept as the record of why; this section says what became
 |---|---|---|
 | 0 | the `gate` workflow; the licence on the package | — |
 | A | depth guard, no value from a refused literal, the repetition bound, handlers of last resort (exit 70), the generated-program test; R4 | `'é'` is not refused by the lexer, which has no charmap context: a constant `K = 'é'` is reported at evaluation instead (D). The repetition bound lives in `Repetitions`, where the memory went |
-| B | the three holes, each with its fixture; R6 for `StateAnalysis` (`StateChecks`); R2 (`InstructionFacts`) | at a label entered from outside, a part the routine's signature leaves `*` stays unchanged rather than unknown, as D and B already did; taken literally the plan's sentence made every `*` routine unwritable |
+| B | the three holes, each with its fixture; R6 for `StateAnalysis` (`StateChecks`); R2 (`InstructionFacts`) | at a label entered from outside, a part the routine's signature leaves `*` stays unchanged rather than unknown, as D and B already did; taken literally the plan's sentence made every `*` routine unwritable. The analysis stack there was a fourth hole, closed after: it is the one entering the routine leaves, since a declaration cannot say what is pushed (§7.3, §16) |
 | C | the arithmetic in §9; no mnemonic reserved; `: abs` on imports; the hostile-options matrix; corpus builds in the gate; R1, R3 | a declared value *and every step of its expression* must fit ca65's 32 bits, since ca65 works the text out again. ca65 cannot be silent at `-W2` (it warns about its own symbols), so the matrix ignores that one message. `-mm far` is refused, as §13 says, rather than byte-identical |
 | D | 357 names (`docs/DIAGNOSTICS.md`), severities in `nt65.json`, `nt65 explain`, `[name]` in the terminal, `id` in `--json`, `code` in the editor; fixtures match on name and line; `AnalysisLevel` on | — |
 | E | own framing in front of StreamJsonRpc (`-32700`, null `params`, the lifecycle codes), `exit` and the parent watch, typed client capabilities, cancellation everywhere, the publishing rules, client-spelled URIs, `SyntaxTree.WithChanges` | — |
@@ -54,8 +54,6 @@ plan as it was written, kept as the record of why; this section says what became
   moving that vocabulary, which is its own piece of work. `CodeLayout` → Flow still needs an
   interface in Layout.
 - The rest of R6: `Evaluator` and `CodeLayout` are not split.
-- B: at a label entered from outside a routine, the analysis *stack* is still what the falling
-  path left.
 - The VS Code client's views (`views.js`) are checked by `node --check` and by the server tests
   on what they are sent, and have not been driven in a running editor by a test.
 - Annotations on syntax nodes, held back until a refactoring needs one.

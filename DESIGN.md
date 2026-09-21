@@ -1064,6 +1064,20 @@ signature says `*`, which stays unchanged there as it does at a label nothing re
 sides meet in the middle, then: a jump in is checked for the parts the declaration gives, and
 the code after the label assumes no more than those.
 
+The analysis stack at such a label is **what entering the routine leaves**: nothing, or, for a
+routine that takes `args n`, the arguments and the return address above them. Whoever jumps in
+is taken to have arrived as a call would, which is the word a tail call to a routine is taken
+at too, and it is the only thing either side can be held to: a `.state` says what the processor
+state at the label is and has no way to say what is on the stack, so there is nothing for the
+two of them to meet in the middle over. Where the path above the label has pushed something a
+jump in has not, they disagree, and the stack after the label is one nothing is known of: a
+`pla` there matches no `pha`, a `plp` finds no saved P, a `.frame` counts from a stack pointer
+nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
+a label, and a second entry point that reads what its caller pushed says so with `args n`,
+which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
+across an entry point, adjacent procs joined by `.next` (§7.4) included: each of those is
+entered with the stack of a call to it, which is what makes each of them callable.
+
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
 them hold, emitting only what the analysis says is needed: nothing where the widths
 already hold, otherwise the `sep` or `rep` that sets them. Its effect on the state does
@@ -1288,7 +1302,7 @@ label:
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). Such a label may be a jump target, never a call target |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816 |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
@@ -1602,7 +1616,9 @@ for the `pha` after it to save it. A save and its restore cancel through a stack
 push holds, so `pha` … `pla` around a call, or a `php` … `plp` across a label, needs nothing
 written. On the 65816 a push is as wide as the register, so a pull gets the value back only
 where the width is the same at both — which a routine that changes neither width is, whatever
-those widths are.
+those widths are. A save does not span a label anyone may jump into: the stack there is the one
+entering the routine leaves (§7.3), so a pull below such a label finds no push made above it,
+and a save and its restore belong on one side of it.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
@@ -3444,6 +3460,19 @@ Recorded so the reasoning survives. None is open.
   and B belong on the routines that set them.
 - **A stack of saved state, not push and pull pairing.** Tracking saved P, D and B as
   the analysis runs lets a save and restore span calls and labels.
+- **A declared label anyone may jump into starts on the stack a call to the routine leaves.**
+  Once such a label stopped assuming the widths its own routine's paths left, the analysis
+  stack was the part still taken from them, and a `pla`, a `plp`, a `.frame` slot or a `keeps`
+  below the label stood on a push a jump in never made. Three answers were weighed. Keeping the
+  falling path's stack is what was already there, and is unsound. Checking the jumping side for
+  the pushes the path above the label made puts a requirement on a jump into a label that a
+  tail call to a whole routine does not carry, and there is nothing in the language for either
+  side to write it down in. So the label assumes what a call to the routine assumes — nothing,
+  or the `args n` the signature names — and where its own path has pushed more, the stack below
+  it is unknown rather than either side's guess. What that costs is that a save may not span a
+  second entry point, which is right: the two ways in genuinely arrive on different stacks, and
+  a routine whose second entry point reads what its caller pushed has `args n` to say so. The
+  message on whatever then fails names the label and says both.
 - **What a routine keeps is worked out; what it promises is declared.** The set is a fact
   about a body, as what a pass costs is, so it is computed and shown rather than written;
   `keeps` is a promise a caller may lean on, so it is declared and checked. That is the same

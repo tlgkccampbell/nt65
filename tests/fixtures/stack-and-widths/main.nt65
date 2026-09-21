@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export copy, setup, mixed, unknown, entered, adder
+.export copy, setup, mixed, unknown, entered, adder, twice, reenter
 
 .struct Locals {
     count: .word
@@ -85,4 +85,29 @@
     add16!(total, {#$1234})
     ldx #$1234              ; X and Y are still 16-bit: `add16!` says nothing about them
     rts
+}
+
+; A second entry point, where the stack is the one entering the routine leaves. `args 2` says
+; the caller pushes a word, so a frame over it reaches the argument at the declared label just
+; as it does at the routine's own entry, whichever way control arrived.
+.struct Call {
+    ret:   .res 2
+    value: .word
+}
+
+.proc twice: a16, i16, args 2 {
+    .frame call: Call
+    lda call::value,s       ; 3,s
+    sta total
+    again:
+    .state a16, i16, native
+    .frame back: Call
+    lda back::value,s       ; 3,s here too
+    sta total
+    rts
+}
+
+.proc reenter: a16, i16 {
+    pea 0
+    jmp twice::again
 }

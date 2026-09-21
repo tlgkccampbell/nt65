@@ -110,6 +110,7 @@ public static class RegisterKeeps
         private readonly CodeLayout layout;
         private readonly ControlFlow flow;
         private readonly StateAnalysis? states;
+        private readonly OutsideEntries outside;
 
         public Walk(SemanticModel model, CodeLayout layout, ControlFlow flow, StateAnalysis? states)
         {
@@ -117,6 +118,7 @@ public static class RegisterKeeps
             this.layout = layout;
             this.flow = flow;
             this.states = states;
+            outside = new OutsideEntries(model, layout);
             Held = new RegisterStates(model.Tree);
         }
 
@@ -141,12 +143,24 @@ public static class RegisterKeeps
             Settle();
 
             // A label a `.state` declares is somewhere another routine may jump into, so what
-            // the registers hold there is nothing this routine put in them.
+            // the registers hold there is nothing this routine put in them. What it has pushed
+            // there is what a call to it pushes, which is nothing: a jump in has made no save
+            // of its own, so a save the path above the label carries across it is one that no
+            // pull below the label can be shown to find again.
             foreach (var block in blocks)
             {
-                if (!block.IsDeclared || reached[block.Index] is not null)
+                if (!block.IsDeclared)
                     continue;
-                reached[block.Index] = RegisterState.Unknown;
+                RegisterState entered;
+                if (reached[block.Index] is not { } state)
+                    entered = RegisterState.Outside;
+                else if (outside.Reaches(block))
+                    entered = Entered(state, block, region.Routine);
+                else
+                    continue;
+                if (entered.Equals(reached[block.Index]))
+                    continue;
+                reached[block.Index] = entered;
                 pending.Add(block.Index);
                 Settle();
             }
@@ -198,6 +212,24 @@ public static class RegisterKeeps
             }
 
             IEnumerable<int> Carried(BasicBlock block) => CarriedTo(blocks, block);
+        }
+
+        /// <summary>
+        /// What a path reaching a declared label that can also be entered from outside leaves
+        /// there: what it holds in the registers, over the stack a call to the routine leaves.
+        /// Where the path above the label has pushed something else the two disagree, and a
+        /// pull below the label finds nothing.
+        /// </summary>
+        private static RegisterState Entered(RegisterState reached, BasicBlock block, Symbol routine)
+        {
+            var stack = SavedStack.Merge(reached.Stack, SavedStack.Empty);
+            return reached with
+            {
+                Stack = stack,
+                WhyStack = stack is null
+                    ? OutsideEntries.Carried(block.Label!, routine)
+                    : reached.WhyStack,
+            };
         }
 
         /// <summary>
@@ -349,9 +381,16 @@ public static class RegisterKeeps
             var names = RegisterEffects.Spell(broken);
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
+
+            // A stack nothing is known of is why a restore cannot be seen, and saying what lost
+            // it is nearer the mistake than telling the routine to restore the register again.
+            var fix = state.Stack is null && state.WhyStack is { } lost
+                ? Cause.Because(lost)
+                : $": restore {(one ? "it" : "them")} before returning, or a `.state keeps {items}` "
+                    + "where the value comes back says so";
             report.Add(new Diagnostic(at,
                 Catalogue.KeepsBroken.Says(
-    region.Routine.DisplayName, items, names, (one ? "is" : "are"), (one ? "it" : "them"), items)));
+                    region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
         }
 
         /// <summary>What one block does to the registers, from the state that reaches it.</summary>

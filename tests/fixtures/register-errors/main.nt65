@@ -4,7 +4,7 @@
 
 .cpu 6502
 
-.export breaks_it, forgets_the_carry, says_nothing
+.export breaks_it, forgets_the_carry, says_nothing, jumps_in
 
 .segment BSS
 .data slot: .byte
@@ -50,4 +50,18 @@
 .proc uses_it {
     spill!()
     rts
+}
+
+; A save does not span a label another routine may jump into: whoever jumps in has pushed
+; nothing, so the `pla` below the label matches no `pha` above it.
+.proc saves_across: keeps a {
+    pha
+    halfway:
+    .state ?
+    pla
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, and A is not what the routine was entered with here, because `halfway` can be entered from outside `saves_across`, and a jump in has not pushed what the path above the label has: the pushes above `halfway` belong on the same side of it as what reads them, and `args n` on `saves_across` is how a second entry point says what its caller pushed
+}
+
+.proc jumps_in {
+    jmp saves_across::halfway
 }

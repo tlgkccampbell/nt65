@@ -11,10 +11,13 @@ namespace Norristown.Flow;
 public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
 {
     /// <summary>Why A's width is unknown, where it is and the analysis can say.</summary>
-    public WidthCause? WhyA { get; init; }
+    public Cause? WhyA { get; init; }
 
     /// <summary>Why the index width is unknown, where it is and the analysis can say.</summary>
-    public WidthCause? WhyIndex { get; init; }
+    public Cause? WhyIndex { get; init; }
+
+    /// <summary>Why the stack is unknown, where it is and the analysis can say.</summary>
+    public Cause? WhyStack { get; init; }
 
     /// <summary>
     /// What two paths arriving at one place agree on. Where they disagree the part is
@@ -26,6 +29,7 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
             return arriving;
         var a = known.Processor;
         var b = arriving.Processor;
+        var stack = AnalysisStack.Merge(known.Stack, arriving.Stack);
         var merged = new FlowState(
             new ProcessorState(
                 a.A == b.A ? a.A : Width.Unknown,
@@ -33,22 +37,23 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
                 a.E == b.E ? a.E : ProcessorMode.Unknown,
                 StateValue.Merge(a.D, b.D),
                 StateValue.Merge(a.B, b.B)),
-            AnalysisStack.Merge(known.Stack, arriving.Stack));
+            stack);
         return merged with
         {
             WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, "A"),
             WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, "X and Y"),
+            WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
         };
     }
 
     /// <summary>Why a merged width is unknown: the cause either side had, or the paths disagreeing.</summary>
-    private static WidthCause? Why(Width a, Width b, WidthCause? known, WidthCause? arriving, string register)
+    private static Cause? Why(Width a, Width b, Cause? known, Cause? arriving, string register)
     {
         if (a == b)
             return a is Width.Eight or Width.Sixteen ? null : known ?? arriving;
         if (a is Width.Eight or Width.Sixteen && b is Width.Eight or Width.Sixteen)
         {
-            return new WidthCause(
+            return new Cause(
                 $"the paths that reach here leave {register} 8-bit on one and 16-bit on another",
                 "an `.ensure` sets it whichever path was taken");
         }

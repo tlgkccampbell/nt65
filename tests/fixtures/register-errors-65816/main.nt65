@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export saves_across
+.export saves_across, jumps_in
 
 ; A routine whose widths nothing says, which is what a hardware entry point looks like.
 .proc twiddle = $8000: a? -> a?
@@ -19,4 +19,18 @@
     jsr twiddle
     pla
     rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, and A is not what the routine was entered with here: restore it before returning, or a `.state keeps a` where the value comes back says so
+}
+
+; The same on the 65816, where the label also declares the widths a jump in is checked for:
+; what it cannot declare is the stack, so the `pha` above it is one a jump in has not made.
+.proc saves_across_a_label: a8, i8, keeps a {
+    pha
+    halfway:
+    .state a8, i8, native
+    pla
+    rts                     ;! error[keeps-broken]: `saves_across_a_label` promises `keeps a`, and A is not what the routine was entered with here, because `halfway` can be entered from outside `saves_across_a_label`, and a jump in has not pushed what the path above the label has: the pushes above `halfway` belong on the same side of it as what reads them, and `args n` on `saves_across_a_label` is how a second entry point says what its caller pushed
+}
+
+.proc jumps_in: a8, i8 {
+    jmp saves_across_a_label::halfway
 }

@@ -1595,7 +1595,7 @@ A jump goes to a place in code. What is named here is something else, so the ana
 
 ### `keeps-broken`
 
-> `{0}` promises `keeps {1}`, and {2} {3} not what the routine was entered with here: restore {4} before returning, or a `.state keeps {5}` where the value comes back says so
+> `{0}` promises `keeps {1}`, and {2} {3} not what the routine was entered with here{4}
 
 The routine promises to hand a register back as it was entered with it, and on this path it does not. Callers are checked on that promise.
 
@@ -1755,7 +1755,7 @@ An `.ensure` writes a `rep` or a `sep` to make a width hold, and the width bits 
 
 ### `frame-depth-unknown`
 
-> `{0}` is counted from the stack pointer, and how much is pushed is not known here
+> `{0}` is counted from the stack pointer, and how much is pushed is not known here{1}
 
 A frame member is an offset from the stack pointer, so how much is pushed has to be known.
 
