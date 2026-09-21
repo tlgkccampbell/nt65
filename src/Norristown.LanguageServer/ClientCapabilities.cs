@@ -38,7 +38,8 @@ internal sealed record ClientCapabilities(
     bool WatchesWhatItIsAsked)
 {
     /// <summary>A client that has declared nothing, which is what a server assumes until it has.</summary>
-    public static ClientCapabilities None { get; } = new(false, false, false, false, false, false, false, false);
+    public static ClientCapabilities None { get; } =
+        new(false, false, false, false, false, false, false, false, false);
 
     /// <summary>What the <c>capabilities</c> of an <c>initialize</c> request declare.</summary>
     public static ClientCapabilities Of(JsonElement? capabilities) => new(

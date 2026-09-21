@@ -53,7 +53,7 @@ public sealed class CapabilitiesTests : IDisposable
             }
             """).RootElement);
 
-        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true, true), declared);
+        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true, true, true), declared);
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(JsonDocument.Parse("{}").RootElement));
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(null));
 

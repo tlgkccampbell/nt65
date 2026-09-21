@@ -119,7 +119,7 @@ public sealed class ViewRequestsTests
         var hover = await client.HoverAsync(Uri, new Position(15, 6), timeout);
         Assert.NotNull(hover);
         Assert.Contains(".macro set16(dest: operand, value)", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("expands to 4 lines · 8 bytes · 10 cycles", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Matches(@"expands to\s+4 lines · 8 bytes · 10 cycles", hover.Contents.Value);
         Assert.Contains("lda #<SCREEN", hover.Contents.Value, StringComparison.Ordinal);
 
         // Four lines fit, so there is nothing left to send anyone to a view for.
@@ -154,7 +154,7 @@ public sealed class ViewRequestsTests
         var hover = await client.HoverAsync(Uri, new Position(9, 6), timeout);
         Assert.NotNull(hover);
         var said = hover.Contents.Value;
-        Assert.Contains("expands to 10 lines · ", said, StringComparison.Ordinal);
+        Assert.Matches(@"expands to\s+10 lines · ", said);
         Assert.Contains("[Show expansion](command:nt65.showExpansion?", said, StringComparison.Ordinal);
         Assert.Contains("— 2 more lines", said, StringComparison.Ordinal);
 
