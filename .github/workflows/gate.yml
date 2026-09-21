@@ -16,6 +16,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  MSYS2_BIN: C:\msys64\mingw64\bin;C:\msys64\usr\bin
+
 jobs:
   gate:
     # One leg is not the other's news: a failure on either system is worth seeing on its own.
@@ -51,21 +54,22 @@ jobs:
           key: cc65-${{ runner.os }}-${{ hashFiles('scripts/cc65.commit') }}
 
       # Ubuntu carries make and gcc already. The Windows image carries MSYS2 but keeps it off
-      # PATH; mingw64 goes first so gcc is the native toolchain, not the msys one, and
-      # GITHUB_PATH puts it there for the steps after this one as well.
+      # PATH; mingw64 goes first so gcc is the native toolchain, not the msys one. It goes on
+      # PATH for the steps that build and no others, so that MSYS2's tar does not shadow the
+      # one the cache action saves with.
       - name: Install make and a MinGW gcc
         if: runner.os == 'Windows'
         run: |
-          $bin = 'C:\msys64\mingw64\bin', 'C:\msys64\usr\bin'
-          $bin | Add-Content $env:GITHUB_PATH
-          $env:PATH = "$($bin -join ';');$env:PATH"
+          $env:PATH = "$env:MSYS2_BIN;$env:PATH"
           if (-not ((Get-Command make -ErrorAction SilentlyContinue) -and
                     (Get-Command gcc -ErrorAction SilentlyContinue))) {
             C:\msys64\usr\bin\pacman.exe -Sy --needed --noconfirm make mingw-w64-x86_64-gcc
           }
 
       - name: Run the gate
-        run: pwsh -NoProfile scripts/gate.ps1
+        run: |
+          if ($IsWindows) { $env:PATH = "$env:MSYS2_BIN;$env:PATH" }
+          pwsh -NoProfile scripts/gate.ps1
 
       # What no test enters, printed and gated on nothing. One system's worth is the whole
       # story, and it is the one the suite is written on.
