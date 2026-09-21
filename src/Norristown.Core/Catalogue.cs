@@ -411,6 +411,20 @@ public static class Catalogue
         "A module names what other modules may see, and this is not among it. The fix is an `.export` on the "
             + "declaration in the module that owns it.");
 
+    internal static DiagnosticDescriptor DeclaredInAnotherModule { get; } = new(
+        "declared-in-another-module",
+        Severity.Error,
+        "`{0}` is not declared here, and module `{1}` exports it: write `{2}::{3}`, or bring it in with `.use {4}::{5}`",
+        "The name is not in scope in this file, and exactly one module in the program exports it, which is almost "
+            + "always the one meant.");
+
+    internal static DiagnosticDescriptor ModuleNotInTheBuild { get; } = new(
+        "module-not-in-the-build",
+        Severity.Error,
+        "`{0}` is not declared, and no module `{1}` is in this build",
+        "The first part of a path names a module or something in scope, and is neither. A module the project's "
+            + "`files` do not name is not part of the program.");
+
     internal static DiagnosticDescriptor ModuleUnknown { get; } = new(
         "module-unknown",
         Severity.Error,
@@ -511,6 +525,12 @@ public static class Catalogue
         "a file is a module, and says which first: `.module name`",
         "A file is one module, and says which before anything else, so that what it declares has a path from the "
             + "first line.");
+
+    internal static DiagnosticDescriptor MultiprocMisplaced { get; } = new(
+        "multiproc-misplaced",
+        Severity.Error,
+        "`.multiproc` declares routines, and this one is inside {0}: a routine belongs at file level or in a `.scope`",
+        "A family declares one routine per member of an enum, and routines are declared where routines belong.");
 
     internal static DiagnosticDescriptor ModuleDeclaredTwice { get; } = new(
         "module-declared-twice",
@@ -625,6 +645,13 @@ public static class Catalogue
         "`{0}` cannot hold on the {1}, whose registers are eight bits",
         "Widths, the emulation flag, the direct page and the data bank are the 65816's. Earlier processors have "
             + "eight-bit registers and none of that state.");
+
+    internal static DiagnosticDescriptor FamilyMisplaced { get; } = new(
+        "family-misplaced",
+        Severity.Error,
+        "{0}",
+        "A family declares one name per member of an enum into the scope around its `.each`, so it stands where "
+            + "those declarations belong and over something whose members have names.");
 
     internal static DiagnosticDescriptor FamilyNotOverAnEnum { get; } = new(
         "family-not-over-an-enum",
@@ -909,6 +936,13 @@ public static class Catalogue
         "`{0}` is not exported by module `{1}`, so the build cannot set it: a setting the module keeps to itself is not part of its configuration",
         "A `.config` the module keeps to itself is not part of its configuration, so a build has no say in it.");
 
+    internal static DiagnosticDescriptor DeclarationInARepetition { get; } = new(
+        "declaration-in-a-repetition",
+        Severity.Error,
+        "{0} belongs outside a repetition: {1}",
+        "A repetition writes its body out once per turn. Anything that names one symbol, or that is program-wide, "
+            + "would be written once per turn along with it.");
+
     internal static DiagnosticDescriptor RepeatCountNotConstant { get; } = new(
         "repeat-count-not-constant",
         Severity.Error,
@@ -987,6 +1021,13 @@ public static class Catalogue
             + "on more than one asks rather than listing the processors that have it.");
 
     // Macros: macro declarations, calls, arguments and expansion.
+
+    internal static DiagnosticDescriptor DeclarationInAMacroBody { get; } = new(
+        "declaration-in-a-macro-body",
+        Severity.Error,
+        "{0} belongs outside a macro body: {1}",
+        "A macro body is written out at each call, in the module that calls it. Each of these would either declare "
+            + "a name in the caller or make something program-wide depend on how many times the macro is called.");
 
     internal static DiagnosticDescriptor MacroRecursive { get; } = new(
         "macro-recursive",
@@ -1257,6 +1298,13 @@ public static class Catalogue
         "A far address is a bank and a sixteen-bit offset. Writing it into two bytes would drop the bank "
             + "silently, so nt65 asks which was meant.");
 
+    internal static DiagnosticDescriptor AddressDoesNotFit { get; } = new(
+        "address-does-not-fit",
+        Severity.Error,
+        "`{0}` is {1} address, and {2}: {3}",
+        "The address is wider than the slot it is written into, so ca65 would refuse the fragment with a range "
+            + "error. The fix names the part of it the slot has room for.");
+
     internal static DiagnosticDescriptor AddressNegative { get; } = new(
         "address-negative",
         Severity.Error,
@@ -1373,6 +1421,12 @@ public static class Catalogue
         "{0} is outside every segment: a `.segment NAME` region or block places it",
         "Bytes go in a segment, and the linker decides where each segment goes. Nothing is placed by being "
             + "written first.");
+
+    internal static DiagnosticDescriptor InstructionInData { get; } = new(
+        "instruction-in-data",
+        Severity.Error,
+        "{0} in a `.proc`, and `.data` holds only data",
+        "A `.data` declaration holds bytes. Code goes in a routine, where the analysis can follow it.");
 
     internal static DiagnosticDescriptor InstructionOutsideARoutine { get; } = new(
         "instruction-outside-a-routine",
@@ -1532,6 +1586,13 @@ public static class Catalogue
         "The file builds in this configuration and has something to say about it.");
 
     // Control flow: where flow goes, and what the analysis needs written beside it.
+
+    internal static DiagnosticDescriptor AnnotationAboutNothing { get; } = new(
+        "annotation-about-nothing",
+        Severity.Error,
+        "`{0}` is about the statement above it, and there is none here",
+        "An annotation stands between the statement it is about and whatever follows, which is what makes it "
+            + "readable without looking for what it attaches to.");
 
     internal static DiagnosticDescriptor CodeUnreachable { get; } = new(
         "code-unreachable",
@@ -2153,66 +2214,13 @@ public static class Catalogue
         "`{0}`: {1} is not a bank or a range of banks",
         "A bank is a byte, and a range of banks is two with a `-` between them.");
 
-    internal static DiagnosticDescriptor AddressDoesNotFit { get; } = new(
-        "address-does-not-fit",
-        Severity.Error,
-        "`{0}` is {1} address, and {2}: {3}",
-        "The address is wider than the slot it is written into, so ca65 would refuse the fragment with a range "
-            + "error. The fix names the part of it the slot has room for.");
+    // Signatures: what a routine or a macro declares about itself, and what a set may hold.
 
-    internal static DiagnosticDescriptor MultiprocMisplaced { get; } = new(
-        "multiproc-misplaced",
+    internal static DiagnosticDescriptor SignatureSetSelfReference { get; } = new(
+        "signature-set-self-reference",
         Severity.Error,
-        "`.multiproc` declares routines, and this one is inside {0}: a routine belongs at file level or in a `.scope`",
-        "A family declares one routine per member of an enum, and routines are declared where routines belong.");
-
-    internal static DiagnosticDescriptor FamilyMisplaced { get; } = new(
-        "family-misplaced",
-        Severity.Error,
-        "{0}",
-        "A family declares one name per member of an enum into the scope around its `.each`, so it stands where "
-            + "those declarations belong and over something whose members have names.");
-
-    internal static DiagnosticDescriptor DeclarationInARepetition { get; } = new(
-        "declaration-in-a-repetition",
-        Severity.Error,
-        "{0} belongs outside a repetition: {1}",
-        "A repetition writes its body out once per turn. Anything that names one symbol, or that is program-wide, "
-            + "would be written once per turn along with it.");
-
-    internal static DiagnosticDescriptor DeclarationInAMacroBody { get; } = new(
-        "declaration-in-a-macro-body",
-        Severity.Error,
-        "{0} belongs outside a macro body: {1}",
-        "A macro body is written out at each call, in the module that calls it. Each of these would either declare "
-            + "a name in the caller or make something program-wide depend on how many times the macro is called.");
-
-    internal static DiagnosticDescriptor AnnotationAboutNothing { get; } = new(
-        "annotation-about-nothing",
-        Severity.Error,
-        "`{0}` is about the statement above it, and there is none here",
-        "An annotation stands between the statement it is about and whatever follows, which is what makes it "
-            + "readable without looking for what it attaches to.");
-
-    internal static DiagnosticDescriptor InstructionInData { get; } = new(
-        "instruction-in-data",
-        Severity.Error,
-        "{0} in a `.proc`, and `.data` holds only data",
-        "A `.data` declaration holds bytes. Code goes in a routine, where the analysis can follow it.");
-
-    internal static DiagnosticDescriptor DeclaredInAnotherModule { get; } = new(
-        "declared-in-another-module",
-        Severity.Error,
-        "`{0}` is not declared here, and module `{1}` exports it: write `{2}::{3}`, or bring it in with `.use {4}::{5}`",
-        "The name is not in scope in this file, and exactly one module in the program exports it, which is almost "
-            + "always the one meant.");
-
-    internal static DiagnosticDescriptor ModuleNotInTheBuild { get; } = new(
-        "module-not-in-the-build",
-        Severity.Error,
-        "`{0}` is not declared, and no module `{1}` is in this build",
-        "The first part of a path names a module or something in scope, and is neither. A module the project's "
-            + "`files` do not name is not part of the program.");
+        "`{0}` names `{1}`, which stands for `{2}` again: a signature set cannot stand for itself",
+        "A signature set stands for the items it names, so naming itself would stand for itself.");
 
     internal static DiagnosticDescriptor AliasDistanceMismatch { get; } = new(
         "alias-distance-mismatch",
@@ -2226,14 +2234,6 @@ public static class Catalogue
         "`{0}` is declared `{1}`, and `{2}` is `{3}`: another name for a routine declares what the routine does",
         "Callers are checked against the signature on the name they write, so two names for one routine that "
             + "declare different things would check the same code two ways.");
-
-    // Signatures: what a routine or a macro declares about itself, and what a set may hold.
-
-    internal static DiagnosticDescriptor SignatureSetSelfReference { get; } = new(
-        "signature-set-self-reference",
-        Severity.Error,
-        "`{0}` names `{1}`, which stands for `{2}` again: a signature set cannot stand for itself",
-        "A signature set stands for the items it names, so naming itself would stand for itself.");
 
     internal static DiagnosticDescriptor ArgsNotConstant { get; } = new(
         "args-not-constant",
