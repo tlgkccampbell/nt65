@@ -51,12 +51,13 @@ public sealed class Configuration
         var all = trees.ToList();
         var settings = Settings.Read(all, cpu, values, defines, diagnostics);
 
+        var evaluator = settings.EvaluatorFor(cpu, values, diagnostics);
         var omitted = new Dictionary<SyntaxTree, List<TextSpan>>();
         var answered = new HashSet<(SyntaxTree, int)>();
         foreach (var tree in all)
         {
             var left = new List<TextSpan>();
-            new Reader(tree, cpu, values, settings, diagnostics, left, answered).Container(tree.Root);
+            new Reader(tree, evaluator, diagnostics, left, answered).Container(tree.Root);
             if (left.Count > 0)
                 omitted[tree] = left;
         }
@@ -164,7 +165,8 @@ public sealed class Configuration
         var reanswered = new HashSet<(SyntaxTree, int)>(answered.Where(at => at.Tree != before));
         var left = new List<TextSpan>();
         var moved = settings.Replacing(before, after);
-        new Reader(after, cpu, Plain(defines), moved, diagnostics, left, reanswered).Container(after.Root);
+        new Reader(after, moved.EvaluatorFor(cpu, Plain(defines), diagnostics), diagnostics, left, reanswered)
+            .Container(after.Root);
         if (left.Count > 0)
             replaced[after] = left;
         return new Configuration(replaced, reanswered, cpu, moved);
@@ -193,9 +195,7 @@ public sealed class Configuration
     /// </summary>
     private sealed class Reader(
         SyntaxTree tree,
-        Cpu cpu,
-        Dictionary<string, long> defines,
-        Settings settings,
+        Evaluator evaluator,
         List<Diagnostic> diagnostics,
         List<TextSpan> omitted,
         HashSet<(SyntaxTree, int)> answered)
@@ -249,38 +249,7 @@ public sealed class Configuration
             }
         }
 
-        public Value Evaluate(SyntaxNode node)
-        {
-            switch (node)
-            {
-                case NumberExpressionSyntax number:
-                    return Number(Literals.Number(number.Token.Text));
-
-                case CharacterExpressionSyntax character:
-                    return Number(Literals.Character(character.Token.Text));
-
-                case StringExpressionSyntax quoted:
-                    return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
-
-                case ParenthesizedExpressionSyntax parenthesized:
-                    return Evaluate(parenthesized.Expression);
-
-                case UnaryExpressionSyntax unary:
-                    return Unary(unary.OperatorToken, Evaluate(unary.Operand));
-
-                case BinaryExpressionSyntax binary:
-                    return Binary(binary);
-
-                case NameExpressionSyntax name:
-                    return ValueOfName(name);
-
-                case CallExpressionSyntax call:
-                    return Call(call);
-
-                default:
-                    return Value.Unknown;
-            }
-        }
+        public Value Evaluate(SyntaxNode node) => evaluator.Evaluate(node);
 
         public void Report(TextSpan span, string message) =>
             diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
@@ -329,146 +298,6 @@ public sealed class Configuration
         // whitespace, before its first token.
         private void Leave(BlockSyntax block) =>
             omitted.Add(new TextSpan(block.Position, block.Span.End - block.Position));
-
-        private Value Binary(BinaryExpressionSyntax binary)
-        {
-            // The right operand is neither evaluated nor looked up once the left decides the
-            // result, which is what makes `.defined(TRACE) && TRACE` a question with an answer.
-            var op = binary.OperatorToken;
-            var left = Evaluate(binary.Left);
-            if (left.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
-                return Value.Of(decided != 0);
-
-            var right = Evaluate(binary.Right);
-            if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
-                return Reject(op, left.IsString ? left : right);
-            if (b == 0 && Operators.Divides(op))
-            {
-                Report(op.Span, "division by zero");
-                return Value.Unknown;
-            }
-            return Operators.Binary(op, a, b) is { } result ? Value.Of(result) : Value.Unknown;
-        }
-
-        private Value Unary(SyntaxToken op, Value operand)
-        {
-            if (operand.AsNumber() is not { } value)
-                return Reject(op, operand);
-            return Operators.Unary(op.Kind, value) is { } result ? Value.Of(result) : Value.Unknown;
-        }
-
-        private Value Reject(SyntaxToken op, Value operand)
-        {
-            if (operand.IsString)
-                Report(op.Span, $"`{op.Text}` cannot be used on a string");
-            return Value.Unknown;
-        }
-
-        /// <summary>
-        /// A name in a condition, which can only be a define or a <c>.config</c> setting.
-        /// Anything else the program declares is refused here rather than looked up: a check
-        /// about the program is an <c>.assert</c>, which is evaluated once the program is known.
-        /// </summary>
-        private Value ValueOfName(NameExpressionSyntax name)
-        {
-            var written = name.GetText().Trim();
-            if (name.SimpleName is { } only && defines.TryGetValue(only.Text, out var value))
-                return Value.Of(value);
-            var (setting, reported) = settings.Find(tree, name, Report);
-            if (setting is not null)
-                return settings.Worth(setting) is { } set ? Value.Of(set) : Value.Unknown;
-            if (!reported)
-            {
-                Report(name.Span, $"`{written}` is not a define or a `.config`. A condition tests the build "
-                    + "configuration, and a check on the program is an `.assert`");
-            }
-            return Value.Unknown;
-        }
-
-        private Value Call(CallExpressionSyntax call)
-        {
-            var given = call.Arguments.Arguments;
-            if (call.Function is not { Kind: SyntaxKind.Directive } function)
-            {
-                // A charmap or a `.func` called by name. Both are declarations, and reaching
-                // them means resolving a name before the declarations exist.
-                Report(call.Span, "a condition may not call a function the program declares");
-                return Value.Unknown;
-            }
-
-            var name = function.Text.ToLowerInvariant();
-
-            // `.defined` asks whether a name is a define, so the name is not looked up at all
-            // and one that is not a define is the answer rather than a mistake.
-            if (name == ".defined")
-            {
-                return given is [NameExpressionSyntax { SimpleName: { } asked }]
-                    ? Value.Of(defines.ContainsKey(asked.Text))
-                    : Value.Unknown;
-            }
-
-            if (AboutTheCpu(name, function, given, cpu, Report) is { } answer)
-                return answer;
-
-            // Only the value the condition chooses is read, so it alone has to be a define.
-            if (name == ".select")
-            {
-                if (given.Count != 3)
-                {
-                    Report(function.Span, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
-                    return Value.Unknown;
-                }
-                return Evaluate(given[0]).AsNumber() is { } holds ? Evaluate(given[holds != 0 ? 1 : 2]) : Value.Unknown;
-            }
-
-            // What the function asks about is decided before its arguments are read: a
-            // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
-            if (!Answerable(name))
-                return Measures(function);
-
-            var values = given.Select(Evaluate).ToArray();
-            return name switch
-            {
-                ".lobyte" => Number1(values, v => v & 0xff),
-                ".hibyte" => Number1(values, v => (v >> 8) & 0xff),
-                ".bankbyte" => Number1(values, v => (v >> 16) & 0xff),
-                ".loword" => Number1(values, v => v & 0xffff),
-                ".hiword" => Number1(values, v => (v >> 16) & 0xffff),
-                ".min" => Number2(values, Math.Min),
-                ".max" => Number2(values, Math.Max),
-                ".strlen" => values is [{ Kind: ValueKind.String, Text: { } s }] ? Value.Of(s.Length) : Value.Unknown,
-                ".strat" => values is [{ Kind: ValueKind.String, Text: { } t }, { Kind: ValueKind.Number } at]
-                    && at.Number >= 0 && at.Number < t.Length
-                    ? Value.Of(t[(int)at.Number])
-                    : Value.Unknown,
-                _ => Value.Unknown,
-            };
-        }
-
-        /// <summary>The built-in functions the configuration alone can answer.</summary>
-        private static bool Answerable(string name) => name is ".lobyte" or ".hibyte" or ".bankbyte"
-            or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat";
-
-        /// <summary>
-        /// A built-in that measures the program, or one only a macro body has. Neither can be
-        /// answered from the configuration alone.
-        /// </summary>
-        private Value Measures(SyntaxToken function)
-        {
-            Report(function.Span, $"`{function.Text}` asks about the program. A condition tests the "
-                + "build configuration, and a check on the program is an `.assert`");
-            return Value.Unknown;
-        }
-
-        private static Value Number1(Value[] arguments, Func<long, long> apply) =>
-            arguments is [{ Kind: ValueKind.Number } only] ? Value.Of(apply(only.Number)) : Value.Unknown;
-
-        private static Value Number2(Value[] arguments, Func<long, long, long> apply) =>
-            arguments is [{ Kind: ValueKind.Number } a, { Kind: ValueKind.Number } b]
-                ? Value.Of(apply(a.Number, b.Number))
-                : Value.Unknown;
-
-        private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
         private static string Directive(StatementSyntax opener) =>
             opener is ElseDirectiveSyntax ? ".else" : ".elseif";
@@ -557,7 +386,8 @@ public sealed class Configuration
                 }
             }
 
-            settings.readerFor = tree => new Reader(tree, cpu, defines, settings, diagnostics, [], []);
+            var evaluator = settings.EvaluatorFor(cpu, defines, diagnostics);
+            settings.readerFor = tree => new Reader(tree, evaluator, diagnostics, [], []);
             foreach (var setting in settings.byName.Values)
                 settings.Worth(setting);
             return settings;
@@ -575,6 +405,27 @@ public sealed class Configuration
             return new Settings(byName, moved, values) { readerFor = readerFor };
         }
 
+        /// <summary>
+        /// An evaluator for the conditions of a build for <paramref name="cpu"/> with
+        /// <paramref name="defines"/>, whose names are these settings and which reports into
+        /// <paramref name="diagnostics"/>.
+        /// </summary>
+        public Evaluator EvaluatorFor(Cpu cpu, Dictionary<string, long> defines, List<Diagnostic> diagnostics) =>
+            Evaluator.ForConditions(new Conditions(cpu, defines, Lookup), diagnostics);
+
+        /// <summary>
+        /// What a name written in a condition is worth as a setting, or null when it names
+        /// none and nothing was reported about it, which leaves it to be reported as naming
+        /// nothing at all.
+        /// </summary>
+        public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, string> report)
+        {
+            var (setting, reported) = Find(name.Tree, name, report);
+            if (setting is not null)
+                return Worth(setting) is { } value ? Value.Of(value) : Value.Unknown;
+            return reported ? Value.Unknown : null;
+        }
+
         /// <summary>What the setting <paramref name="name"/> in <paramref name="tree"/> is worth, or null.</summary>
         public long? ValueOf(SyntaxTree tree, string name) =>
             modules.TryGetValue(tree, out var module) && byName.TryGetValue((module, name), out var setting)
@@ -586,7 +437,7 @@ public sealed class Configuration
         /// declares, one a <c>.use</c> brought in, or one written with its module's path. Whether
         /// anything was reported about it, such as a setting another module keeps to itself.
         /// </summary>
-        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<TextSpan, string> report)
+        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, string> report)
         {
             var parts = name.Names;
             if (parts.Length == 0 || !modules.TryGetValue(tree, out var own))
@@ -608,7 +459,7 @@ public sealed class Configuration
                 return (null, false);
             if (!found.IsExported && found.Tree != tree)
             {
-                report(name.Span, $"`{name.GetText().Trim()}` is not exported by module `{modules[found.Tree]}`");
+                report(name, $"`{name.GetText().Trim()}` is not exported by module `{modules[found.Tree]}`");
                 return (null, true);
             }
             return (found, false);

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -52,6 +53,10 @@ internal sealed class Evaluator
     // Which branches the build takes, for the conditionals in a data body; without it every
     // condition is worked out as one inside an expansion would be.
     private readonly Configuration? configuration;
+
+    // Set when what is being evaluated is a build's own condition, which is read before there
+    // are any declarations and so means something narrower by every name and every call.
+    private readonly Conditions? conditions;
     private Symbol? owner;
 
     // How deep evaluation is inside values `.select` chose, whose names have to mean something,
@@ -68,8 +73,10 @@ internal sealed class Evaluator
         Func<Symbol, long?>? spans = null,
         Func<Symbol, bool>? settled = null,
         List<string>? owners = null,
-        Configuration? configuration = null)
+        Configuration? configuration = null,
+        Conditions? conditions = null)
     {
+        this.conditions = conditions;
         this.configuration = configuration;
         this.settled = settled;
         this.owners = owners;
@@ -249,6 +256,80 @@ internal sealed class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
         new Evaluator(segments, resolved, null, null, bound).SizeOf(expression, segment);
 
+    /// <summary>
+    /// An evaluator for the conditions of a build, which are answered before a declaration
+    /// exists. Nothing resolves in one, so it carries no symbols at all: what a name and a
+    /// call may mean there is <paramref name="conditions"/>.
+    /// </summary>
+    public static Evaluator ForConditions(Conditions conditions, List<Diagnostic> diagnostics) =>
+        new(SegmentTable.Standard, ReadOnlyDictionary<(SyntaxTree, int), Symbol>.Empty, diagnostics,
+            conditions: conditions);
+
+    /// <summary>
+    /// What an expression is worth. A caller that reports — the pass over the symbols, and the
+    /// conditions of a build — evaluates through here; one that only asks goes through
+    /// <see cref="ValueOf"/>.
+    /// </summary>
+    public Value Evaluate(SyntaxNode node)
+    {
+        // A literal the lexer refused is worth nothing, the way an undeclared name is: what is
+        // wrong with it has been said once, where it is written, and reading it for a value
+        // would be reading digits that are not digits.
+        if (node is LiteralExpressionSyntax { Token.ContainsDiagnostics: true })
+            return Value.Unknown;
+
+        switch (node)
+        {
+            case NumberExpressionSyntax number:
+                return Number(Literals.Number(number.Token.Text));
+
+            case CharacterExpressionSyntax character:
+                return Number(Literals.Character(character.Token.Text));
+
+            case StringExpressionSyntax quoted:
+                return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
+
+            case ParenthesizedExpressionSyntax parenthesized:
+                return Evaluate(parenthesized.Expression);
+
+            case NameExpressionSyntax name:
+                return ValueOfName(name);
+
+            case UnaryExpressionSyntax unary:
+                return Unary(unary.OperatorToken, Evaluate(unary.Operand));
+
+            case BinaryExpressionSyntax binary:
+                // `&&` and `||` leave the right operand alone once the left decides the
+                // result, so `.defined(TRACE) && TRACE` is answerable when TRACE is not
+                // defined and the name on the right is never looked up.
+                var op = binary.OperatorToken;
+                var first = Evaluate(binary.Left);
+                if (first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
+                    return Value.Of(decided != 0);
+                var second = Evaluate(binary.Right);
+
+                // A `one` parameter and a repetition over words compare as words: the side
+                // that is not already one is the bare name written beside it, which is a word
+                // rather than a name and is never looked up.
+                if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
+                    && (first.IsWord || second.IsWord)
+                    && WordOf(first, binary.Left) is { } left && WordOf(second, binary.Right) is { } right)
+                {
+                    var same = string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+                    return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
+                }
+                return Binary(op, first, second);
+
+            case CallExpressionSyntax call:
+                return Call(call);
+
+            // `*`, an error the parser has already reported, and the CPU names, which only
+            // `.cpu` and `.target` accept.
+            default:
+                return Value.Unknown;
+        }
+    }
+
     /// <summary>The wider of two address sizes, either of which may be unknown.</summary>
     private static AddressSize? Widest(AddressSize? a, AddressSize? b) =>
         a is null ? b : b is null ? a : (AddressSize)Math.Max((int)a, (int)b);
@@ -388,66 +469,6 @@ internal sealed class Evaluator
                 new RelatedSpan(other.DeclarationSpan, $"through `{other.DisplayName}`"))]);
     }
 
-    private Value Evaluate(SyntaxNode node)
-    {
-        // A literal the lexer refused is worth nothing, the way an undeclared name is: what is
-        // wrong with it has been said once, where it is written, and reading it for a value
-        // would be reading digits that are not digits.
-        if (node is LiteralExpressionSyntax { Token.ContainsDiagnostics: true })
-            return Value.Unknown;
-
-        switch (node)
-        {
-            case NumberExpressionSyntax number:
-                return Number(Literals.Number(number.Token.Text));
-
-            case CharacterExpressionSyntax character:
-                return Number(Literals.Character(character.Token.Text));
-
-            case StringExpressionSyntax quoted:
-                return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
-
-            case ParenthesizedExpressionSyntax parenthesized:
-                return Evaluate(parenthesized.Expression);
-
-            case NameExpressionSyntax name:
-                return ValueOfName(name);
-
-            case UnaryExpressionSyntax unary:
-                return Unary(unary.OperatorToken, Evaluate(unary.Operand));
-
-            case BinaryExpressionSyntax binary:
-                // `&&` and `||` leave the right operand alone once the left decides the
-                // result, so `.defined(TRACE) && TRACE` is answerable when TRACE is not
-                // defined and the name on the right is never looked up.
-                var op = binary.OperatorToken;
-                var first = Evaluate(binary.Left);
-                if (first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
-                    return Value.Of(decided != 0);
-                var second = Evaluate(binary.Right);
-
-                // A `one` parameter and a repetition over words compare as words: the side
-                // that is not already one is the bare name written beside it, which is a word
-                // rather than a name and is never looked up.
-                if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
-                    && (first.IsWord || second.IsWord)
-                    && WordOf(first, binary.Left) is { } left && WordOf(second, binary.Right) is { } right)
-                {
-                    var same = string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-                    return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
-                }
-                return Binary(op, first, second);
-
-            case CallExpressionSyntax call:
-                return Call(call);
-
-            // `*`, an error the parser has already reported, and the CPU names, which only
-            // `.cpu` and `.target` accept.
-            default:
-                return Value.Unknown;
-        }
-    }
-
     /// <summary>
     /// What a written name is worth. Inside a function body a parameter stands for the
     /// argument it was called with; a member reached through a path is the offsets along
@@ -455,6 +476,8 @@ internal sealed class Evaluator
     /// </summary>
     private Value ValueOfName(NameExpressionSyntax name)
     {
+        if (conditions is not null)
+            return InCondition(name, conditions);
         if (BoundItem(name) is { } item)
             return Indexed(name, Evaluate(item));
         if (SymbolOf(name) is not { } symbol)
@@ -652,6 +675,8 @@ internal sealed class Evaluator
     private Value Call(CallExpressionSyntax call)
     {
         var given = call.Arguments.Arguments;
+        if (conditions is not null)
+            return InCondition(call, given, conditions);
         if (call.Callee is { } callee)
             return Applied(callee, given);
         if (call.Function is not { Kind: SyntaxKind.Directive } function)
@@ -746,6 +771,17 @@ internal sealed class Evaluator
             return answer;
         }
 
+        // `.target`, `.has`, `.defined` and the three a macro body adds are answered before
+        // this point, each by the pass that knows what they ask about.
+        return Plain(name, arguments);
+    }
+
+    /// <summary>
+    /// The built-in functions that are arithmetic on their arguments and ask nothing about the
+    /// program, which are the ones a build's conditions may call as well.
+    /// </summary>
+    private Value Plain(string name, IReadOnlyList<SyntaxNode> arguments)
+    {
         var values = arguments.Select(Evaluate).ToArray();
         return name switch
         {
@@ -761,11 +797,82 @@ internal sealed class Evaluator
                 && at.Number >= 0 && at.Number < t.Length
                 ? Value.Of(t[(int)at.Number])
                 : Value.Unknown,
-
-            // `.target`, `.has`, `.defined` and the three a macro body adds are answered before
-            // this point, each by the pass that knows what they ask about.
             _ => Value.Unknown,
         };
+    }
+
+    /// <summary>Whether a built-in is one the configuration alone can answer.</summary>
+    private static bool Answerable(string name) => name is ".lobyte" or ".hibyte" or ".bankbyte"
+        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat";
+
+    /// <summary>
+    /// A name in a build's condition, which can only be a define or a <c>.config</c> setting.
+    /// Anything else the program declares is refused here rather than looked up: a check
+    /// about the program is an <c>.assert</c>, which is evaluated once the program is known.
+    /// </summary>
+    private Value InCondition(NameExpressionSyntax name, Conditions asked)
+    {
+        if (name.SimpleName is { } only && asked.Defines.TryGetValue(only.Text, out var value))
+            return Value.Of(value);
+        if (asked.Setting(name, Report) is { } setting)
+            return setting;
+        Report(name, $"`{name.GetText().Trim()}` is not a define or a `.config`. A condition tests the build "
+            + "configuration, and a check on the program is an `.assert`");
+        return Value.Unknown;
+    }
+
+    /// <summary>
+    /// A call in a build's condition. Only the built-ins the configuration alone can answer
+    /// have one: what a function the program declares is worth, and what a built-in that
+    /// measures the program finds, are not known until there is a program.
+    /// </summary>
+    private Value InCondition(CallExpressionSyntax call, IReadOnlyList<SyntaxNode> given, Conditions asked)
+    {
+        if (call.Function is not { Kind: SyntaxKind.Directive } function)
+        {
+            // A charmap or a `.func` called by name. Both are declarations, and reaching
+            // them means resolving a name before the declarations exist.
+            Report(call, "a condition may not call a function the program declares");
+            return Value.Unknown;
+        }
+
+        var name = function.Text.ToLowerInvariant();
+
+        // `.defined` asks whether a name is a define, so the name is not looked up at all
+        // and one that is not a define is the answer rather than a mistake.
+        if (name == ".defined")
+        {
+            return given is [NameExpressionSyntax { SimpleName: { } about }]
+                ? Value.Of(asked.Defines.ContainsKey(about.Text))
+                : Value.Unknown;
+        }
+
+        if (Configuration.AboutTheCpu(name, function, given, asked.Cpu, (_, message) => Report(function, message))
+            is { } answer)
+        {
+            return answer;
+        }
+
+        // Only the value the condition chooses is read, so it alone has to be a define.
+        if (name == ".select")
+        {
+            if (given.Count != 3)
+            {
+                Report(function, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
+                return Value.Unknown;
+            }
+            return Evaluate(given[0]).AsNumber() is { } holds ? Evaluate(given[holds != 0 ? 1 : 2]) : Value.Unknown;
+        }
+
+        // What the function asks about is decided before its arguments are read: a
+        // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
+        if (!Answerable(name))
+        {
+            Report(function, $"`{function.Text}` asks about the program. A condition tests the "
+                + "build configuration, and a check on the program is an `.assert`");
+            return Value.Unknown;
+        }
+        return Plain(name, given);
     }
 
     /// <summary>
