@@ -220,4 +220,19 @@ function register(context, client) {
     vscode.workspace.onDidCloseTextDocument(document => shown.delete(document.uri.toString())));
 }
 
-module.exports = { register };
+// A hover's *Show expansion* is a link to a command, and VS Code runs one from a hover only
+// where the hover says which commands it means. It is the one command named, so a server
+// writing anything else into a hover cannot have the editor run it.
+const middleware = {
+  async provideHover(document, position, token, next) {
+    const hover = await next(document, position, token);
+    for (const part of (hover && hover.contents) || []) {
+      if (part instanceof vscode.MarkdownString) {
+        part.isTrusted = { enabledCommands: ['nt65.showExpansion'] };
+      }
+    }
+    return hover;
+  },
+};
+
+module.exports = { register, middleware };

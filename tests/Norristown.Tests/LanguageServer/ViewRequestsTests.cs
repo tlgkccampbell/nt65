@@ -126,6 +126,44 @@ public sealed class ViewRequestsTests
         Assert.DoesNotContain("Show expansion", hover.Contents.Value, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Past eight lines the listing stops being something a reader takes in at a glance, so what
+    /// is left is a link to the view that holds it, saying how much was left out.
+    /// </summary>
+    [Fact]
+    public async Task ALongExpansionIsSummarisedAndLinkedTo()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, """
+            .module main
+            .macro clear(n: const) {
+                .repeat n, i {
+                    lda #0
+                    sta $0400 + i
+                }
+            }
+            .segment CODE
+            .export .proc main {
+                clear!(5)
+                rts
+            }
+            """);
+        Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
+
+        var hover = await client.HoverAsync(Uri, new Position(9, 6), timeout);
+        Assert.NotNull(hover);
+        var said = hover.Contents.Value;
+        Assert.Contains("expands to 10 lines · ", said, StringComparison.Ordinal);
+        Assert.Contains("[Show expansion](command:nt65.showExpansion?", said, StringComparison.Ordinal);
+        Assert.Contains("— 2 more lines", said, StringComparison.Ordinal);
+
+        // Eight lines and no more: the listing is the working, and the summary is the answer.
+        var listing = said.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
+        Assert.Equal(8, listing.Length);
+        Assert.Equal("lda #0", listing[0].Trim());
+    }
+
     /// <summary>A call written out in place of itself, and the reasons it is not offered.</summary>
     [Fact]
     public async Task ACallIsInlinedWhereThatChangesNothingButTheText()

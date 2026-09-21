@@ -168,6 +168,7 @@ async function activate(context) {
     serverOptions(context),
     {
       documentSelector: [{ language: 'nt65' }],
+      middleware: views.middleware,
       initializationOptions: {
         configuration: vscode.workspace.getConfiguration('nt65').get('configuration'),
         inlayHints: hintSettings(),

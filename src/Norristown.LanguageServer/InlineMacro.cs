@@ -63,7 +63,7 @@ internal static class InlineMacro
 
         // What the body declares is local to each expansion, and two expansions in one routine
         // would declare it twice; an anonymous scope is inline code and keeps them apart.
-        var scoped = Declares(model, definition);
+        var scoped = MacroExpansion.Declares(analysis, definition);
         var inner = scoped ? indent + Edits.Indent : indent;
         var written = expansion.Lines.Select(line => line.Length == 0 ? "" : inner + line).ToList();
         if (scoped)
@@ -93,15 +93,6 @@ internal static class InlineMacro
         }
         return false;
     }
-
-    /// <summary>
-    /// Whether a body declares anything of its own, which each expansion has one of. The line
-    /// that opens the block declares the macro and its parameters, and is not the body.
-    /// </summary>
-    private static bool Declares(SemanticModel model, BlockSyntax definition) =>
-        model.Symbols.Any(symbol => symbol.Tree == definition.Tree
-            && symbol.NameSpan.Start >= definition.Opener.FullSpan.End
-            && symbol.NameSpan.Start < definition.FullSpan.End);
 
     /// <summary>A file as a reader names it: its own name, without the folders above it.</summary>
     private static string Named(string path) => path[(path.LastIndexOf('/') + 1)..];

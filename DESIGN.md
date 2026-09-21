@@ -3148,7 +3148,8 @@ alone and without an assembler:
   file's, since a body's names are resolved where it is written, and where the call is itself
   in a body, since its arguments are not known until that body is expanded. A body that
   declares anything is written out inside an anonymous `.scope`, since each expansion has its
-  own locals (§6.2) and two of them in one routine would declare the same name twice;
+  own locals (§6.2) and two of them in one place would declare the same name twice, which is
+  also what keeps *Expand all* valid where one body writes another out more than once;
 - change what moving a file asks the program to change, before the move rather than after it.
   A module's name is written in its `.module` line and its output is named after that wherever
   the source is (§13), so a source that moves changes less than it looks: nothing in any other

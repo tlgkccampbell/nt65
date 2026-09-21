@@ -160,15 +160,20 @@ public sealed class ExpansionTests
             // own its arguments are names and not values, and there is nothing to write out.
             if (InAMacroBody(node))
                 continue;
-            var expansion = MacroExpansion.Of(analysis, model, node);
-            Assert.NotNull(expansion);
-            Assert.Null(expansion.Refusal);
             calls++;
 
-            // What is shown has to be nt65 a person could have written, so it parses on its own.
-            var written = string.Join("\n", expansion.Lines);
-            var parsed = Norristown.Syntax.SyntaxTree.Parse("expansion.nt65", $".module m\n.segment CODE\n.proc p {{\n{written}\n}}\n");
-            Assert.Empty(parsed.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}"));
+            // What is shown has to be nt65 a person could have written, so it parses on its
+            // own — one level at a time, and written out all the way down.
+            foreach (var all in (bool[])[false, true])
+            {
+                var expansion = MacroExpansion.Of(analysis, model, node, null, all);
+                Assert.NotNull(expansion);
+                Assert.Null(expansion.Refusal);
+                var written = string.Join("\n", expansion.Lines);
+                var parsed = Norristown.Syntax.SyntaxTree.Parse(
+                    "expansion.nt65", $".module m\n.segment CODE\n.proc p {{\n{written}\n}}\n");
+                Assert.Empty(parsed.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}"));
+            }
         }
         Assert.True(calls > 10, $"the fixture holds {calls} calls");
     }

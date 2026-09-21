@@ -23,14 +23,16 @@ internal sealed class MacroExpansion
     /// <summary>One level of the expansion's own indentation.</summary>
     private const string Step = "    ";
 
+    private readonly ProgramAnalysis analysis;
     private readonly SemanticModel model;
     private readonly bool all;
     private readonly List<string> lines = [];
     private readonly List<Link> links = [];
     private string? refusal;
 
-    private MacroExpansion(SemanticModel model, Symbol macro, MacroCallSyntax call, bool all)
+    private MacroExpansion(ProgramAnalysis analysis, SemanticModel model, Symbol macro, MacroCallSyntax call, bool all)
     {
+        this.analysis = analysis;
         this.model = model;
         this.all = all;
         Macro = macro;
@@ -83,7 +85,7 @@ internal sealed class MacroExpansion
         if (model.MacroAt(call) is not { Definition: BlockSyntax definition } macro)
             return null;
         var (bytes, cycles) = Laid(analysis, model, call);
-        var written = new MacroExpansion(model, macro, call, all) { Bytes = bytes, Cycles = cycles };
+        var written = new MacroExpansion(analysis, model, macro, call, all) { Bytes = bytes, Cycles = cycles };
         written.Body(definition, Expansion.Of(null, call, definition), "", into ?? [], []);
         return written;
     }
@@ -136,6 +138,17 @@ internal sealed class MacroExpansion
         }
         return (bytes, cycles);
     }
+
+    /// <summary>
+    /// Whether a macro body declares anything of its own, which each expansion has one of and
+    /// which two expansions in one place would therefore declare twice. The line that opens the
+    /// block declares the macro and its parameters, and is not the body.
+    /// </summary>
+    public static bool Declares(ProgramAnalysis analysis, BlockSyntax definition) =>
+        analysis.ModelFor(definition.Tree.Path) is { } declaring
+        && declaring.Symbols.Any(symbol => symbol.Tree == definition.Tree
+            && symbol.NameSpan.Start >= definition.Opener.FullSpan.End
+            && symbol.NameSpan.Start < definition.FullSpan.End);
 
     /// <summary>Whether a writing of a line is inside <paramref name="call"/>'s expansion.</summary>
     private static bool Within(Expansion? on, MacroCallSyntax call)
@@ -286,7 +299,20 @@ internal sealed class MacroExpansion
                 Refuse($"`{call.Name.Text}!` reaches itself");
                 return;
             }
-            Body(definition, Expansion.Of(at, call, definition), indent, chosen ? [.. into.Skip(1)] : [], way);
+
+            // Each expansion has its own locals, so two of them written out in one body would
+            // declare the same name twice; an anonymous scope is inline code and keeps them
+            // apart, which is what the language offers for exactly this.
+            var inner = Expansion.Of(at, call, definition);
+            IReadOnlyList<int> next = chosen ? [.. into.Skip(1)] : [];
+            if (!Declares(analysis, definition))
+            {
+                Body(definition, inner, indent, next, way);
+                return;
+            }
+            Emit(indent + ".scope {");
+            Body(definition, inner, indent + Step, next, way);
+            Emit(indent + "}");
             return;
         }
 
