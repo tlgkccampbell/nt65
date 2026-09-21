@@ -1529,11 +1529,14 @@ internal sealed class Binder
             return null;
 
         // A member of a named type may be called after a register or a mnemonic: it is only
-        // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. Any
-        // other reserved name is reported, and declared all the same, so that what uses it and
-        // what counts it are not wrong a second time.
+        // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. A
+        // register elsewhere is reported, and declared all the same, so that what uses it and
+        // what counts it are not wrong a second time; a mnemonic is only warned about.
         if (kind != SymbolKind.Member && scope.Kind != ScopeKind.Type)
+        {
             CheckReservedWord(name);
+            WarnAboutMnemonic(name);
+        }
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
@@ -1593,45 +1596,37 @@ internal sealed class Binder
     }
 
     /// <summary>
-    /// The reserved words: a symbol may not be named after a register, or after a mnemonic of
-    /// the CPU the program is built for. Members of a named struct, union or enum are exempt.
+    /// The reserved words: a symbol may not be named after a register. Nothing else is
+    /// reserved — a mnemonic names a symbol wherever one may stand, and what a reader loses
+    /// by it is <see cref="WarnAboutMnemonic"/>'s business rather than an error's. Members of
+    /// a named struct, union or enum are exempt from both, being reached only through <c>::</c>.
     /// </summary>
     private bool CheckReservedWord(SyntaxToken name)
     {
-        var what = name.Kind switch
-        {
-            SyntaxKind.Mnemonic when SyntaxFacts.LongBranches.Contains(name.Text) || Instructions.Has(cpu, name.Text) =>
-                $"a mnemonic of the {CpuNames.Spell(cpu)}",
-            SyntaxKind.Register => "a register name",
-            _ => null,
-        };
-        if (what is null)
-        {
-            WarnAboutOtherCpusMnemonic(name);
+        if (name.Kind != SyntaxKind.Register)
             return true;
-        }
-        Report(name.Span, $"`{name.Text}` is {what} and cannot be used as a name");
+        Report(name.Span, $"`{name.Text}` is a register name and cannot be used as a name");
         return false;
     }
 
     /// <summary>
-    /// A mnemonic of a CPU this program is not built for may name a symbol here, and the same
-    /// name in a program built for that CPU cannot (§4). A module reached by a glob above the
-    /// project root belongs to every project that takes it, so the name that builds here fails
-    /// there. Saying so where the name is declared costs nothing; finding out when the module is
-    /// shared costs a rename across a library.
+    /// A declared name that is also an instruction. Nothing is wrong with the program and
+    /// nothing is wrong with the output; what is hard is reading it, and that is the same in
+    /// every project, so the warning does not depend on which CPU this program is built for.
+    /// It names that CPU where the word is an instruction there, and otherwise the first CPU
+    /// that has it.
     /// </summary>
-    private void WarnAboutOtherCpusMnemonic(SyntaxToken name)
+    private void WarnAboutMnemonic(SyntaxToken name)
     {
         if (name.Kind != SyntaxKind.Mnemonic)
             return;
-        var having = CpuNames.All.Where(other => Instructions.Has(other, name.Text)).Select(CpuNames.Spell).ToList();
-        if (having.Count == 0)
+        var named = Instructions.Writable(cpu, name.Text)
+            ? cpu
+            : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.Text));
+        if (named is not { } having)
             return;
-        Warn(name.Span, $"`{name.Text}` is a mnemonic on the "
-            + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1])
-            + ", and cannot name a symbol in a program built for one of those: "
-            + "a module shared with one will not build");
+        Warn(name.Span, $"`{name.Text}` is an instruction on the {CpuNames.Spell(having)}; "
+            + "as a name it is legal and easy to misread");
     }
 
     private void ResolveUses(IReadOnlyList<Use> list)
@@ -1757,10 +1752,10 @@ internal sealed class Binder
 
         if (!path)
         {
-            // A register or a mnemonic parses as a name so that a macro body may pass it as a
-            // word. Outside one it can only be a mistake, and saying which reserved word it
-            // is beats saying the name is not declared.
-            // A reserved name that was declared anyway has been reported where it was declared.
+            // A register parses as a name so that a macro body may pass it as a word. Outside
+            // one it can only be a mistake, and saying that it is a register beats saying the
+            // name is not declared. A register that was declared anyway — which is an error —
+            // has been reported where it was declared.
             if (at.Lookup(token.Text) is { } symbol)
                 return new Place(symbol);
             if (!word && !CheckReservedWord(token))
@@ -2164,6 +2159,18 @@ internal sealed class Binder
                 continue;
             var size = item.AddressSize is { } written ? SegmentNames.ParseSize(written.Text) : null;
             var linkerName = item.LinkerName?.Text.Trim('"');
+
+            // An `as` name is the name in the object file, and the output has to define it
+            // under exactly that spelling: there is no module to put in front of one. ca65
+            // reads a word of its own instruction tables at the start of a line as an
+            // instruction, so such a name is one it could never define. Which CPU this
+            // program is built for does not come into it — the name is what another module,
+            // built for another CPU, would link against.
+            if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
+            {
+                Report(spelled.Span, $"`{linkerName}` is an instruction to ca65, which cannot define a symbol "
+                    + "spelled like one: an exported name is written into the output exactly as `as` gives it");
+            }
             Export(symbol, item.Span, linkerName, size);
         }
     }

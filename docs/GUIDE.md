@@ -489,7 +489,9 @@ diagnostics to work through.
 3. `#<label+1` is an error. Say which you mean with parentheses.
 4. A label outside a `.proc` is an error: data is `.data name: …`.
 5. `.byte[4] { 1, 2, 4 }` is an error, not padding.
-6. `x`, `y`, `s` and `a` are reserved, and so are your CPU's mnemonics; call a variable `xpos`.
+6. `x`, `y`, `s` and `a` are reserved; call a variable `xpos`. A mnemonic is not — `lda = 5`
+   and `rts:` are a constant and a label — but nt65 warns, because the next reader sees an
+   instruction.
 7. `.use` names start at the root of the modules, never at the current one.
 8. A module's names are private until exported, even to the module next to it.
 9. `.if` cannot test a program symbol, only defines and `.config` settings.

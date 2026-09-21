@@ -63,7 +63,8 @@ public static class Compiler
                 .Where(symbol => symbol.Tree == model.Tree)
                 .ToHashSet();
             var output = Emitter.Emit(
-                model, analysis.Layouts[i], FlatNames.Create(model, diagnostics), diagnostics, project.Out, elsewhere);
+                model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
+                project.Out, elsewhere);
             output = output with { Dependencies = Dependencies(analysis.Program, model, direct) };
             outputs.Add(output);
 

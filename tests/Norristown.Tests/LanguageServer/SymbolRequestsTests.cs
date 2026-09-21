@@ -458,7 +458,7 @@ public sealed class SymbolRequestsTests
     }
 
     [Theory]
-    [InlineData("lda", "is a reserved word")]
+    [InlineData("x", "is a register name")]
     [InlineData("2fast", "is not a name")]
     [InlineData("SCREEN", "is already declared in this scope")]
     public async Task ARenameThatWouldNotCompileIsRefused(string newName, string reason)

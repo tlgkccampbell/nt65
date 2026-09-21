@@ -322,26 +322,25 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// Only the program's CPU reserves its mnemonics, so a 6502 program may name something
-    /// `per` — with a warning, because a program built for the CPU that has it cannot, and a
-    /// module shared with one would stop building.
+    /// A mnemonic names a symbol on every CPU, and warns on every CPU: the word reads as an
+    /// instruction whoever reads it next, so the warning says the same thing in a 6502
+    /// program as in a 65816 one. It names the program's own CPU where the word is an
+    /// instruction there, and the first CPU that has it otherwise.
     /// </summary>
     [Fact]
-    public void AnotherCpusMnemonicIsANameWithAWarning()
+    public void AMnemonicIsANameWithTheSameWarningOnEveryCpu()
     {
         var program = Analysis.Program(
             ("main.nt65", ".module main\n.cpu 6502\nREP = 1\n.export REP\n.segment ZEROPAGE\n.export .data per: .byte\n"));
 
         Assert.Equal(
             [
-                "main.nt65:3: `REP` is a mnemonic on the 65816, and cannot name a symbol in a program built "
-                    + "for one of those: a module shared with one will not build",
-                "main.nt65:6: `per` is a mnemonic on the 65816, and cannot name a symbol in a program built "
-                    + "for one of those: a module shared with one will not build",
+                "main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread",
+                "main.nt65:6: `per` is an instruction on the 65816; as a name it is legal and easy to misread",
             ],
             program.Problems());
         Assert.Equal(
-            ["main.nt65:3: `REP` is a mnemonic of the 65816 and cannot be used as a name"],
+            ["main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread"],
             Analysis.Program(("main.nt65", ".module main\n.cpu 65816\nREP = 1\n.export REP\n")).Problems());
     }
 }

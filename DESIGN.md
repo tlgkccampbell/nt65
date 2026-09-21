@@ -181,25 +181,23 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   (`gfx::init`, `::hw::init`); `::` is one token, so `z::foo` walks into scope `z`
   and a prefix on a path from the root of the modules is written `z: ::hw::foo`. Cheap
   locals are `@name` (§6.2).
-- **Reserved words:** the mnemonics of the program's CPU and the long branches of §7.6
-  (case-insensitive), the
-  registers `a`, `x`, `y`, `s` (case-insensitive), and every `.directive` (also
-  case-insensitive). The mnemonics are the canonical WDC names, with the bit number in
-  `bbr0`–`bbr7`, `bbs0`–`bbs7`, `rmb0`–`rmb7` and `smb0`–`smb7` as ca65 spells them;
-  ca65's alternative 65816 spellings (`tad`, `swa`, ...) are ordinary identifiers. A user
-  symbol, a macro parameter or a member of an anonymous enum cannot be named `lda` or
-  `X`. Members of a named struct, union or enum are exempt: they are always reached
-  through `::`, where a register name or mnemonic is unambiguous (`Point::x`). Parsing does
-  not depend on the CPU: a line that starts with a mnemonic of any CPU is an instruction,
-  and one the CPU lacks is an error there. But a name that is not a mnemonic of the
-  program's CPU may be declared, so a 6502 program may call something `per` or `REP`, and
-  `ident :` is always a label. Changing a program's CPU can therefore make an existing name
-  reserved, and adding a CPU to the language reserves new words for its programs. **nt65 warns**
-  where a declared name is a mnemonic of a CPU this program is not built for, because a library
-  reached by a glob above the project root belongs to every project that takes it (§5.3): the
-  name that builds here fails in the program built for the CPU that has it, and finding that out
-  then costs a rename across a library. The name is still declared. ca65's alternative 65816
-  spellings are not warned about, since they are reserved in no nt65 program at all.
+- **Reserved words:** the registers `a`, `x`, `y`, `s` (case-insensitive) and every
+  `.directive` (also case-insensitive). **No mnemonic is reserved**, on any CPU. A line that
+  starts with a mnemonic is an instruction unless the token after it is `:` or `=`, which is
+  what makes `rts:` a label, `lda = 5` a constant and `jmp rts` a jump to that label; a
+  mnemonic of a CPU the program is not built for is an error only where it is written as an
+  instruction. The mnemonics are the canonical WDC names, with the bit number in
+  `bbr0`–`bbr7`, `bbs0`–`bbs7`, `rmb0`–`rmb7` and `smb0`–`smb7` as ca65 spells them; ca65's
+  alternative 65816 spellings (`tad`, `swa`, ...) are not nt65 mnemonics at all. A user
+  symbol, a macro parameter or a member of an anonymous enum may not be named `X`, and may be
+  named `lda`. Members of a named struct, union or enum are exempt even from that: they are
+  always reached through `::`, where a register name is unambiguous (`Point::x`). What a name
+  that is also an instruction costs is a reader's double take, so **nt65 warns** where one is
+  declared — `mnemonic-name`, the same in every project, on a word any CPU nt65 knows has an
+  instruction by, whichever CPU this program is built for. It is quiet where the spelling at
+  the use cannot be taken for an instruction: a member reached through `::`, and an `@local`
+  label. The output has its own answer to the same problem (§13), which needs nothing of the
+  programmer.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` and
   `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
   a CPU is named (§5.1) and mean nothing anywhere else. A `_` between two of a number's digits
@@ -2626,6 +2624,19 @@ named `z` or `f` is written `z := *`, because ca65 reads `z:` at the start of a 
 an address-size prefix; references to it need nothing special. An assignment takes the
 whole line, so anything that followed such a label goes on the next one.
 
+**A name ca65 would read as an instruction is written with its module in front.** No
+mnemonic is reserved in nt65 (§4), and ca65 takes any word of its own instruction table at
+the start of a line for an instruction, whatever else the file says that name is — including
+the alternative spellings it keeps and nt65 does not (`swa`, `tad`, `dea`, `ina`). So a
+top-level name that is not exported and that ca65 would misread under the `.setcpu` nt65
+wrote is written `main__swa`, which is the spelling an export already has. Nothing else
+moves: a scoped name and an export already hold a `__`, which no word of ca65's does. The
+words come from ca65's own tables rather than from nt65's idea of the processor, so the two
+cannot drift. The one name with no spelling to fall back on is an `as` name, which is
+written into the output exactly as it is given: `as "lda"` is an error where the `as` is,
+checked against every CPU nt65 writes a `.setcpu` for, because the name is what a module
+built for another one links against.
+
 **A prefix binds to the whole operand.** `z:ptr+1` sizes the expression, not just `ptr`.
 Where an operand expression itself begins with `(`, as `lda (hi + lo) * 2` may (§7.1),
 the output writes `z:+(hi + lo) * 2`: ca65 reads a `(` straight after a prefix as an
@@ -3075,9 +3086,22 @@ Recorded so the reasoning survives. None is open.
   every export twice was the most common complaint about `.export`.
 - **Re-exports name what they re-export.** A glob re-export would grow a module's interface
   whenever another module grows, which is what `.export` exists to prevent.
-- **Mnemonics are reserved by the program's CPU**, not by every CPU nt65 knows. Parsing still
-  knows them all, so a line means the same on every CPU; only which names a program may
-  declare depends on its CPU.
+- **No mnemonic is reserved.** Mnemonics were reserved by the program's CPU, and the review
+  found ca65's alias spellings (`swa`, `tad`, `ina`, ...) accepted as names and refused by
+  ca65. The first answer was to add them to the per-CPU reserved sets; the objection was to
+  the shape of that rule rather than to its gap, since which names a program may declare
+  should not depend on a project setting. Both single rules were weighed. Reserving every
+  mnemonic everywhere takes ordinary words for CPUs a programmer has never heard of (`set`,
+  `map`, `neg`, `tab`), still moves when the pinned ca65 gains an instruction, and is the
+  path on which MASM and NASM each ended up adding an escape. Reserving none costs nothing
+  in the grammar, which already reads `lda = 5`, `rts:` and `jmp rts` as what they are: a
+  line that starts with a mnemonic is an instruction unless `:` or `=` follows it, and that
+  is a question about the line rather than about the CPU. It leaves the backend's one limit
+  to the emitter, which prefixes the few names ca65 would misread and takes its list from
+  ca65's own tables (§13). And it never changes — not for a new CPU, not for a new ca65.
+  What a reader loses when a label is called `rts` is a warning's business, the same in
+  every project. Registers stay reserved: `asl a` is a question about an operand, which
+  position cannot answer.
 - **Merge disagreement is not an error.** The lattice already has unknown; reporting at
   the use is precise, reporting at the label is not.
 - **Signatures are declared, never inferred**, for procs, extern procs and imports
@@ -3446,13 +3470,13 @@ different ca65. Breaking changes wait for version 2. These are not breaking:
 - a new warning, a better message, and anything the editor does;
 - a new directive, built-in function, project file key or command-line option, because every
   `.word` already lexes as a directive and an unknown key or option is already an error;
-- a new CPU, because its mnemonics are reserved only in programs built for it (§4). It does
-  widen the warning of §4 for every other program, which a new warning is allowed to do.
+- a new CPU. It reserves nothing anywhere (§4) and widens the warning of §4 for every
+  program, which a new warning is allowed to do.
 
-Adding an instruction to a CPU nt65 already has reserves its mnemonic in that CPU's programs,
-where it may name a symbol today, so the instruction set of each CPU is part of the language
-version. The same holds for a new state item, whose word a signature set may already be named,
-and for a new contextual word anywhere a name may stand.
+A new state item, whose word a signature set may already be named, and a new contextual word
+anywhere a name may stand, are part of the language version: each takes a spelling that names
+something today. An instruction does not, since no mnemonic is reserved — a CPU that gains one
+gains a warning, and a program that used the word keeps building.
 
 **Version names.** The language is named by the major version of the command: nt65 1 is the
 language every `nt65` 1.x builds. A minor release adds what is not breaking, and a patch release
@@ -3470,6 +3494,9 @@ is in the sections above.
 ; mark after it. Directives, mnemonics, registers and the contextual words (dp, bank,
 ; mirrors, as, proc, zp, abs, far and the state items) match without regard to case.
 ; What the parser reads and the binder then rejects is noted in comments.
+; No mnemonic is reserved (§4), so every `ident` that names a declaration below may also be
+; a mnemonic: `rts:` is a label and `lda = 5` a constant, because what follows the first
+; word is what decides. A register may not, except as a `member-name`.
 file        := module-decl item* (region item*)*
 module-decl := '.module' module-path                  ; first
 region      := '.segment' ident NL                    ; at file level only

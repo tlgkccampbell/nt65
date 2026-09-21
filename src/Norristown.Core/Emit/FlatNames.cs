@@ -1,3 +1,5 @@
+using Norristown.Layout;
+using Norristown.Project;
 using Norristown.Semantics;
 
 namespace Norristown.Emit;
@@ -16,6 +18,13 @@ namespace Norristown.Emit;
 /// from the source and made unique, as <c>draw__loop</c> and <c>draw__loop_2</c>.
 /// </para>
 /// <para>
+/// The one name that does not keep its spelling is one ca65 would read as an instruction
+/// where the output defines it: <c>swa</c> is an alias ca65 has on the 65816, and a line
+/// starting <c>swa:</c> is an instruction to it. Such a name is written with its module in
+/// front, <c>main__swa</c>, which is the spelling an export already has, and which holds a
+/// <c>__</c> that no word of ca65's does.
+/// </para>
+/// <para>
 /// What a macro body declares is local to each expansion, and what a repetition declares to
 /// each turn, so one symbol there is many names in the output, one per writing. Those are handed out as the expansions are written, which is
 /// as deterministic as the writing itself, and each is made unique against everything
@@ -29,12 +38,26 @@ public sealed class FlatNames
     private readonly Dictionary<(Symbol Symbol, Expansion? At), string> perExpansion = [];
     private readonly Dictionary<string, Symbol?> taken = new(StringComparer.Ordinal);
 
+    // What ca65 would read as an instruction in the file being written, and what a name it
+    // would misread is written with in front. The module is null only for a file that names
+    // none, which is an error, and a wrong program writes no output.
+    private IReadOnlySet<string> instructions = new HashSet<string>();
+    private string? module;
+
     private FlatNames() { }
 
-    /// <summary>Assigns every symbol in <paramref name="model"/> its output name.</summary>
-    public static FlatNames Create(SemanticModel model, List<Diagnostic> diagnostics)
+    /// <summary>
+    /// Assigns every symbol in <paramref name="model"/> its output name, for a program built
+    /// for <paramref name="cpu"/>, whose instructions decide which names ca65 would misread.
+    /// </summary>
+    public static FlatNames Create(SemanticModel model, Cpu cpu, List<Diagnostic> diagnostics)
     {
-        var flat = new FlatNames { families = model.Families };
+        var flat = new FlatNames
+        {
+            families = model.Families,
+            instructions = Ca65Instructions.Of(cpu),
+            module = model.FileScope.Module,
+        };
         var taken = flat.taken;
 
         // What another file exports keeps the spelling it was exported under, because that is
@@ -46,7 +69,7 @@ public sealed class FlatNames
         // other way round.
         foreach (var symbol in model.Symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var name = symbol.OutputName;
+            var name = symbol.LinkerName ?? flat.Spelled(symbol.FlatName);
             if (taken.TryGetValue(name, out var other))
             {
                 // Two declarations of the same name in the same scope are one problem, which
@@ -72,7 +95,7 @@ public sealed class FlatNames
         foreach (var symbol in model.Symbols.Where(symbol =>
             !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
-            var basis = symbol.FlatName;
+            var basis = flat.Spelled(symbol.FlatName);
             var name = basis;
             for (var n = 2; taken.ContainsKey(name); n++)
                 name = $"{basis}_{n}";
@@ -105,7 +128,7 @@ public sealed class FlatNames
         if (perExpansion.TryGetValue(at, out var already))
             return already;
 
-        var basis = Basis(symbol, at.Item2);
+        var basis = Spelled(Basis(symbol, at.Item2));
         var name = basis;
         for (var n = 2; taken.ContainsKey(name); n++)
             name = $"{basis}_{n}";
@@ -145,12 +168,23 @@ public sealed class FlatNames
     /// </summary>
     public string Generated(string basis)
     {
-        var name = basis;
+        var name = basis = Spelled(basis);
         for (var n = 2; taken.ContainsKey(name); n++)
             name = $"{basis}_{n}";
         taken[name] = null;
         return name;
     }
+
+    /// <summary>
+    /// A name as the output may define it. ca65 reads a word of its own instruction table at
+    /// the start of a line as an instruction, whatever the rest of the file says that name is,
+    /// so a name it would misread is written with its module in front instead — the spelling
+    /// an export already has, and one holding a <c>__</c> that no word of ca65's holds.
+    /// </summary>
+    private string Spelled(string name) =>
+        instructions.Contains(name) && module is { } own
+            ? $"{own.Replace("::", "__", StringComparison.Ordinal)}__{name}"
+            : name;
 
     /// <summary>
     /// Whether the symbol is one a macro body or a repetition declares, and so one name per

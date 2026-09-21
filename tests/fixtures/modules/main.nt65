@@ -10,11 +10,11 @@
 .use hw::*
 .use rt::host_tick
 
-; A name another CPU calls a mnemonic is a name on this one, with a warning: a program built
-; for that CPU cannot use it, so a module shared with one would stop building.
+; A name an instruction is spelled like is a name here, and warned about wherever it is
+; written: the same word reads as an instruction to whoever reads it next.
 .segment ZEROPAGE
-.data REP: .byte                ;! warning: `REP` is a mnemonic on the 65816, and cannot name a symbol in a program built for one of those: a module shared with one will not build
-.data per: .byte                ;! warning: `per` is a mnemonic on the 65816, and cannot name a symbol in a program built for one of those: a module shared with one will not build
+.data REP: .byte                ;! warning: `REP` is an instruction on the 65816; as a name it is legal and easy to misread
+.data per: .byte                ;! warning: `per` is an instruction on the 65816; as a name it is legal and easy to misread
 
 .segment CODE
 .export .proc main {

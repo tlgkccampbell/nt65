@@ -1,12 +1,21 @@
 ; What goes wrong with a name: one that is not declared, one declared twice, a
-; reserved word, and a cheap local written or reached where it may not be.
+; register name, and a cheap local written or reached where it may not be. A mnemonic
+; is a name like any other, and only warned about.
 
 .module main
 
 SIZE = 1
 SIZE = 2                    ;! error: `SIZE` is already declared in this scope
 
-lda = 5                     ;! error: `lda` is a mnemonic of the 6502 and cannot be used as a name
+lda = 5                     ;! warning: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
+
+; The one name the output cannot spell: an `as` name is written into the output exactly,
+; and ca65 defines no symbol spelled like one of its own instructions — on any CPU, since
+; the name is what a module built for another one would link against.
+PALETTE = 3
+.export PALETTE as "lda"    ;! error: `lda` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+.export SIZE as "swa"       ;! error: `swa` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+
 .segment CODE
 .data x: .byte 0                 ;! error: `x` is a register name and cannot be used as a name
 

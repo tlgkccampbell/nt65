@@ -665,8 +665,10 @@ internal static class Lsp
 
         if (name.Length == 0 || !SyntaxFacts.IsIdentifierStart(name[0]) || !name.All(SyntaxFacts.IsIdentifierPart))
             return $"`{newName}` is not a name: names are a letter or `_` followed by letters, digits and `_`";
-        if (!symbol.IsCheapLocal && (SyntaxFacts.IsMnemonic(name) || SyntaxFacts.IsRegister(name)))
-            return $"`{newName}` is a reserved word";
+        // A mnemonic is a name like any other, warned about and not refused, so only a
+        // register is a word a rename cannot reach.
+        if (!symbol.IsCheapLocal && SyntaxFacts.IsRegister(name))
+            return $"`{newName}` is a register name";
 
         var taken = symbol.IsCheapLocal ? symbol.Scope.FindCheapLocal(name) : (alias ?? symbol.Scope).FindMember(name);
         return taken is null || taken == symbol ? null : $"`{newName}` is already declared in this scope";

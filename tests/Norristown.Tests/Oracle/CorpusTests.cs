@@ -72,6 +72,12 @@ public sealed class CorpusTests
             yield break;
         }
 
+        foreach (var output in compilation.Ca65)
+        {
+            foreach (var problem in Emit.BareNames.Problems(program.Name, output.Path, output.Text))
+                yield return problem;
+        }
+
         var failures = Repo.CollectFailures([.. compilation.Ca65], output =>
             OracleTests.AssemblesToComputedLengths(program.Name, output, output.Path, program.Other));
         foreach (var failure in failures)

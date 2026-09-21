@@ -269,7 +269,8 @@ internal sealed class ProgramReplay
             var model = analysis.Program.Files[i];
             if (model.Tree != analysis.Defines)
             {
-                var output = Emitter.Emit(model, analysis.Layouts[i], FlatNames.Create(model, emitted), emitted, Project.Out);
+                var output = Emitter.Emit(
+                    model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, emitted), emitted, Project.Out);
                 text.Append($"== {output.Path}\n{output.Text}");
             }
         }

@@ -170,16 +170,20 @@ public sealed class BindingTests
         Assert.Equal("declared here", related.Message);
     }
 
+    /// <summary>
+    /// A register is the one word a name may not be: <c>asl a</c> is a question about an
+    /// operand, which position cannot answer. A mnemonic is a name, and only warned about.
+    /// </summary>
     [Fact]
-    public void ReservedWordsCannotBeNames()
+    public void ARegisterIsTheOneWordANameMayNotBe()
     {
         var model = Analysis.Model(".module main\nlda = 5\n.data X: .byte 0\njeq = 1\n");
 
         Assert.Equal(
             [
-                "2: `lda` is a mnemonic of the 6502 and cannot be used as a name",
+                "2: `lda` is an instruction on the 6502; as a name it is legal and easy to misread",
                 "3: `X` is a register name and cannot be used as a name",
-                "4: `jeq` is a mnemonic of the 6502 and cannot be used as a name",
+                "4: `jeq` is an instruction on the 6502; as a name it is legal and easy to misread",
             ],
             model.Problems());
     }

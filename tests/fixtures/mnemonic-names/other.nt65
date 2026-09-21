@@ -1,0 +1,9 @@
+; An exported name already carries its module, so it is spelled `other__tsa` whatever ca65
+; would make of `tsa` on its own.
+.module other
+
+.segment CODE
+.export .proc tsa {
+    nop
+    rts
+}

@@ -1,0 +1,48 @@
+; No mnemonic is reserved, so a routine, a constant, a label and a data declaration may be
+; named after one. What the output does about it is ca65's business: a name ca65 would read
+; as an instruction where the output defines it is written with its module in front.
+;
+; The names here are chosen so that what is said about them is the same on every CPU this
+; fixture is built for. `swa`, `tad`, `ina` and `dea` are spellings ca65 has and nt65 does
+; not, so nothing is said about them at all and only the output moves; `per` and `xba` are
+; instructions of the 65816 alone, so the warning names that CPU whichever build this is.
+.module main
+
+.use other
+
+; A constant, which the output writes where it stands.
+swa = $12
+per = $34                       ;! warning: `per` is an instruction on the 65816; as a name it is legal and easy to misread
+
+.segment ZEROPAGE
+.data tad: .byte                ; data named for an alias ca65 has on the 65816
+.data ina: .byte                ; and for one it has on every CMOS part
+
+.segment RODATA
+.data pair: .byte swa, per      ; the constants, written where they are used
+
+.segment CODE
+
+; A routine ca65 would read as an instruction on the 65816, called from this module and
+; from another one.
+.export .proc dea {
+    lda tad
+    rts
+}
+
+.proc xba {                     ;! warning: `xba` is an instruction on the 65816; as a name it is legal and easy to misread
+@dea:
+    ldx ina
+    bne @dea
+    rts
+}
+
+.proc main {
+    jsr dea
+    jsr xba
+    jsr other::tsa
+    lda pair
+    rts
+}
+
+.export main

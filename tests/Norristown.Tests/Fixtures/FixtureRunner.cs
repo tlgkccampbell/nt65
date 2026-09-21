@@ -36,6 +36,12 @@ internal static class FixtureRunner
                 Fail($"output or diagnostics change when the files are {label}");
         }
 
+        // Nothing the output defines at the margin may be a word ca65 reads as an instruction.
+        // It is checked here, on what this fixture has already been compiled to, rather than
+        // by a pass of its own over every fixture.
+        foreach (var output in compilation.Outputs)
+            failures.AddRange(Emit.BareNames.Problems(fixture.Name, output.Path, output.Text));
+
         var expectedDiagnostics = fixture.ExpectedDiagnostics();
         var actualDiagnostics = compilation.Diagnostics
             .Select(FixtureCase.Format)
