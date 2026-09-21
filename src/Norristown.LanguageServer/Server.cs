@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -30,9 +31,10 @@ internal sealed class Server
 
     // What was last published for each URI, so that a file nobody has open is sent again only
     // when what is wrong with it changed, and the newest revision the client has sent of each
-    // open one, so that nothing is published about text that is gone.
-    private readonly Dictionary<string, string> published = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, int> newest = new(StringComparer.Ordinal);
+    // open one, so that nothing is published about text that is gone. A keystroke's own
+    // publishing and the settled program's can be under way at once, so both are concurrent.
+    private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
     private JsonRpc? rpc;
 
     // What the client can take, and the edge every answer goes out by.
@@ -239,7 +241,7 @@ internal sealed class Server
     public Task DidCloseAsync(DidCloseTextDocumentParams request, CancellationToken cancellation)
     {
         workspace.Close(request.TextDocument.Uri);
-        newest.Remove(request.TextDocument.Uri);
+        newest.TryRemove(request.TextDocument.Uri, out _);
         log.Write($"closed {request.TextDocument.Uri}");
 
         // A closed file of a program is still reported on; one that belonged to no program
@@ -551,7 +553,7 @@ internal sealed class Server
         // that replace them arrive.
         foreach (var gone in published.Keys.Where(uri => !current.Contains(uri)).ToList())
         {
-            published.Remove(gone);
+            published.TryRemove(gone, out _);
             await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
                 new PublishDiagnosticsParams(gone, null, [])).ConfigureAwait(false);
         }
