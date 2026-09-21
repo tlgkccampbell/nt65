@@ -1,0 +1,22 @@
+; What `keeps` cannot promise on the 65816, where a register's width is part of what a push
+; moves: a save and its restore cancel only when the register is the same width at both.
+.module main
+
+.cpu 65816
+
+.export saves_across
+
+; A routine whose widths nothing says, which is what a hardware entry point looks like.
+.proc twiddle = $8000: a? -> a?
+
+.segment CODE
+
+; `pha` pushes as many bytes as A is wide and `pla` pulls as many as A is wide where it
+; stands. Two widths nobody knows are not the same width: `twiddle` may widen A between them,
+; and the `pla` then takes back a byte the `pha` never pushed.
+.proc saves_across: a?, keeps a -> a? {
+    pha
+    jsr twiddle
+    pla
+    rts                     ;! error: `saves_across` promises `keeps a`, and A is not what the routine was entered with here: restore it before returning, or a `.state keeps a` where the value comes back says so
+}

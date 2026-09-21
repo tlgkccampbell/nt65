@@ -39,9 +39,16 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// What a pull of this size and width gets back: what the push on top holds when it was
     /// the same size and width, and otherwise nothing known. A pull of something else, or of
     /// more than the routine pushed, reaches bytes that are not its own.
+    /// <para>
+    /// A width nobody knows is not the same width twice: a call between the push and the pull
+    /// may have widened the register, and then the pull takes back bytes the push never put
+    /// there. Unchanged is not that case, because a routine that hands a register back as it
+    /// found it hands its width back too.
+    /// </para>
     /// </summary>
     public RegisterValue Pulled(PushSize size, Semantics.Width width) =>
         pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
+            && width != Semantics.Width.Unknown
             ? pushes[^1].Value
             : RegisterValue.Unknown;
 
