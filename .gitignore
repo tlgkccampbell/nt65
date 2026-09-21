@@ -2,6 +2,7 @@
 .vs/
 bin/
 obj/
+TestResults/
 
 # The syntax classes the source generator writes from Syntax/Syntax.xml, kept on disk to be read.
 src/Norristown.Core/Generated/

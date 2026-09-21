@@ -1,0 +1,66 @@
+# The gate, on every push to main and every pull request: scripts/gate.ps1 on Windows,
+# which is where the scripts are written to run.
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A superseded run is of no interest; the newest commit is.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # scripts/build-cc65.ps1 needs make and a MinGW gcc. The runner image carries MSYS2 but
+  # keeps it off PATH; mingw64 comes first so gcc is the native toolchain, not the msys one.
+  MSYS2_BIN: C:\msys64\mingw64\bin;C:\msys64\usr\bin
+
+jobs:
+  gate:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The extension's client is checked with `node --check`.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The pinned cc65: the tools, headers and asminc under .cache/cc65, and the source
+      # checkout under .cache/cc65-src, which the tests read. Both are what the pinned
+      # commit says they are, so the commit is the whole key. On a hit build-cc65.ps1 sees
+      # the tools reporting the pinned commit and does nothing.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/cc65
+            .cache/cc65-src
+          key: cc65-${{ runner.os }}-${{ hashFiles('scripts/cc65.commit') }}
+
+      - name: Install make and a MinGW gcc
+        run: |
+          $env:PATH = "$env:MSYS2_BIN;$env:PATH"
+          if ((Get-Command make -ErrorAction SilentlyContinue) -and
+              (Get-Command gcc -ErrorAction SilentlyContinue)) {
+            make --version
+            gcc --version
+            exit 0
+          }
+          C:\msys64\usr\bin\pacman.exe -Sy --needed --noconfirm make mingw-w64-x86_64-gcc
+
+      - name: Run the gate
+        run: |
+          $env:PATH = "$env:MSYS2_BIN;$env:PATH"
+          pwsh -NoProfile scripts/gate.ps1

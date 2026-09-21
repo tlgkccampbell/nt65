@@ -1,5 +1,7 @@
 # nt65
 
+[![gate](https://github.com/tlgkccampbell/nt65/actions/workflows/gate.yml/badge.svg)](https://github.com/tlgkccampbell/nt65/actions/workflows/gate.yml)
+
 nt65 is an assembly language for the 6502, its CMOS variants and the 65816 that transpiles to
 ca65. The **Norristown Assembler** implements it: the `nt65` command, which turns `.nt65`
 sources into ca65 sources, and a language server with a VS Code extension.

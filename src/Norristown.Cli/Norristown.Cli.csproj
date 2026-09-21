@@ -8,6 +8,7 @@
     <ToolCommandName>nt65</ToolCommandName>
     <PackageId>nt65</PackageId>
     <Description>The Norristown Assembler: transpiles nt65, an assembly language for the 6502 family and the 65816, to ca65.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Norristown.Core\Norristown.Core.csproj" />
