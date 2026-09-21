@@ -35,7 +35,7 @@ public sealed record CommandLine(
                nt65 init [<dir>] [--cpu <cpu>]
                nt65 fmt [--check] [<file.nt65>...]
                nt65 remap-dbg <file.dbg> [--out <file>]
-               nt65 explain [<diagnostic>]
+               nt65 explain [<diagnostic> | --markdown]
                nt65 lsp
                nt65 import-inc <file.inc> [-o <file.nt65>] [--module <name>]
                nt65 --help | --version
@@ -55,7 +55,8 @@ public sealed record CommandLine(
         unless `--out` gives somewhere else.
 
         `explain` says what a diagnostic is about, which its one line has no room for; the name
-        is the one in brackets after the message. Named nothing, it lists them.
+        is the one in brackets after the message. Named nothing, it lists them; given
+        `--markdown`, it writes them all as the page docs/DIAGNOSTICS.md is.
 
         `lsp` serves the language server on standard input and output, for an editor that speaks
         LSP; it takes nothing else, and what it says about itself goes to standard error.

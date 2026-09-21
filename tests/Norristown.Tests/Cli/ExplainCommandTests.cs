@@ -73,7 +73,7 @@ public sealed class ExplainCommandTests
         var (code, said, _) = Run("explain", "--help");
 
         Assert.Equal(0, code);
-        Assert.Contains("nt65 explain [<diagnostic>]", said, StringComparison.Ordinal);
+        Assert.Contains("nt65 explain [<diagnostic> | --markdown]", said, StringComparison.Ordinal);
     }
 
     private static (int Code, string Said, string Problems) Run(params string[] arguments)

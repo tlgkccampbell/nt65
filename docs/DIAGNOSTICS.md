@@ -6,8 +6,9 @@ message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and 
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
 
 `nt65 explain <name>` prints the explanation given here, and `nt65 explain` alone lists the names.
-This page is written from `src/Norristown.Core/Catalogue.cs`, which is the source of truth. In a
-message, `{0}` and its siblings stand for what the diagnostic names at the place it is reported.
+This page is what `nt65 explain --markdown` writes from `src/Norristown.Core/Catalogue.cs`, which is
+the source of truth; `scripts/test.ps1 -Update` writes it here again. In a message, `{0}` and its
+siblings stand for what the diagnostic names at the place it is reported.
 
 | area | names | not an error by default |
 |---|---|---|
@@ -1938,7 +1939,7 @@ Two nt65 names become one ca65 symbol, so the output would define it twice. The 
 
 ## The project file
 
-Nt65.json and the command line that adds to it.
+`nt65.json` and the command line that adds to it.
 
 ### `bank-invalid`
 

@@ -5,7 +5,8 @@ namespace Norristown.Cli;
 /// <summary>
 /// <c>nt65 explain &lt;name&gt;</c>: what a diagnostic is about, which its one line has no room
 /// for. Named nothing, it lists what there is to ask about; named something nt65 has no entry
-/// for, it says the name it is nearly.
+/// for, it says the name it is nearly. Given <c>--markdown</c>, it writes the whole catalogue as
+/// the page <c>docs/DIAGNOSTICS.md</c> is.
 /// </summary>
 internal static class ExplainCommand
 {
@@ -15,6 +16,11 @@ internal static class ExplainCommand
         if (arguments is [])
         {
             List(output);
+            return 0;
+        }
+        if (arguments is ["--markdown"])
+        {
+            output.Write(DiagnosticsPage.Text());
             return 0;
         }
         if (arguments is not [var name] || name.StartsWith('-'))

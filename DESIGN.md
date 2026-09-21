@@ -530,7 +530,9 @@ both left for a person rather than written out as something that will not build.
 **Explaining one.** `nt65 explain <name>` prints what the one line had no room for: what the
 diagnostic is about, and the line a project file would write to switch it. Named nothing, it
 lists every name there is; named something nt65 has no entry for, it says the name that one is
-nearly.
+nearly. Given `--markdown` instead of a name, it writes every entry as one page, grouped under
+the headings the catalogue is written in, which is what `docs/DIAGNOSTICS.md` is: the page is
+generated rather than kept by hand, so no entry can be missing from it or say two things.
 
 **Watching.** `nt65 build --watch` builds, then builds again whenever the program changes,
 and says which directory it is watching after each one. What it waits for is what the last

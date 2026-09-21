@@ -13,10 +13,12 @@ namespace Norristown;
 /// </para>
 /// </summary>
 /// <param name="Id">The kebab-case name, such as <c>unused-symbol</c>.</param>
+/// <param name="Area">The heading it is written and printed under.</param>
 /// <param name="Severity">How much it matters where the project file says nothing.</param>
 /// <param name="Format">The sentence, with a hole for each piece a site gives it.</param>
 /// <param name="Explanation">What the message has no room to say, which <c>nt65 explain</c> prints.</param>
-public sealed record DiagnosticDescriptor(string Id, Severity Severity, string Format, string Explanation)
+public sealed record DiagnosticDescriptor(
+    string Id, DiagnosticArea Area, Severity Severity, string Format, string Explanation)
 {
     /// <summary>The message this descriptor says, with <paramref name="arguments"/> in its holes.</summary>
     public DiagnosticMessage Says(params object?[] arguments) =>
