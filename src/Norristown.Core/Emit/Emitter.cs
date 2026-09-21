@@ -431,18 +431,25 @@ public sealed class Emitter
             return;
         }
 
-        // A repetition is unrolled here: its body is written once per turn, and the `.repeat`
-        // itself never reaches ca65. Nothing is reported from here, because layout walked the
-        // same turns and has already said what is wrong with the count or the list.
+        // A repetition is unrolled here: its body is written once per turn, every per-turn
+        // decision made as it is written. Nothing is reported from here, because layout walked
+        // the same turns and has already said what is wrong with the count or the list.
+        // Whether the turns came out alike enough for ca65 to say them once is then a question
+        // about the lines, and is asked of them once they are all written.
         if (Constructs.Repeats(kind))
         {
             var outerTurn = expansion;
-            foreach (var turn in Repetitions.Of(model, block, outerTurn, null))
+            var turns = Repetitions.Of(model, block, outerTurn, null);
+            var starts = new List<int>(turns.Count);
+            foreach (var turn in turns)
             {
+                starts.Add(this.lines.Count);
                 expansion = turn;
                 Walk(lines, from: 1);
             }
             expansion = outerTurn;
+            if (kind == BlockKind.Repeat)
+                Folded(block, starts);
             return;
         }
 
@@ -553,6 +560,120 @@ public sealed class Emitter
         {
             segment = outerSegment;
         }
+    }
+
+    /// <summary>
+    /// A counted repetition whose turns all came out the same, written back out as the one ca65
+    /// <c>.repeat</c> that says what the turns said. nt65 makes every per-turn decision itself —
+    /// the address size an operand is reached at, the width an immediate is written at, the form
+    /// a branch takes, the name a turn declares — so the turns are written first and compared
+    /// after, and ca65 is handed a <c>.repeat</c> only where there was nothing left for it to
+    /// decide. <paramref name="starts"/> is where each turn's lines begin.
+    /// <para>
+    /// What the whole block assembles to goes on the <c>.repeat</c> line, because that is the
+    /// line ca65 counts every turn's bytes against; the body's own lines make no bytes of their
+    /// own any more, and keep only where they came from.
+    /// </para>
+    /// </summary>
+    private void Folded(BlockSyntax block, IReadOnlyList<int> starts)
+    {
+        if (Alike(starts, out var at) is not { } body)
+            return;
+
+        // A line nt65 makes no claim about makes the whole block one, because what the turns
+        // come to is as unpredictable as the line is.
+        long bytes = 0;
+        foreach (var line in body)
+            bytes = line.Bytes < 0 || bytes < 0 ? DataLengths.Unpredictable : bytes + line.Bytes;
+        bytes = bytes <= 0 ? bytes : bytes * starts.Count;
+        var length = bytes is > 0 and <= int.MaxValue ? (int)bytes : bytes < 0 ? DataLengths.Unpredictable : 0;
+
+        var opened = body.Select(line => line.Text).FirstOrDefault(text => text.Length > 0) ?? Body;
+        var indent = opened[..(opened.Length - opened.TrimStart().Length)];
+        lines.RemoveRange(at, lines.Count - at);
+        Write(new EmittedLine($"{indent}.repeat {starts.Count}", length, Mapped(block.Opener, length, located: false)));
+        foreach (var line in body)
+            Write(line with { Text = line.Text.Length == 0 ? "" : Body + line.Text, Bytes = 0 });
+        Write(new EmittedLine($"{indent}.endrepeat"));
+    }
+
+    /// <summary>
+    /// The one body every turn came out as, or null where they did not come out alike and the
+    /// unrolled turns stand. <paramref name="at"/> is where the <c>.repeat</c> goes: the first
+    /// turn may be led by lines that belong before the repetition rather than inside it — a
+    /// blank the source asked for, the <c>.segment</c> whatever follows lands in — which the
+    /// turns after it found written already, and those stay where they are.
+    /// </summary>
+    private List<EmittedLine>? Alike(IReadOnlyList<int> starts, out int at)
+    {
+        at = lines.Count;
+
+        // Two turns read no better as a `.repeat` than as themselves, and one reads worse.
+        if (starts.Count < 3)
+            return null;
+
+        var last = starts[^1];
+        var length = lines.Count - last;
+        if (length == 0)
+            return null;
+        for (var turn = 1; turn < starts.Count; turn++)
+        {
+            var end = turn + 1 < starts.Count ? starts[turn + 1] : lines.Count;
+            if (end - starts[turn] != length || !Alike(starts[turn], last, length))
+                return null;
+        }
+
+        var opening = starts[1] - starts[0] - length;
+        if (opening < 0 || !Alike(starts[0] + opening, last, length))
+            return null;
+        for (var i = 0; i < opening; i++)
+        {
+            var text = lines[starts[0] + i].Text.TrimStart();
+            if (text.Length != 0 && !text.StartsWith(".segment ", StringComparison.Ordinal))
+                return null;
+        }
+
+        var body = lines.GetRange(last, length);
+
+        // A name inside a ca65 `.repeat` is declared once per turn, which is an error on the
+        // second: such a body is written out in full however alike the turns look.
+        if (body.Any(Declares))
+            return null;
+
+        // A row of one repeated byte is a fill however it was written, and `.res` says a fill
+        // more plainly than a `.repeat` around one `.byte` does.
+        if (Repeated(body[0]) is not null && body.TrueForAll(line => Same(line, body[0])))
+            return null;
+
+        at = starts[0] + opening;
+        return body;
+    }
+
+    /// <summary>Whether the <paramref name="length"/> lines at two places say all the same things.</summary>
+    private bool Alike(int one, int other, int length)
+    {
+        for (var i = 0; i < length; i++)
+        {
+            if (lines[one + i] != lines[other + i])
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a line gives something a name. The name a repetition's body declares is its own
+    /// on every turn, and a ca65 <c>.repeat</c> has no way to say that.
+    /// </summary>
+    private static bool Declares(EmittedLine line)
+    {
+        if (line.Label is not null)
+            return true;
+        var text = line.Text.TrimStart();
+        var name = 0;
+        while (name < text.Length && (char.IsLetterOrDigit(text[name]) || text[name] == '_'))
+            name++;
+        var rest = text[name..].TrimStart();
+        return name > 0 && (rest.StartsWith(':') || rest.StartsWith('='));
     }
 
     /// <summary>

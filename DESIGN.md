@@ -72,7 +72,8 @@ accepting ca65 source. nt65 promises a project that mixes them:
    build system reassembles only what an edit affected.
 7. **Debugging.** With `ca65 -g` and `ld65 --dbgfile`, followed by `nt65 remap-dbg` on the
    debug file, debug information refers to `.nt65` files, by their paths from the project
-   root, and lines (§13), and generated names are derived from source names. The output
+   root, and lines (§13): the line that wrote the byte, or the repetition's own line for the
+   bytes of a `.repeat` written back as one (§13). Generated names are derived from source names. The output
    itself carries no debug directives: each `foo.s` is written with a `foo.s.lines` beside
    it, which is what `remap-dbg` reads.
 8. **C.** `nt65 build --c-header` writes a C header of what the program exports, in cc65's
@@ -148,8 +149,11 @@ with a `z:`/`a:`/`f:` prefix; every width-dependent immediate on the 65816 is pr
 the width directive it needs; every expression whose meaning could depend on operator
 precedence is parenthesized; names are flat, so ca65's scoping rules never apply;
 character and string data is written as byte values, so no target character set can
-change it; macros are expanded, `.repeat` and `.each` are unrolled and `.if` is resolved
-before output.
+change it; macros are expanded, `.if` is resolved and every repetition is unrolled before
+output, each turn decided on its own. A counted `.repeat` whose turns then came out as the
+same lines is written back as ca65's own `.repeat` around those lines (§13): ca65 is still
+guessing nothing, because every choice was made before the comparison that allowed it —
+it is repeating a line nt65 settled, not working one out.
 
 The output assembles to the same bytes under any ca65 command line a project already
 uses, with the pinned ca65 (§13). The header switches off everything a command-line option
@@ -2242,9 +2246,13 @@ The rules:
   and once, naming the binding, when every instance has it.
 
 
-None of these reaches the output. nt65 resolves every `.if` and unrolls every `.repeat`
-and `.each` itself; names declared inside a `.repeat` or `.each` body are distinct per
-iteration, as macro expansion labels are, and nothing outside the body can name them. A
+None of these decides anything in the output. nt65 resolves every `.if` and unrolls every
+`.repeat` and `.each` itself, one turn at a time; names declared inside a `.repeat` or
+`.each` body are distinct per iteration, as macro expansion labels are, and nothing outside
+the body can name them. The one thing that does reach the output is the shape of a counted
+`.repeat` whose turns all came out as the same lines, which is written back as a ca65
+`.repeat` around one copy of them (§13) — a repetition of what nt65 decided, with nothing
+in it left for ca65 to work out. A
 body holds nothing that is one thing for the whole file: no `.import`, `.use`, `.module`,
 `.cpu`, segment declaration, `.macro` or `.func`. A family is the one thing it does hold that
 is not the turn's — a `.proc` or a `.data` whose name is the binding, and the `.export` before
@@ -2732,7 +2740,8 @@ readable ca65 with a header comment and source spellings preserved where possibl
 program and nothing else, with everything a debugger needs in the map.
 
 **It is laid out as ca65 is written, not as the source was.** Names stand at the margin and
-what they hold is indented once, which is the two levels hand-written ca65 has. Keeping the
+what they hold is indented once, which is the two levels hand-written ca65 has; the body of a
+folded `.repeat` takes one more, because that is a block the output does hold. Keeping the
 source's own indentation would step the output in past `.proc`, `.scope`, `.enum` and
 `.struct` blocks that are no longer in it, leaving a run of constants indented under nothing.
 A run of named data lines is lined up on its directives — `ptr:` and `frame:` become `ptr:`
@@ -2860,7 +2869,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | nt65 | ca65 |
 |---|---|
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off |
-| each generated line that produces bytes, and each `.assert` ca65 evaluates | nothing in the output; a `line` record in the map beside it, naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the map says, so those get none |
+| each generated line that produces bytes, and each `.assert` ca65 evaluates | nothing in the output; a `line` record in the map beside it, naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the map says, so those get none. A folded `.repeat` counts the whole block against its own line, which is where ca65 counts it too, and that line names the repetition in the source; the lines of the body name where they came from and make no bytes of their own |
 | `a == b`, `a != b`, `a ^^ b` | `a = b`, `a <> b`, `a .xor b`; nt65's other operators are ca65's |
 | `.segment X: zp` declaration | nothing by itself |
 | `.segment X` region, `.segment X { }` at file level | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
@@ -2881,7 +2890,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `wdm #n` | `.byte $42, n` |
 | `mvn #s, #d` | `mvn #s, #d` |
 | `.if c { } .else { }` | resolved at transpile time; only the chosen branch is emitted |
-| `.repeat n, i { }`, `.each l, v { }` | unrolled; what the turn is worth is written into each line, and the name the turn is bound to is not repeated down them as a comment |
+| `.repeat n, i { }`, `.each l, v { }` | unrolled; what the turn is worth is written into each line, and the name the turn is bound to is not repeated down them as a comment. A counted `.repeat` of three turns or more whose turns all came out as the same lines, and whose body names nothing, is then written back as `.repeat n` around one copy of them, indented a level; everything else stays unrolled |
 | `m!(...)` | expanded inline, between `; m!(...)  file:line` and `; end of m!`; its lines map to the call's line (debug information) |
 | `.enum Color { }` | a constant per member, `Color__red = 0` |
 | `.struct`, `.union` | nothing by themselves |
@@ -3724,6 +3733,18 @@ Recorded so the reasoning survives. None is open.
 - **Paths are from the project root.** ca65 records a path as written, so a path relative to
   the output file pointed outside the project in debug files and messages. The root is where a
   build runs, which is where a debugger looks.
+- **A repetition folds back into a ca65 `.repeat`, and the output decides it, not the source.**
+  Forty-three copies of one instruction is not what anyone reading the output wants to see, and
+  ca65 has the directive that says it, so where writing `.repeat` would mean exactly what nt65
+  means, the output writes it. What it may not do is guess: every turn is decided on its own —
+  the address size an operand is reached at, the width an immediate is written at, the form a
+  branch takes, the branch each `.if` in the body took, the name each turn declares — and none
+  of that can be read off the source, because two turns that look alike there are often two
+  different lines here. So the turns are written out first, as they always were, and compared
+  afterwards; they fold only where they came out the same line for line, which is the same
+  question, asked of the same lines, as the one that gathers a row of equal bytes back into a
+  `.res`. A body that names something stays unrolled whatever it looks like, because ca65 would
+  declare that name once a turn.
 - **nt65 deletes only what it wrote.** A record under `out` names each output: a removed
   module's output goes, and a hand-written file beside it never does.
 - **Unchanged output is left alone, and stale output is touched.** make then reassembles only

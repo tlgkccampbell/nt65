@@ -28,49 +28,9 @@ main__way_off:
     bne main__way_off__over
     jmp way_off__out
 main__way_off__over:
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
-    sta a:count
+    .repeat 43
+        sta a:count
+    .endrepeat
 way_off__out:
     rts
 ; end of way_off

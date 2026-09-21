@@ -1,0 +1,143 @@
+; A repetition is unrolled, and then written back out as one ca65 `.repeat` where every
+; turn came out the same. nt65 makes every per-turn decision itself, so the question is
+; asked of the lines the turns were written as and never of the source: what the turns
+; came out as is what says whether ca65 can repeat them rather than be handed them one
+; at a time.
+.module main
+
+.cpu 65816
+
+.export shift, spaced, widths_alike, widths_differ, nested, twice, per_turn_label
+.export branching, padding, over_a_list, over_an_enum
+
+.segment ZP: zp
+
+.segment ZP
+.data slot: .byte
+
+.segment BSS
+.data count: .word
+.data other: .word
+
+.enum Cmd {
+    move
+    fire
+    wait
+}
+
+.list targets {
+    slot, count, other
+}
+
+; The case this exists for: one instruction said over and over, which ca65 says with its
+; own `.repeat` exactly as nt65 means it.
+.segment CODE
+.proc shift: a16, i16 {
+    lda count
+    .repeat 5 {
+        asl a
+    }
+    sta count
+    rts
+}
+
+; A blank the source asked for is written where the repetition starts rather than inside
+; it, so the body is the turn and nothing else.
+.proc spaced: a16, i16 {
+    lda count
+
+    .repeat 4 {
+        asl a
+        clc
+    }
+    rts
+}
+
+; Both widths change on every turn, so every turn writes both directives and the turns
+; are alike: the directives go inside the `.repeat`, where ca65 runs them once a turn.
+.proc widths_alike: a16, i16 {
+    .repeat 3 {
+        lda #$1234
+        sep #$20
+        lda #$12
+        rep #$20
+    }
+    rts
+}
+
+; The width changes only on the first turn, because the turns after it find A already
+; written 16 bits wide, so the turns differ and every one of them is written out.
+.proc widths_differ: a8, i16 {
+    rep #$20
+    .repeat 3 {
+        lda #$1234
+        sta count
+    }
+    sep #$20
+    rts
+}
+
+; Folding composes: the inner repetition folds first, and the outer one then sees three
+; turns that are alike.
+.proc nested: a16, i16 {
+    .repeat 3 {
+        .repeat 4 {
+            asl a
+        }
+        clc
+    }
+    rts
+}
+
+; Two turns read no better as a `.repeat` than as themselves, so they stay as they are.
+.proc twice: a16, i16 {
+    .repeat 2 {
+        asl a
+    }
+    rts
+}
+
+; A name a body declares is the turn's own, and ca65 has no way to say that: the turns are
+; written out in full, each with the name it declared.
+.proc per_turn_label: a16, i8 {
+    .repeat 3 {
+    @spin:
+        dex
+        bne @spin
+    }
+    rts
+}
+
+; A branch out of the body reaches further on every turn, which is a distance ca65 works
+; out for itself; what nt65 decided is the form, and that came out the same every time.
+.proc branching: a16, i8 {
+    .repeat 6 {
+        dex
+        bne @out
+    }
+@out:
+    rts
+}
+
+; A row of one repeated byte is a fill, and `.res` already says a fill: the repetition
+; stays gathered rather than becoming a `.repeat` around one `.byte`.
+.segment RODATA
+.data padding: .byte[8] {
+    .repeat 8 {
+        $ff
+    }
+}
+
+; An `.each` walks a list or an enum, and what a turn is worth decides the line: these
+; are always written out a turn at a time.
+.data over_a_list: .addr[] {
+    .each targets, t {
+        t
+    }
+}
+
+.data over_an_enum: .byte[] {
+    .each Cmd, c {
+        c
+    }
+}
