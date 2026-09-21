@@ -50,12 +50,11 @@ public sealed class Emitter
     private readonly List<Diagnostic> diagnostics;
     private readonly string source;
     private readonly string output;
-    private readonly StringBuilder generated = new();
-    private readonly List<int> lineBytes = [];
-    private readonly List<int> lineSources = [];
 
-    // The named data lines, by the line they were written on, in the parts they line up by.
-    private readonly Dictionary<int, (string Label, string Text, string? Comment)> columns = [];
+    // The output, a line at a time and in its parts until the last of it is written: what a
+    // run of named data lines lines up on, and what a run of equal bytes becomes, are
+    // questions nothing can answer about a line that is already text.
+    private readonly List<EmittedLine> lines = [];
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
@@ -121,12 +120,21 @@ public sealed class Emitter
         emitter.WalkContainer(model.Tree.Root);
         emitter.Columns();
         emitter.Filled();
-        return new OutputFile(path, emitter.generated.ToString(), emitter.lineBytes)
+        return new OutputFile(path, emitter.Written(), [.. emitter.lines.Select(line => line.Bytes)])
         {
             Source = model.Tree.Path,
             SourceSize = Encoding.UTF8.GetByteCount(model.Tree.Text),
-            LineSources = emitter.lineSources,
+            LineSources = [.. emitter.lines.Select(line => line.Source)],
         };
+    }
+
+    /// <summary>The lines as the file holds them, each with its comment at the column those line up in.</summary>
+    private string Written()
+    {
+        var text = new StringBuilder();
+        foreach (var line in lines)
+            text.Append(Commented(line.Text, line.Comment).TrimEnd()).Append('\n');
+        return text.ToString();
     }
 
     /// <summary>
@@ -680,7 +688,7 @@ public sealed class Emitter
         edits.Replace[mnemonic.Position] = "jmp";
         var jump = Render(statement, edits, Body);
         Code(line, $"{Body}{skipped} {over}", Instructions.Length(AddressingMode.Relative));
-        Line(jump, Instructions.Length(AddressingMode.Absolute));
+        Write(new EmittedLine(jump, Instructions.Length(AddressingMode.Absolute)));
         Line($"{over}:");
     }
 
@@ -823,7 +831,7 @@ public sealed class Emitter
             var reserved = Reservations(laid.Length).ToList();
             WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], comment);
             foreach (var rest in reserved.Skip(1))
-                Code(line, Commented($"{Body}.res {rest}", comment), (int)rest);
+                Code(line, $"{Body}.res {rest}", (int)rest, comment);
             return;
         }
 
@@ -856,7 +864,7 @@ public sealed class Emitter
         if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
             return;
         foreach (var reserved in Reservations(zeros))
-            Code(line, Commented($"{Body}.res {reserved}, $00", $"padded to {count}"), (int)reserved);
+            Code(line, $"{Body}.res {reserved}, $00", (int)reserved, $"padded to {count}");
     }
 
     /// <summary>
@@ -890,10 +898,8 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(values, edits, nested: false);
-        var text = $"{Body}{ForCa65(directive.Directive.Text)} {Bare(values, edits, out var comment)}";
-        if (comment is not null)
-            text += new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
-        Code(line, text, laid.Length);
+        Code(line, $"{Body}{ForCa65(directive.Directive.Text)} {Bare(values, edits, out var comment)}",
+            laid.Length, comment);
     }
 
     /// <summary>
@@ -906,17 +912,16 @@ public sealed class Emitter
     {
         if (symbol is null)
         {
-            Code(line, Commented(Body + text, comment), bytes);
+            Code(line, Body + text, bytes, comment);
             return;
         }
         if (LabelText(Named(symbol)) is var label && !label.EndsWith(':'))
         {
             Code(line, label, 0);
-            Code(line, Commented(Body + text, comment), bytes);
+            Code(line, Body + text, bytes, comment);
             return;
         }
-        Code(line, Commented($"{label} {text}", comment), bytes);
-        columns[lineBytes.Count - 1] = (label, text, comment);
+        Named(line, label, text, bytes, comment);
     }
 
     /// <summary>The line with its generated comment at the column those line up in.</summary>
@@ -930,17 +935,20 @@ public sealed class Emitter
     /// </summary>
     private void Columns()
     {
-        var lines = generated.ToString().Split('\n');
         foreach (var run in Runs())
         {
-            var column = run.Max(at => columns[at].Label.Length) + 1;
+            var column = run.Max(at => lines[at].Label!.Length) + 1;
             foreach (var at in run)
             {
-                var (label, text, comment) = columns[at];
-                lines[at] = Commented(label + new string(' ', column - label.Length) + text, comment);
+                var line = lines[at];
+                var label = line.Label!;
+                lines[at] = line with
+                {
+                    Text = label + new string(' ', column - label.Length) + line.Text,
+                    Label = null,
+                };
             }
         }
-        generated.Clear().Append(string.Join('\n', lines));
     }
 
     /// <summary>
@@ -954,72 +962,60 @@ public sealed class Emitter
     /// </summary>
     private void Filled()
     {
-        var lines = generated.ToString().Split('\n');
-        var kept = new List<string>(lines.Length);
-        var bytes = new List<int>(lineBytes.Count);
-        var sources = new List<int>(lineSources.Count);
-
-        // The split leaves an empty last element for the newline every line ends with, which is
-        // no line and has no length of its own.
-        var end = lines.Length - 1;
-        for (var i = 0; i < end; i++)
+        var kept = new List<EmittedLine>(lines.Count);
+        for (var i = 0; i < lines.Count; i++)
         {
             // A run longer than one `.res` reserves is left as it is: gathering it would need
             // several directives, and a file with that many equal lines in it is a repetition
             // nobody would have written by hand either.
             var run = 1;
-            while (i + run < end && run < 0xffff && lines[i + run] == lines[i] && Repeated(lines[i]) is not null)
+            while (i + run < lines.Count && run < 0xffff && Same(lines[i + run], lines[i]) && Repeated(lines[i]) is not null)
                 run++;
-            if (run >= 3 && Repeated(lines[i]) is var (indent, value, comment))
+            if (run >= 3 && Repeated(lines[i]) is { } value)
             {
-                kept.Add(Commented($"{indent}.res {run}, {value}", comment));
-                bytes.Add(run * (i < lineBytes.Count ? lineBytes[i] : 1));
-                sources.Add(i < lineSources.Count ? lineSources[i] : 0);
+                var indent = lines[i].Text[..(lines[i].Text.Length - lines[i].Text.TrimStart().Length)];
+                kept.Add(lines[i] with { Text = $"{indent}.res {run}, {value}", Bytes = run * lines[i].Bytes });
                 i += run - 1;
                 continue;
             }
             kept.Add(lines[i]);
-            bytes.Add(i < lineBytes.Count ? lineBytes[i] : 0);
-            sources.Add(i < lineSources.Count ? lineSources[i] : 0);
         }
-        kept.Add("");
-        generated.Clear().Append(string.Join('\n', kept));
-        lineBytes.Clear();
-        lineBytes.AddRange(bytes);
-        lineSources.Clear();
-        lineSources.AddRange(sources);
+        lines.Clear();
+        lines.AddRange(kept);
     }
 
     /// <summary>
-    /// The indentation, the value and the comment of a line that is one byte and nothing else,
-    /// or null for a line that is anything more: only such a line stands for one byte of a
-    /// fill. A generated comment stands two spaces or more past the line's own text and says
-    /// what the byte is; it belongs to the fill the run becomes as much as to one line of it.
+    /// Whether two lines say the same thing. What each assembles to and where it came from
+    /// are no part of that: a row of equal bytes is a fill however many source lines wrote
+    /// it, and the fill is mapped to the first of them.
     /// </summary>
-    private static (string Indent, string Value, string? Comment)? Repeated(string line)
+    private static bool Same(EmittedLine a, EmittedLine b) =>
+        a.Text == b.Text && a.Label == b.Label && a.Comment == b.Comment;
+
+    /// <summary>
+    /// The one byte a line is, or null for a line that is anything more: only such a line
+    /// stands for one byte of a fill. The comment goes with it, because what it says about
+    /// the byte is as true of the fill the run becomes.
+    /// </summary>
+    private static string? Repeated(EmittedLine line)
     {
-        var text = line.TrimStart();
-        var indent = line[..(line.Length - text.Length)];
-        string? comment = null;
-        if (text.IndexOf("  ;", StringComparison.Ordinal) is var at and >= 0)
-        {
-            comment = text[(at + 3)..].Trim();
-            text = text[..at];
-        }
+        if (line.Label is not null)
+            return null;
+        var text = line.Text.TrimStart();
         if (!text.StartsWith(".byte ", StringComparison.Ordinal))
             return null;
         var value = text[".byte ".Length..].Trim();
-        return value.Length == 0 || value.Contains(',') || value.Contains(';')
-            ? null
-            : (indent, value, comment is { Length: > 0 } said ? said : null);
+        return value.Length == 0 || value.Contains(',') || value.Contains(';') ? null : value;
     }
 
     /// <summary>The runs of lines to line up: named data lines with nothing in between.</summary>
     private List<List<int>> Runs()
     {
         var runs = new List<List<int>>();
-        foreach (var at in columns.Keys.Order())
+        for (var at = 0; at < lines.Count; at++)
         {
+            if (lines[at].Label is null)
+                continue;
             if (runs.Count > 0 && runs[^1][^1] == at - 1)
                 runs[^1].Add(at);
             else
@@ -1055,7 +1051,7 @@ public sealed class Emitter
             var reserved = Reservations(room.Bytes).ToList();
             WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], type.QualifiedName);
             foreach (var rest in reserved.Skip(1))
-                Code(line, Commented($"{Body}.res {rest}", type.QualifiedName), (int)rest);
+                Code(line, $"{Body}.res {rest}", (int)rest, type.QualifiedName);
             return;
         }
         else
@@ -1198,7 +1194,7 @@ public sealed class Emitter
 
     /// <summary>One member's directive, with the path it fills in a comment.</summary>
     private void Field(LineSyntax line, string directive, string path, long size) =>
-        Code(line, Commented(Body + directive, path), (int)size);
+        Code(line, Body + directive, (int)size, path);
 
     /// <summary>The <c>member = value</c>s of a record, by member name: a braced record, or the lines of one.</summary>
     private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(SyntaxNode? record) =>
@@ -1367,7 +1363,7 @@ public sealed class Emitter
         Immediate(statement, bytes, edits);
         Slot(statement, edits);
         Direct(statement, edits);
-        Code(line, Render(statement, edits, Body), bytes, located);
+        Code(line, Render(statement, edits, Body), bytes, located: located);
     }
 
     /// <summary>
@@ -1504,12 +1500,28 @@ public sealed class Emitter
     /// what goes wrong with those, whatever the map says, and each would only map a line covering
     /// nothing.
     /// </summary>
-    private void Code(LineSyntax line, string text, int bytes, bool located = false)
+    private void Code(LineSyntax line, string text, int bytes, string? comment = null, bool located = false)
     {
         Segment();
         Flush();
-        Line(text, bytes, bytes != 0 || located ? (callLine ?? line).LineIndex + 1 : 0);
+        Write(new EmittedLine(text, bytes, Mapped(line, bytes, located), Comment: comment));
     }
+
+    /// <summary>
+    /// A named data line, which shares its line with the name at its margin. The two are kept
+    /// apart until every line is written, because where the directive goes is what the whole
+    /// run of them says rather than what this one does.
+    /// </summary>
+    private void Named(LineSyntax line, string label, string text, int bytes, string? comment)
+    {
+        Segment();
+        Flush();
+        Write(new EmittedLine(text, bytes, Mapped(line, bytes, located: false), label, comment));
+    }
+
+    /// <summary>The source line a generated line is mapped to, or 0 for one the map should not name.</summary>
+    private int Mapped(LineSyntax line, int bytes, bool located) =>
+        bytes != 0 || located ? (callLine ?? line).LineIndex + 1 : 0;
 
     /// <summary>
     /// Writes a definition that is in no segment: a constant, or a name for an address given
@@ -1552,21 +1564,17 @@ public sealed class Emitter
         if (!pendingBlank)
             return;
         pendingBlank = false;
-        if (generated.Length > 0)
+        if (lines.Count > 0)
             Line("");
     }
 
     /// <summary>
-    /// Appends one line of output. <paramref name="bytes"/> is what it assembles to, and
-    /// <paramref name="line"/> the source line it came from, or 0 for a line that came from
-    /// nowhere the map should name.
+    /// Appends one line of output that came from nowhere the map should name: a directive, a
+    /// name, or a blank between them.
     /// </summary>
-    private void Line(string text, int bytes = 0, int line = 0)
-    {
-        generated.Append(text.TrimEnd()).Append('\n');
-        lineBytes.Add(bytes);
-        lineSources.Add(line);
-    }
+    private void Line(string text) => Write(new EmittedLine(text));
+
+    private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd() });
 
     /// <summary>
     /// The statement's own text with the edits applied: the source's spacing between its
