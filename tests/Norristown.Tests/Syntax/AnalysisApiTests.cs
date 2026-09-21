@@ -186,6 +186,74 @@ public sealed class AnalysisApiTests
         Assert.Same(renamed, new Hexadecimal().Visit(renamed));
     }
 
+    /// <summary>
+    /// A tag on what a fix inserts, and the same tag found again in the tree that comes back,
+    /// which is the one thing that can say where the piece ended up.
+    /// </summary>
+    [Fact]
+    public void AnnotatingWhatAFixInserts()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".proc main: a8 {\n    rts\n}\n");
+        var widened = new SyntaxAnnotation("widened");
+
+        var root = new Widen(widened).Visit(tree.Root)!;
+        Assert.Equal(".proc main: a8, i8 {\n    rts\n}\n", root.ToFullString());
+
+        // Where `i8` ended up: the caret goes here, and no counting of characters would say it.
+        Assert.Equal(new TextSpan(16, 2), root.GetAnnotatedNodes(widened).Single().Span);
+
+        // The tag is no part of what the piece says, and it is found by being itself.
+        var inserted = root.GetAnnotatedNodes("widened").Single();
+        Assert.Equal("i8", inserted.GetText());
+        Assert.True(inserted.HasAnnotation(widened));
+        Assert.False(inserted.HasAnnotation(new SyntaxAnnotation("widened")));
+        Assert.Equal([widened], inserted.GetAnnotations("widened"));
+        Assert.True(inserted.HasAnnotations("widened"));
+        Assert.False(inserted.WithoutAnnotations(widened).ContainsAnnotations);
+        Assert.Empty(root.GetAnnotatedTokens(widened));
+        Assert.Equal([inserted], root.GetAnnotatedNodesAndTokens(widened).Select(piece => piece.AsNode()));
+
+        // An edit elsewhere leaves the line alone, and the tag with it; the line itself typed
+        // over is read again, and what was on it is gone.
+        var elsewhere = root.Tree.WithChange(new TextChange(root.Tree.GetPosition(1, 7), 0, "  ; done"));
+        Assert.Equal("i8", elsewhere.Root.GetAnnotatedNodes(widened).Single().GetText());
+        Assert.Empty(root.Tree
+            .WithChange(new TextChange(root.Tree.GetPosition(0, 12), 2, "a16"))
+            .Root.GetAnnotatedNodes(widened));
+
+        // A token tagged and written in is found the same way.
+        var name = root.DescendantTokens().Single(token => token.Text == "main");
+        var renamed = new SyntaxAnnotation("renamed");
+        var written = root.ReplaceToken(name, SyntaxFactory.Identifier("start")
+            .WithTriviaFrom(name)
+            .WithAdditionalAnnotations(renamed));
+        Assert.Equal("start", written.GetAnnotatedTokens(renamed).Single().Text);
+    }
+
+    /// <summary>
+    /// A fix: a routine that says only what the accumulator is has the index registers said too,
+    /// and what it writes carries a tag so that whoever ran it can find it.
+    /// </summary>
+    /// <param name="tag">The tag to put on the item the fix writes.</param>
+    private sealed class Widen(SyntaxAnnotation tag) : SyntaxRewriter
+    {
+        public override SyntaxNode? VisitStateList(StateListSyntax node)
+        {
+            if (node.Items is not [StateFlagItemSyntax { Name.Text: "a8" } a8])
+                return node;
+
+            // What stood after the last item stands after the list still, so it moves to the item
+            // that is now the last: the `{` of the routine reads as it did.
+            var written = SyntaxFactory.StateFlagItem(
+                SyntaxFactory.Identifier("i8").WithTrailingTrivia(a8.Name.TrailingTrivia));
+            return node.WithItems(SyntaxFactory.SeparatedList(
+            [
+                (StateItemSyntax)a8.ReplaceToken(a8.Name, a8.Name.WithTrailingTrivia()),
+                (StateItemSyntax)written.WithAdditionalAnnotations(tag),
+            ]));
+        }
+    }
+
     /// <summary>Every mnemonic a file writes, in source order.</summary>
     private sealed class Mnemonics : SyntaxWalker
     {

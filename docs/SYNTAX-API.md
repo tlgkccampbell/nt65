@@ -3,8 +3,7 @@
 nt65 exists to have a Roslyn-style analysis API and a fully-featured editor. This was the brief
 for taking the syntax tree the rest of the way there — fixed-shape nodes, missing tokens, a public
 surface an analyzer or an editor feature is written against, and a way to change a tree rather than
-only read one — and it is now the record of it. The work is done; annotations are the one thing
-held back, and are named where they belong.
+only read one — and it is now the record of it. The work is done, annotations included.
 
 For writing against the tree, read [the analysis API](ANALYSIS-API.md), which is the guide. This
 document says how the tree came to be the shape it is, so that the next person to change it knows
@@ -62,9 +61,11 @@ and every editor request over half-written files), `NavigationTests`, `TreeDiagn
 `Fidelity` (a line reads back as its text), `IncrementalTests` (an edit reuses the lines it did
 not touch, as the same objects) and `RewriteTests` (a rewrite of nothing gives back the same root,
 rebuilding every name writes the file back byte for byte, replacing one number moves nothing else,
-and a normalized file reads back as the tokens it was written with). All but the last run over
-every `.nt65` source in the repository and over seven ways of cutting its lines short, which is
-what a file being typed looks like; `RewriteTests` runs over the sources as they are written.
+and a normalized file reads back as the tokens it was written with) and `AnnotationTests` (a tag
+put on a node is found again on the same node, whatever else the rewrite and the edits after it
+wrote). All but the last two run over every `.nt65` source in the repository and over seven ways of
+cutting its lines short, which is what a file being typed looks like; `RewriteTests` runs over the
+sources as they are written, and `AnnotationTests` over every fourth of them.
 
 ## The target
 
@@ -101,10 +102,9 @@ new MyWalker().Visit(tree.Root) // SyntaxWalker with a VisitProcDeclaration to o
 
 An analyzer could be written against the tree above; a fix could not, which is why every
 refactoring in the language server is still a text edit. That is what this adds, from the same
-rows: `SyntaxFactory`, `Update` and one `With<Slot>` per slot, `SyntaxRewriter`, and the
-replacements on a node. [The analysis API](ANALYSIS-API.md) is how to use them; this is why they
-are the shape they are. **Annotations** are still deliberately out: they are a field on `GreenNode`
-beside the diagnostics one, and they go in when a refactoring first needs one.
+rows: `SyntaxFactory`, `Update` and one `With<Slot>` per slot, `SyntaxRewriter`, the replacements
+on a node, and `SyntaxAnnotation`. [The analysis API](ANALYSIS-API.md) is how to use them; this is
+why they are the shape they are.
 
 - **The generator writes three more things.** `Update` over every slot and a `With<Slot>` per slot
   on the red class; a `SyntaxFactory` method per kind over the typed green constructor;
@@ -113,7 +113,7 @@ beside the diagnostics one, and they go in when a refactoring first needs one.
   which holds `VisitToken`, the three `VisitList`s and the file, the block and the line.
 - **`Update` compares green nodes, so nothing changed means the same node.** Every slot given back
   the green node already in it makes `Update` return `this`, which rolls up: a rewriter with no
-  override hands back the root it was given, the same object. That is the identity a fix run over a
+  override hands back the root it was given, the same object, annotations and all. That is the identity a fix run over a
   file is asked about afterwards, and it is what makes the rest cheap.
 - **A statement and below is rebuilt; a line and above is written back as text.** A green line
   holds the tokens the lexer read and *not* the statement they parse to — the statement is the
@@ -156,6 +156,35 @@ beside the diagnostics one, and they go in when a refactoring first needs one.
   with the separator after it, and whatever stood after a list's last item is handed to the item
   now at the end, so that what is left is not written up against the rest of the line. A piece the
   table says must be there cannot go, and says so.
+- **An annotation is a tag that crosses the reparse, and that is the whole of why it exists.** A
+  fix inserts a piece and then wants to know where that piece ended up — to put the caret on it, to
+  start a rename on it, to report its span — and the tree is the only thing that can say, because
+  what the fix wrote is a span in the text and what came back is a tree parsed from the whole line.
+  So `WithAdditionalAnnotations` puts a `SyntaxAnnotation` on a node or a token, which is a
+  different node from the unannotated one and writes exactly the same text, and
+  `GetAnnotatedNodes`, `GetAnnotatedTokens` and `GetAnnotatedNodesAndTokens` find it again in the
+  tree the rewrite gives back. An annotation is found by *being itself*: two with the same kind and
+  the same data are two annotations, and a kind is for finding a class of them together.
+- **How a tag crosses the line boundary, and the one rule about where it does not.** The rewrite
+  remembers, for every annotated piece of what it writes, that piece's kind and where it stands in
+  the new text; after the file is parsed again it looks in the lines that were read again for a node
+  or a token of the same kind whose full span is the one the piece was written at, and gives it the
+  annotations. A line the rewrite did not write over but which lies between two that it did is read
+  again too, so what *it* carries is carried across the same way. The rule for everything else is
+  one line: **a piece the reparse did not make loses its annotations, and nothing is said about
+  it.** That covers a text the parser read another way, and it covers a tag on a line, on a block
+  or on the file itself, none of which is a piece the reparse makes at all.
+- **A tag lives as long as the line it is on.** A tree keeps the annotated parse of each line it
+  has one for, beside the lines themselves. `WithChanges` carries that along for every line that
+  keeps its green node, which is every line outside the edit, so an annotation survives typing
+  somewhere else in the file; a line the edit reaches is lexed and parsed again, and what was on it
+  is gone. Roslyn's annotations behave the same way, and for the same reason. A line whose
+  surrounding block kind changed is read again in the kind it is in now, and its annotations go
+  with the parse they were on.
+- **A rebuilt node is still the node that was tagged.** The generated `Update` puts the node's own
+  annotations back on what it builds, as Roslyn's does, so a tag on a node outlives a change to
+  anything under it; a token keeps its tag when it is respelled or given other trivia, which is
+  what lets `NormalizeWhitespace` — a rewrite of every token in the node — leave the tags alone.
 - **The generator says no to a table that would break it.** A second row of the same `Name` used to
   write one file twice and keep whichever came last; a `Base` that leads back into a circle used to
   be walked up forever. Both are `NT1001` against `Syntax.xml` now, with the line to look at.
@@ -208,6 +237,28 @@ Where the code does not already say it.
   and being part of the parse is what lets `IncrementalTests` still find a reused statement to be
   the same object. A token that reports something is never shared: the lexer's cache refuses one
   with an error, and the missing token of a kind is shared only while it says nothing.
+- **Annotations went the other way: a table beside the nodes, not a field on them.** The argument
+  for the diagnostics is the argument against it here, turned around. A parse annotates *nothing* —
+  the parser never writes an annotation, and only a rewrite ever does — so a
+  `ConditionalWeakTable` is never written during a parse and never read except by a node that says
+  it carries something. A field would be eight bytes on every green node of every file so that the
+  handful a fix tags could use them: measured over the 158 sources in the repository, the field
+  cost 312 KiB of the seven megabytes parsing all of them allocates, and the table costs nothing.
+  What *is* a field is the flag, because a walk has to be able to skip a subtree without looking
+  anything up — and `ContainsDiagnostics` and `ContainsAnnotations` are one `GreenFlags` word now,
+  rolled up in one pass, so a node reads each of its slots once however many things are rolled up.
+  Annotating a node is one `MemberwiseClone` and one entry in the table, which covers every kind of
+  node, generated and hand-written, without a line of generated cloning code.
+- **No refactoring in the language server uses one, and none is made to.** The obvious candidate
+  was the handshake that starts a rename on the name a change had to invent, which works out where
+  the caret lands by applying the change's edits to the text and counting line breaks. It stays as
+  it is, because every change the server offers is a `TextEdit` the *client* applies: the server
+  never holds the tree a change gives, and the one refactoring that wants the caret inserts whole
+  lines, which the tree cannot build — a green line holds the tokens the lexer read, so there is no
+  `SyntaxFactory.Line` and there is not going to be one. An annotation would have to be threaded
+  through a rewrite that does not happen. So the worked example is a test rather than a feature:
+  `AnalysisApiTests.AnnotatingWhatAFixInserts` is an analyzer-style fix that puts a node in through
+  a `SyntaxRewriter` and finds it again in the tree that comes back.
 - **A line, a block and a file answer over their lines.** A green line holds the tokens the lexer
   read, not the pieces they parse to, so no flag on it could answer for the line. The tree works
   out as it is built which lines have anything to say — their tokens, what the parser said about

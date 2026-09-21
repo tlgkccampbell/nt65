@@ -176,24 +176,6 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
-    /// A fix that inserts a piece tags it, runs, and finds it in the tree that comes back: which
-    /// is the whole use of an annotation, and what no amount of counting characters would give.
-    /// </summary>
-    [Fact]
-    public void AFixFindsThePieceItInserted()
-    {
-        var tree = SyntaxTree.Parse("main.nt65", ".proc main: a8 {\n    rts\n}\n");
-        var tag = new SyntaxAnnotation("inserted");
-
-        var root = new Widened(tag).Visit(tree.Root)!;
-        Assert.Equal(".proc main: a8, i8 {\n    rts\n}\n", root.ToFullString());
-
-        var inserted = Assert.Single(root.GetAnnotatedNodes(tag));
-        Assert.Equal("i8", inserted.GetText());
-        Assert.Equal(new TextSpan(16, 2), inserted.Span);
-    }
-
-    /// <summary>
     /// What the reparse makes no matching piece of loses its annotations, and says nothing about
     /// it. A line is the plainest case of that: a rewrite writes a line back as text, so a tag on
     /// what is written <em>on</em> the line crosses and a tag on the line itself has nothing to
@@ -347,28 +329,5 @@ public sealed class AnnotationTests
     /// <summary>A rewrite that overrides nothing, which is the one that must change nothing.</summary>
     private sealed class Untouched : SyntaxRewriter
     {
-    }
-
-    /// <summary>
-    /// A fix: a routine that says only what the accumulator is has the index registers said too,
-    /// and the item it puts there carries a tag so that whoever ran the fix can find it.
-    /// </summary>
-    /// <param name="tag">The tag to put on the item the fix writes.</param>
-    private sealed class Widened(SyntaxAnnotation tag) : SyntaxRewriter
-    {
-        public override SyntaxNode? VisitStateList(StateListSyntax node)
-        {
-            if (node.Items is not [StateFlagItemSyntax { SuffixToken: null } only] || only.Name.Text is not "a8")
-                return node;
-
-            // What stood after the last item stands after the list still, so it moves to the item
-            // that is now the last: the `{` of the routine reads as it did.
-            var after = only.Name.TrailingTrivia;
-            var head = (StateItemSyntax)only.ReplaceToken(only.Name, only.Name.WithTrailingTrivia());
-            var item = (StateItemSyntax)SyntaxFactory
-                .StateFlagItem(SyntaxFactory.Identifier("i8").WithTrailingTrivia(after))
-                .WithAdditionalAnnotations(tag);
-            return node.WithItems(SyntaxFactory.SeparatedList([head, item]));
-        }
     }
 }

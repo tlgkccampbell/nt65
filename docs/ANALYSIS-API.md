@@ -339,6 +339,52 @@ What none of this does is lay a line out. `Formatter.Format(newRoot.Tree)` is th
 nt65 file is written in — indentation, trailing space, the column a run of data lines shares — and
 running it over the tree a rewrite gives back is what puts a built line where it belongs.
 
+**A tag finds a piece again afterwards.** A fix that puts something into a file usually wants to
+know where that something ended up — to put the caret on it, to start a rename on it, to say what
+it changed. Counting characters will not answer that, because the tree that comes back is parsed
+from the line as a whole. A `SyntaxAnnotation` is the answer: put one on the piece before the
+rewrite, and find it again in the result.
+
+```csharp
+var tree = SyntaxTree.Parse("main.nt65", ".proc main: a8 {\n    rts\n}\n");
+var widened = new SyntaxAnnotation("widened");
+
+// A fix: a routine that says only what the accumulator is has the index registers said too.
+class Widen(SyntaxAnnotation tag) : SyntaxRewriter
+{
+    public override SyntaxNode? VisitStateList(StateListSyntax node) =>
+        node.Items is [StateFlagItemSyntax { Name.Text: "a8" } a8]
+            ? node.WithItems(SyntaxFactory.SeparatedList(
+                [a8, (StateItemSyntax)SyntaxFactory.StateFlagItem(SyntaxFactory.Identifier("i8"))
+                    .WithAdditionalAnnotations(tag)]))
+            : node;
+}
+
+var root = new Widen(widened).Visit(tree.Root)!;   // .proc main: a8, i8 {\n    rts\n}\n
+root.GetAnnotatedNodes(widened).Single().Span      // where `i8` ended up: the caret goes here
+```
+
+`WithAdditionalAnnotations` and `WithoutAnnotations` are on a node and on a token, as are
+`HasAnnotation`, `HasAnnotations(kind)` and `GetAnnotations(kind)`; a node also has
+`GetAnnotatedNodes`, `GetAnnotatedTokens` and `GetAnnotatedNodesAndTokens`, by the annotation
+itself or by a kind, and `ContainsAnnotations`, which answers without walking. An annotation is
+found by *being itself* — two with the same kind and the same data are two annotations — and it is
+no part of what a piece says: a tagged node writes the same text, has the same width and reports
+the same diagnostics. What it is, is a different node, and that is what makes it findable.
+
+Two rules say how long a tag lasts.
+
+**It crosses the reparse, or it is dropped and nothing is said.** A rewrite that reaches a line
+writes text and parses the file again, so the rewrite remembers every annotated piece of what it
+wrote — what kind it is and where it stands in the new text — and gives the annotations back to
+the piece of the same kind at the same place. Where the parser read that text another way there is
+no such piece, and the annotations go. A tag on a line, on a block or on the file itself is the
+same case: those are not pieces a reparse makes.
+
+**It lasts as long as the line it is on.** An edit elsewhere in the file leaves an annotated line
+alone, green node and all, so what it carries is still there; a line the edit reaches is read again
+and its annotations go with the parse they were on. Roslyn does the same.
+
 ## The model of a file
 
 `Compiler.Analyze` reads a set of files as one program and gives a `ProgramAnalysis`; the
