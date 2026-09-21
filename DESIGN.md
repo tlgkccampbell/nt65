@@ -3013,8 +3013,9 @@ another moves with an edit there. The one exception is where a macro is written,
 expansion's comment names the calls in it by file and line (§13) and a problem with a line of
 its body is reported at the call with that line named beside it. Nothing in the interface is derived from a proc body or
 depends on `*`: code sizes are layout, left to the linker (§7.6). If an edit leaves
-the interface unchanged, no other file is re-analyzed, and within the file only the
-edited proc's flow analysis reruns. The only program-wide tables are the defines, the
+the interface unchanged, no other file is re-analyzed, and the file it is in is laid out and
+followed again whole: where control goes is read off the order layout wrote the bytes in, so
+the unit is the file rather than the proc. The only program-wide tables are the defines, the
 module table, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
 signatures declared rather than inferred is what protects this: inference would make
 every caller depend on every callee's body.

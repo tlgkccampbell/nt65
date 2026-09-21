@@ -6,9 +6,15 @@ smaller: a full-fidelity immutable tree, a class per kind of node, fixed slots, 
 diagnostics on the nodes they are about, and a factory and a rewriter for changing one. If you know
 `Microsoft.CodeAnalysis`, you know this.
 
-Everything here is `Norristown.Syntax`, in `Norristown.Core`. Every sample below is a test in
-`tests/Norristown.Tests/Syntax/AnalysisApiTests.cs`, so nothing on this page can drift from what
-the API does.
+Above the tree is the semantic layer, `Norristown.Semantics`: what every name in a file refers to,
+what its expressions are worth, and how the files of a program see one another. It is Roslyn's
+design there too — a model per file, built once and then read-only, with `LookupSymbols`,
+`GetSymbolInfo` and a symbol for every declaration.
+
+Everything here is in `Norristown.Core`. Every sample on the syntax half is a test in
+`tests/Norristown.Tests/Syntax/AnalysisApiTests.cs` and every sample on the semantic half one in
+`tests/Norristown.Tests/Semantics/AnalysisApiTests.cs`, so nothing on this page can drift from
+what the API does.
 
 ## Parsing a tree
 
@@ -332,6 +338,185 @@ stood after the last item so that what is left is not written up against the res
 What none of this does is lay a line out. `Formatter.Format(newRoot.Tree)` is the one layout an
 nt65 file is written in — indentation, trailing space, the column a run of data lines shares — and
 running it over the tree a rewrite gives back is what puts a built line where it belongs.
+
+## The model of a file
+
+`Compiler.Analyze` reads a set of files as one program and gives a `ProgramAnalysis`; the
+`SemanticModel` in it for one file is what every question about that file is asked of.
+
+```csharp
+var analysis = Compiler.Analyze([new SourceFile("main.nt65", text), …], ProjectSettings.None);
+var model = analysis.ModelFor("main.nt65")!;
+
+model.Tree                 // the file, as a syntax tree
+model.Diagnostics          // what is wrong with its names and constants, ordered
+model.Symbols              // every name it declares, in source order
+model.References           // every place a name is written, declarations included
+model.FileScope            // its top level
+model.Segments             // the program's segments, which address sizes come from
+model.Configuration        // which `.if` branches this build takes
+
+// What its output brings in from elsewhere, and what of its own it uses.
+model.ExternalSymbols      // the symbols it names and another file declares
+model.Used                 // everything its code and data name, macro bodies included
+model.Brought              // what its `.use` items bring in, under the names it writes
+model.Globs                // the modules a `.use module::*` brought everything of
+model.Families             // a declaration written once and made once per enum member
+model.FamilyAt(statement)  // the family that statement stands for, or null
+
+// One file on its own sees no other, which is what a scratch buffer is analyzed as.
+var alone = SemanticModel.Create(tree, SegmentTable.Standard);
+```
+
+A model is built once and is then read-only. Nothing it answers works anything out for the first
+time — every type is laid out and every value settled while the program is evaluated — so an
+editor may hold one and ask it anything from whatever thread a request arrives on.
+
+## What a name means
+
+Two questions, and they are different ones. *What does this name, already written, refer to?* is
+answered from what binding recorded. *What could a name written here mean?* is answered by running
+the binder's own lookup at a position, which is what completion asks while a line is being typed.
+
+```csharp
+// A name already written.
+var reference = model.ReferenceAt(caret)!;    // the name the position is in, or null
+reference.Symbol                              // what it refers to
+model.SymbolAt(token)                         // the same, from a token
+model.GetSymbolInfo(name)                     // the same, from a NameExpressionSyntax
+model.ReferencesTo(reference.Symbol)          // every place this file writes it
+model.DeclaredBy(header, on)                  // what a declaration line declares
+
+// A name being typed, which is text at a position rather than a node.
+model.ScopeAt(caret)                          // the innermost scope there
+model.GetSymbolInfo(caret, ["cells"])         // SymbolInfo: a symbol, a module, or neither
+model.GetSymbolInfo(caret, ["Point", "y"])    // a path, part by part
+model.GetSymbolInfo(caret, ["hw"], fromRoot: true)   // a path from the modules' root
+model.LookupNames(caret)                      // every name writable there, and what each means
+model.LookupSymbols(caret)                    // the symbols among them
+model.LookupSymbols(caret, "EDGE")            // the candidates for one spelling, the winner first
+```
+
+`SymbolInfo` is a symbol or a module path, because a module is no declaration: `hw::vic` is the way
+to a name rather than a name. `SymbolInfo.None` is neither, and `IsNone` says so.
+
+The order `LookupNames` answers in is the order the binder tries: the scopes from the caret out to
+the file, the nearest first, then what `.use` brought in, then the defines, then what a
+`.use module::*` brings in. Where two share a name the first is what the name means — so
+`LookupSymbols(position, name)` lists the candidates with the one that binds at the front. A name a
+`.use … as` renamed answers to the name written here, and a cheap local to its `@` name. This is
+the same code the binder resolves the file with, so what an editor offers and what the line will
+mean cannot disagree.
+
+## What a declaration is
+
+```csharp
+point.Kind                  // SymbolKind.Struct
+point.KindText              // "structure"; KindPhrase is "a structure"
+point.Name                  // "Point", without the `@` of a cheap local; DisplayName has it
+point.QualifiedName         // the scopes around it, joined with `::`
+point.PathName              // the same with the module in front, as another module writes it
+point.FlatName              // the name in the output, joined with `__`
+point.OutputName            // the linker's name for it: its `as` name, or the flat one
+point.Module                // the module it is declared in
+point.Tree, point.NameSpan  // the file, and where the name is written
+point.DeclarationSpan       // the same as a diagnostic names it
+point.Size, point.Count     // how many bytes it stands for, and how many elements they are
+point.Value                 // what it is worth; for a member of a layout, its offset
+point.Body                  // the scope it opens, for a routine, a scope or a type
+```
+
+The rest of a symbol says what kind of thing it is and how it is reached: `IsExported`,
+`LinkerName`, `ExportSize`, `ExportSpan`, `IsCheapLocal`, `IsDefine`, `IsConfig`, `IsEnumMember`,
+`FollowsPrevious`, `IsCyclic`, `IsAddress`, `IsLayout`, `IsReachableByPath`, `Segment`,
+`AddressSize`, `AddressSizeIn(tree)`, `Routine`, `Scope`, `Type`, `TypeExpression`,
+`ValueExpression`, `Data`, `Definition`, `Items`, `Entries`, `PreviousMember`, `Signature`,
+`MacroSignature`, `StateDeclaration`, `Parameters`, `ParameterSymbols`, `Parameter`, `Bound`,
+`IsSiblingOf(other)`, and `Calls` and `Uses` for a macro — read-only views of what its body calls
+and names.
+
+A `Scope` is one level of naming, and lookup runs from the inside out:
+
+```csharp
+scope.Kind, scope.Name, scope.Parent, scope.Owner, scope.Module
+scope.Symbols                    // everything declared here, in source order
+scope.Lookup("Point")            // from here outward to the file
+scope.FindMember("Point")        // here only
+scope.LookupCheapLocal("loop")   // cheap locals live in a namespace of their own
+scope.FindCheapLocal("loop")
+scope.Enclosing(ScopeKind.Proc)  // the routine this is written in, or null
+scope.NearestNamed()             // the nearest scope with a name
+scope.IsReachableByPath          // whether `::` can reach what is declared here
+```
+
+## What an expression is worth
+
+```csharp
+model.ValueOf(expression)          // a Value: a number, a string, or unknown
+model.SymbolOf(expression)         // the symbol a written name stands for
+model.RoomFor(directive)           // a DataSize: the bytes a data directive takes, and elements
+model.ElementsOf(directive)        // how many its count declares, and how many its values come to
+model.ElementsOf(directive).Given
+model.AddressSizeOf(expression)    // zp, abs or far
+model.BytesOf(operand)             // the bytes it becomes, for a literal or mapped text
+model.ItemsOf(operand)             // a list's items, or null
+model.Check(expression, problems)  // evaluate and report, for an operand nobody else evaluates
+```
+
+An address is the linker's to say, so a label has no value; how many bytes a routine takes is
+layout's, and `ValueOf(expression, on, spans)` takes a `spans` function from a caller that has laid
+the file out. The model stays read-only either way: what only layout knows is handed in rather than
+kept.
+
+## Macros and repetitions
+
+A macro body is read once and written out at every call, and a `.repeat` or `.each` body once per
+turn. An `Expansion` is which writing of those lines is being asked about, and every question that
+could be answered differently on different turns takes one.
+
+```csharp
+model.MacroAt(call)                 // the macro a call names
+model.InvocationAt(call)            // what that call gives each parameter
+var on = Expansion.Of(null, call, (BlockSyntax)plot.Definition!);
+
+model.ArgumentFor(parameter, on)    // what the parameter was given at this expansion
+model.GivenAt(parameter, on)        // the same, with the level it was written at
+model.BindingsOf(on)                // every name bound here and at the levels around it
+model.BindingsOf(null)              // null: outside an expansion nothing is bound
+```
+
+## The program the files are part of
+
+```csharp
+var program = analysis.Program;
+
+program.Files                       // one model per file
+program.Segments                    // the program's segments
+program.Diagnostics                 // everything wrong with its names and constants
+program.Symbols                     // what each file may name in the others
+program.Current(symbol)             // what a symbol stands for now, after an edit elsewhere
+program.ReferencesTo(symbol)        // every place it is written, in every file
+program.ReferencesTo([a, b])        // the same for several, which one name written two ways needs
+
+program.Symbols.Modules             // every module
+program.Symbols.ModuleNamed("hw::vic")
+program.Symbols.IsModulePath("hw")  // whether a path starts a module's name
+program.Symbols.Member(module, "BORDER")
+program.Symbols.ModulesExporting("BORDER")
+program.Symbols.Defines             // what the build gives every file; Define(name) is one
+
+ProgramModel.Create(trees, SegmentTable.Build(trees, []));   // names and constants, laid out by nobody
+```
+
+`ReferencesTo` answers in file and source order, and compares what each reference stands for *now*:
+a file kept from before an edit elsewhere names what the edited file declared then, and
+`Current` is what that declaration is today. Find-references, rename and the language server's
+call hierarchy are all this one method.
+
+Analysis is incremental. `Compiler.Analyze(files, project, previous)` reads only the files that
+changed and the files a change reaches; `ProgramAnalysis.Reanalyzed` says how many were read and
+`WholeProgram` why all of them were, when all of them were. What it answers is exactly what
+analyzing from scratch answers — that is a test, replayed over hundreds of edits.
 
 ## Adding a node kind
 
