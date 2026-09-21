@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Text;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -18,6 +20,13 @@ namespace Norristown.Syntax;
 /// character of the file is the same character, and the lines the change did not touch keep the
 /// nodes they had.
 /// </para>
+/// <para>
+/// A <see cref="SyntaxAnnotation"/> crosses that reparse. Every annotated piece of what the
+/// rewrite writes is remembered with what it is and where it stands in the new text, and after
+/// the file is read again the piece of the same kind at the same place is given the annotations
+/// back. Where the reparse read the text another way and there is no such piece, the annotations
+/// are dropped, and nothing is said about it.
+/// </para>
 /// </summary>
 public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
 {
@@ -25,6 +34,10 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     // never overlapping: one per piece of a line that came back different. It is null except
     // while such a rewrite is running, which is also what tells a nested one to only collect.
     private List<TextChange>? changes;
+
+    // The annotated pieces of what those changes write, which is what puts an annotation back on
+    // the piece it was on once the file has been parsed again. Null and non-null with `changes`.
+    private List<Tagged>? tagged;
 
     /// <summary>A node no method is overridden for is left as it is, with everything under it.</summary>
     /// <param name="node">The node visited.</param>
@@ -194,6 +207,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         }
 
         changes = [];
+        tagged = [];
         try
         {
             Collect(node);
@@ -203,30 +217,86 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             // One change, from the first piece that moved to the last, so that the file is parsed
             // once however many pieces the rewrite touched and the lines outside that range keep
             // the green nodes they have.
-            return Corresponding(node, node.Tree.WithChange(Joined(node.Tree.Text, changes)));
+            var written = new int[changes.Count];
+            var joined = Joined(node.Tree.Text, changes, written);
+            Between(node.Tree, changes, written);
+            var tree = node.Tree.WithChange(joined);
+            return Corresponding(node, tagged.Count == 0 ? tree : Reattached(tree, written, tagged));
         }
         finally
         {
             changes = null;
+            tagged = null;
         }
     }
 
     /// <summary>
     /// The one change that makes all of <paramref name="changes"/>: from the start of the first
     /// to the end of the last, with the text between them as it stands where nothing moved.
+    /// <paramref name="written"/> is filled with where each change's own text lands in the file.
     /// </summary>
-    private static TextChange Joined(string text, List<TextChange> changes)
+    private static TextChange Joined(string text, List<TextChange> changes, int[] written)
     {
         var start = changes[0].Start;
         var end = changes[^1].Start + changes[^1].Length;
         var built = new StringBuilder(end - start);
         var at = start;
-        foreach (var change in changes)
+        for (var i = 0; i < changes.Count; i++)
         {
-            built.Append(text, at, change.Start - at).Append(change.NewText);
+            var change = changes[i];
+            built.Append(text, at, change.Start - at);
+            written[i] = start + built.Length;
+            built.Append(change.NewText);
             at = change.Start + change.Length;
         }
         return new TextChange(start, end - start, built.Append(text, at, end - at).ToString());
+    }
+
+    /// <summary>
+    /// <paramref name="tree"/> with the annotations of <paramref name="tagged"/> put back on the
+    /// pieces they were written on. A piece is looked for by what it is and where it stands: the
+    /// node or the token of the same kind whose full span is the one the annotated piece was
+    /// written at. A reparse that read the text another way leaves no such piece, and those
+    /// annotations are dropped.
+    /// </summary>
+    /// <param name="tree">The file as it reads after the change.</param>
+    /// <param name="written">Where each change's own text lands in that file.</param>
+    /// <param name="tagged">The annotated pieces of what the rewrite wrote.</param>
+    private static SyntaxTree Reattached(SyntaxTree tree, int[] written, List<Tagged> tagged)
+    {
+        var byLine = new Dictionary<int, List<Tagged>>();
+        foreach (var mark in tagged)
+        {
+            var at = Math.Clamp(mark.Change < 0 ? mark.At : written[mark.Change] + mark.At, 0, tree.Text.Length);
+            var line = tree.GetLineIndex(at);
+            if (line >= tree.LineCount)
+                continue;
+            if (!byLine.TryGetValue(line, out var wanted))
+                byLine[line] = wanted = [];
+            wanted.Add(mark with { At = at });
+        }
+
+        // The lines already carrying annotations keep the parse they carry them on; the lines
+        // just read again are given theirs back on the pieces the reparse made of them.
+        var kept = new Parser.Result?[tree.LineCount];
+        for (var i = 0; i < kept.Length; i++)
+        {
+            if (tree.LinesContainAnnotations(i, i))
+                kept[i] = tree.Parsed(i);
+        }
+        var any = false;
+        foreach (var (line, wanted) in byLine)
+        {
+            var statement = tree.GetLine(line).Statement;
+            if (new Reattacher(wanted).Visit(statement) is not { } found
+                || ReferenceEquals(found.Green, statement.Green))
+            {
+                continue;
+            }
+            kept[line] = tree.Parsed(line) with { Node = found.Green };
+            any = true;
+        }
+        return any ? tree.WithCarried(ImmutableCollectionsMarshal.AsImmutableArray(kept)) : tree;
     }
 
     /// <summary>The node of <paramref name="tree"/> that <paramref name="node"/> has become.</summary>
@@ -256,6 +326,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
                 continue;
             }
             var before = changes!.Count;
+            var marked = tagged!.Count;
             var rewritten = Visit(line);
             if (ReferenceEquals(rewritten, line))
                 continue;
@@ -263,6 +334,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             // The whole line is being written over, so whatever the walk down it found is part
             // of what goes: one change for the line, never one inside a span already replaced.
             changes.RemoveRange(before, changes.Count - before);
+            tagged.RemoveRange(marked, tagged.Count - marked);
             Changed(line, rewritten);
         }
     }
@@ -280,15 +352,145 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
 
     private void Changed(SyntaxToken written, SyntaxToken rewritten)
     {
-        if (!ReferenceEquals(written.Green, rewritten.Green))
-            changes!.Add(new TextChange(written.FullSpan.Start, written.FullSpan.Length, rewritten.ToFullString()));
+        if (ReferenceEquals(written.Green, rewritten.Green))
+            return;
+        Tag(rewritten.Green, changes!.Count, 0);
+        changes.Add(new TextChange(written.FullSpan.Start, written.FullSpan.Length, rewritten.ToFullString()));
     }
 
     private void Changed(SyntaxNode written, SyntaxNode? rewritten)
     {
         if (rewritten is not null && ReferenceEquals(written.Green, rewritten.Green))
             return;
+        if (rewritten is not null)
+            Tag(rewritten.Green, changes!.Count, 0);
         changes!.Add(new TextChange(
             written.FullSpan.Start, written.FullSpan.Length, rewritten?.ToFullString() ?? ""));
+    }
+
+    /// <summary>
+    /// Remembers the annotated pieces of <paramref name="tree"/> that stand between the changes.
+    /// The file is parsed again from the first change to the last, in one span, so a line the
+    /// rewrite never wrote over is still read again where it lies between two that it did; what
+    /// it carries crosses that reparse with the rest.
+    /// </summary>
+    /// <param name="tree">The file as it stands.</param>
+    /// <param name="changes">What the rewrite writes, in source order.</param>
+    /// <param name="written">Where each change's own text lands in the file it gives.</param>
+    private void Between(SyntaxTree tree, List<TextChange> changes, int[] written)
+    {
+        if (changes.Count < 2 || !tree.Root.ContainsAnnotations)
+            return;
+        for (var i = 0; i + 1 < changes.Count; i++)
+        {
+            var from = changes[i].Start + changes[i].Length;
+            var to = changes[i + 1].Start;
+            if (to <= from)
+                continue;
+
+            // How far the text of this gap has moved: everything written before it, against
+            // everything it stood after.
+            var moved = written[i] + changes[i].NewText.Length - from;
+            foreach (var piece in tree.Root.AnnotatedPieces())
+            {
+                var span = piece.FullSpan;
+                if (span.Start < from || span.End > to)
+                    continue;
+                var carried = piece.AsNode() is { } inner ? inner.Green.Annotations : piece.AsToken().Green.Annotations;
+                tagged!.Add(new Tagged(-1, span.Start + moved, span.Length, piece.Kind, piece.IsToken, carried));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Remembers every annotated piece of <paramref name="green"/>, with where it stands in the
+    /// text the change is about to write. Only the subtrees that say they hold one are walked.
+    /// </summary>
+    /// <param name="green">What the change writes.</param>
+    /// <param name="change">Which of the changes is being written.</param>
+    /// <param name="at">Where <paramref name="green"/> starts in that change's text.</param>
+    private void Tag(GreenNode green, int change, int at)
+    {
+        if (!green.ContainsAnnotations)
+            return;
+        if (green.Annotations.Length > 0)
+        {
+            tagged!.Add(new Tagged(
+                change, at, green.FullWidth, green.Kind, green is GreenToken, green.Annotations));
+        }
+        for (var i = 0; i < green.SlotCount; i++)
+        {
+            if (green.GetSlot(i) is not { } slot)
+                continue;
+            Tag(slot, change, at);
+            at += slot.FullWidth;
+        }
+    }
+
+    /// <summary>
+    /// An annotated piece of what a rewrite writes, remembered so that the piece the reparse
+    /// makes of that same text can be given the annotations back.
+    /// </summary>
+    /// <param name="Change">
+    /// Which of the rewrite's changes writes it, or −1 for a piece that stands between two of
+    /// them and is only read again, whose <paramref name="At"/> is already where it lands.
+    /// </param>
+    /// <param name="At">
+    /// Where it starts: in that change's own text while the rewrite is collecting, and in the
+    /// file once the change has been written into it.
+    /// </param>
+    /// <param name="Width">How wide it is, trivia included.</param>
+    /// <param name="Kind">What the piece is.</param>
+    /// <param name="IsToken">Whether it is a token rather than a node.</param>
+    /// <param name="Annotations">What it carries.</param>
+    private readonly record struct Tagged(
+        int Change,
+        int At,
+        int Width,
+        SyntaxKind Kind,
+        bool IsToken,
+        ImmutableArray<SyntaxAnnotation> Annotations);
+
+    /// <summary>
+    /// A rewrite that hands back the pieces it is given, annotated: a node or a token standing
+    /// where an annotated one stood, and of the same kind, is the piece that was annotated.
+    /// </summary>
+    /// <param name="wanted">The annotated pieces to look for, all on one line.</param>
+    private sealed class Reattacher(List<Tagged> wanted) : SyntaxRewriter
+    {
+        /// <inheritdoc/>
+        public override SyntaxNode? Visit(SyntaxNode? node)
+        {
+            if (node is null)
+                return null;
+
+            // The piece is looked for before the walk goes down, because that is where the node
+            // still stands in the file; what comes back is a node of its own with no place yet.
+            var found = Wanted(node.FullSpan, node.Kind, isToken: false);
+            var rewritten = base.Visit(node);
+            return found.IsEmpty || rewritten is null ? rewritten : rewritten.WithAdditionalAnnotations(found);
+        }
+
+        /// <inheritdoc/>
+        public override SyntaxToken VisitToken(SyntaxToken token)
+        {
+            var found = Wanted(token.FullSpan, token.Kind, isToken: true);
+            return found.IsEmpty ? token : token.WithAdditionalAnnotations(found);
+        }
+
+        /// <summary>The annotations wanted on the piece of <paramref name="kind"/> at <paramref name="span"/>.</summary>
+        private ImmutableArray<SyntaxAnnotation> Wanted(TextSpan span, SyntaxKind kind, bool isToken)
+        {
+            var found = ImmutableArray<SyntaxAnnotation>.Empty;
+            foreach (var mark in wanted)
+            {
+                if (mark.IsToken == isToken && mark.Kind == kind
+                    && mark.At == span.Start && mark.Width == span.Length)
+                {
+                    found = found.AddRange(mark.Annotations);
+                }
+            }
+            return found;
+        }
     }
 }

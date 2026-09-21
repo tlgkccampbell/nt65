@@ -37,6 +37,10 @@ public sealed partial class BlockSyntax : SyntaxNode
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LastLineIndex);
 
+    /// <inheritdoc/>
+    /// <remarks>A block answers over the lines it is written over, as it does for the diagnostics.</remarks>
+    public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LastLineIndex);
+
     private GreenBlock GreenBlock => (GreenBlock)Green;
 
     /// <inheritdoc/>

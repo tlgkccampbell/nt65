@@ -69,6 +69,13 @@ public abstract class SyntaxNode
     /// </summary>
     public virtual bool ContainsDiagnostics => Green.ContainsDiagnostics;
 
+    /// <summary>
+    /// Whether this node or anything under it carries a <see cref="SyntaxAnnotation"/>, answered
+    /// without walking, so that looking for an annotated piece of a file costs a walk of the
+    /// subtrees that hold one.
+    /// </summary>
+    public virtual bool ContainsAnnotations => Green.ContainsAnnotations;
+
     /// <summary>Child lines and blocks of a file or block, a line's statement, or the nodes a statement is made of.</summary>
     public ImmutableArray<SyntaxNode> ChildNodes
     {
@@ -271,6 +278,87 @@ public abstract class SyntaxNode
         return new Spacer(spaced.ToImmutable()).Visit(this) ?? this;
     }
 
+    /// <summary>
+    /// This node carrying <paramref name="annotations"/> as well as the ones it has. What comes
+    /// back is a node of this node's own class, belonging to no file until a rewrite puts it into
+    /// one, and it is a <em>different</em> node from this one: that is what lets a rewrite find it
+    /// again afterwards.
+    /// </summary>
+    /// <param name="annotations">The annotations to put on, which it does not already carry.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Green.Annotations;
+        var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
+        return wanted.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(wanted));
+    }
+
+    /// <summary>This node without <paramref name="annotations"/>, and with the rest of its own.</summary>
+    /// <param name="annotations">The annotations to take off.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Green.Annotations;
+        var kept = own.RemoveRange(annotations);
+        return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
+    }
+
+    /// <summary>This node without the annotations of <paramref name="kind"/> it carries.</summary>
+    /// <param name="kind">The kind of annotation to take off.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode WithoutAnnotations(string kind)
+    {
+        var own = Green.Annotations;
+        var kept = own.RemoveAll(annotation => annotation.Kind == kind);
+        return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
+    }
+
+    /// <summary>Whether this node itself carries <paramref name="annotation"/>.</summary>
+    /// <param name="annotation">The annotation to look for, which is found by being itself.</param>
+    public bool HasAnnotation(SyntaxAnnotation annotation) => Green.Annotations.Contains(annotation);
+
+    /// <summary>Whether this node itself carries an annotation of <paramref name="kind"/>.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public bool HasAnnotations(string kind) => GetAnnotations(kind).Any();
+
+    /// <summary>The annotations of <paramref name="kind"/> on this node itself, in the order they were put on.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
+        Green.Annotations.Where(annotation => annotation.Kind == kind);
+
+    /// <summary>
+    /// Every node at or below this one carrying <paramref name="annotation"/>, in source order.
+    /// It is how a fix finds the piece it tagged in the tree the rewrite gave back.
+    /// </summary>
+    /// <param name="annotation">The annotation to look for.</param>
+    public IEnumerable<SyntaxNode> GetAnnotatedNodes(SyntaxAnnotation annotation) =>
+        GetAnnotatedNodesAndTokens(annotation).Select(child => child.AsNode()).OfType<SyntaxNode>();
+
+    /// <summary>Every node at or below this one carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public IEnumerable<SyntaxNode> GetAnnotatedNodes(string kind) =>
+        GetAnnotatedNodesAndTokens(kind).Select(child => child.AsNode()).OfType<SyntaxNode>();
+
+    /// <summary>Every token below this node carrying <paramref name="annotation"/>, in source order.</summary>
+    /// <param name="annotation">The annotation to look for.</param>
+    public IEnumerable<SyntaxToken> GetAnnotatedTokens(SyntaxAnnotation annotation) =>
+        GetAnnotatedNodesAndTokens(annotation).Where(child => child.IsToken).Select(child => child.AsToken());
+
+    /// <summary>Every token below this node carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public IEnumerable<SyntaxToken> GetAnnotatedTokens(string kind) =>
+        GetAnnotatedNodesAndTokens(kind).Where(child => child.IsToken).Select(child => child.AsToken());
+
+    /// <summary>Everything at or below this node carrying <paramref name="annotation"/>, in source order.</summary>
+    /// <param name="annotation">The annotation to look for.</param>
+    public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(SyntaxAnnotation annotation) =>
+        Annotated(carried => carried.Contains(annotation));
+
+    /// <summary>Everything at or below this node carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(string kind) =>
+        Annotated(carried => carried.Any(annotation => annotation.Kind == kind));
+
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
@@ -420,6 +508,49 @@ public abstract class SyntaxNode
             throw new ArgumentOutOfRangeException(nameof(span), span, "the span is not inside the node");
         return ChildHolding(span) ?? this;
     }
+
+    /// <summary>
+    /// <paramref name="built"/> carrying this node's own annotations, which is what an
+    /// <c>Update</c> hands back: a node rebuilt out of new pieces is still the node that was
+    /// tagged, and the pieces bring whatever they carry themselves.
+    /// </summary>
+    /// <typeparam name="T">What the node is.</typeparam>
+    /// <param name="built">The node just rebuilt out of this one's pieces.</param>
+    /// <returns>That node, or the node it has become.</returns>
+    private protected T Annotated<T>(T built) where T : SyntaxNode =>
+        Green.Annotations.IsEmpty ? built : (T)built.WithAdditionalAnnotations(Green.Annotations);
+
+    /// <summary>
+    /// Everything at or below this node whose annotations <paramref name="wanted"/> accepts, in
+    /// source order. Only the subtrees that say they hold an annotation are walked at all.
+    /// </summary>
+    /// <param name="wanted">Whether a piece's annotations are the ones being looked for.</param>
+    private IEnumerable<SyntaxNodeOrToken> Annotated(
+        Func<ImmutableArray<SyntaxAnnotation>, bool> wanted)
+    {
+        if (!ContainsAnnotations)
+            yield break;
+        if (wanted(Green.Annotations))
+            yield return this;
+        foreach (var child in ChildNodesAndTokens())
+        {
+            if (child.AsNode() is { } inner)
+            {
+                foreach (var found in inner.Annotated(wanted))
+                    yield return found;
+            }
+            else if (child.AsToken() is { ContainsAnnotations: true } token && wanted(token.Green.Annotations))
+            {
+                yield return token;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Everything at or below this node carrying an annotation of any kind, in source order,
+    /// which is what a rewrite reads to carry them across a reparse.
+    /// </summary>
+    internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => Annotated(carried => !carried.IsEmpty);
 
     /// <summary>Where slot <paramref name="index"/> starts in the file's text, trivia included.</summary>
     internal int SlotPosition(int index)

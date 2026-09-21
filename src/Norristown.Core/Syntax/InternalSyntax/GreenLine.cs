@@ -21,7 +21,7 @@ internal sealed class GreenLine : GreenNode
 
         // A line holds its tokens and nothing else, so what it contains is the lexical errors on
         // them; what the line parses to carries its own, on the statement the parse hands back.
-        ContainsDiagnostics = AnyDiagnostics(tokens);
+        RollUp(tokens);
     }
 
     /// <summary>The line's tokens, always ending with an <see cref="SyntaxKind.EndOfLine"/> token.</summary>

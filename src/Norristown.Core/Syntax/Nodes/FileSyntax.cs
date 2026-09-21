@@ -23,6 +23,10 @@ public sealed partial class FileSyntax : SyntaxNode
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(0, Tree.LineCount - 1);
 
+    /// <inheritdoc/>
+    /// <remarks>The root answers for the whole file, as it does for the diagnostics.</remarks>
+    public override bool ContainsAnnotations => Tree.LinesContainAnnotations(0, Tree.LineCount - 1);
+
     /// <summary>
     /// The file's lines in source order, however deep in blocks they are written. The blocks are
     /// walked once, on the first ask, so that finding the line at a position costs a lookup

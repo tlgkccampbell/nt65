@@ -13,7 +13,7 @@ internal sealed class GreenBlock : GreenNode
     {
         Children = children;
         HasCloser = hasCloser;
-        ContainsDiagnostics = AnyDiagnostics(children);
+        RollUp(children);
     }
 
     /// <summary>The opener line, the block's contents, and the closing line when it has one.</summary>

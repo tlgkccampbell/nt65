@@ -72,6 +72,13 @@ public sealed partial class LineSyntax : SyntaxNode
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LineIndex);
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// As with the diagnostics: the green line holds the tokens the lexer read rather than the
+    /// pieces they parse to, so the line's answer is both of theirs and the tree works it out.
+    /// </remarks>
+    public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LineIndex);
+
+    /// <inheritdoc/>
     internal override ImmutableArray<SyntaxNodeOrToken>? RedChildren
     {
         get

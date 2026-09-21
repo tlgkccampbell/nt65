@@ -21,6 +21,17 @@ public sealed class SyntaxTree
     private readonly bool[] reported;
     private FileSyntax? root;
 
+    // The parse a line is to keep instead of the one its tokens give, for the lines an annotated
+    // rewrite reattached its annotations to; null everywhere else, and empty where there are
+    // none at all. It rides along an edit for every line that keeps its green node, which is what
+    // makes an annotation survive an edit elsewhere in the file and go with a line parsed again.
+    private readonly ImmutableArray<Parser.Result?> carried;
+
+    // Which lines hold an annotation, allocated only once something does. A green line holds the
+    // tokens the lexer read and not the statement they parse to, so, as with the diagnostics, no
+    // flag on the line itself could answer for the line.
+    private readonly bool[]? annotated;
+
     /// <summary>
     /// The tree a node built by <see cref="SyntaxFactory"/> belongs to: the node's own text and
     /// nothing else, so that its spans, its trivia and what it says are read the same way a
@@ -45,12 +56,15 @@ public sealed class SyntaxTree
         });
     }
 
-    private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
+    private SyntaxTree(
+        string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines,
+        ImmutableArray<Parser.Result?> carried)
     {
         Path = path;
         Text = text;
         LineStarts = lineStarts;
         Lines = lines;
+        this.carried = carried;
         var errors = new List<Blocks.Error>();
         green = Blocks.Build(lines, errors);
         blockErrors = [.. errors];
@@ -60,7 +74,7 @@ public sealed class SyntaxTree
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;
-        ParseLines(green, BlockKind.None, parsed, ref line);
+        ParseLines(green, BlockKind.None, parsed, carried, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
 
         // Which lines have something to say is worked out here, once, so that a node asked
@@ -68,7 +82,14 @@ public sealed class SyntaxTree
         // line does not hold what it parses to, so no flag on it could answer for the line.
         reported = new bool[lines.Length];
         for (var i = 0; i < parsed.Length; i++)
+        {
             reported[i] = Said(parsed[i], lines[i]);
+
+            // Annotations are rare — a file has none until a rewrite tags something — so the
+            // flags for them are not there at all until one does.
+            if (Marked(parsed[i], lines[i]))
+                (annotated ??= new bool[lines.Length])[i] = true;
+        }
         foreach (var error in blockErrors)
             reported[error.Line] = true;
         diagnostics = new(() => CollectRange(0, lines.Length - 1));
@@ -120,7 +141,7 @@ public sealed class SyntaxTree
         var lines = ImmutableArray.CreateBuilder<GreenLine>(starts.Length);
         for (var i = 0; i < starts.Length; i++)
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
-        return new SyntaxTree(path, text, starts, lines.MoveToImmutable());
+        return new SyntaxTree(path, text, starts, lines.MoveToImmutable(), default);
     }
 
     /// <summary>
@@ -197,8 +218,40 @@ public sealed class SyntaxTree
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
         for (var i = oldCount - suffix; i < oldCount; i++)
             lines.Add(Lines[i]);
-        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable());
+        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable(), Carried(prefix, suffix, newCount));
     }
+
+    /// <summary>
+    /// The annotated parses this tree keeps, for the lines of the tree an edit gives: a line that
+    /// keeps its green node keeps them, wherever the edit moved it, and a line lexed again does
+    /// not. It is the same rule the statements themselves follow, and it is why an annotation
+    /// survives an edit somewhere else in the file and is gone from a line typed over.
+    /// </summary>
+    /// <param name="prefix">How many lines at the start of the file the edit left alone.</param>
+    /// <param name="suffix">How many lines at the end of it the edit left alone.</param>
+    /// <param name="newCount">How many lines the edited file has.</param>
+    private ImmutableArray<Parser.Result?> Carried(int prefix, int suffix, int newCount)
+    {
+        if (carried.IsDefaultOrEmpty)
+            return default;
+        var kept = new Parser.Result?[newCount];
+        var any = false;
+        for (var i = 0; i < prefix; i++)
+            any |= (kept[i] = carried[i]) is not null;
+        for (var i = 0; i < suffix; i++)
+            any |= (kept[newCount - 1 - i] = carried[carried.Length - 1 - i]) is not null;
+        return any ? ImmutableCollectionsMarshal.AsImmutableArray(kept) : default;
+    }
+
+    /// <summary>
+    /// This tree with <paramref name="kept"/> as the parse of the lines that have one, which is
+    /// how a rewrite puts the annotations it carried across a reparse back on the tree. Nothing
+    /// else moves: the text and the lines are this tree's, and a kept parse is the line's own
+    /// with its annotations on.
+    /// </summary>
+    /// <param name="kept">One entry per line: a parse to keep, or null to read the line's own.</param>
+    internal SyntaxTree WithCarried(ImmutableArray<Parser.Result?> kept) =>
+        new(Path, Text, LineStarts, Lines, kept);
 
     /// <summary>
     /// Everything line <paramref name="line"/> parsed to, 0-based: its statement and the pieces
@@ -264,7 +317,8 @@ public sealed class SyntaxTree
     }
 
     /// <summary>Parses every line under <paramref name="node"/>, each in the block kind around it.</summary>
-    private static void ParseLines(GreenNode node, BlockKind context, Parser.Result[] parsed, ref int line)
+    private static void ParseLines(
+        GreenNode node, BlockKind context, Parser.Result[] parsed, ImmutableArray<Parser.Result?> carried, ref int line)
     {
         for (var i = 0; i < node.SlotCount; i++)
         {
@@ -275,9 +329,19 @@ public sealed class SyntaxTree
             // conditional inside an enum holds members, so their lines read the way the body's
             // own do.
             if (node.GetSlot(i) is GreenBlock block)
-                ParseLines(block, Within(context, block.BlockKind), parsed, ref line);
-            else
-                parsed[line++] = ((GreenLine)node.GetSlot(i)!).Parse(context);
+            {
+                ParseLines(block, Within(context, block.BlockKind), parsed, carried, ref line);
+                continue;
+            }
+
+            // A line an annotated rewrite reattached its annotations to keeps that parse, which
+            // is the line's own with the annotations on it. A line whose surroundings have since
+            // changed is read again in the kind of block it is in now, and the annotations go
+            // with the parse they were on.
+            var at = line++;
+            parsed[at] = !carried.IsDefaultOrEmpty && carried[at] is { } kept && kept.Context == context
+                ? kept
+                : ((GreenLine)node.GetSlot(i)!).Parse(context);
         }
     }
 
@@ -308,6 +372,16 @@ public sealed class SyntaxTree
         || parsed.Node.ContainsDiagnostics
         || parsed.ExportKeyword is { ContainsDiagnostics: true }
         || parsed.SkippedTokens is { ContainsDiagnostics: true };
+
+    /// <summary>
+    /// Whether anything on a parsed line carries an annotation, which, as with the diagnostics,
+    /// is both the line's own tokens and what they parse to.
+    /// </summary>
+    private static bool Marked(Parser.Result parsed, GreenLine line) =>
+        line.ContainsAnnotations
+        || parsed.Node.ContainsAnnotations
+        || parsed.ExportKeyword is { ContainsAnnotations: true }
+        || parsed.SkippedTokens is { ContainsAnnotations: true };
 
     /// <summary>
     /// The diagnostics <paramref name="green"/> and everything under it carry, as spans in the
@@ -341,6 +415,22 @@ public sealed class SyntaxTree
         for (var i = first; i <= last; i++)
         {
             if (reported[i])
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether any line from <paramref name="first"/> to <paramref name="last"/>, both 0-based and
+    /// inclusive, carries an annotation, which is what a line, a block and the file answer for.
+    /// </summary>
+    internal bool LinesContainAnnotations(int first, int last)
+    {
+        if (annotated is null)
+            return false;
+        for (var i = first; i <= last; i++)
+        {
+            if (annotated[i])
                 return true;
         }
         return false;

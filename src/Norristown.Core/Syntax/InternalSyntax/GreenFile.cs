@@ -10,7 +10,7 @@ internal sealed class GreenFile : GreenNode
     internal GreenFile(ImmutableArray<GreenNode> children) : base(SyntaxKind.File, SumWidths(children))
     {
         Children = children;
-        ContainsDiagnostics = AnyDiagnostics(children);
+        RollUp(children);
     }
 
     /// <summary>The file's top-level lines and blocks, in source order.</summary>

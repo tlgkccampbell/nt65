@@ -14,7 +14,7 @@ internal sealed class GreenList : GreenNode
     public GreenList(ImmutableArray<GreenNode> children) : base(SyntaxKind.List, SumWidths(children))
     {
         Children = children;
-        ContainsDiagnostics = AnyDiagnostics(children);
+        RollUp(children);
     }
 
     /// <summary>The list's items, in source order.</summary>

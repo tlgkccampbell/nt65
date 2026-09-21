@@ -182,8 +182,11 @@ public static class SyntaxWriter
             condition = string.Join("\n        && ", terms);
         text.Append("        ").Append(condition).Append('\n');
         text.Append("            ? this\n");
+
+        // A node rebuilt out of new pieces is still the node that was tagged, so the annotations
+        // it carries go on to what it becomes; the pieces bring their own.
         text.Append(Parameters(
-            $"            : SyntaxFactory.{node.BareName}(", [.. slots.Select(s => s.Slot.Field)], ");"));
+            $"            : Annotated(SyntaxFactory.{node.BareName}(", [.. slots.Select(s => s.Slot.Field)], "));"));
         return text.ToString();
     }
 
@@ -363,8 +366,8 @@ public static class SyntaxWriter
         foreach (var (_, slot, _) in slots)
             text.AppendLine($"        {slot.Name} = {slot.Field};");
 
-        // A node holds what its children hold, so a walk for diagnostics need only follow the
-        // slots that lead to one.
+        // A node holds what its children hold, so a walk for a diagnostic or an annotation need
+        // only follow the slots that lead to one.
         if (slots.Length > 0)
             text.Append(RolledUp(slots));
         text.AppendLine("    }");
@@ -420,22 +423,23 @@ public static class SyntaxWriter
     }
 
     /// <summary>
-    /// The assignment that rolls <c>ContainsDiagnostics</c> up from <paramref name="slots"/>, one
-    /// slot to a line once it will not fit on one.
+    /// The assignment that rolls <c>Flags</c> up from <paramref name="slots"/>, one slot to a
+    /// line once it will not fit on one. What a node holds below it — a diagnostic, an annotation
+    /// — is one word, so a node reads each of its slots once however many of them there are.
     /// </summary>
     private static string RolledUp(ImmutableArray<LaidOutSlot> slots)
     {
         var terms = slots.Select(s =>
             s.Slot.IsRequired && s.Slot.List == ListShape.None
-                ? $"{s.Slot.Field}.ContainsDiagnostics"
-                : $"{s.Slot.Field} is {{ ContainsDiagnostics: true }}").ToList();
-        var line = $"        ContainsDiagnostics = {string.Join(" || ", terms)};";
+                ? $"{s.Slot.Field}.Flags"
+                : $"({s.Slot.Field}?.Flags ?? GreenFlags.None)").ToList();
+        var line = $"        Flags = {string.Join(" | ", terms)};";
         if (line.Length <= 118)
             return line + "\n";
-        var text = new StringBuilder("        ContainsDiagnostics =\n");
+        var text = new StringBuilder("        Flags =\n");
         for (var i = 0; i < terms.Count; i++)
         {
-            text.Append("            ").Append(i > 0 ? "|| " : "").Append(terms[i]);
+            text.Append("            ").Append(i > 0 ? "| " : "").Append(terms[i]);
             text.Append(i < terms.Count - 1 ? "\n" : ";\n");
         }
         return text.ToString();

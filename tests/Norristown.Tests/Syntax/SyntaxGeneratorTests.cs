@@ -230,7 +230,7 @@ public sealed class SyntaxGeneratorTests
             + "        && ReferenceEquals(parts.Green, Parts.Green)\n"
             + "        && ReferenceEquals(closeBraceToken?.Green, CloseBraceToken?.Green)\n"
             + "            ? this\n"
-            + "            : SyntaxFactory.Widget(keyword, name, parts, closeBraceToken);",
+            + "            : Annotated(SyntaxFactory.Widget(keyword, name, parts, closeBraceToken));",
             red);
         Assert.Contains(
             "    public WidgetSyntax WithName(SyntaxToken name) =>\n"
@@ -240,6 +240,23 @@ public sealed class SyntaxGeneratorTests
             "    public WidgetSyntax WithCloseBraceToken(SyntaxToken? closeBraceToken) =>\n"
             + "        Update(Keyword, Name, Parts, closeBraceToken);",
             red);
+    }
+
+    /// <summary>
+    /// A green node rolls up what its slots hold as it is built — a diagnostic, an annotation —
+    /// so that a walk looking for one of those follows only the slots that lead to one. They are
+    /// one word, so each slot is read once however many things are rolled up.
+    /// </summary>
+    [Fact]
+    public void AGreenNodeRollsUpWhatItsSlotsHold()
+    {
+        Assert.Contains(
+            "        Flags =\n"
+            + "            keyword.Flags\n"
+            + "            | name.Flags\n"
+            + "            | (parts?.Flags ?? GreenFlags.None)\n"
+            + "            | (closeBraceToken?.Flags ?? GreenFlags.None);",
+            Green(Widget));
     }
 
     /// <summary>

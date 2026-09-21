@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Norristown.Syntax.InternalSyntax;
@@ -11,6 +13,13 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <param name="fullWidth">The node's width, trivia included.</param>
 internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
 {
+    // What each annotated node carries. It is a table beside the nodes rather than a field on
+    // every one of them because a parse annotates nothing: the parser never writes here, and a
+    // file none of whose nodes is tagged pays not one byte for the ones that could be. The
+    // diagnostics went the other way for the opposite reason — the parser reports on them, and a
+    // lookup on every node that holds one would be paid at every parse.
+    private static readonly ConditionalWeakTable<GreenNode, SyntaxAnnotation[]> carried = new();
+
     private ImmutableArray<GreenDiagnostic> diagnostics;
 
     /// <summary>What the node is.</summary>
@@ -19,16 +28,30 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     /// <summary>Width including trivia.</summary>
     public int FullWidth { get; } = fullWidth;
 
+    /// <summary>What this node or something under it holds, rolled up as the node is built.</summary>
+    public GreenFlags Flags { get; private protected set; }
+
     /// <summary>
     /// Whether this node or anything under it carries a diagnostic, so that collecting the
-    /// diagnostics of a file walks only the subtrees that have any. Every node rolls it up from
-    /// its children as it is built.
+    /// diagnostics of a file walks only the subtrees that have any.
     /// </summary>
-    public bool ContainsDiagnostics { get; private protected set; }
+    public bool ContainsDiagnostics => (Flags & GreenFlags.ContainsDiagnostics) != 0;
+
+    /// <summary>
+    /// Whether this node or anything under it carries an annotation, so that looking for an
+    /// annotated piece walks only the subtrees that hold one.
+    /// </summary>
+    public bool ContainsAnnotations => (Flags & GreenFlags.ContainsAnnotations) != 0;
 
     /// <summary>The diagnostics on this node itself, in the order they were reported.</summary>
     public ImmutableArray<GreenDiagnostic> Diagnostics =>
         diagnostics.IsDefault ? ImmutableArray<GreenDiagnostic>.Empty : diagnostics;
+
+    /// <summary>The annotations on this node itself, in the order they were put on.</summary>
+    public ImmutableArray<SyntaxAnnotation> Annotations =>
+        ContainsAnnotations && carried.TryGetValue(this, out var own)
+            ? ImmutableCollectionsMarshal.AsImmutableArray(own)
+            : ImmutableArray<SyntaxAnnotation>.Empty;
 
     /// <summary>How many children the node has.</summary>
     public abstract int SlotCount { get; }
@@ -64,7 +87,29 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     internal void Report(GreenDiagnostic diagnostic)
     {
         diagnostics = Diagnostics.Add(diagnostic);
-        ContainsDiagnostics = true;
+        Flags |= GreenFlags.ContainsDiagnostics;
+    }
+
+    /// <summary>
+    /// A copy of this node carrying <paramref name="wanted"/> in place of the annotations it has,
+    /// or this node itself where it has none and none is wanted. The copy holds the same children,
+    /// the same width and the same diagnostics — an annotation is no part of what a node says —
+    /// and is a different object, which is the whole of what makes it findable. It is copied
+    /// rather than rebuilt so that every kind of node, generated and hand-written, is covered by
+    /// this one method.
+    /// </summary>
+    /// <param name="wanted">The annotations the copy is to carry.</param>
+    internal GreenNode WithAnnotations(ImmutableArray<SyntaxAnnotation> wanted)
+    {
+        if (wanted.IsEmpty && Annotations.IsEmpty)
+            return this;
+        var copy = (GreenNode)MemberwiseClone();
+        copy.Flags = !wanted.IsEmpty || AnyAnnotations()
+            ? Flags | GreenFlags.ContainsAnnotations
+            : Flags & ~GreenFlags.ContainsAnnotations;
+        if (!wanted.IsEmpty)
+            carried.Add(copy, ImmutableCollectionsMarshal.AsArray(wanted)!);
+        return copy;
     }
 
     /// <summary>The red node for this one at <paramref name="position"/> under <paramref name="parent"/>.</summary>
@@ -85,12 +130,24 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
         return width;
     }
 
-    /// <summary>Whether any of <paramref name="nodes"/> holds a diagnostic, for a parent's own flag.</summary>
-    protected static bool AnyDiagnostics<T>(ImmutableArray<T> nodes) where T : GreenNode
+    /// <summary>
+    /// Rolls <see cref="Flags"/> up from <paramref name="nodes"/>, which is what a parent holding
+    /// a run of children does as it is built. The generated nodes, whose children are named slots
+    /// rather than a run, write the same one assignment out.
+    /// </summary>
+    /// <param name="nodes">The children to roll up from.</param>
+    private protected void RollUp<T>(ImmutableArray<T> nodes) where T : GreenNode
     {
         foreach (var node in nodes)
+            Flags |= node.Flags;
+    }
+
+    /// <summary>Whether any child of this node holds an annotation, or holds one below it.</summary>
+    private bool AnyAnnotations()
+    {
+        for (var i = 0; i < SlotCount; i++)
         {
-            if (node.ContainsDiagnostics)
+            if (GetSlot(i) is { ContainsAnnotations: true })
                 return true;
         }
         return false;

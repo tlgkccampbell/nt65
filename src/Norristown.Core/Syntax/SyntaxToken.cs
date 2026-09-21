@@ -47,6 +47,9 @@ public readonly record struct SyntaxToken
     /// </summary>
     public bool ContainsDiagnostics => Green.ContainsDiagnostics;
 
+    /// <summary>Whether the token carries a <see cref="SyntaxAnnotation"/>.</summary>
+    public bool ContainsAnnotations => Green.ContainsAnnotations;
+
     /// <summary>The token's range, without trivia.</summary>
     public TextSpan Span => new(Position + Green.LeadingWidth, Green.Text.Length);
 
@@ -111,6 +114,53 @@ public readonly record struct SyntaxToken
     public SyntaxToken WithTriviaFrom(SyntaxToken other) =>
         Rebuilt(Text, other.Green.LeadingTrivia, other.Green.TrailingTrivia);
 
+    /// <summary>
+    /// This token carrying <paramref name="annotations"/> as well as the ones it has. It is a
+    /// <em>different</em> token from this one, belonging to no file until a rewrite puts it into
+    /// one, which is what lets a rewrite find it again afterwards.
+    /// </summary>
+    /// <param name="annotations">The annotations to put on, which it does not already carry.</param>
+    /// <returns>This token, or the token it has become.</returns>
+    public SyntaxToken WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Green.Annotations;
+        var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
+        return wanted.Length == own.Length ? this : Carrying(wanted);
+    }
+
+    /// <summary>This token without <paramref name="annotations"/>, and with the rest of its own.</summary>
+    /// <param name="annotations">The annotations to take off.</param>
+    /// <returns>This token, or the token it has become.</returns>
+    public SyntaxToken WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Green.Annotations;
+        var kept = own.RemoveRange(annotations);
+        return kept.Length == own.Length ? this : Carrying(kept);
+    }
+
+    /// <summary>This token without the annotations of <paramref name="kind"/> it carries.</summary>
+    /// <param name="kind">The kind of annotation to take off.</param>
+    /// <returns>This token, or the token it has become.</returns>
+    public SyntaxToken WithoutAnnotations(string kind)
+    {
+        var own = Green.Annotations;
+        var kept = own.RemoveAll(annotation => annotation.Kind == kind);
+        return kept.Length == own.Length ? this : Carrying(kept);
+    }
+
+    /// <summary>Whether this token carries <paramref name="annotation"/>.</summary>
+    /// <param name="annotation">The annotation to look for, which is found by being itself.</param>
+    public bool HasAnnotation(SyntaxAnnotation annotation) => Green.Annotations.Contains(annotation);
+
+    /// <summary>Whether this token carries an annotation of <paramref name="kind"/>.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public bool HasAnnotations(string kind) => GetAnnotations(kind).Any();
+
+    /// <summary>The annotations of <paramref name="kind"/> on this token, in the order they were put on.</summary>
+    /// <param name="kind">The kind to look for.</param>
+    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
+        Green.Annotations.Where(annotation => annotation.Kind == kind);
+
     /// <summary>The syntax diagnostics on this token, in source order.</summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
     {
@@ -126,10 +176,15 @@ public readonly record struct SyntaxToken
     private static ImmutableArray<GreenTrivia> Trivia(IEnumerable<SyntaxTrivia> trivia) =>
         [.. trivia.Select(one => one.Green)];
 
+    /// <summary>This token carrying <paramref name="wanted"/> in place of the annotations it has.</summary>
+    private SyntaxToken Carrying(ImmutableArray<SyntaxAnnotation> wanted) =>
+        SyntaxFactory.Detached((GreenToken)Green.WithAnnotations(wanted));
+
     /// <summary>
     /// This token said another way. A token that reports something says it about the text it was
-    /// read as, so a rebuilt one carries nothing: it is a token the source has not been written
-    /// with yet.
+    /// read as, so a rebuilt one reports nothing: it is a token the source has not been written
+    /// with yet. Its annotations are not about its text, so they come along: the same token of the
+    /// same line, spelled another way, is still the token that was tagged.
     /// </summary>
     private SyntaxToken Rebuilt(string text, ImmutableArray<GreenTrivia> leading, ImmutableArray<GreenTrivia> trailing)
     {
@@ -138,7 +193,7 @@ public readonly record struct SyntaxToken
         var green = new GreenToken(Kind, text, leading, trailing, null);
         return green.ToFullString() == Green.ToFullString() && green.Kind == Green.Kind && !Green.ContainsDiagnostics
             ? this
-            : SyntaxFactory.Detached(green);
+            : SyntaxFactory.Detached((GreenToken)green.WithAnnotations(Green.Annotations));
     }
 
     /// <summary>Whether <paramref name="token"/> is the one written where <paramref name="sought"/> is.</summary>
