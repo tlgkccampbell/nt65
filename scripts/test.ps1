@@ -2,12 +2,14 @@
 # -Ca65 runs only the tests that assemble with the pinned ca65, the corpus programs among
 # them. -Fixture runs only fixtures and corpus programs whose name contains the text. -Update
 # rewrites expected fixture output instead of comparing it. -Benchmark builds Release and runs
-# only the timings, which print what an edit costs; no gate runs them.
+# only the timings, which print what an edit costs; no gate runs them. -Thorough also compiles
+# every fixture with its files reversed and shuffled, which the gate asks for and an edit need not.
 [CmdletBinding()]
 param(
     [switch]$Ca65,
     [string]$Fixture,
     [switch]$Update,
+    [switch]$Thorough,
     [switch]$Benchmark,
     [switch]$NoBuild
 )
@@ -48,13 +50,18 @@ $runnerArgs = @('-noLogo', '-parallelMode', 'all')
 $runnerArgs += if ($Ca65) { '-trait', 'Category=Oracle' } else { '-trait-', 'Category=Oracle', '-trait-', 'Category=Benchmark' }
 if ($Fixture -and -not $Ca65) { $runnerArgs += '-class', 'Norristown.Tests.Fixtures.FixtureTests' }
 
-$saved = $env:NT65_FIXTURE, $env:NT65_UPDATE
+# Tier 0 is instrumented so that tier 1 can be told what the program did, and a suite that is
+# over in three seconds never calls anything often enough to be paid back: the instrumented code
+# is what most of the run executes. The benchmarks above keep it, because the shipped binaries do.
+$saved = $env:NT65_FIXTURE, $env:NT65_UPDATE, $env:NT65_THOROUGH, $env:DOTNET_TieredPGO
 try {
+    $env:DOTNET_TieredPGO = '0'
     $env:NT65_FIXTURE = $Fixture
     $env:NT65_UPDATE = if ($Update) { '1' } else { '' }
+    $env:NT65_THOROUGH = if ($Thorough) { '1' } else { '' }
     & $runner @runnerArgs
     exit $LASTEXITCODE
 }
 finally {
-    $env:NT65_FIXTURE, $env:NT65_UPDATE = $saved
+    $env:NT65_FIXTURE, $env:NT65_UPDATE, $env:NT65_THOROUGH, $env:DOTNET_TieredPGO = $saved
 }

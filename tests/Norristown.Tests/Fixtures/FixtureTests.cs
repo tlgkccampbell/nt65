@@ -12,7 +12,8 @@ public sealed class FixtureTests
         var fixtures = FixtureCase.All();
         if (Repo.Selection is { } filter)
             Assert.True(fixtures.Count > 0, $"no fixture name contains \"{filter}\"");
-        var failures = Repo.CollectFailures(fixtures, f => FixtureRunner.Run(f, FixtureRunner.UpdateMode));
+        var failures = Repo.CollectFailures(
+            fixtures, f => FixtureRunner.Run(f, FixtureRunner.UpdateMode, FixtureRunner.ThoroughMode));
         Assert.True(failures.Count == 0, $"{failures.Count} fixture failure(s):\n" + string.Join("\n", failures));
     }
 }

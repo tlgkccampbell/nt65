@@ -8,8 +8,16 @@ internal static class FixtureRunner
     /// <summary>True when NT65_UPDATE is set: expected output is rewritten instead of compared.</summary>
     public static bool UpdateMode => Environment.GetEnvironmentVariable("NT65_UPDATE") is "1" or "true";
 
+    /// <summary>
+    /// True when NT65_THOROUGH is set (<c>scripts/test.ps1 -Thorough</c>, which the gate does):
+    /// every fixture is compiled with its files reversed and shuffled as well as as written. The
+    /// edit loop leaves it off, where those two runs are the cost of a compile each and prove
+    /// something about a set of files rather than about the edit just made.
+    /// </summary>
+    public static bool ThoroughMode => Environment.GetEnvironmentVariable("NT65_THOROUGH") is "1" or "true";
+
     /// <summary>Runs one fixture and returns its failures, empty when it passes.</summary>
-    public static IEnumerable<string> Run(FixtureCase fixture, bool update = false)
+    public static IEnumerable<string> Run(FixtureCase fixture, bool update = false, bool thorough = false)
     {
         // What the analysis meant is kept from the first of the runs, so that what the editor
         // would show beside each source can be checked against what the build wrote without
@@ -24,7 +32,8 @@ internal static class FixtureRunner
                 analyzed ??= analysis;
                 return Compiler.Emit(analysis, fixture.Project);
             },
-            update).ToList();
+            update,
+            thorough).ToList();
         if (analyzed is { } program)
         {
             failures.AddRange(Shown(fixture, program));
@@ -132,7 +141,8 @@ internal static class FixtureRunner
     }
 
     public static IEnumerable<string> Run(
-        FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false)
+        FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false,
+        bool thorough = false)
     {
         var failures = new List<string>();
         void Fail(string message) => failures.Add($"[{fixture.Name}] {message}");
@@ -147,10 +157,11 @@ internal static class FixtureRunner
         }
 
         // Output is deterministic: the same sources give byte-identical output, and a
-        // program is a set of files, so other orders must give identical results too.
+        // program is a set of files, so other orders must give identical results too. The
+        // orders are the thorough run's; the second run over the same files is every run's.
         if (!Same(compilation, compile(fixture.Sources)))
             Fail("output or diagnostics change between two runs over the same files");
-        foreach (var (label, order) in OtherOrders(fixture.Sources))
+        foreach (var (label, order) in OtherOrders(fixture.Sources, thorough))
         {
             if (!Same(compilation, compile(order)))
                 Fail($"output or diagnostics change when the files are {label}");
@@ -242,9 +253,10 @@ internal static class FixtureRunner
             fail($"unexpected diagnostic: {extra}");
     }
 
-    private static IEnumerable<(string, IReadOnlyCollection<SourceFile>)> OtherOrders(IReadOnlyList<SourceFile> files)
+    private static IEnumerable<(string, IReadOnlyCollection<SourceFile>)> OtherOrders(
+        IReadOnlyList<SourceFile> files, bool thorough)
     {
-        if (files.Count < 2)
+        if (!thorough || files.Count < 2)
             yield break;
         yield return ("reversed", [.. files.Reverse()]);
         // A fixed seed keeps a failure reproducible.

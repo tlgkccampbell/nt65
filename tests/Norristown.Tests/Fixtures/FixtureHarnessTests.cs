@@ -71,13 +71,15 @@ public sealed class FixtureHarnessTests : IDisposable
     }
 
     [Fact]
-    public void OrderDependenceFails()
+    public void OrderDependenceFailsTheThoroughRunAndNoOther()
     {
         var fixture = Write(("a.nt65", ""), ("b.nt65", ""));
         Compilation FirstFileWins(IReadOnlyCollection<SourceFile> files) =>
             new([new OutputFile("out.s", files.First().Path)], []);
-        Assert.Contains(FixtureRunner.Run(fixture, FirstFileWins, update: true),
+        Assert.Contains(FixtureRunner.Run(fixture, FirstFileWins, update: true, thorough: true),
             f => f.Contains("change when the files are reversed"));
+        Assert.DoesNotContain(FixtureRunner.Run(fixture, FirstFileWins, update: true),
+            f => f.Contains("change when the files are"));
     }
 
     private static Func<IReadOnlyCollection<SourceFile>, Compilation> Returns(

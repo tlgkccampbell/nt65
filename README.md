@@ -134,7 +134,9 @@ pwsh scripts/coverage.ps1           # what the fast suite reaches, by type; CI r
 ```
 
 `scripts/test.ps1 -Fixture name` runs one fixture or corpus program, `-Update` accepts changed
-fixture output, and `-Benchmark` measures what an edit costs in the language server.
+fixture output, `-Thorough` also compiles every fixture with its files reversed and shuffled —
+which the gate asks for, so that order independence is proven once per unit of work rather than
+at every edit — and `-Benchmark` measures what an edit costs in the language server.
 
 The classes of the syntax tree come from `src/Norristown.Core/Syntax/Syntax.xml`, a table with a
 block per kind of node, after Roslyn's own `Syntax.xml`. The source generator in

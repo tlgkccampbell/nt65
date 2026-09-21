@@ -21,7 +21,7 @@ function Step([string]$name, [scriptblock]$body) {
 
 Step 'cc65' { & (Join-Path $PSScriptRoot 'build-cc65.ps1') }
 Step 'build' { dotnet build (Join-Path $root 'Norristown.slnx') --nologo -v q -clp:NoSummary }
-Step 'tests' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild }
+Step 'tests' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild -Thorough }
 Step 'ca65 oracle' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild -Ca65 }
 Step 'corpus builds' { & (Join-Path $PSScriptRoot 'corpus.ps1') }
 Step 'vscode client' {

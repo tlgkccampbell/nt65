@@ -262,14 +262,19 @@ Still true for anyone changing the tree.
 - Incremental parsing must not get slower in kind: an edit still lexes the lines it touches and
   reparses only those, and lines whose block context changed. `scripts/test.ps1 -Benchmark` prints
   what an edit costs.
-- `scripts/test.ps1` is the edit loop, about three and a half seconds of which one is the build;
-  `scripts/gate.ps1` once per unit of work, about four and a half. It was ten and eleven, and what
-  it spent them on was not the work: the test project asks for the server collector, because the
-  workstation one suspended every test at once to gather what the sweeps allocate and cost over
-  five of the nine seconds; the runner is given `-parallelMode all`, because a class's tests queued
-  behind each other and the longest of them are three seeds of one theory and one replay among
-  twelve other tests; and the random-edit replay makes its edits a batch at a time and compares the
-  batch's trees beside each other, since making an edit is a twentieth of what checking it costs.
+- `scripts/test.ps1` is the edit loop, about four seconds of which one is the build and three the
+  suite; `scripts/gate.ps1` once per unit of work, about nine, the rest of which is the solution
+  built warnings-as-errors, the output assembled with ca65 and the corpus built end to end. The
+  suite was ten, and what it spent them on was not the work: the test project asks for the server
+  collector, because the workstation one suspended every test at once to gather what the sweeps
+  allocate and cost over five of the nine seconds; the runner is given `-parallelMode all`, because
+  a class's tests queued behind each other and the longest of them are three seeds of one theory
+  and one replay among twelve other tests; the random-edit replay makes its edits a batch at a time
+  and compares the batch's trees beside each other, since making an edit is a twentieth of what
+  checking it costs; and the run turns tier-0 PGO instrumentation off, because a process that is
+  over in three seconds calls nothing often enough for tier 1 to pay the instrumenting back, and
+  what it executes is mostly the instrumented code. `-Benchmark` keeps the instrumentation, as it
+  keeps the collector, because the shipped binaries have both.
 - Five sweeps run over 142 sources times eight variants — the broken-source sweep, the shape test,
   the typed-node test, navigation and the tree's diagnostics — and each parses those 1,136 trees
   for itself. That reads like waste and measures like nothing: building the variants and parsing
@@ -277,8 +282,15 @@ Still true for anyone changing the tree.
   five together are four tenths of a second of the loop. Keep them parallel
   (`Repo.CollectFailures`); a tree shared between them would also be a tree two sweeps race to
   build a red root over, which `SyntaxTree.Root` is not written for.
-- Where the next second is: the two analysis replays. Each of their steps analyzes the program
-  from scratch to compare against, which is most of what they cost and is about that step alone,
-  so they can be batched the way the parse replay now is.
+- Compiling every fixture four times — as written, again, reversed, shuffled — is two runs at
+  every edit and four under `-Thorough`, which the gate sets. It reads like the loop's biggest
+  lever and is not: sixty-four of the seventy-nine fixtures are one file, and one file has no
+  other order, so the two runs it drops are the fifteen multi-file fixtures' and a tenth of a
+  second.
+- Where the next second is: the suite is processor-bound on thirty-two cores, and two classes are
+  more than half of what it burns — the broken-source sweep and the parse replay's own class, each
+  about fifteen seconds of processor time. After them come the two analysis replays, whose every
+  step analyzes the program from scratch to compare against; that is most of what they cost and is
+  about that step alone, so they can be batched the way the parse replay now is.
 - `CLAUDE.md` holds the C# rules. Generated files are one type per file like any other.
 - `DESIGN.md` defines the language, not the API.
