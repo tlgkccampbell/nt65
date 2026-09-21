@@ -54,7 +54,8 @@ SIZE = -1
     }
 }
 
-; A repetition in a macro body counts every turn towards what an expansion may lay out.
+; A repetition in a macro body counts every turn towards what an expansion may lay out, so
+; two calls that each stay under the bound can still take the file past it together.
 .macro big(n: const) {
     .repeat n {
         .byte 0
@@ -62,5 +63,14 @@ SIZE = -1
 }
 
 .data lots {
-    big!(70000)                 ;! error: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
+    big!(20000)
+    big!(20000)                 ;! error: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
+}
+
+; One repetition that runs further than nt65 unrolls is said where its count is written,
+; whatever the file comes to in all.
+.data too_many {
+    .repeat 70000 {             ;! error: this repetition runs 70000 times, and 65536 turns is as far as nt65 goes
+        .byte 0
+    }
 }

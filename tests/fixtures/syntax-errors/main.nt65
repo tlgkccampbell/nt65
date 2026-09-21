@@ -6,6 +6,11 @@
     .byte 'ab'            ;! error: a character literal holds exactly one character
     lda #$1G            ;! error: invalid hexadecimal number `$1G`
 
+    ; A literal the lexer refused is worth nothing: what is wrong with it is said once, and
+    ; nothing downstream reads digits that are not digits.
+    lda #'\xZZ'         ;! error: `\x` must be followed by two hexadecimal digits
+    lda #'\q'           ;! error: unknown escape `\q`
+
     ; `_` separates the digits of a number; it is not one, so it stands between two.
     lda #$_ff           ;! error: `$_ff` has a `_` that separates no digits: a separator stands between two of them
     lda #%1010_         ;! error: `%1010_` has a `_` that separates no digits: a separator stands between two of them

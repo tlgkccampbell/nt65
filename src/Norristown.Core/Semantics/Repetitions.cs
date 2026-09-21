@@ -10,6 +10,14 @@ namespace Norristown.Semantics;
 public static class Repetitions
 {
     /// <summary>
+    /// How many turns a repetition is unrolled for. A body is written out once per turn, so
+    /// this is the bound that already holds for the statements a file's expansions come to,
+    /// and the same number: past it nt65 stops rather than filling memory with turns nobody
+    /// could assemble.
+    /// </summary>
+    public const int MaximumTurns = 65536;
+
+    /// <summary>
     /// The turns <paramref name="block"/> stands for, inside <paramref name="outer"/>.
     /// A count or a list nt65 cannot read is reported into
     /// <paramref name="diagnostics"/>, when a caller wants to hear about it, and stands for
@@ -33,6 +41,11 @@ public static class Repetitions
             _ => [],
         };
     }
+
+    /// <summary>What is said about a repetition of <paramref name="count"/> turns, which is too many.</summary>
+    /// <param name="count">How many turns it runs.</param>
+    public static string Beyond(long count) =>
+        $"this repetition runs {count} times, and {MaximumTurns} turns is as far as nt65 goes";
 
     /// <summary>The name a repetition binds, or null when it names none.</summary>
     public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
@@ -61,6 +74,11 @@ public static class Repetitions
         if (count < 0)
         {
             Report(model, diagnostics, counted, outer, $"a `.repeat` count cannot be negative, and this one is {count}");
+            return [];
+        }
+        if (count > MaximumTurns)
+        {
+            Report(model, diagnostics, counted, outer, Beyond(count));
             return [];
         }
 

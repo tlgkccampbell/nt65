@@ -26,8 +26,12 @@ internal sealed class Server
 
     private Server(ServerLog log) => this.log = log;
 
-    /// <summary>Serves one client until it sends <c>exit</c> or disconnects.</summary>
-    public static async Task RunAsync(Stream input, Stream output, ServerLog log)
+    /// <summary>
+    /// Serves one client until it sends <c>exit</c> or disconnects, and answers with the code
+    /// the process is to leave with: 0 where the client ended it, and 70 where nt65 itself
+    /// failed, which is what has the editor's client start a new server.
+    /// </summary>
+    public static async Task<int> RunAsync(Stream input, Stream output, ServerLog log)
     {
         var server = new Server(log);
         using var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(output, input, CreateFormatter()));
@@ -37,10 +41,21 @@ internal sealed class Server
         try
         {
             await rpc.Completion;
+            return 0;
         }
         catch (Exception e) when (e is ConnectionLostException or ObjectDisposedException)
         {
             // The client went away without `exit`; nothing to clean up yet.
+            return 0;
+        }
+        catch (Exception e)
+        {
+            // The handler of last resort: the loop itself failed, which is a bug in nt65. It
+            // goes to the log for the report and to the person for the news, and the process
+            // leaves with a failure so that the client does not talk to a server that is gone.
+            log.Write($"internal error: {e}");
+            await server.ShowAsync(MessageType.Error, $"nt65: internal error: {e.Message}");
+            return 70;
         }
     }
 
@@ -361,6 +376,24 @@ internal sealed class Server
         && given.TryGetProperty("workspace", out var workspace) && workspace.ValueKind == JsonValueKind.Object
         && workspace.TryGetProperty(what, out var kind) && kind.ValueKind == JsonValueKind.Object
         && kind.TryGetProperty("refreshSupport", out var refresh) && refresh.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// Puts a message in front of the person, where the client shows one. A client that is
+    /// already gone hears nothing, which is not worth saying twice.
+    /// </summary>
+    /// <param name="type">How bad the news is.</param>
+    /// <param name="message">What to show.</param>
+    private async Task ShowAsync(MessageType type, string message)
+    {
+        try
+        {
+            await rpc!.NotifyWithParameterObjectAsync("window/showMessage", new ShowMessageParams(type, message));
+        }
+        catch (Exception e) when (e is ConnectionLostException or ObjectDisposedException)
+        {
+            log.Write($"the client did not hear: {message}");
+        }
+    }
 
     /// <summary>
     /// Asks the client to fetch something again. It is not waited for: the client answers after

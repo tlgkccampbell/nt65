@@ -14,4 +14,20 @@ Console.CancelKeyPress += (_, stopping) =>
     interrupted.Cancel();
 };
 
-return Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, colour, interrupted.Token);
+// The handler of last resort. Anything that reaches here is a bug in nt65 rather than
+// something wrong with the program being built, and says so: what threw, which program nt65
+// was reading, and the stack to report it with. 70 is what a tool exits with when it failed at
+// its own end, which is what this is.
+try
+{
+    return Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, colour, interrupted.Token);
+}
+catch (Exception e)
+{
+    Console.Error.WriteLine($"nt65: internal error: {e.GetType().Name}: {e.Message}");
+    if (Building.Program is { } program)
+        Console.Error.WriteLine($"nt65: while building {program}");
+    Console.Error.WriteLine("nt65: this is a bug in nt65; please report it with the program and the stack below");
+    Console.Error.WriteLine(e);
+    return 70;
+}

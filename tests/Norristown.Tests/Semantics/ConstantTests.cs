@@ -92,6 +92,23 @@ public sealed class ConstantTests
         Assert.Equal(["2: division by zero", "3: division by zero"], model.Problems());
     }
 
+    /// <summary>
+    /// The one division with no answer — the least number nt65 counts in over −1, whose
+    /// quotient is one past the greatest — has no value, rather than the overflow the
+    /// processor raises on it. What that expression ought to be is the arithmetic's to settle;
+    /// what it must not be is the end of the process.
+    /// </summary>
+    [Fact]
+    public void TheDivisionWithNoAnswerHasNoValue()
+    {
+        var model = Analysis.Model(
+            ".module main\nQUOTIENT = (0 - $7fffffffffffffff - 1) / (0 - 1)\n"
+            + "REMAINDER = (0 - $7fffffffffffffff - 1) .mod (0 - 1)\n");
+
+        Assert.False(model.Symbol("QUOTIENT").Value.IsKnown);
+        Assert.False(model.Symbol("REMAINDER").Value.IsKnown);
+    }
+
     [Fact]
     public void ArithmeticOnAStringIsReported()
     {

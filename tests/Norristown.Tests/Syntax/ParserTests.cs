@@ -310,6 +310,35 @@ public sealed class ParserTests
         Assert.Equal(6, diagnostic.Span.EndColumn);
     }
 
+    /// <summary>
+    /// Nesting past what the parser reads is one line's problem, said once: a stack that runs
+    /// out takes the process with it, and no editor survives that. The line's text still reads
+    /// back whole, because what was not read is the line's skipped tokens.
+    /// </summary>
+    [Theory]
+    [InlineData(600, true)]
+    [InlineData(800, false)]
+    [InlineData(600, false, "{")]
+    public void ANestTooDeepToReadIsSaidOnceAndTheTextStandsWhole(int depth, bool closed, string open = "(")
+    {
+        var close = open == "(" ? ")" : "}";
+        var line = ".word " + string.Concat(Enumerable.Repeat(open, depth)) + "1"
+            + (closed ? string.Concat(Enumerable.Repeat(close, depth)) : "") + "\n";
+        var tree = SyntaxTree.Parse("test.nt65", line);
+        var diagnostic = Assert.Single(tree.Diagnostics);
+        Assert.Equal("this nests more than 100 expressions deep, which is as far as nt65 reads", diagnostic.Message);
+        Assert.Equal(line, tree.Root.ToFullString());
+    }
+
+    /// <summary>Nesting the parser does read is read, and says nothing.</summary>
+    [Fact]
+    public void ANestWithinReachIsReadAsWritten()
+    {
+        var line = ".word " + string.Concat(Enumerable.Repeat("(", 90)) + "1"
+            + string.Concat(Enumerable.Repeat(")", 90)) + "\n";
+        Assert.Empty(SyntaxTree.Parse("test.nt65", line).Diagnostics);
+    }
+
     /// <summary>Whitespace between tokens is trivia, so an operand written apart is still read.</summary>
     [Fact]
     public void SpaceBetweenTokensDoesNotChangeWhatALineMeans()

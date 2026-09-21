@@ -34,8 +34,8 @@ internal static class Operators
     public static long? Binary(SyntaxToken op, long a, long b) => op.Kind switch
     {
         SyntaxKind.Star => a * b,
-        SyntaxKind.Slash => b == 0 ? null : a / b,
-        SyntaxKind.Directive => b == 0 ? null : a % b,
+        SyntaxKind.Slash => HasQuotient(a, b) ? a / b : null,
+        SyntaxKind.Directive => HasQuotient(a, b) ? a % b : null,
         SyntaxKind.Plus => a + b,
         SyntaxKind.Minus => a - b,
         SyntaxKind.LessLess => Shift(a, b, left: true),
@@ -70,6 +70,14 @@ internal static class Operators
         SyntaxKind.BarBar => left != 0,
         _ => false,
     };
+
+    /// <summary>
+    /// Whether a division of <paramref name="a"/> by <paramref name="b"/> has an answer: not by
+    /// zero, and not the one pair whose quotient is no number of the type — the least number
+    /// over −1, which is one past the greatest. The remainder of that pair is as unanswerable,
+    /// and the processor refuses both alike.
+    /// </summary>
+    private static bool HasQuotient(long a, long b) => b != 0 && !(a == long.MinValue && b == -1);
 
     /// <summary>A shift by more than the width of a value says nothing, so it has no value.</summary>
     private static long? Shift(long value, long places, bool left) =>

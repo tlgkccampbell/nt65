@@ -7,5 +7,6 @@ var logPath = Environment.GetEnvironmentVariable("NT65_SERVER_LOG");
 using var log = new ServerLog(Console.Error, string.IsNullOrEmpty(logPath) ? null : logPath);
 
 log.Write($"Norristown language server starting (pid {Environment.ProcessId})");
-await Server.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(), log);
-log.Write("Norristown language server exiting");
+var exit = await Server.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(), log);
+log.Write($"Norristown language server exiting ({exit})");
+return exit;

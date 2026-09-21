@@ -159,14 +159,19 @@ public abstract class SyntaxNode
         return result;
     }
 
-    /// <summary>Every node below this one, parents before children.</summary>
+    /// <summary>
+    /// Every node below this one, parents before children. The walk keeps its own stack rather
+    /// than the machine's: a deeply nested expression is a line somebody wrote, and running out
+    /// of stack would take the process with it.
+    /// </summary>
     public IEnumerable<SyntaxNode> DescendantNodes()
     {
-        foreach (var child in ChildNodes)
+        var pending = new Stack<SyntaxNode>();
+        PushChildren(pending, this);
+        while (pending.TryPop(out var node))
         {
-            yield return child;
-            foreach (var descendant in child.DescendantNodes())
-                yield return descendant;
+            yield return node;
+            PushChildren(pending, node);
         }
     }
 
@@ -196,15 +201,8 @@ public abstract class SyntaxNode
     /// </summary>
     public IEnumerable<SyntaxNodeOrToken> DescendantNodesAndTokens()
     {
-        foreach (var child in ChildNodesAndTokens())
-        {
+        foreach (var child in Below(this))
             yield return child;
-            if (child.AsNode() is { } node)
-            {
-                foreach (var descendant in node.DescendantNodesAndTokens())
-                    yield return descendant;
-            }
-        }
     }
 
     /// <summary>
@@ -213,17 +211,10 @@ public abstract class SyntaxNode
     /// </summary>
     public IEnumerable<SyntaxToken> DescendantTokens()
     {
-        foreach (var child in ChildNodesAndTokens())
+        foreach (var child in Below(this))
         {
-            if (child.AsNode() is { } node)
-            {
-                foreach (var token in node.DescendantTokens())
-                    yield return token;
-            }
-            else
-            {
+            if (child.AsNode() is null)
                 yield return child.AsToken();
-            }
         }
     }
 
@@ -430,6 +421,54 @@ public abstract class SyntaxNode
 
     /// <summary>The tokens of the list in slot <paramref name="index"/>.</summary>
     private protected SyntaxTokenList SlotTokenList(int index) => new(SlotRed(index));
+
+    /// <summary>
+    /// Everything below <paramref name="node"/>, nodes and tokens together, a parent before its
+    /// children and siblings in source order. The children being walked at each level are held
+    /// here rather than in a stack frame, so how deeply a file nests is not how much stack
+    /// reading it takes.
+    /// </summary>
+    /// <param name="node">The node to walk below.</param>
+    private static IEnumerable<SyntaxNodeOrToken> Below(SyntaxNode node)
+    {
+        var pending = new Stack<IEnumerator<SyntaxNodeOrToken>>();
+        pending.Push(node.ChildNodesAndTokens().GetEnumerator());
+        try
+        {
+            while (pending.Count > 0)
+            {
+                var children = pending.Peek();
+                if (!children.MoveNext())
+                {
+                    pending.Pop().Dispose();
+                    continue;
+                }
+                var child = children.Current;
+                yield return child;
+                if (child.AsNode() is { } inner)
+                    pending.Push(inner.ChildNodesAndTokens().GetEnumerator());
+            }
+        }
+        finally
+        {
+            // A caller that stops early leaves the levels it did not finish.
+            foreach (var children in pending)
+                children.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Puts <paramref name="node"/>'s children on <paramref name="pending"/>, last first, so
+    /// that they come off it in source order.
+    /// </summary>
+    /// <param name="pending">The walk's stack.</param>
+    /// <param name="node">The node whose children to push.</param>
+    private static void PushChildren(Stack<SyntaxNode> pending, SyntaxNode node)
+    {
+        var children = node.ChildNodes;
+        for (var i = children.Length - 1; i >= 0; i--)
+            pending.Push(children[i]);
+    }
 
     /// <summary>The first token's text start and the last non-line-break token's text end.</summary>
     private static void Measure(GreenNode node, int position, ref int start, ref int end)

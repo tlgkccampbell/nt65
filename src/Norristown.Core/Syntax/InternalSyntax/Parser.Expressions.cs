@@ -6,7 +6,18 @@ namespace Norristown.Syntax.InternalSyntax;
 // places the language wants parentheses.
 internal sealed partial class Parser
 {
-    private ExpressionSyntax ParseExpression() => ParseBinary(LowestPrecedence);
+    /// <summary>
+    /// An expression, at the loosest binding level. Every expression inside another is read
+    /// through here or through <see cref="ParseUnary"/>, so this is where the nesting is
+    /// counted and where a nest too deep to read stops.
+    /// </summary>
+    private ExpressionSyntax ParseExpression()
+    {
+        nesting++;
+        var expression = TooDeeplyNested() ?? ParseBinary(LowestPrecedence);
+        nesting--;
+        return expression;
+    }
 
     private ExpressionSyntax ParseBinary(int level)
     {
@@ -33,7 +44,10 @@ internal sealed partial class Parser
         if (!SyntaxFacts.IsUnaryOperator(Kind))
             return ParsePrimary();
         var op = Advance();
-        return new UnaryExpressionSyntax(op, ParseUnary());
+        nesting++;
+        var operand = TooDeeplyNested() ?? ParseUnary();
+        nesting--;
+        return new UnaryExpressionSyntax(op, operand);
     }
 
     private ExpressionSyntax ParsePrimary()

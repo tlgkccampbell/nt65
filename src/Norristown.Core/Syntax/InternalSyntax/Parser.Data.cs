@@ -133,6 +133,15 @@ internal sealed partial class Parser
     /// </summary>
     private GreenNode ParseBracedValue()
     {
+        nesting++;
+        var value = TooDeeplyNested() ?? ParseBraced();
+        nesting--;
+        return value;
+    }
+
+    /// <summary>A braced value, once there is room on the stack to read one.</summary>
+    private GreenNode ParseBraced()
+    {
         var record = Next == SyntaxKind.CloseBrace
             || (index + 2 < tokens.Length
                 && tokens[index + 1].Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic

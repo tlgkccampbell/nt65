@@ -6,7 +6,8 @@ namespace Norristown.Semantics;
 /// <summary>
 /// What a literal token means. The lexer has already said whether a literal is
 /// well formed, so these read a token the lexer accepted and give up quietly on one it
-/// did not.
+/// did not: a literal nobody could read has no value rather than a value nobody meant,
+/// and what is wrong with it was said where it is written.
 /// </summary>
 public static class Literals
 {
@@ -55,7 +56,8 @@ public static class Literals
                 case '\\': text.Append('\\'); break;
                 case '"': text.Append('"'); break;
                 case '\'': text.Append('\''); break;
-                case 'x' when i + 2 < body.Length:
+                case 'x' when i + 2 < body.Length
+                    && char.IsAsciiHexDigit(body[i + 1]) && char.IsAsciiHexDigit(body[i + 2]):
                     text.Append((char)int.Parse(body.Slice(i + 1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
                     i += 2;
                     break;

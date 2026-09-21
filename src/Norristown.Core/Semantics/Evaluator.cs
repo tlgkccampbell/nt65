@@ -390,6 +390,12 @@ internal sealed class Evaluator
 
     private Value Evaluate(SyntaxNode node)
     {
+        // A literal the lexer refused is worth nothing, the way an undeclared name is: what is
+        // wrong with it has been said once, where it is written, and reading it for a value
+        // would be reading digits that are not digits.
+        if (node is LiteralExpressionSyntax { Token.ContainsDiagnostics: true })
+            return Value.Unknown;
+
         switch (node)
         {
             case NumberExpressionSyntax number:
@@ -1209,6 +1215,11 @@ internal sealed class Evaluator
         {
             if (Evaluate(counted).AsNumber() is not { } count || count < 0)
                 return null;
+            if (count > Repetitions.MaximumTurns)
+            {
+                Report(counted, Repetitions.Beyond(count));
+                return null;
+            }
             if (binding is null)
                 return body() * count;
             for (long i = 0; i < count; i++)

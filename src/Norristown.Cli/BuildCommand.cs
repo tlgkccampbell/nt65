@@ -79,7 +79,11 @@ public static class BuildCommand
 
         var sources = paths.Select(path => new SourceFile(path, File.ReadAllText(Path.Combine(root, path)))).ToList();
         var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
+
+        // What a crash names, so that a report says which program nt65 was reading.
+        Building.Started(paths.Count == 1 ? paths[0] : $"{paths[0]} and {paths.Count - 1} more");
         var compilation = Compiler.Compile(sources, project, path => Length(Path.Combine(root, path)), header);
+        Building.Nothing();
 
         // What a watch waits on is what the build read: the sources, and the binaries the outputs
         // say they include. A program that is wrong writes no output and so names no binaries;

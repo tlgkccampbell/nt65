@@ -42,6 +42,13 @@ internal sealed partial class Parser
     /// <summary>The tightest binding level that is still a binary operator.</summary>
     private const int TightestPrecedence = 3;
 
+    /// <summary>
+    /// How deeply expressions may nest inside one another. Each level costs a dozen stack
+    /// frames, and a stack that runs out takes the process with it, so a line nobody would
+    /// write stops being read rather than stopping everything.
+    /// </summary>
+    private const int MaximumNesting = 100;
+
     private readonly ImmutableArray<GreenToken> tokens;
     private readonly BlockKind context;
     private readonly bool opensBlock;
@@ -61,6 +68,9 @@ internal sealed partial class Parser
     // Whether an operand is being read inside the braces of a macro argument, where `}` ends
     // it as the end of a line does elsewhere.
     private bool braced;
+
+    // How many expressions the parser is inside, which is what MaximumNesting bounds.
+    private int nesting;
 
     private Parser(GreenLine line, BlockKind context)
     {
@@ -124,6 +134,20 @@ internal sealed partial class Parser
     {
         if (reported == 0)
             Report(index, message, fix);
+    }
+
+    /// <summary>
+    /// The expression that stands where a nest of them runs deeper than the parser reads, or
+    /// null while there is room for one more. What is left on the line is not read: the line
+    /// keeps it as skipped tokens, so the text still reads back whole, and the one thing said
+    /// about the line is that it nests too deeply.
+    /// </summary>
+    private ExpressionSyntax? TooDeeplyNested()
+    {
+        if (nesting <= MaximumNesting)
+            return null;
+        ReportOnce($"this nests more than {MaximumNesting} expressions deep, which is as far as nt65 reads");
+        return new ErrorExpressionSyntax(null);
     }
 
     /// <summary>Reports over the token at <paramref name="token"/>, wherever it sits in the line.</summary>
