@@ -16,6 +16,11 @@ namespace Norristown.Syntax.InternalSyntax;
 /// thread and cost all of that, so it is not worth having; the tables also need no locks
 /// this way, and what the cache holds never depends on what another thread is doing.
 /// </para>
+/// <para>
+/// Only the lexer puts a token in here, so nothing that a rewrite made can ever come back out of
+/// it: a token given a diagnostic is refused outright, and a token given a
+/// <see cref="SyntaxAnnotation"/> is a copy made well after the lexer has finished with the line.
+/// </para>
 /// </summary>
 internal static class GreenCache
 {

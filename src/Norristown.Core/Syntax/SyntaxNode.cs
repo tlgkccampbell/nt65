@@ -352,12 +352,12 @@ public abstract class SyntaxNode
     /// <summary>Everything at or below this node carrying <paramref name="annotation"/>, in source order.</summary>
     /// <param name="annotation">The annotation to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(SyntaxAnnotation annotation) =>
-        Annotated(carried => carried.Contains(annotation));
+        AnnotatedPieces(carried => carried.Contains(annotation));
 
     /// <summary>Everything at or below this node carrying an annotation of <paramref name="kind"/>, in source order.</summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(string kind) =>
-        Annotated(carried => carried.Any(annotation => annotation.Kind == kind));
+        AnnotatedPieces(carried => carried.Any(annotation => annotation.Kind == kind));
 
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
@@ -521,12 +521,17 @@ public abstract class SyntaxNode
         Green.Annotations.IsEmpty ? built : (T)built.WithAdditionalAnnotations(Green.Annotations);
 
     /// <summary>
+    /// Everything at or below this node carrying an annotation of any kind, in source order,
+    /// which is what a rewrite reads to carry them across a reparse.
+    /// </summary>
+    internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => AnnotatedPieces(carried => !carried.IsEmpty);
+
+    /// <summary>
     /// Everything at or below this node whose annotations <paramref name="wanted"/> accepts, in
     /// source order. Only the subtrees that say they hold an annotation are walked at all.
     /// </summary>
     /// <param name="wanted">Whether a piece's annotations are the ones being looked for.</param>
-    private IEnumerable<SyntaxNodeOrToken> Annotated(
-        Func<ImmutableArray<SyntaxAnnotation>, bool> wanted)
+    private IEnumerable<SyntaxNodeOrToken> AnnotatedPieces(Func<ImmutableArray<SyntaxAnnotation>, bool> wanted)
     {
         if (!ContainsAnnotations)
             yield break;
@@ -536,7 +541,7 @@ public abstract class SyntaxNode
         {
             if (child.AsNode() is { } inner)
             {
-                foreach (var found in inner.Annotated(wanted))
+                foreach (var found in inner.AnnotatedPieces(wanted))
                     yield return found;
             }
             else if (child.AsToken() is { ContainsAnnotations: true } token && wanted(token.Green.Annotations))
@@ -545,12 +550,6 @@ public abstract class SyntaxNode
             }
         }
     }
-
-    /// <summary>
-    /// Everything at or below this node carrying an annotation of any kind, in source order,
-    /// which is what a rewrite reads to carry them across a reparse.
-    /// </summary>
-    internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => Annotated(carried => !carried.IsEmpty);
 
     /// <summary>Where slot <paramref name="index"/> starts in the file's text, trivia included.</summary>
     internal int SlotPosition(int index)
