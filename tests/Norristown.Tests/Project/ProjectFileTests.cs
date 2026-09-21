@@ -144,7 +144,8 @@ public sealed class ProjectFileTests
 
         Assert.Equal(
             [(4, "`N` is not a number, and a define is a number"),
-                (4, "configuration `a`: `cpu` is not a configuration key: a configuration has `defines` and `out`")],
+                (4, "configuration `a`: `cpu` is not a configuration key: a configuration has `defines`, "
+                    + "`diagnostics` and `out`")],
             project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
     }
 
@@ -187,6 +188,70 @@ public sealed class ProjectFileTests
         Assert.Equal([("DEBUG", 1L), ("EXTRA", 3L), ("KEEP", 7L)],
             project.Defines.Select(define => (define.Name, define.Value)));
     }
+
+    /// <summary>
+    /// How much a diagnostic matters is the project's to say by name, and a configuration says
+    /// it over the project, so that a release build can be stricter than the one being worked in.
+    /// </summary>
+    [Fact]
+    public void ADiagnosticIsReportedAsTheProjectAndItsConfigurationSay()
+    {
+        var project = Read("""
+            {
+              "diagnostics": { "unused-symbol": "off", "mnemonic-name": "warning" },
+              "configurations": {
+                "release": { "diagnostics": { "unused-symbol": "error" } }
+              }
+            }
+            """);
+
+        Assert.Empty(project.Diagnostics);
+        Assert.Equal([("mnemonic-name", Severity.Warning), ("unused-symbol", null)], Said(project));
+        Assert.Equal(
+            [("mnemonic-name", Severity.Warning), ("unused-symbol", Severity.Error)],
+            Said(project.Configured("release", default)));
+    }
+
+    /// <summary>
+    /// A warning switched off is gone and one turned up is an error; an error is neither, so a
+    /// construct that is an error here and a warning on another processor cannot be lost.
+    /// </summary>
+    [Fact]
+    public void WhatTheProjectSaysIsWhatEachDiagnosticIsReportedAs()
+    {
+        var project = Read("""{ "diagnostics": { "unused-symbol": "off", "mnemonic-name": "error" } }""");
+        Diagnostic Said(DiagnosticDescriptor descriptor, Severity severity) =>
+            new(new Span("main.nt65", 1, 1, 2), severity, descriptor.Says("x", "y", "z"));
+
+        var reported = Norristown.Diagnostics.WithSeverities(
+            [
+                Said(Catalogue.UnusedSymbol, Severity.Warning),
+                Said(Catalogue.MnemonicName, Severity.Warning),
+                Said(Catalogue.UnusedSymbol, Severity.Error),
+            ],
+            project.Severities);
+        Assert.Equal(
+            [("mnemonic-name", Severity.Error), ("unused-symbol", Severity.Error)],
+            reported.Select(d => (d.Id, d.Severity)));
+    }
+
+    [Theory]
+    [InlineData("""{ "diagnostics": { "unused-symbols": "off" } }""",
+        "`unused-symbols` is not a diagnostic nt65 reports; `unused-symbol` is")]
+    [InlineData("""{ "diagnostics": { "unused-symbol": "quiet" } }""",
+        "`unused-symbol` is reported as \"off\", \"warning\" or \"error\"")]
+    [InlineData("""{ "diagnostics": { "not-declared": "off" } }""",
+        "`not-declared` is an error, and a project may not turn an error down")]
+    public void WhatIsWrongWithADiagnosticsEntryIsReported(string text, string message)
+    {
+        var project = Read(text);
+
+        Assert.Equal(message, Assert.Single(project.Diagnostics).Message);
+        Assert.Empty(project.Severities);
+    }
+
+    private static IEnumerable<(string Id, Severity? Level)> Said(ProjectSettings project) =>
+        project.Severities.Select(pair => (pair.Key, pair.Value)).OrderBy(said => said.Key, StringComparer.Ordinal);
 
     private static ProjectSettings Read(string text) => ProjectFile.Read(ProjectFile.Name, text);
 }

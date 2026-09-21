@@ -8,4 +8,8 @@ namespace Norristown.Project;
 /// <param name="Defines">Defines that add to the project's, or override them by name.</param>
 /// <param name="Out">Where its output goes, or null to keep the project's.</param>
 /// <param name="Declaration">Where the project file names it.</param>
-public sealed record BuildConfiguration(string Name, IReadOnlyList<Define> Defines, string? Out, Span Declaration);
+public sealed record BuildConfiguration(string Name, IReadOnlyList<Define> Defines, string? Out, Span Declaration)
+{
+    /// <summary>What it reports each named diagnostic as, over the project's own answers.</summary>
+    public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = ProjectSettings.NoSeverities;
+}

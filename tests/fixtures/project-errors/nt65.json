@@ -8,6 +8,11 @@
   "defines": {
     "SIZE": "twelve"      // ;! error[define-not-a-number]: `SIZE` is not a number, and a define is a number
   },
+  "diagnostics": {
+    "unused-symbols": "off",   // ;! error[diagnostic-name-unknown]: `unused-symbols` is not a diagnostic nt65 reports; `unused-symbol` is
+    "unused-symbol": "quiet",  // ;! error[diagnostic-severity-unknown]: `unused-symbol` is reported as "off", "warning" or "error"
+    "not-declared": "warning"  // ;! error[diagnostic-not-turned-down]: `not-declared` is an error, and a project may not turn an error down
+  },
   "segments": {
     "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment "VRAM" needs a `size` of "zp", "abs" or "far"
     "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
@@ -21,7 +26,7 @@
     "$4200": ["$00-$1ff"] // ;! error[bank-invalid]: `$4200`: "$00-$1ff" is not a bank or a range of banks
   },
   "configurations": {
-    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines` and `out`
+    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines`, `diagnostics` and `out`
     "slow down": {}               // ;! error[configuration-name-invalid]: `slow down` is not a configuration name: one is letters, digits, `_` and `-`
   }
 }

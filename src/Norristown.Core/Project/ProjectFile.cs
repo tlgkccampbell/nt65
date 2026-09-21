@@ -19,7 +19,8 @@ public static class ProjectFile
     /// <summary>What the project file is called.</summary>
     public const string Name = "nt65.json";
 
-    private static readonly string[] known = ["cpu", "files", "out", "defines", "segments", "ranges", "configurations"];
+    private static readonly string[] known =
+        ["cpu", "files", "out", "defines", "diagnostics", "segments", "ranges", "configurations"];
 
     /// <summary>
     /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
@@ -34,7 +35,10 @@ public static class ProjectFile
     public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
 
     /// <summary>The keys one named configuration may hold.</summary>
-    public static IReadOnlyList<string> ConfigurationKeys { get; } = ["defines", "out"];
+    public static IReadOnlyList<string> ConfigurationKeys { get; } = ["defines", "diagnostics", "out"];
+
+    /// <summary>What a <c>diagnostics</c> entry may say, which is how much its name matters.</summary>
+    public static IReadOnlyList<string> Levels { get; } = ["off", "warning", "error"];
 
     /// <summary>The keys one segment may hold.</summary>
     public static IReadOnlyList<string> SegmentKeys { get; } = ["size", "dp", "bank", "mirrors"];
@@ -92,6 +96,7 @@ public static class ProjectFile
                 diagnostics)
             {
                 Ranges = reader.Ranges(document.RootElement),
+                Severities = reader.Severities(document.RootElement),
                 Configurations = reader.Configurations(document.RootElement),
             };
         }
@@ -193,6 +198,47 @@ public static class ProjectFile
         }
 
         /// <summary>
+        /// <c>"diagnostics": { "unused-symbol": "off" }</c>: how much each named diagnostic
+        /// matters to this project, over the severity the catalogue gives it.
+        /// <paramref name="from"/> is where the object being read is written, so a configuration's
+        /// entry is reported where that configuration gives it.
+        /// </summary>
+        public IReadOnlyDictionary<string, Severity?> Severities(JsonElement root, int from = 0)
+        {
+            if (!Object(root, "diagnostics", out var said, from))
+                return ProjectSettings.NoSeverities;
+
+            var read = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+            var within = Offset("diagnostics", from);
+            foreach (var property in said.EnumerateObject())
+            {
+                if (Catalogue.Find(property.Name) is not { } descriptor)
+                {
+                    var nearest = Spelling.Nearest(property.Name, Catalogue.All.Select(d => d.Id));
+                    Report(
+                        property.Name,
+                        Catalogue.DiagnosticNameUnknown.Says(
+                            property.Name, nearest is null ? "" : $"; `{nearest}` is"),
+                        within);
+                    continue;
+                }
+                if (property.Value.ValueKind != JsonValueKind.String
+                    || Level(property.Value.GetString(), out var level) is false)
+                {
+                    Report(property.Name, Catalogue.DiagnosticSeverityUnknown.Says(property.Name), within);
+                    continue;
+                }
+                if (descriptor.Severity == Severity.Error && level != Severity.Error)
+                {
+                    Report(property.Name, Catalogue.DiagnosticNotTurnedDown.Says(property.Name), within);
+                    continue;
+                }
+                read[property.Name] = level;
+            }
+            return read;
+        }
+
+        /// <summary>
         /// <c>"debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }</c>: the named
         /// configurations, each giving defines over the project's and an output directory.
         /// </summary>
@@ -224,7 +270,13 @@ public static class ProjectFile
                     }
                 }
                 read.Add(new BuildConfiguration(
-                    property.Name, Defines(property.Value, from), String(property.Value, "out", from), At(property.Name, within)));
+                    property.Name,
+                    Defines(property.Value, from),
+                    String(property.Value, "out", from),
+                    At(property.Name, within))
+                {
+                    Severities = Severities(property.Value, from),
+                });
             }
             return [.. read.OrderBy(configuration => configuration.Name, StringComparer.Ordinal)];
         }
@@ -371,6 +423,18 @@ public static class ProjectFile
 
         public void Report(string key, DiagnosticMessage message, int from = 0) =>
             diagnostics.Add(new Diagnostic(At(key, from), Severity.Error, message));
+
+        /// <summary>How much a diagnostic matters, where the word is one of the three; <c>off</c> is no severity.</summary>
+        private static bool Level(string? written, out Severity? level)
+        {
+            level = written switch
+            {
+                "warning" => Severity.Warning,
+                "error" => Severity.Error,
+                _ => null,
+            };
+            return written is "off" or "warning" or "error";
+        }
 
         /// <summary><c>first-last</c> or a single number, each no more than <paramref name="largest"/>.</summary>
         private static (long First, long Last)? Interval(string text, long largest)

@@ -76,8 +76,9 @@ public static class Compiler
         var header = cHeader is null ? null : CHeader.Write(analysis.Program, cHeader, diagnostics);
 
         // A program that is wrong produces no output: what would be written for it is not a
-        // translation of anything.
-        var ordered = Diagnostics.Ordered(diagnostics);
+        // translation of anything. What counts as wrong is the project's to say by name, so
+        // what it says about each is applied before anything reads the severities.
+        var ordered = Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
         var wrong = ordered.Any(d => d.Severity == Severity.Error);
         return new Compilation(wrong ? [] : outputs, ordered)
         {
@@ -370,7 +371,7 @@ public static class Compiler
         diagnostics.AddRange(reuse.Analyzed.Values.SelectMany(found => found));
         if (target != Cpu.Wdc65816)
             diagnostics.AddRange(FarNeedsA65816(program.Segments, program));
-        return Diagnostics.Ordered(diagnostics);
+        return Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
     }
 
     /// <summary>Diagnostics grouped by the file they are in.</summary>

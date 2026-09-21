@@ -24,8 +24,19 @@ public sealed record ProjectSettings(
     IReadOnlyList<Segment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
+    /// <summary>What a project that says nothing about any diagnostic gives.</summary>
+    public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
+        new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+
     /// <summary>The banks an absolute constant address in each range may be reached from, ordered by address.</summary>
     public IReadOnlyList<AccessRange> Ranges { get; init; } = [];
+
+    /// <summary>
+    /// What each named diagnostic is reported as, over the severity the catalogue gives it;
+    /// a name mapped to null is not reported at all. An error is never turned down, which is
+    /// said where the project file asks for it.
+    /// </summary>
+    public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = NoSeverities;
 
     /// <summary>No project: what <c>nt65 build main.nt65</c> works from.</summary>
     public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
@@ -41,7 +52,13 @@ public sealed record ProjectSettings(
     public ProjectSettings Configured(string name, Span given)
     {
         if (Configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
-            return With(chosen.Defines) with { Out = chosen.Out ?? Out };
+        {
+            return With(chosen.Defines) with
+            {
+                Out = chosen.Out ?? Out,
+                Severities = Reported(chosen.Severities),
+            };
+        }
         var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
         var message = Catalogue.ConfigurationUnknown.Says(
             name,
@@ -50,6 +67,17 @@ public sealed record ProjectSettings(
                 : $"{ProjectFile.Name} names "
                     + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]));
         return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
+    }
+
+    /// <summary>The project's answers about each diagnostic, with <paramref name="over"/> on top.</summary>
+    private IReadOnlyDictionary<string, Severity?> Reported(IReadOnlyDictionary<string, Severity?> over)
+    {
+        if (over.Count == 0)
+            return Severities;
+        var said = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+        foreach (var (id, level) in Severities.Concat(over))
+            said[id] = level;
+        return said;
     }
 
     /// <summary>The same settings with <paramref name="defines"/> added, overriding by name.</summary>

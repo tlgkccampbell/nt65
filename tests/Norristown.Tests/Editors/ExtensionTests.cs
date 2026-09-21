@@ -44,6 +44,21 @@ public sealed class ExtensionTests : IDisposable
             Assert.False(element.GetProperty("additionalProperties").GetBoolean());
     }
 
+    /// <summary>
+    /// The names the schema offers under <c>diagnostics</c> are the catalogue, and the answers
+    /// it offers for one are the ones the reader knows. An editor completes them, so a name
+    /// added to the catalogue and not to the schema would be offered nowhere.
+    /// </summary>
+    [Fact]
+    public void TheSchemaOffersEveryDiagnosticByName()
+    {
+        var diagnostics = Definition("diagnostics");
+        Assert.Equal(
+            Catalogue.All.Select(descriptor => descriptor.Id),
+            Enumeration(diagnostics.GetProperty("propertyNames")));
+        Assert.Equal(ProjectFile.Levels, Enumeration(diagnostics.GetProperty("additionalProperties")));
+    }
+
     /// <summary>The processors and the segment sizes the schema offers are the ones nt65 reads.</summary>
     [Fact]
     public void TheSchemaOffersTheProcessorsAndSizesNt65Reads()

@@ -1,0 +1,11 @@
+; `unused-symbol` is off here, so the declaration nothing names says nothing; `mnemonic-name`
+; is an error here, so the label ca65 would read as an instruction stops the build.
+.module main
+
+QUIET = 1
+
+.segment CODE
+.proc start {
+    lda:                                ;! error[mnemonic-name]: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
+    rts
+}

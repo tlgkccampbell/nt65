@@ -2081,13 +2081,14 @@ public static class Catalogue
     internal static DiagnosticDescriptor ConfigurationNotAnObject { get; } = new(
         "configuration-not-an-object",
         Severity.Error,
-        "configuration `{0}` is an object with `defines` and `out`",
+        "configuration `{0}` is an object with `defines`, `diagnostics` and `out`",
         "A configuration gives defines over the project's and an output directory in place of it.");
 
     internal static DiagnosticDescriptor ConfigurationKeyUnknown { get; } = new(
         "configuration-key-unknown",
         Severity.Error,
-        "configuration `{0}`: `{1}` is not a configuration key: a configuration has `defines` and `out`",
+        "configuration `{0}`: `{1}` is not a configuration key: a configuration has `defines`, `diagnostics` and "
+            + "`out`",
         "What a named configuration may change is a fixed, small set: the defines it gives over the "
             + "project's, and where its output goes.");
 
@@ -2115,6 +2116,26 @@ public static class Catalogue
         Severity.Error,
         "segment \"{0}\": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`",
         "What a segment may say is a fixed set: how wide an address in it is, and where it sits.");
+
+    internal static DiagnosticDescriptor DiagnosticNameUnknown { get; } = new(
+        "diagnostic-name-unknown",
+        Severity.Error,
+        "`{0}` is not a diagnostic nt65 reports{1}",
+        "The names are a fixed set, so a typo is a mistake rather than a line that quietly does nothing. "
+            + "`nt65 explain` lists them.");
+
+    internal static DiagnosticDescriptor DiagnosticSeverityUnknown { get; } = new(
+        "diagnostic-severity-unknown",
+        Severity.Error,
+        "`{0}` is reported as \"off\", \"warning\" or \"error\"",
+        "A project says how much a diagnostic matters to it, and there are three answers.");
+
+    internal static DiagnosticDescriptor DiagnosticNotTurnedDown { get; } = new(
+        "diagnostic-not-turned-down",
+        Severity.Error,
+        "`{0}` is an error, and a project may not turn an error down",
+        "A warning is a matter of taste and an error is a program nt65 refuses to translate. Turning one down "
+            + "would not make the output right; it would only stop nt65 saying so.");
 
     internal static DiagnosticDescriptor RangeInvalid { get; } = new(
         "range-invalid",
