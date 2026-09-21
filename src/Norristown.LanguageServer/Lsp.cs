@@ -155,6 +155,7 @@ internal static class Lsp
         // where the routine lives. What a macro call becomes is the same question asked of a
         // macro, and its rows belong here beside these.
         Routine(card, analysis, symbol);
+        card.Row("expands to", MacroCallHover.Becomes(analysis, model, reference));
 
         // How much room it takes and how many of them there are answer one question, so they
         // are read together rather than a line apart. One of something is what a declaration
@@ -171,8 +172,13 @@ internal static class Lsp
         }
         Declares(card, model, reference);
         Written(card, analysis, symbol);
+
+        // A macro call is the one name whose hover has more to say than its declaration: what
+        // it becomes. The line that says so is worked out where the expansion is, and the
+        // listing under it is added to what the card writes.
         return new Protocol.Hover(
-            Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, reference.Span));
+            Protocol.MarkupContent.Markdown(MacroCallHover.Added(card.ToString(), analysis, model, reference)),
+            ToRange(model.Tree, reference.Span));
     }
 
     /// <summary>

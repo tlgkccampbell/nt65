@@ -38,6 +38,7 @@ internal static class Refactors
             .. Named(model, caret, line),
             .. Labels(analysis.Program, model, caret),
             .. Segments(model, line),
+            .. InlineMacro.In(analysis, model, caret),
             .. ExtractProc.In(analysis, model, range),
             .. Ca65Conversion.In(model, range),
         ];

@@ -3122,6 +3122,21 @@ alone and without an assembler:
   a call left where they were, the state they were written under declared and the label they
   start with as the name to be going on with, and ca65 in a selection read as nt65 as far as
   one line at a time can say it;
+- write a macro call out as what it expands to, in nt65 rather than in ca65: the body with the
+  arguments in place, as the programmer would have written it by hand (§11). Hovering over a
+  call says what it becomes in one line — how many lines, how many bytes and what it costs —
+  and then the first eight lines of it, with a link to a view holding the rest. What the body
+  decided from its arguments is decided in what is shown, because the text has no way to leave
+  it open: an `.if` over a `one` parameter is the branch it takes, and an `.each` over a `list`
+  parameter is its turns, since a call's arguments cannot be written as a list. A call inside
+  the body stays a call, with a link of its own: one level at a time, because a fully written
+  out nest of macros is unreadable and nobody wrote it. The same text replaces the call where
+  the programmer asks for it, which is how one stops using a macro; it is refused, with the
+  reason, where writing it there would change what the line means — where the macro is another
+  file's, since a body's names are resolved where it is written, and where the call is itself
+  in a body, since its arguments are not known until that body is expanded. A body that
+  declares anything is written out inside an anonymous `.scope`, since each expansion has its
+  own locals (§6.2) and two of them in one routine would declare the same name twice;
 - report on every file of every program, not only the ones that are open: a broken export is
   wrong in each module that named it, and none of them may be open. What is wrong with the
   project file is published for it too;

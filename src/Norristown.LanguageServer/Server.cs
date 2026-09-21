@@ -279,6 +279,28 @@ internal sealed class Server
     [JsonRpcMethod("nt65/configurations")]
     public IReadOnlyList<string> Configurations(JsonElement _) => workspace.Configurations();
 
+    /// <summary>
+    /// What the macro call at a place becomes, as nt65 rather than as ca65: the body with the
+    /// arguments in place. Calls inside it are left as calls, one level at a time, each with
+    /// what to send back to have that one written out too.
+    /// </summary>
+    [JsonRpcMethod("nt65/expansion")]
+    public ExpansionResult? Expansion(ExpansionParams request, CancellationToken cancellation)
+    {
+        if (At(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation) is not { } asked)
+            return null;
+        var written = MacroExpansion.At(
+            asked.Analysis, asked.Model, asked.Position, request.Into, request.All);
+        return written is null
+            ? null
+            : new ExpansionResult(
+                written.Call.GetText().Trim().TrimEnd('{').TrimEnd(),
+                written.Summary(),
+                string.Join("\n", written.Lines) + "\n",
+                [.. written.Links.Select(link => new ExpansionLink(link.Line, link.Text, link.Into))],
+                written.Refusal);
+    }
+
     [JsonRpcMethod("textDocument/didOpen")]
     public async Task DidOpenAsync(DidOpenTextDocumentParams request, CancellationToken cancellation)
     {

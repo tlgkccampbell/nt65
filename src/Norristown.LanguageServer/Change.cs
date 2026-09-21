@@ -19,6 +19,11 @@ namespace Norristown.LanguageServer;
 /// A name already written that the change asks the programmer to replace, and its whole work,
 /// for a change that writes nothing: the editor puts the caret there and starts a rename.
 /// </param>
+/// <param name="Refused">
+/// Why it cannot be applied here, or null for one that can. A change that would change what the
+/// line means is offered greyed with the reason rather than left out, so that looking for it
+/// finds the reason.
+/// </param>
 internal sealed record Change(
     string Title,
     string Kind,
@@ -26,7 +31,8 @@ internal sealed record Change(
     Diagnostic? For = null,
     bool? Preferred = null,
     Change.Placeholder? Names = null,
-    Span? Renames = null)
+    Span? Renames = null,
+    string? Refused = null)
 {
     /// <summary>
     /// A name a change writes because it has to write something, and the programmer is the one

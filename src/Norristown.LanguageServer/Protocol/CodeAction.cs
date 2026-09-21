@@ -14,10 +14,16 @@ namespace Norristown.LanguageServer.Protocol;
 /// it is written: a routine lifted out of another is named by the programmer, so the client is
 /// asked to start a rename on the name it was given to begin with.
 /// </param>
+/// <param name="Disabled">
+/// Why it cannot be applied here, or null for one that can. A change that would change what
+/// the line means is worth offering greyed with the reason, so that looking for it finds the
+/// reason rather than nothing.
+/// </param>
 internal sealed record CodeAction(
     string Title,
     string Kind,
     IReadOnlyList<Diagnostic> Diagnostics,
     WorkspaceEdit Edit,
     bool? IsPreferred = null,
-    Command? Command = null);
+    Command? Command = null,
+    CodeActionDisabled? Disabled = null);

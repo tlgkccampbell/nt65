@@ -22,7 +22,8 @@ internal static class CodeActions
         if (Wanted(only, CodeActionKinds.Rewrite) || Wanted(only, CodeActionKinds.Extract))
             changes.AddRange(Refactors.In(analysis, model, range));
         return [.. changes
-            .Where(change => Wanted(only, change.Kind) && (change.Edits.Count > 0 || change.Renames is not null))
+            .Where(change => Wanted(only, change.Kind)
+                && (change.Edits.Count > 0 || change.Renames is not null || change.Refused is not null))
             .Select(Spelled)];
     }
 
@@ -51,7 +52,8 @@ internal static class CodeActions
             change.For is { } diagnostic ? [Lsp.ToDiagnostic(diagnostic)] : [],
             new Protocol.WorkspaceEdit(edits),
             change.Preferred,
-            Renaming(change));
+            Renaming(change),
+            change.Refused is { } why ? new Protocol.CodeActionDisabled(why) : null);
     }
 
     /// <summary>
