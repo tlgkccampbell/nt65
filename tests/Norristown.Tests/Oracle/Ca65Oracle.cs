@@ -21,6 +21,11 @@ internal sealed partial class Ca65Oracle
     private readonly string ld65;
     private readonly string cc65;
     private readonly string commit;
+
+    // The bytes of the assembler itself. The commit says which source it was built from and
+    // not what came out of the build, so a cached result is keyed on the binary that produced
+    // it: a rebuilt ca65 that answers differently must not be believed on an old entry.
+    private readonly string binary;
     private readonly string? cacheDirectory;
 
     public Ca65Oracle(string ca65Path, string pinnedCommit, string? cacheDirectory)
@@ -33,6 +38,7 @@ internal sealed partial class Ca65Oracle
         ld65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "ld65.exe" : "ld65");
         cc65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "cc65.exe" : "cc65");
         commit = pinnedCommit;
+        binary = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ca65Path)));
         this.cacheDirectory = cacheDirectory;
     }
 
@@ -88,7 +94,8 @@ internal sealed partial class Ca65Oracle
     public AssemblyResult Assemble(
         string fileName, string source, IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
     {
-        var seed = new StringBuilder(commit).Append('\0').Append(fileName).Append('\0').Append(source);
+        var seed = new StringBuilder(commit).Append('\0').Append(binary)
+            .Append('\0').Append(fileName).Append('\0').Append(source);
         foreach (var (name, content) in alongside ?? [])
             seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
         var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
@@ -145,7 +152,8 @@ internal sealed partial class Ca65Oracle
     /// </summary>
     public LinkResult Link(
         string config, IReadOnlyList<(string Name, string Source)> files,
-        IReadOnlyList<(string Name, byte[] Content)>? alongside = null, bool debugFile = false)
+        IReadOnlyList<(string Name, byte[] Content)>? alongside = null, bool debugFile = false,
+        Func<string, IReadOnlyList<string>>? options = null)
     {
         var work = Directory.CreateTempSubdirectory("nt65-ld65-");
         try
@@ -159,9 +167,11 @@ internal sealed partial class Ca65Oracle
                 WriteText(work.FullName, name, source);
                 var target = Path.ChangeExtension(name, ".o");
                 var include = Path.GetDirectoryName(name) is { Length: > 0 } directory ? directory : ".";
-                var (code, said) = Execute(ca65, ["-g", "-I", include, "-o", target, name], work.FullName);
-                if (code != 0 || said.Trim().Length > 0)
-                    return new LinkResult(false, $"ca65 on {name}:\n{said.Trim()}", []);
+                var (code, assembled) = Execute(ca65,
+                    ["-g", .. options?.Invoke(name) ?? [], "-I", include, "-o", target, name], work.FullName);
+                var said = Said(assembled);
+                if (code != 0 || said.Length > 0)
+                    return new LinkResult(false, $"ca65 on {name}:\n{said}", []);
                 objects.Add(target);
             }
 
@@ -206,6 +216,20 @@ internal sealed partial class Ca65Oracle
             work.Delete(recursive: true);
         }
     }
+
+    /// <summary>
+    /// What ca65 said about the file it was given. A defined symbol nothing in the module
+    /// refers to is left out: that is the whole of what <c>-W2</c> adds beyond the default
+    /// level, and it is said about ca65's own predefined <c>CPU_65816</c> and the rest for
+    /// every file there is, about any symbol a <c>-D</c> defined, and about a label nt65 wrote
+    /// for a linker configuration to place, which nothing in the module can refer to by
+    /// design. The other half of the level — a symbol imported and never used — stays, because
+    /// nt65 imports only what a file uses and one that turned up would be an nt65 bug.
+    /// </summary>
+    private static string Said(string output) =>
+        string.Join('\n', output.ReplaceLineEndings("\n").Split('\n')
+            .Where(line => !line.Contains("is defined but never used", StringComparison.Ordinal))
+            .Where(line => line.Trim().Length > 0));
 
     private static void WriteText(string root, string name, string text)
     {

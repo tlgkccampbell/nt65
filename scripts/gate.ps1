@@ -1,5 +1,6 @@
 # The gate, once per stage or unit of work: the pinned cc65 build, the whole solution
-# (warnings are errors), the fast suite, the ca65 oracle suite and the VS Code client.
+# (warnings are errors), the fast suite, the ca65 oracle suite, the corpus programs built
+# end to end with the command line, and the VS Code client.
 [CmdletBinding()]
 param()
 
@@ -22,6 +23,7 @@ Step 'cc65' { & (Join-Path $PSScriptRoot 'build-cc65.ps1') }
 Step 'build' { dotnet build (Join-Path $root 'Norristown.slnx') --nologo -v q -clp:NoSummary }
 Step 'tests' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild }
 Step 'ca65 oracle' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild -Ca65 }
+Step 'corpus builds' { & (Join-Path $PSScriptRoot 'corpus.ps1') }
 Step 'vscode client' { node --check (Join-Path $root 'editors/vscode/extension.js') }
 
 Write-Host ("gate passed in {0:0.0}s" -f $total.Elapsed.TotalSeconds) -ForegroundColor Green
