@@ -2,7 +2,7 @@
   "name": "nt65",
   "displayName": "nt65 (Norristown Assembler)",
   "description": "nt65 assembly: highlighting, and the Norristown language server.",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "private": true,
   "publisher": "nt65",
   "engines": {
