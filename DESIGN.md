@@ -396,6 +396,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   "files": ["src/**/*.nt65"],
   "out": "build",
   "defines": { "DEBUG": 1, "VERSION": "$0102" },
+  "diagnostics": { "unused-symbol": "off", "mnemonic-name": "error" },
   "segments": {
     "ZP2":   { "size": "zp",  "dp": "$2100" },
     "WRAM":  { "size": "abs", "bank": "$7e" },
@@ -430,6 +431,11 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   `.config` that module exports (§10), and setting one the module does not export, or one
   no module declares, is an error. The output always writes a define as its value,
   never by name, so a `-D` given to ca65 cannot collide with it.
+- `diagnostics`: how much each diagnostic matters to this program, by name. The names are
+  the catalogue's (§14), the same ones the command writes in brackets after a message, and the
+  answers are `"off"`, `"warning"` and `"error"`. A diagnostic nt65 reports as an error is not
+  a project's to turn down, and says so; a name nt65 has no entry for is an error, with the
+  name it is nearly.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
   be declared in a file. Its `mirrors` are written as `ranges` writes banks.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
@@ -437,9 +443,11 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   range of addresses or a single address, each item a range of banks or a single bank,
   and no two keys may overlap.
 - `configurations`: named builds of the program. Each gives `defines` over the project's,
-  by name, and an `out` in place of the project's; `--config name` chooses one, `-D`
-  overrides on top of it, and with none chosen the project's own settings build. The editor's
-  setting for the active configuration chooses the one a language server analyzes.
+  by name, `diagnostics` over the project's, by name, and an `out` in place of the project's,
+  so that a release build can be stricter than the one being worked in; `--config name`
+  chooses one, `-D` overrides on top of it, and with none chosen the project's own settings
+  build. The editor's setting for the active configuration chooses the one a language server
+  analyzes.
 - `$schema`: accepted and ignored, so that a project file may name the schema an editor
   validates it against. Every other key nt65 does not know is an error.
 
@@ -464,13 +472,20 @@ normally runs in; what it tells the person running it is from where they are.
 | `--json` | one JSON object per diagnostic on standard output, for whatever is reading nt65 that is not an editor |
 | `--help`, `--version` | |
 
-A diagnostic is one line, `file:line:column: severity: message`, on standard error. Where
-standard error is a terminal and `NO_COLOR` is unset, `error:` and `warning:` are coloured and
-nothing else on the line is, so the position stays selectable. `--json` puts them on standard
-output instead, one object per line, with `file`, `line`, `column`, `endColumn`, `severity`,
-`message`, and `related` where a diagnostic points at a second place, which the line form
-leaves to an editor. What nt65 says about itself, the `nt65:` lines, stays on standard error
-either way, because it is not about the program.
+A diagnostic is one line, `file:line:column: severity: message [name]`, on standard error.
+The name is the catalogue's (§14), and goes last, where compilers put it: it is what a project
+file switches and what CI matches on, and nobody reads it first. Where standard error is a
+terminal and `NO_COLOR` is unset, `error:` and `warning:` are coloured and nothing else on the
+line is, so the position stays selectable. `--json` puts them on standard output instead, one
+object per line, with `file`, `line`, `column`, `endColumn`, `severity`, `id`, `message`, and
+`related` where a diagnostic points at a second place, which the line form leaves to an editor.
+What nt65 says about itself, the `nt65:` lines, stays on standard error either way, because it
+is not about the program.
+
+**Explaining one.** `nt65 explain <name>` prints what the one line had no room for: what the
+diagnostic is about, and the line a project file would write to switch it. Named nothing, it
+lists every name there is; named something nt65 has no entry for, it says the name that one is
+nearly.
 
 **Watching.** `nt65 build --watch` builds, then builds again whenever the program changes,
 and says which directory it is watching after each one. What it waits for is what the last
@@ -2867,8 +2882,9 @@ alone and without an assembler:
   included;
 - colour every name by what it refers to, so `Joy::A` is an enum member and not a register;
 - show on hover the line that declares a symbol, as the language writes it, and under it its
-  value, how wide an address it is, the segment it sits in and how many bytes it takes, and
-  with them the comment written above the declaration. There is no doc-comment syntax of its own: the
+  value, how wide an address it is, the segment it sits in and how many bytes it takes, what
+  the output calls it where that is not what the source calls it, and with them the comment
+  written above the declaration. There is no doc-comment syntax of its own: the
   `;` lines directly above a declaration, each on a line of its own, are what its author had
   to say about it, and a blank line or a line of code between ends them. Every instance of a
   family is declared on the family's line, so each of them shows the family's comment;
@@ -2884,6 +2900,13 @@ alone and without an assembler:
   data lines says together where its column is;
 - diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
   module does not export, unused symbols, and constant assertions;
+- report every one of them under a name of its own. Every diagnostic nt65 has is in one
+  catalogue, with the name it is reported under, how much it matters where a project says
+  nothing, the sentence it says and a sentence about it the message has no room for. A name is
+  kebab-case and says what is wrong rather than which pass found it — `unused-symbol`,
+  `width-unknown`, `branch-out-of-reach` — and it is what the editor shows as the diagnostic's
+  code, what `--json` writes as its `id`, what `nt65 explain` answers about, and what
+  `nt65.json` switches (§5.3);
 - on the 65816, diagnose width, mode and near/far mismatches at calls and returns,
   immediates reached with unknown width, every unannotated construct of §7.4, and
   direct-page and bank mismatches against declared segments and ranges (§7.5);
@@ -2915,7 +2938,9 @@ alone and without an assembler:
   the declared name a misspelling is within a letter or two of, ca65's assertion level
   dropped, a `.res` as the `.byte[n]` that reserves the same room, an export widened to the
   address size it exports, the width item a routine assumes written into its signature, and
-  the declaration or `.use` item nothing names, taken out or exported. Where a line has two
+  the declaration or `.use` item nothing names, taken out or exported. Where the fix is a name
+  nobody but the programmer can give — a name ca65 would read as an instruction (§4) — nothing
+  is written: the caret goes on the name and a rename starts. Where a line has two
   readings — an expression that needs parentheses, a width the analysis cannot work out —
   each is offered and none is preferred, because which was meant is the programmer's to say;
 - rewrite what is asked for at a selection, which nothing reported: a path written out in
@@ -3011,6 +3036,20 @@ every caller depend on every callee's body.
 
 Recorded so the reasoning survives. None is open.
 
+- **A diagnostic is named, not numbered.** A user meets the name in the Problems panel, in a
+  project file and in CI output, and `"unused-symbol": "off"` can be read by someone who has
+  never seen the catalogue, where `NT0203` cannot. A name also has to be chosen well, which is
+  the point: it says what is wrong rather than which pass found it, so it survives the pass
+  moving. The one number that stays a number is `NT1001`, which the source generator reports
+  to whoever is building nt65 itself; that is a different audience.
+- **How much a diagnostic matters is set in the project file, and nowhere in the source.**
+  `"diagnostics": { "unused-symbol": "off" }` is the whole of it, and a named configuration
+  says it again for a stricter build. Suppression in the source — an `.allow` above a
+  declaration — is a language change, and is left out: the project file answers the case that
+  matters, which is a team agreeing what it wants to be told, and `.allow` stays the honest
+  spelling if one is ever wanted. Adding it later breaks nothing. An error is not a project's
+  to turn down either way: a warning is a matter of taste, and an error is a program nt65
+  refuses to translate.
 - **Braces, not end-keywords.** Simpler to parse and, as much to the point, an nt65
   file is visually distinct from a ca65 file at a glance.
 - **`name!(args)` for macro invocation.** A marker on the line is required by §3.1;
@@ -3436,12 +3475,15 @@ as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x 
   the same linker names and address sizes, with the same `.nt65` file and line for each byte in
   the debug information, and the C header declares the same names with the same types.
 - **To whoever writes `nt65.json`: the project file** of §5.3. Every key keeps its meaning, and
-  a project file one release reads, every later one reads.
+  a project file one release reads, every later one reads. That covers the names under
+  `diagnostics`: a diagnostic's name is stable once released, so a project file that switches
+  one keeps switching it. A release that stops reporting something keeps the name in the
+  catalogue, reported by nothing, so that a project file naming it still reads.
 - **To scripts and Makefiles: the command line** of §5.3. The options and what they do, where
   output goes and what it is named, the dependency file, the exit status (0 when the program
   built, 1 when it is wrong, 2 when the command is) and the form of each diagnostic,
-  `file:line:column: severity: message`, with the path as the person running it would write it,
-  and the fields of the object `--json` writes in its place. `nt65 fmt` keeps its own exit
+  `file:line:column: severity: message [name]`, with the path as the person running it would
+  write it, and the fields of the object `--json` writes in its place. `nt65 fmt` keeps its own exit
   status too: 0 when every file it was given is in the layout, 1 when `--check` found one that
   is not.
 - **To packagers: the cc65 pin.** A release's output is tested against, and promised for, ca65
@@ -3450,7 +3492,9 @@ as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x 
 
 Version 1 does not promise:
 
-- which warnings a program gets, or the wording and exact position of any diagnostic;
+- which warnings a program gets, or the wording and exact position of any diagnostic. The
+  *name* a diagnostic is reported under is promised, and its wording is not: that is what lets
+  a message be reworded without breaking a project file or a CI filter;
 - the text of the output beyond what the contract of §1 names: its layout, its comments, and
   the generated names of cheap locals, expansions and iterations;
 - the layout `nt65 fmt` writes, character for character. It stays one layout, and laying out
