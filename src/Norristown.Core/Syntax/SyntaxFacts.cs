@@ -44,81 +44,61 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> keptRegisterSet =
         KeptRegisters.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    // Directives are case-insensitive, like mnemonics and registers.
-    private static readonly FrozenDictionary<string, BlockKind> blockDirectives = new Dictionary<string, BlockKind>
+    // Every directive that may begin a line, one row each, so that adding a directive is one
+    // line here and one case in the parser. Directives are case-insensitive, like mnemonics
+    // and registers. `.segment` parses to one of three kinds and `.proc` to one of two,
+    // decided by the rest of the line.
+    private static readonly FrozenDictionary<string, Directive> lineDirectives = new Dictionary<string, Directive>
     {
-        [".proc"] = BlockKind.Proc,
-        [".multiproc"] = BlockKind.MultiProc,
-        [".scope"] = BlockKind.Scope,
-        [".macro"] = BlockKind.Macro,
-        [".enum"] = BlockKind.Enum,
-        [".struct"] = BlockKind.Struct,
-        [".union"] = BlockKind.Union,
-        [".charmap"] = BlockKind.Charmap,
-        [".list"] = BlockKind.List,
-        [".segment"] = BlockKind.Segment,
-        [".data"] = BlockKind.Data,
-        [".if"] = BlockKind.If,
-        [".elseif"] = BlockKind.If,
-        [".else"] = BlockKind.If,
-        [".repeat"] = BlockKind.Repeat,
-        [".each"] = BlockKind.Each,
-        [".type"] = BlockKind.RecordInitializer,
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    // Every directive that may begin a line, and the node it parses to. `.segment` parses to
-    // one of three kinds and `.proc` to one of two, decided by the rest of the line.
-    private static readonly FrozenDictionary<string, SyntaxKind> lineDirectives = new Dictionary<string, SyntaxKind>
-    {
-        [".cpu"] = SyntaxKind.CpuDirective,
-        [".segment"] = SyntaxKind.SegmentDeclaration,
-        [".data"] = SyntaxKind.DataDeclaration,
-        [".proc"] = SyntaxKind.ProcDeclaration,
-        [".multiproc"] = SyntaxKind.MultiProcDeclaration,
-        [".scope"] = SyntaxKind.ScopeDeclaration,
-        [".export"] = SyntaxKind.ExportDirective,
-        [".import"] = SyntaxKind.ImportDirective,
-        [".module"] = SyntaxKind.ModuleDirective,
-        [".use"] = SyntaxKind.UseDirective,
-        [".byte"] = SyntaxKind.DataDirective,
-        [".word"] = SyntaxKind.DataDirective,
-        [".long"] = SyntaxKind.DataDirective,
-        [".dword"] = SyntaxKind.DataDirective,
-        [".beword"] = SyntaxKind.DataDirective,
-        [".belong"] = SyntaxKind.DataDirective,
-        [".bedword"] = SyntaxKind.DataDirective,
-        [".addr"] = SyntaxKind.DataDirective,
-        [".faraddr"] = SyntaxKind.DataDirective,
-        [".res"] = SyntaxKind.DataDirective,
-        [".strz"] = SyntaxKind.DataDirective,
-        [".type"] = SyntaxKind.DataDirective,
-        [".align"] = SyntaxKind.DataDirective,
-        [".incbin"] = SyntaxKind.DataDirective,
-        [".lobytes"] = SyntaxKind.DataDirective,
-        [".hibytes"] = SyntaxKind.DataDirective,
-        [".bankbytes"] = SyntaxKind.DataDirective,
-        [".enum"] = SyntaxKind.EnumDeclaration,
-        [".struct"] = SyntaxKind.StructDeclaration,
-        [".union"] = SyntaxKind.UnionDeclaration,
-        [".charmap"] = SyntaxKind.CharmapDeclaration,
-        [".list"] = SyntaxKind.ListDeclaration,
-        [".func"] = SyntaxKind.FuncDeclaration,
-        [".signature"] = SyntaxKind.SignatureDeclaration,
-        [".config"] = SyntaxKind.ConfigDeclaration,
-        [".if"] = SyntaxKind.IfDirective,
-        [".elseif"] = SyntaxKind.ElseIfDirective,
-        [".else"] = SyntaxKind.ElseDirective,
-        [".repeat"] = SyntaxKind.RepeatDirective,
-        [".each"] = SyntaxKind.EachDirective,
-        [".assert"] = SyntaxKind.AssertDirective,
-        [".error"] = SyntaxKind.ErrorDirective,
-        [".warning"] = SyntaxKind.ErrorDirective,
-        [".macro"] = SyntaxKind.MacroDeclaration,
-        [".next"] = SyntaxKind.NextDirective,
-        [".patch"] = SyntaxKind.PatchDirective,
-        [".state"] = SyntaxKind.StateDirective,
-        [".ensure"] = SyntaxKind.EnsureDirective,
-        [".frame"] = SyntaxKind.FrameDirective,
+        [".cpu"] = new(SyntaxKind.CpuDirective),
+        [".segment"] = new(SyntaxKind.SegmentDeclaration, BlockKind.Segment),
+        [".data"] = new(SyntaxKind.DataDeclaration, BlockKind.Data, Exportable: true),
+        [".proc"] = new(SyntaxKind.ProcDeclaration, BlockKind.Proc, Exportable: true),
+        [".multiproc"] = new(SyntaxKind.MultiProcDeclaration, BlockKind.MultiProc, Exportable: true),
+        [".scope"] = new(SyntaxKind.ScopeDeclaration, BlockKind.Scope, Exportable: true),
+        [".export"] = new(SyntaxKind.ExportDirective),
+        [".import"] = new(SyntaxKind.ImportDirective, Exportable: true),
+        [".module"] = new(SyntaxKind.ModuleDirective),
+        [".use"] = new(SyntaxKind.UseDirective, Exportable: true),
+        [".byte"] = new(SyntaxKind.DataDirective),
+        [".word"] = new(SyntaxKind.DataDirective),
+        [".long"] = new(SyntaxKind.DataDirective),
+        [".dword"] = new(SyntaxKind.DataDirective),
+        [".beword"] = new(SyntaxKind.DataDirective),
+        [".belong"] = new(SyntaxKind.DataDirective),
+        [".bedword"] = new(SyntaxKind.DataDirective),
+        [".addr"] = new(SyntaxKind.DataDirective),
+        [".faraddr"] = new(SyntaxKind.DataDirective),
+        [".res"] = new(SyntaxKind.DataDirective),
+        [".strz"] = new(SyntaxKind.DataDirective),
+        [".type"] = new(SyntaxKind.DataDirective, BlockKind.RecordInitializer),
+        [".align"] = new(SyntaxKind.DataDirective),
+        [".incbin"] = new(SyntaxKind.DataDirective),
+        [".lobytes"] = new(SyntaxKind.DataDirective),
+        [".hibytes"] = new(SyntaxKind.DataDirective),
+        [".bankbytes"] = new(SyntaxKind.DataDirective),
+        [".enum"] = new(SyntaxKind.EnumDeclaration, BlockKind.Enum, Exportable: true),
+        [".struct"] = new(SyntaxKind.StructDeclaration, BlockKind.Struct, Exportable: true),
+        [".union"] = new(SyntaxKind.UnionDeclaration, BlockKind.Union, Exportable: true),
+        [".charmap"] = new(SyntaxKind.CharmapDeclaration, BlockKind.Charmap, Exportable: true),
+        [".list"] = new(SyntaxKind.ListDeclaration, BlockKind.List, Exportable: true),
+        [".func"] = new(SyntaxKind.FuncDeclaration, Exportable: true),
+        [".signature"] = new(SyntaxKind.SignatureDeclaration, Exportable: true),
+        [".config"] = new(SyntaxKind.ConfigDeclaration, Exportable: true),
+        [".if"] = new(SyntaxKind.IfDirective, BlockKind.If),
+        [".elseif"] = new(SyntaxKind.ElseIfDirective, BlockKind.If),
+        [".else"] = new(SyntaxKind.ElseDirective, BlockKind.If),
+        [".repeat"] = new(SyntaxKind.RepeatDirective, BlockKind.Repeat),
+        [".each"] = new(SyntaxKind.EachDirective, BlockKind.Each),
+        [".assert"] = new(SyntaxKind.AssertDirective),
+        [".error"] = new(SyntaxKind.ErrorDirective),
+        [".warning"] = new(SyntaxKind.ErrorDirective),
+        [".macro"] = new(SyntaxKind.MacroDeclaration, BlockKind.Macro, Exportable: true),
+        [".next"] = new(SyntaxKind.NextDirective),
+        [".patch"] = new(SyntaxKind.PatchDirective),
+        [".state"] = new(SyntaxKind.StateDirective),
+        [".ensure"] = new(SyntaxKind.EnsureDirective),
+        [".frame"] = new(SyntaxKind.FrameDirective),
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // The element types a data declaration or a struct member is an array of, by the size of
@@ -186,11 +166,19 @@ public static class SyntaxFacts
 
     /// <summary>The kind of block a directive opens when its line ends in <c>{</c>.</summary>
     public static BlockKind BlockKindOfDirective(string directive) =>
-        blockDirectives.GetValueOrDefault(directive, BlockKind.Unknown);
+        lineDirectives.TryGetValue(directive, out var row) ? row.Block : BlockKind.Unknown;
 
     /// <summary>The kind of node a directive at the start of a line parses to, or <see cref="SyntaxKind.None"/>.</summary>
     public static SyntaxKind LineDirectiveKind(string directive) =>
-        lineDirectives.GetValueOrDefault(directive, SyntaxKind.None);
+        lineDirectives.TryGetValue(directive, out var row) ? row.Kind : SyntaxKind.None;
+
+    /// <summary>
+    /// Whether <c>.export</c> may go before <paramref name="directive"/>, which is whether it
+    /// declares a name for the linker to know: a routine, data, a scope, a type, a constant of
+    /// the language, or what another module brings in.
+    /// </summary>
+    public static bool IsExportable(string directive) =>
+        lineDirectives.TryGetValue(directive, out var row) && row.Exportable;
 
     /// <summary>
     /// The size of one element of <paramref name="directive"/>, when it is an element type:
@@ -356,4 +344,15 @@ public static class SyntaxFacts
 
         return mos6502.Concat(wdc65C02).Concat(wdc65816);
     }
+
+    /// <summary>
+    /// What a directive at the start of a line is: the node it parses to, the block it opens
+    /// where its line ends in <c>{</c>, and whether <c>.export</c> may go before it. One row
+    /// says all three, so the three questions cannot drift apart.
+    /// </summary>
+    /// <param name="Kind">The node the line parses to.</param>
+    /// <param name="Block">The block it opens, or <see cref="BlockKind.Unknown"/> where it opens none.</param>
+    /// <param name="Exportable">Whether <c>.export</c> before it exports what it declares.</param>
+    private readonly record struct Directive(
+        SyntaxKind Kind, BlockKind Block = BlockKind.Unknown, bool Exportable = false);
 }
