@@ -255,9 +255,15 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
                 Collect(child);
                 continue;
             }
+            var before = changes!.Count;
             var rewritten = Visit(line);
-            if (!ReferenceEquals(rewritten, line))
-                Changed(line, rewritten);
+            if (ReferenceEquals(rewritten, line))
+                continue;
+
+            // The whole line is being written over, so whatever the walk down it found is part
+            // of what goes: one change for the line, never one inside a span already replaced.
+            changes.RemoveRange(before, changes.Count - before);
+            Changed(line, rewritten);
         }
     }
 

@@ -580,58 +580,6 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The child whose text holds <paramref name="position"/>, which the walk down to a token
-    /// goes on through; nothing when no child does. A child of no width holds no position, so a
-    /// missing token is never it.
-    /// </summary>
-    private SyntaxNodeOrToken ChildContaining(int position)
-    {
-        if (RedChildren is { } children)
-        {
-            foreach (var child in children)
-            {
-                if (child.FullSpan.Contains(position))
-                    return child;
-            }
-            return default;
-        }
-        var at = Position;
-        for (var i = 0; i < Green.SlotCount; i++)
-        {
-            if (Green.GetSlot(i) is not { } slot)
-                continue;
-            if (position < at + slot.FullWidth)
-            {
-                return slot is GreenToken token
-                    ? new SyntaxNodeOrToken(new SyntaxToken(ChildParent, token, at))
-                    : new SyntaxNodeOrToken(SlotRed(i)!);
-            }
-            at += slot.FullWidth;
-        }
-        return default;
-    }
-
-    /// <summary>
-    /// The innermost node under this one holding the whole of <paramref name="span"/>, or null
-    /// when no child of it does. A span with a length is held by one child at most, and an empty
-    /// one is held both by what ends where it stands and by what starts there, so every child
-    /// that could hold it is followed down and the narrowest answer, latest written, is the one.
-    /// </summary>
-    private SyntaxNode? ChildHolding(TextSpan span)
-    {
-        SyntaxNode? best = null;
-        foreach (var child in ChildNodes)
-        {
-            if (!child.FullSpan.Contains(span))
-                continue;
-            var found = child.ChildHolding(span) ?? child;
-            if (best is null || found.FullSpan.Length <= best.FullSpan.Length)
-                best = found;
-        }
-        return best;
-    }
-
-    /// <summary>
     /// Every token under <paramref name="node"/>, in source order, each with whether what holds
     /// it writes it tight against what follows: a prefix operator and its operand, the pieces of
     /// an operand and an address prefix are where nt65 leaves no space.
@@ -687,6 +635,58 @@ public abstract class SyntaxNode
     private static bool Word(SyntaxKind kind) => kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
         or SyntaxKind.Mnemonic or SyntaxKind.Register or SyntaxKind.Directive or SyntaxKind.NumberLiteral
         or SyntaxKind.CharacterLiteral or SyntaxKind.StringLiteral or SyntaxKind.CpuName or SyntaxKind.BadToken;
+
+    /// <summary>
+    /// The child whose text holds <paramref name="position"/>, which the walk down to a token
+    /// goes on through; nothing when no child does. A child of no width holds no position, so a
+    /// missing token is never it.
+    /// </summary>
+    private SyntaxNodeOrToken ChildContaining(int position)
+    {
+        if (RedChildren is { } children)
+        {
+            foreach (var child in children)
+            {
+                if (child.FullSpan.Contains(position))
+                    return child;
+            }
+            return default;
+        }
+        var at = Position;
+        for (var i = 0; i < Green.SlotCount; i++)
+        {
+            if (Green.GetSlot(i) is not { } slot)
+                continue;
+            if (position < at + slot.FullWidth)
+            {
+                return slot is GreenToken token
+                    ? new SyntaxNodeOrToken(new SyntaxToken(ChildParent, token, at))
+                    : new SyntaxNodeOrToken(SlotRed(i)!);
+            }
+            at += slot.FullWidth;
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// The innermost node under this one holding the whole of <paramref name="span"/>, or null
+    /// when no child of it does. A span with a length is held by one child at most, and an empty
+    /// one is held both by what ends where it stands and by what starts there, so every child
+    /// that could hold it is followed down and the narrowest answer, latest written, is the one.
+    /// </summary>
+    private SyntaxNode? ChildHolding(TextSpan span)
+    {
+        SyntaxNode? best = null;
+        foreach (var child in ChildNodes)
+        {
+            if (!child.FullSpan.Contains(span))
+                continue;
+            var found = child.ChildHolding(span) ?? child;
+            if (best is null || found.FullSpan.Length <= best.FullSpan.Length)
+                best = found;
+        }
+        return best;
+    }
 
     /// <summary>A rewrite that writes the nodes it was given as something else, or out of the tree.</summary>
     /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
