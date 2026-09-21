@@ -17,7 +17,8 @@ public static class Commands
         switch (arguments)
         {
             case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["init", "--help" or "-h"]
-                or ["fmt", "--help" or "-h"] or ["remap-dbg", "--help" or "-h"]:
+                or ["fmt", "--help" or "-h"] or ["remap-dbg", "--help" or "-h"]
+                or ["explain", "--help" or "-h"]:
                 output.WriteLine(CommandLine.Usage);
                 return 0;
             case ["--version"]:
@@ -35,6 +36,8 @@ public static class Commands
                 return FormatCommand.Run(asked, Path.GetFullPath(directory), output, error);
             case ["remap-dbg", .. var given]:
                 return RemapCommand.Run(given, Path.GetFullPath(directory), error);
+            case ["explain", .. var about]:
+                return ExplainCommand.Run(about, output, error);
 
             // A first argument nt65 has no meaning for: one line of news and where to read the
             // rest, rather than the usage text, which asked for nothing and buries the news.

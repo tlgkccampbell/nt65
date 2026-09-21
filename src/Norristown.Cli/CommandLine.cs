@@ -33,6 +33,7 @@ public sealed record CommandLine(
                nt65 init [<dir>] [--cpu <cpu>]
                nt65 fmt [--check] [<file.nt65>...]
                nt65 remap-dbg <file.dbg> [--out <file>]
+               nt65 explain [<diagnostic>]
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
@@ -48,6 +49,9 @@ public sealed record CommandLine(
         `remap-dbg` runs after the link: it makes the debug file ld65 wrote name the `.nt65`
         sources as well as the `.s` files, from the `.s.lines` map beside each one, in place
         unless `--out` gives somewhere else.
+
+        `explain` says what a diagnostic is about, which its one line has no room for; the name
+        is the one in brackets after the message. Named nothing, it lists them.
 
         options:
           --project <file>      the project file, or the directory that holds nt65.json
