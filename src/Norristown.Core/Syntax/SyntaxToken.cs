@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
@@ -78,6 +79,38 @@ public readonly record struct SyntaxToken
     /// </summary>
     public SyntaxToken? GetPreviousToken() => Step(-1);
 
+    /// <summary>
+    /// This token written as <paramref name="text"/>, keeping its kind and the trivia around it,
+    /// or this token itself when the text is what it already says. It is what a rename is: the
+    /// same token of the same line, spelled another way.
+    /// </summary>
+    /// <param name="text">What the token is to say.</param>
+    /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
+    public SyntaxToken WithText(string text) =>
+        text == Text ? this : Rebuilt(text, Green.LeadingTrivia, Green.TrailingTrivia);
+
+    /// <summary>This token with <paramref name="trivia"/> before it.</summary>
+    /// <param name="trivia">The whitespace to write before the token.</param>
+    /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
+    public SyntaxToken WithLeadingTrivia(params IEnumerable<SyntaxTrivia> trivia) =>
+        Rebuilt(Text, Trivia(trivia), Green.TrailingTrivia);
+
+    /// <summary>This token with <paramref name="trivia"/> after it.</summary>
+    /// <param name="trivia">The whitespace and comments to write after the token.</param>
+    /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
+    public SyntaxToken WithTrailingTrivia(params IEnumerable<SyntaxTrivia> trivia) =>
+        Rebuilt(Text, Green.LeadingTrivia, Trivia(trivia));
+
+    /// <summary>
+    /// This token standing where <paramref name="other"/> stands: its own kind and text, with the
+    /// trivia <paramref name="other"/> carries. It is what a fix that swaps one token for another
+    /// wants, so that the indentation and the comment on the line stay where they were.
+    /// </summary>
+    /// <param name="other">The token being written over.</param>
+    /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
+    public SyntaxToken WithTriviaFrom(SyntaxToken other) =>
+        Rebuilt(Text, other.Green.LeadingTrivia, other.Green.TrailingTrivia);
+
     /// <summary>The syntax diagnostics on this token, in source order.</summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
     {
@@ -88,6 +121,25 @@ public readonly record struct SyntaxToken
 
     /// <summary>The token's text, without trivia.</summary>
     public override string ToString() => Text;
+
+    /// <summary>The green trivia of <paramref name="trivia"/>, in the order it is written.</summary>
+    private static ImmutableArray<GreenTrivia> Trivia(IEnumerable<SyntaxTrivia> trivia) =>
+        [.. trivia.Select(one => one.Green)];
+
+    /// <summary>
+    /// This token said another way. A token that reports something says it about the text it was
+    /// read as, so a rebuilt one carries nothing: it is a token the source has not been written
+    /// with yet.
+    /// </summary>
+    private SyntaxToken Rebuilt(string text, ImmutableArray<GreenTrivia> leading, ImmutableArray<GreenTrivia> trailing)
+    {
+        if (Green.IsMissing && text.Length == 0)
+            return this;
+        var green = new GreenToken(Kind, text, leading, trailing, null);
+        return green.ToFullString() == Green.ToFullString() && green.Kind == Green.Kind && !Green.ContainsDiagnostics
+            ? this
+            : SyntaxFactory.Detached(green);
+    }
 
     /// <summary>Whether <paramref name="token"/> is the one written where <paramref name="sought"/> is.</summary>
     private static bool Written(SyntaxToken token, SyntaxToken sought) =>

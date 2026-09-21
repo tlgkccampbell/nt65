@@ -25,12 +25,37 @@ public static class NodeTable
             throw Bad(root, $"the node table starts with <{root.Name.LocalName}>, not <Tree>");
 
         var nodes = ImmutableArray.CreateBuilder<NodeRow>();
+        var named = new Dictionary<string, XElement>(StringComparer.Ordinal);
         foreach (var element in root.Elements())
         {
             var isAbstract = element.Name.LocalName == "AbstractNode";
             if (!isAbstract && element.Name.LocalName != "Node")
                 throw Bad(element, $"the node table does not understand <{element.Name.LocalName}>");
-            nodes.Add(ReadNode(element, isAbstract));
+            var node = ReadNode(element, isAbstract);
+
+            // One row per class: a second row of the same name would write the same file twice,
+            // and the one the generator kept would be whichever the table listed last.
+            if (named.TryGetValue(node.Name, out var first))
+            {
+                throw Bad(element,
+                    $"{node.Name} is written twice, here and at line {((IXmlLineInfo)first).LineNumber}");
+            }
+            named.Add(node.Name, element);
+            nodes.Add(node);
+        }
+
+        // The classes above a node end somewhere: a base that leads back into a circle is a
+        // hierarchy with no top, and every walk up one would run forever.
+        var rows = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
+        foreach (var node in nodes)
+        {
+            var row = node;
+            for (var step = 0; rows.TryGetValue(row.Base, out var above); step++)
+            {
+                row = above;
+                if (row.Name == node.Name || step > rows.Count)
+                    throw Bad(named[node.Name], $"the classes above {node.Name} run in a circle, through {node.Base}");
+            }
         }
         return nodes.ToImmutable();
     }

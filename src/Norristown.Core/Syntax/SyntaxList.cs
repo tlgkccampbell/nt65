@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Immutable;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -31,6 +32,9 @@ public readonly struct SyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
             return (T)list!.ChildNodes[index];
         }
     }
+
+    /// <summary>The green list the items hang from, or null for a list with nothing in it.</summary>
+    internal GreenList? Green => list?.Green as GreenList;
 
     /// <summary>The <paramref name="length"/> items from <paramref name="start"/>, which is what a slice pattern reads.</summary>
     /// <param name="start">The first item to take.</param>

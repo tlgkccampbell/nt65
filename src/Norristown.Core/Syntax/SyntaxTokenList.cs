@@ -33,6 +33,12 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
         }
     }
 
+    /// <summary>
+    /// The green list the tokens hang from, or null where they are not a list of their own: an
+    /// empty slot, or a line, whose tokens are its own slots.
+    /// </summary>
+    internal GreenList? Green => list?.Green as GreenList;
+
     /// <summary>The <paramref name="length"/> tokens from <paramref name="start"/>, which is what a slice pattern reads.</summary>
     /// <param name="start">The first token to take.</param>
     /// <param name="length">How many to take.</param>

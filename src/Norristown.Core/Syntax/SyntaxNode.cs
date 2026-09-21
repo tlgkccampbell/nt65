@@ -186,6 +186,91 @@ public abstract class SyntaxNode
         return null;
     }
 
+    /// <summary>
+    /// This node with <paramref name="oldNode"/> written as <paramref name="newNode"/>. Nothing
+    /// else moves: every other character of the file is the same character, and a replacement
+    /// that changes nothing gives back this node itself.
+    /// <para>
+    /// A statement and everything under it is rebuilt where it stands. A line, a block and the
+    /// file are written back as text and parsed again, so replacing inside one of those gives the
+    /// matching node of a <em>new</em> tree, which <see cref="Tree"/> answers for.
+    /// </para>
+    /// </summary>
+    /// <param name="oldNode">The node to write over, which is under this one.</param>
+    /// <param name="newNode">What to write there.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode ReplaceNode(SyntaxNode oldNode, SyntaxNode newNode) =>
+        ReplaceNodes<SyntaxNode>([oldNode], (_, _) => newNode);
+
+    /// <summary>
+    /// This node with each of <paramref name="nodes"/> written as
+    /// <paramref name="computeReplacement"/> says, which is what a fix over a whole file is. A
+    /// replacement of null takes the node out, which only a list item and an optional piece can
+    /// stand.
+    /// </summary>
+    /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
+    /// <param name="nodes">The nodes to write over, which are under this one.</param>
+    /// <param name="computeReplacement">The node as it was found, twice, and what to write there.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode ReplaceNodes<TNode>(
+        IEnumerable<TNode> nodes, Func<TNode, TNode, SyntaxNode?> computeReplacement)
+        where TNode : SyntaxNode =>
+        new NodeReplacer<TNode>(nodes, computeReplacement).Visit(this)
+            ?? throw new InvalidOperationException("a node cannot be taken out of itself");
+
+    /// <summary>This node with <paramref name="oldToken"/> written as <paramref name="newToken"/>.</summary>
+    /// <param name="oldToken">The token to write over, which is under this node.</param>
+    /// <param name="newToken">What to write there.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode ReplaceToken(SyntaxToken oldToken, SyntaxToken newToken) =>
+        ReplaceTokens([oldToken], (_, _) => newToken);
+
+    /// <summary>This node with each of <paramref name="tokens"/> written as <paramref name="computeReplacement"/> says.</summary>
+    /// <param name="tokens">The tokens to write over, which are under this node.</param>
+    /// <param name="computeReplacement">The token as it was found, twice, and what to write there.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode ReplaceTokens(
+        IEnumerable<SyntaxToken> tokens, Func<SyntaxToken, SyntaxToken, SyntaxToken> computeReplacement) =>
+        new TokenReplacer(tokens, computeReplacement).Visit(this)
+            ?? throw new InvalidOperationException("a node cannot be taken out of itself");
+
+    /// <summary>
+    /// This node without <paramref name="node"/>. A line goes with the break that ends it; an
+    /// item of a list goes with the separator written after it; a piece that must be there cannot
+    /// go at all.
+    /// </summary>
+    /// <param name="node">The node to take out, which is under this one.</param>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode RemoveNode(SyntaxNode node) => ReplaceNodes<SyntaxNode>([node], (_, _) => null);
+
+    /// <summary>
+    /// This node written with one space where two tokens would otherwise read as one and none
+    /// where none is wanted, and with the trivia it carried thrown away. It is what a node built
+    /// out of bare tokens wants before it goes into a file: the factory invents no whitespace, so
+    /// without this a built <c>lda #0</c> is written <c>lda#0</c>.
+    /// <para>
+    /// What comes out is nt65 a reader can read, not the layout the file is written in:
+    /// <see cref="Formatter"/> is what sets a line's indentation, and running it over the tree a
+    /// rewrite gives back is what puts a built line where it belongs.
+    /// </para>
+    /// </summary>
+    /// <returns>This node, or the node it has become.</returns>
+    public SyntaxNode NormalizeWhitespace()
+    {
+        var written = new List<(SyntaxToken Token, bool Tight)>();
+        Flatten(this, written);
+        var spaced = ImmutableArray.CreateBuilder<SyntaxToken>(written.Count);
+        for (var i = 0; i < written.Count; i++)
+        {
+            var (token, tight) = written[i];
+            SyntaxTrivia[] after = !tight && i + 1 < written.Count && Apart(token.Kind, written[i + 1].Token.Kind)
+                ? [SyntaxFactory.Space]
+                : [];
+            spaced.Add(token.WithLeadingTrivia().WithTrailingTrivia(after));
+        }
+        return new Spacer(spaced.ToImmutable()).Visit(this) ?? this;
+    }
+
     /// <summary>The node's text, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
@@ -544,5 +629,115 @@ public abstract class SyntaxNode
                 best = found;
         }
         return best;
+    }
+
+    /// <summary>
+    /// Every token under <paramref name="node"/>, in source order, each with whether what holds
+    /// it writes it tight against what follows: a prefix operator and its operand, the pieces of
+    /// an operand and an address prefix are where nt65 leaves no space.
+    /// </summary>
+    private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> written)
+    {
+        var tight = node is UnaryExpressionSyntax or OperandSyntax or AddressPrefixSyntax;
+        foreach (var child in node.ChildNodesAndTokens())
+        {
+            if (child.AsNode() is { } inner)
+                Flatten(inner, written);
+            else
+                written.Add((child.AsToken(), tight));
+        }
+    }
+
+    /// <summary>
+    /// Whether a space goes between a token of <paramref name="left"/> and one of
+    /// <paramref name="right"/>. What binds tight binds tight on whichever side it is written,
+    /// a word needs telling from the word after it, and an operator is written clear of both of
+    /// its operands.
+    /// </summary>
+    private static bool Apart(SyntaxKind left, SyntaxKind right)
+    {
+        if (right is SyntaxKind.EndOfLine or SyntaxKind.Comma or SyntaxKind.CloseParen or SyntaxKind.CloseBracket
+            or SyntaxKind.Colon or SyntaxKind.ColonColon or SyntaxKind.OpenBracket or SyntaxKind.DotDot)
+        {
+            return false;
+        }
+        if (left is SyntaxKind.ColonColon or SyntaxKind.Hash or SyntaxKind.OpenParen or SyntaxKind.OpenBracket
+            or SyntaxKind.DotDot or SyntaxKind.Bang or SyntaxKind.Tilde)
+        {
+            return false;
+        }
+        if (left is SyntaxKind.Colon or SyntaxKind.Comma or SyntaxKind.Mnemonic or SyntaxKind.CloseBrace)
+            return true;
+        if (left is SyntaxKind.Directive)
+            return right != SyntaxKind.OpenParen;
+        if (left is SyntaxKind.OpenBrace || right is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace)
+            return true;
+        return Operator(left) || Operator(right) || (Word(left) && Word(right));
+    }
+
+    /// <summary>The binary operators, which are written clear of what they are between.</summary>
+    private static bool Operator(SyntaxKind kind) => kind is SyntaxKind.Star or SyntaxKind.Slash
+        or SyntaxKind.Plus or SyntaxKind.Minus or SyntaxKind.LessLess or SyntaxKind.GreaterGreater
+        or SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals
+        or SyntaxKind.EqualsEquals or SyntaxKind.BangEquals or SyntaxKind.Ampersand
+        or SyntaxKind.AmpersandAmpersand or SyntaxKind.Bar or SyntaxKind.BarBar or SyntaxKind.Caret
+        or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.Arrow;
+
+    /// <summary>The tokens a reader tells apart by the space between them.</summary>
+    private static bool Word(SyntaxKind kind) => kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+        or SyntaxKind.Mnemonic or SyntaxKind.Register or SyntaxKind.Directive or SyntaxKind.NumberLiteral
+        or SyntaxKind.CharacterLiteral or SyntaxKind.StringLiteral or SyntaxKind.CpuName or SyntaxKind.BadToken;
+
+    /// <summary>A rewrite that writes the nodes it was given as something else, or out of the tree.</summary>
+    /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
+    private sealed class NodeReplacer<TNode> : SyntaxRewriter where TNode : SyntaxNode
+    {
+        private readonly HashSet<SyntaxNode> sought;
+        private readonly Func<TNode, TNode, SyntaxNode?> replacement;
+
+        internal NodeReplacer(IEnumerable<TNode> nodes, Func<TNode, TNode, SyntaxNode?> replacement)
+        {
+            sought = [.. nodes];
+            this.replacement = replacement;
+        }
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// A node that is being written over is not walked into: what replaces it is worked out
+        /// from the node as it stands, which is what a fix reads.
+        /// </remarks>
+        public override SyntaxNode? Visit(SyntaxNode? node) =>
+            node is TNode found && sought.Contains(node) ? replacement(found, found) : base.Visit(node);
+    }
+
+    /// <summary>A rewrite that writes the tokens it was given as something else.</summary>
+    private sealed class TokenReplacer : SyntaxRewriter
+    {
+        private readonly HashSet<SyntaxToken> sought;
+        private readonly Func<SyntaxToken, SyntaxToken, SyntaxToken> replacement;
+
+        internal TokenReplacer(IEnumerable<SyntaxToken> tokens, Func<SyntaxToken, SyntaxToken, SyntaxToken> replacement)
+        {
+            sought = [.. tokens];
+            this.replacement = replacement;
+        }
+
+        /// <inheritdoc/>
+        public override SyntaxToken VisitToken(SyntaxToken token) =>
+            sought.Contains(token) ? replacement(token, token) : token;
+    }
+
+    /// <summary>
+    /// A rewrite that hands back the tokens it was given, in the order they are met. The spacing
+    /// was worked out over the same walk, so the nth token visited is the nth token written.
+    /// </summary>
+    /// <param name="spaced">Every token of the node, in source order, with its new trivia.</param>
+    private sealed class Spacer(ImmutableArray<SyntaxToken> spaced) : SyntaxRewriter
+    {
+        private int index;
+
+        /// <inheritdoc/>
+        public override SyntaxToken VisitToken(SyntaxToken token) =>
+            index < spaced.Length ? spaced[index++] : token;
     }
 }

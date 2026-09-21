@@ -13,12 +13,37 @@ public sealed class SyntaxTree
 {
     private readonly Lazy<IReadOnlyList<Diagnostic>> diagnostics;
 
-    // The file's lines and blocks, which the root is the red node over.
-    private readonly GreenFile green;
+    // The file's lines and blocks, which the root is the red node over. A tree of one built node
+    // has neither, and answers over that node instead.
+    private readonly GreenFile? green;
     private readonly ImmutableArray<Parser.Result> statements;
     private readonly ImmutableArray<Blocks.Error> blockErrors;
     private readonly bool[] reported;
     private FileSyntax? root;
+
+    /// <summary>
+    /// The tree a node built by <see cref="SyntaxFactory"/> belongs to: the node's own text and
+    /// nothing else, so that its spans, its trivia and what it says are read the same way a
+    /// node of a file's are. It has no lines and no <see cref="Root"/>; a rewrite that puts the
+    /// node into a file gives a tree of that file.
+    /// </summary>
+    /// <param name="built">The node the tree is of.</param>
+    private SyntaxTree(GreenNode built)
+    {
+        Path = "";
+        Text = built.ToFullString();
+        LineStarts = SplitLines(Text);
+        Lines = [];
+        statements = [];
+        blockErrors = [];
+        reported = [];
+        diagnostics = new(() =>
+        {
+            var result = new List<Diagnostic>();
+            Collect(built, 0, result);
+            return result;
+        });
+    }
 
     private SyntaxTree(string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines)
     {
@@ -61,9 +86,15 @@ public sealed class SyntaxTree
     /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
     internal ImmutableArray<GreenLine> Lines { get; }
 
-    /// <summary>The root node, created on first use, and the same one whoever asks first.</summary>
+    /// <summary>
+    /// The root node, created on first use, and the same one whoever asks first. A tree of one
+    /// node built by <see cref="SyntaxFactory"/> is no file and has none.
+    /// </summary>
     public FileSyntax Root =>
-        root ?? Interlocked.CompareExchange(ref root, new FileSyntax(this, null, green, 0), null) ?? root;
+        root ?? Interlocked.CompareExchange(
+            ref root,
+            new FileSyntax(this, null, green ?? throw new InvalidOperationException("a built node is no file"), 0),
+            null) ?? root;
 
     /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
@@ -83,6 +114,14 @@ public sealed class SyntaxTree
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
         return new SyntaxTree(path, text, starts, lines.MoveToImmutable());
     }
+
+    /// <summary>
+    /// The red node for <paramref name="built"/>, in a tree of that node alone. It is what
+    /// <see cref="SyntaxFactory"/> hands back and what an <c>Update</c> makes: a node with no
+    /// file around it, whose text is its own.
+    /// </summary>
+    /// <param name="built">The green node just built.</param>
+    internal static SyntaxNode Detached(GreenNode built) => built.CreateRed(new SyntaxTree(built), null, 0);
 
     /// <summary>
     /// The tree for this text with <paramref name="change"/> applied. Only the lines the

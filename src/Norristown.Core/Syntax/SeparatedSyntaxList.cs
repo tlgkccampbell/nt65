@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Immutable;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
@@ -40,6 +41,9 @@ public readonly struct SeparatedSyntaxList<T> : IReadOnlyList<T> where T : Synta
             return (T)list!.ChildNodes[index];
         }
     }
+
+    /// <summary>The green list the items hang from, or null for a list with nothing in it.</summary>
+    internal GreenSeparatedList? Green => list?.Green as GreenSeparatedList;
 
     private int Slots => list?.Green.SlotCount ?? 0;
 

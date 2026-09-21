@@ -69,6 +69,9 @@ public sealed record NodeSlot(
         }
     }
 
+    /// <summary>The parameter's name as a <c>param</c> tag writes it, which is without the <c>@</c>.</summary>
+    public string DocName => Field.TrimStart('@');
+
     /// <summary>What <paramref name="type"/> holds between <paramref name="opening"/> and its <c>&gt;</c>.</summary>
     private static string Inside(string type, string opening) =>
         type.Substring(opening.Length, type.Length - opening.Length - 1);
