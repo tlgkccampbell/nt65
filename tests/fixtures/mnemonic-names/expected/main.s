@@ -11,7 +11,7 @@
 .export main__dea
 .export main__main
 
-.import other__tsa
+.import other__tsa: abs
 
 swa = $12
 per = $34

@@ -21,8 +21,8 @@
 .export main__enter
 .export main__jumper
 
-.import print
-.import beep
+.import print: abs
+.import beep: abs
 
 .segment "BSS": absolute
 cmd:      .res 1

@@ -15,21 +15,21 @@
 gfx__SCREEN = $0400
 .importzp gfx__ptr
 .importzp host_tick
-.import rt__ticks
-.import gfx__init
-.import snd__init
-.import gfx__clear
-.import gfx__clear__again
-.import host_print
-.import HOST_VERSION
+.import rt__ticks: abs
+.import gfx__init: abs
+.import snd__init: abs
+.import gfx__clear: abs
+.import gfx__clear__again: abs
+.import host_print: abs
+.import HOST_VERSION: abs
 .assert HOST_VERSION = $0102, lderror, "HOST_VERSION is not $0102, which is what main.nt65 was built against"
 gfx__Color__white = $01
 gfx__palette__ink = $01
-.import gfx__tables__lo
+.import gfx__tables__lo: abs
 hw__vic__BORDER = $d020
-.import hw__vic__set_border
+.import hw__vic__set_border: abs
 hw__sid__volume = $d418
-.import gfx__clear__end
+.import gfx__clear__end: abs
 
 .segment "ZEROPAGE": zeropage
 REP: .res 1

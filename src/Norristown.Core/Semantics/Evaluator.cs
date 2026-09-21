@@ -508,6 +508,11 @@ internal sealed class Evaluator
             .ThenBy(symbol => symbol.NameSpan.Start)
             .First());
         List<Symbol> ring = [.. found.Skip(first), .. found.Take(first)];
+
+        // Every symbol on the ring is left without a value, and a type on one without a
+        // layout: whoever walks into a type later has to be able to tell.
+        foreach (var member in ring)
+            member.IsCyclic = true;
         var symbol = ring[0];
         Report(symbol.DeclarationSpan, $"`{symbol.DisplayName}` is defined in terms of itself",
             [.. ring.Skip(1).Select(other =>

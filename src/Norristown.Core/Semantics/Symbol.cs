@@ -208,6 +208,13 @@ public sealed class Symbol
     public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;
 
     /// <summary>
+    /// Whether the symbol is defined in terms of itself, which evaluation reported once for
+    /// the whole ring. It has no value and, for a type, no layout, so nothing that walks into
+    /// one may walk into this.
+    /// </summary>
+    public bool IsCyclic { get; internal set; }
+
+    /// <summary>
     /// Whether the symbol can be reached from outside its scope with <c>::</c>: a
     /// cheap local never can, and neither can anything inside an anonymous <c>.scope</c>.
     /// </summary>

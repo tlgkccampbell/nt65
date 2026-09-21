@@ -330,7 +330,7 @@ public sealed class Emitter
             if (!any)
                 Blank();
             any = true;
-            Line(Linked(".import", Implicit(measured.AddressSizeIn(model.Tree)), EndOf(measured)));
+            Line(Linked(".import", measured.AddressSizeIn(model.Tree), EndOf(measured)));
         }
         if (any)
             pendingBlank = true;
@@ -349,8 +349,9 @@ public sealed class Emitter
     };
 
     /// <summary>
-    /// A size as a line that states none has it: ca65 takes an import, and an export of an
-    /// address, as absolute unless told otherwise.
+    /// A size an export states by standing there: ca65 takes an export of an address as
+    /// absolute unless told otherwise. An import says its size outright, because ld65 warns
+    /// about one whose size it had to guess under a far memory model.
     /// </summary>
     private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
 
@@ -359,7 +360,7 @@ public sealed class Emitter
     {
         var name = Named(symbol);
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
-            return Linked(".import", Implicit(symbol.AddressSizeIn(model.Tree)), name);
+            return Linked(".import", symbol.AddressSizeIn(model.Tree), name);
 
         // A constant another file declares, written out by value. One whose value nt65
         // does not know has already been reported, and a string is only ever used through
@@ -1035,8 +1036,12 @@ public sealed class Emitter
             NotTranspiled(directive);
     }
 
-    /// <summary>Whether a type, or a record inside it, has a member that pads with something other than zero.</summary>
-    private bool Pads(Symbol type) => (type.Body?.Symbols ?? []).Any(member =>
+    /// <summary>
+    /// Whether a type, or a record inside it, has a member that pads with something other
+    /// than zero. A type that holds itself has no layout at all, which the analysis has
+    /// already said, so there is nothing here to walk into.
+    /// </summary>
+    private bool Pads(Symbol type) => !type.IsCyclic && (type.Body?.Symbols ?? []).Any(member =>
         member.Kind == SymbolKind.Member
         && (member.Type is { IsLayout: true } inner ? Pads(inner) : Fill(member) != 0));
 
@@ -1092,6 +1097,9 @@ public sealed class Emitter
     private long Fields(
         LineSyntax line, Symbol type, IReadOnlyDictionary<string, MemberValueSyntax> written, string path)
     {
+        // A type that holds itself has no layout to write out, and the analysis has said so.
+        if (type.IsCyclic)
+            return 0;
         long bytes = 0;
         var members = (type.Body?.Symbols ?? []).Where(member => member.Kind == SymbolKind.Member).ToList();
 

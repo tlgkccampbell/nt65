@@ -11,9 +11,9 @@
 .export main__playing
 .export main__main
 
-.import snd__play__lo
-.import snd__stop__hi
-.import snd__play__hi
+.import snd__play__lo: abs
+.import snd__stop__hi: abs
+.import snd__play__hi: abs
 
 .segment "RODATA": absolute
 main__playing:

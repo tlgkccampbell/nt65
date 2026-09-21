@@ -23,12 +23,12 @@
 
 .importzp zp_scratch
 .import far_table: far
-.import _printf
-.import tick
-.import reset
-.import VIC_BORDER
+.import _printf: abs
+.import tick: abs
+.import reset: abs
+.import VIC_BORDER: abs
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what main.nt65 was built against"
-.import raw
+.import raw: abs
 
 CHROUT = $ffd2
 alias = main__fill_page

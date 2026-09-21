@@ -9,7 +9,7 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 lib__SCREEN = $0400
-.import lib__tiles
+.import lib__tiles: abs
 
 .segment "ZEROPAGE": zeropage
 ptr: .res 2

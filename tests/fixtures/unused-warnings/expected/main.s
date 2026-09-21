@@ -11,7 +11,7 @@
 .exportzp main__WIDTH
 .export main__detour
 
-.import other__work
+.import other__work: abs
 
 LIMIT = 10
 main__WIDTH = 40

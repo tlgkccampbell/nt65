@@ -17,7 +17,7 @@
 .export main__banner
 .export main__exact
 
-.import hw__slots
+.import hw__slots: abs
 
 .segment "BSS": absolute
 main__actors:   .res 72             ; Actor

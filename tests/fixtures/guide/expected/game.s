@@ -8,8 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
-.import gfx__clear
-.import _gfx_fill
+.import gfx__clear: abs
+.import _gfx_fill: abs
 gfx__BORDER = $d020
 
 .segment "CODE": absolute

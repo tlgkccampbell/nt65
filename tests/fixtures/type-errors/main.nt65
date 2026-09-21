@@ -24,9 +24,14 @@
 }
 
 ; A layout that holds itself has no size, which is the same ring any constant would be.
+; An instance of one is still written out — every file of a wrong program is — and what
+; writes it walks into the type, so it has to stop where the analysis stopped.
 .struct Ring {          ;! error: `Ring` is defined in terms of itself
     self: .type Ring       ;! error: `self` reserves no room a member may take
 }
+
+.segment RODATA
+.data ring: .type Ring
 
 ; What an initialized instance gives each member has to fit the room the member has.
 .struct Named {

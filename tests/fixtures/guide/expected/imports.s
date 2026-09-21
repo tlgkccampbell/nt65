@@ -10,9 +10,9 @@
 
 .export imports__print
 
-.import _printf
+.import _printf: abs
 .importzp sp
-.import VIC_BORDER
+.import VIC_BORDER: abs
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what imports.nt65 was built against"
 
 CHROUT = $ffd2

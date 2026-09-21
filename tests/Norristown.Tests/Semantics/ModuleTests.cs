@@ -134,7 +134,7 @@ public sealed class ModuleTests
 
         var main = outputs["main.s"];
         Assert.Contains(".importzp gfx__ptr\n", main);
-        Assert.Contains(".import gfx__clear\n", main);
+        Assert.Contains(".import gfx__clear: abs\n", main);
         Assert.Contains("gfx__SCREEN = $0400\n", main);
         Assert.DoesNotContain(".import gfx__SCREEN", main);
         Assert.Contains(".export gfx__clear\n", outputs["gfx.s"]);
@@ -152,7 +152,7 @@ public sealed class ModuleTests
             ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda vars::count\n    rts\n}\n"));
 
         Assert.Contains(".export vars__count: abs\n", outputs["vars.s"]);
-        Assert.Contains(".import vars__count\n", outputs["main.s"]);
+        Assert.Contains(".import vars__count: abs\n", outputs["main.s"]);
         Assert.Contains("lda a:vars__count", outputs["main.s"]);
     }
 
@@ -197,7 +197,7 @@ public sealed class ModuleTests
         var main = Analysis.Outputs(
             ("main.nt65", ".module main\n.import VIC_BORDER = $d020\n.segment CODE\n.proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
 
-        Assert.Contains(".import VIC_BORDER\n", main);
+        Assert.Contains(".import VIC_BORDER: abs\n", main);
         Assert.Contains(".assert VIC_BORDER = $d020, lderror,", main);
         Assert.Contains("sta a:$d020", main);
     }
@@ -214,7 +214,7 @@ public sealed class ModuleTests
             ("hw.nt65", ".module hw\n.export .import BORDER = $d020, tick: zp\n"),
             ("main.nt65", ".module main\n.use hw::*\n.segment CODE\n.proc main {\n    sta BORDER\n    lda tick\n    rts\n}\n"));
 
-        Assert.Contains(".import BORDER\n", outputs["main.s"]);
+        Assert.Contains(".import BORDER: abs\n", outputs["main.s"]);
         Assert.Contains(".importzp tick\n", outputs["main.s"]);
         Assert.Contains(".assert BORDER = $d020, lderror,", outputs["main.s"]);
         Assert.DoesNotContain(".import", outputs["hw.s"]);
@@ -235,7 +235,7 @@ public sealed class ModuleTests
             ("main.nt65", ".module main\n.import unused: proc(), later: proc()\n.macro call_other() {\n    jsr lib::other\n    jsr later\n}\n"
                 + ".segment CODE\n.proc main {\n    jmp lib::outer::inner\n}\n"));
 
-        Assert.Contains(".import lib__outer__inner\n", outputs["main.s"]);
+        Assert.Contains(".import lib__outer__inner: abs\n", outputs["main.s"]);
         Assert.DoesNotContain("lib__outer\n", outputs["main.s"]);
         Assert.DoesNotContain("lib__other", outputs["main.s"]);
         Assert.DoesNotContain("unused", outputs["main.s"]);
@@ -316,7 +316,7 @@ public sealed class ModuleTests
         // Nothing outside an anonymous scope can name what it declares, so its `gfx__clear` is a
         // generated name and the import keeps the plain one.
         var main = outputs["main.s"];
-        Assert.Contains(".import gfx__clear\n", main);
+        Assert.Contains(".import gfx__clear: abs\n", main);
         Assert.Contains("gfx__clear_2:", main);
         Assert.Contains("jsr gfx__clear\n", main);
     }

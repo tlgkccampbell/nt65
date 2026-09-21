@@ -11,13 +11,13 @@
 .export main__main
 .export main__other
 
-.import gfx__init
-.import snd__init
+.import gfx__init: abs
+.import snd__init: abs
 very__long__path__thing = $10
-.import _init
+.import _init: abs
 hw__BORDER = $d020
 hw__sid__VOLUME = $d418
-.import hw__set_border
+.import hw__set_border: abs
 
 .segment "CODE": absolute
 ; .proc main: a8, i8  main.nt65:14
