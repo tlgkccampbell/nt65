@@ -51,6 +51,10 @@ public sealed class IncrementalAnalysisTests
             ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
             ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the set, and errors calls `clear`
             ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
+            // A collision under one linker name is reported on the file that sorts later, which
+            // is not the file that changed: that file is read again all the same.
+            ("app.nt65", "ENTRY = BASE", "ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
+            ("app.nt65", "\n.export ENTRY as \"segs__hud_value\"", "", null, 2),
             ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.config TRIAL = 1", WholeProgramReason.SettingsDeclared, 8),
             ("main.nt65", "TRIAL = 1", "TRIAL = 2", WholeProgramReason.SettingsDeclared, 8),                // any file's conditions may read it
         ];

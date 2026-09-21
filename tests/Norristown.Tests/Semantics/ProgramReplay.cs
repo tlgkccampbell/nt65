@@ -205,6 +205,10 @@ internal sealed class ProgramReplay
 
             .export hud_value
 
+            ; Nothing names it, so this file is always warned about it — until something goes
+            ; wrong here, when a file's warnings give way to what is actually wrong with it.
+            HUD_SPARE = 3
+
             .segment HUD: zp
 
             .segment HUD

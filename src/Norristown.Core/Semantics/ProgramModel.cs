@@ -340,6 +340,19 @@ public sealed class ProgramModel
             }
         }
 
+        // What is wrong with the program rather than with one file — two exports under one
+        // linker name, two files that are one module — is reported on whichever of them sorts
+        // later, which need not be a file that changed. That file says something new from here
+        // on, and what it says the rest of it depends on: a file with an error in it is not
+        // told about the names it never uses. So it is read again with the others.
+        foreach (var path in Named(this.tables).Union(Named(tables), StringComparer.Ordinal))
+        {
+            if (!dirty.Contains(path) && !Spelled(this.tables, path).SequenceEqual(Spelled(tables, path), StringComparer.Ordinal))
+                affected.Add(path);
+        }
+        if (affected.Count > 0)
+            return null;
+
         // What every other file found stands, carried to where an edit moved it. A file that
         // said something about a place an edit rewrote is read again, and says it afresh.
         var byFile = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
@@ -376,6 +389,16 @@ public sealed class ProgramModel
     /// </summary>
     private static List<Symbol> Expanded(Binder binder, Func<Symbol, Symbol> current) =>
         [.. Macros.Reachable(binder.CalledMacros()).SelectMany(macro => macro.Uses.Select(use => current(use.Used)))];
+
+    /// <summary>The files a program-wide diagnostic names.</summary>
+    private static IEnumerable<string> Named(IEnumerable<Diagnostic> tables) =>
+        tables.Select(diagnostic => diagnostic.Span.File).Distinct(StringComparer.Ordinal);
+
+    /// <summary>What those of them about <paramref name="path"/> say, in order, as text to compare.</summary>
+    private static IEnumerable<string> Spelled(IEnumerable<Diagnostic> tables, string path) =>
+        tables
+            .Where(diagnostic => string.Equals(diagnostic.Span.File, path, StringComparison.Ordinal))
+            .Select(diagnostic => $"{diagnostic.Span} {diagnostic.Severity} {diagnostic.Message}");
 
     /// <summary>Where one file's names resolve to and where it declares them, by position.</summary>
     private static (Dictionary<int, Symbol> Resolved, Dictionary<int, Symbol> Declared) Names(Binder.Result bound)
