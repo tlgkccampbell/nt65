@@ -444,6 +444,36 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
+    /// A block move takes seven cycles for every byte it moves, and how many that is is in A
+    /// when it runs, so the routine around it has no count. The lens says that rather than
+    /// going missing, which reads as though it failed.
+    /// </summary>
+    [Fact]
+    public async Task ALensSaysWhyARoutineWithABlockMoveHasNoCount()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc copy: a16, i16 {
+                mvn #$7e, #$7e
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            ["not counted: a block move takes 7 cycles a byte, and how many is in A"],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
     /// An inline <c>.scope</c> is a part of its routine and costs what a pass through it
     /// costs; one at file level holds declarations and no code, and has nothing to say.
     /// </summary>

@@ -57,12 +57,21 @@ internal sealed class StateChecks
     public static bool IsKnown(ProcessorMode mode) => mode is ProcessorMode.Native or ProcessorMode.Emulation;
 
     /// <summary>What a routine hands back: its exit, with the parts it declares unchanged kept from <paramref name="state"/>.</summary>
-    public static ProcessorState Exited(Signature callee, ProcessorState state) => new(
-        callee.Exit.A == Width.Unchanged ? state.A : callee.Exit.A,
-        callee.Exit.Index == Width.Unchanged ? state.Index : callee.Exit.Index,
-        callee.Exit.E == ProcessorMode.Unchanged ? state.E : callee.Exit.E,
-        callee.Exit.D.Kind == StateValueKind.Unchanged ? state.D : callee.Exit.D,
-        callee.Exit.B.Kind == StateValueKind.Unchanged ? state.B : callee.Exit.B);
+    public static ProcessorState Exited(Signature callee, ProcessorState state)
+    {
+        var exited = new ProcessorState(
+            callee.Exit.A == Width.Unchanged ? state.A : callee.Exit.A,
+            callee.Exit.Index == Width.Unchanged ? state.Index : callee.Exit.Index,
+            callee.Exit.E == ProcessorMode.Unchanged ? state.E : callee.Exit.E,
+            callee.Exit.D.Kind == StateValueKind.Unchanged ? state.D : callee.Exit.D,
+            callee.Exit.B.Kind == StateValueKind.Unchanged ? state.B : callee.Exit.B);
+
+        // Emulation mode pins both widths at 8, as a `.state emu` does, so a routine returning
+        // in it returns with them there however its `a*` and `i*` read.
+        return exited.E == ProcessorMode.Emulation
+            ? exited with { A = Width.Eight, Index = Width.Eight }
+            : exited;
+    }
 
     /// <summary>The operand an instruction has on this writing of it: what a call gave, where the body names an <c>operand</c> parameter.</summary>
     public SyntaxNode? OperandOf(Step step)
@@ -497,9 +506,16 @@ internal sealed class StateChecks
         {
             return;
         }
-        var fix = mnemonic == "jsr" ? "jsl" : "jml";
+        // A conditional branch has no long form to reach with, so what reaches the other bank
+        // is a `jml` the opposite branch skips.
+        var reaches = mnemonic switch
+        {
+            "jsr" => "`jsl` reaches it",
+            "jmp" or "bra" or "brl" => "`jml` reaches it",
+            _ => "no branch leaves the bank: branching the other way over a `jml` to it does",
+        };
         Report(step, $"`{mnemonic}` stays in bank {StateValue.Hex(here.Value, 2)}, and `{target.DisplayName}` is in "
-            + $"\"{segment.Name}\", in bank {StateValue.Hex(there, 2)}: `{fix}` reaches it");
+            + $"\"{segment.Name}\", in bank {StateValue.Hex(there, 2)}: {reaches}");
     }
 
     /// <summary>

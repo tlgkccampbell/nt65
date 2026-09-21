@@ -55,6 +55,24 @@
     rts
 }
 
+; Emulation mode pins both widths at 8 whatever is written to change them, so a `rep` whose
+; operand nt65 cannot work out changes nothing there and the widths are still known after it.
+.proc masked: emu -> emu {
+    rep #<value             ; the low byte of an address, which only the linker knows
+    lda #$12
+    rts
+}
+
+; A routine that returns in emulation mode returns with both widths 8, however its `a*` and
+; `i*` read, because that is what the mode pins them at.
+.proc go_emu = $8000: a*, i* -> emu
+
+.proc after_it: a16, i8 -> emu {
+    jsr go_emu
+    lda #$12
+    rts
+}
+
 ; A save and a restore around a call: `plp` finds the status `php` saved, so the widths
 ; after it are the widths before it, and the call in between changes nothing about that.
 .proc save: a8, i8 {

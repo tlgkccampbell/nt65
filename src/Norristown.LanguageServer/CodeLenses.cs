@@ -78,8 +78,10 @@ internal static class CodeLenses
         // leaving a line that looks as though the lens failed on it.
         if (!cost.Ends)
             return endless;
+        // A routine holding an instruction whose time only the run says has no count, and the
+        // word for it is better than no lens at all.
         if (cost is not { Least: { } least })
-            return null;
+            return cost.Uncounted is { } why ? $"not counted: {why}" : null;
         var count = Count(least, cost.Most);
         if (cost.Loops)
             count += ", loops";

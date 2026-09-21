@@ -98,11 +98,17 @@ public static class Instructions
         _ => null,
     };
 
-    /// <summary>Whether a mnemonic transfers control, so its target is near or far rather than sized.</summary>
+    /// <summary>
+    /// Whether a mnemonic's operand names a place to reach rather than an address to size, so
+    /// what it takes is a near or a far target: every jump, call and branch, and <c>per</c>,
+    /// which reaches its target the way <c>brl</c> does and pushes it. Which names those are is
+    /// the same question whatever the program is built for, so every CPU nt65 knows is asked.
+    /// </summary>
     public static bool IsControlTransfer(string mnemonic) =>
-        Modes(Cpu.Wdc65C02, mnemonic).Any(mode => mode is AddressingMode.Relative or AddressingMode.DirectRelative)
+        CpuNames.All.Any(cpu => Modes(cpu, mnemonic).Any(mode =>
+            mode is AddressingMode.Relative or AddressingMode.DirectRelative or AddressingMode.RelativeLong))
         || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic)
-        || mnemonic.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl" or "brl";
+        || mnemonic.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl";
 
     /// <summary>
     /// The two short branches a long branch is written with: the one it takes when the

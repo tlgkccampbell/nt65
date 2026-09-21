@@ -693,10 +693,13 @@ public sealed class StateAnalysis
     /// </summary>
     private ProcessorState Flags(Step step, bool reset, ProcessorState state)
     {
-        if (Constant(step) is not { } flags)
-            return state with { A = Width.Unknown, Index = Width.Unknown };
+        // Emulation mode pins both widths at 8 whatever the operand says, so an operand nt65
+        // cannot work out changes nothing there. That is asked first: forgetting the widths and
+        // then finding the mode would throw away what the mode already said.
         if (state.E == ProcessorMode.Emulation)
             return state;
+        if (Constant(step) is not { } flags)
+            return state with { A = Width.Unknown, Index = Width.Unknown };
 
         var width = reset
             ? state.E == ProcessorMode.Native ? Width.Sixteen : Width.Unknown

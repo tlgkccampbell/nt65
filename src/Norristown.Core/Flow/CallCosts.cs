@@ -110,7 +110,8 @@ public static class CallCosts
         var (least, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
         var most = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Most;
         walking.Remove(name);
-        var cost = new RoutineCost(least, most, Calls(region), ends && returns.Contains(name));
+        var cost = new RoutineCost(
+            least, most, Calls(region), ends && returns.Contains(name), region.Cost.Uncounted);
         totals[name] = cost;
         return cost;
 

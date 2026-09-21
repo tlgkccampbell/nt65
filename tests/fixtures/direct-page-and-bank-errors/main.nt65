@@ -103,3 +103,10 @@
     rts
 }
 
+; A conditional branch has no long form to name instead, so what reaches the other bank is a
+; `jml` the opposite branch skips.
+.proc branches: a8, i8 {
+    beq low                 ;! error: `beq` stays in bank $02, and `low` is in "BANK1", in bank $01: no branch leaves the bank: branching the other way over a `jml` to it does
+    rts
+}
+

@@ -90,9 +90,6 @@ public sealed class CodeLayout
     // recursion check, but a chain of macros over long lists is not, so it is counted too.
     private int expanded;
 
-    // Whether the immediate being laid out is sized by a register whose width is not known.
-    private bool sizeUnknown;
-
     private CodeLayout(
         SemanticModel model, Cpu cpu, StateAnalysis? states,
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
@@ -558,10 +555,10 @@ public sealed class CodeLayout
 
         // A width the analysis does not know has been reported where it is needed, and a value
         // that does not fit a byte is no second mistake while nobody knows it is one byte.
-        sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } sized
+        var sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } sized
             && state?.Of(sized) is not (Width.Eight or Width.Sixteen);
 
-        var mode = Choose(mnemonic, operand, candidates, substituted, bits);
+        var mode = Choose(mnemonic, operand, candidates, substituted, bits, sizeUnknown);
         var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
         if (mode != AddressingMode.Immediate)
             bits = null;
@@ -766,10 +763,14 @@ public sealed class CodeLayout
             [new RelatedSpan(inTheBody.Tree.GetSpan(inTheBody.Span), "in the macro body")]));
     }
 
-    /// <summary>Which of the candidate modes the operand's own width calls for.</summary>
+    /// <summary>
+    /// Which of the candidate modes the operand's own width calls for.
+    /// <paramref name="sizeUnknown"/> says the immediate is sized by a register whose width the
+    /// analysis does not know, which it has already reported.
+    /// </summary>
     private AddressingMode Choose(
         SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode[] candidates,
-        OperandSubstitution? substituted, int? bits)
+        OperandSubstitution? substituted, int? bits, bool sizeUnknown)
     {
         var widths = candidates.OrderBy(Instructions.Length).ToArray();
         if (operand is null)
@@ -801,7 +802,7 @@ public sealed class CodeLayout
                 Report(operand, $"`{mnemonic.Text}` has only a {Spell(reach)} form of this operand, "
                     + $"and `{pointer.GetText().Trim()}` is {Spell(wide)}");
             }
-            CheckOperand(mnemonic, operand, candidates[0], substituted, bits);
+            CheckOperand(mnemonic, operand, candidates[0], substituted, bits, sizeUnknown);
             return candidates[0];
         }
 
@@ -819,7 +820,7 @@ public sealed class CodeLayout
             Report(operand,
                 $"`{mnemonic.Text}` cannot reach a {Spell(size)} address on the {CpuNames.Spell(cpu)}");
         }
-        CheckOperand(mnemonic, operand, chosen, substituted, bits);
+        CheckOperand(mnemonic, operand, chosen, substituted, bits, sizeUnknown);
         return chosen;
     }
 
@@ -829,7 +830,7 @@ public sealed class CodeLayout
     /// </summary>
     private void CheckOperand(
         SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, OperandSubstitution? substituted,
-        int? bits)
+        int? bits, bool sizeUnknown)
     {
         if (Expression(operand) is not { } expression)
             return;

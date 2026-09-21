@@ -86,6 +86,13 @@ public sealed class BasicBlock
     public CycleCount? Cycles { get; internal set; }
 
     /// <summary>
+    /// Why it has no count, in a sentence, where nt65 knows the instruction and still cannot
+    /// say what it takes; null where it has a count, and where the line is one nt65 could not
+    /// lay out at all.
+    /// </summary>
+    public string? Uncounted { get; internal set; }
+
+    /// <summary>
     /// How many times one pass through the routine runs it, where it is a loop counting
     /// itself down from an immediate; null for every other block, whose turns are not in the
     /// program.

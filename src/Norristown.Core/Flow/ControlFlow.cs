@@ -70,7 +70,7 @@ public sealed class ControlFlow
                 ? (null, null, true)
                 : Paths.Through(blocks);
             var region = new FlowRegion(
-                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends),
+                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends, Uncounted(blocks)),
                 flow.Costed(blocks, inline), inline);
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
@@ -469,7 +469,10 @@ public sealed class ControlFlow
             if (step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax || step.IsMarker)
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
+            {
+                block.Uncounted = Uncounted(step);
                 return null;
+            }
             total += cycles;
         }
 
@@ -477,6 +480,20 @@ public sealed class ControlFlow
         // label, and running none of it takes no time at all.
         return total;
     }
+
+    /// <summary>
+    /// Why a statement nt65 knows has no count, for the lens that would otherwise leave the
+    /// routine with none and say nothing; null for a line nt65 could not lay out, which has
+    /// been reported where it is written.
+    /// </summary>
+    private static string? Uncounted(Step step) =>
+        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() is "mvn" or "mvp"
+            ? "a block move takes 7 cycles a byte, and how many is in A"
+            : null;
+
+    /// <summary>Why a routine has no count: the first block a path reaches that has none says so.</summary>
+    private static string? Uncounted(IReadOnlyList<BasicBlock> blocks) =>
+        blocks.FirstOrDefault(block => block.IsReached && block.Uncounted is not null)?.Uncounted;
 
     /// <summary>Which blocks any path from the region's first one reaches.</summary>
     private static void Reach(List<BasicBlock> blocks)

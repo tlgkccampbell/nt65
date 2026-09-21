@@ -15,7 +15,13 @@ namespace Norristown.Flow;
 /// Whether a path through it ever leaves it. A routine that loops for ever does not, and has
 /// no pass to put a cost on at all.
 /// </param>
-public readonly record struct RoutineCost(int? Least, int? Most, bool Calls, bool Ends)
+/// <param name="Uncounted">
+/// Why there is no count, in a sentence, where an instruction nt65 knows takes a time only the
+/// run says: a block move, whose length is in A. Null wherever the count is known, and wherever
+/// the line that has none was reported.
+/// </param>
+public readonly record struct RoutineCost(
+    int? Least, int? Most, bool Calls, bool Ends, string? Uncounted = null)
 {
     /// <summary>Whether nt65 has a count for every instruction a path through it runs.</summary>
     public bool IsKnown => Least is not null;

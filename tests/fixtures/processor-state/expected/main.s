@@ -68,7 +68,23 @@ hooked:
     rts
 ; end of hooked
 
-; .proc save: a8, i8  main.nt65:60
+; .proc masked: emu -> emu  main.nt65:60
+masked:
+    rep #<value
+    lda #$12
+    rts
+; end of masked
+
+go_emu = $8000
+
+; .proc after_it: a16, i8 -> emu  main.nt65:70
+after_it:
+    jsr go_emu
+    lda #$12
+    rts
+; end of after_it
+
+; .proc save: a8, i8  main.nt65:78
 main__save:
     php
     rep #$30
@@ -81,14 +97,14 @@ main__save:
     rts
 ; end of save
 
-; .proc keep: a*, i*  main.nt65:71
+; .proc keep: a*, i*  main.nt65:89
 main__keep:
     pha
     pla
     rts
 ; end of keep
 
-; .proc merge: a8  main.nt65:79
+; .proc merge: a8  main.nt65:97
 merge:
     lda a:value
     beq merge__done
@@ -99,19 +115,19 @@ merge__done:
     rts
 ; end of merge
 
-; .proc tail: a16 -> a8  main.nt65:90
+; .proc tail: a16 -> a8  main.nt65:108
 main__tail:
     sep #$20
     jmp render_again
 ; end of tail
 
-; .proc render_again: a8  main.nt65:95
+; .proc render_again: a8  main.nt65:113
 render_again:
     lda #1
     rts
 ; end of render_again
 
-; .proc handler: a?, i?  main.nt65:101
+; .proc handler: a?, i?  main.nt65:119
 handler:
     rep #$30
     .a16
@@ -122,9 +138,9 @@ handler__vector:
     rti
 ; end of handler
 
-; .proc command: a8, i8  main.nt65:122
+; .proc command: a8, i8  main.nt65:140
 main__command:
-    ; dispatch!(@load, @save)  main.nt65:123
+    ; dispatch!(@load, @save)  main.nt65:141
     jmp (dispatch__table,x)
 dispatch__table:
     .addr command__load

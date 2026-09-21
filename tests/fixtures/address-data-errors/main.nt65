@@ -33,6 +33,11 @@
     rep #$20
     lda #sprite             ;! error: `sprite` is a far address, and this immediate is two bytes: `.loword(sprite)` is its low 16 bits
     sep #$20
+
+    ; `per` reaches its target the way `brl` does, so what it pushes is a near address.
+    per sprite              ;! error: `per` takes a near target, and this one is far
+    pla
+    pla
     rts
 }
 
