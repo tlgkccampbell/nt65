@@ -215,6 +215,7 @@ internal sealed partial class Binder
                     broughtAt.TryGetValue(pair.Key, out var at) ? at.At : default,
                     broughtAt.TryGetValue(pair.Key, out var how) && how.Exported),
                 StringComparer.Ordinal),
+            Used = used,
             Globs = globs,
         };
     }
@@ -1777,6 +1778,10 @@ internal sealed partial class Binder
         /// <summary>The names the file's <c>.use</c> items bring in, each a symbol or a module path.</summary>
         public IReadOnlyDictionary<string, BroughtName> Brought { get; init; } =
             new Dictionary<string, BroughtName>();
+
+        /// <summary>The same as the places those names reach, which is what a lookup here answers with.</summary>
+        internal IReadOnlyDictionary<string, Place> Used { get; init; } =
+            new Dictionary<string, Place>(StringComparer.Ordinal);
 
         /// <summary>The modules whose exports a <c>.use module::*</c> brings in.</summary>
         public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];

@@ -82,14 +82,13 @@ internal static class Completion
     /// The macro or function a call names, written as the name or path that ends at
     /// <paramref name="end"/>, exclusive.
     /// </summary>
-    public static Symbol? Callee(ProgramModel program, SemanticModel model, Scope scope, LineContext line, int end)
+    public static Symbol? Callee(SemanticModel model, LineContext line, int end)
     {
         var before = line.Before;
         if (end < 1 || !LineContext.IsWord(before[end - 1].Kind))
             return null;
         var path = line.PathBefore(end - 1) ?? [];
-        var found = Walk(program, model, scope, [.. path, before[end - 1].Text], fromRoot: false);
-        return found?.Symbol;
+        return model.GetSymbolInfo(line.Caret, [.. path, before[end - 1].Text]).Symbol;
     }
 
     private static void Collect(
@@ -98,7 +97,6 @@ internal static class Completion
     {
         var before = line.Before;
         var directive = line.Directive;
-        var scope = model.ScopeAt(line.Caret);
 
         // After `::`, what the path leads to has the names; in a `.use`, a path starts at the
         // modules' root, and in its `{ }` names what the path before it leads to.
@@ -108,13 +106,13 @@ internal static class Completion
             var path = brace >= 0 ? line.PathBefore(brace) : line.PathBefore(before.Count);
             if (path is null && brace < 0 && before.Count == line.Start + 1)
                 AddModules(program, "", items);
-            else if (path is not null && Walk(program, model, scope, path, fromRoot: true) is { } found)
+            else if (path is not null && model.GetSymbolInfo(line.Caret, path, fromRoot: true) is { IsNone: false } found)
                 AddMembers(program, model, found, modulesToo: brace < 0, items);
             return;
         }
         if (line.PathBefore(before.Count) is { } walked)
         {
-            if (Walk(program, model, scope, walked, fromRoot: false) is { } found)
+            if (model.GetSymbolInfo(line.Caret, walked) is { IsNone: false } found)
                 AddMembers(program, model, found, modulesToo: true, items);
             return;
         }
@@ -158,7 +156,7 @@ internal static class Completion
                     AddWords(RoutineItems, "processor state", items);
                     AddWords(PromiseItems, "registers kept", items);
                 }
-                AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
+                AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
                 return;
             }
         }
@@ -183,28 +181,28 @@ internal static class Completion
         // A statement's first word, which the place the line is in decides.
         if (before.Count == line.Start)
         {
-            Starting(program, model, scope, line, cpu, items);
+            Starting(program, model, line, cpu, items);
             return;
         }
 
         // What follows a mnemonic is that instruction's operand, and nothing else.
         if (before[line.Start].Kind == SyntaxKind.Mnemonic)
         {
-            Operand(program, model, scope, line, cpu, items);
+            Operand(program, model, line, cpu, items);
             return;
         }
 
         // An argument of a macro call may name the parameter it is for.
         if (line.OpenCall() is { } call && call.Open >= 2 && before[call.Open - 1].Kind == SyntaxKind.Bang
             && before[^1].Kind is SyntaxKind.OpenParen or SyntaxKind.Comma
-            && Callee(program, model, scope, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
+            && Callee(model, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
         {
             foreach (var parameter in macro.Parameters)
                 items.TryAdd(parameter.Symbol.Name, new Suggestion(Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = "));
         }
 
         if (!Ends(before[^1].Kind))
-            AddExpression(program, model, scope, line, items);
+            AddExpression(program, model, line, items);
     }
 
     /// <summary>
@@ -218,7 +216,7 @@ internal static class Completion
 
     /// <summary>What may begin a statement where the caret is.</summary>
     private static void Starting(
-        ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
+        ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
         Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.At(line))
@@ -236,25 +234,25 @@ internal static class Completion
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
                     items.TryAdd(mnemonic, new Suggestion(Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic));
                 }
-                AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro
+                AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro
                     || (symbol.Kind == SymbolKind.MacroParameter && symbol.Parameter is { IsBlock: true }));
                 Called(items);
                 break;
 
             // A `.data` block holds data, the declarations that name it, and macro calls.
             case Place.Data:
-                AddInScope(program, model, scope, items, symbol => symbol.Kind == SymbolKind.Macro);
+                AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro);
                 Called(items);
                 break;
 
             // A line of values, of a list or of a charmap starts with an expression.
             case Place.Values:
-                AddExpression(program, model, scope, line, items);
+                AddExpression(program, model, line, items);
                 break;
 
             // A record initializer gives the type's members their values, one a line.
             case Place.Record:
-                if (line.RecordType is { } path && Walk(program, model, scope, path, fromRoot: false) is { } found)
+                if (line.RecordType is { } path && model.GetSymbolInfo(line.Caret, path) is { IsNone: false } found)
                     AddMembers(program, model, found, modulesToo: false, items);
                 break;
 
@@ -283,7 +281,7 @@ internal static class Completion
     /// that index them, and the names an address or a value is written from.
     /// </summary>
     private static void Operand(
-        ProgramModel program, SemanticModel model, Scope scope, LineContext line, Cpu cpu,
+        ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
         Dictionary<string, Suggestion> items)
     {
         var mnemonic = line.Before[line.Start].Text;
@@ -320,7 +318,7 @@ internal static class Completion
             // An instruction whose only operand is a value is written with the `#`, so a name
             // on its own is not something that could go there.
             if (modes.Any(mode => Takes(mode) && mode is not (AddressingMode.Immediate or AddressingMode.BlockMove)))
-                AddExpression(program, model, scope, line, items);
+                AddExpression(program, model, line, items);
             return;
         }
         if (written[^1].Kind == SyntaxKind.Comma)
@@ -329,11 +327,11 @@ internal static class Completion
 
             // `bbr0 flags, @skip` is the one operand whose comma is followed by a target.
             if (modes.Contains(AddressingMode.DirectRelative))
-                AddExpression(program, model, scope, line, items);
+                AddExpression(program, model, line, items);
             return;
         }
         if (!Ends(written[^1].Kind))
-            AddExpression(program, model, scope, line, items);
+            AddExpression(program, model, line, items);
     }
 
     /// <summary>Every form an instruction has, written as the mark that begins it.</summary>
@@ -455,46 +453,12 @@ internal static class Completion
         };
     }
 
-    /// <summary>
-    /// Where a path leads: a symbol, or a module path. A path in code starts where a name does, in
-    /// scope, among what <c>.use</c> brought in, or at the modules' root; one in a <c>.use</c>
-    /// starts at the root.
-    /// </summary>
-    private static (Symbol? Symbol, string? Module)? Walk(
-        ProgramModel program, SemanticModel model, Scope scope, IReadOnlyList<string> path, bool fromRoot)
-    {
-        var symbols = program.Symbols;
-        (Symbol? Symbol, string? Module)? at = null;
-        foreach (var part in path)
-        {
-            at = at switch
-            {
-                null when fromRoot => symbols.IsModulePath(part) ? (null, part) : null,
-                null => scope.Lookup(part) is { } local ? (local, null)
-                    : model.Brought.TryGetValue(part, out var brought) ? (brought.Symbol, brought.Module)
-                    : model.Globs.Select(module => symbols.Member(module, part)).FirstOrDefault(found => found is { IsExported: true }) is { } globbed ? (globbed, null)
-                    : symbols.IsModulePath(part) ? (null, part)
-                    : symbols.Define(part) is { } define ? (define, null)
-                    : null,
-                { Module: { } prefix } when symbols.IsModulePath($"{prefix}::{part}") => (null, $"{prefix}::{part}"),
-                { Module: { } prefix } => symbols.ModuleNamed(prefix) is { } module && symbols.Member(module, part) is { } member
-                    ? (member, null)
-                    : null,
-                { Symbol: { } outer } => BodyOf(outer)?.FindMember(part) is { } inner ? (inner, null) : null,
-                _ => null,
-            };
-            if (at is null)
-                return null;
-        }
-        return at;
-    }
-
     /// <summary>What a name leads into with <c>::</c>: its own body, or its type's.</summary>
     private static Scope? BodyOf(Symbol symbol) => symbol.Body ?? symbol.Type?.Body;
 
     /// <summary>The names after <c>::</c> where a path leads, and the modules below it when it is a module path.</summary>
     private static void AddMembers(
-        ProgramModel program, SemanticModel model, (Symbol? Symbol, string? Module) at, bool modulesToo,
+        ProgramModel program, SemanticModel model, SymbolInfo at, bool modulesToo,
         Dictionary<string, Suggestion> items)
     {
         if (at.Module is { } prefix)
@@ -540,13 +504,13 @@ internal static class Completion
     /// functions, the last three of which only a macro body has.
     /// </summary>
     private static void AddExpression(
-        ProgramModel program, SemanticModel model, Scope scope, LineContext line,
+        ProgramModel program, SemanticModel model, LineContext line,
         Dictionary<string, Suggestion> items)
     {
         AddWord("$", "a hexadecimal number", items);
         AddWord("%", "a binary number", items);
         AddWord("'", "a character", items);
-        AddInScope(program, model, scope, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
+        AddInScope(model, line.Caret, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
         AddModules(program, "", items);
         var builtins = line.InMacro
             ? SyntaxFacts.BuiltinFunctions.Concat(SyntaxFacts.MacroBuiltinFunctions)
@@ -556,33 +520,27 @@ internal static class Completion
     }
 
     /// <summary>
-    /// Every name <paramref name="scope"/> can write alone that <paramref name="wanted"/> accepts:
-    /// what the scopes out to the file declare, the nearest first, what <c>.use</c> brought in, and
-    /// the defines.
+    /// Every name that may be written alone at <paramref name="position"/> and that
+    /// <paramref name="wanted"/> accepts, each under the spelling that reaches it there. The
+    /// list and its order are the model's, which is the binder's, so what is offered is what
+    /// the name will mean once it is written.
     /// </summary>
     private static void AddInScope(
-        ProgramModel program, SemanticModel model, Scope scope,
+        SemanticModel model, int position,
         Dictionary<string, Suggestion> items, Func<Symbol, bool> wanted)
     {
-        for (var around = scope; around is not null; around = around.Parent)
+        foreach (var (name, means) in model.LookupNames(position))
         {
-            foreach (var symbol in around.Symbols.Where(wanted))
-                Add(symbol, items);
-        }
-        foreach (var (name, brought) in model.Brought)
-        {
-            if (brought.Symbol is { } symbol && wanted(symbol))
-                items.TryAdd(name, new Suggestion(KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol)));
-            else if (brought.Module is { } module)
+            if (means.Symbol is { } symbol)
+            {
+                if (wanted(symbol))
+                    items.TryAdd(name, new Suggestion(KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol)));
+            }
+            else if (means.Module is { } module)
+            {
                 items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Module, $"module `{module}`", name));
+            }
         }
-        foreach (var module in model.Globs)
-        {
-            foreach (var symbol in module.FileScope.Symbols.Where(symbol => symbol.IsExported && wanted(symbol)))
-                Add(symbol, items);
-        }
-        foreach (var define in program.Symbols.Defines.Where(wanted))
-            Add(define, items);
     }
 
     private static void AddDirectives(

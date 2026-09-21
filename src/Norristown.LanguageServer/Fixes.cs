@@ -105,7 +105,7 @@ internal static class Fixes
                 break;
 
             case FixKind.DataMember:
-                foreach (var change in DataMember(model, diagnostic))
+                foreach (var change in DataMember(analysis.Program, model, diagnostic))
                     yield return change;
                 break;
 
@@ -326,7 +326,7 @@ internal static class Fixes
     }
 
     /// <summary>A label written in mixed data, as a member of it or as a position in it.</summary>
-    private static IEnumerable<Change> DataMember(SemanticModel model, Diagnostic diagnostic)
+    private static IEnumerable<Change> DataMember(ProgramModel program, SemanticModel model, Diagnostic diagnostic)
     {
         var tree = model.Tree;
         var span = Edits.SpanOf(tree, diagnostic.Span);
@@ -345,7 +345,7 @@ internal static class Fixes
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
         IReadOnlyList<Edit> edits = symbol is null
             ? [new Edit(tree, new TextSpan(span.Start, 0), "@")]
-            : Edits.Rename(model, symbol, "@" + name);
+            : Edits.Rename(program, symbol, "@" + name);
         yield return Fix(diagnostic, $"Make `{name}` a position, `@{name}`", edits, preferred: false);
     }
 

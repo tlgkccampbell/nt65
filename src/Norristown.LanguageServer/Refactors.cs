@@ -36,7 +36,7 @@ internal static class Refactors
             .. Leaves(analysis, model, line),
             .. Widths(analysis, model, line),
             .. Named(model, caret, line),
-            .. Labels(model, caret),
+            .. Labels(analysis.Program, model, caret),
             .. Segments(model, line),
             .. ExtractProc.In(analysis, model, range),
             .. Ca65Conversion.In(model, range),
@@ -303,7 +303,7 @@ internal static class Refactors
     /// A label given a name of its own, or made cheap. A cheap local is private to the routine
     /// around it, so a label with a name only that routine writes may become one.
     /// </summary>
-    private static IEnumerable<Change> Labels(SemanticModel model, int caret)
+    private static IEnumerable<Change> Labels(ProgramModel program, SemanticModel model, int caret)
     {
         var tree = model.Tree;
         if (model.ReferenceAt(caret) is not { IsDeclaration: true } reference
@@ -316,7 +316,7 @@ internal static class Refactors
         {
             var name = Edits.UnusedName(model, label.Name);
             yield return new Change($"Give `@{label.Name}` a name of its own", CodeActionKinds.Rewrite,
-                Edits.Rename(model, label, name));
+                Edits.Rename(program, label, name));
             yield break;
         }
 
@@ -330,7 +330,7 @@ internal static class Refactors
         if (model.ReferencesTo(label).Any(other => other.Span.Start < body.Start || other.Span.End > body.End))
             yield break;
         yield return new Change($"Make `{label.Name}` a cheap local, `@{label.Name}`", CodeActionKinds.Rewrite,
-            Edits.Rename(model, label, "@" + label.Name));
+            Edits.Rename(program, label, "@" + label.Name));
     }
 
     /// <summary>

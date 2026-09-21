@@ -182,35 +182,8 @@ internal sealed partial class Binder
     /// What a name the scopes around it do not declare means: what a <c>.use</c> brought in, a
     /// define, the first part of a module's path, or what a <c>.use module::*</c> brought in.
     /// </summary>
-    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report)
-    {
-        if (used.TryGetValue(token.Text, out var brought))
-            return brought with { IsAlias = brought.Symbol is { } target && target.Name != token.Text };
-        if (program.Define(token.Text) is { } define)
-            return new Place(define);
-        if (!last && IsModulePath(token.Text))
-            return new Place(null, token.Text);
-
-        // A module on its own is no value, so a name a `*` brought in is what one standing
-        // alone means; with nothing else, it is the module, which is reported as one.
-        Place? chosen = null;
-        foreach (var module in globs)
-        {
-            if (program.Member(module, token.Text, Touch) is not { } exported
-                || exported.Tree == module.Tree && !exported.IsExported || chosen?.Symbol == exported)
-            {
-                continue;
-            }
-            if (chosen is { } other)
-            {
-                report?.Invoke(token.Span, Catalogue.ExportAmbiguous.Says(
-                    token.Text, other.From, module.Name, module.Name, token.Text));
-                return Place.Reported;
-            }
-            chosen = new Place(exported, From: module.Name);
-        }
-        return chosen ?? (last && IsModulePath(token.Text) ? new Place(null, token.Text) : null);
-    }
+    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report) =>
+        Lookup.Outside(token.Text, last, program, used, globs, Touch, At(token, report));
 
     /// <summary>
     /// A name no scope, <c>.use</c> or define gives any meaning, and the modules that export one
@@ -259,39 +232,22 @@ internal sealed partial class Binder
         }
     }
 
+    /// <summary>What a lookup that reports says it on: the name it was asked about.</summary>
+    private static Action<DiagnosticMessage>? At(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
+        report is null ? null : message => report(token.Span, message);
+
     /// <summary>The first part of a path written from the root of the modules.</summary>
-    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report)
-    {
-        if (IsModulePath(token.Text))
-            return new Place(null, token.Text);
-        report?.Invoke(token.Span, Catalogue.ModuleUnknown.Says(token.Text));
-        return null;
-    }
+    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
+        Lookup.ModuleRoot(token.Text, program, At(token, report));
 
     /// <summary>The part after <paramref name="prefix"/>, which is a module or the start of one's name.</summary>
     private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, DiagnosticMessage>? report)
     {
-        var path = $"{prefix}::{token.Text}";
-        if (IsModulePath(path))
-            return new Place(null, path);
-        if (program.ModuleNamed(prefix) is not { } module)
-        {
-            report?.Invoke(token.Span, Catalogue.ModuleUnknown.Says(path));
-            return null;
-        }
-        if (program.Member(module, token.Text, Touch) is not { } member)
-        {
-            report?.Invoke(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"module `{prefix}`"));
-            return null;
-        }
-        return new Place(report is null ? member : CheckExported(token, member, last));
+        var found = Lookup.InModule(token.Text, prefix, program, Touch, At(token, report));
+        return found is { Symbol: { } member } && report is not null
+            ? new Place(CheckExported(token, member, last))
+            : found;
     }
-
-    /// <summary>
-    /// Whether <paramref name="path"/> is a module or the start of one's name. Which modules
-    /// there are changes only when a file names a different one, which is read again whole.
-    /// </summary>
-    private bool IsModulePath(string path) => program.IsModulePath(path);
 
     /// <summary>Remembers that resolving this file looked for <paramref name="member"/>, written <c>module::name</c>.</summary>
     private void Touch(string member) => lookedUp.Add("member:" + member);
@@ -314,20 +270,16 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// What a name may reach into. A routine or a scope opens its own; a member or an
-    /// data declaration opens the one belonging to the type it names, which is what makes the
-    /// fields of `.type T` data reachable through it.
+    /// What a name may reach into, while the file is being bound: the scope a routine or a
+    /// scope opens, or the one belonging to the type a member or a data declaration names,
+    /// which is what makes the fields of <c>.type T</c> data reachable through it. The type is
+    /// resolved here rather than in order, because nothing has evaluated anything yet.
     /// </summary>
     private Scope? BodyOf(Symbol symbol)
     {
-        // A macro has a body scope, but it is not one a path may reach into: what a body
-        // declares is local to each expansion, so there is no one symbol to name from
-        // outside.
-        if (symbol.Kind == SymbolKind.Macro)
-            return null;
-        if (symbol.Body is { } own)
-            return own;
-        if (symbol.TypeExpression is null || !resolving.Add(symbol))
+        if (Lookup.BodyOf(symbol) is { } known)
+            return known;
+        if (symbol.Kind == SymbolKind.Macro || symbol.TypeExpression is null || !resolving.Add(symbol))
             return null;
         var type = TypeOf(symbol);
         resolving.Remove(symbol);
@@ -465,19 +417,5 @@ internal sealed partial class Binder
             return;
         }
         broughtAt[name.Text] = (name.Span, exported);
-    }
-
-    /// <summary>What a part of a name resolved to: a symbol, or a module or the start of one's name.</summary>
-    /// <param name="Symbol">The symbol, or null for a module path.</param>
-    /// <param name="Module">The module path, when it is one.</param>
-    /// <param name="IsAlias">Whether the name was written as the name a <c>.use ... as</c> gave the symbol.</param>
-    /// <param name="From">The module whose <c>.use module::*</c> brought the symbol in, when one did.</param>
-    private readonly record struct Place(Symbol? Symbol, string? Module = null, bool IsAlias = false, string? From = null)
-    {
-        /// <summary>A name that means nothing, which has been reported as such.</summary>
-        public static Place Reported => default;
-
-        /// <summary>Whether this is <see cref="Reported"/>.</summary>
-        public bool IsReported => Symbol is null && Module is null;
     }
 }

@@ -170,7 +170,7 @@ public sealed class ProgramModel
         for (var i = 0; i < trees.Count; i++)
         {
             var path = trees[i].Path;
-            files.Add(new SemanticModel(trees[i], segments, configuration, bound[i], resolved, declared,
+            files.Add(new SemanticModel(trees[i], segments, configuration, symbols, bound[i], resolved, declared,
                 Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), binaryLength));
         }
         var lookedUp = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
@@ -188,6 +188,30 @@ public sealed class ProgramModel
     /// the same declaration under the same name; this is the symbol for it now.
     /// </summary>
     public Symbol Current(Symbol symbol) => forwarding.Current(symbol);
+
+    /// <summary>
+    /// Every place <paramref name="symbol"/> is written, in every file of the program, its
+    /// declaration included, in file and source order. A file kept from before an edit
+    /// elsewhere names what the edited file declared then, so what each reference stands for
+    /// is compared as what it stands for now.
+    /// </summary>
+    public IReadOnlyList<(SemanticModel File, SymbolReference Reference)> ReferencesTo(Symbol symbol) =>
+        ReferencesTo([symbol]);
+
+    /// <summary>
+    /// The same for several symbols at once, which is what one name declared under several of
+    /// them needs: an enum member and the instances of a family named after it.
+    /// </summary>
+    public IReadOnlyList<(SemanticModel File, SymbolReference Reference)> ReferencesTo(
+        IReadOnlyCollection<Symbol> symbols)
+    {
+        var wanted = symbols.Select(Current).ToHashSet();
+        return [.. Files
+            .OrderBy(file => file.Tree.Path, StringComparer.Ordinal)
+            .SelectMany(file => file.References
+                .Where(reference => wanted.Contains(Current(reference.Symbol)))
+                .Select(reference => (file, reference)))];
+    }
 
     /// <summary>
     /// The program with the files at <paramref name="dirty"/> read again, as
@@ -334,7 +358,7 @@ public sealed class ProgramModel
         var all = byFile.Values.SelectMany(diagnostics => diagnostics).Concat(tables).Concat(segmentValuesNow).ToList();
         var files = Files
             .Select(file => dirty.Contains(file.Tree.Path)
-                ? new SemanticModel(trees[file.Tree.Path], Segments, configuration, bound[file.Tree.Path], resolved,
+                ? new SemanticModel(trees[file.Tree.Path], Segments, configuration, symbols, bound[file.Tree.Path], resolved,
                     declared, Expanded(binders[file.Tree.Path], forwarding.Current), all.Where(d => d.Span.File == file.Tree.Path), binaryLength)
                 : file)
             .ToList();

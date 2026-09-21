@@ -20,10 +20,16 @@ public sealed class SemanticModel
     private readonly IReadOnlyList<(TextSpan Span, Scope Scope)> regions;
     private readonly Dictionary<StatementSyntax, Family> byFamily;
 
+    // What the file may name in the other modules, and the places its `.use` items reach,
+    // which together are what a lookup at a position is answered from.
+    private readonly ProgramSymbols program;
+    private readonly IReadOnlyDictionary<string, Place> used;
+
     internal SemanticModel(
         SyntaxTree tree,
         SegmentTable segments,
         Configuration configuration,
+        ProgramSymbols program,
         Binder.Result bound,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> declared,
@@ -33,6 +39,8 @@ public sealed class SemanticModel
     {
         this.declared = declared;
         this.binaryLength = binaryLength;
+        this.program = program;
+        used = bound.Used;
         Tree = tree;
         Segments = segments;
         Configuration = configuration;
@@ -213,6 +221,74 @@ public sealed class SemanticModel
             return line < Tree.LineStarts.Length ? Tree.LineStarts[line] : Tree.Text.Length;
         }
     }
+
+    /// <summary>
+    /// Every name that may be written alone at <paramref name="position"/>, each with what it
+    /// means there, in the order a lookup tries them: what the scopes out to the file declare,
+    /// the nearest first, what <c>.use</c> brought in, the defines, and what a
+    /// <c>.use module::*</c> brings in. Where two share a name the first is what the name
+    /// means, which is the rule the binder resolves the file by.
+    /// <para>
+    /// A module is not one of them: it is the start of a path rather than a name that stands
+    /// for something. <see cref="GetSymbolInfo(int, IReadOnlyList{string}, bool)"/> answers a
+    /// path, module or not.
+    /// </para>
+    /// </summary>
+    public IEnumerable<(string Name, SymbolInfo Means)> LookupNames(int position) =>
+        Lookup.InScope(ScopeAt(position), program, used, Globs)
+            .Select(found => (found.Name, found.Means.Means));
+
+    /// <summary>
+    /// The symbols a name written alone at <paramref name="position"/> could stand for, the
+    /// one the binder would choose first. With no <paramref name="name"/>, every symbol in
+    /// scope there, in the same order; a cheap local answers to its <c>@</c> name, as it is
+    /// written.
+    /// </summary>
+    public IReadOnlyList<Symbol> LookupSymbols(int position, string? name = null) =>
+        [.. LookupNames(position)
+            .Where(found => (name is null || found.Name == name) && found.Means.Symbol is not null)
+            .Select(found => found.Means.Symbol!)
+            .Distinct()];
+
+    /// <summary>
+    /// What a path written at <paramref name="position"/> means, each part as it is spelled:
+    /// the symbol it reaches, the module it stops at, or nothing. <paramref name="fromRoot"/>
+    /// says it starts at the root of the modules, as the path of a <c>.use</c> does.
+    /// <para>
+    /// The path is given as text rather than as a node, because the question is asked of a
+    /// line being typed as much as of one the file parsed. What it answers is what binding
+    /// the same name would answer, from the same lookup.
+    /// </para>
+    /// </summary>
+    public SymbolInfo GetSymbolInfo(int position, IReadOnlyList<string> path, bool fromRoot = false)
+    {
+        var at = ScopeAt(position);
+        Place? found = null;
+        for (var i = 0; i < path.Count; i++)
+        {
+            var last = i == path.Count - 1;
+            found = i == 0
+                ? fromRoot
+                    ? Lookup.ModuleRoot(path[0], program)
+                    : at.Lookup(path[0]) is { } local
+                        ? new Place(local)
+                        : Lookup.Outside(path[0], last, program, used, Globs)
+                : found!.Value.Module is { } prefix
+                    ? Lookup.InModule(path[i], prefix, program)
+                    : Lookup.BodyOf(found.Value.Symbol!)?.FindMember(path[i]) is { } member
+                        ? new Place(member)
+                        : null;
+            if (found is null or { IsReported: true })
+                return SymbolInfo.None;
+        }
+        return found?.Means ?? SymbolInfo.None;
+    }
+
+    /// <summary>
+    /// What a name written in the file means. <paramref name="on"/> is the turn it is written
+    /// on, for a path that ends in a repetition's name.
+    /// </summary>
+    public SymbolInfo GetSymbolInfo(SyntaxNode name, Expansion? on = null) => new(SymbolOf(name, on));
 
     /// <summary>Every place <paramref name="symbol"/> is written, its declaration included.</summary>
     public IReadOnlyList<SymbolReference> ReferencesTo(Symbol symbol) => [.. bySymbol[symbol]];

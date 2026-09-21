@@ -101,11 +101,15 @@ internal static class Edits
     public static BlockSyntax? BlockOpenedBy(SyntaxTree tree, int line) =>
         tree.GetLine(line).Parent is BlockSyntax block && block.LineIndex == line ? block : null;
 
-    /// <summary>Writing <paramref name="symbol"/> as <paramref name="name"/> everywhere its file writes it.</summary>
-    public static IReadOnlyList<Edit> Rename(SemanticModel model, Symbol symbol, string name) =>
-        [.. model.ReferencesTo(symbol)
-            .Where(reference => !reference.IsAlias)
-            .Select(reference => new Edit(model.Tree, reference.Span, name))];
+    /// <summary>
+    /// Writing <paramref name="symbol"/> as <paramref name="name"/> everywhere the program
+    /// writes it. A name another file brought in under one of its own is left alone: that file
+    /// wrote the <c>.use ... as</c> and goes on reaching the symbol through it.
+    /// </summary>
+    public static IReadOnlyList<Edit> Rename(ProgramModel program, Symbol symbol, string name) =>
+        [.. program.ReferencesTo(symbol)
+            .Where(found => !found.Reference.IsAlias)
+            .Select(found => new Edit(found.File.Tree, found.Reference.Span, name))];
 
     /// <summary>Whether a name is written after a <c>::</c>, which makes it a step on a path rather than a name on its own.</summary>
     public static bool IsQualified(SyntaxTree tree, TextSpan span)

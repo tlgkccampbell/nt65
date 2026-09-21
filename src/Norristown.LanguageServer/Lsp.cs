@@ -612,10 +612,12 @@ internal static class Lsp
     /// <summary>Every place the name at <paramref name="position"/> is written, in every file.</summary>
     public static IReadOnlyList<Protocol.Location> ToReferences(
         ProgramModel program, SemanticModel model, int position, bool includeDeclaration) =>
-        [.. Everywhere(program, model, position, renaming: false)
-            .Where(found => includeDeclaration || !found.Reference.IsDeclaration)
-            .Select(found => new Protocol.Location(
-                ToUri(found.File.Tree.Path), ToRange(found.File.Tree, found.Reference.Span)))];
+        model.ReferenceAt(position) is not { } asked
+            ? []
+            : [.. program.ReferencesTo(asked.Symbol)
+                .Where(found => includeDeclaration || !found.Reference.IsDeclaration)
+                .Select(found => new Protocol.Location(
+                    ToUri(found.File.Tree.Path), ToRange(found.File.Tree, found.Reference.Span)))];
 
     /// <summary>The same places, for a client to mark while the caret is on one of them.</summary>
     public static IReadOnlyList<Protocol.DocumentHighlight> ToHighlights(SemanticModel model, int position) =>
@@ -651,7 +653,7 @@ internal static class Lsp
         // An exported name is written in every file that uses it, so the edit spans the
         // program rather than the file the caret is in.
         var edits = new Dictionary<string, IReadOnlyList<Protocol.TextEdit>>(StringComparer.Ordinal);
-        foreach (var byFile in Everywhere(program, model, position, renaming: true).GroupBy(found => found.File))
+        foreach (var byFile in Renamed(program, model, reference).GroupBy(found => found.File))
         {
             edits[ToUri(byFile.Key.Tree.Path)] =
                 [.. byFile.Select(found => new Protocol.TextEdit(
@@ -696,44 +698,37 @@ internal static class Lsp
         model.ReferenceAt(position) is { } reference ? model.ReferencesTo(reference.Symbol) : [];
 
     /// <summary>
-    /// The same, across every file of the program, in file and source order. A name a
-    /// <c>.use ... as</c> gives is written instead of the symbol's own, so for a rename it is
-    /// kept apart: renaming the symbol leaves those alone, and renaming one renames only the
-    /// names that module wrote the same way.
+    /// The names a rename of <paramref name="reference"/> writes over. A name a
+    /// <c>.use ... as</c> gives is written instead of the symbol's own, so it is kept apart:
+    /// renaming the symbol leaves those alone, and renaming one renames only the names that
+    /// module wrote the same way.
     /// </summary>
-    private static IEnumerable<(SemanticModel File, SymbolReference Reference)> Everywhere(
-        ProgramModel program, SemanticModel model, int position, bool renaming)
+    private static IEnumerable<(SemanticModel File, SymbolReference Reference)> Renamed(
+        ProgramModel program, SemanticModel model, SymbolReference reference)
     {
-        if (model.ReferenceAt(position) is not { } asked)
-            return [];
-
         // A file kept from before an edit elsewhere names what the edited file declared then,
         // so the symbols are compared as what they stand for now.
-        var symbol = program.Current(asked.Symbol);
-        if (renaming && symbol.Bound?.Value.Member is { } member)
+        var symbol = program.Current(reference.Symbol);
+        if (symbol.Bound?.Value.Member is { } member)
             symbol = member;
-        if (renaming && asked.IsAlias)
+        if (reference.IsAlias)
         {
-            var written = model.Tree.Text.Substring(asked.Span.Start, asked.Span.Length);
+            var written = model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length);
             return model.References
-                .Where(reference => reference.IsAlias && program.Current(reference.Symbol) == symbol
-                    && model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length) == written)
-                .Select(reference => (model, reference));
+                .Where(other => other.IsAlias && program.Current(other.Symbol) == symbol
+                    && model.Tree.Text.Substring(other.Span.Start, other.Span.Length) == written)
+                .Select(other => (model, other));
         }
+
         // An instance of a family is named after an enum's member, so renaming either is
         // renaming the member and every use of every instance named after it.
         var renamed = new HashSet<Symbol> { symbol };
-        if (renaming && symbol.IsEnumMember)
+        if (symbol.IsEnumMember)
         {
             foreach (var file in program.Files)
                 renamed.UnionWith(file.Symbols.Where(instance => instance.Bound?.Value.Member == symbol));
         }
-        return program.Files
-            .OrderBy(file => file.Tree.Path, StringComparer.Ordinal)
-            .SelectMany(file => file.References
-                .Where(reference => renamed.Contains(program.Current(reference.Symbol))
-                    && !(renaming && reference.IsAlias))
-                .Select(reference => (file, reference)));
+        return program.ReferencesTo(renamed).Where(found => !found.Reference.IsAlias);
     }
 
     /// <summary>

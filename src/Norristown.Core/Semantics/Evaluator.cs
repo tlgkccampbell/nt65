@@ -422,6 +422,11 @@ internal sealed class Evaluator
         if (!evaluated.Add(symbol))
             return;
 
+        // The type a `.type T` names is worth keeping on the symbol: emission walks into it,
+        // an editor asks what a path reaches through it, and nothing else would have resolved
+        // it unless a path happened to lead that way.
+        symbol.Type ??= symbol.TypeExpression is NameExpressionSyntax typed ? SymbolOf(typed) : null;
+
         switch (symbol.Kind)
         {
             // A layout assigns its members their offsets and sizes, and takes its own size
@@ -472,7 +477,6 @@ internal sealed class Evaluator
             var outerSizing = declaring;
             declaring = null;
             evaluating.Add(symbol);
-            symbol.Type ??= (symbol.Data as DataDirectiveSyntax)?.Type is { } typed ? SymbolOf(typed) : null;
             if (symbol.Data is { } element && RoomFor(element) is { } room)
             {
                 symbol.Size = room.Bytes;

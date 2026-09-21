@@ -13,7 +13,6 @@ internal static class CallHelp
     public static Protocol.SignatureHelp? At(ProgramModel program, SemanticModel model, int position)
     {
         var line = LineContext.At(model.Tree, position);
-        var scope = model.ScopeAt(position);
         var before = line.Before;
 
         // The innermost call is the one being written; one that is not a call nt65 can describe
@@ -31,11 +30,11 @@ internal static class CallHelp
                     "the second argument when the condition holds, and the third when it does not", Math.Min(argument, 2));
             }
             if (open >= 2 && before[open - 1].Kind == SyntaxKind.Bang
-                && Completion.Callee(program, model, scope, line, open - 1) is { Kind: SymbolKind.Macro } macro)
+                && Completion.Callee(model, line, open - 1) is { Kind: SymbolKind.Macro } macro)
             {
                 return ForMacro(macro, before, open, end, argument);
             }
-            if (open >= 1 && Completion.Callee(program, model, scope, line, open) is { Kind: SymbolKind.Func } function)
+            if (open >= 1 && Completion.Callee(model, line, open) is { Kind: SymbolKind.Func } function)
             {
                 return Help($"{function.Name}(", [.. function.ParameterSymbols.Select(parameter => parameter.Name)], ")",
                     function.Items is [{ } body] ? $"`= {body.GetText().Trim()}`" : null,
