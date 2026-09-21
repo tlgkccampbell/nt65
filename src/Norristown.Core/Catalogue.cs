@@ -752,7 +752,8 @@ public static class Catalogue
         "`{0}` is never used: nothing names it, and it is not exported",
         "Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data "
             + "that holds values may be there for where it lands, so only a declaration that reserves storage is "
-            + "reported.");
+            + "reported. A declaration another module writes without the export is named, wrongly, and is reported "
+            + "there instead.");
 
     internal static DiagnosticDescriptor UnusedUseItem { get; } = Entry(
         "unused-use-item",

@@ -146,6 +146,13 @@ internal sealed partial class Binder
     /// </summary>
     public IReadOnlySet<LookedUpName> LookedUp => lookedUp;
 
+    /// <summary>
+    /// What resolving this file reached in another module that the module does not export,
+    /// which is what <c>not-exported</c> was said about. The file that declares one of these is
+    /// named all the same, so it is not also told that nothing uses it.
+    /// </summary>
+    public IReadOnlySet<Symbol> Unexported => unexported;
+
     /// <summary>The file as the program sees it: its module's name, its top level and what it exports.</summary>
     public ProgramSymbols.Module Module => new(tree, moduleName, moduleNameSpan, fileScope, exported, reexports);
 

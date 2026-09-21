@@ -3291,7 +3291,10 @@ news to exactly the modules this rule already names. It also holds the names
 of the declarations it does not export that a path can reach, because another module naming
 one is told that it exists and is not exported, and what any of them means that another
 module names anyway. A changed name is news only to the modules that looked that name up in
-this one; a changed module name or re-export is news to all of them. Positions are not part of it: what one file says about a place in
+this one; a changed module name or re-export is news to all of them. It travels the other way
+once: a module that starts or stops naming an unexported declaration of another is news to the
+module that declares it, because a declaration something names, wrongly, is not also reported as
+one nothing names. Positions are not part of it: what one file says about a place in
 another moves with an edit there. The one exception is where a macro is written, because an
 expansion's comment names the calls in it by file and line (§13) and a problem with a line of
 its body is reported at the call with that line named beside it. Nothing in the interface is derived from a proc body or

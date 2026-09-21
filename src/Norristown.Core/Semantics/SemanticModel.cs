@@ -35,8 +35,10 @@ public sealed class SemanticModel
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> declared,
         IReadOnlyList<Symbol> expanded,
         IEnumerable<Diagnostic> fromTheProgram,
+        IReadOnlySet<string> namedUnexported,
         Func<string, long?>? binaryLength = null)
     {
+        NamedUnexported = namedUnexported;
         this.declared = declared;
         this.binaryLength = binaryLength;
         this.program = program;
@@ -98,6 +100,13 @@ public sealed class SemanticModel
     /// define is written as its value and is no symbol to the linker.
     /// </summary>
     public IReadOnlyList<Symbol> ExternalSymbols { get; }
+
+    /// <summary>
+    /// What this file declares and does not export, and another file writes all the same, by
+    /// qualified name. That file is told the name is not exported; this one is not also told
+    /// that nothing uses it, which would be the same mistake reported twice.
+    /// </summary>
+    internal IReadOnlySet<string> NamedUnexported { get; }
 
     /// <summary>
     /// Every symbol this file's output uses, in the order it first names them: what its code and

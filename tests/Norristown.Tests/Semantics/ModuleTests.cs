@@ -343,4 +343,25 @@ public sealed class ModuleTests
             ["main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread"],
             Analysis.Program(("main.nt65", ".module main\n.cpu 65816\nREP = 1\n.export REP\n")).Problems());
     }
+
+    /// <summary>
+    /// A name another module writes without this one exporting it is reported where it is
+    /// written and nowhere else. Something does name the declaration, wrongly, so saying here
+    /// that nothing does would be one mistake said twice, with each fix undoing the other.
+    /// Nothing naming it is what the warning is for, and taking the use away brings it back.
+    /// </summary>
+    [Fact]
+    public void ANameAnotherModuleWritesWithoutTheExportIsNotAlsoReportedUnused()
+    {
+        const string Lib = ".module lib\nhidden = 2\n";
+        const string Writes = ".module main\n.segment CODE\n.export .proc main {\n    lda #lib::hidden\n    rts\n}\n";
+        const string Leaves = ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    rts\n}\n";
+
+        Assert.Equal(
+            ["main.nt65:4: `lib::hidden` is not exported by module `lib`"],
+            Analysis.Program(("lib.nt65", Lib), ("main.nt65", Writes)).Problems());
+        Assert.Equal(
+            ["lib.nt65:2: `hidden` is never used: nothing names it, and it is not exported"],
+            Analysis.Program(("lib.nt65", Lib), ("main.nt65", Leaves)).Problems());
+    }
 }

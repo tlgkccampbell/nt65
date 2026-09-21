@@ -39,6 +39,10 @@ public sealed class IncrementalAnalysisTests
             ("main.nt65", "dex", "dex\n    dex", null, 1),
             ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", null, 2),                        // errors.nt65 looks it up
             ("errors.nt65", "jsr gfx::draw", "jsr gfx::clear", null, 1),
+            // Writing a name segs.nt65 does not export stops segs.nt65 saying nothing uses it,
+            // and taking it away again starts it: the fact is here and what it silences is there.
+            ("errors.nt65", "lda #1\n", "lda #1\n    lda #segs::HUD_SPARE\n", null, 2),
+            ("errors.nt65", "    lda #segs::HUD_SPARE\n", "", null, 2),
             ("main.nt65", ".if DEBUG {", ".if !DEBUG {", null, 1),                                   // `TRACE` is gone, and nobody looked it up
             ("main.nt65", "BASE = 4", "BASE = 4 ; four", null, 1),                                   // what it means is the same
             ("defs.nt65", "SCALE  = 3", "SCALE  = 4", null, 2),                                      // gfx calls `scaled`, whose body names it

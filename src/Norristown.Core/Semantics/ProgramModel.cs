@@ -31,6 +31,11 @@ public sealed class ProgramModel
     // The names each file looked for in the others, found or not.
     private readonly IReadOnlyDictionary<string, IReadOnlySet<LookedUpName>> lookedUp;
 
+    // The names each file wrote that the file declaring them does not export. They are said
+    // where they are written, and the file that declares one is not also told nothing uses it,
+    // so a file that starts or stops writing one is news to the file that declares it.
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<UnexportedName>> unexported;
+
     // What each file's own analysis found — binding, evaluating its symbols, checking its
     // macros and signatures — by file, and what only the whole program can say.
     private readonly IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> byFile;
@@ -41,6 +46,7 @@ public sealed class ProgramModel
         IReadOnlyList<SemanticModel> files, SegmentTable segments, ProgramSymbols symbols, Cpu cpu,
         IReadOnlyList<ProgramSymbols.Module> modules, SymbolMap resolved, SymbolMap declared, Forwarding forwarding,
         IReadOnlyDictionary<string, IReadOnlySet<LookedUpName>> lookedUp,
+        IReadOnlyDictionary<string, IReadOnlySet<UnexportedName>> unexported,
         IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> byFile, IReadOnlyList<Diagnostic> tables,
         IReadOnlyList<Diagnostic> segmentValues)
     {
@@ -53,6 +59,7 @@ public sealed class ProgramModel
         this.declared = declared;
         this.forwarding = forwarding;
         this.lookedUp = lookedUp;
+        this.unexported = unexported;
         this.byFile = byFile;
         this.tables = tables;
         this.segmentValues = segmentValues;
@@ -165,19 +172,25 @@ public sealed class ProgramModel
             CheckDeclaredSignatures(result.Symbols, byFile, target);
         CheckDefineNames(modules, defines, tables);
 
+        var unexported = new Dictionary<string, IReadOnlySet<UnexportedName>>(StringComparer.Ordinal);
+        foreach (var binder in binders)
+            unexported.TryAdd(binder.Tree.Path, Unexported(binder));
+        var named = NamedElsewhere(unexported);
+
         var all = byFile.Values.SelectMany(file => file).Concat(tables).Concat(segmentValues).ToList();
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
             var path = trees[i].Path;
             files.Add(new SemanticModel(trees[i], segments, configuration, symbols, bound[i], resolved, declared,
-                Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), binaryLength));
+                Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), Names(named, path),
+                binaryLength));
         }
         var lookedUp = new Dictionary<string, IReadOnlySet<LookedUpName>>(StringComparer.Ordinal);
         foreach (var binder in binders)
             lookedUp.TryAdd(binder.Tree.Path, binder.LookedUp);
         return new ProgramModel(
-            files, segments, symbols, target, modules, resolved, declared, Forwarding.None, lookedUp,
+            files, segments, symbols, target, modules, resolved, declared, Forwarding.None, lookedUp, unexported,
             byFile.ToDictionary(pair => pair.Key, IReadOnlyList<Diagnostic> (pair) => pair.Value, StringComparer.Ordinal),
             tables, segmentValues);
     }
@@ -340,6 +353,21 @@ public sealed class ProgramModel
             }
         }
 
+        // A file that has started or stopped writing a name another file does not export is
+        // news to the file that declares it: that file says nothing uses the name, or stops
+        // saying it. Nothing else carries this, because the fact is in one file and what it
+        // silences is in another.
+        var written = new Dictionary<string, IReadOnlySet<UnexportedName>>(this.unexported, StringComparer.Ordinal);
+        foreach (var (path, binder) in binders)
+        {
+            written[path] = Unexported(binder);
+            foreach (var name in written[path].Except(this.unexported[path]).Concat(this.unexported[path].Except(written[path])))
+            {
+                if (!dirty.Contains(name.Path))
+                    affected.Add(name.Path);
+            }
+        }
+
         // What is wrong with the program rather than with one file — two exports under one
         // linker name, two files that are one module — is reported on whichever of them sorts
         // later, which need not be a file that changed. That file says something new from here
@@ -368,18 +396,21 @@ public sealed class ProgramModel
         if (affected.Count > 0 || EditMap.Moved(segmentValues, moved) is not { } segmentValuesNow)
             return null;
 
+        var named = NamedElsewhere(written);
         var all = byFile.Values.SelectMany(diagnostics => diagnostics).Concat(tables).Concat(segmentValuesNow).ToList();
         var files = Files
             .Select(file => dirty.Contains(file.Tree.Path)
                 ? new SemanticModel(trees[file.Tree.Path], Segments, configuration, symbols, bound[file.Tree.Path], resolved,
-                    declared, Expanded(binders[file.Tree.Path], forwarding.Current), all.Where(d => d.Span.File == file.Tree.Path), binaryLength)
+                    declared, Expanded(binders[file.Tree.Path], forwarding.Current), all.Where(d => d.Span.File == file.Tree.Path),
+                    Names(named, file.Tree.Path), binaryLength)
                 : file)
             .ToList();
         var lookups = new Dictionary<string, IReadOnlySet<LookedUpName>>(lookedUp, StringComparer.Ordinal);
         foreach (var (path, binder) in binders)
             lookups[path] = binder.LookedUp;
         return new ProgramModel(
-            files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, byFile, tables, segmentValuesNow);
+            files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, written, byFile, tables,
+            segmentValuesNow);
     }
 
     /// <summary>
@@ -389,6 +420,28 @@ public sealed class ProgramModel
     /// </summary>
     private static List<Symbol> Expanded(Binder binder, Func<Symbol, Symbol> current) =>
         [.. Macros.Reachable(binder.CalledMacros()).SelectMany(macro => macro.Uses.Select(use => current(use.Used)))];
+
+    /// <summary>What one file wrote that the files declaring it do not export.</summary>
+    private static IReadOnlySet<UnexportedName> Unexported(Binder binder) =>
+        binder.Unexported.Select(symbol => new UnexportedName(symbol.Tree.Path, symbol.QualifiedName)).ToHashSet();
+
+    /// <summary>
+    /// The same the other way round: what each file declares, does not export, and another file
+    /// writes all the same, by the file that declares it.
+    /// </summary>
+    private static Dictionary<string, HashSet<string>> NamedElsewhere(
+        IReadOnlyDictionary<string, IReadOnlySet<UnexportedName>> unexported) =>
+        unexported.Values
+            .SelectMany(written => written)
+            .GroupBy(name => name.Path, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(name => name.QualifiedName).ToHashSet(StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
+    /// <summary>What of <paramref name="path"/> another file names, which is nothing for most files.</summary>
+    private static IReadOnlySet<string> Names(IReadOnlyDictionary<string, HashSet<string>> named, string path) =>
+        named.GetValueOrDefault(path) ?? [];
 
     /// <summary>The files a program-wide diagnostic names.</summary>
     private static IEnumerable<string> Named(IEnumerable<Diagnostic> tables) =>

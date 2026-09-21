@@ -5,7 +5,8 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// The labels, constants, macros and types a file declares and nothing names. An export
-/// names what it exports, so what another file can use is never reported.
+/// names what it exports, so what another file can use is never reported, and neither is
+/// one another file names without the export, which is already reported there.
 /// <para>
 /// A name written in a branch this build leaves out counts as used: the other build uses it,
 /// and a warning that comes and goes with a define is noise. A file with errors gets none
@@ -31,6 +32,11 @@ public static class UnusedSymbols
             .ToHashSet();
         named.UnionWith(entries);
         named.UnionWith(model.Symbols.Where(symbol => symbol.IsExported));
+
+        // A name another file writes without this one exporting it is used, wrongly: that file
+        // is told it is not exported, and saying here that nothing uses it is the same mistake
+        // twice, with the fix for one the opposite of the fix for the other.
+        named.UnionWith(model.Symbols.Where(symbol => model.NamedUnexported.Contains(symbol.QualifiedName)));
 
         // `actions::c`, where `c` walks an enum, names a member of `actions` on every turn,
         // so what that scope holds counts as named.

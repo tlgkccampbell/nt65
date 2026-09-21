@@ -637,7 +637,7 @@ A signature set stands for the items it names, so its own name has to be one a s
 
 > `{0}` is never used: nothing names it, and it is not exported
 
-Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data that holds values may be there for where it lands, so only a declaration that reserves storage is reported.
+Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data that holds values may be there for where it lands, so only a declaration that reserves storage is reported. A declaration another module writes without the export is named, wrongly, and is reported there instead.
 
 ### `unused-use-item` — warning
 
