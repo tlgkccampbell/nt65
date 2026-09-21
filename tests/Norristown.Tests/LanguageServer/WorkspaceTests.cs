@@ -15,6 +15,14 @@ public sealed class WorkspaceTests
 
     private const string Source = ".module main\n.proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
+    /// <summary>
+    /// What <see cref="Uri"/> is as a path. A drive letter is one on Windows and part of a
+    /// rooted path anywhere else, which is what the workspace carries either way: a path is a
+    /// name to the analysis, and only the editor's URI has to come back unchanged.
+    /// </summary>
+    private static readonly string Named =
+        OperatingSystem.IsWindows() ? "c:/work/main.nt65" : "/c:/work/main.nt65";
+
     private static Workspace OpenSource(out Document document)
     {
         var workspace = new Workspace();
@@ -26,7 +34,7 @@ public sealed class WorkspaceTests
     [Fact]
     public void AWorkspacePathComesFromItsUri()
     {
-        Assert.Equal("c:/work/main.nt65", Workspace.PathOf(Uri));
+        Assert.Equal(Named, Workspace.PathOf(Uri));
         Assert.Equal("untitled:Untitled-1", Workspace.PathOf("untitled:Untitled-1"));
     }
 
@@ -113,7 +121,7 @@ public sealed class WorkspaceTests
 
         Assert.NotNull(changed);
         Assert.Equal("nop\n", changed.Tree.Text);
-        Assert.Equal("c:/work/main.nt65", changed.Tree.Path);
+        Assert.Equal(Named, changed.Tree.Path);
     }
 
     /// <summary>A position past the end of a line or the file is clamped, not an error.</summary>
