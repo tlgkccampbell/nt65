@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Norristown.LanguageServer.Protocol;
 
 // The protocol has a Range of its own, which is the one these tests mean.
@@ -162,6 +163,48 @@ public sealed class ViewRequestsTests
         var listing = said.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
         Assert.Equal(8, listing.Length);
         Assert.Equal("lda #0", listing[0].Trim());
+    }
+
+    /// <summary>
+    /// The hover's link is followed with exactly what the link carries. An editor that escapes
+    /// the drive's colon opened the file under one spelling and the link names it under the
+    /// server's, and the two are one file: the link used to answer that the caret was on no call.
+    /// </summary>
+    [Fact]
+    public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorSpellsTheFile()
+    {
+        const string escaped = "file:///c%3A/work/main.nt65";
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(escaped, """
+            .module main
+            .macro clear(n: const) {
+                .repeat n, i {
+                    lda #0
+                    sta $0400 + i
+                }
+            }
+            .segment CODE
+            .export .proc main {
+                clear!(5)
+                rts
+            }
+            """);
+        Assert.Empty((await client.NextDiagnosticsAsync(escaped, timeout)).Diagnostics);
+
+        var hover = await client.HoverAsync(escaped, new Position(9, 6), timeout);
+        Assert.NotNull(hover);
+        var link = hover.Contents.Value.Split("command:nt65.showExpansion?")[1].Split(')')[0];
+        using var parsed = JsonDocument.Parse(System.Uri.UnescapeDataString(link));
+        var carried = parsed.RootElement;
+
+        var expansion = await client.RequestAsync<ExpansionResult?>("nt65/expansion",
+            new ExpansionParams(
+                new TextDocumentIdentifier(carried[0].GetString()!),
+                new Position(carried[1].GetInt32(), carried[2].GetInt32())),
+            timeout);
+        Assert.NotNull(expansion);
+        Assert.Equal("clear!(5)", expansion.Title);
     }
 
     /// <summary>A call written out in place of itself, and the reasons it is not offered.</summary>

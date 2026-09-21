@@ -167,12 +167,18 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>An open document, or null when it is not open.</summary>
+    /// <summary>
+    /// An open document, or null when it is not open. A URI spelled another way than the client
+    /// spelled it at <c>didOpen</c> names the same file and finds the same document: a link the
+    /// server wrote into a hover comes back spelled the server's way, not the client's.
+    /// </summary>
     public Document? Find(string uri)
     {
         lock (gate)
         {
-            return open.GetValueOrDefault(uri);
+            if (open.TryGetValue(uri, out var document))
+                return document;
+            return named.TryGetValue(PathOf(uri), out var spelled) ? open.GetValueOrDefault(spelled) : null;
         }
     }
 
