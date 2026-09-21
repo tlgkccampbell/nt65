@@ -14,7 +14,7 @@ namespace Norristown;
 /// </summary>
 public static class Catalogue
 {
-    // Reading a line: lexing and parsing: what a line is made of, and what is written where.
+    // Reading a line: what a line is made of, and what is written where.
 
     internal static DiagnosticDescriptor NumberInvalid { get; } = new(
         "number-invalid",
