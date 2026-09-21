@@ -506,7 +506,18 @@ internal sealed class Server
     /// file the client is editing, which has already heard and does not hear again.
     /// </summary>
     private void PublishTheRestSoon(string changed) =>
-        settling.After(() => PublishEverythingAsync(changed, CancellationToken.None));
+        settling.After(async () =>
+        {
+            try
+            {
+                await PublishEverythingAsync(changed, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is ConnectionLostException or ObjectDisposedException)
+            {
+                // The client went away while the typing was settling; nobody is waiting.
+                log.Write($"the rest of the program was not published: {e.Message}");
+            }
+        });
 
     /// <summary>
     /// Publishes what is wrong with every file of every program. Not only the open ones: an

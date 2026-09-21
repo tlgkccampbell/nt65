@@ -8,9 +8,11 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an edit costs: the edit, the analysis, and the diagnostics of every file of the
-/// program, which is what the server publishes for each of them. Not part of the edit loop;
-/// <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most from a Release build.
+/// What an edit costs, in the two parts the server publishes it in: what the caret waits for —
+/// the edit, the analysis, and the diagnostics of the edited file, which go out at once — and
+/// what the whole program costs, which goes out once the typing has stopped. Not part of the
+/// edit loop; <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most from a
+/// Release build.
 /// </summary>
 public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 {
@@ -73,6 +75,8 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "cpx #8"), 9, 10, "9", "8");
     }
 
+    private static double Median(List<double> sorted) => sorted[sorted.Count / 2];
+
     private static int Line(Workspace workspace, string uri, string find)
     {
         var text = workspace.Find(uri)!.Tree.Text;
@@ -87,7 +91,8 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
     private void Time(
         Workspace workspace, string uri, ref int version, string what, int line, int start, int end, string text, string? undo)
     {
-        var times = new List<double>();
+        var atOnce = new List<double>();
+        var settled = new List<double>();
         var analyzed = new SortedSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < 30; i++)
         {
@@ -99,15 +104,24 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             var watch = Stopwatch.StartNew();
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
                 [new TextDocumentContentChangeEvent(range, written)]);
+
+            // What the caret waits for: the edited file's own diagnostics, from the analysis
+            // the edit asked for.
+            var own = workspace.ToPublish(uri)!.Value;
+            _ = Lsp.ToDiagnostics(own.Diagnostics, own.Tree, own.Configuration);
+            atOnce.Add(watch.Elapsed.TotalMilliseconds);
+
             var analysis = workspace.AnalysisFor(Workspace.PathOf(uri));
             foreach (var file in workspace.ToPublish())
                 _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
-            times.Add(watch.Elapsed.TotalMilliseconds);
+            settled.Add(watch.Elapsed.TotalMilliseconds);
             analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");
             Assert.Empty(analysis.Diagnostics);
         }
-        times.Sort();
-        output.WriteLine($"{what}: median {times[times.Count / 2]:0.0} ms, min {times[0]:0.0} ms, "
-            + $"max {times[^1]:0.0} ms; analyzed {string.Join(", ", analyzed)}");
+        atOnce.Sort();
+        settled.Sort();
+        output.WriteLine($"{what}: at once median {Median(atOnce):0.0} ms (min {atOnce[0]:0.0}, max {atOnce[^1]:0.0}); "
+            + $"whole program median {Median(settled):0.0} ms (min {settled[0]:0.0}, max {settled[^1]:0.0}); "
+            + $"analyzed {string.Join(", ", analyzed)}");
     }
 }

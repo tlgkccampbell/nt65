@@ -2971,7 +2971,48 @@ of a program of the other such open files. A project file, a source nobody has o
 file an `.incbin` measured changing on disk is read again, and what is wrong is published
 again. What is published is every file of every project, from the moment the editor connects,
 and a file is sent again only where what is wrong with it changed, so that an edit in a
-program of hundreds of files costs one message and not hundreds.
+program of hundreds of files costs one message and not hundreds. The folders the editor has
+open are the workspace: a folder added to it brings whatever projects are in it, and one
+taken out takes its projects with it.
+
+**What a keystroke publishes, and when.** A squiggle never flickers, and is never about text
+that is gone. Four rules keep that:
+
+- the edited file's own diagnostics go out at once, from the analysis that edit asked for.
+  They are the whole answer about that file, program-wide problems with it included, so
+  nothing about it is briefly missing;
+- the rest of the program's go out after 200 ms with no further edit. An edit in one file can
+  change what is wrong with another, and a squiggle in a file nobody is looking at is worth
+  arriving a moment late rather than coming and going on every keystroke;
+- a file's diagnostics stand until the ones that replace them arrive. A file that is still
+  part of the program is never emptied and then filled in again; only a file that has left one
+  is emptied;
+- nothing is published about a revision of a file older than the newest the editor has sent.
+
+The editor is asked to fetch the names' classes and the lenses again only where the edit
+reached past the file it was made in, which is exactly when what a name in another file refers
+to, or what a routine costs with its calls, can have moved. The edited file is never among
+them: the editor asks about the document it is showing by itself.
+
+**What the editor says it can take** is read once, when it connects, and everything that
+depends on it is settled from that: whether the outline is a tree or the flat list the
+protocol had first, whether an edit carries the revision each of its files was worked out
+against — so that one worked out against a buffer that has since moved on is refused rather
+than written into the wrong place — whether a completion may write a whole block with stops in
+it, whether the editor will say when its folders change, and whether it can be asked to fetch
+what it holds again. An editor that says nothing is given the plain answer, which every editor
+understands. A position is a line and a count of UTF-16 code units into it, which the server
+says so that an editor that would rather count differently knows not to.
+
+**The server's life.** Nothing an editor sends ends the server. A frame whose body is not
+JSON is answered as a parse error and the next frame is read; a request that arrives before
+the editor has initialized the server, or after it has shut it down, is answered as that
+rather than acted on, and a notification at either point is dropped. A request the person has
+moved on from is cancelled, and a cancelled request stops at the next file of the program
+rather than finishing. `exit` ends the process: cleanly where the editor shut the server down
+first and as a failure where it did not. An editor that crashes never says goodbye, so the
+server watches the process the editor named as its own when it connected, and leaves when that
+process does.
 
 **Unused symbols** are warnings: a label, constant, macro, struct, union, enum or data
 declaration that nothing names and the file does not export, since an export is what another

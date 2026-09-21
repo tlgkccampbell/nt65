@@ -11,26 +11,16 @@ internal sealed class Debounce(TimeSpan quiet, Delay delay)
 {
     private readonly Lock gate = new();
 
-    // Which wait is the current one, and the task of the latest, for a caller that wants
-    // whatever is outstanding to have happened before it looks.
+    // Which wait is the current one. A wait that something else has replaced runs out and then
+    // finds that it is no longer the one whose work is wanted.
     private long generation;
-    private Task running = Task.CompletedTask;
 
     /// <summary>Runs <paramref name="work"/> once nothing else has asked for a while.</summary>
     public void After(Func<Task> work)
     {
         lock (gate)
         {
-            running = WaitAsync(++generation, work);
-        }
-    }
-
-    /// <summary>Whatever is waiting, done: for a test, and for a request that must see the whole program.</summary>
-    public Task SettledAsync()
-    {
-        lock (gate)
-        {
-            return running;
+            _ = WaitAsync(++generation, work);
         }
     }
 
