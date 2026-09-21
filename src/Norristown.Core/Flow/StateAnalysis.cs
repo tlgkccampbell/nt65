@@ -219,7 +219,7 @@ public sealed class StateAnalysis
             {
                 reached[block.Index] = new FlowState(Outside(signature), null);
             }
-            else if (EnteredFromOutside(block, region))
+            else if (EnteredFromOutside(block))
             {
                 var entered = Entered(block, reached[block.Index]!, signature, region.Routine);
                 if (entered.Equals(reached[block.Index]))
@@ -288,7 +288,7 @@ public sealed class StateAnalysis
     /// A sibling joined by <c>.next</c> is part of the same routine as far as state goes, so a
     /// path from one is not from outside.
     /// </summary>
-    private bool EnteredFromOutside(BasicBlock block, FlowRegion region)
+    private bool EnteredFromOutside(BasicBlock block)
     {
         if (block.Label is not { } label)
             return false;
