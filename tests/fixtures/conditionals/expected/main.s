@@ -51,14 +51,9 @@ Cmd__wait = $03
 
 .segment "RODATA": absolute
 main__bits:
-    .byte 1 << $00
-    .byte 1 << $01
-    .byte 1 << $02
-    .byte 1 << $03
-    .byte 1 << $04
-    .byte 1 << $05
-    .byte 1 << $06
-    .byte 1 << $07
+    .repeat 8, i
+        .byte 1 << i
+    .endrepeat
 
 main__dispatch:
     .addr main - 1
@@ -77,40 +72,40 @@ main__actions_table:
     .addr actions__wait
 
 main__grid:
-    .byte ($00 * 3) + $00
-    .byte ($00 * 3) + $01
-    .byte ($00 * 3) + $02
-    .byte ($01 * 3) + $00
-    .byte ($01 * 3) + $01
-    .byte ($01 * 3) + $02
+    .repeat 3, col
+        .byte ($00 * 3) + col
+    .endrepeat
+    .repeat 3, col
+        .byte ($01 * 3) + col
+    .endrepeat
 
 COLUMNS = 80
 
 .segment "CODE": absolute
-; .proc indented  main.nt65:128
+; .proc indented  main.nt65:129
 main__indented:
     lda #COLUMNS
     rts
 ; end of indented
 
-; .proc move  main.nt65:140
+; .proc move  main.nt65:141
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:143
+; .proc fire  main.nt65:144
 actions__fire:
     jmp actions__move
 ; end of fire
-; .proc dump  main.nt65:147
+; .proc dump  main.nt65:148
 actions__dump:
     rts
 ; end of dump
-; .proc wait  main.nt65:151
+; .proc wait  main.nt65:152
 actions__wait:
     rts
 ; end of wait
 
-; .proc slow  main.nt65:158
+; .proc slow  main.nt65:159
 main__slow:
     ldx #$00 + 1
 slow__delay:
@@ -136,7 +131,7 @@ slow__skip_3:
     rts
 ; end of slow
 
-; .proc run_all  main.nt65:172
+; .proc run_all  main.nt65:173
 main__run_all:
     jsr actions__move
     jsr actions__fire

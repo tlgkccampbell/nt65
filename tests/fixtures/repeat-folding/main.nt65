@@ -2,13 +2,16 @@
 ; turn came out the same. nt65 makes every per-turn decision itself, so the question is
 ; asked of the lines the turns were written as and never of the source: what the turns
 ; came out as is what says whether ca65 can repeat them rather than be handed them one
-; at a time.
+; at a time. Where the turns differ only in what the binding was worth, the body is said
+; once with a counter of ca65's in its place, but only after putting every turn's number
+; back has given the line that turn was written as.
 .module main
 
 .cpu 65816
 
 .export shift, spaced, widths_alike, widths_differ, nested, twice, per_turn_label
 .export branching, padding, over_a_list, over_an_enum
+.export ramp, grid, edge, chosen, crossing
 
 .segment ZP: zp
 
@@ -140,4 +143,52 @@
     .each Cmd, c {
         c
     }
+}
+
+; The showcase: two hundred and fifty-six turns, each a line of its own, and three lines of
+; output. ca65 counts from zero where the binding did.
+.data ramp: .byte[] {
+    .repeat 256, i {
+        i
+    }
+}
+
+; A counter each, and the one inside is written the same way on every turn of the one
+; around it, so the outer repetition sees three turns that are alike.
+.data grid: .byte[] {
+    .repeat 3, row {
+        .repeat 4, col {
+            (row * 4) + col
+        }
+    }
+}
+
+; The arithmetic is ca65's to do once the counter is in it, so it is done in the 32 bits
+; ca65 has: this is the last turn that fits, and nt65 has already checked every one of them.
+.data edge: .dword[] {
+    .repeat 4, i {
+        $7ffffffc + i
+    }
+}
+
+; A condition on the binding is answered on each turn, and these turns were answered
+; differently, so what each came out as is what is written.
+.data chosen: .byte[] {
+    .repeat 4, i {
+        .if i < 2 {
+            $11
+        } .else {
+            $22
+        }
+    }
+}
+
+; The third turn reaches past the zero page, so it is a different instruction from the two
+; before it: no one line stands for all three.
+.segment CODE
+.proc crossing: a8, i8 {
+    .repeat 3, i {
+        lda $fe + i
+    }
+    rts
 }

@@ -4,8 +4,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What a <c>.repeat</c> or an <c>.each</c> unrolls to: one turn per count, per list item or
-/// per enum member. Nothing of it reaches the output, so layout and emission each ask for
-/// the turns and walk the body once per turn.
+/// per enum member. Nothing of it decides anything in the output, so layout and emission each
+/// ask for the turns and walk the body once per turn; whether the lines a counted repetition's
+/// turns came out as can be said once is the emitter's question, asked of those lines.
 /// </summary>
 public static class Repetitions
 {

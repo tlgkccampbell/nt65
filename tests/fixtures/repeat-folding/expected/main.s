@@ -19,6 +19,11 @@
 .export main__padding
 .export main__over_a_list
 .export main__over_an_enum
+.export main__ramp
+.export main__grid
+.export main__edge
+.export main__chosen
+.export main__crossing
 
 .segment "ZP": zeropage
 slot: .res 1
@@ -32,7 +37,7 @@ Cmd__fire = $01
 Cmd__wait = $02
 
 .segment "CODE": absolute
-; .proc shift: a16, i16  main.nt65:35
+; .proc shift: a16, i16  main.nt65:38
 main__shift:
     lda a:count
     .repeat 5
@@ -42,7 +47,7 @@ main__shift:
     rts
 ; end of shift
 
-; .proc spaced: a16, i16  main.nt65:46
+; .proc spaced: a16, i16  main.nt65:49
 main__spaced:
     lda a:count
 
@@ -53,7 +58,7 @@ main__spaced:
     rts
 ; end of spaced
 
-; .proc widths_alike: a16, i16  main.nt65:58
+; .proc widths_alike: a16, i16  main.nt65:61
 main__widths_alike:
     .repeat 3
         .a16
@@ -66,7 +71,7 @@ main__widths_alike:
     rts
 ; end of widths_alike
 
-; .proc widths_differ: a8, i16  main.nt65:70
+; .proc widths_differ: a8, i16  main.nt65:73
 main__widths_differ:
     rep #$20
     .a16
@@ -80,7 +85,7 @@ main__widths_differ:
     rts
 ; end of widths_differ
 
-; .proc nested: a16, i16  main.nt65:82
+; .proc nested: a16, i16  main.nt65:85
 main__nested:
     .repeat 3
         .repeat 4
@@ -91,14 +96,14 @@ main__nested:
     rts
 ; end of nested
 
-; .proc twice: a16, i16  main.nt65:93
+; .proc twice: a16, i16  main.nt65:96
 main__twice:
     asl a
     asl a
     rts
 ; end of twice
 
-; .proc per_turn_label: a16, i8  main.nt65:102
+; .proc per_turn_label: a16, i8  main.nt65:105
 main__per_turn_label:
 per_turn_label__spin:
     dex
@@ -112,7 +117,7 @@ per_turn_label__spin_3:
     rts
 ; end of per_turn_label
 
-; .proc branching: a16, i8  main.nt65:113
+; .proc branching: a16, i8  main.nt65:116
 main__branching:
     .repeat 6
         dex
@@ -135,3 +140,35 @@ main__over_an_enum:
     .byte $00
     .byte $01
     .byte $02
+
+main__ramp:
+    .repeat 256, i
+        .byte i
+    .endrepeat
+
+main__grid:
+    .repeat 3, row
+        .repeat 4, col
+            .byte (row * 4) + col
+        .endrepeat
+    .endrepeat
+
+main__edge:
+    .repeat 4, i_2
+        .dword $7ffffffc + i_2
+    .endrepeat
+
+main__chosen:
+    .byte $11
+    .byte $11
+    .byte $22
+    .byte $22
+
+.segment "CODE": absolute
+; .proc crossing: a8, i8  main.nt65:189
+main__crossing:
+    lda z:$fe + $00
+    lda z:$fe + $01
+    lda a:$fe + $02
+    rts
+; end of crossing

@@ -58,6 +58,11 @@ public sealed class Emitter
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
+    // What each folded repetition counts with in the output. A repetition's body may be
+    // written out many times — inside another repetition, or in every expansion of a macro —
+    // and the counter is the same name each time, so the repetition around it sees one thing.
+    private readonly Dictionary<Symbol, string> counters = [];
+
     // What the file measures with `.endof` or `.spanof`, and so what needs a label just past
     // its last byte. A use may come before the thing it measures, so they are found up front.
     private readonly HashSet<Symbol> ends = [];
@@ -449,7 +454,7 @@ public sealed class Emitter
             }
             expansion = outerTurn;
             if (kind == BlockKind.Repeat)
-                Folded(block, starts);
+                Folded(block, Repetitions.BindingOf(model, opener), starts);
             return;
         }
 
@@ -570,15 +575,35 @@ public sealed class Emitter
     /// after, and ca65 is handed a <c>.repeat</c> only where there was nothing left for it to
     /// decide. <paramref name="starts"/> is where each turn's lines begin.
     /// <para>
+    /// Where the turns differ only in what the binding was worth, the body is written once with
+    /// a ca65 repeat counter where the number stood, and only after the counter has been put
+    /// back for every turn and the lines have come out as the turns did.
+    /// </para>
+    /// <para>
     /// What the whole block assembles to goes on the <c>.repeat</c> line, because that is the
     /// line ca65 counts every turn's bytes against; the body's own lines make no bytes of their
     /// own any more, and keep only where they came from.
     /// </para>
     /// </summary>
-    private void Folded(BlockSyntax block, IReadOnlyList<int> starts)
+    private void Folded(BlockSyntax block, Symbol? binding, IReadOnlyList<int> starts)
     {
-        if (Alike(starts, out var at) is not { } body)
+        if (Turns(starts, out var at) is not { } turns)
             return;
+
+        var body = turns[^1];
+        var counter = "";
+        if (!turns.TrueForAll(turn => Written(turn, body)))
+        {
+            if (binding is null || Counted(turns, binding) is not { } counted)
+                return;
+            (counter, body) = ($", {counted.Counter}", counted.Body);
+        }
+        else if (Repeated(body[0]) is not null && body.TrueForAll(line => Same(line, body[0])))
+        {
+            // A row of one repeated byte is a fill however it was written, and `.res` says a
+            // fill more plainly than a `.repeat` around one `.byte` does.
+            return;
+        }
 
         // A line nt65 makes no claim about makes the whole block one, because what the turns
         // come to is as unpredictable as the line is.
@@ -591,20 +616,26 @@ public sealed class Emitter
         var opened = body.Select(line => line.Text).FirstOrDefault(text => text.Length > 0) ?? Body;
         var indent = opened[..(opened.Length - opened.TrimStart().Length)];
         lines.RemoveRange(at, lines.Count - at);
-        Write(new EmittedLine($"{indent}.repeat {starts.Count}", length, Mapped(block.Opener, length, located: false)));
+        Write(new EmittedLine(
+            $"{indent}.repeat {starts.Count}{counter}", length, Mapped(block.Opener, length, located: false)));
         foreach (var line in body)
             Write(line with { Text = line.Text.Length == 0 ? "" : Body + line.Text, Bytes = 0 });
-        Write(new EmittedLine($"{indent}.endrepeat"));
+
+        // ca65 counts the block's bytes against the `.repeat`, and ld65 records a span for the
+        // whole of it against the `.endrepeat`, so the closing line is named as well as the
+        // opening one: the map has to answer for every line the debug information reaches.
+        Write(new EmittedLine($"{indent}.endrepeat", Source: At(block.Closer ?? block.Opener)));
     }
 
     /// <summary>
-    /// The one body every turn came out as, or null where they did not come out alike and the
-    /// unrolled turns stand. <paramref name="at"/> is where the <c>.repeat</c> goes: the first
-    /// turn may be led by lines that belong before the repetition rather than inside it — a
-    /// blank the source asked for, the <c>.segment</c> whatever follows lands in — which the
-    /// turns after it found written already, and those stay where they are.
+    /// The lines each turn came out as, or null where the block is one no <c>.repeat</c> could
+    /// stand for however alike the turns are. <paramref name="at"/> is where the
+    /// <c>.repeat</c> goes: the first turn may be led by lines that belong before the repetition
+    /// rather than inside it — a blank the source asked for, the <c>.segment</c> whatever
+    /// follows lands in — which the turns after it found written already, and those stay where
+    /// they are.
     /// </summary>
-    private List<EmittedLine>? Alike(IReadOnlyList<int> starts, out int at)
+    private List<List<EmittedLine>>? Turns(IReadOnlyList<int> starts, out int at)
     {
         at = lines.Count;
 
@@ -612,19 +643,18 @@ public sealed class Emitter
         if (starts.Count < 3)
             return null;
 
-        var last = starts[^1];
-        var length = lines.Count - last;
+        var length = lines.Count - starts[^1];
         if (length == 0)
             return null;
         for (var turn = 1; turn < starts.Count; turn++)
         {
             var end = turn + 1 < starts.Count ? starts[turn + 1] : lines.Count;
-            if (end - starts[turn] != length || !Alike(starts[turn], last, length))
+            if (end - starts[turn] != length)
                 return null;
         }
 
         var opening = starts[1] - starts[0] - length;
-        if (opening < 0 || !Alike(starts[0] + opening, last, length))
+        if (opening < 0)
             return null;
         for (var i = 0; i < opening; i++)
         {
@@ -633,32 +663,139 @@ public sealed class Emitter
                 return null;
         }
 
-        var body = lines.GetRange(last, length);
+        var turns = new List<List<EmittedLine>>(starts.Count) { lines.GetRange(starts[0] + opening, length) };
+        for (var turn = 1; turn < starts.Count; turn++)
+            turns.Add(lines.GetRange(starts[turn], length));
 
         // A name inside a ca65 `.repeat` is declared once per turn, which is an error on the
         // second: such a body is written out in full however alike the turns look.
-        if (body.Any(Declares))
-            return null;
-
-        // A row of one repeated byte is a fill however it was written, and `.res` says a fill
-        // more plainly than a `.repeat` around one `.byte` does.
-        if (Repeated(body[0]) is not null && body.TrueForAll(line => Same(line, body[0])))
+        if (turns[0].Any(Declares))
             return null;
 
         at = starts[0] + opening;
-        return body;
+        return turns;
     }
 
-    /// <summary>Whether the <paramref name="length"/> lines at two places say all the same things.</summary>
-    private bool Alike(int one, int other, int length)
+    /// <summary>Whether two turns came out as all the same lines.</summary>
+    private static bool Written(List<EmittedLine> one, List<EmittedLine> other)
     {
-        for (var i = 0; i < length; i++)
+        for (var i = 0; i < one.Count; i++)
         {
-            if (lines[one + i] != lines[other + i])
+            if (one[i] != other[i])
                 return false;
         }
         return true;
     }
+
+    /// <summary>
+    /// The one body the turns of a counted repetition are, written in terms of a ca65 repeat
+    /// counter, with the name to count with — or null where no such body says what the turns
+    /// said. ca65 puts the turn's number in wherever the counter's name stands, so the body is
+    /// the first turn with the counter where the number it was worth stood, and it is written
+    /// only once every turn has been put back and has come out as the turn did. ca65 then
+    /// evaluates the expression the source wrote, in the arithmetic nt65 already agrees with it
+    /// on, since it is the line nt65 wrote for that turn with one number in it.
+    /// </summary>
+    private (string Counter, List<EmittedLine> Body)? Counted(List<List<EmittedLine>> turns, Symbol binding)
+    {
+        // Something no output holds, so that the places the counter goes can be marked before
+        // there is a name to put there.
+        const string mark = "\u0001";
+
+        var body = new List<EmittedLine>(turns[0].Count);
+        for (var i = 0; i < turns[0].Count; i++)
+        {
+            var line = turns[0][i];
+            if (!turns.TrueForAll(turn => Alongside(turn[i], line))
+                || Templated(line.Text, turns[1][i].Text, mark) is not { } text)
+            {
+                return null;
+            }
+            body.Add(line with { Text = text });
+        }
+        for (var turn = 0; turn < turns.Count; turn++)
+        {
+            for (var i = 0; i < body.Count; i++)
+            {
+                if (Instantiated(body[i].Text, mark, Constant(turn)) != turns[turn][i].Text)
+                    return null;
+            }
+        }
+
+        // The counter is a name of the output's like any other: derived from the source, and
+        // taken by nothing else in the file. One repetition has one, however many times its
+        // body is written out, or the repetition around it would see two different counters.
+        if (!counters.TryGetValue(binding, out var counter))
+            counters[binding] = counter = names.Generated(binding.Name);
+        return (counter, [.. body.Select(line =>
+            line with { Text = line.Text.Replace(mark, counter, StringComparison.Ordinal) })]);
+    }
+
+    /// <summary>
+    /// What the first two turns wrote, with <paramref name="mark"/> wherever the one wrote the
+    /// number the binding was worth on its turn and the other wrote its own; null where they
+    /// differ in anything else, which is a decision that came out differently and no counter
+    /// can stand for.
+    /// </summary>
+    private static string? Templated(string zeroth, string first, string mark)
+    {
+        if (zeroth.Length != first.Length)
+            return null;
+        var zero = Constant(0);
+        var one = Constant(1);
+        var text = new StringBuilder(zeroth.Length);
+        for (var at = 0; at < zeroth.Length;)
+        {
+            if (at + zero.Length <= zeroth.Length
+                && string.CompareOrdinal(zeroth, at, zero, 0, zero.Length) == 0
+                && string.CompareOrdinal(first, at, one, 0, one.Length) == 0
+                && (at == 0 || !InAName(zeroth[at - 1]))
+                && (at + zero.Length == zeroth.Length || !InAName(zeroth[at + zero.Length])))
+            {
+                text.Append(mark);
+                at += zero.Length;
+                continue;
+            }
+            if (zeroth[at] != first[at])
+                return null;
+            text.Append(zeroth[at]);
+            at++;
+        }
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// A body with <paramref name="value"/> where <paramref name="mark"/> stands, as ca65 puts
+    /// the turn's number where the counter's name stands: at a whole word of it and nowhere
+    /// inside one.
+    /// </summary>
+    private static string Instantiated(string body, string mark, string value)
+    {
+        var text = new StringBuilder(body.Length);
+        for (var at = 0; at < body.Length;)
+        {
+            var found = body.IndexOf(mark, at, StringComparison.Ordinal);
+            if (found < 0)
+            {
+                text.Append(body, at, body.Length - at);
+                break;
+            }
+            text.Append(body, at, found - at);
+            var after = found + mark.Length;
+            text.Append((found == 0 || !InAName(body[found - 1]))
+                && (after == body.Length || !InAName(body[after])) ? value : mark);
+            at = after;
+        }
+        return text.ToString();
+    }
+
+    /// <summary>Whether a character is one a ca65 name is spelled with, or the dot that opens a word of ca65's own.</summary>
+    private static bool InAName(char letter) => char.IsLetterOrDigit(letter) || letter == '_' || letter == '.';
+
+    /// <summary>Whether two lines agree about everything but what they say.</summary>
+    private static bool Alongside(EmittedLine one, EmittedLine other) =>
+        one.Bytes == other.Bytes && one.Source == other.Source
+            && one.Label == other.Label && one.Comment == other.Comment;
 
     /// <summary>
     /// Whether a line gives something a name. The name a repetition's body declares is its own
@@ -1645,7 +1782,13 @@ public sealed class Emitter
 
     /// <summary>The source line a generated line is mapped to, or 0 for one the map should not name.</summary>
     private int Mapped(LineSyntax line, int bytes, bool located) =>
-        bytes != 0 || located ? (callLine ?? line).LineIndex + 1 : 0;
+        bytes != 0 || located ? At(line) : 0;
+
+    /// <summary>
+    /// The line of this file a generated line came from, counting from one. The lines of an
+    /// expansion came from the call, which is the line of this file that asked for all of them.
+    /// </summary>
+    private int At(LineSyntax line) => (callLine ?? line).LineIndex + 1;
 
     /// <summary>
     /// Writes a definition that is in no segment: a constant, or a name for an address given

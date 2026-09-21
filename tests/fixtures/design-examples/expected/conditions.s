@@ -32,14 +32,9 @@ conditions__run:
 
 .segment "RODATA": absolute
 conditions__bits:
-    .byte 1 << $00
-    .byte 1 << $01
-    .byte 1 << $02
-    .byte 1 << $03
-    .byte 1 << $04
-    .byte 1 << $05
-    .byte 1 << $06
-    .byte 1 << $07
+    .repeat 8, i
+        .byte 1 << i
+    .endrepeat
 
 conditions__LINES = 262
 

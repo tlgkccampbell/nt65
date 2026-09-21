@@ -49,31 +49,9 @@ data__player_x: .res 2
 data__buffer:   .res 64
 data__gradient: .byte 40, $e0, 0
 data__row_lo:
-    .byte <(SCREEN + ($00 * 40))
-    .byte <(SCREEN + ($01 * 40))
-    .byte <(SCREEN + ($02 * 40))
-    .byte <(SCREEN + ($03 * 40))
-    .byte <(SCREEN + ($04 * 40))
-    .byte <(SCREEN + ($05 * 40))
-    .byte <(SCREEN + ($06 * 40))
-    .byte <(SCREEN + ($07 * 40))
-    .byte <(SCREEN + ($08 * 40))
-    .byte <(SCREEN + ($09 * 40))
-    .byte <(SCREEN + ($0a * 40))
-    .byte <(SCREEN + ($0b * 40))
-    .byte <(SCREEN + ($0c * 40))
-    .byte <(SCREEN + ($0d * 40))
-    .byte <(SCREEN + ($0e * 40))
-    .byte <(SCREEN + ($0f * 40))
-    .byte <(SCREEN + ($10 * 40))
-    .byte <(SCREEN + ($11 * 40))
-    .byte <(SCREEN + ($12 * 40))
-    .byte <(SCREEN + ($13 * 40))
-    .byte <(SCREEN + ($14 * 40))
-    .byte <(SCREEN + ($15 * 40))
-    .byte <(SCREEN + ($16 * 40))
-    .byte <(SCREEN + ($17 * 40))
-    .byte <(SCREEN + ($18 * 40))
+    .repeat 25, r
+        .byte <(SCREEN + (r * 40))
+    .endrepeat
 data__handlers: .addr move, fire, jump, quit
 data__header:
     .byte $4e, $54, $36, $35        ; title

@@ -6,26 +6,30 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 public sealed class RepetitionTests
 {
-    /// <summary>The example: the index counts from zero, so this is the eight single bits.</summary>
+    /// <summary>
+    /// The example: the index counts from zero, so this is the eight single bits. Every turn
+    /// came out as the same line in terms of the index, so the output says it once, with ca65's
+    /// own counter, which counts from zero too.
+    /// </summary>
     [Fact]
     public void RepeatCountsFromZero()
     {
         var main = Output(".data bits: .byte[] {\n.repeat 8, i {\n    1 << i\n}\n}\n");
 
-        Assert.Equal(8, Lines(main, ".byte").Count);
-        Assert.Contains(".byte 1 << $00", main);
-        Assert.Contains(".byte 1 << $07", main);
+        Assert.Contains(".repeat 8, i\n", main);
+        Assert.Equal([".byte 1 << i"], Lines(main, ".byte"));
+        Assert.Contains(".endrepeat\n", main);
     }
 
-    /// <summary>A repetition inside another sees both names.</summary>
+    /// <summary>A repetition inside another sees both names, and each counts with its own.</summary>
     [Fact]
     public void RepetitionsNest()
     {
-        var main = Output(".data grid: .byte[] {\n.repeat 2, row {\n.repeat 3, col {\n    row * 3 + col\n}\n}\n}\n");
+        var main = Output(".data grid: .byte[] {\n.repeat 3, row {\n.repeat 3, col {\n    row * 3 + col\n}\n}\n}\n");
 
-        Assert.Equal(6, Lines(main, ".byte").Count);
-        Assert.Contains(".byte ($00 * 3) + $00", main);
-        Assert.Contains(".byte ($01 * 3) + $02", main);
+        Assert.Contains(".repeat 3, row\n", main);
+        Assert.Contains(".repeat 3, col\n", main);
+        Assert.Equal([".byte (row * 3) + col"], Lines(main, ".byte"));
     }
 
     /// <summary>
@@ -142,14 +146,41 @@ public sealed class RepetitionTests
         Assert.Contains("bne p__wait_2\n", main);
     }
 
-    /// <summary>A repetition is unrolled by nt65, so none of it reaches ca65.</summary>
+    /// <summary>
+    /// A repetition whose turns came out as the same lines is said once, however many of them
+    /// there are: the showcase is a table of the numbers themselves.
+    /// </summary>
     [Fact]
-    public void NothingOfARepetitionReachesTheOutput()
+    public void ARepetitionSaidOnceIsThreeLinesHoweverManyTurnsItRuns()
     {
-        var main = Output(".data bits: .byte[] {\n.repeat 4, i {\n    i\n}\n}\n");
+        var main = Output(".data ramp: .byte[] {\n.repeat 256, i {\n    i\n}\n}\n");
+
+        Assert.Contains(".repeat 256, i\n", main);
+        Assert.Equal([".byte i"], Lines(main, ".byte"));
+    }
+
+    /// <summary>
+    /// A repetition is unrolled first, and only what came out the same is said once: turns that
+    /// differ in a decision nt65 made — here how much room each line takes — are all written out,
+    /// because a ca65 <c>.repeat</c> could not say them.
+    /// </summary>
+    [Fact]
+    public void TurnsThatCameOutDifferentlyAreAllWrittenOut()
+    {
+        var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
         Assert.DoesNotContain(".repeat", main);
         Assert.DoesNotContain(".endrep", main);
+    }
+
+    /// <summary>Two turns read no better said once, so the threshold is three.</summary>
+    [Fact]
+    public void TwoTurnsAreWrittenOut()
+    {
+        var main = Output(".proc p {\n.repeat 2 {\n    nop\n}\n    rts\n}\n");
+
+        Assert.DoesNotContain(".repeat", main);
+        Assert.Equal(["nop", "nop"], Lines(main, "nop"));
     }
 
     /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>

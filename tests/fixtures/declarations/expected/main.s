@@ -27,11 +27,9 @@ gradient__end:
 lut: .byte 1, 2, 4, 8
 lut__end:
 row_lo:
-    .byte $00 * 40
-    .byte $01 * 40
-    .byte $02 * 40
-    .byte $03 * 40
-    .byte $04 * 40
+    .repeat 5, i
+        .byte i * 40
+    .endrepeat
 row_lo__end:
 text: .byte $68, $69, $00           ; "hi"
 text__end:

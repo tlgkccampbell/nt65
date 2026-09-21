@@ -151,9 +151,10 @@ precedence is parenthesized; names are flat, so ca65's scoping rules never apply
 character and string data is written as byte values, so no target character set can
 change it; macros are expanded, `.if` is resolved and every repetition is unrolled before
 output, each turn decided on its own. A counted `.repeat` whose turns then came out as the
-same lines is written back as ca65's own `.repeat` around those lines (§13): ca65 is still
-guessing nothing, because every choice was made before the comparison that allowed it —
-it is repeating a line nt65 settled, not working one out.
+same lines is written back as ca65's own `.repeat` around those lines, and one whose turns
+differ only in the number the binding was worth as a `.repeat` with a counter (§13): ca65 is
+still guessing nothing, because every choice was made before the comparison that allowed it —
+it is repeating a line nt65 settled, and at most counting, not working one out.
 
 The output assembles to the same bytes under any ca65 command line a project already
 uses, with the pinned ca65 (§13). The header switches off everything a command-line option
@@ -2251,8 +2252,9 @@ None of these decides anything in the output. nt65 resolves every `.if` and unro
 `.each` body are distinct per iteration, as macro expansion labels are, and nothing outside
 the body can name them. The one thing that does reach the output is the shape of a counted
 `.repeat` whose turns all came out as the same lines, which is written back as a ca65
-`.repeat` around one copy of them (§13) — a repetition of what nt65 decided, with nothing
-in it left for ca65 to work out. A
+`.repeat` around one copy of them, with a counter in it where the turns differ only in the
+number the binding was worth (§13) — a repetition of what nt65 decided, with nothing in it
+left for ca65 to work out. A
 body holds nothing that is one thing for the whole file: no `.import`, `.use`, `.module`,
 `.cpu`, segment declaration, `.macro` or `.func`. A family is the one thing it does hold that
 is not the turn's — a `.proc` or a `.data` whose name is the binding, and the `.export` before
@@ -2869,7 +2871,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | nt65 | ca65 |
 |---|---|
 | file header | `.setcpu`, `.smart -`, `.case +`, every `.feature` switched off |
-| each generated line that produces bytes, and each `.assert` ca65 evaluates | nothing in the output; a `line` record in the map beside it, naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the map says, so those get none. A folded `.repeat` counts the whole block against its own line, which is where ca65 counts it too, and that line names the repetition in the source; the lines of the body name where they came from and make no bytes of their own |
+| each generated line that produces bytes, and each `.assert` ca65 evaluates | nothing in the output; a `line` record in the map beside it, naming its `.nt65` file and line. ld65 reports imports, exports and link-time assertions at the `.s` line whatever the map says, so those get none. A folded `.repeat` counts the whole block against its own line, which is where ca65 counts it too, and that line names the repetition in the source; the lines of the body name where they came from and make no bytes of their own, and the `.endrepeat` names the brace that closed the body, because ld65 records a span for the whole block against it |
 | `a == b`, `a != b`, `a ^^ b` | `a = b`, `a <> b`, `a .xor b`; nt65's other operators are ca65's |
 | `.segment X: zp` declaration | nothing by itself |
 | `.segment X` region, `.segment X { }` at file level | `.segment "X": zeropage`, `absolute` or `far`, from the segment table ... (next segment) |
@@ -2890,7 +2892,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `wdm #n` | `.byte $42, n` |
 | `mvn #s, #d` | `mvn #s, #d` |
 | `.if c { } .else { }` | resolved at transpile time; only the chosen branch is emitted |
-| `.repeat n, i { }`, `.each l, v { }` | unrolled; what the turn is worth is written into each line, and the name the turn is bound to is not repeated down them as a comment. A counted `.repeat` of three turns or more whose turns all came out as the same lines, and whose body names nothing, is then written back as `.repeat n` around one copy of them, indented a level; everything else stays unrolled |
+| `.repeat n, i { }`, `.each l, v { }` | unrolled; what the turn is worth is written into each line, and the name the turn is bound to is not repeated down them as a comment. A counted `.repeat` of three turns or more whose body names nothing is then written back as one block, indented a level: `.repeat n` where the turns came out as the same lines, and `.repeat n, i` around the body once with a counter of the output's own where they differ only in the number the binding was worth, which is checked by putting every turn's number back and finding the line that turn was written as. Everything else stays unrolled |
 | `m!(...)` | expanded inline, between `; m!(...)  file:line` and `; end of m!`; its lines map to the call's line (debug information) |
 | `.enum Color { }` | a constant per member, `Color__red = 0` |
 | `.struct`, `.union` | nothing by themselves |
@@ -3745,6 +3747,18 @@ Recorded so the reasoning survives. None is open.
   question, asked of the same lines, as the one that gathers a row of equal bytes back into a
   `.res`. A body that names something stays unrolled whatever it looks like, because ca65 would
   declare that name once a turn.
+- **A counter where the turns differ only in what the binding was worth.** ca65's `.repeat`
+  takes a counter and puts the turn's number wherever its name stands, which is exactly what
+  the turns of `.repeat 256, i { i }` differ by, and two hundred and fifty-six lines of table
+  are three lines of output instead. It is settled the same way as the rest: the body is the
+  first turn with the counter where the number stood, and it is written only after putting
+  every turn's number back has given the line that turn was actually written as. So the
+  arithmetic ca65 does is the arithmetic nt65 checked, on the same expression, in the 32 bits
+  the two already agree in (§9) — anything the binding decided rather than appeared in, such as
+  how wide an address a turn reaches or how much room a line takes, makes a turn that the
+  counter cannot reproduce, and the whole repetition is written out. The counter is a name of
+  the output's, derived from the binding's and made unique against everything else in the file,
+  since ca65 replaces the name wherever it stands.
 - **nt65 deletes only what it wrote.** A record under `out` names each output: a removed
   module's output goes, and a hand-written file beside it never does.
 - **Unchanged output is left alone, and stale output is touched.** make then reassembles only
@@ -3894,8 +3908,9 @@ Version 1 does not promise:
 - which warnings a program gets, or the wording and exact position of any diagnostic. The
   *name* a diagnostic is reported under is promised, and its wording is not: that is what lets
   a message be reworded without breaking a project file or a CI filter;
-- the text of the output beyond what the contract of §1 names: its layout, its comments, and
-  the generated names of cheap locals, expansions and iterations;
+- the text of the output beyond what the contract of §1 names: its layout, its comments, which
+  repetitions it says once and which it writes out, and the generated names of cheap locals,
+  expansions, iterations and repeat counters;
 - the layout `nt65 fmt` writes, character for character. It stays one layout, and laying out
   what is laid out changes nothing; a release that moves it says so, and formatting again is
   what answers it;
