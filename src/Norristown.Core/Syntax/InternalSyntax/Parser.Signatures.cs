@@ -41,7 +41,7 @@ internal sealed partial class Parser
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {
-            Report("expected a processor-state item");
+            Report(Catalogue.ExpectedStateItem.Says("a processor-state item"));
             return null;
         }
 
@@ -55,7 +55,7 @@ internal sealed partial class Parser
             var equals = Advance();
             var given = ParseExpression();
             if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
-                Report(nameIndex, $"`{name.Text}` is not a processor-state item");
+                Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
 
             // The item is what a misspelled word is an item of, so it takes what was said of it.
             return Own(new StateValueItemSyntax(name, equals, given));
@@ -64,7 +64,7 @@ internal sealed partial class Parser
         GreenToken? suffix = Kind is SyntaxKind.Star or SyntaxKind.Question ? Advance() : null;
         if (!SyntaxFacts.IsStateItem(name.Text, suffix?.Kind ?? SyntaxKind.None))
         {
-            Report(nameIndex, $"`{name.Text}` is not a processor-state item");
+            Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
             return Own(new StateFlagItemSyntax(name, suffix));
         }
         else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
@@ -95,7 +95,7 @@ internal sealed partial class Parser
     {
         if (!AtKeptRegister(index))
         {
-            Report("expected the registers it keeps: `keeps a`, `keeps x, y`");
+            Report(Catalogue.ExpectedKeptRegisters.Says("the registers it keeps: `keeps a`, `keeps x, y`"));
             return null;
         }
         var pieces = ImmutableArray.CreateBuilder<GreenNode>();

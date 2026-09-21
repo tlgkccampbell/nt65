@@ -53,9 +53,8 @@ public sealed class ProgramSymbols
                 continue;
             if (byName.TryGetValue(name, out var other))
             {
-                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Severity.Error,
-                    $"module `{name}` is already `{FileName(other.Tree)}`: a module is one file, and a large one "
-                    + "is split into submodules",
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
+                    Catalogue.ModuleNameTaken.Says(name, FileName(other.Tree)),
                     [new RelatedSpan(other.Tree.GetSpan(other.NameSpan), "declared here")]));
                 continue;
             }
@@ -63,9 +62,8 @@ public sealed class ProgramSymbols
             // write two whose names differ only in case to one file.
             if (byName.Values.FirstOrDefault(named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)) is { } same)
             {
-                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Severity.Error,
-                    $"modules `{name}` and `{same.Name}` differ only in case, and a file system that ignores case "
-                    + "writes both to one file",
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
+                    Catalogue.ModuleNamesDifferInCase.Says(name, same.Name),
                     [new RelatedSpan(same.Tree.GetSpan(same.NameSpan), "the other module")]));
             }
             byName[name] = module;
@@ -82,8 +80,8 @@ public sealed class ProgramSymbols
                 var path = $"{module.Name}::{symbol.Name}";
                 if (!symbol.IsCheapLocal && (byName.ContainsKey(path) || prefixes.Contains(path)))
                 {
-                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                        $"`{path}` is the path of a module, and module `{module.Name}` may not declare `{symbol.Name}` as well"));
+                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
+                        Catalogue.NameIsAModulePath.Says(path, module.Name, symbol.Name)));
                 }
             }
         }
@@ -98,8 +96,7 @@ public sealed class ProgramSymbols
                 if (byLinkerName.TryGetValue(linked, out var other))
                 {
                     diagnostics.Add(new Diagnostic(symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan,
-                        Severity.Error,
-                        $"`{symbol.PathName}` and `{other.PathName}` are both exported to the linker as `{linked}`",
+                        Catalogue.ExportNameTaken.Says(symbol.PathName, other.PathName, linked),
                         [new RelatedSpan(other.DeclarationSpan, "the other export")]));
                     continue;
                 }

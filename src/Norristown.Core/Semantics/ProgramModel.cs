@@ -380,7 +380,7 @@ public sealed class ProgramModel
                 ? new Dictionary<Symbol, Expansion.Bound> { [held.Binding] = held.Value }
                 : null;
             long? ValueOf(ExpressionSyntax expression) => Evaluator.ValueOf(expression, segments, resolved, bound).AsNumber();
-            void Report(TextSpan span, string message) =>
+            void Report(TextSpan span, DiagnosticMessage message) =>
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
             if (symbol.Kind == SymbolKind.SignatureSet)
                 Signature.CheckSet(symbol, ValueOf, SetOf, Report);
@@ -416,16 +416,16 @@ public sealed class ProgramModel
                 alias.Signature = actual;
                 continue;
             }
-            var said = declared.IsFar != actual.IsFar
-                ? $"`{alias.Name}` is declared {declared.Distance}, and `{routine.DisplayName}` is {actual.Distance}"
+            DiagnosticMessage? said = declared.IsFar != actual.IsFar
+                ? Catalogue.AliasDistanceMismatch.Says(
+                    alias.Name, declared.Distance, routine.DisplayName, actual.Distance)
                 : declared.Entry != actual.Entry || declared.Exit != actual.Exit || declared.Inline != actual.Inline
                     || declared.IsInterrupt != actual.IsInterrupt || declared.NeverReturns != actual.NeverReturns
                     || declared.Arguments != actual.Arguments
-                    ? $"`{alias.Name}` is declared `{declared}`, and `{routine.DisplayName}` is `{actual}`: "
-                        + "another name for a routine declares what the routine does"
-                    : null;
-            if (said is not null)
-                byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), Severity.Error, said));
+                    ? Catalogue.AliasSignatureMismatch.Says(alias.Name, declared, routine.DisplayName, actual)
+                    : (DiagnosticMessage?)null;
+            if (said is { } problem)
+                byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), problem));
         }
     }
 
@@ -529,9 +529,8 @@ public sealed class ProgramModel
                 continue;
             }
             var kind = symbol.Kind == SymbolKind.ExternProc ? "an extern proc" : "an imported routine";
-            byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                $"`{symbol.Name}` declares no processor state, and {kind} has no body to check one against: "
-                + "say what a caller must hold to, or `?` where nothing is known"));
+            byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.DeclarationSpan,
+                Catalogue.SignatureMissing.Says(symbol.Name, kind)));
         }
     }
 
@@ -544,8 +543,8 @@ public sealed class ProgramModel
             var actual = symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize();
             if (actual is { } size && given < size)
             {
-                byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at), Severity.Error,
-                    $"`{symbol.Name}` is `{Spell(size)}`, and an export may widen an address size but not narrow it: `{symbol.Name}: {Spell(size)}` or wider")
+                byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at),
+                    Catalogue.ExportNarrowsAddressSize.Says(symbol.Name, Spell(size), symbol.Name, Spell(size)))
                 {
                     Fix = new DiagnosticFix(FixKind.ExportSize, Spell(size)),
                 });
@@ -578,8 +577,8 @@ public sealed class ProgramModel
             {
                 if (!symbol.IsCheapLocal && configured.ContainsKey(symbol.Name))
                 {
-                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                        $"`{symbol.Name}` is a define, and a file may not declare one"));
+                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
+                        Catalogue.DefineRedeclared.Says(symbol.Name)));
                 }
             }
         }

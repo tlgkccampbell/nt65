@@ -44,8 +44,7 @@ public static class Repetitions
 
     /// <summary>What is said about a repetition of <paramref name="count"/> turns, which is too many.</summary>
     /// <param name="count">How many turns it runs.</param>
-    public static string Beyond(long count) =>
-        $"this repetition runs {count} times, and {MaximumTurns} turns is as far as nt65 goes";
+    public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Says(count, MaximumTurns);
 
     /// <summary>The name a repetition binds, or null when it names none.</summary>
     public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
@@ -68,12 +67,12 @@ public static class Repetitions
     {
         if (model.ValueOf(counted, outer).AsNumber() is not { } count)
         {
-            Report(model, diagnostics, counted, outer, "a `.repeat` count is a constant, and this is not one");
+            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNotConstant);
             return [];
         }
         if (count < 0)
         {
-            Report(model, diagnostics, counted, outer, $"a `.repeat` count cannot be negative, and this one is {count}");
+            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNegative.Says(count));
             return [];
         }
         if (count > MaximumTurns)
@@ -127,7 +126,7 @@ public static class Repetitions
             return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
                 (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))];
 
-        Report(model, diagnostics, walked, outer, "`.each` walks a list or an enum, and this is neither");
+        Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);
         return [];
     }
 
@@ -136,24 +135,28 @@ public static class Repetitions
     /// may. What the body declares is a different name on every turn, and each of these is
     /// one thing for the whole file.
     /// </summary>
-    public static string? Forbidden(StatementSyntax statement) => statement switch
+    public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
+        ? Catalogue.DeclarationInARepetition.Says(why.What, why.Because)
+        : (DiagnosticMessage?)null;
+
+    /// <summary>The two halves of that sentence, or null where the statement may stand.</summary>
+    private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
-            "an export or an import belongs outside a repetition: it names one symbol, and a "
-            + "repetition's body is written out once per turn",
-        CpuDirectiveSyntax => "`.cpu` belongs outside a repetition: the CPU is program-wide",
+            ("an export or an import", "it names one symbol, and a repetition's body is written out once per turn"),
+        CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
         SegmentDeclarationSyntax =>
-            "a segment declaration belongs outside a repetition: a segment is declared exactly "
-            + "once for the program, and this one would be declared once per turn",
+            ("a segment declaration",
+                "a segment is declared exactly once for the program, and this one would be declared once per turn"),
         MultiProcDeclarationSyntax =>
-            "`.multiproc` belongs outside a repetition: it declares one routine per member of an enum, "
-            + "and this one would declare them again on every turn",
+            ("`.multiproc`",
+                "it declares one routine per member of an enum, and this one would declare them again on every turn"),
         ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
-            "`.proc` belongs outside a repetition: a routine's name and signature are part of the "
-            + "file's interface, and this one would be a different routine on every turn",
+            ("`.proc`", "a routine's name and signature are part of the file's interface, and this one would be "
+                + "a different routine on every turn"),
         MacroDeclarationSyntax or FuncDeclarationSyntax or SignatureDeclarationSyntax =>
-            "a definition belongs outside a repetition: it would be a different one on every turn, "
-            + "and nothing outside the body could name any of them",
+            ("a definition", "it would be a different one on every turn, and nothing outside the body could name "
+                + "any of them"),
         _ => null,
     };
 
@@ -164,6 +167,6 @@ public static class Repetitions
         : item.GetText().Trim();
 
     private static void Report(
-        SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, string message) =>
+        SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, DiagnosticMessage message) =>
         diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, outer, Severity.Error, message));
 }

@@ -144,7 +144,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// this file's diagnostics does not move when that file is edited.
     /// </summary>
     public static Diagnostic Problem(
-        SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity severity, string message)
+        SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity? severity, DiagnosticMessage message)
     {
         if (tree != file)
         {
@@ -152,12 +152,13 @@ public sealed class Expansion : IEquatable<Expansion>
             {
                 if (level.Call is { } call && call.Tree == file)
                 {
-                    return new Diagnostic(file.GetSpan(call.Span), severity, message,
+                    return new Diagnostic(
+                        file.GetSpan(call.Span), severity ?? message.Descriptor.Severity, message,
                         [new RelatedSpan(tree.GetSpan(span), "in the macro body")]);
                 }
             }
         }
-        return new Diagnostic(tree.GetSpan(span), severity, message);
+        return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message);
     }
 
     /// <summary>How deep the expansions go, which is what bounds a runaway one.</summary>

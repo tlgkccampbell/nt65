@@ -23,7 +23,7 @@ internal sealed partial class Parser
             if (AtName || Kind == SyntaxKind.ColonColon)
                 type = ParseName();
             else
-                Report("expected the type: `.type T`");
+                Report(Catalogue.ExpectedDataType.Says("the type: `.type T`"));
         }
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
@@ -34,7 +34,7 @@ internal sealed partial class Parser
             if (Next == SyntaxKind.EndOfLine)
             {
                 if (count is null && !record)
-                    ReportOnce($"values in a body need a count: `{directive.Text}[] {{` counts them");
+                    ReportOnce(Catalogue.DataBodyNeedsACount.Says(directive.Text));
                 tail = new DataBodySyntax(Advance());
             }
             else
@@ -46,9 +46,9 @@ internal sealed partial class Parser
         {
             if (count is not null || record)
             {
-                ReportOnce(count is not null
+                ReportOnce(Catalogue.DataValuesNeedBraces.Says(count is not null
                     ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
-                    : "a record's values go in braces: `.type T { member = value }`");
+                    : "a record's values go in braces: `.type T { member = value }`"));
             }
             tail = ParseInlineData();
         }
@@ -67,7 +67,8 @@ internal sealed partial class Parser
     {
         var bracket = Advance();
         var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
-        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, "expected `]`"));
+        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says(
+            "`]`")));
     }
 
     /// <summary>
@@ -79,8 +80,8 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         var name = ExpectName(Kind == SyntaxKind.OpenBrace
-            ? "`.data` declares data, and needs a name: the segment is written `.segment DATA`"
-            : "expected a name: `.data name: .byte 1, 2` or `.data name { }`");
+            ? Catalogue.DataNeedsAName.Says()
+            : Catalogue.ExpectedName.Says("a name: `.data name: .byte 1, 2` or `.data name { }`"));
 
         GreenToken? colon = null;
         DataDirectiveSyntax? element = null;
@@ -95,9 +96,10 @@ internal sealed partial class Parser
             else
             {
                 var instead = Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null;
-                ReportOnce(instead?.Message
-                    ?? "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
-                        + "`.type T`, or bytes such as `.incbin`",
+                ReportOnce(
+                    instead?.Message ?? Catalogue.ExpectedDataType.Says(
+                        "what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
+                        + "`.type T`, or bytes such as `.incbin`"),
                     instead is { } written ? Spelling(written, wholeLine: false) : null);
             }
         }
@@ -107,7 +109,7 @@ internal sealed partial class Parser
         }
         else
         {
-            ReportOnce("expected `:` and what the data is, or `{` for mixed data");
+            ReportOnce(Catalogue.ExpectedColon.Says("`:` and what the data is, or `{` for mixed data"));
         }
         return new DataDeclarationSyntax(keyword, name, colon, element, brace);
     }
@@ -117,8 +119,7 @@ internal sealed partial class Parser
     {
         if (Kind == SyntaxKind.Directive && !SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            return ErrorLine($"a data body holds values, and `{Current.Text}` is a directive: "
-                + "what the values are is the declaration's to say");
+            return ErrorLine(Catalogue.DataBodyHoldsValues.Says(Current.Text));
         }
         return Finish(new DataValuesSyntax(ParseSeparatedList(ParseDataValue)));
     }
@@ -150,7 +151,7 @@ internal sealed partial class Parser
         var items = Kind != SyntaxKind.CloseBrace && !AtEnd
             ? ParseSeparatedList(record ? ParseMemberValue : ParseDataValue)
             : null;
-        var closeBrace = Expect(SyntaxKind.CloseBrace, "expected `}`");
+        var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Says("`}`"));
         return record
             ? new RecordValuesSyntax(openBrace, items, closeBrace)
             : new ValueListSyntax(openBrace, items, closeBrace);
@@ -164,11 +165,12 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report("expected a member name");
+            Report(Catalogue.ExpectedName.Says("a member name"));
             return null;
         }
         var name = Advance();
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says(
+            "`=`"));
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
@@ -176,13 +178,13 @@ internal sealed partial class Parser
     private GreenNode ParseMemberValueLine() =>
         ParseMemberValue() is { } value
             ? Finish(value)
-            : ErrorLine("expected `member = value`");
+            : ErrorLine(Catalogue.ExpectedMemberValue);
 
     /// <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
     private GreenNode ParseEnumMember()
     {
         if (!AtName)
-            return ErrorLine("expected a member name, or `name = expr`");
+            return ErrorLine(Catalogue.ExpectedName.Says("a member name, or `name = expr`"));
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
             return Finish(new EnumMemberSyntax(name, null, null));
@@ -201,7 +203,8 @@ internal sealed partial class Parser
             dotDot = Advance();
             last = ParseExpression();
         }
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, "expected `=`");
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says(
+            "`=`"));
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 }

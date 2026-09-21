@@ -193,8 +193,8 @@ public sealed class CHeader
                 return $"{(type.Kind == SymbolKind.Union ? "union" : "struct")} {CName(type.OutputName)} {name}{dimension}";
             if (type is not null)
             {
-                diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Warning,
-                    $"`{symbol.Name}` holds `{type.PathName}`, which is not exported, so the C header declares it as bytes"));
+                diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
+                    Catalogue.CHeaderUntyped.Says(symbol.Name, type.PathName)));
             }
             return $"unsigned char {name}[{size}]";
         }
@@ -215,9 +215,8 @@ public sealed class CHeader
         if (symbol.OutputName.StartsWith('_'))
             return true;
         var span = symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan;
-        diagnostics.Add(new Diagnostic(span, Severity.Warning,
-            $"`{symbol.PathName}` is exported to the linker as `{symbol.OutputName}`, which C cannot name, so the C header "
-            + $"leaves the {what} out: cc65 puts `_` before a C name, so export it `as \"_{symbol.Name}\"`"));
+        diagnostics.Add(new Diagnostic(span,
+            Catalogue.CHeaderNameLeftOut.Says(symbol.PathName, symbol.OutputName, what, symbol.Name)));
         return false;
     }
 

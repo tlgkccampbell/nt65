@@ -190,9 +190,11 @@ public sealed class Emitter
             var end = EndOf(measured);
             if (names.Claimed(end) is { } other)
             {
-                diagnostics.Add(new Diagnostic(measured.DeclarationSpan, Severity.Error,
-                    $"`{other.QualifiedName}` and the end of `{measured.QualifiedName}` both become "
-                    + $"`{end}` in the output", [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
+                diagnostics.Add(new Diagnostic(measured.DeclarationSpan,
+                    Catalogue.OutputNameCollision.Says(
+    other.QualifiedName,
+    $"the end of `{measured.QualifiedName}`",
+    end), [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
             }
             names.Claim(end);
         }
@@ -202,8 +204,9 @@ public sealed class Emitter
             var size = SizeOf(type);
             if (names.Claimed(size) is { } other)
             {
-                diagnostics.Add(new Diagnostic(type.DeclarationSpan, Severity.Error,
-                    $"`{other.QualifiedName}` and the size of `{type.QualifiedName}` both become `{size}` in the output",
+                diagnostics.Add(new Diagnostic(type.DeclarationSpan,
+                    Catalogue.OutputNameCollision.Says(
+    other.QualifiedName, $"the size of `{type.QualifiedName}`", size),
                     [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
             }
             names.Claim(size);
@@ -1487,8 +1490,8 @@ public sealed class Emitter
         // mistake left behind, and saying so again only buries the mistake.
         if (diagnostics.Any(d => d.Severity == Severity.Error && d.Span.File == model.Tree.Path))
             return;
-        diagnostics.Add(Expansion.Problem(model.Tree, first.Parent.Tree, first.Span, expansion, Severity.Error,
-            $"`{first.Text}` cannot be written out, and nothing said why: this is a bug in nt65"));
+        diagnostics.Add(Expansion.Problem(
+            model.Tree, first.Parent.Tree, first.Span, expansion, null, Catalogue.CannotBeWritten.Says(first.Text)));
     }
 
     /// <summary>

@@ -75,7 +75,7 @@ internal sealed partial class Parser
                     ? new CallExpressionSyntax(name, null, ParseArgumentList())
                     : name;
             default:
-                Report("expected an expression");
+                Report(Catalogue.ExpectedExpression);
                 return new ErrorExpressionSyntax(null);
         }
     }
@@ -84,20 +84,21 @@ internal sealed partial class Parser
     {
         var open = Advance();
         var expression = ParseExpression();
-        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, "expected `)`"));
+        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says(
+            "`)`")));
     }
 
     private ExpressionSyntax ParseBuiltinCall()
     {
         if (!SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            Report($"`{Current.Text}` is not a function");
+            Report(Catalogue.NotAFunction.Says(Current.Text));
             return new ErrorExpressionSyntax(Advance());
         }
         var name = Advance();
         if (Kind == SyntaxKind.OpenParen)
             return new CallExpressionSyntax(null, name, ParseArgumentList());
-        Report($"expected `(` after `{name.Text}`");
+        Report(Catalogue.ExpectedParenthesis.Says($"`(` after `{name.Text}`"));
         return new ErrorExpressionSyntax(name);
     }
 
@@ -107,7 +108,7 @@ internal sealed partial class Parser
         var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseExpression) : null;
         var closeParen = Kind == SyntaxKind.CloseParen
             ? Advance()
-            : Missing(SyntaxKind.CloseParen, "expected `)`");
+            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`"));
         return new ArgumentListSyntax(openParen, arguments, closeParen);
     }
 
@@ -126,7 +127,7 @@ internal sealed partial class Parser
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
             or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
-            return new NameExpressionSyntax(global, MissingParts("expected a name"));
+            return new NameExpressionSyntax(global, MissingParts(Catalogue.ExpectedName.Says("a name")));
         }
 
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
@@ -140,7 +141,7 @@ internal sealed partial class Parser
             if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
                 parts.Add(separator);
-                parts.Add(MissingPart("expected a name after `::`"));
+                parts.Add(MissingPart(Catalogue.ExpectedName.Says("a name after `::`")));
                 break;
             }
             parts.Add(separator);
@@ -160,15 +161,15 @@ internal sealed partial class Parser
     /// The part that stands where a name belongs the source does not have, saying so unless
     /// <paramref name="message"/> is null, which is where something else has said it better.
     /// </summary>
-    private IdentifierNameSyntax MissingPart(string? message) =>
-        new(message is null ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, message),
+    private IdentifierNameSyntax MissingPart(DiagnosticMessage? message) =>
+        new(message is not { } said ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, said),
             null);
 
     /// <summary>A path of one part, that part being only the place a name belongs.</summary>
-    private GreenSeparatedList MissingParts(string? message) => new([MissingPart(message)]);
+    private GreenSeparatedList MissingParts(DiagnosticMessage? message) => new([MissingPart(message)]);
 
     /// <summary>The name that stands where one belongs the source does not have.</summary>
-    private NameExpressionSyntax MissingName(string? message) => new(null, MissingParts(message));
+    private NameExpressionSyntax MissingName(DiagnosticMessage? message) => new(null, MissingParts(message));
 
     /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
     private ElementIndexSyntax ParseElementIndex()
@@ -181,10 +182,11 @@ internal sealed partial class Parser
         }
         else
         {
-            Report("expected the element: `name[i]` is the i-th of what `name` declares");
+            Report(Catalogue.ExpectedElementIndex);
             index = new ErrorExpressionSyntax(null);
         }
-        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, "expected `]`"));
+        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says(
+            "`]`")));
     }
 
     /// <summary>
@@ -205,7 +207,7 @@ internal sealed partial class Parser
                 // enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
-                Report(operatorIndex, $"`{op.Text}` and `{inner.Text}` need parentheses to show which applies first",
+                Report(operatorIndex, Catalogue.OperatorsNeedParentheses.Says(op.Text, inner.Text),
                     new DiagnosticFix(FixKind.Parentheses));
                 return;
             }
@@ -214,7 +216,7 @@ internal sealed partial class Parser
         if (RightmostByteOperator(left) is { } byteOperator)
         {
             Report(operatorIndex,
-                $"unary `{byteOperator.Text}` before `{op.Text}` needs parentheses to show what `{byteOperator.Text}` applies to",
+                Catalogue.ByteOperatorNeedsParentheses.Says(byteOperator.Text, op.Text, byteOperator.Text),
                 new DiagnosticFix(FixKind.Parentheses));
         }
     }

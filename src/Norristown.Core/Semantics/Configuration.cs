@@ -105,14 +105,15 @@ public sealed class Configuration
     /// with the argument goes to <paramref name="report"/>.
     /// </summary>
     internal static Value? AboutTheCpu(
-        string name, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu, Action<TextSpan, string> report)
+        string name, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu,
+        Action<TextSpan, DiagnosticMessage> report)
     {
         switch (name)
         {
             case ".target":
                 if (given.Count != 1 || Alone(given[0]) is not { } written || CpuNames.Parse(written.Text) is not { } named)
                 {
-                    report(function.Span, $"`.target` takes {CpuNames.Listed}");
+                    report(function.Span, Catalogue.TargetArgument.Says(CpuNames.Listed));
                     return Value.Unknown;
                 }
                 return Value.Of(named == cpu);
@@ -122,7 +123,7 @@ public sealed class Configuration
             case ".has":
                 if (given.Count != 1 || given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
-                    report(function.Span, "`.has` takes a mnemonic, such as `.has(phx)`");
+                    report(function.Span, Catalogue.HasArgument);
                     return Value.Unknown;
                 }
                 return Value.Of(Layout.Instructions.Writable(cpu, mnemonic.Text));
@@ -233,7 +234,7 @@ public sealed class Configuration
                     case ElseDirectiveSyntax:
                         if (!chaining)
                         {
-                            Report(opener.Span, $"`{Directive(opener)}` continues an `.if`, and there is none to continue");
+                            Report(opener.Span, Catalogue.ElseWithoutIf.Says(Directive(opener)));
                             Leave(block);
                             continue;
                         }
@@ -251,7 +252,7 @@ public sealed class Configuration
 
         public Value Evaluate(SyntaxNode node) => evaluator.Evaluate(node);
 
-        public void Report(TextSpan span, string message) =>
+        public void Report(TextSpan span, DiagnosticMessage message) =>
             diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
 
         /// <summary>
@@ -265,7 +266,7 @@ public sealed class Configuration
             foreach (var node in block.DescendantNodes())
             {
                 if (node is CpuDirectiveSyntax)
-                    Report(node.Span, "`.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`");
+                    Report(node.Span, Catalogue.CpuUnderACondition);
             }
 
             var take = !already && Holds(opener);
@@ -287,7 +288,7 @@ public sealed class Configuration
             var value = Evaluate(condition);
             if (value.IsString)
             {
-                Report(condition.Span, "a condition is a number, and this is text");
+                Report(condition.Span, Catalogue.ConditionIsText);
                 return false;
             }
             return value.AsNumber() is { } number && number != 0;
@@ -353,9 +354,8 @@ public sealed class Configuration
                         continue;
                     if (!Configuration.AtFileLevel(declaration))
                     {
-                        diagnostics.Add(new Diagnostic(tree.GetSpan(declaration.Keyword.Span), Severity.Error,
-                            "a `.config` is written at file level, outside every block: which settings a program has "
-                                + "depends on no condition"));
+                        diagnostics.Add(new Diagnostic(tree.GetSpan(declaration.Keyword.Span),
+                            Catalogue.ConfigMisplaced));
                         continue;
                     }
                     settings.byName.TryAdd((module, name.Text), new Setting(tree, name, declaration.Value,
@@ -371,14 +371,13 @@ public sealed class Configuration
                 var key = (define.Name[..at], define.Name[(at + 2)..]);
                 if (!settings.byName.TryGetValue(key, out var setting))
                 {
-                    diagnostics.Add(new Diagnostic(define.Declaration, Severity.Error,
-                        $"`{define.Name}` names no `.config`: the build sets a setting a module declares and exports"));
+                    diagnostics.Add(new Diagnostic(define.Declaration,
+                        Catalogue.SettingUnknown.Says(define.Name)));
                 }
                 else if (!setting.IsExported)
                 {
-                    diagnostics.Add(new Diagnostic(define.Declaration, Severity.Error,
-                        $"`{define.Name}` is not exported by module `{key.Item1}`, so the build cannot set it: a setting "
-                            + "the module keeps to itself is not part of its configuration"));
+                    diagnostics.Add(new Diagnostic(define.Declaration,
+                        Catalogue.SettingNotExported.Says(define.Name, key.Item1)));
                 }
                 else
                 {
@@ -418,7 +417,7 @@ public sealed class Configuration
         /// none and nothing was reported about it, which leaves it to be reported as naming
         /// nothing at all.
         /// </summary>
-        public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, string> report)
+        public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
             var (setting, reported) = Find(name.Tree, name, report);
             if (setting is not null)
@@ -437,7 +436,7 @@ public sealed class Configuration
         /// declares, one a <c>.use</c> brought in, or one written with its module's path. Whether
         /// anything was reported about it, such as a setting another module keeps to itself.
         /// </summary>
-        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, string> report)
+        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
             var parts = name.Names;
             if (parts.Length == 0 || !modules.TryGetValue(tree, out var own))
@@ -459,7 +458,7 @@ public sealed class Configuration
                 return (null, false);
             if (!found.IsExported && found.Tree != tree)
             {
-                report(name, $"`{name.GetText().Trim()}` is not exported by module `{modules[found.Tree]}`");
+                report(name, Catalogue.NotExported.Says(name.GetText().Trim(), modules[found.Tree]));
                 return (null, true);
             }
             return (found, false);
@@ -473,7 +472,7 @@ public sealed class Configuration
             var reader = readerFor!(setting.Tree);
             if (evaluating.Contains(setting))
             {
-                reader.Report(setting.Name.Span, $"`{setting.Name.Text}` is defined in terms of itself");
+                reader.Report(setting.Name.Span, Catalogue.DefinedInTermsOfItself.Says(setting.Name.Text));
                 values[setting] = null;
                 return null;
             }
@@ -481,7 +480,7 @@ public sealed class Configuration
             var written = setting.Expression is { } expression ? reader.Evaluate(expression) : Value.Unknown;
             evaluating.Remove(setting);
             if (written.IsString && setting.Expression is { } text)
-                reader.Report(text.Span, "a `.config` is a number, and this is text");
+                reader.Report(text.Span, Catalogue.ConfigIsText);
             if (values.ContainsKey(setting))
                 return values[setting];
             return values[setting] = setting.Given ?? written.AsNumber();

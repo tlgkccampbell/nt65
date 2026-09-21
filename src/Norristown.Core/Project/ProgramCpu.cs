@@ -30,8 +30,8 @@ public static class ProgramCpu
             {
                 if (chosen is { } already && cpu != already)
                 {
-                    diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error,
-                        $"this program is built for the {CpuNames.Spell(already)}, so `.cpu {CpuNames.Spell(cpu)}` disagrees"));
+                    diagnostics.Add(new Diagnostic(tree.GetSpan(span),
+                        Catalogue.CpuDisagrees.Says(CpuNames.Spell(already), CpuNames.Spell(cpu))));
                     continue;
                 }
                 chosen = cpu;

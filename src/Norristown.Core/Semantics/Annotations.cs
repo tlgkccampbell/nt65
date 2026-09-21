@@ -65,9 +65,8 @@ public static class Annotations
     /// has to be above it: a label below takes the address the annotation's statement ends
     /// at, and an annotation about nothing is a claim about nothing.
     /// </summary>
-    public static string? Misplaced(LineSyntax line, StatementSyntax directive) =>
-        Annotated(line) is not null ? null
-            : $"`{Spell(directive)}` is about the statement above it, and there is none here";
+    public static DiagnosticMessage? Misplaced(LineSyntax line, StatementSyntax directive) =>
+        Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Says(Spell(directive));
 
     /// <summary>The directive as it is written, for a message that names it.</summary>
     public static string Spell(StatementSyntax directive) =>

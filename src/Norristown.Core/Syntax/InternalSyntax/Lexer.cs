@@ -56,7 +56,7 @@ internal static class Lexer
         return pos;
     }
 
-    private static (SyntaxKind Kind, IReadOnlyList<string>? Errors) Scan(ReadOnlySpan<char> text, ref int pos)
+    private static (SyntaxKind Kind, IReadOnlyList<DiagnosticMessage>? Errors) Scan(ReadOnlySpan<char> text, ref int pos)
     {
         var c = text[pos];
         var next = pos + 1 < text.Length ? text[pos + 1] : '\0';
@@ -94,8 +94,8 @@ internal static class Lexer
             if (word.IsEmpty)
             {
                 return (SyntaxKind.NumberLiteral, One(hex
-                    ? "expected hexadecimal digits after `$`"
-                    : "expected binary digits after `%` (the remainder operator is `.mod`)"));
+                    ? Catalogue.DigitsMissing.Says("hexadecimal", "$", "")
+                    : Catalogue.DigitsMissing.Says("binary", "%", " (the remainder operator is `.mod`)")));
             }
             return (SyntaxKind.NumberLiteral, One(Digits(
                 word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1')));
@@ -107,7 +107,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, One("expected a name after `@`"));
+                    return (SyntaxKind.BadToken, One(Catalogue.NameAfterAt));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.CheapLocal, null);
@@ -120,7 +120,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, One("unexpected `.`"));
+                    return (SyntaxKind.BadToken, One(Catalogue.StrayDot));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.Directive, null);
@@ -176,11 +176,12 @@ internal static class Lexer
         // One whole character, so a surrogate pair is not split.
         Rune.DecodeFromUtf16(text[pos..], out var rune, out var consumed);
         pos += consumed;
-        return (SyntaxKind.BadToken, One($"unexpected character `{rune}`"));
+        return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Says(rune)));
     }
 
     /// <summary>The one thing wrong with a token as the list of them it is given as, or null.</summary>
-    private static IReadOnlyList<string>? One(string? error) => error is null ? null : [error];
+    private static IReadOnlyList<DiagnosticMessage>? One(DiagnosticMessage? error) =>
+        error is { } one ? [one] : null;
 
     private static int SkipWord(ReadOnlySpan<char> text, int pos)
     {
@@ -196,18 +197,18 @@ internal static class Lexer
     /// the digits follow, or <c>\0</c> for a decimal number, so that a message names the number
     /// as it was written; nothing is put together until there is something to say.
     /// </summary>
-    private static string? Digits(ReadOnlySpan<char> digits, char prefix, string radix, Func<char, bool> isDigit)
+    private static DiagnosticMessage? Digits(ReadOnlySpan<char> digits, char prefix, string radix, Func<char, bool> isDigit)
     {
         for (var i = 0; i < digits.Length; i++)
         {
             if (digits[i] == '_')
             {
                 if (i == 0 || i == digits.Length - 1 || digits[i - 1] == '_')
-                    return $"`{Written(digits, prefix)}` has a `_` that separates no digits: a separator stands between two of them";
+                    return Catalogue.NumberSeparator.Says(Written(digits, prefix));
                 continue;
             }
             if (!isDigit(digits[i]))
-                return $"invalid {radix} number `{Written(digits, prefix)}`";
+                return Catalogue.NumberInvalid.Says(radix, Written(digits, prefix));
         }
         return null;
 
@@ -221,10 +222,10 @@ internal static class Lexer
     /// reported, since each is a separate thing to correct; that a character literal holds
     /// more than one character is not, where an escape it could not read is why.
     /// </summary>
-    private static IReadOnlyList<string>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
+    private static IReadOnlyList<DiagnosticMessage>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {
         var isChar = quote == '\'';
-        List<string>? errors = null;
+        List<DiagnosticMessage>? errors = null;
         var characters = 0;
         pos++;
         while (true)
@@ -232,7 +233,7 @@ internal static class Lexer
             if (pos >= text.Length)
             {
                 if (errors is null)
-                    return One(isChar ? "unterminated character literal" : "unterminated string");
+                    return One(Catalogue.TextUnterminated.Says(isChar ? "character literal" : "string"));
                 return errors;
             }
             var c = text[pos];
@@ -258,7 +259,7 @@ internal static class Lexer
                     pos += 4;
                     break;
                 case 'x':
-                    (errors ??= []).Add("`\\x` must be followed by two hexadecimal digits");
+                    (errors ??= []).Add(Catalogue.EscapeHexDigits);
                     pos += 2;
                     break;
                 case '\0':
@@ -266,7 +267,7 @@ internal static class Lexer
                     break;
                 default:
                     Rune.DecodeFromUtf16(text[(pos + 1)..], out var rune, out var consumed);
-                    (errors ??= []).Add($"unknown escape `\\{rune}`");
+                    (errors ??= []).Add(Catalogue.EscapeUnknown.Says(rune));
                     pos += 1 + consumed;
                     break;
             }
@@ -276,9 +277,7 @@ internal static class Lexer
         // count is news only where every escape was read.
         if (isChar && characters != 1 && errors is null)
         {
-            return One(characters == 0
-                ? "empty character literal"
-                : "a character literal holds exactly one character");
+            return One(characters == 0 ? Catalogue.CharacterEmpty : Catalogue.CharacterTooLong);
         }
         return errors;
     }

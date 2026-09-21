@@ -54,7 +54,7 @@ internal static class GreenCache
     /// (or none). Trivia lists are compared by reference, which is exact for shared lists.
     /// </summary>
     public static GreenToken Token(SyntaxKind kind, ReadOnlySpan<char> text, ImmutableArray<GreenTrivia> leading,
-        ImmutableArray<GreenTrivia> trailing, IReadOnlyList<string>? errors)
+        ImmutableArray<GreenTrivia> trailing, IReadOnlyList<DiagnosticMessage>? errors)
     {
         if (errors is not null || text.Length > MaxText || !Shared(leading) || !Shared(trailing))
             return new GreenToken(kind, text.ToString(), leading, trailing, errors);

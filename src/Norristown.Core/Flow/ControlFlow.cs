@@ -627,18 +627,17 @@ public sealed class ControlFlow
                     continue;
                 if (IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
-                    diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
+                    diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
                         IsAddressData(target.Symbol)
-                            ? $"`{target.Symbol.DisplayName}` holds no code labels, and `.next` reads the labels a table holds"
-                            : $"`{target.Symbol.DisplayName}` is not a table of addresses: `.next` reads the labels a table "
-                                + "declared as `.addr` or `.faraddr` holds"));
+                            ? Catalogue.NextTableHasNoLabels.Says(target.Symbol.DisplayName)
+                            : Catalogue.NextTargetNotATable.Says(target.Symbol.DisplayName)));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
                     continue;
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
-                    $"`{target.Symbol.DisplayName}` is {target.Symbol.KindPhrase}, and "
-                    + $"`{Annotations.Spell(annotation.a)}` names somewhere code is"));
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                    Catalogue.NextTargetNotCode.Says(
+    target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Spell(annotation.a))));
             }
         }
     }
@@ -662,9 +661,8 @@ public sealed class ControlFlow
                 && block.Stream != region.Blocks[block.Index - 1].Stream
                 && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
             {
-                diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span), Severity.Warning,
-                    "this code is never reached: fall-through does not enter a nested segment block, so code "
-                    + "there starts at a label a `.next` names or a `.state` declares"));
+                diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span),
+                    Catalogue.CodeUnreachable));
                 continue;
             }
             if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
@@ -674,8 +672,8 @@ public sealed class ControlFlow
             }
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
-            diagnostics.Add(new Diagnostic(label.DeclarationSpan, Severity.Warning,
-                $"`{label.DisplayName}` is never reached: nothing runs into it and nothing names it"));
+            diagnostics.Add(new Diagnostic(label.DeclarationSpan,
+                Catalogue.LabelUnreachable.Says(label.DisplayName)));
         }
     }
 
@@ -720,7 +718,7 @@ public sealed class ControlFlow
             {
                 diagnostics.Add(new Diagnostic(
                     unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), severity,
-                    "the instruction above runs into this data. `.next` on it says where flow goes instead"));
+                    Catalogue.RunsIntoData));
             }
 
             // A run of data is one run: only what code runs into is worth saying.
@@ -754,7 +752,7 @@ public sealed class ControlFlow
                 }
                 else
                 {
-                    Report(call, $"`{name}` returns past one `.strz` written after each call, and none follows this one");
+                    Report(call, Catalogue.InlineDataMissing.Says(name, "one `.strz`", "none follows this one"));
                 }
                 continue;
             }
@@ -762,7 +760,7 @@ public sealed class ControlFlow
             if (inline.Expression is not { } count
                 || model.ValueOf(count, units[i].Step.On).AsNumber() is not { } bytes || bytes < 0)
             {
-                Report(call, $"`{name}` returns past `{inline.Text}`, which needs a constant count of bytes");
+                Report(call, Catalogue.InlineCountNotConstant.Says(name, inline.Text));
                 continue;
             }
 
@@ -779,13 +777,15 @@ public sealed class ControlFlow
             }
             if (taken != bytes)
             {
-                Report(call, $"`{name}` returns past {Bytes(bytes)} of data written after each call, and "
-                    + (taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
+                Report(call, Catalogue.InlineDataMissing.Says(
+                    name,
+                    $"{Bytes(bytes)} of data",
+                    taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
             }
         }
         return skipped;
 
-        void Report(SyntaxNode node, string message) =>
+        void Report(SyntaxNode node, DiagnosticMessage message) =>
             diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
 
         static string Bytes(long count) => count == 1 ? "1 byte" : $"{count} bytes";
@@ -807,8 +807,8 @@ public sealed class ControlFlow
             {
                 var returned = instruction.Mnemonic.Text.ToLowerInvariant();
                 Report(statement, own.IsInterrupt
-                    ? $"`{routine.DisplayName}` is an interrupt handler, and leaves by `rti` rather than `{returned}`"
-                    : $"`{routine.DisplayName}` never returns, as its `noreturn` says, and `{returned}` returns",
+                    ? Catalogue.HandlerReturnsNotRti.Says(routine.DisplayName, returned)
+                    : Catalogue.NoreturnReturns.Says(routine.DisplayName, returned),
 
                     // A handler is left by `rti`, which is the instruction to write instead. A
                     // routine that never returns has no instruction that would do: what it
@@ -817,12 +817,11 @@ public sealed class ControlFlow
             }
             if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
             {
-                Report(statement, $"`{handler.DisplayName}` is an interrupt handler, which the processor enters and `rti` "
-                    + "leaves: a call to it would not come back");
+                Report(statement, Catalogue.HandlerCalled.Says(handler.DisplayName));
             }
         }
 
-        void Report(SyntaxNode node, string message, DiagnosticFix? fix = null) =>
+        void Report(SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix = null) =>
             diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
     }
 
@@ -863,9 +862,8 @@ public sealed class ControlFlow
                 {
                     continue;
                 }
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span), Severity.Error,
-                    $"`.next {routine.DisplayName}` says flow runs on into `{routine.DisplayName}`, and it does not "
-                    + "start where this statement ends: a routine runs into the one written directly after it"));
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                    Catalogue.NextRoutineNotAdjacent.Says(routine.DisplayName, routine.DisplayName)));
             }
         }
     }

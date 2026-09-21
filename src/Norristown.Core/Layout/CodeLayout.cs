@@ -377,8 +377,7 @@ public sealed class CodeLayout
             if (Constructs.SegmentOf(opener) == segment
                 && (routine is not null || streams.Count > 1) && opener is SegmentStatementSyntax detour)
             {
-                Report(detour.Keyword, $"this block names \"{segment}\", the segment it is already in, "
-                    + "so its contents would stay inline where fall-through reaches them");
+                Report(detour.Keyword, Catalogue.SegmentBlockRedundant.Says(segment));
             }
             segment = Constructs.SegmentOf(opener) ?? segment;
             streams.Add(nextStream++);
@@ -438,8 +437,7 @@ public sealed class CodeLayout
         expanded += statements;
         if (expanded <= MaximumStatements)
             return false;
-        Report(call, $"the expansions in this file come to more than {MaximumStatements} "
-            + "statements, which is as far as nt65 goes");
+        Report(call, Catalogue.ExpansionLimit.Says(MaximumStatements));
         return true;
     }
 
@@ -502,7 +500,7 @@ public sealed class CodeLayout
         if (routine is null)
         {
             if (expansion?.NearestCall is not null)
-                Report(mnemonic, "an instruction belongs in a `.proc`: code outside one is reached by nothing nt65 can follow");
+                Report(mnemonic, Catalogue.InstructionOutsideARoutine.Says("an instruction belongs"));
             return;
         }
 
@@ -510,10 +508,13 @@ public sealed class CodeLayout
         if (available.Count == 0)
         {
             var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.Text)).Select(CpuNames.Spell).ToList();
-            Report(mnemonic, having.Count == 0
-                ? $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}"
-                : $"`{mnemonic.Text}` is not available on the {CpuNames.Spell(cpu)}, and is on the "
-                    + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1]));
+            Report(mnemonic, Catalogue.InstructionNotOnCpu.Says(
+                mnemonic.Text,
+                CpuNames.Spell(cpu),
+                having.Count == 0
+                    ? ""
+                    : ", and is on the "
+                        + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1])));
             Unlayable();
             return;
         }
@@ -533,14 +534,14 @@ public sealed class CodeLayout
         var candidates = Plausible(operand).Where(available.Contains).ToArray();
         if (candidates.Length == 0 && operand is null)
         {
-            Report(mnemonic, $"`{mnemonic.Text}` needs an operand");
+            Report(mnemonic, Catalogue.OperandMissing.Says(mnemonic.Text));
             Unlayable();
             return;
         }
         if (candidates.Length == 0)
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                $"`{mnemonic.Text}` does not take this operand on the {CpuNames.Spell(cpu)}");
+                Catalogue.OperandNotTaken.Says(mnemonic.Text, CpuNames.Spell(cpu)));
             Unlayable();
             return;
         }
@@ -600,18 +601,18 @@ public sealed class CodeLayout
             || !Plausible(operand).Contains(AddressingMode.Relative))
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                $"`{mnemonic.Text}` branches to a near target, and does not take this operand");
+                Catalogue.BranchOperandNotTaken.Says(mnemonic.Text));
             return;
         }
         if (WrittenPrefix(operand) is not null)
         {
             Report(operand,
-                $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
+                Catalogue.TransferPrefix.Says(mnemonic.Text));
             return;
         }
         if (model.AddressSizeOf(target, segment, expansion) == AddressSize.Far)
         {
-            Report(target, $"`{mnemonic.Text}` takes a near target, and this one is far");
+            Report(target, Catalogue.TargetTooFar.Says(mnemonic.Text));
             return;
         }
 
@@ -694,7 +695,7 @@ public sealed class CodeLayout
             var reaches = SyntaxFacts.LongBranches.Contains(longer);
             var fix = reaches ? $". `{longer}` reaches any near target" : "";
             ReportOnLine(branch.Target, branch.On,
-                $"`{mnemonic}` would branch {reach} bytes, and a branch reaches only -128 to 127{fix}",
+                Catalogue.BranchOutOfReach.Says(mnemonic, reach, fix),
 
                 // The change is to the branch, so it is offered only where the branch is
                 // written: an expansion's is the macro body's line, which is not this file's.
@@ -747,15 +748,14 @@ public sealed class CodeLayout
         // The pair is what is wrong — this body line with this argument — so it is reported
         // at the call, which is the side that can change it, and the body line is named.
         var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + n`";
-        ReportPaired(given.At, $"{what} needs an operand with a next byte, and `{given.Parameter.Name}` "
-            + $"is `{given.Mode}` here");
+        ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Says(what, given.Parameter.Name, given.Mode));
     }
 
     /// <summary>
     /// Something that is only wrong for these arguments: reported at the call, which is the
     /// side that can change them, with the body line that wrote it named beside it.
     /// </summary>
-    private void ReportPaired(SyntaxNode inTheBody, string message)
+    private void ReportPaired(SyntaxNode inTheBody, DiagnosticMessage message)
     {
         if (expansion?.NearestCall is not { } call)
             return;
@@ -784,7 +784,8 @@ public sealed class CodeLayout
                 && Instructions.Width(candidates[0]) is { } width && width != written
                 && !Instructions.IsControlTransfer(mnemonic.Text))
             {
-                Report(operand, $"`{mnemonic.Text}` has no {Spell(written)} form of this operand on the {CpuNames.Spell(cpu)}");
+                Report(operand, Catalogue.AddressingModeMissing.Says(
+                    mnemonic.Text, Spell(written), CpuNames.Spell(cpu)));
             }
 
             // The one form there is reaches an address of its width and no wider: `(ptr),y`
@@ -799,8 +800,8 @@ public sealed class CodeLayout
                 && Expression(operand) is { } pointer
                 && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
             {
-                Report(operand, $"`{mnemonic.Text}` has only a {Spell(reach)} form of this operand, "
-                    + $"and `{pointer.GetText().Trim()}` is {Spell(wide)}");
+                Report(operand, Catalogue.AddressingModeTooNarrow.Says(
+                    mnemonic.Text, Spell(reach), pointer.GetText().Trim(), Spell(wide)));
             }
             CheckOperand(mnemonic, operand, candidates[0], substituted, bits, sizeUnknown);
             return candidates[0];
@@ -818,7 +819,7 @@ public sealed class CodeLayout
         if (required is { } size && Instructions.Width(chosen) < size)
         {
             Report(operand,
-                $"`{mnemonic.Text}` cannot reach a {Spell(size)} address on the {CpuNames.Spell(cpu)}");
+                Catalogue.AddressSizeUnreachable.Says(mnemonic.Text, Spell(size), CpuNames.Spell(cpu)));
         }
         CheckOperand(mnemonic, operand, chosen, substituted, bits, sizeUnknown);
         return chosen;
@@ -838,7 +839,7 @@ public sealed class CodeLayout
         // Text is what data is written from. An operand is a number or an address.
         if (model.ValueOf(expression, expansion, SpanOf).IsString)
         {
-            Report(expression, $"`{expression.GetText().Trim()}` is text, and an operand is a number or an address");
+            Report(expression, Catalogue.OperandIsText.Says(expression.GetText().Trim()));
             return;
         }
 
@@ -850,7 +851,7 @@ public sealed class CodeLayout
             if (WrittenPrefix(operand) is not null)
             {
                 Report(operand,
-                    $"`{mnemonic.Text}` transfers control, and a control transfer is not sized by a prefix");
+                    Catalogue.TransferPrefix.Says(mnemonic.Text));
             }
 
             // On the 65816 whether a routine is called near or far is its signature's to say,
@@ -881,9 +882,8 @@ public sealed class CodeLayout
             return;
         if (value < low || value > high)
         {
-            Report(expression, bits == 16
-                ? $"this immediate is two bytes, and {Value.Of(value)} does not fit"
-                : $"an immediate is one byte, and {Value.Of(value)} does not fit");
+            Report(expression, Catalogue.ImmediateTooWide.Says(
+                bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", Value.Of(value)));
         }
     }
 
@@ -897,7 +897,7 @@ public sealed class CodeLayout
         if (mode != AddressingMode.Long)
         {
             if (size == AddressSize.Far)
-                Report(expression, $"`{mnemonic.Text}` takes a near target, and this one is far");
+                Report(expression, Catalogue.TargetTooFar.Says(mnemonic.Text));
             return;
         }
 
@@ -906,8 +906,7 @@ public sealed class CodeLayout
         if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf).AsNumber() is not null)
             return;
         var near = mnemonic.Text.Equals("jsl", StringComparison.OrdinalIgnoreCase) ? "jsr" : "jmp";
-        Report(expression, $"`{mnemonic.Text}` takes a far target, and this one is {Spell(size.Value)}: "
-            + $"`{near}` reaches it");
+        Report(expression, Catalogue.TargetTooNear.Says(mnemonic.Text, Spell(size.Value), near));
     }
 
     /// <summary>
@@ -921,17 +920,17 @@ public sealed class CodeLayout
             return null;
         if (cpu != Cpu.Wdc65816)
         {
-            Report(operand, $"`d:` reaches an address through the 65816's direct page, and this program is built for the {CpuNames.Spell(cpu)}");
+            Report(operand, Catalogue.DirectPageNeeds65816.Says(CpuNames.Spell(cpu)));
             return null;
         }
         if (model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } address)
         {
-            Report(operand, "`d:` is for a constant address: a symbol reaches the direct page through a `zp` segment");
+            Report(operand, Catalogue.DirectPagePrefixOnSymbol);
             return null;
         }
         if (Instructions.Width(mode) != AddressSize.ZeroPage)
         {
-            Report(operand, $"`d:` makes a direct operand, and `{mnemonic.Text}` has no direct form of this operand");
+            Report(operand, Catalogue.DirectPageFormMissing.Says(mnemonic.Text));
             return null;
         }
         return state?.D is { IsKnown: true } page && address >= page.Value && address <= page.Value + 0xff
@@ -956,9 +955,11 @@ public sealed class CodeLayout
         {
             if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: { } page and not 0 } segment)
                 continue;
-            Report(expression, $"`{symbol.DisplayName}` is in \"{segment.Name}\", reached through the direct page at "
-                + $"{StateValue.Hex(page, 4)}, and is only a direct operand: as {(mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")} "
-                + "operand it would reach its offset in the data bank");
+            Report(expression, Catalogue.DirectPageOnly.Says(
+                symbol.DisplayName,
+                segment.Name,
+                StateValue.Hex(page, 4),
+                (mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")));
         }
     }
 
@@ -982,7 +983,7 @@ public sealed class CodeLayout
             return;
         }
         if (value == 0)
-            Report(directive, assertion.Message ?? "this assertion does not hold");
+            Report(directive, Catalogue.AssertionFailed.Says(assertion.Message ?? "this assertion does not hold"));
     }
 
     /// <summary>
@@ -1012,8 +1013,8 @@ public sealed class CodeLayout
     private void Refuse(ErrorDirectiveSyntax directive)
     {
         var warns = directive.Keyword.Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
-        Report(directive, Constructs.AssertionOf(directive).Message ?? "this configuration is not supported",
-            warns ? Severity.Warning : Severity.Error);
+        var said = Constructs.AssertionOf(directive).Message ?? "this configuration is not supported";
+        Report(directive, warns ? Catalogue.ConfigWarned.Says(said) : Catalogue.ConfigRefused.Says(said));
     }
 
     private void Data(StatementSyntax directive)
@@ -1025,9 +1026,9 @@ public sealed class CodeLayout
             // Bytes a macro expands outside a routine belong to a declaration as much as bytes
             // written there do, which binding could not see where the body was written.
             if (expansion?.NearestCall is not null && DataSyntax.NameOf(loose) is not (".res" or ".align"))
-                Report(directive, $"`{loose.Directive.Text}` outside a `.proc` belongs to a `.data` declaration");
+                Report(directive, Catalogue.PaddingOutsideARoutine.Says(loose.Directive.Text, ""));
             else if (segment is null && length != 0)
-                Report(directive, "this is outside every segment: a `.segment NAME` region or block places it");
+                Report(directive, Catalogue.OutsideEverySegment.Says("this"));
         }
         Laid(directive, new LineLayout(length, null, null));
         Place(directive, length);
@@ -1083,16 +1084,14 @@ public sealed class CodeLayout
             && (declaration is ProcDeclarationSyntax or MultiProcDeclarationSyntax
                 || (routine is null && declaration is DataDeclarationSyntax)))
         {
-            Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is outside every segment: "
-                + "a `.segment NAME` region or block places it");
+            Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Says($"`{symbol.DisplayName}`"));
         }
 
         // A label a macro expands outside a routine is a position in no code, which binding
         // could not see where the body was written.
         if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
         {
-            Report(declaration.Tree, symbol.NameSpan, $"`{symbol.DisplayName}` is a label outside a `.proc`: "
-                + "a label is only a position in code");
+            Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Says(symbol.DisplayName, ""));
         }
         labels[(symbol, Expansion.Owning(expansion, symbol))] =
             new Placement(Measured, filled.GetValueOrDefault(Measured), 0);
@@ -1112,13 +1111,13 @@ public sealed class CodeLayout
         _ => "far",
     };
 
-    private void Report(SyntaxNode node, string message, Severity severity = Severity.Error) =>
+    private void Report(SyntaxNode node, DiagnosticMessage message, Severity? severity = null) =>
         Report(node.Tree, node.Span, message, severity);
 
-    private void Report(SyntaxToken token, string message, Severity severity = Severity.Error) =>
+    private void Report(SyntaxToken token, DiagnosticMessage message, Severity? severity = null) =>
         Report(token.Parent.Tree, token.Span, message, severity);
 
-    private void Report(SyntaxTree tree, TextSpan span, string message, Severity severity = Severity.Error) =>
+    private void Report(SyntaxTree tree, TextSpan span, DiagnosticMessage message, Severity? severity = null) =>
         diagnostics.Add(Expansion.Problem(model.Tree, tree, span, expansion, severity, message));
 
     /// <summary>
@@ -1126,15 +1125,15 @@ public sealed class CodeLayout
     /// A body's line is reported at the call, which is in this file and is the side that
     /// chose the arguments; the body line is named beside it.
     /// </summary>
-    private void ReportOnLine(SyntaxNode node, Expansion? on, string message, DiagnosticFix? fix = null)
+    private void ReportOnLine(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         if (node.Tree == model.Tree)
         {
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), message) { Fix = fix });
         }
         else if (on?.NearestCall is { } call)
         {
-            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
+            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), message,
                 [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
         }
     }

@@ -15,10 +15,10 @@ internal sealed partial class Parser
         if (ParseDirective(SyntaxFacts.LineDirectiveKind(Current.Text)) is { } statement)
             return Finish(statement);
         if (SyntaxFacts.LineDirectiveKind(Current.Text) is SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective)
-            return ErrorLine($"`{Current.Text}` continues an `.if`, and belongs after its `}}`");
+            return ErrorLine(Catalogue.ElseIfMisplaced.Says(Current.Text));
         return Replaced(Current.Text) is { } instead
             ? ErrorLine(instead.Message, Spelling(instead, wholeLine: true))
-            : ErrorLine($"unknown directive `{Current.Text}`");
+            : ErrorLine(Catalogue.DirectiveUnknown.Says(Current.Text));
     }
 
     /// <summary>
@@ -66,7 +66,7 @@ internal sealed partial class Parser
     /// a whole line and nothing else, and <c>.tag T, n</c> is <c>.type T[n]</c>, which moves the
     /// count as well as the word, so only the plain form is offered as a change to make.
     /// </summary>
-    private DiagnosticFix? Spelling((string Message, string? Write) instead, bool wholeLine) =>
+    private DiagnosticFix? Spelling((DiagnosticMessage Message, string? Write) instead, bool wholeLine) =>
         instead.Write is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
             ? new DiagnosticFix(FixKind.Spelling, word)
             : null;
@@ -86,17 +86,17 @@ internal sealed partial class Parser
     /// How a directive nt65 no longer has is written now, and the word to write in its place
     /// where one word is all it takes; null for a directive it never had.
     /// </summary>
-    private static (string Message, string? Write)? Replaced(string directive) => directive.ToLowerInvariant() switch
+    private static (DiagnosticMessage Message, string? Write)? Replaced(string directive) => directive.ToLowerInvariant() switch
     {
         ".zeropage" or ".code" or ".bss" or ".rodata" =>
-            ($"`{directive}` is written `.segment {directive[1..].ToUpperInvariant()}`",
+            (Catalogue.Ca65Spelling.Says(directive, $".segment {directive[1..].ToUpperInvariant()}"),
                 $".segment {directive[1..].ToUpperInvariant()}"),
-        ".tag" => ("`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`", ".type"),
-        ".asciiz" => ("`.asciiz` is written `.strz`", ".strz"),
-        ".dbyt" => ("`.dbyt` is written `.beword`", ".beword"),
+        ".tag" => (Catalogue.Ca65Tag.Says(), ".type"),
+        ".asciiz" => (Catalogue.Ca65Spelling.Says(directive, ".strz"), ".strz"),
+        ".dbyt" => (Catalogue.Ca65Spelling.Says(directive, ".beword"), ".beword"),
         ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
             or ".endif" or ".endrep" or ".endrepeat" =>
-            ($"a block ends with `}}`, and `{directive}` closes nothing", "}"),
+            (Catalogue.Ca65BlockEnd.Says(directive), "}"),
         _ => null,
     };
 
@@ -138,7 +138,7 @@ internal sealed partial class Parser
             if (AtName)
                 name = Advance();
             else
-                Report("expected the name to bind");
+                Report(Catalogue.ExpectedName.Says("the name to bind"));
         }
         var openBrace = ExpectOpenBrace();
         return kind == SyntaxKind.RepeatDirective
@@ -163,8 +163,7 @@ internal sealed partial class Parser
         GreenToken? levelComma = null;
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
         {
-            Report($"`{Current.Text}` is ca65's: an nt65 assertion that fails is always an error, checked as soon as "
-                + "nt65 can and otherwise at link time, so `.assert` takes only the condition and the message",
+            Report(Catalogue.AssertLevel.Says(Current.Text),
                 new DiagnosticFix(FixKind.AssertLevel));
             level = Advance();
             if (Kind != SyntaxKind.Comma)
@@ -176,7 +175,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.StringLiteral)
             message = Advance();
         else
-            Report("expected the message, in quotes");
+            Report(Catalogue.ExpectedText.Says("the message, in quotes"));
         return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, message);
     }
 
@@ -187,7 +186,8 @@ internal sealed partial class Parser
     private GreenNode ParseError()
     {
         var keyword = Advance();
-        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, "expected the message, in quotes"));
+        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Says(
+            "the message, in quotes")));
     }
 
     /// <summary>
@@ -200,7 +200,8 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Question)
             return new NextDirectiveSyntax(keyword, Advance(), null);
         return new NextDirectiveSyntax(
-            keyword, null, ParseSeparatedList(() => ParseTarget("expected a label flow continues at, or `?`")));
+            keyword, null, ParseSeparatedList(() => ParseTarget(Catalogue.ExpectedLabel.Says(
+                "a label flow continues at, or `?`"))));
     }
 
     /// <summary>
@@ -227,8 +228,9 @@ internal sealed partial class Parser
     private GreenNode ParseFrame()
     {
         var keyword = Advance();
-        var name = Expect(SyntaxKind.Identifier, "expected a name for the frame");
-        var colon = Expect(SyntaxKind.Colon, "expected `:` and the struct the frame is laid out as");
+        var name = Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Says("a name for the frame"));
+        var colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Says(
+            "`:` and the struct the frame is laid out as"));
 
         // The struct is written after the `:`, so a line without one says nothing about it.
         return new FrameDirectiveSyntax(keyword, name, colon, colon.IsMissing ? null : ParseExpression());
@@ -239,11 +241,11 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         return new PatchDirectiveSyntax(
-            keyword, ParseTarget("expected the label of the instruction being written to"));
+            keyword, ParseTarget(Catalogue.ExpectedLabel.Says("the label of the instruction being written to")));
     }
 
     /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>
-    private NameExpressionSyntax? ParseTarget(string expected)
+    private NameExpressionSyntax? ParseTarget(DiagnosticMessage expected)
     {
         if (AtName || Kind is SyntaxKind.CheapLocal or SyntaxKind.ColonColon)
             return ParseName();

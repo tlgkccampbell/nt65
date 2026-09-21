@@ -52,7 +52,7 @@ internal sealed class Requirements
         }
         requirements.CheckUses();
         requirements.CheckExports();
-        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Message)));
+        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ internal sealed class Requirements
         var requirements = new Requirements(model, layout, flow, Severity.Warning);
         foreach (var region in flow.Regions)
             requirements.CheckEnd(region);
-        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Message)));
+        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
     }
 
     private static bool Is(SyntaxNode statement, params string[] mnemonics) =>
@@ -134,18 +134,15 @@ internal sealed class Requirements
         switch (Transfers.Of(statement, mode))
         {
             case Transfer.Elsewhere when Mnemonic(statement).Calls:
-                Report(statement, $"{Quoted(statement)} calls where its operand points, which the analysis cannot "
-                    + "see: `.next` names the routines it calls");
+                Report(statement, Catalogue.IndirectCallUnchecked.Says(Quoted(statement)));
                 break;
 
             case Transfer.Elsewhere:
-                Report(statement, $"{Quoted(statement)} goes where its operand points, which the analysis cannot "
-                    + "see: `.next` names the labels it reaches, or `.next ?` ends the path", EndPath(step));
+                Report(statement, Catalogue.IndirectJumpUnchecked.Says(Quoted(statement)), EndPath(step));
                 break;
 
             case Transfer.Return when Is(statement, "rts", "rtl") && PushesCode(block):
-                Report(statement, $"`{statement.Mnemonic.Text.ToLowerInvariant()}` here returns to an address "
-                    + "this block pushed, which makes it a jump: `.next` names where it goes");
+                Report(statement, Catalogue.PushedReturnUnchecked.Says(statement.Mnemonic.Text.ToLowerInvariant()));
                 break;
 
             case Transfer.Jump or Transfer.Branch when flow.RelativeCallAt(step) is null:
@@ -174,9 +171,7 @@ internal sealed class Requirements
         {
             if (!calls && written is not NameExpressionSyntax)
             {
-                Report(statement, $"{Quoted(statement)} goes to a computed address, which the analysis cannot "
-                    + "follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not "
-                    + "an instruction boundary", EndPath(step));
+                Report(statement, Catalogue.ComputedJumpUnchecked.Says(Quoted(statement)), EndPath(step));
             }
             return;
         }
@@ -185,9 +180,8 @@ internal sealed class Requirements
         {
             if (!calls)
             {
-                Report(statement, $"{Quoted(statement)} goes to `{symbol.DisplayName}`, {symbol.KindPhrase} rather "
-                    + "than a label, which the analysis cannot follow: `.next` names the labels it reaches, or "
-                    + "`.next ?` ends the path", EndPath(step));
+                Report(statement, Catalogue.JumpTargetNotALabel.Says(
+                    Quoted(statement), symbol.DisplayName, symbol.KindPhrase), EndPath(step));
             }
             return;
         }
@@ -199,8 +193,7 @@ internal sealed class Requirements
         if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null }
             && owner != region.Routine && !owner.IsSiblingOf(region.Routine))
         {
-            Report(statement, $"`{symbol.DisplayName}` is inside `{owner.DisplayName}`, and a jump "
-                + "into another routine needs the label declared: a `.state` after it says what the state is there",
+            Report(statement, Catalogue.EntryNotDeclared.Says(symbol.DisplayName, owner.DisplayName),
                 new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
         }
         if (!labels.TryGetValue(symbol, out var labelled))
@@ -208,8 +201,7 @@ internal sealed class Requirements
         if (!labelled.IsCode && DataAt(labelled) is { } data
             && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
-            Report(statement, $"`{symbol.DisplayName}` labels data, and this jumps to it: the label needs a `.state` "
-                + "after it saying what the state is there, and the data a `.next` saying where flow goes");
+            Report(statement, Catalogue.JumpIntoData.Says(symbol.DisplayName));
         }
     }
 
@@ -273,10 +265,10 @@ internal sealed class Requirements
 
         var routine = region.Routine.DisplayName;
         var message = own
-            ? $"`{routine}` runs off its end into whatever is written after it: `.next` naming the "
-                + "routine it runs into says so, or `.next ?` ends the path"
-            : $"`{routine}` runs off the end of a segment block into whatever that segment holds next: "
-                + "`.next` says where flow goes, or `.next ?` ends the path";
+            ? Catalogue.RoutineRunsOffTheEnd.Says(
+                routine, "its end", "is written after it", "naming the routine it runs into says so")
+            : Catalogue.RoutineRunsOffTheEnd.Says(
+                routine, "the end of a segment block", "that segment holds next", "says where flow goes");
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;
@@ -333,17 +325,15 @@ internal sealed class Requirements
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
                     if (!patched)
                     {
-                        Report(statement, $"{Quoted(statement)} writes into the instruction at "
-                            + $"`{symbol.DisplayName}`: `.patch {symbol.DisplayName}` acknowledges it");
+                        Report(statement, Catalogue.SelfModifyingUnchecked.Says(
+                            Quoted(statement), symbol.DisplayName, symbol.DisplayName));
                     }
                     continue;
                 }
 
                 if (labelled.Block.IsDeclared || named.Contains((labelled.Region.Routine, symbol)))
                     continue;
-                Report(name, $"`{symbol.DisplayName}` labels code and is used here as data, so flow may reach it "
-                    + "where the analysis cannot see: a `.state` after the label says what the state is there, "
-                    + $"or a `.next` in `{labelled.Region.Routine.DisplayName}` naming it carries the state to it",
+                Report(name, Catalogue.CodeLabelAsData.Says(symbol.DisplayName, labelled.Region.Routine.DisplayName),
                     new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
         }
@@ -390,16 +380,15 @@ internal sealed class Requirements
             {
                 continue;
             }
-            diagnostics.Add(new Diagnostic(model.Tree.GetSpan(at), Severity.Error,
-                $"`{symbol.DisplayName}` is inside `{labelled.Region.Routine.DisplayName}`, and exporting it lets "
-                + "other modules jump into the routine: a `.state` after the label says what the state is there")
+            diagnostics.Add(new Diagnostic(model.Tree.GetSpan(at),
+                Catalogue.ExportedEntryNotDeclared.Says(symbol.DisplayName, labelled.Region.Routine.DisplayName))
             {
                 Fix = new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan),
             });
         }
     }
 
-    private void Report(SyntaxNode node, string message, DiagnosticFix? fix = null) =>
+    private void Report(SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix = null) =>
         diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
 
     /// <summary>

@@ -66,7 +66,7 @@ public sealed class LexerTests
         // A lexical error covers the token's text, and the line says it holds one.
         Assert.True(line.ContainsDiagnostics);
         var reported = Assert.Single(line.Tokens[0].Diagnostics);
-        Assert.Equal(error, reported.Message);
+        Assert.Equal(error, reported.Message.Text);
         Assert.Equal(line.Tokens[0].LeadingWidth, reported.Offset);
         Assert.Equal(text.Length, reported.Width);
     }
@@ -84,7 +84,7 @@ public sealed class LexerTests
     public void EveryEscapeALiteralGetsWrongIsSaid(string text, string[] errors)
     {
         var token = Lexer.LexLine(text).Tokens[0];
-        Assert.Equal(errors, token.Diagnostics.Select(diagnostic => diagnostic.Message));
+        Assert.Equal(errors, token.Diagnostics.Select(diagnostic => diagnostic.Message.Text));
     }
 
     [Fact]

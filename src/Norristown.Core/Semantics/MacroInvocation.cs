@@ -43,7 +43,7 @@ public sealed class MacroInvocation
         Func<string, Symbol?>? lookup = null)
     {
         var invocation = new MacroInvocation(macro, call);
-        void Report(TextSpan span, string message) =>
+        void Report(TextSpan span, DiagnosticMessage message) =>
             diagnostics?.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
 
         var positional = macro.Parameters.Where(parameter => !parameter.IsBlock).ToList();
@@ -62,7 +62,7 @@ public sealed class MacroInvocation
             }
             if (named)
             {
-                Report(argument.Span, "a positional argument comes before the named ones");
+                Report(argument.Span, Catalogue.ArgumentAfterANamedOne);
                 continue;
             }
             BindPositional(argument);
@@ -81,17 +81,17 @@ public sealed class MacroInvocation
             var parameter = macro.Parameters.FirstOrDefault(p => p.Name == name.Text);
             if (parameter is null)
             {
-                Report(name.Span, $"`{macro.Name}` has no parameter called `{name.Text}`");
+                Report(name.Span, Catalogue.ParameterUnknown.Says(macro.Name, name.Text));
                 return;
             }
             if (parameter.IsBlock)
             {
-                Report(name.Span, $"`{parameter.Name}` takes a block, which is written after the parentheses");
+                Report(name.Span, Catalogue.BlockArgumentInParentheses.Says(parameter.Name));
                 return;
             }
             if (given.ContainsKey(parameter.Symbol) || listed.ContainsKey(parameter.Symbol))
             {
-                Report(name.Span, $"`{parameter.Name}` is given twice");
+                Report(name.Span, Catalogue.ArgumentGivenTwice.Says(parameter.Name));
                 return;
             }
             Take(parameter, argument.Value);
@@ -148,12 +148,12 @@ public sealed class MacroInvocation
                     parameter = parameters.FirstOrDefault(p => p.Name == name.Text);
                     if (parameter is null)
                     {
-                        Report(name.Span, $"`{macro.Name}` has no `block` parameter called `{name.Text}`");
+                        Report(name.Span, Catalogue.BlockParameterUnknown.Says(macro.Name, name.Text));
                         continue;
                     }
                     if (given.ContainsKey(parameter.Symbol))
                     {
-                        Report(name.Span, $"`{parameter.Name}` is given twice");
+                        Report(name.Span, Catalogue.ArgumentGivenTwice.Says(parameter.Name));
                         continue;
                     }
                 }
@@ -164,7 +164,7 @@ public sealed class MacroInvocation
                 else
                 {
                     Report(blocks[i].Opener.Span,
-                        $"`{macro.Name}` takes no block, and this call gives it one");
+                        Catalogue.BlockArgumentUnexpected.Says(macro.Name));
                     continue;
                 }
                 given[parameter.Symbol] = new MacroArgument(parameter, null, [], blocks[i], Written: true);
@@ -200,7 +200,8 @@ public sealed class MacroInvocation
             if (missing.Count > 0)
             {
                 Report(NameSpan(call),
-                    $"`{macro.Name}` is not given {string.Join(", ", missing.Select(name => $"`{name}`"))}");
+                    Catalogue.ArgumentMissing.Says(
+                        macro.Name, string.Join(", ", missing.Select(name => $"`{name}`"))));
             }
         }
 
@@ -217,8 +218,8 @@ public sealed class MacroInvocation
                     // indirect addressing and so can only be a mistake here.
                     if (value is ParenthesizedExpressionSyntax)
                     {
-                        Report(value.Span, $"`{parameter.Name}` takes an operand, and `{value.GetText()}` "
-                            + "reads as an expression in parentheses. Brace it to pass indirect addressing");
+                        Report(value.Span, Catalogue.OperandArgumentParenthesized.Says(
+                            parameter.Name, value.GetText()));
                     }
                     break;
 
@@ -236,32 +237,34 @@ public sealed class MacroInvocation
                             .ToList();
                         if (missing.Count > 0)
                         {
-                            Report(value.Span, $"`{parameter.Name}` takes one of "
-                                + $"{string.Join(", ", accepts.Words.Select(w => $"`{w}`"))}, and `{word}` may "
-                                + $"also be {string.Join(", ", missing.Select(w => $"`{w}`"))}");
+                            Report(value.Span, Catalogue.WordArgumentAmbiguous.Says(
+                                parameter.Name,
+                                string.Join(", ", accepts.Words.Select(w => $"`{w}`")),
+                                word,
+                                string.Join(", ", missing.Select(w => $"`{w}`"))));
                         }
                         break;
                     }
 
                     if (word is null || !accepts.Words.Any(w => w.Equals(word, StringComparison.OrdinalIgnoreCase)))
                     {
-                        Report(value.Span, $"`{parameter.Name}` takes one of "
-                            + $"{string.Join(", ", accepts.Words.Select(w => $"`{w}`"))}, and this is "
-                            + (word is null ? "not a word" : $"`{word}`"));
+                        Report(value.Span, Catalogue.WordArgumentNotListed.Says(
+                            parameter.Name,
+                            string.Join(", ", accepts.Words.Select(w => $"`{w}`")),
+                            word is null ? "not a word" : $"`{word}`"));
                     }
                     break;
 
                 case ParameterKind.Ident:
                     if (value is not NameExpressionSyntax)
-                        Report(value.Span, $"`{parameter.Name}` takes a name, and this is not one");
+                        Report(value.Span, Catalogue.IdentArgumentNotAName.Says(parameter.Name));
                     break;
 
                 case ParameterKind.Expr:
                 case ParameterKind.Const:
                     if (value is BracedOperandSyntax)
                     {
-                        Report(value.Span, $"`{parameter.Name}` takes an expression, and a braced "
-                            + "argument is a whole operand");
+                        Report(value.Span, Catalogue.ExpressionArgumentBraced.Says(parameter.Name));
                     }
                     break;
 
@@ -272,13 +275,13 @@ public sealed class MacroInvocation
     }
 
     /// <summary>How many arguments a macro takes, as the message for a call that gives more.</summary>
-    private static string Count(Symbol macro)
+    private static DiagnosticMessage Count(Symbol macro)
     {
         var positional = macro.Parameters.Count(parameter => !parameter.IsBlock);
         var least = macro.Parameters.Count(parameter => !parameter.IsBlock && !parameter.IsOptional);
-        return positional == least
-            ? $"`{macro.Name}` takes {positional} argument(s), and this call gives more"
-            : $"`{macro.Name}` takes {least} to {positional} arguments, and this call gives more";
+        return Catalogue.ArgumentCount.Says(
+            macro.Name,
+            positional == least ? $"{positional} argument(s)" : $"{least} to {positional} arguments");
     }
 
     /// <summary>The name a call writes, which is where a diagnostic about the call as a whole goes.</summary>

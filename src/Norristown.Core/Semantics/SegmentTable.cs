@@ -63,8 +63,8 @@ public sealed class SegmentTable
         {
             if (segments.TryGetValue(segment.Name, out var predeclared))
             {
-                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Severity.Error,
-                    $"segment \"{segment.Name}\" is already declared",
+                diagnostics.Add(new Diagnostic(segment.Declaration!.Value,
+                    Catalogue.SegmentDeclaredTwice.Says(segment.Name),
                     [new RelatedSpan(segment.Declaration.Value,
                         $"\"{predeclared.Name}\" is one of the standard segment names, which are predeclared")]));
                 continue;
@@ -84,8 +84,8 @@ public sealed class SegmentTable
             var declared = node.Tree.GetSpan(span);
             if (segments.TryGetValue(name, out var existing))
             {
-                diagnostics.Add(new Diagnostic(declared, Severity.Error,
-                    $"segment \"{name}\" is already declared",
+                diagnostics.Add(new Diagnostic(declared,
+                    Catalogue.SegmentDeclaredTwice.Says(name),
                     existing.Declaration is { } first
                         ? [new RelatedSpan(first, "declared here")]
                         : [new RelatedSpan(declared, "it is one of the standard segment names, which are predeclared")]));
@@ -106,24 +106,27 @@ public sealed class SegmentTable
         string segment, AddressSize size, string word, long? value, Span at, (long? DirectPage, long? Bank) already,
         List<Diagnostic> diagnostics)
     {
-        string? problem = null;
+        DiagnosticMessage? problem = null;
         if ((word == "dp" ? already.DirectPage : already.Bank) is not null)
-            problem = $"segment \"{segment}\" already gives its `{word}`";
+            problem = Catalogue.SegmentAttributeTwice.Says(segment, word);
         else if (word == "dp" && size != AddressSize.ZeroPage)
-            problem = $"`dp` says which direct page a `zp` segment is reached through, and \"{segment}\" is not `zp`";
+            problem = Catalogue.SegmentDpNotZp.Says(segment);
         else if (value is null)
-            problem = $"`{word}` needs a constant";
+            problem = Catalogue.SegmentAttributeNotConstant.Says(word);
         else if (value < 0 || value > (word == "dp" ? 0xffff : 0xff))
-            problem = word == "dp" ? "the direct page is a 16-bit address" : "a bank is one byte";
-        if (problem is null)
+        {
+            problem = Catalogue.SegmentAttributeOutOfRange.Says(
+                word == "dp" ? "the direct page is a 16-bit address" : "a bank is one byte");
+        }
+        if (problem is not { } said)
             return value;
-        diagnostics.Add(new Diagnostic(at, Severity.Error, problem));
+        diagnostics.Add(new Diagnostic(at, said));
         return null;
     }
 
     /// <summary>What is said of a segment that declares mirrors and no home bank for them to mirror.</summary>
-    public static string MirrorsNeedABank(string segment) =>
-        $"segment \"{segment}\" gives `mirrors` and no `bank`: a mirror shows a segment's home bank in another bank";
+    public static DiagnosticMessage MirrorsNeedABank(string segment) =>
+        Catalogue.SegmentMirrorsNeedABank.Says(segment);
 
     /// <summary>
     /// Works out the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> the files' declarations write, now that
@@ -145,7 +148,7 @@ public sealed class SegmentTable
                 {
                     if (mirrors is not null)
                     {
-                        diagnostics.Add(new Diagnostic(at, Severity.Error, $"segment \"{name}\" already gives its `mirrors`"));
+                        diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Says(name, "mirrors")));
                         continue;
                     }
                     mirrors = attribute;
@@ -161,7 +164,7 @@ public sealed class SegmentTable
             }
             if (mirrors is not null && segment.Bank is null)
             {
-                diagnostics.Add(new Diagnostic(mirrors.Tree.GetSpan(mirrors.Span), Severity.Error, MirrorsNeedABank(name)));
+                diagnostics.Add(new Diagnostic(mirrors.Tree.GetSpan(mirrors.Span), MirrorsNeedABank(name)));
                 segment = segment with { Mirrors = [] };
             }
             segments[name] = segment;
@@ -186,8 +189,8 @@ public sealed class SegmentTable
             if (start is not { } first || end is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
                 || first > last)
             {
-                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Severity.Error,
-                    "a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`"));
+                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span),
+                    Catalogue.SegmentMirrorInvalid));
                 continue;
             }
             banks.Add((first, last));

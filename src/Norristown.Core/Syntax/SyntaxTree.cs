@@ -289,7 +289,7 @@ public sealed class SyntaxTree
         foreach (var diagnostic in green.Diagnostics)
         {
             var span = GetSpan(new TextSpan(position + diagnostic.Offset, diagnostic.Width));
-            result.Add(new Diagnostic(span, Severity.Error, diagnostic.Message) { Fix = diagnostic.Fix });
+            result.Add(new Diagnostic(span, diagnostic.Message) { Fix = diagnostic.Fix });
         }
         for (var i = 0; i < green.SlotCount; i++)
         {
@@ -364,12 +364,12 @@ public sealed class SyntaxTree
                 var token = Lines[error.Line].Tokens[error.Token];
                 var column = Lines[error.Line].TextOffset(error.Token) + 1;
                 var width = token.Kind == SyntaxKind.EndOfLine ? 0 : token.Text.Length;
-                return new Diagnostic(
-                    new Span(Path, error.Line + 1, column, column + width), Severity.Error, error.Message);
+                return new Diagnostic(new Span(Path, error.Line + 1, column, column + width), error.Message);
             }));
         return [.. result
             .OrderBy(d => d.Span.Line)
             .ThenBy(d => d.Span.StartColumn)
-            .ThenBy(d => d.Message, StringComparer.Ordinal)];
+            .ThenBy(d => d.Message, StringComparer.Ordinal)
+            .ThenBy(d => d.Id, StringComparer.Ordinal)];
     }
 }

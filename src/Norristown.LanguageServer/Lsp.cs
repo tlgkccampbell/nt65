@@ -53,7 +53,7 @@ internal static class Lsp
                 ToRange(tree!, span),
                 Protocol.DiagnosticSeverity.Hint,
                 SourceName,
-                "the build configuration leaves this branch out",
+                Catalogue.OmittedBranch.Format,
                 null,
                 [Protocol.DiagnosticTag.Unnecessary])),
         ];

@@ -126,14 +126,14 @@ internal sealed partial class Parser
     }
 
     /// <summary>Reports over the current token, with the change the message names as its fix.</summary>
-    private void Report(string message, DiagnosticFix? fix = null) => Report(index, message, fix);
+    private void Report(DiagnosticMessage message, DiagnosticFix? fix = null) => Report(index, message, fix);
 
     /// <summary>
     /// Reports only when nothing has been said about this line yet. A half-typed
     /// <c>m!({</c> runs out of tokens inside an argument, inside the braces and inside the
     /// parentheses; the first of those says what is missing, and the rest is the same news.
     /// </summary>
-    private void ReportOnce(string message, DiagnosticFix? fix = null)
+    private void ReportOnce(DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         if (reported == 0)
             Report(index, message, fix);
@@ -149,12 +149,12 @@ internal sealed partial class Parser
     {
         if (nesting <= MaximumNesting)
             return null;
-        ReportOnce($"this nests more than {MaximumNesting} expressions deep, which is as far as nt65 reads");
+        ReportOnce(Catalogue.NestingTooDeep.Says(MaximumNesting));
         return new ErrorExpressionSyntax(null);
     }
 
     /// <summary>Reports over the token at <paramref name="token"/>, wherever it sits in the line.</summary>
-    private void Report(int token, string message, DiagnosticFix? fix = null)
+    private void Report(int token, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         var (start, width) = Caret(token);
         pending.Add(new Pending(start, width, message, fix));
@@ -246,7 +246,7 @@ internal sealed partial class Parser
         // what the rest of the line would otherwise be reported for is this same mistake.
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
-            Report(colon, "an unnamed label is written `@name`: a cheap local, private to the routine around it");
+            Report(colon, Catalogue.UnnamedLabel);
             return Own(new ErrorLineSyntax(TakeRest()));
         }
 
@@ -283,7 +283,7 @@ internal sealed partial class Parser
             // a question about this line — a splice inside an `.if` inside a body is still a
             // splice — so it is read as one everywhere and the binder says where it belongs.
             LineKind.BareIdentifier => Finish(new BlockSpliceSyntax(Advance())),
-            _ => ErrorLine("expected a label, a constant, an instruction or a directive"),
+            _ => ErrorLine(Catalogue.ExpectedStatement.Says("a label, a constant, an instruction or a directive")),
         };
     }
 
@@ -312,13 +312,13 @@ internal sealed partial class Parser
         if (reported == 0)
         {
             Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
-                ? $"a block's `{{` ends the line that opens it: {Describe(Current)} goes on the next line, and `}}` on its own"
-                : $"unexpected {Describe(Current)}");
+                ? Catalogue.BlockBraceEndsTheLine.Says(Describe(Current))
+                : Catalogue.UnexpectedToken.Says(Describe(Current)));
         }
         skippedTokens = Own(new SkippedTokensSyntax(TakeRest()));
     }
 
-    private GreenNode ErrorLine(string message, DiagnosticFix? fix = null)
+    private GreenNode ErrorLine(DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         Report(index, message, fix);
         return Own(new ErrorLineSyntax(TakeRest()));
@@ -366,7 +366,7 @@ internal sealed partial class Parser
     /// The same, with <paramref name="message"/> on the missing token, where nothing has been said
     /// about this line yet.
     /// </summary>
-    private GreenToken Expect(SyntaxKind kind, string message)
+    private GreenToken Expect(SyntaxKind kind, DiagnosticMessage message)
     {
         if (Kind == kind)
             return Advance();
@@ -376,22 +376,22 @@ internal sealed partial class Parser
     /// <summary>
     /// The name written here, or the missing identifier that stands where one belongs, carrying
     /// <paramref name="message"/>. A name may be spelled as an identifier, a register or a
-    /// mnemonic, which is why it is not one kind for <see cref="Expect(SyntaxKind, string)"/>.
+    /// mnemonic, which is why it is not one kind for <see cref="Expect(SyntaxKind, DiagnosticMessage)"/>.
     /// </summary>
-    private GreenToken ExpectName(string message) =>
+    private GreenToken ExpectName(DiagnosticMessage message) =>
         AtName ? Advance() : Missing(SyntaxKind.Identifier, message);
 
     /// <summary>
     /// The missing token of <paramref name="kind"/>, standing where one belongs that the source
     /// does not have and carrying <paramref name="message"/> whether or not the line has been
-    /// reported on already: what <see cref="Expect(SyntaxKind, string)"/> does where the second
+    /// reported on already: what <see cref="Expect(SyntaxKind, DiagnosticMessage)"/> does where the second
     /// piece missing on a line is news of its own.
     /// <para>
     /// The token sits after the trivia that follows the token before it, and the caret belongs
     /// where that token's text ends, so the diagnostic reaches back over the trivia.
     /// </para>
     /// </summary>
-    private GreenToken Missing(SyntaxKind kind, string message, DiagnosticFix? fix = null)
+    private GreenToken Missing(SyntaxKind kind, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         var (start, width) = Caret(index);
         reported++;
@@ -412,7 +412,7 @@ internal sealed partial class Parser
             : null;
 
     /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
-    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, "expected `{`");
+    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Says("`{`"));
 
     /// <summary>
     /// The items of a comma-separated list and the commas between them, as the one list that holds
@@ -461,5 +461,5 @@ internal sealed partial class Parser
     /// <param name="Width">How many characters it covers.</param>
     /// <param name="Message">What to tell the programmer.</param>
     /// <param name="Fix">The change the message names as its fix, or null.</param>
-    private readonly record struct Pending(int Start, int Width, string Message, DiagnosticFix? Fix);
+    private readonly record struct Pending(int Start, int Width, DiagnosticMessage Message, DiagnosticFix? Fix);
 }

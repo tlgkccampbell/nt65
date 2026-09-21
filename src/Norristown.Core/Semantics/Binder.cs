@@ -48,7 +48,7 @@ internal sealed class Binder
     private readonly List<Diagnostic> diagnostics = [];
 
     // What a lookup that may report reports through; one asked quietly is given none.
-    private readonly Action<TextSpan, string> report;
+    private readonly Action<TextSpan, DiagnosticMessage> report;
     private readonly List<Symbol> symbols = [];
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
@@ -178,8 +178,7 @@ internal sealed class Binder
         {
             if (at.Lookup(name.Text) is { IsDefine: false, Kind: not (SymbolKind.MacroParameter or SymbolKind.Binding) })
             {
-                Report(name.Span, $"`{name.Text}` is declared by the program, and `.defined` asks only about "
-                    + "defines: a condition tests the build configuration, and a check on the program is an `.assert`");
+                Report(name.Span, Catalogue.DefinedAsksAboutDefines.Says(name.Text));
             }
         }
 
@@ -193,8 +192,7 @@ internal sealed class Binder
             var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
             if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
-                Report(name.Span, $"`{foreign.Name}` is declared in module `{foreign.Module}`, and a module exports what it "
-                    + $"declares: `.export .use {foreign.PathName}` makes it part of this one");
+                Report(name.Span, Catalogue.ReexportNeeded.Says(foreign.Name, foreign.Module, foreign.PathName));
             }
         }
 
@@ -421,18 +419,19 @@ internal sealed class Binder
     {
         if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
             return null;
-        var why = kind == BlockKind.Repeat
-            ? "a `.repeat` counts its turns, and a count is no name: a family is an `.each` over a named enum, "
-                + "whose members are the names it declares"
+        DiagnosticMessage? why = kind == BlockKind.Repeat
+            ? Catalogue.FamilyMisplaced.Says("a `.repeat` counts its turns, and a count is no name: a family is an "
+                + "`.each` over a named enum, whose members are the names it declares")
             : around.Kind == ScopeKind.Repetition
-                ? "a family declares into the scope around its `.each`, and this one is inside another repetition, "
-                    + "where every name is a different one on every turn"
+                ? Catalogue.FamilyMisplaced.Says("a family declares into the scope around its `.each`, and this one "
+                    + "is inside another repetition, where every name is a different one on every turn")
                 : Placement is ScopeKind.File
-                    ? null
-                    : "a family declares one routine per member into the scope around its `.each`, and this one is "
+                    ? (DiagnosticMessage?)null
+                    : Catalogue.FamilyMisplaced.Says(
+                        "a family declares one routine per member into the scope around its `.each`, and this one is "
                         + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
                             ? "a body declares nothing in its caller"
-                            : "a routine belongs at file level or in a `.scope`");
+                            : "a routine belongs at file level or in a `.scope`"));
         return new Repeated(block, (opener as RepetitionDirectiveSyntax)?.Expression, binding, around, segment, why);
     }
 
@@ -487,11 +486,10 @@ internal sealed class Binder
         var around = scope;
         var placement = Placement;
         var why = placement is ScopeKind.Proc or ScopeKind.Data or ScopeKind.Type
-            ? $"`.multiproc` declares routines, and this one is inside {Article(placement)}: "
-                + "a routine belongs at file level or in a `.scope`"
-            : null;
-        if (why is not null)
-            Report(multiProc.Keyword.Span, why);
+            ? Catalogue.MultiprocMisplaced.Says(Article(placement))
+            : (DiagnosticMessage?)null;
+        if (why is { } misplaced)
+            Report(multiProc.Keyword.Span, misplaced);
 
         // One inside a macro body, a block argument or a repetition has been told so by the
         // rule that holds `.proc` there; either way it declares nothing.
@@ -525,9 +523,7 @@ internal sealed class Binder
     {
         var what = kind == ScopeKind.Scope ? "scope" : "`.data` block";
         Report(NameToken(opener)?.Span ?? opener.Span,
-            $"`{each.Binding.Name}` here would declare one {what} per member, and everything inside it once for "
-            + "each: a family declares routines and data, so write one family per role, "
-            + $"`note::{each.Binding.Name}` and `stop::{each.Binding.Name}`");
+            Catalogue.FamilyDeclaresTooMuch.Says(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
 
         // The block still opens a scope of its own, so what it holds has somewhere to go and
         // one refusal stays one.
@@ -539,10 +535,10 @@ internal sealed class Binder
         Repeated each, StatementSyntax declaration, Scope body, SymbolKind kind,
         ProcSignatureSyntax? signature, DataDirectiveSyntax? data, NameExpressionSyntax? type)
     {
-        if (each.Why is not null)
+        if (each.Why is { } refused)
         {
             if (declaration is not MultiProcDeclarationSyntax)
-                Report(NameToken(declaration)?.Span ?? declaration.Span, each.Why);
+                Report(NameToken(declaration)?.Span ?? declaration.Span, refused);
             return;
         }
         pendingFamilies.Add(new PendingFamily(declaration, each, body, kind, signature, data, type));
@@ -592,9 +588,8 @@ internal sealed class Binder
         var found = walked is null ? null : NamedByPath(walked, pending.Each.Around);
         if (found is not { Kind: SymbolKind.Enum, Body: { } members })
         {
-            Report(walked?.Span ?? at, found is null
-                ? $"a family declares one routine per member of a named enum, and `{written}` names none"
-                : $"a family declares one routine per member of a named enum, and `{written}` is {Named(found)}");
+            Report(walked?.Span ?? at, Catalogue.FamilyNotOverAnEnum.Says(
+                written, found is null ? "names none" : $"is {Named(found)}"));
             return;
         }
 
@@ -634,8 +629,7 @@ internal sealed class Binder
         instance.Bound = (pending.Each.Binding, new Expansion.Bound(member.Value, null, Member: member));
         if (scope.Declare(instance) is { } existing)
         {
-            Report(at, $"`{member.Name}` is a member of `{pending.Each.Walked?.GetText().Trim()}` and is already "
-                + "declared in this scope: a family declares one name per member",
+            Report(at, Catalogue.FamilyMemberCollides.Says(member.Name, pending.Each.Walked?.GetText().Trim()),
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(instance);
@@ -736,8 +730,7 @@ internal sealed class Binder
             {
                 if (item is { Width: Width.Sixteen, Part: StatePart.A or StatePart.Index })
                 {
-                    Report(item.Node.Span, $"`{item.Text}` cannot hold on the {CpuNames.Spell(cpu)}, "
-                        + "whose registers are eight bits");
+                    Report(item.Node.Span, Catalogue.SignatureItemNeeds65816.Says(item.Text, CpuNames.Spell(cpu)));
                 }
             }
             foreach (var child in node.ChildNodes)
@@ -876,10 +869,8 @@ internal sealed class Binder
         {
             if (around.Kind is not (ScopeKind.Proc or ScopeKind.Macro))
                 continue;
-            Report(opener.Keyword.Span,
-                around.Kind == ScopeKind.Proc
-                    ? "a `.macro` belongs at file level or in a `.scope`, not inside a routine"
-                    : "a `.macro` belongs at file level or in a `.scope`, not inside another macro");
+            Report(opener.Keyword.Span, Catalogue.MacroMisplaced.Says(
+                around.Kind == ScopeKind.Proc ? "a routine" : "another macro"));
             return;
         }
     }
@@ -905,13 +896,11 @@ internal sealed class Binder
             }
             if (block is not null)
             {
-                Report(at, $"`{parameter.Name}` comes after the `block` parameter `{block.Name}`, "
-                    + "and a block is written after the parentheses");
+                Report(at, Catalogue.ParameterAfterBlock.Says(parameter.Name, block.Name));
             }
             if (list is not null)
             {
-                Report(at, $"`{parameter.Name}` comes after the `list` parameter `{list.Name}`, "
-                    + "which takes every remaining argument");
+                Report(at, Catalogue.ParameterAfterList.Says(parameter.Name, list.Name));
             }
             if (parameter.Kind == ParameterKind.List)
                 list = list is null ? parameter : list;
@@ -931,7 +920,7 @@ internal sealed class Binder
         {
             return;
         }
-        Report(opener.Name.Span, "this block continues no macro call");
+        Report(opener.Name.Span, Catalogue.BlockContinuesNothing);
     }
 
     /// <summary>
@@ -945,9 +934,9 @@ internal sealed class Binder
         var why = InMacroBody ? Macros.Forbidden(statement) : null;
         if (why is null && InRepetition)
             why = Repetitions.Forbidden(statement);
-        if (why is null)
+        if (why is not { } refused)
             return;
-        Report(statement.ChildTokens.Length > 0 ? statement.ChildTokens[0].Span : statement.Span, why);
+        Report(statement.ChildTokens.Length > 0 ? statement.ChildTokens[0].Span : statement.Span, refused);
     }
 
     /// <summary>
@@ -1127,7 +1116,7 @@ internal sealed class Binder
         // name is caught before ld65 runs. Its contents still go there, which keeps the mistake
         // to one diagnostic.
         if (segments.Find(name) is null)
-            Report(token.Span, $"segment \"{name}\" is not declared");
+            Report(token.Span, Catalogue.SegmentUndeclared.Says(name));
         return name;
     }
 
@@ -1278,8 +1267,8 @@ internal sealed class Binder
         codeRun = null;
         var many = run.Lines > 1 ? $"these {run.Lines} instructions belong" : "an instruction belongs";
         Report(run.At, run.Placement == ScopeKind.Data
-            ? $"{many} in a `.proc`, and `.data` holds only data"
-            : $"{many} in a `.proc`: code outside one is reached by nothing nt65 can follow");
+            ? Catalogue.InstructionInData.Says(many)
+            : Catalogue.InstructionOutsideARoutine.Says(many));
     }
 
     /// <summary>
@@ -1299,14 +1288,13 @@ internal sealed class Binder
         {
             if (name.Kind != SyntaxKind.CheapLocal)
             {
-                Report(name.Span, $"`{name.Text}` is a label in `.data`: a named member is `.data {name.Text}: ...`, "
-                    + $"and a position is `@{name.Text}:`");
+                Report(name.Span, Catalogue.LabelInData.Says(name.Text, name.Text, name.Text));
                 Fixed(new DiagnosticFix(FixKind.DataMember));
             }
             return;
         }
-        Report(name.Span, $"`{name.Text}` is a label outside a `.proc`: a label is only a position in code, "
-            + $"and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`");
+        Report(name.Span, Catalogue.LabelOutsideARoutine.Says(
+            name.Text, $", and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`"));
         if (name.Kind == SyntaxKind.Identifier)
             Fixed(new DiagnosticFix(FixKind.DataDeclaration));
     }
@@ -1322,8 +1310,8 @@ internal sealed class Binder
         if (statement.Directive.Text.ToLowerInvariant() is not (".res" or ".align"))
         {
             var directive = statement.Directive.Text;
-            Report(statement.Directive.Span, $"`{directive}` outside a `.proc` belongs to a `.data` declaration: "
-                + $"`.data name: {directive} ...`");
+            Report(statement.Directive.Span, Catalogue.PaddingOutsideARoutine.Says(
+                directive, $": `.data name: {directive} ...`"));
         }
     }
 
@@ -1381,7 +1369,7 @@ internal sealed class Binder
         var token = statement.Name;
         if (!InMacroBody)
         {
-            Report(token.Span, "expected a label, a constant, an instruction or a directive");
+            Report(token.Span, Catalogue.ExpectedStatement.Says("a label, a constant, an instruction or a directive"));
             return;
         }
         uses.Add(new Use(token, scope, Path: false, First: true, Last: true, Splice: true));
@@ -1424,7 +1412,7 @@ internal sealed class Binder
             references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
             if (symbol.Kind != SymbolKind.Macro)
             {
-                Report(callee.Span, $"`{callee.Text}` is {symbol.KindPhrase}, and `!` calls a macro");
+                Report(callee.Span, Catalogue.NotAMacro.Says(callee.Text, symbol.KindPhrase));
                 continue;
             }
             if (inside is not null)
@@ -1541,8 +1529,7 @@ internal sealed class Binder
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
         {
-            Report(name.Span, $"`{name.Text}` is declared in a block argument, which may declare only "
-                + "cheap locals: the macro it is given to may splice it in more than one place");
+            Report(name.Span, Catalogue.DeclarationInABlockArgument.Says(name.Text));
             return null;
         }
         var owner = cheap ? CheapLocalOwner(name) : scope;
@@ -1564,9 +1551,8 @@ internal sealed class Binder
             // declaring a name in its caller, which is what says it plainly here.
             Report(name.Span,
                 existing.Parameter is { Kind: ParameterKind.Ident }
-                    ? $"`{symbol.DisplayName}` is an `ident` parameter, and a body may not declare "
-                        + "the name it stands for"
-                    : $"`{symbol.DisplayName}` is already declared in this scope",
+                    ? Catalogue.IdentParameterDeclared.Says(symbol.DisplayName)
+                    : Catalogue.NameAlreadyDeclared.Says(symbol.DisplayName),
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(symbol);
@@ -1591,7 +1577,7 @@ internal sealed class Binder
             if (owner.Kind != ScopeKind.File)
                 return owner;
         }
-        Report(name.Span, $"`{name.Text}` is a cheap local, which needs an enclosing `.proc` or `.scope`");
+        Report(name.Span, Catalogue.CheapLocalOutsideAScope.Says(name.Text));
         return fileScope;
     }
 
@@ -1605,7 +1591,7 @@ internal sealed class Binder
     {
         if (name.Kind != SyntaxKind.Register)
             return true;
-        Report(name.Span, $"`{name.Text}` is a register name and cannot be used as a name");
+        Report(name.Span, Catalogue.RegisterName.Says(name.Text));
         return false;
     }
 
@@ -1625,8 +1611,7 @@ internal sealed class Binder
             : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.Text));
         if (named is not { } having)
             return;
-        Warn(name.Span, $"`{name.Text}` is an instruction on the {CpuNames.Spell(having)}; "
-            + "as a name it is legal and easy to misread");
+        Warn(name.Span, Catalogue.MnemonicName.Says(name.Text, CpuNames.Spell(having)));
     }
 
     private void ResolveUses(IReadOnlyList<Use> list)
@@ -1664,7 +1649,7 @@ internal sealed class Binder
             {
                 if (last)
                 {
-                    Report(token.Span, $"`{place.Module}` is a module: a name in it is written `{place.Module}::name`");
+                    Report(token.Span, Catalogue.ModuleUsedAsAName.Says(place.Module, place.Module));
                     broken = true;
                 }
                 continue;
@@ -1686,8 +1671,7 @@ internal sealed class Binder
             }
             if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
-                Report(token.Span, $"`{token.Text}` is {symbol.KindPhrase}; a name written on its "
-                    + "own splices a `block` parameter, and nothing else belongs on a line alone");
+                Report(token.Span, Catalogue.NameAloneOnALine.Says(token.Text, symbol.KindPhrase));
             }
         }
     }
@@ -1736,14 +1720,14 @@ internal sealed class Binder
         {
             if (path)
             {
-                Report(token.Span, $"`{token.Text}` is a cheap local and cannot be reached with `::`");
+                Report(token.Span, Catalogue.CheapLocalInAPath.Says(token.Text));
                 return null;
             }
             var local = at.LookupCheapLocal(token.Text[1..]);
             if (local is null)
             {
                 var near = NearestName(at, token.Text[1..], cheap: true);
-                Report(token.Span, $"`{token.Text}` is not declared" + (near is null ? "" : $"; `@{near}` is"));
+                Report(token.Span, Catalogue.NotDeclared.Says(token.Text, near is null ? "" : $"; `@{near}` is"));
                 if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
             }
@@ -1780,7 +1764,7 @@ internal sealed class Binder
         var container = BodyOf(before.Symbol!);
         if (container is null)
         {
-            Report(token.Span, $"`{before.Symbol!.DisplayName}` is {before.Symbol.KindPhrase}, not a scope");
+            Report(token.Span, Catalogue.NotAScope.Says(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
             return null;
         }
 
@@ -1792,7 +1776,7 @@ internal sealed class Binder
             // out which.
             if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
                 return new Place(binding);
-            Report(token.Span, $"`{token.Text}` is not declared in `{container.Name}`");
+            Report(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.Name}`"));
             return null;
         }
         return new Place(CheckExported(token, member, last));
@@ -1802,7 +1786,7 @@ internal sealed class Binder
     /// What a name the scopes around it do not declare means: what a <c>.use</c> brought in, a
     /// define, the first part of a module's path, or what a <c>.use module::*</c> brought in.
     /// </summary>
-    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, string>? report)
+    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report)
     {
         if (used.TryGetValue(token.Text, out var brought))
             return brought with { IsAlias = brought.Symbol is { } target && target.Name != token.Text };
@@ -1823,8 +1807,8 @@ internal sealed class Binder
             }
             if (chosen is { } other)
             {
-                report?.Invoke(token.Span, $"`{token.Text}` is exported by both `{other.From}` and `{module.Name}`, "
-                    + $"and a `.use` brings in everything each exports: `{module.Name}::{token.Text}` says which");
+                report?.Invoke(token.Span, Catalogue.ExportAmbiguous.Says(
+                    token.Text, other.From, module.Name, module.Name, token.Text));
                 return Place.Reported;
             }
             chosen = new Place(exported, From: module.Name);
@@ -1843,11 +1827,11 @@ internal sealed class Binder
         var exporting = program.ModulesExporting(token.Text).ToList();
         var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
-            ? $"`{token.Text}` is not declared here, and module `{exporting[0]}` exports it: "
-                + $"write `{exporting[0]}::{token.Text}`, or bring it in with `.use {exporting[0]}::{token.Text}`"
+            ? Catalogue.DeclaredInAnotherModule.Says(
+                token.Text, exporting[0], exporting[0], token.Text, exporting[0], token.Text)
             : last
-                ? $"`{token.Text}` is not declared" + (nearest is null ? "" : $"; `{nearest}` is")
-                : $"`{token.Text}` is not declared, and no module `{token.Text}` is in this build");
+                ? Catalogue.NotDeclared.Says(token.Text, nearest is null ? "" : $"; `{nearest}` is")
+                : Catalogue.ModuleNotInTheBuild.Says(token.Text, token.Text));
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
         else if (nearest is not null)
@@ -1880,28 +1864,28 @@ internal sealed class Binder
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
-    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, string>? report)
+    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report)
     {
         if (IsModulePath(token.Text))
             return new Place(null, token.Text);
-        report?.Invoke(token.Span, $"no module `{token.Text}` is in this build");
+        report?.Invoke(token.Span, Catalogue.ModuleUnknown.Says(token.Text));
         return null;
     }
 
     /// <summary>The part after <paramref name="prefix"/>, which is a module or the start of one's name.</summary>
-    private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, string>? report)
+    private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, DiagnosticMessage>? report)
     {
         var path = $"{prefix}::{token.Text}";
         if (IsModulePath(path))
             return new Place(null, path);
         if (program.ModuleNamed(prefix) is not { } module)
         {
-            report?.Invoke(token.Span, $"no module `{path}` is in this build");
+            report?.Invoke(token.Span, Catalogue.ModuleUnknown.Says(path));
             return null;
         }
         if (program.Member(module, token.Text, Touch) is not { } member)
         {
-            report?.Invoke(token.Span, $"`{token.Text}` is not declared in module `{prefix}`");
+            report?.Invoke(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"module `{prefix}`"));
             return null;
         }
         return new Place(report is null ? member : CheckExported(token, member, last));
@@ -1927,7 +1911,7 @@ internal sealed class Binder
         // Said once, where the file first names it: every other use is the same mistake.
         if (!last || symbol.Tree == tree || symbol.IsExported || symbol.IsDefine || !unexported.Add(symbol))
             return symbol;
-        Report(token.Span, $"`{symbol.PathName}` is not exported by module `{symbol.Module}`",
+        Report(token.Span, Catalogue.NotExported.Says(symbol.PathName, symbol.Module),
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         Fixed(new DiagnosticFix(FixKind.Export, symbol.QualifiedName, symbol.DeclarationSpan));
         return symbol;
@@ -1999,9 +1983,9 @@ internal sealed class Binder
             return;
         var span = new TextSpan(parts[0].Span.Start, parts[^1].Span.End - parts[0].Span.Start);
         if (moduleName is not null)
-            Report(span, "a file is one module, and names it once");
+            Report(span, Catalogue.ModuleDeclaredTwice);
         else if (pastFirstItem || scope != fileScope)
-            Report(statement.Keyword.Span, "`.module` comes first: the file's other items belong to the module it names");
+            Report(statement.Keyword.Span, Catalogue.ModuleNotFirst);
         if (moduleName is not null)
             return;
         foreach (var part in parts)
@@ -2019,7 +2003,7 @@ internal sealed class Binder
     {
         if (scope != fileScope)
         {
-            Report(statement.Keyword.Span, "`.use` belongs at the top level of a module");
+            Report(statement.Keyword.Span, Catalogue.UseMisplaced);
             return;
         }
         useDirectives.Add(statement);
@@ -2068,8 +2052,7 @@ internal sealed class Binder
         {
             if (statement.IsExported)
             {
-                Report(statement.Span, "`.export .use` names what it re-exports: a `*` would make everything the other "
-                    + "module exports, now and later, part of this one");
+                Report(statement.Span, Catalogue.ReexportStar);
             }
             else if (target.Module is { } name && program.ModuleNamed(name) is { } module)
             {
@@ -2077,8 +2060,10 @@ internal sealed class Binder
             }
             else
             {
-                Report(path[^1].Span, $"`.use {target.Module ?? target.Symbol!.PathName}::*` brings in what a module exports, "
-                    + $"and `{path[^1].Text}` is {(target.Module is null ? "not a module" : "only the start of a module's name")}");
+                Report(path[^1].Span, Catalogue.UseStarNotAModule.Says(
+                    target.Module ?? target.Symbol!.PathName,
+                    path[^1].Text,
+                    (target.Module is null ? "not a module" : "only the start of a module's name")));
             }
             return;
         }
@@ -2106,8 +2091,8 @@ internal sealed class Binder
     private Place? NotIn(SyntaxToken token, Symbol container)
     {
         Report(token.Span, container.Body is null && container.TypeExpression is null
-            ? $"`{container.DisplayName}` is {container.KindPhrase}, not a scope"
-            : $"`{token.Text}` is not declared in `{container.DisplayName}`");
+            ? Catalogue.NotAScope.Says(container.DisplayName, container.KindPhrase)
+            : Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.DisplayName}`"));
         return null;
     }
 
@@ -2116,20 +2101,20 @@ internal sealed class Binder
     {
         if (exported && target.Symbol is null)
         {
-            Report(name.Span, $"`{target.Module}` is a module, and `.export .use` re-exports a name in one");
+            Report(name.Span, Catalogue.ReexportModule.Says(target.Module));
             return;
         }
         if (renamed && target.Symbol is { } symbol)
             references.Add(new SymbolReference(symbol, name.Span, true, IsAlias: true, InUse: true));
         if (fileScope.FindMember(name.Text) is { } local)
         {
-            Report(name.Span, $"`{name.Text}` is declared in this module, and a `.use` may not bring in another: "
-                + $"`as` brings it in under a name of its own", new RelatedSpan(local.DeclarationSpan, "declared here"));
+            Report(name.Span, Catalogue.UseCollidesWithDeclaration.Says(
+                name.Text), new RelatedSpan(local.DeclarationSpan, "declared here"));
             return;
         }
         if (!used.TryAdd(name.Text, target))
         {
-            Report(name.Span, $"a `.use` already brings in `{name.Text}`");
+            Report(name.Span, Catalogue.UseBringsInTwice.Says(name.Text));
             return;
         }
         broughtAt[name.Text] = (name.Span, exported);
@@ -2149,7 +2134,7 @@ internal sealed class Binder
     {
         if (moduleName is null && !isDefines)
         {
-            Report(new TextSpan(0, 0), "a file is a module, and says which first: `.module name`");
+            Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
         }
         foreach (var (symbol, at) in exportedDeclarations)
             Export(symbol, at, linkerName: null, size: null);
@@ -2168,8 +2153,7 @@ internal sealed class Binder
             // built for another CPU, would link against.
             if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
             {
-                Report(spelled.Span, $"`{linkerName}` is an instruction to ca65, which cannot define a symbol "
-                    + "spelled like one: an exported name is written into the output exactly as `as` gives it");
+                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Says(linkerName));
             }
             Export(symbol, item.Span, linkerName, size);
         }
@@ -2217,10 +2201,10 @@ internal sealed class Binder
         return symbol;
     }
 
-    private void Report(TextSpan span, string message, params RelatedSpan[] related) =>
+    private void Report(TextSpan span, DiagnosticMessage message, params RelatedSpan[] related) =>
         diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, related));
 
-    private void Warn(TextSpan span, string message) =>
+    private void Warn(TextSpan span, DiagnosticMessage message) =>
         diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Warning, message));
 
     /// <summary>Gives the diagnostic just reported the fix its message names.</summary>
@@ -2281,7 +2265,8 @@ internal sealed class Binder
     /// <param name="Segment">The segment that scope is placing things in.</param>
     /// <param name="Why">Why a declaration named after the binding may not stand here, or null when it may.</param>
     private sealed record Repeated(
-        BlockSyntax Block, ExpressionSyntax? Walked, Symbol Binding, Scope Around, string? Segment, string? Why);
+        BlockSyntax Block, ExpressionSyntax? Walked, Symbol Binding, Scope Around, string? Segment,
+        DiagnosticMessage? Why);
 
     /// <summary>A declaration named by a repetition's binding, waiting for the enum it walks to be known.</summary>
     private sealed record PendingFamily(
@@ -2336,7 +2321,7 @@ internal sealed class Binder
             var items = node.Items;
             var set = node.Name;
             if (SyntaxFacts.IsStateWord(set.Text))
-                binder.Report(set.Span, $"`{set.Text}` is a signature item, and cannot name a signature set");
+                binder.Report(set.Span, Catalogue.SignatureSetNameIsAnItem.Says(set.Text));
             else if (binder.Declare(set, SymbolKind.SignatureSet) is { } declared)
                 declared.Definition = items;
             binder.CollectUses(items);
@@ -2444,8 +2429,7 @@ internal sealed class Binder
         /// </summary>
         /// <param name="node">The region line.</param>
         public override void VisitSegmentRegion(SegmentRegionSyntax node) =>
-            binder.Report(node.Keyword.Span, "a `.segment NAME` region belongs at file level, outside "
-                + "every block: inside one, `.segment NAME { }` places what it holds");
+            binder.Report(node.Keyword.Span, Catalogue.SegmentRegionMisplaced);
 
         /// <inheritdoc/>
         public override void VisitAssertDirective(AssertDirectiveSyntax node) => binder.CollectUses(node);

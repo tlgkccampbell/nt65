@@ -79,8 +79,8 @@ public sealed class FlatNames
                 if (other is not null && other.QualifiedName != symbol.QualifiedName
                     && (other.LinkerName is null || symbol.LinkerName is null))
                 {
-                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan, Severity.Error,
-                        $"`{symbol.QualifiedName}` and `{other.QualifiedName}` both become `{name}` in the output",
+                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
+                        Catalogue.OutputNameCollision.Says(symbol.QualifiedName, $"`{other.QualifiedName}`", name),
                         [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
                 }
                 flat.names[symbol] = name;

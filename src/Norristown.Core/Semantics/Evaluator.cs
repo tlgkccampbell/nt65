@@ -175,7 +175,7 @@ internal sealed class Evaluator
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.LastPart?.Name.Text == scope.Name)
-                Report(name, $"`{scope.Name}` is a scope, which has no address: a routine or data inside it does");
+                Report(name, Catalogue.ScopeHasNoAddress.Says(scope.Name));
         }
         Evaluate(operand);
     }
@@ -296,9 +296,7 @@ internal sealed class Evaluator
     }
 
     /// <summary>What is wrong with a value ca65 has no room for.</summary>
-    private static string TooWide(long number) =>
-        $"{Value.Of(number)} does not fit the 32 bits ca65 computes in: a value the output carries is "
-        + "at least -$80000000 and at most $ffffffff";
+    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Says(Value.Of(number));
 
     /// <summary>Whether ca65 can hold a value: its own arithmetic is 32 bits, and it reads one unsigned.</summary>
     private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
@@ -484,7 +482,7 @@ internal sealed class Evaluator
             // member after it a value nothing can work out.
             if (symbol.IsEnumMember)
             {
-                Report(expression, $"`{symbol.Name}` is an enum member, whose value is a constant, and this names an address");
+                Report(expression, Catalogue.EnumMemberIsNotAnAddress.Says(symbol.Name));
                 symbol.Value = Value.Unknown;
                 return;
             }
@@ -514,7 +512,7 @@ internal sealed class Evaluator
         foreach (var member in ring)
             member.IsCyclic = true;
         var symbol = ring[0];
-        Report(symbol.DeclarationSpan, $"`{symbol.DisplayName}` is defined in terms of itself",
+        Report(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Says(symbol.DisplayName),
             [.. ring.Skip(1).Select(other =>
                 new RelatedSpan(other.DeclarationSpan, $"through `{other.DisplayName}`"))]);
     }
@@ -535,7 +533,7 @@ internal sealed class Evaluator
             // Binding left a name in a value `.select` chooses between to whichever evaluation
             // chooses it.
             if (choosing > 0 && name.SimpleName is { Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone)
-                Report(alone, $"`{alone.Text}` is not declared");
+                Report(alone, Catalogue.NotDeclared.Says(alone.Text, ""));
             return Value.Unknown;
         }
         if (arguments.TryGetValue(symbol, out var argument))
@@ -572,9 +570,11 @@ internal sealed class Evaluator
                 return null;
             if (symbol.Kind is not (SymbolKind.Data or SymbolKind.Member) || symbol is { Kind: SymbolKind.Data, Data: null })
             {
-                Report(index, symbol is { Kind: SymbolKind.Data, Data: null }
-                    ? $"`{symbol.DisplayName}` is mixed data, which has bytes and no elements"
-                    : $"`{symbol.DisplayName}` is {symbol.KindPhrase}, and `[i]` reaches an element of data");
+                Report(index, Catalogue.NotIndexable.Says(
+                    symbol.DisplayName,
+                    symbol is { Kind: SymbolKind.Data, Data: null }
+                        ? "mixed data, which has bytes and no elements"
+                        : $"{symbol.KindPhrase}, and `[i]` reaches an element of data"));
                 return null;
             }
 
@@ -594,17 +594,16 @@ internal sealed class Evaluator
                 // the index is no constant only because of it.
                 if (Names(written))
                 {
-                    Report(written, "an element index is a constant: an index worked out as the program runs "
-                        + $"is what `{symbol.DisplayName},x` is for");
+                    Report(written, Catalogue.ElementIndexNotConstant.Says(symbol.DisplayName));
                 }
                 return null;
             }
             if (at < 0 || at >= count)
             {
-                Report(written, at < 0
+                Report(written, Catalogue.ElementIndexOutOfRange.Says(at < 0
                     ? $"an element index is never negative, and this one is {at}"
                     : $"`{symbol.DisplayName}` holds {count} {(count == 1 ? "element" : "elements")}, "
-                        + $"and the last of them is {count - 1}");
+                        + $"and the last of them is {count - 1}"));
                 return null;
             }
             offset += at * stride;
@@ -686,8 +685,8 @@ internal sealed class Evaluator
             return Reject(op, operand);
         if (Operators.Unary(op.Kind, value, out var refused) is { } result)
             return Value.Of(result);
-        if (refused is not null)
-            Report(op, refused);
+        if (refused is { } why)
+            Report(op, why);
         return Value.Unknown;
     }
 
@@ -707,13 +706,13 @@ internal sealed class Evaluator
             return Reject(op, left.IsString ? left : right);
         if (b == 0 && Operators.Divides(op))
         {
-            Report(op, "division by zero");
+            Report(op, Catalogue.DivisionByZero);
             return Value.Unknown;
         }
         if (Operators.Binary(op, a, b, out var refused) is { } result)
             return Value.Of(result);
-        if (refused is not null)
-            Report(op, refused);
+        if (refused is { } why)
+            Report(op, why);
         return Value.Unknown;
     }
 
@@ -721,7 +720,7 @@ internal sealed class Evaluator
     private Value Reject(SyntaxToken op, Value operand)
     {
         if (operand.IsString)
-            Report(op, $"`{op.Text}` cannot be used on a string");
+            Report(op, Catalogue.OperatorOnText.Says(op.Text));
         return Value.Unknown;
     }
 
@@ -769,8 +768,7 @@ internal sealed class Evaluator
                 return Value.Unknown;
             if (!HasBytesOfItsOwn(laid))
             {
-                Report(arguments[0], $"`{laid.Name}` is {laid.KindPhrase} and takes no bytes of its own, "
-                    + $"so `{name}` has nothing to measure");
+                Report(arguments[0], Catalogue.NothingToMeasure.Says(laid.Name, laid.KindPhrase, name));
                 return Value.Unknown;
             }
             return name == ".spanof" && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
@@ -796,8 +794,8 @@ internal sealed class Evaluator
             var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
             if (name == ".countof" && bytesOnly)
             {
-                Report(arguments[0], $"`{measured.Name}` is {(measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data")}, "
-                    + $"which has bytes and no elements: `.sizeof({measured.Name})` is how many bytes it takes");
+                Report(arguments[0], Catalogue.CountofHasNoElements.Says(
+                    measured.Name, (measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data"), measured.Name));
                 return Value.Unknown;
             }
             if (measured.Kind == SymbolKind.Proc)
@@ -807,8 +805,7 @@ internal sealed class Evaluator
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
             {
-                Report(arguments[0], $"nt65 cannot say how many bytes `{measured.Name}` takes: an `.align` in it "
-                    + $"depends on where it lands, and `.spanof({measured.Name})` measures it in the output");
+                Report(arguments[0], Catalogue.SizeofDependsOnAlignment.Says(measured.Name, measured.Name));
             }
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }
@@ -874,8 +871,7 @@ internal sealed class Evaluator
             return Value.Of(value);
         if (asked.Setting(name, Report) is { } setting)
             return setting;
-        Report(name, $"`{name.GetText().Trim()}` is not a define or a `.config`. A condition tests the build "
-            + "configuration, and a check on the program is an `.assert`");
+        Report(name, Catalogue.ConditionNamesTheProgram.Says(name.GetText().Trim()));
         return Value.Unknown;
     }
 
@@ -890,7 +886,7 @@ internal sealed class Evaluator
         {
             // A charmap or a `.func` called by name. Both are declarations, and reaching
             // them means resolving a name before the declarations exist.
-            Report(call, "a condition may not call a function the program declares");
+            Report(call, Catalogue.ConditionCallsAFunction);
             return Value.Unknown;
         }
 
@@ -916,7 +912,7 @@ internal sealed class Evaluator
         {
             if (given.Count != 3)
             {
-                Report(function, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
+                Report(function, Catalogue.SelectArguments);
                 return Value.Unknown;
             }
             return Evaluate(given[0]).AsNumber() is { } holds ? Evaluate(given[holds != 0 ? 1 : 2]) : Value.Unknown;
@@ -926,8 +922,7 @@ internal sealed class Evaluator
         // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
         if (!Answerable(name))
         {
-            Report(function, $"`{function.Text}` asks about the program. A condition tests the "
-                + "build configuration, and a check on the program is an `.assert`");
+            Report(function, Catalogue.ConditionAsksAboutTheProgram.Says(function.Text));
             return Value.Unknown;
         }
         return Plain(name, given);
@@ -941,7 +936,7 @@ internal sealed class Evaluator
     {
         if (arguments.Count != 3)
         {
-            Report(function, "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`");
+            Report(function, Catalogue.SelectArguments);
             return Value.Unknown;
         }
         var condition = Evaluate(arguments[0]);
@@ -956,11 +951,11 @@ internal sealed class Evaluator
             }
             else if (condition.IsString)
             {
-                Report(arguments[0], "a `.select` condition is a number, and this is text");
+                Report(arguments[0], Catalogue.SelectConditionIsText);
             }
             else
             {
-                Report(arguments[0], "a `.select` condition is a constant, and this is not one");
+                Report(arguments[0], Catalogue.SelectConditionNotConstant);
             }
             return Value.Unknown;
         }
@@ -994,7 +989,7 @@ internal sealed class Evaluator
     {
         if (at is NameExpressionSyntax { IsIndexed: true })
         {
-            Report(at, $"`{function}` measures a declaration, and `{at.GetText().Trim()}` is a place in one");
+            Report(at, Catalogue.MeasuresADeclaration.Says(function, at.GetText().Trim()));
             return true;
         }
         var what = symbol.Kind switch
@@ -1005,7 +1000,7 @@ internal sealed class Evaluator
         };
         if (what is null)
             return false;
-        Report(at, $"`{symbol.DisplayName}` is {what}: `{function}` measures a `.data` declaration, a routine or a type");
+        Report(at, Catalogue.NotMeasurable.Says(symbol.DisplayName, what, function));
         return true;
     }
 
@@ -1036,8 +1031,8 @@ internal sealed class Evaluator
             return Value.Unknown;
         if (symbol.ParameterSymbols.Count != given.Count)
         {
-            Report(callee, $"`{symbol.Name}` takes {symbol.ParameterSymbols.Count} argument(s), "
-                + $"and {given.Count} were given");
+            Report(callee, Catalogue.FunctionArgumentCount.Says(
+                symbol.Name, symbol.ParameterSymbols.Count, given.Count));
             return Value.Unknown;
         }
         if (evaluating.Contains(symbol))
@@ -1480,7 +1475,7 @@ internal sealed class Evaluator
         var from = Paths.Beside(directive.Tree.Path, path);
         if (binaryLength?.Invoke(from) is not { } length)
         {
-            Report(directive, $"`{path}` cannot be read");
+            Report(directive, Catalogue.IncbinUnreadable.Says(path));
             return null;
         }
 
@@ -1540,7 +1535,7 @@ internal sealed class Evaluator
         {
             if (!mapped.TryGetValue(character, out var b))
             {
-                Report(operand, $"`{charmap.Name}` does not map `{(char)character}`");
+                Report(operand, Catalogue.CharmapHasNoEntry.Says(charmap.Name, (char)character));
                 return null;
             }
             bytes.Add(b);
@@ -1583,17 +1578,16 @@ internal sealed class Evaluator
                 };
                 if (valued is not null)
                 {
-                    Report(valued, $"`{member.Name}` is a member, which reserves room and holds no value: "
-                        + $"several are `{spelled}[n]`");
+                    Report(valued, Catalogue.MemberHasNoValue.Says(member.Name, spelled));
                 }
                 else if (element.Count is { Count: null } count)
                 {
-                    Report(count, $"`{member.Name}` is a member, whose count is a number: `{spelled}[n]`");
+                    Report(count, Catalogue.MemberCountNotANumber.Says(member.Name, spelled));
                 }
             }
             if (room is null)
             {
-                Report(member.DeclarationSpan, $"`{member.Name}` reserves no room a member may take", []);
+                Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Says(member.Name), []);
                 continue;
             }
 
@@ -1659,14 +1653,13 @@ internal sealed class Evaluator
         {
             if (items.ContainsKey(binding) || arguments.ContainsKey(binding))
             {
-                Report(name, $"`{binding.Name}` does not walk an enum, so it names no member: a path "
-                    + "ends in a repetition's name only over an enum's members");
+                Report(name, Catalogue.BindingNotOverAnEnum.Says(binding.Name));
             }
             return null;
         }
         if (body.FindMember(member.Name) is { } namesake)
             return namesake;
-        Report(name, $"`{container.Name}` has no `{member.Name}`, which `{binding.Name}` stands for on this turn");
+        Report(name, Catalogue.FamilyMemberMissing.Says(container.Name, member.Name, binding.Name));
         return null;
     }
 
@@ -1683,13 +1676,13 @@ internal sealed class Evaluator
 
     private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
-    private void Report(Span span, string message, IReadOnlyList<RelatedSpan> related) =>
+    private void Report(Span span, DiagnosticMessage message, IReadOnlyList<RelatedSpan> related) =>
         Add(new Diagnostic(span, Severity.Error, message, related));
 
-    private void Report(SyntaxToken token, string message) =>
+    private void Report(SyntaxToken token, DiagnosticMessage message) =>
         Add(new Diagnostic(token.Parent.Tree.GetSpan(token.Span), Severity.Error, message, []));
 
-    private void Report(SyntaxNode node, string message) =>
+    private void Report(SyntaxNode node, DiagnosticMessage message) =>
         Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, []));
 
     private void Add(Diagnostic diagnostic)

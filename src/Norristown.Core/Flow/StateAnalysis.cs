@@ -68,7 +68,7 @@ public sealed class StateAnalysis
         analysis.checks.Final = true;
         analysis.checks.CheckOutsideRoutines();
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
-            analysis.checks.Found.DistinctBy(d => (d.Span, d.Message)));
+            analysis.checks.Found.DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
     }
 
@@ -752,8 +752,7 @@ public sealed class StateAnalysis
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
                 or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set)
             {
-                checks.ReportAt(item.Node, step, $"`{item.Text}` describes a routine rather than a point in it, "
-                    + "and belongs in a signature");
+                checks.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Says(item.Text));
                 continue;
             }
             switch (item.Part)
@@ -767,8 +766,8 @@ public sealed class StateAnalysis
                 case StatePart.E:
                     if (StateChecks.IsKnown(item.Mode) && StateChecks.IsKnown(processor.E) && item.Mode != processor.E)
                     {
-                        checks.ReportAt(item.Node, step, $"`.state {item.Text}`, and the processor is in "
-                            + $"{StateChecks.Mode(processor.E)} mode here");
+                        checks.ReportAt(item.Node, step, Catalogue.StateModeMismatch.Says(
+                            item.Text, StateChecks.Mode(processor.E)));
                     }
                     processor = processor with { E = item.Mode };
                     break;
@@ -792,7 +791,7 @@ public sealed class StateAnalysis
         if (processor.E == ProcessorMode.Emulation)
         {
             if (processor.A == Width.Sixteen || processor.Index == Width.Sixteen)
-                checks.Report(step, "a 16-bit width cannot hold in emulation mode, where both widths are 8 bits");
+                checks.Report(step, Catalogue.WidthInEmulation.Says("a 16-bit width"));
             processor = processor with { A = Width.Eight, Index = Width.Eight };
         }
         return state with { Processor = processor };
@@ -803,19 +802,21 @@ public sealed class StateAnalysis
                 return StateValue.Unknown;
             if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
             {
-                checks.ReportAt(expression, step, $"`.state {item.Text}` needs a constant: the analysis follows {register} by value");
+                checks.ReportAt(expression, step, Catalogue.StateValueNotConstant.Says(item.Text, register));
                 return StateValue.Unknown;
             }
             if (value < 0 || value > (register == "D" ? 0xffff : 0xff))
             {
-                checks.ReportAt(expression, step, $"`.state {item.Text}` is out of range: "
-                    + (register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
+                checks.ReportAt(expression, step, Catalogue.StateValueOutOfRange.Says(
+                    item.Text,
+                    register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
                 return StateValue.Unknown;
             }
             if (here.IsKnown && here.Value != value)
             {
                 checks.ReportAt(item.Node, step,
-                    $"`.state {item.Text}`, and {register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} here");
+                    Catalogue.StateValueMismatch.Says(
+                        item.Text, register, StateValue.Hex(here.Value, register == "D" ? 4 : 2)));
             }
             return StateValue.Of(value);
         }
@@ -824,8 +825,8 @@ public sealed class StateAnalysis
         {
             if (StateChecks.IsKnown(item.Width) && StateChecks.IsKnown(here) && item.Width != here)
             {
-                checks.ReportAt(item.Node, step, $"`.state {item.Text}`, and {register} "
-                    + $"{(register == "A" ? "is" : "are")} {StateChecks.Spell(here)} here");
+                checks.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Says(
+                    item.Text, register, (register == "A" ? "is" : "are"), StateChecks.Spell(here)));
             }
             return item.Width;
         }
@@ -842,14 +843,14 @@ public sealed class StateAnalysis
         {
             if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
             {
-                checks.ReportAt(item.Node, step, "`.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: "
-                    + $"`{item.Text}` is not one of them");
+                checks.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Says(item.Text));
                 continue;
             }
             if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
             {
-                checks.ReportAt(item.Node, step, $"`.ensure {item.Text}` needs native mode, and "
-                    + (processor.E == ProcessorMode.Emulation
+                checks.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Says(
+                    item.Text,
+                    processor.E == ProcessorMode.Emulation
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
                         : "the mode is not known here"));
             }
@@ -875,14 +876,14 @@ public sealed class StateAnalysis
         if (directive.Type is not { } type
             || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })
         {
-            checks.Report(step, $"`.frame {frame.DisplayName}` is laid out as a struct or a union, whose size says how many bytes it names");
+            checks.Report(step, Catalogue.FrameNotARecord.Says(frame.DisplayName));
             return state;
         }
         if (state.Stack is not { } stack)
             return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
         if (stack.Framed(frame, (int)size) is { } framed)
             return state with { Stack = framed };
-        checks.Report(step, $"`{frame.DisplayName}` is {size} bytes, and only {stack.Depth} are pushed here");
+        checks.Report(step, Catalogue.FramePastTheStack.Says(frame.DisplayName, size, stack.Depth));
         return state;
     }
 
@@ -905,18 +906,17 @@ public sealed class StateAnalysis
             if (mode is not (AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
                 || name.Parent is not OperandSyntax)
             {
-                checks.ReportAt(name, step, $"`{written}` is a place on the stack, and is named only on its own as a "
-                    + $"stack-relative operand: `{written},s`");
+                checks.ReportAt(name, step, Catalogue.FrameMemberNotStackRelative.Says(written, written));
                 continue;
             }
             if (stack is null)
             {
-                checks.ReportAt(name, step, $"`{written}` is counted from the stack pointer, and how much is pushed is not known here");
+                checks.ReportAt(name, step, Catalogue.FrameDepthUnknown.Says(written));
                 continue;
             }
             if (stack.Above(frame) is not { } above)
             {
-                checks.ReportAt(name, step, $"`{written}` is in `{frame.DisplayName}`, which is no longer on the stack here");
+                checks.ReportAt(name, step, Catalogue.FrameGone.Says(written, frame.DisplayName));
                 continue;
             }
             var size = frame.TypeExpression is { } type ? model.SymbolOf(type)?.Size ?? 0 : 0;
@@ -948,8 +948,7 @@ public sealed class StateAnalysis
             else if (started.TryGetValue(key, out var before) && before != processor
                 && step.On?.NearestCall is { } call && model.MacroAt(call) is { } owner)
             {
-                checks.Report(step, $"the block given to `{owner.DisplayName}!` has to leave the state as it found it: "
-                    + $"it starts with `{before}` and ends with `{processor}`");
+                checks.Report(step, Catalogue.BlockChangesState.Says(owner.DisplayName, before, processor));
             }
             return state;
         }

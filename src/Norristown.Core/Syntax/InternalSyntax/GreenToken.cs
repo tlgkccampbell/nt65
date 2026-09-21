@@ -13,7 +13,7 @@ internal sealed class GreenToken : GreenNode
     private static readonly GreenToken?[] missing = new GreenToken?[byte.MaxValue + 1];
 
     internal GreenToken(SyntaxKind kind, string text, ImmutableArray<GreenTrivia> leading,
-        ImmutableArray<GreenTrivia> trailing, IReadOnlyList<string>? errors)
+        ImmutableArray<GreenTrivia> trailing, IReadOnlyList<DiagnosticMessage>? errors)
         : base(kind, TriviaWidth(leading) + text.Length + TriviaWidth(trailing))
     {
         Text = text;

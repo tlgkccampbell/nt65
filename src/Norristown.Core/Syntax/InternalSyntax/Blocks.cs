@@ -46,7 +46,7 @@ internal static class Blocks
         void PopUnclosed()
         {
             var opener = stack[^1].Line;
-            errors.Add(new Error(opener, lines[opener].Tokens.Length - 2, "missing `}` to close this block"));
+            errors.Add(new Error(opener, lines[opener].Tokens.Length - 2, Catalogue.BlockNotClosed));
             Pop(hasCloser: false);
         }
 
@@ -67,7 +67,7 @@ internal static class Blocks
             {
                 if (stack.Count == 0)
                 {
-                    errors.Add(new Error(i, 0, "unmatched `}`"));
+                    errors.Add(new Error(i, 0, Catalogue.UnmatchedBrace));
                 }
                 else if (line.Opens)
                 {
@@ -121,7 +121,7 @@ internal static class Blocks
         return depth == 0;
     }
 
-    public readonly record struct Error(int Line, int Token, string Message);
+    public readonly record struct Error(int Line, int Token, DiagnosticMessage Message);
 
     private sealed record Frame(int Line, ImmutableArray<GreenNode>.Builder Children);
 }

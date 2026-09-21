@@ -109,7 +109,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// names it.
     /// </summary>
     public static void CheckSet(
-        Symbol set, Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, string> report)
+        Symbol set, Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, DiagnosticMessage> report)
     {
         if (set.Definition is not { Parent: { } declaration } list)
             return;
@@ -118,8 +118,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (item.Part == StatePart.Set && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
                 && Reaches(named, set, setOf, []))
             {
-                report(item.Node.Span, $"`{set.Name}` names `{item.Text}`, which stands for `{set.Name}` again: "
-                    + "a signature set cannot stand for itself");
+                report(item.Node.Span, Catalogue.SignatureSetSelfReference.Says(set.Name, item.Text, set.Name));
             }
         }
         Read(declaration, forMacro: false, valueOf, setOf, report);
@@ -132,7 +131,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <paramref name="report"/>.
     /// </summary>
     public Signature Resolved(
-        Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, string> report) =>
+        Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, DiagnosticMessage> report) =>
         syntax is null ? this : Read(syntax, forMacro, valueOf, setOf, report);
 
     /// <summary>Whether the sets <paramref name="from"/> names come, however indirectly, to <paramref name="to"/>.</summary>
@@ -149,7 +148,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     private static Signature Read(
         SyntaxNode? syntax, bool forMacro,
-        Func<ExpressionSyntax, long?>? valueOf, Func<NameExpressionSyntax, Symbol?>? setOf, Action<TextSpan, string> report)
+        Func<ExpressionSyntax, long?>? valueOf, Func<NameExpressionSyntax, Symbol?>? setOf, Action<TextSpan, DiagnosticMessage> report)
     {
         var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
         if (syntax is null)
@@ -172,9 +171,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
         {
             if (valueOf(count) is not { } bytes)
-                report(count.Span, $"`{args.Text}` needs a constant: it counts the bytes the caller pushes");
+                report(count.Span, Catalogue.ArgsNotConstant.Says(args.Text));
             else if (bytes < 0 || bytes > 0xffff)
-                report(count.Span, $"`{args.Text}` is out of range: it counts the bytes the caller pushes");
+                report(count.Span, Catalogue.ArgsOutOfRange.Says(args.Text));
             else
                 arguments = (int)bytes;
         }
@@ -192,7 +191,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         if (entry.NoReturn is not null)
         {
             if (exitList is not null)
-                report(exitList.Span, "a routine that says `noreturn` never returns, and declares nothing after `->`");
+                report(exitList.Span, Catalogue.NoreturnDeclaresAnExit);
             return Made(entryState, entryState) with { NeverReturns = true };
         }
 
@@ -247,27 +246,24 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (other is { } given)
                 {
-                    report(At(entry, given), $"`{given.Text}`: an interrupt handler is entered from anywhere, and "
-                        + "assumes nothing but its mode: `interrupt, native` or `interrupt, emu`");
+                    report(At(entry, given), Catalogue.HandlerAssumesState.Says(given.Text));
                 }
             }
             foreach (var other in new[] { entry.Far, entry.Inline, entry.Arguments })
             {
                 if (other is { } given)
                 {
-                    report(At(entry, given), $"`{given.Text}` describes how a routine is called, and an interrupt "
-                        + "handler is entered by the processor, which makes it neither near nor far");
+                    report(At(entry, given), Catalogue.HandlerDistance.Says(given.Text));
                 }
             }
             if (entry.NoReturn is { } never)
             {
-                report(At(entry, never), $"`{never.Text}`: an interrupt handler leaves by `rti`, "
-                    + "and never returns to a caller in any case");
+                report(At(entry, never), Catalogue.HandlerNoreturn.Says(never.Text));
             }
             if (entry.E is { IsUnchanged: true } kept)
-                report(At(entry, kept), $"`{kept.Text}`: an interrupt handler says which mode it is entered in, or nothing");
+                report(At(entry, kept), Catalogue.HandlerKeeps.Says(kept.Text));
             if (exitList is not null)
-                report(exitList.Span, "an interrupt handler leaves by `rti`, and declares nothing after `->`");
+                report(exitList.Span, Catalogue.HandlerDeclaresAnExit);
 
             var mode = entry.E is { IsUnchanged: false } stated ? stated.Mode : ProcessorMode.Unknown;
             var state = Pinned(new ProcessorState(Width.Unknown, Width.Unknown, mode, StateValue.Unknown, StateValue.Unknown));
@@ -300,15 +296,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (valueOf(expression) is not { } value)
             {
                 if (Here(given))
-                    report(expression.Span, $"`{given.Text}` needs a constant: the analysis follows D and B by value");
+                    report(expression.Span, Catalogue.SignatureValueNotConstant.Says(given.Text));
                 return StateValue.Unknown;
             }
             if (value < 0 || value > largest)
             {
                 if (Here(given))
                 {
-                    report(expression.Span, $"`{given.Text}` is out of range: "
-                        + (largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
+                    report(expression.Span, Catalogue.SignatureValueOutOfRange.Says(
+                        given.Text,
+                        largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
                 }
                 return StateValue.Unknown;
             }
@@ -331,8 +328,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 }
                 if (!first)
                 {
-                    report(item.Node.Span, $"`{item.Text}` is a signature set, and comes first in its list: "
-                        + "the items after it change what it gives");
+                    report(item.Node.Span, Catalogue.SignatureSetNotFirst.Says(item.Text));
                     continue;
                 }
                 first = false;
@@ -364,8 +360,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (Here(reference))
                 {
-                    report(reference.Node.Span, $"`{reference.Text}` is {set.KindPhrase}, and a name among a "
-                        + "signature's items is a signature set");
+                    report(reference.Node.Span, Catalogue.SignatureSetNotASet.Says(reference.Text, set.KindPhrase));
                 }
                 return items;
             }
@@ -406,12 +401,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
 
                 case StatePart.Keeps when forMacro:
-                    report(item.Node.Span, $"`{item.Text}` is about a routine from entry to exit, and a macro is "
-                        + "expanded into one: what its body keeps is part of what that routine keeps");
+                    report(item.Node.Span, Catalogue.MacroKeeps.Says(item.Text));
                     break;
                 case StatePart.Keeps when isExit:
                     report(item.Node.Span,
-                        $"`{item.Text}` is about a routine from entry to exit, and belongs before `->`");
+                        Catalogue.ItemBelongsAtEntry.Says(item.Text, "is about a routine from entry to exit"));
                     break;
                 case StatePart.Keeps:
                     if (item.Registers == Layout.Registers.None)
@@ -420,16 +414,15 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
 
                 case StatePart.NoReturn when forMacro:
-                    report(item.Node.Span, "`noreturn` says a routine never returns, and a macro is expanded, "
-                        + "ending where its body does");
+                    report(item.Node.Span, Catalogue.MacroNoreturn);
                     break;
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when forMacro:
-                    report(item.Node.Span, $"`{item.Text}` describes how a routine is called, and a macro is expanded");
+                    report(item.Node.Span, Catalogue.MacroDistance.Says(item.Text));
                     break;
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt
                     or StatePart.NoReturn when isExit:
                     report(item.Node.Span,
-                        $"`{item.Text}` describes how a routine is called, entered or left, and belongs before `->`");
+                        Catalogue.ItemBelongsAtEntry.Says(item.Text, "describes how a routine is called, entered or left"));
                     break;
                 case StatePart.NoReturn:
                     parts.NoReturn = Once(parts, parts.NoReturn, item, fromSet);
@@ -447,7 +440,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     if (!fromSet && parts.Written.Contains(StatePart.Distance) && parts.Far is { } said && said.IsFar != item.IsFar)
                     {
                         report(item.Node.Span,
-                            $"`{item.Text}` disagrees with `{(said.IsFar ? "far" : "near")}`: a routine is called one way");
+                            Catalogue.DistanceDisagrees.Says(item.Text, (said.IsFar ? "far" : "near")));
                     }
                     if (!fromSet)
                         parts.Written.Add(StatePart.Distance);
@@ -465,7 +458,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (fromSet)
                 return item;
             if (earlier is { } first && !parts.Written.Add(item.Part))
-                report(item.Node.Span, $"`{first.Text}` and `{item.Text}` both describe the same part of the state");
+                report(item.Node.Span, Catalogue.SignatureItemTwice.Says(first.Text, item.Text));
             parts.Written.Add(item.Part);
             return item;
         }
@@ -475,8 +468,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         {
             if (exitItem is not { IsUnchanged: true } kept || keptAtEntry)
                 return true;
-            report(At(exit, kept), $"`{kept.Text}` after `->` needs `{kept.Text}` at entry too: a routine "
-                + "hands back unchanged only what it assumed nothing about");
+            report(At(exit, kept), Catalogue.UnchangedNeedsEntry.Says(kept.Text, kept.Text));
             return false;
         }
 
@@ -491,7 +483,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             foreach (var wide in new[] { parts.A, parts.Index })
             {
                 if (wide is { Width: Width.Sixteen } item)
-                    report(At(parts, item), $"`{item.Text}` cannot hold in emulation mode, where both widths are 8 bits");
+                    report(At(parts, item), Catalogue.WidthInEmulation.Says($"`{item.Text}`"));
             }
         }
     }

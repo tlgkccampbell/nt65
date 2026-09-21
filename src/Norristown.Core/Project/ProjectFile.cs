@@ -60,8 +60,7 @@ public static class ProjectFile
             diagnostics.Add(new Diagnostic(
                 new Span(path, (int)(exception.LineNumber ?? 0) + 1, (int)(exception.BytePositionInLine ?? 0) + 1,
                     (int)(exception.BytePositionInLine ?? 0) + 2),
-                Severity.Error,
-                exception.Message.TrimEnd('.').Split(" LineNumber")[0]));
+                Catalogue.ProjectJsonInvalid.Says(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
             return ProjectSettings.None with { Diagnostics = diagnostics };
         }
 
@@ -70,7 +69,7 @@ public static class ProjectFile
             var reader = new Reader(path, text, diagnostics);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
-                reader.Report("", $"{Name} holds one object");
+                reader.Report("", Catalogue.ProjectNotAnObject.Says(Name));
                 return ProjectSettings.None with { Diagnostics = diagnostics };
             }
 
@@ -109,15 +108,15 @@ public static class ProjectFile
         var span = new Span("-D", 1, 1, argument.Length + 1);
         if (!IsName(name))
         {
-            diagnostics.Add(new Diagnostic(span, Severity.Error, $"`{name}` is not a name"));
+            diagnostics.Add(new Diagnostic(span, Catalogue.DefineNameInvalid.Says(name)));
             return null;
         }
         if (at < 0)
             return new Define(name, 1, span);
         if (Number(argument[(at + 1)..]) is not { } value)
         {
-            diagnostics.Add(new Diagnostic(span, Severity.Error,
-                $"`{argument[(at + 1)..]}` is not a number, and a define is a number"));
+            diagnostics.Add(new Diagnostic(span,
+                Catalogue.DefineNotANumber.Says(argument[(at + 1)..])));
             return null;
         }
         return new Define(name, value, span);
@@ -127,10 +126,10 @@ public static class ProjectFile
     /// What a key nt65 does not know is reported as, with the key it is nearly when there is
     /// one: a typo is one letter from the key it was meant to be.
     /// </summary>
-    private static string Unknown(string key)
+    private static DiagnosticMessage Unknown(string key)
     {
-        var message = $"`{key}` is not a {Name} key";
-        return Spelling.Nearest(key, known) is { } nearest ? $"{message}; `{nearest}` is" : message;
+        var nearest = Spelling.Nearest(key, known);
+        return Catalogue.ProjectKeyUnknown.Says(key, Name, nearest is null ? "" : $"; `{nearest}` is");
     }
 
     /// <summary>A JSON number, or a string in nt65's number syntax.</summary>
@@ -161,7 +160,7 @@ public static class ProjectFile
                 return null;
             if (CpuNames.Parse(named) is { } cpu)
                 return cpu;
-            Report("cpu", $"`{named}` is not a processor nt65 knows: {CpuNames.Listed}");
+            Report("cpu", Catalogue.ProjectCpuUnknown.Says(named, CpuNames.Listed));
             return null;
         }
 
@@ -180,12 +179,12 @@ public static class ProjectFile
             {
                 if (!IsName(property.Name))
                 {
-                    Report(property.Name, $"`{property.Name}` is not a name", from);
+                    Report(property.Name, Catalogue.DefineNameInvalid.Says(property.Name), from);
                     continue;
                 }
                 if (Number(property.Value) is not { } value)
                 {
-                    Report(property.Name, $"`{property.Name}` is not a number, and a define is a number", from);
+                    Report(property.Name, Catalogue.DefineNotANumber.Says(property.Name), from);
                     continue;
                 }
                 read.Add(new Define(property.Name, value, At(property.Name, from)));
@@ -209,20 +208,19 @@ public static class ProjectFile
                 var from = Offset(property.Name, within);
                 if (property.Name.Length == 0 || !property.Name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
                 {
-                    Report(property.Name, $"`{property.Name}` is not a configuration name: one is letters, digits, `_` and `-`", within);
+                    Report(property.Name, Catalogue.ConfigurationNameInvalid.Says(property.Name), within);
                     continue;
                 }
                 if (property.Value.ValueKind != JsonValueKind.Object)
                 {
-                    Report(property.Name, $"configuration `{property.Name}` is an object with `defines` and `out`", within);
+                    Report(property.Name, Catalogue.ConfigurationNotAnObject.Says(property.Name), within);
                     continue;
                 }
                 foreach (var key in property.Value.EnumerateObject())
                 {
                     if (!ConfigurationKeys.Contains(key.Name, StringComparer.Ordinal))
                     {
-                        Report(key.Name, $"configuration `{property.Name}`: `{key.Name}` is not a configuration key: "
-                            + "a configuration has `defines` and `out`", from);
+                        Report(key.Name, Catalogue.ConfigurationKeyUnknown.Says(property.Name, key.Name), from);
                     }
                 }
                 read.Add(new BuildConfiguration(
@@ -241,7 +239,7 @@ public static class ProjectFile
             {
                 if (property.Value.ValueKind != JsonValueKind.Object)
                 {
-                    Report(property.Name, $"segment \"{property.Name}\" is an object with a `size`");
+                    Report(property.Name, Catalogue.ProjectSegmentNotAnObject.Says(property.Name));
                     continue;
                 }
 
@@ -250,7 +248,7 @@ public static class ProjectFile
                     : null;
                 if (size is not { } address)
                 {
-                    Report(property.Name, $"segment \"{property.Name}\" needs a `size` of \"zp\", \"abs\" or \"far\"");
+                    Report(property.Name, Catalogue.ProjectSegmentSizeMissing.Says(property.Name));
                     continue;
                 }
                 var segment = new Segment(property.Name, address, At(property.Name));
@@ -258,8 +256,7 @@ public static class ProjectFile
                 {
                     if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
                     {
-                        Report(property.Name, $"segment \"{property.Name}\": `{attribute.Name}` is not a segment key: "
-                            + "a segment has a `size`, a `dp`, a `bank` and `mirrors`");
+                        Report(property.Name, Catalogue.ProjectSegmentKeyUnknown.Says(property.Name, attribute.Name));
                         continue;
                     }
                     if (attribute.Name == "size")
@@ -299,19 +296,19 @@ public static class ProjectFile
             {
                 if (Interval(property.Name, 0xffff) is not { } addresses)
                 {
-                    Report(property.Name, $"`{property.Name}` is not a range of absolute addresses, such as \"$2100-$21ff\"");
+                    Report(property.Name, Catalogue.RangeInvalid.Says(property.Name));
                     continue;
                 }
                 if (property.Value.ValueKind != JsonValueKind.Array)
                 {
-                    Report(property.Name, $"`{property.Name}` is a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]");
+                    Report(property.Name, Catalogue.BanksNotAList.Says(property.Name));
                     continue;
                 }
                 var range = new AccessRange(addresses.First, addresses.Last, Banks(property.Name, property.Value));
                 if (read.FirstOrDefault(other => other.First <= range.Last && range.First <= other.Last) is { } overlapping)
                 {
-                    Report(property.Name, $"`{property.Name}` overlaps `{StateValue.Hex(overlapping.First, 4)}-"
-                        + $"{StateValue.Hex(overlapping.Last, 4)}`: an address is in one range at most");
+                    Report(property.Name, Catalogue.RangesOverlap.Says(
+                        property.Name, StateValue.Hex(overlapping.First, 4), StateValue.Hex(overlapping.Last, 4)));
                     continue;
                 }
                 read.Add(range);
@@ -325,7 +322,7 @@ public static class ProjectFile
             var banks = new List<(long First, long Last)>();
             if (value.ValueKind != JsonValueKind.Array)
             {
-                Report(key, $"`{key}` is a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]");
+                Report(key, Catalogue.BanksNotAList.Says(key));
                 return banks;
             }
             foreach (var item in value.EnumerateArray())
@@ -336,7 +333,7 @@ public static class ProjectFile
                 if (bank is { } valid)
                     banks.Add(valid);
                 else
-                    Report(key, $"`{key}`: {item.GetRawText()} is not a bank or a range of banks");
+                    Report(key, Catalogue.BankInvalid.Says(key, item.GetRawText()));
             }
             return banks;
         }
@@ -347,7 +344,7 @@ public static class ProjectFile
                 return [];
             if (value.ValueKind != JsonValueKind.Array)
             {
-                Report(key, $"`{key}` is a list of strings");
+                Report(key, Catalogue.ProjectNotAList.Says(key));
                 return [];
             }
 
@@ -357,7 +354,7 @@ public static class ProjectFile
                 if (item.ValueKind == JsonValueKind.String)
                     read.Add(item.GetString() ?? "");
                 else
-                    Report(key, $"`{key}` is a list of strings");
+                    Report(key, Catalogue.ProjectNotAList.Says(key));
             }
             return read;
         }
@@ -368,11 +365,11 @@ public static class ProjectFile
                 return null;
             if (value.ValueKind == JsonValueKind.String)
                 return value.GetString();
-            Report(key, $"`{key}` is a string", from);
+            Report(key, Catalogue.ProjectNotAString.Says(key), from);
             return null;
         }
 
-        public void Report(string key, string message, int from = 0) =>
+        public void Report(string key, DiagnosticMessage message, int from = 0) =>
             diagnostics.Add(new Diagnostic(At(key, from), Severity.Error, message));
 
         /// <summary><c>first-last</c> or a single number, each no more than <paramref name="largest"/>.</summary>
@@ -393,7 +390,7 @@ public static class ProjectFile
                 return false;
             if (value.ValueKind == JsonValueKind.Object)
                 return true;
-            Report(key, $"`{key}` is an object", from);
+            Report(key, Catalogue.ProjectValueNotAnObject.Says(key), from);
             return false;
         }
 

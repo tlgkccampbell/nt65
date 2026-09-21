@@ -60,8 +60,8 @@ public static class UnusedSymbols
                 continue;
             if (omitted.Count > 0 && omitted.Any(new Regex($@"(?<![\w@.]){Regex.Escape(symbol.DisplayName)}(?!\w)").IsMatch))
                 continue;
-            yield return new Diagnostic(symbol.DeclarationSpan, Severity.Warning,
-                $"`{symbol.DisplayName}` is never used: nothing names it, and it is not exported")
+            yield return new Diagnostic(symbol.DeclarationSpan,
+                Catalogue.UnusedSymbol.Says(symbol.DisplayName))
             {
                 Fix = new DiagnosticFix(FixKind.Unused, symbol.DisplayName),
                 IsUnnecessary = true,
@@ -97,8 +97,8 @@ public static class UnusedSymbols
         {
             if (written.Contains(name))
                 continue;
-            yield return new Diagnostic(tree.GetSpan(brought.At), Severity.Warning,
-                $"`{name}` is brought in and nothing names it: the `.use` item may go")
+            yield return new Diagnostic(tree.GetSpan(brought.At),
+                Catalogue.UnusedUseItem.Says(name))
             {
                 Fix = new DiagnosticFix(FixKind.UseItem, name),
                 IsUnnecessary = true,

@@ -123,11 +123,9 @@ public static class Macros
             if (Back(macro) is { } at)
             {
                 var through = path.Skip(1).Select(step => $"`{step.Name}`").ToList();
-                report(macro, new Diagnostic(at, Severity.Error,
-                    through.Count == 0
-                        ? $"`{macro.Name}` calls itself, and every expansion has to be bounded"
-                        : $"`{macro.Name}` calls itself through {string.Join(", ", through)}, "
-                            + "and every expansion has to be bounded"));
+                report(macro, new Diagnostic(at, Catalogue.MacroRecursive.Says(
+                    macro.Name,
+                    through.Count == 0 ? "" : $" through {string.Join(", ", through)}")));
             }
 
             // The first call, in the order the bodies are written, that leads back to the macro.
@@ -191,9 +189,8 @@ public static class Macros
             {
                 if (used.Tree != macro.Tree || used.IsDefine || isExported(used))
                     continue;
-                diagnostics.Add(new Diagnostic(macro.DeclarationSpan, Severity.Error,
-                    $"`{macro.Name}!` is exported but names `{used.DisplayName}`, which is not: a macro expands "
-                    + "in the module that calls it, and what it names there has to be exported",
+                diagnostics.Add(new Diagnostic(macro.DeclarationSpan,
+                    Catalogue.MacroNamesUnexported.Says(macro.Name, used.DisplayName),
                     [new RelatedSpan(at, "named here")]));
             }
         }
@@ -204,33 +201,34 @@ public static class Macros
     /// would either declare a name in the caller or make something program-wide depend on
     /// how many times the macro is called.
     /// </summary>
-    public static string? Forbidden(StatementSyntax statement) => statement switch
+    public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
+        ? Catalogue.DeclarationInAMacroBody.Says(why.What, why.Because)
+        : (DiagnosticMessage?)null;
+
+    /// <summary>The two halves of that sentence, or null where the statement may stand.</summary>
+    private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax =>
-            "`.export` belongs outside a macro body: other files resolve names through the "
-            + "export map, and a body cannot add to it",
+            ("`.export`", "other files resolve names through the export map, and a body cannot add to it"),
         ImportDirectiveSyntax =>
-            "`.import` belongs outside a macro body: a body resolves names where the macro is "
-            + "declared, and the output imports whatever an expansion uses",
-        CpuDirectiveSyntax => "`.cpu` belongs outside a macro body: the CPU is program-wide",
+            ("`.import`", "a body resolves names where the macro is declared, and the output imports whatever "
+                + "an expansion uses"),
+        CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
         SegmentDeclarationSyntax =>
-            "a segment declaration belongs outside a macro body: a segment is declared exactly "
-            + "once for the program, and this one would be declared once per call",
+            ("a segment declaration",
+                "a segment is declared exactly once for the program, and this one would be declared once per call"),
         MultiProcDeclarationSyntax =>
-            "`.multiproc` belongs outside a macro body: a routine's name and signature are part of "
-            + "the file's interface, and a body declares nothing in its caller",
+            ("`.multiproc`", "a routine's name and signature are part of the file's interface, and a body declares "
+                + "nothing in its caller"),
         ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
-            "`.proc` belongs outside a macro body: a routine's name and signature are part of "
-            + "the file's interface. Take a `block` parameter and let the caller declare the routine",
+            ("`.proc`", "a routine's name and signature are part of the file's interface. Take a `block` parameter "
+                + "and let the caller declare the routine"),
         MacroDeclarationSyntax =>
-            "`.macro` belongs outside a macro body: a definition there could capture the "
-            + "enclosing macro's parameters",
+            ("`.macro`", "a definition there could capture the enclosing macro's parameters"),
         FuncDeclarationSyntax =>
-            "`.func` belongs outside a macro body: a definition there could capture the "
-            + "enclosing macro's parameters",
+            ("`.func`", "a definition there could capture the enclosing macro's parameters"),
         SignatureDeclarationSyntax =>
-            "`.signature` belongs outside a macro body: a signature set is used in signatures, which "
-            + "are part of the file's interface",
+            ("`.signature`", "a signature set is used in signatures, which are part of the file's interface"),
         _ => null,
     };
 }

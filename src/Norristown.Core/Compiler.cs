@@ -466,16 +466,15 @@ public static class Compiler
     /// </summary>
     private static IEnumerable<Diagnostic> FarNeedsA65816(SegmentTable segments, ProgramModel program)
     {
-        const string Message = "a `far` address needs the 65816";
         foreach (var segment in segments.Segments)
         {
             if (segment is { Size: AddressSize.Far, Declaration: { } declared })
-                yield return new Diagnostic(declared, Severity.Error, $"segment \"{segment.Name}\": {Message}");
+                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Says($"segment \"{segment.Name}\""));
         }
         foreach (var symbol in program.Files.SelectMany(file => file.Symbols))
         {
             if (symbol is { Kind: SymbolKind.ImportedAddress, AddressSize: AddressSize.Far })
-                yield return new Diagnostic(symbol.DeclarationSpan, Severity.Error, $"`{symbol.Name}`: {Message}");
+                yield return new Diagnostic(symbol.DeclarationSpan, Catalogue.FarNeeds65816.Says($"`{symbol.Name}`"));
         }
     }
 }

@@ -19,4 +19,4 @@ namespace Norristown.Semantics;
 internal sealed record Conditions(
     Cpu Cpu,
     IReadOnlyDictionary<string, long> Defines,
-    Func<NameExpressionSyntax, Action<SyntaxNode, string>, Value?> Setting);
+    Func<NameExpressionSyntax, Action<SyntaxNode, DiagnosticMessage>, Value?> Setting);

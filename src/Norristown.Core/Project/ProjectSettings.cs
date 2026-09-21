@@ -43,11 +43,13 @@ public sealed record ProjectSettings(
         if (Configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
             return With(chosen.Defines) with { Out = chosen.Out ?? Out };
         var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
-        var message = named.Count == 0
-            ? $"`{name}` is not a configuration: {ProjectFile.Name} names none"
-            : $"`{name}` is not a configuration: {ProjectFile.Name} names "
-                + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]);
-        return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, Severity.Error, message)] };
+        var message = Catalogue.ConfigurationUnknown.Says(
+            name,
+            named.Count == 0
+                ? $"{ProjectFile.Name} names none"
+                : $"{ProjectFile.Name} names "
+                    + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]));
+        return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
     }
 
     /// <summary>The same settings with <paramref name="defines"/> added, overriding by name.</summary>

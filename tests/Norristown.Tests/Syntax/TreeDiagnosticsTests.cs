@@ -22,7 +22,7 @@ public sealed class TreeDiagnosticsTests
         Assert.True(brace.IsMissing);
         Assert.True(brace.ContainsDiagnostics);
         var reported = Assert.Single(brace.Green.Diagnostics);
-        Assert.Equal("expected `{`, or `= address` for a routine with no body", reported.Message);
+        Assert.Equal("expected `{`, or `= address` for a routine with no body", reported.Message.Text);
 
         // The token sits after the trivia that follows `p`, and the caret reaches back over it to
         // where the `{` belongs: the end of the last token the line really has.
@@ -97,13 +97,13 @@ public sealed class TreeDiagnosticsTests
         var errored = Lexer.LexLine("$1G").Tokens[0];
         Assert.True(errored.ContainsDiagnostics);
         Assert.NotSame(errored, Lexer.LexLine("$1G").Tokens[0]);
-        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], ["invalid hexadecimal number `$1G`"]));
+        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], [Catalogue.NumberInvalid.Says("hexadecimal", "$1G")]));
 
         // The missing token of a kind is shared only while it says nothing.
         var quiet = GreenToken.Missing(SyntaxKind.OpenBrace);
         Assert.False(quiet.ContainsDiagnostics);
         Assert.Same(quiet, GreenToken.Missing(SyntaxKind.OpenBrace));
-        var said = GreenToken.Missing(SyntaxKind.OpenBrace, new Green.GreenDiagnostic(0, 0, "expected `{`"));
+        var said = GreenToken.Missing(SyntaxKind.OpenBrace, new Green.GreenDiagnostic(0, 0, Catalogue.ExpectedBrace.Says("`{`")));
         Assert.NotSame(quiet, said);
         Assert.True(said.ContainsDiagnostics);
         Assert.False(GreenToken.Missing(SyntaxKind.OpenBrace).ContainsDiagnostics);

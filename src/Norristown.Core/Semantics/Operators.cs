@@ -16,7 +16,7 @@ namespace Norristown.Semantics;
 internal static class Operators
 {
     /// <summary>A prefix operator applied to a number.</summary>
-    public static long? Unary(SyntaxKind op, long value, out string? refused)
+    public static long? Unary(SyntaxKind op, long value, out DiagnosticMessage? refused)
     {
         // Negating the smallest number there is is the one prefix operation with no answer:
         // its own positive is one past the largest.
@@ -43,7 +43,7 @@ internal static class Operators
     /// A binary operator applied to two numbers. <c>.mod</c> arrives as a directive token,
     /// because <c>%</c> begins a binary number.
     /// </summary>
-    public static long? Binary(SyntaxToken op, long a, long b, out string? refused)
+    public static long? Binary(SyntaxToken op, long a, long b, out DiagnosticMessage? refused)
     {
         refused = null;
         switch (op.Kind)
@@ -114,7 +114,7 @@ internal static class Operators
     /// <summary>
     /// The result where it is a 64-bit number, and no value with the reason where it is not.
     /// </summary>
-    private static long? Within(Int128 result, SyntaxToken op, long a, long b, out string? refused)
+    private static long? Within(Int128 result, SyntaxToken op, long a, long b, out DiagnosticMessage? refused)
     {
         if (result >= long.MinValue && result <= long.MaxValue)
         {
@@ -134,16 +134,15 @@ internal static class Operators
         : $"{Value.Of(a)} {op.Text} {Value.Of(b)}";
 
     /// <summary>Whether a shift counts a number of places a 64-bit value has, and says so if not.</summary>
-    private static bool Counted(long places, out string? refused)
+    private static bool Counted(long places, out DiagnosticMessage? refused)
     {
         refused = places is < 0 or > 63
-            ? $"a shift counts 0 to 63 places, and this one counts {places.ToString(CultureInfo.InvariantCulture)}"
-            : null;
+            ? Catalogue.ShiftCountOutOfRange.Says(places.ToString(CultureInfo.InvariantCulture))
+            : (DiagnosticMessage?)null;
         return refused is null;
     }
 
-    private static string Overflows(string written) =>
-        $"{written} overflows the 64 bits nt65 computes in";
+    private static DiagnosticMessage Overflows(string written) => Catalogue.ArithmeticOverflow.Says(written);
 
     private static long Truth(bool condition) => condition ? 1 : 0;
 }

@@ -63,7 +63,7 @@ public sealed class FixtureHarnessTests : IDisposable
         IReadOnlyList<OutputFile> outputs, params Diagnostic[] diagnostics) => _ => new(outputs, diagnostics);
 
     private static Diagnostic Error(string file, int line, string message) =>
-        new(new Span(file, line, 1, 2), Severity.Error, message);
+        new(new Span(file, line, 1, 2), "unexpected-token", Severity.Error, message, []);
 
     private FixtureCase Write(params (string Path, string Text)[] files)
     {

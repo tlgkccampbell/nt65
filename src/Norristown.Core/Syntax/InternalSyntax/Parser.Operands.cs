@@ -91,7 +91,7 @@ internal sealed partial class Parser
         var address = ParseExpression();
         var closeBracket = Kind == SyntaxKind.CloseBracket
             ? Advance()
-            : Missing(SyntaxKind.CloseBracket, "expected `]`");
+            : Missing(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says("`]`"));
         return Kind == SyntaxKind.Comma && IsRegister(1, "y")
             ? new LongIndirectOperandSyntax(openBracket, address, closeBracket, Advance(), Advance())
             : new LongIndirectOperandSyntax(openBracket, address, closeBracket, null, null);

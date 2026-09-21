@@ -78,7 +78,7 @@ public static class RegisterKeeps
         }
         for (var i = 0; i < byFile.Count; i++)
             flows[i].Registers = byFile[i].Held;
-        return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Message)));
+        return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
 
         // What a routine keeps: what the walk found, or, for one whose body is not here, what
         // it declares. A routine that declares more than its body shows is taken at its word,
@@ -348,10 +348,9 @@ public static class RegisterKeeps
             var names = RegisterEffects.Spell(broken);
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
-            report.Add(new Diagnostic(at, Severity.Error,
-                $"`{region.Routine.DisplayName}` promises `keeps {items}`, and {names} {(one ? "is" : "are")} not what "
-                + $"the routine was entered with here: restore {(one ? "it" : "them")} before returning, or a "
-                + $"`.state keeps {items}` where the value comes back says so"));
+            report.Add(new Diagnostic(at,
+                Catalogue.KeepsBroken.Says(
+    region.Routine.DisplayName, items, names, (one ? "is" : "are"), (one ? "it" : "them"), items)));
         }
 
         /// <summary>What one block does to the registers, from the state that reaches it.</summary>
@@ -425,9 +424,8 @@ public static class RegisterKeeps
                     if (report is not null && state.Of(register).Holds(register))
                     {
                         report.Add(new Diagnostic(
-                            step.Statement.Tree.GetSpan(item.Node.Span), Severity.Warning,
-                            $"`{item.Text}` says nothing here: {RegisterEffects.Spell(register)} is already "
-                            + "what the routine was entered with"));
+                            step.Statement.Tree.GetSpan(item.Node.Span),
+                            Catalogue.KeepsRedundant.Says(item.Text, RegisterEffects.Spell(register))));
                     }
                     state = state.With(register, RegisterValue.Of(register));
                 }
