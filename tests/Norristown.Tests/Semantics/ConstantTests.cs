@@ -93,20 +93,19 @@ public sealed class ConstantTests
     }
 
     /// <summary>
-    /// The one division with no answer — the least number nt65 counts in over −1, whose
-    /// quotient is one past the greatest — has no value, rather than the overflow the
-    /// processor raises on it. What that expression ought to be is the arithmetic's to settle;
-    /// what it must not be is the end of the process.
+    /// The one division the processor traps on: the least number nt65 counts in over −1. Its
+    /// quotient is one past the greatest, which is an overflow like any other and has no
+    /// value; its remainder is zero, as a remainder by −1 always is. Neither ends the process.
     /// </summary>
     [Fact]
-    public void TheDivisionWithNoAnswerHasNoValue()
+    public void TheDivisionWithNoAnswerDoesNotEndTheProcess()
     {
         var model = Analysis.Model(
             ".module main\nQUOTIENT = (0 - $7fffffffffffffff - 1) / (0 - 1)\n"
             + "REMAINDER = (0 - $7fffffffffffffff - 1) .mod (0 - 1)\n");
 
         Assert.False(model.Symbol("QUOTIENT").Value.IsKnown);
-        Assert.False(model.Symbol("REMAINDER").Value.IsKnown);
+        Assert.Equal(0, model.Symbol("REMAINDER").Value.AsNumber());
     }
 
     [Fact]
