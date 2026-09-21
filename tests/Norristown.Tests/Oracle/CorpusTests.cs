@@ -21,6 +21,33 @@ public sealed class CorpusTests
     }
 
     /// <summary>
+    /// Every macro call the editor offers to write out, in every corpus program, written out:
+    /// what a real program assembles to does not move because a call was replaced by what it
+    /// expands to. The fixtures check each construct; these are the combinations real code uses.
+    /// </summary>
+    [Fact]
+    public void WritingOutEveryCallLeavesTheProgramsTheSame()
+    {
+        var programs = CorpusProgram.All();
+        if (Repo.Selection is null)
+            Assert.NotEmpty(programs);
+        var failures = Repo.CollectFailures(programs, program =>
+        {
+            long? Length(string path)
+            {
+                var file = Path.Combine(program.Directory, path.Replace('/', Path.DirectorySeparatorChar));
+                return File.Exists(file) ? new FileInfo(file).Length : null;
+            }
+
+            return Fixtures.FixtureRunner.Inlined(
+                program.Name, program.Project, program.Sources, Length,
+                Compiler.Analyze(
+                    [.. program.Sources.Select(Norristown.Syntax.SyntaxTree.Parse)], program.Project, Length));
+        });
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    /// <summary>
     /// A debug build and a release build of the C64 program differ only in what <c>DEBUG</c>
     /// guards, however the guard is indented: the state check in <c>dispatch</c>
     /// (<c>cpx #</c>, <c>bcc</c>, <c>brk #</c>) and the two border flashes of <c>trace!</c>

@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Fixtures;
@@ -27,7 +28,8 @@ internal static class FixtureRunner
         if (analyzed is { } program)
         {
             failures.AddRange(Shown(fixture, program));
-            failures.AddRange(Inlined(fixture, program));
+            failures.AddRange(Inlined(
+                fixture.Name, fixture.Project, fixture.Sources, fixture.BinaryLength, program));
         }
         return failures;
     }
@@ -38,12 +40,19 @@ internal static class FixtureRunner
     /// wrong with it. A macro whose only call was written out is one nothing names any more,
     /// which is the warning it should be and not a difference.
     /// </summary>
-    private static IEnumerable<string> Inlined(FixtureCase fixture, ProgramAnalysis analysis)
+    /// <param name="name">What a failure names the program.</param>
+    /// <param name="project">What it is built as.</param>
+    /// <param name="sources">Its sources, as the analysis read them.</param>
+    /// <param name="binaryLength">How long a file an <c>.incbin</c> names is.</param>
+    /// <param name="analysis">The program, already read.</param>
+    public static IEnumerable<string> Inlined(
+        string name, ProjectSettings project, IReadOnlyList<SourceFile> sources,
+        Func<string, long?> binaryLength, ProgramAnalysis analysis)
     {
         if (analysis.Diagnostics.Any(d => d.Severity == Severity.Error))
             yield break;
         var was = Reported(analysis);
-        foreach (var source in fixture.Sources)
+        foreach (var source in sources)
         {
             if (analysis.ModelFor(source.Path) is not { } model)
                 continue;
@@ -66,12 +75,12 @@ internal static class FixtureRunner
                         .Select(tree => tree.Path == source.Path
                             ? SyntaxTree.Parse(tree.Path, written)
                             : tree)],
-                    fixture.Project, fixture.BinaryLength, analysis);
-                var where = $"[{fixture.Name}] writing out the call on "
+                    project, binaryLength, analysis);
+                var where = $"[{name}] writing out the call on "
                     + $"{source.Path}:{model.Tree.GetLineIndex(call.Position) + 1}";
                 if (!Reported(after).SequenceEqual(was))
                     yield return $"{where} reports {string.Join("; ", Reported(after).Except(was))}";
-                else if (Assembled(analysis, fixture, source.Path) != Assembled(after, fixture, source.Path))
+                else if (Assembled(analysis, project, source.Path) != Assembled(after, project, source.Path))
                     yield return $"{where} changes what it assembles to";
             }
         }
@@ -86,8 +95,8 @@ internal static class FixtureRunner
     /// in order. A comment and a label generate none, so this is the program and not the ca65
     /// that spells it, and a label an expansion no longer names is not a difference.
     /// </summary>
-    private static string Assembled(ProgramAnalysis analysis, FixtureCase fixture, string path) =>
-        Compiler.EmitFile(analysis, fixture.Project, path) is { } output
+    private static string Assembled(ProgramAnalysis analysis, ProjectSettings project, string path) =>
+        Compiler.EmitFile(analysis, project, path) is { } output
             ? string.Join(",", output.LineBytes.Where(bytes => bytes != 0))
             : "nothing";
 
