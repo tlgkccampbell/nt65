@@ -116,8 +116,9 @@ with the joypad.
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and
-a MinGW gcc on the path, and the extension needs Node.js. The scripts and the corpus builds are
-written for Windows, with Git Bash for the corpus's shell scripts.
+a C compiler on the path — on Windows a MinGW gcc — and the extension needs Node.js. The
+scripts run on Windows and on Linux; the corpus's shell scripts want a `sh`, which on Windows
+is Git Bash.
 
 ```text
 dotnet build Norristown.slnx        # the command, the language server and the tests

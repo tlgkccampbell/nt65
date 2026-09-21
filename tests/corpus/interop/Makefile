@@ -2,10 +2,12 @@
 # header nt65 writes, linked with ld65. `make CONFIG=debug` builds the debug configuration.
 ROOT   := ../../..
 TOOLS  := $(ROOT)/.cache/cc65/bin
-NT65   := $(ROOT)/src/Norristown.Cli/bin/Debug/net10.0/nt65.exe
-CC65   := $(TOOLS)/cc65.exe
-CA65   := $(TOOLS)/ca65.exe
-LD65   := $(TOOLS)/ld65.exe
+# What the tools are called: the same build on either system, bar the suffix.
+X      := $(if $(filter Windows_NT,$(OS)),.exe,)
+NT65   := $(ROOT)/src/Norristown.Cli/bin/Debug/net10.0/nt65$(X)
+CC65   := $(TOOLS)/cc65$(X)
+CA65   := $(TOOLS)/ca65$(X)
+LD65   := $(TOOLS)/ld65$(X)
 
 CONFIG ?= release
 OBJ    := build/$(CONFIG)

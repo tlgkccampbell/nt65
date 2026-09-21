@@ -13,11 +13,12 @@ param([string]$Configuration = 'Debug')
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$nt65 = Join-Path $root "src/Norristown.Cli/bin/$Configuration/net10.0/nt65.exe"
+$exe = if ($IsWindows) { '.exe' } else { '' }
+$nt65 = Join-Path $root "src/Norristown.Cli/bin/$Configuration/net10.0/nt65$exe"
 $bin = Join-Path $root '.cache/cc65/bin'
-$ca65 = Join-Path $bin 'ca65.exe'
-$cc65 = Join-Path $bin 'cc65.exe'
-$ld65 = Join-Path $bin 'ld65.exe'
+$ca65 = Join-Path $bin "ca65$exe"
+$cc65 = Join-Path $bin "cc65$exe"
+$ld65 = Join-Path $bin "ld65$exe"
 
 foreach ($tool in $nt65, $ca65, $ld65) {
     if (-not (Test-Path $tool)) {

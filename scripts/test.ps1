@@ -20,7 +20,8 @@ if (-not $NoBuild) {
     dotnet build (Join-Path $root 'tests/Norristown.Tests/Norristown.Tests.csproj') --nologo -v q -clp:NoSummary -c $configuration
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
-$runner = Join-Path $root "tests/Norristown.Tests/bin/$configuration/net10.0/Norristown.Tests.exe"
+$exe = if ($IsWindows) { '.exe' } else { '' }
+$runner = Join-Path $root "tests/Norristown.Tests/bin/$configuration/net10.0/Norristown.Tests$exe"
 
 if ($Benchmark) {
     # The test project asks for the server collector, which the suite wants and an editor does
