@@ -217,6 +217,27 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task NextHintsRefreshAsync(CancellationToken cancellation) =>
         await notifications.HintsRefreshed.Reader.ReadAsync(cancellation);
 
+    /// <summary>The names of the lines <paramref name="first"/> to <paramref name="last"/>, classified.</summary>
+    public Task<SemanticTokens> SemanticTokensRangeAsync(
+        string uri, int first, int last, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<SemanticTokens>("textDocument/semanticTokens/range",
+            new SemanticTokensRangeParams(
+                new TextDocumentIdentifier(uri),
+                new Range(new Position(first, 0), new Position(last, 0))),
+            cancellation);
+
+    /// <summary>What changed about the document's names since <paramref name="previous"/>.</summary>
+    public Task<SemanticTokensDelta> SemanticTokensDeltaAsync(
+        string uri, string previous, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<SemanticTokensDelta>("textDocument/semanticTokens/full/delta",
+            new SemanticTokensDeltaParams(new TextDocumentIdentifier(uri), previous), cancellation);
+
+    /// <summary>What a caret at each place grows to take in.</summary>
+    public Task<IReadOnlyList<SelectionRange>> SelectionRangesAsync(
+        string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<SelectionRange>>("textDocument/selectionRange",
+            new SelectionRangeParams(new TextDocumentIdentifier(uri), [position]), cancellation);
+
     /// <summary>The document's foldable ranges.</summary>
     public Task<IReadOnlyList<FoldingRange>> FoldingRangesAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<FoldingRange>>("textDocument/foldingRange",

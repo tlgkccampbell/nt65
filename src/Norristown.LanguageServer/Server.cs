@@ -52,6 +52,13 @@ internal sealed class Server
     private IReadOnlyDictionary<string, string> described =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
+    // The names of each file as the client was last given them, under the name it would ask
+    // about them by. A client asking what changed is holding one of these; one asking about an
+    // answer this server no longer has is given the whole thing instead.
+    private readonly ConcurrentDictionary<string, (string Id, IReadOnlyList<int> Data)> classified =
+        new(StringComparer.Ordinal);
+    private int classifiedId;
+
     // The editor that started this server. It is watched rather than asked: an editor that
     // crashes never sends `exit`, and a server nobody is talking to should not outlive it.
     private Process? parent;
@@ -151,7 +158,9 @@ internal sealed class Server
             CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
             CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
-            SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true),
+            SemanticTokensProvider: new SemanticTokensOptions(
+                NameHighlighting.Legend, new SemanticTokensFullOptions(Delta: true), Range: true),
+            SelectionRangeProvider: true,
             InlayHintProvider: new InlayHintOptions(ResolveProvider: false),
             CallHierarchyProvider: true,
             DocumentLinkProvider: new DocumentLinkOptions(ResolveProvider: false),
@@ -488,10 +497,57 @@ internal sealed class Server
     public Protocol.SemanticTokens SemanticTokens(SemanticTokensParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return workspace.Find(request.TextDocument.Uri) is { } document
-            && workspace.AnalysisFor(document.Tree.Path).ModelFor(document.Tree.Path) is { } model
-            ? NameHighlighting.In(model)
+        return Classified(request.TextDocument.Uri);
+    }
+
+    /// <summary>
+    /// The names of the lines the editor is showing. A file of thousands of lines is read a
+    /// screenful at a time, and the screenful is what colours it while the rest is worked out.
+    /// </summary>
+    [JsonRpcMethod("textDocument/semanticTokens/range")]
+    public Protocol.SemanticTokens SemanticTokensRange(
+        SemanticTokensRangeParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        return Model(request.TextDocument.Uri) is { } model
+            ? NameHighlighting.In(model, request.Range.Start.Line, request.Range.End.Line)
             : new Protocol.SemanticTokens([]);
+    }
+
+    /// <summary>
+    /// What changed since the answer the client is holding. An edit in one place moves a
+    /// handful of numbers in a file of thousands; a client holding an answer this server no
+    /// longer has gets the whole thing instead.
+    /// </summary>
+    [JsonRpcMethod("textDocument/semanticTokens/full/delta")]
+    public object SemanticTokensDelta(SemanticTokensDeltaParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var holding = classified.TryGetValue(request.TextDocument.Uri, out var before)
+            && before.Id == request.PreviousResultId;
+        var held = before.Data;
+        var answer = Classified(request.TextDocument.Uri);
+        return holding ? NameHighlighting.Changed(answer.ResultId!, held, answer.Data) : answer;
+    }
+
+    /// <summary>
+    /// What a caret grows to take in as the selection is widened: the operand, the instruction,
+    /// the block and the routine, which is the tree the file already is.
+    /// </summary>
+    [JsonRpcMethod("textDocument/selectionRange")]
+    public IReadOnlyList<SelectionRange> SelectionRanges(
+        SelectionRangeParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+            return [];
+        var tree = document.Tree;
+        return
+        [
+            .. request.Positions
+                .Select(at => LanguageServer.SelectionRanges.At(tree, tree.GetPosition(at.Line, at.Character)))
+                .OfType<SelectionRange>(),
+        ];
     }
 
     [JsonRpcMethod("workspace/symbol")]
@@ -722,6 +778,21 @@ internal sealed class Server
         {
             log.Write($"{what} refresh failed: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// The names of a whole file, classified, under a name of its own so that the client can
+    /// ask what changed about it next time.
+    /// </summary>
+    private Protocol.SemanticTokens Classified(string uri)
+    {
+        if (Model(uri) is not { } model)
+            return new Protocol.SemanticTokens([]);
+        var data = NameHighlighting.In(model).Data;
+        var id = Interlocked.Increment(ref classifiedId)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        classified[uri] = (id, data);
+        return new Protocol.SemanticTokens(data, id);
     }
 
     /// <summary>What a file the client named means, or null when the program does not hold it.</summary>

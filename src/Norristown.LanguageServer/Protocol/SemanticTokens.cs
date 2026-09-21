@@ -5,4 +5,9 @@ namespace Norristown.LanguageServer.Protocol;
 /// the character from its start when on the same line, the length, the type and the modifier
 /// bits.
 /// </summary>
-internal sealed record SemanticTokens(IReadOnlyList<int> Data);
+/// <param name="Data">The numbers.</param>
+/// <param name="ResultId">
+/// What to call this answer when asking for the next change to it, or null where the answer is
+/// about part of a document and there is no change to ask for.
+/// </param>
+internal sealed record SemanticTokens(IReadOnlyList<int> Data, string? ResultId = null);

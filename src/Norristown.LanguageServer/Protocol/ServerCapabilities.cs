@@ -16,6 +16,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="CodeActionProvider">Which kinds of change the server offers, or null when it offers none.</param>
 /// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
 /// <param name="InlayHintProvider">How the server hints in a line, or null when it does not.</param>
+/// <param name="SelectionRangeProvider">Whether the server answers what a caret grows to take in.</param>
 /// <param name="CallHierarchyProvider">Whether the server answers the three call-hierarchy requests.</param>
 /// <param name="DocumentLinkProvider">How the server answers <c>textDocument/documentLink</c>, or null when it does not.</param>
 /// <param name="DocumentFormattingProvider">Whether the server lays a whole file out.</param>
@@ -38,6 +39,7 @@ internal sealed record ServerCapabilities(
     CodeActionOptions? CodeActionProvider = null,
     SemanticTokensOptions? SemanticTokensProvider = null,
     InlayHintOptions? InlayHintProvider = null,
+    bool SelectionRangeProvider = false,
     bool CallHierarchyProvider = false,
     DocumentLinkOptions? DocumentLinkProvider = null,
     bool DocumentFormattingProvider = false,

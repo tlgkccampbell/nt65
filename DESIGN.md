@@ -3025,7 +3025,13 @@ alone and without an assembler:
   `.use`, `as` and re-exports: a rename across modules rewrites the `.use` items that name
   the symbol, and leaves a name `as` gave alone), the member names a record gives values
   included;
-- colour every name by what it refers to, so `Joy::A` is an enum member and not a register;
+- colour every name by what it refers to, so `Joy::A` is an enum member and not a register. A
+  long file is asked about a screenful at a time, and after an edit only what changed about it
+  is sent: a file of thousands of lines is thousands of numbers, and a keystroke moves a
+  handful of them;
+- widen a selection through the tree, a step at a time: the operand under the caret, the
+  instruction written around it, the block that holds the line, the routine that holds the
+  block, and the file;
 - show on hover the line that declares a symbol, as the language writes it, and under it its
   value, how wide an address it is, the segment it sits in and how many bytes it takes, what
   the output calls it where that is not what the source calls it, and with them the comment

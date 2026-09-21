@@ -1,6 +1,9 @@
 using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 
+// The protocol has a Range of its own, which is the one these tests mean.
+using Range = Norristown.LanguageServer.Protocol.Range;
+
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -56,7 +59,8 @@ public sealed class SemanticTokensTests
 
         var provider = client.Initialized.Capabilities.SemanticTokensProvider;
         Assert.NotNull(provider);
-        Assert.True(provider.Full);
+        Assert.True(provider.Full.Delta);
+        Assert.True(provider.Range);
         Assert.Equal(NameHighlighting.Legend.TokenTypes, provider.Legend.TokenTypes);
     }
 
@@ -123,6 +127,48 @@ public sealed class SemanticTokensTests
         await using var client = await TestClient.StartAsync(null, null, timeout, refreshesTokens: true);
         await client.OpenAsync(Uri, Source);
         await client.NextTokensRefreshAsync(timeout);
+    }
+
+    /// <summary>
+    /// A long file is read a screenful at a time, so the lines the editor is showing can be
+    /// asked about on their own, and what changed since the last answer can be asked for
+    /// instead of every number again.
+    /// </summary>
+    [Fact]
+    public async Task ALongFileIsAskedAboutAScreenfulAndAChangeAtATime()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, Source);
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        var legend = client.Initialized.Capabilities.SemanticTokensProvider!.Legend;
+
+        // The `.enum` block and nothing above or below it.
+        var part = await client.SemanticTokensRangeAsync(Uri, 6, 9, timeout);
+        Assert.Equal(
+            ["Joy enum declaration", "A enumMember declaration readonly", "X enumMember declaration readonly"],
+            Decode(legend, Source, part));
+        Assert.Null(part.ResultId);
+
+        // A whole file is answered under a name of its own, and what changed since it is one
+        // run of numbers rather than all of them.
+        var whole = await client.SemanticTokensAsync(Uri, timeout);
+        Assert.NotNull(whole.ResultId);
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
+            new Range(new Position(24, 0), new Position(24, 0)), "\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        // A line added above the routine moves one number: how far the first of its names is
+        // from the one before it. The other hundred and forty are sent no second time.
+        var changed = await client.SemanticTokensDeltaAsync(Uri, whole.ResultId!, timeout);
+        var edit = Assert.Single(changed.Edits);
+        Assert.Equal(1, edit.DeleteCount);
+        Assert.Single(edit.Data!);
+
+        // A client holding an answer this server no longer has is given the whole thing.
+        var again = await client.RequestAsync<SemanticTokens>("textDocument/semanticTokens/full/delta",
+            new { textDocument = new { uri = Uri }, previousResultId = "gone" }, timeout);
+        Assert.NotEmpty(again.Data);
     }
 
     /// <summary>Each token as its text, its type and its modifiers.</summary>
