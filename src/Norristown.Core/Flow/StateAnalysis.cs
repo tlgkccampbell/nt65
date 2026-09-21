@@ -536,11 +536,17 @@ public sealed class StateAnalysis
             case "tcs":
                 return state with { Stack = AnalysisStack.Unanchored };
 
-            // A return with a `.next` is a jump to the address the routine pushed, and pulls it.
+            // A return with a `.next` is a jump to the address the routine pushed, and pulls
+            // it. Where the `.next` names routines it is a tail call to each of them, checked
+            // as a `jmp` to one would be.
             case "rts":
             case "rtl":
                 if (next is not null)
+                {
+                    foreach (var named in Routines(next, step.On))
+                        checks.CheckTailCall(step, ".next", named, named.Signature!, processor, routine);
                     return state with { Stack = Pull(stack, mnemonic == "rts" ? 2 : 3) };
+                }
                 if (routine.Signature is not { HasNoCaller: true })
                     checks.CheckReturn(step, mnemonic, processor, routine);
                 return state;

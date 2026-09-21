@@ -124,6 +124,18 @@
     .next falls             ;! error: `.next falls` says flow runs on into `falls`, and it does not start where this statement ends: a routine runs into the one written directly after it
 }
 
+; A `.next` on a return says the return is a jump to the routines it names, which is a tail
+; call and is checked as a `jmp` to one of them would be.
+.proc landed: a16, i16 {
+    rts
+}
+
+.proc returns_into_it: a8, i8 {
+    pea landed - 1
+    rts                     ;! error: `.next landed` needs `a16`, and A is 8-bit here;! error: `.next landed` needs `i16`, and X and Y are 8-bit here;! error: `.next landed` is a tail call: `returns_into_it` returns with `a8`, and A is 16-bit when `landed` returns;! error: `.next landed` is a tail call: `returns_into_it` returns with `i8`, and X and Y are 16-bit when `landed` returns
+    .next landed
+}
+
 ; Self-modifying code without `.patch`.
 .proc patching: a8, i8 {
 @op:
