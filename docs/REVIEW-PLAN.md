@@ -298,8 +298,8 @@ framework cannot start without it.
     off, but it is an error today, a port is where such names come from, and a default can be
     loosened after release and not tightened.
 
-**Left for the owner** (see the last section): suppression *in the source*. It is a language
-change, and the plan does not assume it.
+**Not in D:** suppression *in the source*. It is a language change, and the owner has left it
+out for now (see *Decided*).
 
 ### E. Server foundation
 
@@ -706,24 +706,6 @@ Done with the workstream named, not separately.
 - `TestResults/` in `.gitignore`. `AnalysisLevel` in `Directory.Build.props`, so the CA rules
   run under the warnings-are-errors the build already has.
 
-## For the owner to decide
-
-The plan recommends an answer to each and does not depend on it.
-
-1. **Diagnostic names or numbers** (D). Recommended: names.
-2. **Suppression in the source.** A project-wide switch does not cover "this one declaration is
-   unused on purpose". The options are a directive above the declaration
-   (`.allow unused-symbol`), which is a language addition and the honest spelling; or nothing,
-   on the argument that an unused declaration one wants to keep can be exported. A comment that
-   carries meaning is not on the list: comments mean nothing in nt65, and that is worth more
-   than this.
-3. **Compile-time math** (I.4): add it, or refuse it in §15 and show the `.incbin` answer.
-4. **`.cyclesof`** (I.5): reverses a recorded decision in §16.
-5. **Counted enums** (I.6): whether the problem is real enough to spend syntax on.
-6. **Which of E+H or F+G is nearer the goal**, if they cannot both run: the editor, or the API.
-   The order above assumes both; with one pair of hands, E and H first, because they are what a
-   person trying nt65 meets.
-
 ## Decided
 
 - **No mnemonic is reserved** (2026-09-21). The review found ca65's alias mnemonics (`swa`,
@@ -741,3 +723,16 @@ The plan recommends an answer to each and does not depend on it.
   business, the same in every project, and a project that wants the old strictness sets
   `"mnemonic-name": "error"`. Registers stay reserved: `asl a` is a question about an operand,
   which position cannot answer. The work is in C, the warning in D, the document in I.
+- **Diagnostics are named, not numbered** (2026-09-21), as D describes.
+- **No suppression in the source, for now** (2026-09-21). D ships severities in the project
+  file and nothing in the language. `.allow` above a declaration stays the honest spelling if
+  one is wanted later, and adding it then breaks nothing.
+- **Compile-time math is added, integer only** (2026-09-21): I.4 as written, exactly specified
+  so that the output stays deterministic.
+- **Cycle counts become two constants, `.mincycles` and `.maxcycles`** (2026-09-21), over a
+  span with no call and no loop in it, in place of I.5's single `.cyclesof`: exact where the
+  count is exact, and honest where a page crossing makes it a range. §16's refusal of cycle
+  built-ins is amended with that reasoning.
+- **Counted enums are deferred** (2026-09-21). I.6 is not part of this plan.
+- **E, F and G run together**, each in its own worktree, so the question of which pair comes
+  first does not arise.
