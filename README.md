@@ -18,8 +18,11 @@ nt65 needs the .NET 10 runtime. Build the packages (below), then:
 
 ```text
 dotnet tool install --global nt65 --configfile artifacts/nuget.config
-code --install-extension artifacts/nt65-1.0.0.vsix
+code --install-extension artifacts/nt65-<version>.vsix
 ```
+
+A build from a checkout is `0.0.0-dev`; a release is what its `v*` tag says, and the release
+workflow attaches both packages to it.
 
 The extension runs the language server it carries on the installed .NET; `nt65.server.path`
 points it at another. It also validates `nt65.json` against the schema it contributes, and

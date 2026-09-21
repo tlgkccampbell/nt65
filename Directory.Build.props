@@ -15,7 +15,8 @@
     <!-- Output never depends on the machine's culture (PLAN.md, determinism). -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <!-- The version nt65 reports. -->
-    <Version>1.0.0</Version>
+    <!-- The version nt65 reports. A build from a checkout is a development build and says so;
+         a release is built by the release workflow, which passes the tag's version. -->
+    <Version>0.0.0-dev</Version>
   </PropertyGroup>
 </Project>
