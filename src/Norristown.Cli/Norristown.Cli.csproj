@@ -12,5 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Norristown.Core\Norristown.Core.csproj" />
+    <!-- `nt65 lsp` serves the language server, so the tool carries it. -->
+    <ProjectReference Include="..\Norristown.LanguageServer\Norristown.LanguageServer.csproj" />
   </ItemGroup>
 </Project>

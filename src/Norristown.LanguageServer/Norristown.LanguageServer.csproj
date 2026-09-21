@@ -11,5 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Norristown.Tests" />
+    <!-- `nt65 lsp` serves the same entry point this project's own Program does. -->
+    <InternalsVisibleTo Include="nt65" />
   </ItemGroup>
 </Project>

@@ -18,7 +18,7 @@ public static class Commands
         {
             case ["--help" or "-h"] or ["build", "--help" or "-h"] or ["init", "--help" or "-h"]
                 or ["fmt", "--help" or "-h"] or ["remap-dbg", "--help" or "-h"]
-                or ["explain", "--help" or "-h"]:
+                or ["explain", "--help" or "-h"] or ["lsp", "--help" or "-h"]:
                 output.WriteLine(CommandLine.Usage);
                 return 0;
             case ["--version"]:
@@ -38,6 +38,10 @@ public static class Commands
                 return RemapCommand.Run(given, Path.GetFullPath(directory), error);
             case ["explain", .. var about]:
                 return ExplainCommand.Run(about, output, error);
+            case ["lsp"]:
+                return LspCommand.Run(error);
+            case ["lsp", var unexpected, ..]:
+                return Wrong(error, $"`lsp` takes nothing else, and was given `{unexpected}`");
 
             // A first argument nt65 has no meaning for: one line of news and where to read the
             // rest, rather than the usage text, which asked for nothing and buries the news.

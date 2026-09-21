@@ -506,6 +506,11 @@ what a gate runs. Named nothing, it formats every file the project's `files` nam
 no program: a file that belongs to no project, or that does not compile, is laid out from its
 own lines and braces like any other.
 
+**The editor's server.** `nt65 lsp` serves the language server (§14) on standard input and
+output and takes nothing else, so that any editor speaking LSP starts it from the same command
+every other use of nt65 already installs. What it says about itself goes to standard error,
+because standard output carries the protocol.
+
 A file named on the command line is built as part of its project, so a name another module
 exports means what it means there, and only its output is written. Without a project the
 named files are the program, and a name whose module is not among them says so. A program

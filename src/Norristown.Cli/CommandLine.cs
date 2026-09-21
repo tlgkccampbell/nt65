@@ -34,6 +34,7 @@ public sealed record CommandLine(
                nt65 fmt [--check] [<file.nt65>...]
                nt65 remap-dbg <file.dbg> [--out <file>]
                nt65 explain [<diagnostic>]
+               nt65 lsp
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
@@ -52,6 +53,9 @@ public sealed record CommandLine(
 
         `explain` says what a diagnostic is about, which its one line has no room for; the name
         is the one in brackets after the message. Named nothing, it lists them.
+
+        `lsp` serves the language server on standard input and output, for an editor that speaks
+        LSP; it takes nothing else, and what it says about itself goes to standard error.
 
         options:
           --project <file>      the project file, or the directory that holds nt65.json

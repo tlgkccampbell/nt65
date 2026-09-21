@@ -33,6 +33,7 @@ Problems panel. Output assembles with ca65 and ld65 built from the cc65 commit i
 nt65 init [dir] [--cpu 65816]
 nt65 build [--config name] [-D NAME=value] [--check] [--watch] [--json]
 nt65 fmt [--check] [file.nt65...]
+nt65 lsp
 ```
 
 `nt65 init` writes an `nt65.json` and a `src/main.nt65` that builds. `nt65 build` reads
@@ -40,8 +41,72 @@ nt65 fmt [--check] [file.nt65...]
 per module; `--check` reports and writes nothing, `--watch` builds again whenever the program
 changes, and `--json` writes one object per diagnostic for tools that are not editors.
 `nt65 fmt` writes files in the one layout nt65 sources are written in, or with `--check` lists
-the ones that are not in it and exits 1. `nt65 --help` lists every option; §5.3 of the design
-describes the project file and the command line.
+the ones that are not in it and exits 1. `nt65 lsp` serves the language server on standard
+input and output. `nt65 --help` lists every option; §5.3 of the design describes the project
+file and the command line.
+
+## Other editors
+
+The language server is plain LSP over stdio, and `nt65 lsp` starts it from the installed tool,
+so an editor needs nothing of nt65's but a few lines of configuration. `NT65_SERVER_LOG` names
+a file the server writes what it says about itself to, which is where to look when an editor
+starts it and shows nothing.
+
+**Neovim** (0.11 or later) takes the file type and the server as configuration, in
+`init.lua`:
+
+```lua
+vim.filetype.add({ extension = { nt65 = "nt65" } })
+vim.lsp.config.nt65 = {
+  cmd = { "nt65", "lsp" },
+  filetypes = { "nt65" },
+  root_markers = { "nt65.json", ".git" },
+}
+vim.lsp.enable("nt65")
+```
+
+**Helix** takes both in `~/.config/helix/languages.toml`. A language Helix does not know needs
+a `scope` and an `indent` of its own; nt65 is four spaces and `;` comments:
+
+```toml
+[language-server.nt65]
+command = "nt65"
+args = ["lsp"]
+
+[[language]]
+name = "nt65"
+scope = "source.nt65"
+file-types = ["nt65"]
+roots = ["nt65.json"]
+comment-token = ";"
+indent = { tab-width = 4, unit = "    " }
+language-servers = ["nt65"]
+```
+
+**Zed** takes a language server only from an extension, so nt65 needs a small one of three
+files, installed from its directory with **zed: install dev extension**. `extension.toml` and
+`languages/nt65/config.toml` declare the language and the server:
+
+```toml
+# extension.toml
+id = "nt65"
+name = "nt65"
+version = "0.1.0"
+schema_version = 1
+[language_servers.nt65]
+name = "nt65"
+languages = ["nt65"]
+
+# languages/nt65/config.toml
+name = "nt65"
+path_suffixes = ["nt65"]
+line_comments = ["; "]
+```
+
+and `src/lib.rs` answers with the command, from a `language_server_command` returning
+`zed::Command { command: "nt65".into(), args: vec!["lsp".into()], env: vec![] }`. Once such an
+extension is installed, `"lsp": { "nt65": { "binary": { "path": "..." } } }` in Zed's settings
+points it at another build.
 
 ## Examples
 
