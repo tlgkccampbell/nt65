@@ -125,7 +125,11 @@ one structurally.
    declarations exist in the program, not their order or file. Which declarations exist
    is fixed by the build configuration (the defines of §5.3) before anything in the
    program is evaluated, because `.if` conditions test defines and never program
-   symbols (§10). Cycles among constant definitions are errors, not sequencing puzzles.
+   symbols (§10). The one thing the configuration does not fix by itself is a family's
+   instances, which are one declaration per member of an enum (§10): the members are a list
+   written out in the source, under conditions the configuration answers like any others, so
+   reading the enum's headers is enough and nothing has to be evaluated to know which
+   instances there are. Cycles among constant definitions are errors, not sequencing puzzles.
 3. **Sequential state** exists only inside a `.proc` body and is limited to the
    instruction stream itself, the current address `*`, and 65816 processor state:
    register widths, the emulation flag, the direct page and the data bank. That state
@@ -150,8 +154,10 @@ before output.
 The output assembles to the same bytes under any ca65 command line a project already
 uses, with the pinned ca65 (§13). The header switches off everything a command-line option
 can switch on (§13), and the output is written so that the remaining options (`-t`,
-`-D`, `-mm`) cannot silently change it. If ca65 reports an error or a warning on nt65
-output, that is an nt65 bug.
+`-D`, `-mm`) cannot silently change it. If ca65 reports an error on nt65 output, that is an
+nt65 bug, and so is a warning at any level ca65 has: the oracle assembles at `-W2`, which is
+every warning ca65 knows, rather than at the default level, because a warning nobody is shown
+at the default is still the output saying something a reader would have to answer.
 
 ### 3.3 Same spelling, same meaning
 
@@ -1038,8 +1044,9 @@ finds it: `txs` then `phk`, `plb` sets B, and `tcs` then `pea c`, `pld` sets D. 
 the known top gets a value nothing is known of. The whole stack becomes unknown after a push
 or pull whose size is unknown, and at a merge where the incoming stacks differ in depth.
 
-**Assertions.** `.state` takes the same items as a signature, except `near`, `far` and
-the `*` items, which describe a routine rather than a point in it. `keeps` is the one item
+**Assertions.** `.state` takes the same items as a signature, except those that describe a
+routine rather than a point in it: `near`, `far`, `inline`, `args`, `interrupt`, `noreturn`,
+the `*` items, and a signature set, which stands for items of its own. `keeps` is the one item
 that is about a routine and is written at a point too, because a routine's promise is its
 point fact asked at every way out of it (§7.7):
 `.state a16, i8, dbr = $7e`. Each item asserts and sets: if that part of the state is
@@ -1738,7 +1745,11 @@ confused; a record is `.type T { … }` and an array of records `.type T[] { …
   plain label is an error there that suggests a member or a position.
 - **Padding.** `.res n [, fill]` is only padding: unnamed between declarations, in a mixed
   body, or as a struct's string member (§6.3). `.data ptr: .res 2` is an error that asks for
-  `.byte[2]`, since storage is declared with its type.
+  `.byte[2]`, since storage is declared with its type. `.align boundary [, fill]` is the other
+  padding: it writes however many bytes it takes to reach the boundary, which is a constant
+  power of two from 1 to $10000, and the fill is a byte as a `.res` fill is. How many bytes
+  that comes to depends on where it lands, so an `.align` is the one directive with no length
+  nt65 knows (§7.6).
 
 Unnamed data directives are written as they are in ca65, inside a proc (inline data after a
 call, the `.byte $2c` skip) or in mixed data:
@@ -2215,8 +2226,11 @@ The rules:
 None of these reaches the output. nt65 resolves every `.if` and unrolls every `.repeat`
 and `.each` itself; names declared inside a `.repeat` or `.each` body are distinct per
 iteration, as macro expansion labels are, and nothing outside the body can name them. A
-body holds nothing that is one thing for the whole file: no `.export`, `.import`, `.use`,
-`.module`, `.cpu`, segment declaration, `.proc`, `.macro` or `.func`.
+body holds nothing that is one thing for the whole file: no `.import`, `.use`, `.module`,
+`.cpu`, segment declaration, `.macro` or `.func`. A family is the one thing it does hold that
+is not the turn's — a `.proc` or a `.data` whose name is the binding, and the `.export` before
+it — because what such a declaration declares is one per member of the enum, which is a set
+the configuration already fixed rather than something a turn works out.
 
 ## 11. Macros
 
@@ -2602,6 +2616,10 @@ What another module's output does with a name depends on its kind:
 
 - **address symbols**, labels and address aliases alike, become `.import`/`.importzp`
   under their linker names in the referencing module's output, sized from the export;
+  a module that measures another's routine or data with `.endof` or `.spanof` imports the
+  `f__end` label beside it, and the module that declares `f` exports that label for it — it
+  is the one label nt65 generates that another file can see (§1), and it is exported because
+  something measured it rather than because the source asked;
 - **constants** whose value nt65 knows are emitted by value (`gfx__SCREEN = $0400`) in every
   module that uses them, because ca65 cannot use an imported symbol where it needs a
   constant (`.res`, `.if`, `.repeat`, `.sizeof`);
@@ -3789,7 +3807,7 @@ cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
 banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
-padding     := '.res' expr (',' expr)? | '.align' expr
+padding     := '.res' expr (',' expr)? | '.align' expr (',' expr)?
 local       := '@'ident                               ; one token
 label-line  := (ident | local) ':' (instr | data | macro-call)?   ; inside a proc
 const       := (ident | local) '=' expr
@@ -3818,12 +3836,12 @@ proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
 multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
-state-item  := point-item | keep-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | kept-item
+state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
+             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item
              | path                                   ; a path names a signature set, first
-kept-item   := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
+keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state
-keep-item   := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'        ; unchanged
+unchanged-item := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'     ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'
              | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr?'
 enum        := '.enum' ident? '{' NL (enum-member | if-block)* '}'
@@ -3843,7 +3861,8 @@ body        := (item | label-line | instr | data | macro-call | assertion | ensu
              | annotation | splice)*                  ; no proc inside a proc
 splice      := ident                                  ; block parameter, in macros only
 assertion   := '.state' state                         ; not near, far, inline, args,
-                                                      ; interrupt, none or the * items
+                                                      ; interrupt, noreturn, a signature set
+                                                      ; or the * items
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
 width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path

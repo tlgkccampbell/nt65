@@ -29,11 +29,13 @@ internal static class DesignCorpus
             var lines = ReadLines(document);
             for (var i = 0; i < lines.Length; i++)
             {
-                if (lines[i] != "```" + tag)
+                // A fence indented inside a list is a fence: an example that slipped past this
+                // because of where it stands would be one no fixture holds and nobody notices.
+                if (lines[i].TrimStart() != "```" + tag)
                     continue;
                 var start = i + 1;
                 var body = new StringBuilder();
-                for (i++; lines[i] != "```"; i++)
+                for (i++; lines[i].TrimStart() != "```"; i++)
                 {
                     // `...` stands for elided code in the examples.
                     body.Append(lines[i].Trim() == "..." ? "" : lines[i]).Append('\n');

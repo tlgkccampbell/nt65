@@ -413,6 +413,73 @@ checks every immediate, call and return against it. There are no `.a8`, `.a16`, 
 - Segments may declare their home bank and direct page, `.segment WRAM: abs, bank = $7e`, and
   an absolute operand reached with the wrong data bank is an error.
 
+### What a 65816 port has to change first
+
+A 65816 program brought over from ca65 builds once three things are written down. They are the
+three the analysis cannot work out for itself, and until they are there almost everything else
+it says is a consequence of not knowing them.
+
+**A signature on every routine.** ca65 carries the widths in `.a8` and `.i16` directives, which
+say what the programmer believed rather than what is true, and nt65 has none of them. Every
+`.proc` says what it is entered in and, where it differs, what it leaves:
+
+```nt65
+.signature port = a8, i16, dbr = $80
+
+.proc draw: port {
+    rts
+}
+
+.proc widen: port -> a16, i16 {
+    rep #$20
+    rts
+}
+```
+
+Write the `.signature` set first, from the state most of the program runs in, and give it to
+every routine; then fix the handful that differ. A routine with no signature is taken to be
+`a8, i8`, native and near, which for a program that runs in `a8, i16` is an error on nearly
+every line — so the set is what to do before reading any of them.
+
+**Second entry points as adjacent procs joined by `.next`.** A ca65 routine often has a second
+label part-way down that another routine jumps into, and a fall-through from the first into the
+second. nt65 has no jumping into the middle of a routine from outside it: the label is a
+position private to its routine's own flow. Cut the routine in two at that label, and say that
+the first runs into the second:
+
+```nt65
+.proc setup: port {
+    lda #0
+    .next fill                  ; it runs into `fill`, which is written next
+}
+
+.proc fill: port {
+    sta $2100
+    rts
+}
+```
+
+`.next` is what says the fall-through was meant; without it the first routine is reported as
+running off its end. The second is an ordinary routine, so it takes a signature and callers
+check against it.
+
+**ROM addresses as extern procs.** A monitor or toolbox entry is `JSR $FFD2` in ca65 and a
+constant address here, declared with the state it is called in:
+
+```nt65
+.proc CHROUT = $FFD2: a8, i16
+.proc TOOLBOX = $00E10000: a16, i16, far
+```
+
+An extern proc is a routine with no body: it has a signature and no code, so calls to it are
+checked like any other and the output writes the constant. Its signature is not optional on the
+65816 — nt65 has nothing else to check the call against — and `far` is what says `jsl` rather
+than `jsr`.
+
+After those three, the errors left are the real ones: an immediate whose width nobody set, a
+`jsr` to a far routine, a label something jumps into that no `.state` declares. Each names its
+fix, and the editor writes it.
+
 ## In the editor
 
 The language server knows the program, so most of what it offers is the analysis rather than

@@ -479,12 +479,17 @@ public static class DataLengths
             Report(operands[0], model, diagnostics, on, Catalogue.ResCountOutOfRange.Says(count));
     }
 
-    /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>
+    /// <summary>
+    /// An alignment is a constant power of two, which is what ca65 will take, and the fill it
+    /// pads with is a byte, as a <c>.res</c> fill is.
+    /// </summary>
     private static void Alignment(
         SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
         if (operands.Count == 0)
             return;
+        if (operands.Count > 1)
+            CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
         var boundary = model.ValueOf(operands[0], on).AsNumber();
         if (boundary is null)
             Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotConstant);
