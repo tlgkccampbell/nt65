@@ -256,10 +256,10 @@ public sealed class InlayHintsTests
         // out, its constants are written as literals, and every branch reaches.
         Assert.Equal(
             [
-                "27: xce                         ; native, both widths 8 native",
-                "28: rep #$38                    ; a16, i16, binary mode a16 i16",
-                "32: tcd                         ; D = $0000 dp = $0000",
-                "34: plb                         ; B = $00 dbr = $00",
+                "27: xce native                         ; native, both widths 8",
+                "28: rep #$38 a16 i16                    ; a16, i16, binary mode",
+                "32: tcd dp = $0000                         ; D = $0000",
+                "34: plb dbr = $00                         ; B = $00",
                 "35: sep #$20 a8",
                 "45: rep #$20 a16",
                 "52: sep #$20 a8",

@@ -186,12 +186,6 @@ internal sealed class LineContext
     public static int CodeEnd(SyntaxTree tree, int line) =>
         TokensOf(tree, line) is [.., var last] ? last.Start + last.Text.Length : tree.LineStarts[line];
 
-    /// <summary>Where the text of a line ends, after any comment and before the line's break.</summary>
-    public static int TextEnd(SyntaxTree tree, int line) =>
-        tree.GetLine(line).Tokens is [.., { Kind: SyntaxKind.EndOfLine } broken]
-            ? broken.Span.Start
-            : CodeEnd(tree, line);
-
     /// <summary>Whether a token is one a name can be written as.</summary>
     public static bool IsWord(SyntaxKind kind) =>
         kind is SyntaxKind.Identifier or SyntaxKind.Mnemonic or SyntaxKind.Register;
