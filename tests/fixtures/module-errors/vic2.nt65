@@ -1,4 +1,4 @@
 ; A module is one file.
-.module hw::vic             ;! error: module `hw::vic` is already `vic.nt65`: a module is one file, and a large one is split into submodules
+.module hw::vic             ;! error[module-name-taken]: module `hw::vic` is already `vic.nt65`: a module is one file, and a large one is split into submodules
 
 .export FOREGROUND = $d022

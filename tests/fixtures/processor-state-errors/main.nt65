@@ -14,13 +14,13 @@
 ; An immediate needs a known width.
 .segment CODE
 .proc unknown_width: a? {
-    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `unknown_width` says `a?` at entry: an `.ensure` sets it
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown_width` says `a?` at entry: an `.ensure` sets it
     rts
 }
 
 ; `*` assumes nothing, so a width it keeps is not a width anyone knows.
 .proc kept: i* {
-    ldx #1                  ;! error: `ldx #` needs the width of X and Y, and `kept` says `i*`, which assumes nothing about it
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `kept` says `i*`, which assumes nothing about it
     rts
 }
 
@@ -30,36 +30,36 @@
     beq @done
     rep #$20
 @done:
-    cmp #1                  ;! error: `cmp #` needs the width of A, and it is not known here, because the paths that reach here leave A 8-bit on one and 16-bit on another: an `.ensure` sets it whichever path was taken
+    cmp #1                  ;! error[width-unknown]: `cmp #` needs the width of A, and it is not known here, because the paths that reach here leave A 8-bit on one and 16-bit on another: an `.ensure` sets it whichever path was taken
     sep #$20
     rts
 }
 
 ; A return has to reach the state the signature declares, and leave the way it is called.
 .proc wrong_exit: a8 -> a16 {
-    rts                     ;! error: `rts`: `wrong_exit` returns with `a16`, and A is 8-bit here
+    rts                     ;! error[return-state-mismatch]: `rts`: `wrong_exit` returns with `a16`, and A is 8-bit here
 }
 
 .proc wrong_return: far {
-    rts                     ;! error: `wrong_return` is far, and returns with `rtl`
+    rts                     ;! error[return-distance-mismatch]: `wrong_return` is far, and returns with `rtl`
 }
 
 .proc changed: a* {
     rep #$20
-    rts                     ;! error: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, and here it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, and here it may not be
 }
 
 ; A call has to meet the routine's entry, and use the instruction its distance calls for.
 .proc wrong_entry: a16, i8 -> a8, i16 {
-    jsr printf              ;! error: `jsr printf` needs `a8`, and A is 16-bit here;! error: `jsr printf` needs `i16`, and X and Y are 8-bit here
+    jsr printf              ;! error[call-state-mismatch]: `jsr printf` needs `a8`, and A is 16-bit here;! error[call-state-mismatch]: `jsr printf` needs `i16`, and X and Y are 8-bit here
     rts
 }
 
 .proc calls: a8, i8 {
-    jsr far_away            ;! error: `far_away` is far, and is called with `jsl`
-    jsl calls               ;! error: `calls` is near, and is called with `jsr`
-    jsr plain               ;! error: `plain` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
-    jsr @inside             ;! error: `@inside` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+    jsr far_away            ;! error[call-distance-mismatch]: `far_away` is far, and is called with `jsl`
+    jsl calls               ;! error[call-distance-mismatch]: `calls` is near, and is called with `jsr`
+    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
     rts
 @inside:
     rts
@@ -67,43 +67,43 @@
 
 ; A tail call returns for the routine that makes it.
 .proc tail: a16, i8 -> a8 {
-    jmp wrong_entry         ;! error: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
+    jmp wrong_entry         ;! error[return-state-mismatch]: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
 }
 
 ; An assertion that disagrees with what is known.
 .proc asserted: a8 {
-    .state a16              ;! error: `.state a16`, and A is 8-bit here
-    .state near             ;! error: `near` describes a routine rather than a point in it, and belongs in a signature
-    rts                     ;! error: `rts`: `asserted` returns with `a8`, and A is 16-bit here
+    .state a16              ;! error[state-width-mismatch]: `.state a16`, and A is 8-bit here
+    .state near             ;! error[state-item-not-a-point]: `near` describes a routine rather than a point in it, and belongs in a signature
+    rts                     ;! error[return-state-mismatch]: `rts`: `asserted` returns with `a8`, and A is 16-bit here
 }
 
 ; A label nothing reaches has no state to size an immediate with.
 .proc orphan: a8, i8 {
     rts
-@lost:                      ;! warning: `@lost` is never reached: nothing runs into it and nothing names it
-    lda #1                  ;! error: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
+@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: nothing runs into it and nothing names it
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
     rts
 }
 
 ; Signatures that contradict themselves.
-.proc twice: a8, a16 {      ;! error: `a8` and `a16` both describe the same part of the state
+.proc twice: a8, a16 {      ;! error[signature-item-twice]: `a8` and `a16` both describe the same part of the state
     rts
 }
 
-.proc handed_back: a8 -> a* {   ;! error: `a*` after `->` needs `a*` at entry too: a routine hands back unchanged only what it assumed nothing about
+.proc handed_back: a8 -> a* {   ;! error[unchanged-needs-entry]: `a*` after `->` needs `a*` at entry too: a routine hands back unchanged only what it assumed nothing about
     rts
 }
 
-.proc pinned: emu, a16 {    ;! error: `a16` cannot hold in emulation mode, where both widths are 8 bits
+.proc pinned: emu, a16 {    ;! error[width-in-emulation]: `a16` cannot hold in emulation mode, where both widths are 8 bits
     rts
 }
 
 ; Outside a routine there is no processor state.
-.state a8               ;! error: `.state` describes a point in a routine, and this is outside any `.proc`
+.state a8               ;! error[state-outside-a-routine]: `.state` describes a point in a routine, and this is outside any `.proc`
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.
 .proc long_to_near: a8, i8 {
-    jml @near               ;! error: `jml` takes a far target, and this one is absolute: `jmp` reaches it
+    jml @near               ;! error[target-too-near]: `jml` takes a far target, and this one is absolute: `jmp` reaches it
 @near:
     jml $008000
     .next ?                 ; a constant address is somewhere the analysis does not follow
@@ -115,20 +115,20 @@
     rts
 }
 
-.proc worker_long = worker: a8, i16, far        ;! error: `worker_long` is declared far, and `worker` is near
-.proc worker_wide = worker: a16, i16            ;! error: `worker_wide` is declared `a16, i16, native, near`, and `worker` is `a8, i16, native, near`: another name for a routine declares what the routine does
+.proc worker_long = worker: a8, i16, far        ;! error[alias-distance-mismatch]: `worker_long` is declared far, and `worker` is near
+.proc worker_wide = worker: a16, i16            ;! error[alias-signature-mismatch]: `worker_wide` is declared `a16, i16, native, near`, and `worker` is `a8, i16, native, near`: another name for a routine declares what the routine does
 .proc worker_same = worker: a8, i16
 
 ; What made a width unknown is named where the width is needed.
 .proc pulled: a8, i8 {
     plp
-    lda #1                  ;! error: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
     sep #$30
     rts
 }
 
 .proc swapped: a8, i8 {
     xce
-    ldx #1                  ;! error: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it says what it is
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it says what it is
     .next ?
 }

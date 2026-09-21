@@ -257,15 +257,17 @@ public sealed class BuildCommandTests : IDisposable
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(
-            "main.nt65:4:1: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not exported\n",
+            "main.nt65:4:1: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not "
+                + "exported [unused-symbol]\n",
             Apart(app, true, "build").Error);
         Assert.Equal(
-            "main.nt65:4:1: warning: `UNUSED` is never used: nothing names it, and it is not exported\n",
+            "main.nt65:4:1: warning: `UNUSED` is never used: nothing names it, and it is not exported "
+                + "[unused-symbol]\n",
             Apart(app, false, "build").Error);
 
         File("app/main.nt65", ".module main\n.export BORDER\nBORDER = nowhere\n");
         Assert.Equal(
-            "main.nt65:3:10: [31merror:[0m `nowhere` is not declared\n",
+            "main.nt65:3:10: [31merror:[0m `nowhere` is not declared [not-declared]\n",
             Apart(app, true, "build").Error);
     }
 

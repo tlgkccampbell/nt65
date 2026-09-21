@@ -7,7 +7,10 @@ namespace Norristown.Tests.Fixtures;
 /// A fixture is a directory under <c>tests/fixtures</c>:
 /// <list type="bullet">
 /// <item><c>**/*.nt65</c>, the program, with expected diagnostics written inline as trailing
-/// comments: <c>;! error: message</c> on the line the diagnostic is reported on;</item>
+/// comments: <c>;! error[unused-symbol]: message</c> on the line the diagnostic is reported on.
+/// A diagnostic is matched on its line, its severity and its catalogue name; the message is a
+/// second expectation, so that rewording one is one line to change and <c>NT65_UPDATE=1</c>
+/// writes it;</item>
 /// <item><c>nt65.json</c>, optional. Its own expected diagnostics are written in
 /// <c>//</c> comments, which the reader skips;</item>
 /// <item><c>expected/**</c>, the output snapshot, one file per generated file, at the
@@ -31,6 +34,9 @@ internal sealed partial record FixtureCase(
     string ExpectedDirectory)
 {
     public const string DefaultExpectedDirectory = "expected";
+
+    /// <summary>Held while a fixture's own text is written back, which several cases may do at once.</summary>
+    private static readonly Lock Writing = new();
 
     public static IReadOnlyList<FixtureCase> All()
     {
@@ -96,20 +102,30 @@ internal sealed partial record FixtureCase(
     public static string RelativePath(string directory, string path) =>
         System.IO.Path.GetRelativePath(directory, path).Replace(System.IO.Path.DirectorySeparatorChar, '/');
 
-    public static IEnumerable<string> ParseInlineDiagnostics(SourceFile file)
+    public static IEnumerable<Expectation> ParseInlineDiagnostics(SourceFile file)
     {
         var lines = file.Text.ReplaceLineEndings("\n").Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
             // A `;!` inside a string literal would be misread; fixtures should not do that.
             foreach (Match m in InlineDiagnostic().Matches(lines[i]))
-                yield return $"{file.Path}:{i + 1}: {m.Groups["severity"].Value}: {m.Groups["message"].Value.Trim()}";
+            {
+                yield return new Expectation(
+                    file.Path,
+                    i + 1,
+                    m.Groups["severity"].Value,
+                    m.Groups["id"].Value,
+                    m.Groups["message"].Value.Trim());
+            }
         }
     }
 
-    /// <summary>The comparison form: file, line, severity and message. Columns are not checked.</summary>
-    public static string Format(Diagnostic d) =>
-        $"{d.Span.File}:{d.Span.Line}: {d.Severity.ToString().ToLowerInvariant()}: {d.Message}";
+    /// <summary>What a fixture expects of one diagnostic. Columns are not checked.</summary>
+    public static Expectation Of(Diagnostic d) =>
+        new(d.Span.File, d.Span.Line, d.Severity.ToString().ToLowerInvariant(), d.Id, d.Message);
+
+    /// <summary>The comparison form, for the runs that only ask whether two are the same.</summary>
+    public static string Format(Diagnostic d) => Of(d).ToString();
 
     /// <summary>
     /// How long a file an <c>.incbin</c> names is. A fixture's binaries sit beside its
@@ -143,15 +159,83 @@ internal sealed partial record FixtureCase(
         return outputs;
     }
 
-    /// <summary>Expected diagnostics from the inline <c>;!</c> comments, as formatted by <see cref="Format"/>.</summary>
-    public List<string> ExpectedDiagnostics() =>
-        [.. Sources.Concat(ProjectFileText is null ? [] : new[] { ProjectFileText })
-            .SelectMany(ParseInlineDiagnostics)
-            .Order(StringComparer.Ordinal)];
+    /// <summary>What the inline <c>;!</c> comments say the program is told.</summary>
+    public List<Expectation> ExpectedDiagnostics() =>
+        [.. Annotated().SelectMany(ParseInlineDiagnostics)];
+
+    /// <summary>
+    /// Writes what <paramref name="actual"/> says into the annotations that already stand for
+    /// it, so that rewording a message is not a fixture edit. An annotation is only rewritten
+    /// where exactly one diagnostic on its line is reported under its name; anything else is a
+    /// difference the fixture should be failing over.
+    /// </summary>
+    public List<Expectation> UpdateInlineDiagnostics(IReadOnlyList<Expectation> actual)
+    {
+        var expected = new List<Expectation>();
+        foreach (var file in Annotated())
+        {
+            var lines = file.Text.ReplaceLineEndings("\n").Split('\n');
+            var changed = false;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = i + 1;
+                var written = InlineDiagnostic().Replace(lines[i], match =>
+                {
+                    var found = actual.Where(d => d.File == file.Path && d.Line == line
+                        && d.Severity == match.Groups["severity"].Value
+                        && d.Id == match.Groups["id"].Value)
+                        .ToList();
+                    return found is [var one] ? $";! {one.Severity}[{one.Id}]: {one.Message}" : match.Value;
+                });
+                if (written != lines[i])
+                {
+                    lines[i] = written;
+                    changed = true;
+                }
+                expected.AddRange(ParseInlineDiagnostics(new SourceFile(file.Path, lines[i]))
+                    .Select(said => said with { Line = line }));
+            }
+            if (!changed)
+                continue;
+
+            // A fixture built more than one way is several cases over the same files, run
+            // beside each other, and each of them writes the same text back.
+            var path = System.IO.Path.Combine(Directory, file.Path);
+            var whole = string.Join('\n', lines);
+            lock (Writing)
+            {
+                if (Repo.ReadText(path).ReplaceLineEndings("\n") != whole)
+                    Repo.WriteText(path, whole);
+            }
+        }
+        return expected;
+    }
+
+    /// <summary>The files a fixture may write annotations in: its sources, and its project file.</summary>
+    private IEnumerable<SourceFile> Annotated() =>
+        Sources.Concat(ProjectFileText is null ? [] : [ProjectFileText]);
 
     // A line may carry more than one annotation, so a message runs to the next `;!` rather
     // than to the end of the line. It is the marker that delimits them, not a bare `;`, so a
     // message may hold one: "`COUNTR` is not declared; `COUNTER` is".
-    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*:(?<message>(?:(?!;!).)*)")]
+    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*\[(?<id>[a-z0-9-]+)\]\s*:(?<message>(?:(?!;!).)*)")]
     private static partial Regex InlineDiagnostic();
+
+    /// <summary>
+    /// One diagnostic as a fixture expects it: where it is, the name it is reported under, and
+    /// what it says. The name and the place are what a diagnostic is matched on; the words are
+    /// a second expectation, so that rewording one moves one line and not two.
+    /// </summary>
+    /// <param name="File">The file it is reported in.</param>
+    /// <param name="Line">The 1-based line it is reported on.</param>
+    /// <param name="Severity">How much it matters, as the message writes it.</param>
+    /// <param name="Id">The catalogue name.</param>
+    /// <param name="Message">What it says.</param>
+    internal readonly record struct Expectation(string File, int Line, string Severity, string Id, string Message)
+    {
+        /// <summary>Everything but the words, which is what one is matched on.</summary>
+        public string Where => $"{File}:{Line}: {Severity}[{Id}]";
+
+        public override string ToString() => $"{Where}: {Message}";
+    }
 }

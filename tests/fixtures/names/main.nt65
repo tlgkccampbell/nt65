@@ -5,36 +5,36 @@
 .module main
 
 SIZE = 1
-SIZE = 2                    ;! error: `SIZE` is already declared in this scope
+SIZE = 2                    ;! error[name-already-declared]: `SIZE` is already declared in this scope
 
-lda = 5                     ;! warning: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
+lda = 5                     ;! warning[mnemonic-name]: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
 
 ; The one name the output cannot spell: an `as` name is written into the output exactly,
 ; and ca65 defines no symbol spelled like one of its own instructions — on any CPU, since
 ; the name is what a module built for another one would link against.
 PALETTE = 3
-.export PALETTE as "lda"    ;! error: `lda` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
-.export SIZE as "swa"       ;! error: `swa` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+.export PALETTE as "lda"    ;! error[linker-name-is-an-instruction]: `lda` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+.export SIZE as "swa"       ;! error[linker-name-is-an-instruction]: `swa` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
 
 .segment CODE
-.data x: .byte 0                 ;! error: `x` is a register name and cannot be used as a name
+.data x: .byte 0                 ;! error[register-name]: `x` is a register name and cannot be used as a name
 
 ; An anonymous enum declares its members where it is written, so they are ordinary names.
 .enum {
-    y                       ;! error: `y` is a register name and cannot be used as a name
+    y                       ;! error[register-name]: `y` is a register name and cannot be used as a name
 }
 
-@stray:                     ;! error: `@stray` is a cheap local, which needs an enclosing `.proc` or `.scope`
+@stray:                     ;! error[cheap-local-outside-a-scope]: `@stray` is a cheap local, which needs an enclosing `.proc` or `.scope`
 
 .proc main {
-    jsr missing             ;! error: `missing` is not declared
-    lda #COUNT              ;! error: `COUNT` is not declared
-    bne @nowhere            ;! error: `@nowhere` is not declared
+    jsr missing             ;! error[not-declared]: `missing` is not declared
+    lda #COUNT              ;! error[not-declared]: `COUNT` is not declared
+    bne @nowhere            ;! error[not-declared]: `@nowhere` is not declared
 @loop:
     rts
 }
 
-.proc main {                ;! error: `main` is already declared in this scope
+.proc main {                ;! error[name-already-declared]: `main` is already declared in this scope
     rts
 }
 
@@ -43,18 +43,18 @@ PALETTE = 3
 .proc spelling {
     COUNTER = 0
     ldx #COUNTER
-    lda #COUNTR             ;! error: `COUNTR` is not declared; `COUNTER` is
+    lda #COUNTR             ;! error[not-declared]: `COUNTR` is not declared; `COUNTER` is
 @loop:
     dex
-    bne @lop                ;! error: `@lop` is not declared; `@loop` is
+    bne @lop                ;! error[not-declared]: `@lop` is not declared; `@loop` is
     rts
 }
 
 .proc reach {
-    lda ::@loop             ;! error: `@loop` is a cheap local and cannot be reached with `::`
-    lda ::nothing           ;! error: no module `nothing` is in this build
-    lda ::main::nothing     ;! error: `nothing` is not declared in module `main`
-    lda SIZE::inner         ;! error: `SIZE` is a constant, not a scope
-    lda main::inner         ;! error: `inner` is not declared in `main`
+    lda ::@loop             ;! error[cheap-local-in-a-path]: `@loop` is a cheap local and cannot be reached with `::`
+    lda ::nothing           ;! error[module-unknown]: no module `nothing` is in this build
+    lda ::main::nothing     ;! error[not-declared-in]: `nothing` is not declared in module `main`
+    lda SIZE::inner         ;! error[not-a-scope]: `SIZE` is a constant, not a scope
+    lda main::inner         ;! error[not-declared-in]: `inner` is not declared in `main`
     rts
 }

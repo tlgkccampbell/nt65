@@ -42,15 +42,11 @@ internal static class FixtureRunner
         foreach (var output in compilation.Outputs)
             failures.AddRange(Emit.BareNames.Problems(fixture.Name, output.Path, output.Text));
 
-        var expectedDiagnostics = fixture.ExpectedDiagnostics();
-        var actualDiagnostics = compilation.Diagnostics
-            .Select(FixtureCase.Format)
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        foreach (var missing in expectedDiagnostics.Except(actualDiagnostics))
-            Fail($"expected diagnostic not reported: {missing}");
-        foreach (var extra in actualDiagnostics.Except(expectedDiagnostics))
-            Fail($"unexpected diagnostic: {extra}");
+        var actualDiagnostics = compilation.Diagnostics.Select(FixtureCase.Of).ToList();
+        var expectedDiagnostics = update
+            ? fixture.UpdateInlineDiagnostics(actualDiagnostics)
+            : fixture.ExpectedDiagnostics();
+        CompareDiagnostics(expectedDiagnostics, actualDiagnostics, Fail);
 
         var expected = fixture.ExpectedOutputs();
         var actual = compilation.Outputs.ToDictionary(o => o.Path, o => o.Text, StringComparer.Ordinal);
@@ -87,6 +83,43 @@ internal static class FixtureRunner
                 Fail($"output differs (NT65_UPDATE=1 to accept): {path}\n{FirstDifference(want, text)}");
         }
         return failures;
+    }
+
+    /// <summary>
+    /// What a fixture expects against what it got. They are matched on where a diagnostic is
+    /// and what it is called; the words are a second expectation, checked once a pair has been
+    /// made, so that a reworded message is one line to change rather than a diagnostic gone and
+    /// another arrived in its place.
+    /// </summary>
+    private static void CompareDiagnostics(
+        IReadOnlyList<FixtureCase.Expectation> expected,
+        IReadOnlyList<FixtureCase.Expectation> actual,
+        Action<string> fail)
+    {
+        var found = actual
+            .GroupBy(d => d.Where, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => new Queue<FixtureCase.Expectation>(group.OrderBy(d => d.Message, StringComparer.Ordinal)),
+                StringComparer.Ordinal);
+
+        var wanted = expected
+            .OrderBy(d => d.Where, StringComparer.Ordinal)
+            .ThenBy(d => d.Message, StringComparer.Ordinal);
+        foreach (var want in wanted)
+        {
+            if (!found.TryGetValue(want.Where, out var here) || here.Count == 0)
+            {
+                fail($"expected diagnostic not reported: {want}");
+                continue;
+            }
+            var got = here.Dequeue();
+            if (got.Message != want.Message)
+                fail($"message differs (NT65_UPDATE=1 to accept): {want.Where}\n  expected: {want.Message}\n  actual:   {got.Message}");
+        }
+        foreach (var extra in found.Values.SelectMany(here => here))
+            fail($"unexpected diagnostic: {extra}");
     }
 
     private static IEnumerable<(string, IReadOnlyCollection<SourceFile>)> OtherOrders(IReadOnlyList<SourceFile> files)

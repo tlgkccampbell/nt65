@@ -3,25 +3,25 @@
 .module main
 
 .segment RODATA
-.frobnicate 1           ;! error: unknown directive `.frobnicate`
-.data one: .word .frobnicate(1) ;! error: `.frobnicate` is not a function
-.data two: .word (1 + 2         ;! error: expected `)`
-.cpu 6510               ;! error: expected `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
-.segment "X": zp      ;! error: a segment name is written without quotes: `.segment X`
-.segment Y: word      ;! error: expected `zp`, `abs` or `far`
-.import thing: quad     ;! error: expected `zp`, `abs`, `far` or `proc(...)`
-gfx::init               ;! error: expected a label, a constant, an instruction or a directive
+.frobnicate 1           ;! error[directive-unknown]: unknown directive `.frobnicate`
+.data one: .word .frobnicate(1) ;! error[not-a-function]: `.frobnicate` is not a function
+.data two: .word (1 + 2         ;! error[expected-parenthesis]: expected `)`
+.cpu 6510               ;! error[expected-cpu]: expected `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
+.segment "X": zp      ;! error[segment-name-quoted]: a segment name is written without quotes: `.segment X`
+.segment Y: word      ;! error[expected-address-size]: expected `zp`, `abs` or `far`
+.import thing: quad     ;! error[expected-address-size]: expected `zp`, `abs`, `far` or `proc(...)`
+gfx::init               ;! error[expected-statement]: expected a label, a constant, an instruction or a directive
 
 .segment CODE
-.proc {                 ;! error: expected a routine name
+.proc {                 ;! error[expected-name]: expected a routine name
     rts
 }
 
-.proc p: a9 {           ;! error: `a9` is not a processor-state item
-    lda #1 junk         ;! error: unexpected `junk`
+.proc p: a9 {           ;! error[state-item-unknown]: `a9` is not a processor-state item
+    lda #1 junk         ;! error[unexpected-token]: unexpected `junk`
     rts
 }
 
-label: .proc q {        ;! error: `.proc` may not follow a label ;! error: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
+label: .proc q {        ;! error[directive-after-label]: `.proc` may not follow a label;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
     rts
 }

@@ -8,7 +8,7 @@
 .segment CODE
 .proc reaching {
     lda count
-    beq @out                ;! error: `beq` would branch 129 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
+    beq @out                ;! error[branch-out-of-reach]: `beq` would branch 129 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
     .repeat 43, i {
         sta count
     }

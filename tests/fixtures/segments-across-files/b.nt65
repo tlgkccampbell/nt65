@@ -4,7 +4,7 @@
 .data other: .byte
 
 ; The second declaration is the one reported, whichever file it is in.
-.segment DUP: abs         ;! error: segment "DUP" is already declared
+.segment DUP: abs         ;! error[segment-declared-twice]: segment "DUP" is already declared
 
 ; Exported, so that what the file only declares counts as used.
 .export other

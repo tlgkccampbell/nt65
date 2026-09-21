@@ -7,9 +7,9 @@
 
 ; A name brought in and never written is reported on the item that brought it, and one of
 ; several in braces is the one reported.
-.use other::{work, SPARE}       ;! warning: `SPARE` is brought in and nothing names it: the `.use` item may go
+.use other::{work, SPARE}       ;! warning[unused-use-item]: `SPARE` is brought in and nothing names it: the `.use` item may go
 
-LIMIT = 10                      ;! warning: `LIMIT` is never used: nothing names it, and it is not exported
+LIMIT = 10                      ;! warning[unused-symbol]: `LIMIT` is never used: nothing names it, and it is not exported
 WIDTH = 40
 .export WIDTH
 
@@ -18,11 +18,11 @@ WIDTH = 40
 }
 DEPTH = 3
 
-.macro twice(value) {           ;! warning: `twice` is never used: nothing names it, and it is not exported
+.macro twice(value) {           ;! warning[unused-symbol]: `twice` is never used: nothing names it, and it is not exported
     lda #value
 }
 
-.struct Pair {                  ;! warning: `Pair` is never used: nothing names it, and it is not exported
+.struct Pair {                  ;! warning[unused-symbol]: `Pair` is never used: nothing names it, and it is not exported
     first:  .byte
     second: .byte
 }
@@ -37,11 +37,11 @@ DEPTH = 3
 .proc main: a8, i8 {
     jsr work
     lda #Mode::busy
-@unnamed:                       ;! warning: `@unnamed` is never used: nothing names it, and it is not exported
+@unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used: nothing names it, and it is not exported
     ldx #0
     rts
     ; Never reached is said once, and says more.
-@dead:                          ;! warning: `@dead` is never reached: nothing runs into it and nothing names it
+@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: nothing runs into it and nothing names it
     rts
     ; An entry point nt65 cannot see the callers of declares its state, and is not reported.
 @hook:
@@ -50,14 +50,14 @@ DEPTH = 3
 }
 
 .segment RODATA
-.data table: .byte[3]                ;! warning: `table` is never used: nothing names it, and it is not exported
+.data table: .byte[3]                ;! warning[unused-symbol]: `table` is never used: nothing names it, and it is not exported
 
 ; Fall-through never enters a nested segment block, so code at its start with no label is
 ; somewhere nothing goes.
 .segment CODE
 .proc detour: a8, i8 {
     .segment RODATA {
-        nop                     ;! warning: this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
+        nop                     ;! warning[code-unreachable]: this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
         rts
     }
     rts

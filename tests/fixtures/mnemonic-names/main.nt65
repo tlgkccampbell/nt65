@@ -12,7 +12,7 @@
 
 ; A constant, which the output writes where it stands.
 swa = $12
-per = $34                       ;! warning: `per` is an instruction on the 65816; as a name it is legal and easy to misread
+per = $34                       ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
 
 .segment ZEROPAGE
 .data tad: .byte                ; data named for an alias ca65 has on the 65816
@@ -30,7 +30,7 @@ per = $34                       ;! warning: `per` is an instruction on the 65816
     rts
 }
 
-.proc xba {                     ;! warning: `xba` is an instruction on the 65816; as a name it is legal and easy to misread
+.proc xba {                     ;! warning[mnemonic-name]: `xba` is an instruction on the 65816; as a name it is legal and easy to misread
 @dea:
     ldx ina
     bne @dea

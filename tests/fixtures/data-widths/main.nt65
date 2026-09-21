@@ -28,7 +28,7 @@ DELTA = -2
 .data padding {
     .res 3, -1
 }
-.warning "a warning is said, and the program is built" ;! warning: a warning is said, and the program is built
+.warning "a warning is said, and the program is built" ;! warning[config-warned]: a warning is said, and the program is built
 
 .segment FAR: far, bank = 1
 .segment FAR

@@ -5,13 +5,13 @@
 
 ; A parameter with a reserved name is reported where it is declared, and is still the
 ; macro's parameter for its call and its uses.
-.macro load(x) {            ;! error: `x` is a register name and cannot be used as a name
+.macro load(x) {            ;! error[register-name]: `x` is a register name and cannot be used as a name
     lda #x
     sta x
 }
 
 ; A type with a reserved name, and an instance of it that therefore cannot be written.
-.struct S {                 ;! error: `S` is a register name and cannot be used as a name
+.struct S {                 ;! error[register-name]: `S` is a register name and cannot be used as a name
     q: .byte
 }
 
@@ -27,20 +27,20 @@
     load!($10)
 
     ; A name another module keeps to itself, named three times.
-    lda #lib::twice(1)      ;! error: `lib::twice` is not exported by module `lib`
+    lda #lib::twice(1)      ;! error[not-exported]: `lib::twice` is not exported by module `lib`
     lda #lib::twice(2)
     lda #lib::twice(3)
 
     ; A name another module exports, named as if it were declared here: said once for each.
-    lda #thrice(1)          ;! error: `thrice` is not declared here, and module `lib` exports it: write `lib::thrice`, or bring it in with `.use lib::thrice`
+    lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here, and module `lib` exports it: write `lib::thrice`, or bring it in with `.use lib::thrice`
     lda #lib::thrice(1)
 
     ; A call through a pointer with no `.next` leaves the state as it was.
-    jsr (table,x)           ;! error: `jsr (table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+    jsr (table,x)           ;! error[indirect-call-unchecked]: `jsr (table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
 
     ; An instruction that needs an operand, and a far jump to a near routine.
-    jsr                     ;! error: `jsr` needs an operand
-    jml near_one            ;! error: `near_one` is near: a jump to it is `jmp near_one`
+    jsr                     ;! error[operand-missing]: `jsr` needs an operand
+    jml near_one            ;! error[jump-distance-mismatch]: `near_one` is near: a jump to it is `jmp near_one`
     table:
     .addr near_one
 }
@@ -48,27 +48,27 @@
 ; What a paste from ca65 leaves behind: each of these is one decision to make, and each is
 ; reported once rather than once per token the reader of the line then trips over.
 .proc pasted: a8, i16 {
-    :                           ;! error: an unnamed label is written `@name`: a cheap local, private to the routine around it
+    :                           ;! error[unnamed-label]: an unnamed label is written `@name`: a cheap local, private to the routine around it
     lda #1
-    bne :+                  ;! error: an unnamed label is written `@name`: a cheap local, private to the routine around it
+    bne :+                  ;! error[unnamed-label]: an unnamed label is written `@name`: a cheap local, private to the routine around it
     nop
     rts
 }
 
 ; Instructions outside a routine are one paste, said once and counted.
-lda #1                  ;! error: these 3 instructions belong in a `.proc`: code outside one is reached by nothing nt65 can follow
+lda #1                  ;! error[instruction-outside-a-routine]: these 3 instructions belong in a `.proc`: code outside one is reached by nothing nt65 can follow
 sta $10
 rts
 
 ; A block holds its lines, so what was written after the `{` says so rather than being
 ; unexpected where the opener ended.
 .segment RODATA
-.data inline { .byte 1 }    ;! error: a block's `{` ends the line that opens it: `.byte` goes on the next line, and `}` on its own
+.data inline { .byte 1 }    ;! error[block-brace-ends-the-line]: a block's `{` ends the line that opens it: `.byte` goes on the next line, and `}` on its own
 
 .segment CODE
 ; A 16-bit value in an immediate of unknown width is one mistake, not two.
 .proc unknown: a? {
-    lda #$1234              ;! error: `lda #` needs the width of A, and it is not known here, because `unknown` says `a?` at entry: an `.ensure` sets it
+    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown` says `a?` at entry: an `.ensure` sets it
     sep #$20
     rts
 }

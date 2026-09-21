@@ -12,23 +12,23 @@
 ; A 16-bit width needs native mode, and `.ensure` takes widths only.
 .segment CODE
 .proc pinned: emu -> emu {
-    .ensure a16             ;! error: `.ensure a16` needs native mode, and the processor is in emulation mode here, where both widths are 8 bits
-    .ensure native          ;! error: `.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: `native` is not one of them
+    .ensure a16             ;! error[ensure-needs-native]: `.ensure a16` needs native mode, and the processor is in emulation mode here, where both widths are 8 bits
+    .ensure native          ;! error[ensure-item-not-a-width]: `.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: `native` is not one of them
     rts
 }
 
 ; A frame bigger than what is pushed, and slots where they cannot be counted.
 .proc frames: a16, i16 {
     pea 0
-    .frame short: Locals    ;! error: `short` is 4 bytes, and only 2 are pushed here
+    .frame short: Locals    ;! error[frame-past-the-stack]: `short` is 4 bytes, and only 2 are pushed here
     pea 0
     .frame locals: Locals
-    lda #locals::count      ;! error: `locals::count` is a place on the stack, and is named only on its own as a stack-relative operand: `locals::count,s`
+    lda #locals::count      ;! error[frame-member-not-stack-relative]: `locals::count` is a place on the stack, and is named only on its own as a stack-relative operand: `locals::count,s`
     pla
     pla
-    lda locals::src,s       ;! error: `locals::src` is in `locals`, which is no longer on the stack here
+    lda locals::src,s       ;! error[frame-gone]: `locals::src` is in `locals`, which is no longer on the stack here
     txs
-    lda short::src,s        ;! error: `short::src` is in `short`, which is no longer on the stack here
+    lda short::src,s        ;! error[frame-gone]: `short::src` is in `short`, which is no longer on the stack here
     rts
 }
 
@@ -51,13 +51,13 @@
 }
 
 .proc macros: a16 {
-    load8!(1)               ;! error: `load8!` needs `a8`, and A is 16-bit here
+    load8!(1)               ;! error[call-state-mismatch]: `load8!` needs `a8`, and A is 16-bit here
     sep #$20
-    widen!()                ;! error: `widen!` returns with `a16`, and A is 8-bit at the end of its body
+    widen!()                ;! error[return-state-mismatch]: `widen!` returns with `a16`, and A is 8-bit at the end of its body
     rep #$20
     sep #$20
-    index!(1)               ;! error: `ldx #` needs the width of X and Y, and `index!` says `i*`, which assumes nothing about it
-    keep!() {               ;! error: the block given to `keep!` has to leave the state as it found it: it starts with `a8, i*, native` and ends with `a16, i*, native`;! error: `keep!` returns with `a8`, and A is 16-bit at the end of its body
+    index!(1)               ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `index!` says `i*`, which assumes nothing about it
+    keep!() {               ;! error[block-changes-state]: the block given to `keep!` has to leave the state as it found it: it starts with `a8, i*, native` and ends with `a16, i*, native`;! error[return-state-mismatch]: `keep!` returns with `a8`, and A is 16-bit at the end of its body
         rep #$20
     }
     rep #$20
@@ -65,4 +65,4 @@
 }
 
 ; Outside a routine there is no stack and no widths to set.
-.ensure a8              ;! error: `.ensure` describes a point in a routine, and this is outside any `.proc`
+.ensure a8              ;! error[state-outside-a-routine]: `.ensure` describes a point in a routine, and this is outside any `.proc`

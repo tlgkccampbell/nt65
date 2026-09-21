@@ -52,6 +52,7 @@ internal static class Lsp
             .. (tree is null ? [] : configuration.Omitted(tree)).Select(span => new Protocol.Diagnostic(
                 ToRange(tree!, span),
                 Protocol.DiagnosticSeverity.Hint,
+                Catalogue.OmittedBranch.Id,
                 SourceName,
                 Catalogue.OmittedBranch.Format,
                 null,
@@ -739,6 +740,7 @@ internal static class Lsp
     internal static Protocol.Diagnostic ToDiagnostic(Diagnostic diagnostic) => new(
         ToRange(diagnostic.Span),
         ToSeverity(diagnostic.Severity),
+        diagnostic.Id,
         SourceName,
         diagnostic.Message,
         diagnostic.Related.Count == 0

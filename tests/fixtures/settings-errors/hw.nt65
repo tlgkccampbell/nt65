@@ -2,22 +2,22 @@
 .module hw
 
 .config HIDDEN = 1
-.config LOOP = LOOP_TOO             ;! error: `LOOP` is defined in terms of itself
+.config LOOP = LOOP_TOO             ;! error[defined-in-terms-of-itself]: `LOOP` is defined in terms of itself
 .config LOOP_TOO = LOOP
-.config WORDS = "text"              ;! error: a `.config` is a number, and this is text
-.config SIZE = LIMIT                ;! error: `LIMIT` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
+.config WORDS = "text"              ;! error[config-is-text]: a `.config` is a number, and this is text
+.config SIZE = LIMIT                ;! error[condition-names-the-program]: `LIMIT` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
 LIMIT = 4
 
 .if HIDDEN {
-    .config NESTED = 1              ;! error: a `.config` is written at file level, outside every block: which settings a program has depends on no condition
+    .config NESTED = 1              ;! error[config-misplaced]: a `.config` is written at file level, outside every block: which settings a program has depends on no condition
 }
 
-.if .has(LIMIT) {                   ;! error: `.has` takes a mnemonic, such as `.has(phx)`
+.if .has(LIMIT) {                   ;! error[has-argument]: `.has` takes a mnemonic, such as `.has(phx)`
 }
 
-TWO = .select(1, 2)                 ;! error: `.select` takes a condition and the two values it chooses between: `.select(c, a, b)`
-UNKNOWN = .select(1, MISSING_NAME, 0) ;! error: `MISSING_NAME` is not declared
-ADDRESS = .select(here, 1, 0)       ;! error: a `.select` condition is a constant, and this is not one
+TWO = .select(1, 2)                 ;! error[select-arguments]: `.select` takes a condition and the two values it chooses between: `.select(c, a, b)`
+UNKNOWN = .select(1, MISSING_NAME, 0) ;! error[not-declared]: `MISSING_NAME` is not declared
+ADDRESS = .select(here, 1, 0)       ;! error[select-condition-not-constant]: a `.select` condition is a constant, and this is not one
 .export TWO, UNKNOWN, ADDRESS, WORDS, SIZE, LOOP
 
 .segment CODE

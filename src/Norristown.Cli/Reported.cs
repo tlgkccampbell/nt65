@@ -31,7 +31,9 @@ internal static class Reported
     /// <summary>
     /// The diagnostic as one line. <paramref name="colour"/> marks what it is when the terminal
     /// can show it; everything else on the line is left plain, so the position stays selectable
-    /// and the message is not competing with it.
+    /// and the message is not competing with it. The catalogue name goes last, in brackets,
+    /// where compilers put it: it is what a project file switches and what CI matches on, and
+    /// nobody reads it first.
     /// </summary>
     public static string Line(Diagnostic diagnostic, string file, bool colour)
     {
@@ -43,7 +45,8 @@ internal static class Reported
                 Severity.Warning => $"{Yellow}{said}:{Plain}",
                 _ => $"{said}:",
             };
-        return $"{file}:{diagnostic.Span.Line}:{diagnostic.Span.StartColumn}: {marked} {diagnostic.Message}";
+        return $"{file}:{diagnostic.Span.Line}:{diagnostic.Span.StartColumn}: {marked} {diagnostic.Message} "
+            + $"[{diagnostic.Id}]";
     }
 
     /// <summary>
@@ -59,6 +62,7 @@ internal static class Reported
                 column = diagnostic.Span.StartColumn,
                 endColumn = diagnostic.Span.EndColumn,
                 severity = diagnostic.Severity.ToString().ToLowerInvariant(),
+                id = diagnostic.Id,
                 message = diagnostic.Message,
                 related = diagnostic.Related.Count == 0
                     ? null

@@ -20,9 +20,9 @@ NEXT    = ptr + 1
 HERE    = *
 
 ; A name that needs itself, directly or through another, is an error reported once.
-SELF    = SELF + 1          ;! error: `SELF` is defined in terms of itself
-LOOP_A  = LOOP_B            ;! error: `LOOP_A` is defined in terms of itself
+SELF    = SELF + 1          ;! error[defined-in-terms-of-itself]: `SELF` is defined in terms of itself
+LOOP_A  = LOOP_B            ;! error[defined-in-terms-of-itself]: `LOOP_A` is defined in terms of itself
 LOOP_B  = LOOP_A
 
-DIVIDE  = 1 / 0             ;! error: division by zero
-JOIN    = TEXT + 1          ;! error: `+` cannot be used on a string
+DIVIDE  = 1 / 0             ;! error[division-by-zero]: division by zero
+JOIN    = TEXT + 1          ;! error[operator-on-text]: `+` cannot be used on a string

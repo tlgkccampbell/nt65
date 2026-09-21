@@ -1,2 +1,2 @@
 ; A module is written to a file named after it, so two may not differ only in case.
-.module HW::Vic2           ;! error: modules `HW::Vic2` and `hw::vic2` differ only in case, and a file system that ignores case writes both to one file
+.module HW::Vic2           ;! error[module-names-differ-in-case]: modules `HW::Vic2` and `hw::vic2` differ only in case, and a file system that ignores case writes both to one file

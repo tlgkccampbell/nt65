@@ -8,30 +8,30 @@
 .segment ZEROPAGE
 .data ptr: .word
 
-.segment FAR: far    ;! error: segment "FAR": a `far` address needs the 65816
+.segment FAR: far    ;! error[far-needs-65816]: segment "FAR": a `far` address needs the 65816
 .segment FAR
 .data away: .byte
 
 .segment CODE
 .proc reaching {
-    lda (ptr)               ;! error: `lda` does not take this operand on the 6502
-    lda [ptr]               ;! error: `lda` does not take this operand on the 6502
-    lda [ptr],y             ;! error: `lda` does not take this operand on the 6502
-    lda 3,s                 ;! error: `lda` does not take this operand on the 6502
-    lda away                ;! error: `lda` cannot reach a far address on the 6502
-    jmp (ptr,x)             ;! error: `jmp` does not take this operand on the 6502
-    jmp a:reaching          ;! error: `jmp` transfers control, and a control transfer is not sized by a prefix
-    jsr away                ;! error: `jsr` takes a near target, and this one is far
-    lda #$1234              ;! error: an immediate is one byte, and $1234 does not fit
-    stz z:ptr               ;! error: `stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
-    bra @out                ;! error: `bra` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
-    bbr0 ptr, @out          ;! error: `bbr0` is not available on the 6502, and is on the r65c02 and 65c02
-    jml [ptr]               ;! error: `jml` is not available on the 6502, and is on the 65816
-    cop #1                  ;! error: `cop` is not available on the 6502, and is on the 65816
-    mvn #$7e, #$00          ;! error: `mvn` is not available on the 6502, and is on the 65816
-    jeq a:@out              ;! error: `jeq` transfers control, and a control transfer is not sized by a prefix
-    lda z:(ptr),y           ;! error: `lda` has no direct-page form of this operand on the 6502
-    lda d:$05               ;! error: `d:` reaches an address through the 65816's direct page, and this program is built for the 6502
+    lda (ptr)               ;! error[operand-not-taken]: `lda` does not take this operand on the 6502
+    lda [ptr]               ;! error[operand-not-taken]: `lda` does not take this operand on the 6502
+    lda [ptr],y             ;! error[operand-not-taken]: `lda` does not take this operand on the 6502
+    lda 3,s                 ;! error[operand-not-taken]: `lda` does not take this operand on the 6502
+    lda away                ;! error[address-size-unreachable]: `lda` cannot reach a far address on the 6502
+    jmp (ptr,x)             ;! error[operand-not-taken]: `jmp` does not take this operand on the 6502
+    jmp a:reaching          ;! error[transfer-prefix]: `jmp` transfers control, and a control transfer is not sized by a prefix
+    jsr away                ;! error[target-too-far]: `jsr` takes a near target, and this one is far
+    lda #$1234              ;! error[immediate-too-wide]: an immediate is one byte, and $1234 does not fit
+    stz z:ptr               ;! error[instruction-not-on-cpu]: `stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
+    bra @out                ;! error[instruction-not-on-cpu]: `bra` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
+    bbr0 ptr, @out          ;! error[instruction-not-on-cpu]: `bbr0` is not available on the 6502, and is on the r65c02 and 65c02
+    jml [ptr]               ;! error[instruction-not-on-cpu]: `jml` is not available on the 6502, and is on the 65816
+    cop #1                  ;! error[instruction-not-on-cpu]: `cop` is not available on the 6502, and is on the 65816
+    mvn #$7e, #$00          ;! error[instruction-not-on-cpu]: `mvn` is not available on the 6502, and is on the 65816
+    jeq a:@out              ;! error[transfer-prefix]: `jeq` transfers control, and a control transfer is not sized by a prefix
+    lda z:(ptr),y           ;! error[addressing-mode-missing]: `lda` has no direct-page form of this operand on the 6502
+    lda d:$05               ;! error[direct-page-needs-65816]: `d:` reaches an address through the 65816's direct page, and this program is built for the 6502
 @out:
     rts
 }

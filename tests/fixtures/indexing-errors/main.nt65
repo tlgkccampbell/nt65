@@ -21,11 +21,11 @@ COUNT = 4
 
 .segment RODATA
 ; A count catches a short table; only one text is padded out to it.
-.data table:   .addr[4] { one, one }    ;! error: this array holds 4 elements, and its values come to 2
-.data letters: .byte[4] { "a", "b" }    ;! error: this array holds 4 elements, and its values come to 2
-.data letter:  .byte[4] { 'A' }         ;! error: this array holds 4 elements, and its values come to 1
-.data over:    .byte[2] { "hello" }     ;! error: this array holds 2 elements, and its values come to 5
-.data words:   .word[4] { "hi" }        ;! error: this array holds 4 elements, and its values come to 2
+.data table:   .addr[4] { one, one }    ;! error[element-count-mismatch]: this array holds 4 elements, and its values come to 2
+.data letters: .byte[4] { "a", "b" }    ;! error[element-count-mismatch]: this array holds 4 elements, and its values come to 2
+.data letter:  .byte[4] { 'A' }         ;! error[element-count-mismatch]: this array holds 4 elements, and its values come to 1
+.data over:    .byte[2] { "hello" }     ;! error[element-count-mismatch]: this array holds 2 elements, and its values come to 5
+.data words:   .word[4] { "hi" }        ;! error[element-count-mismatch]: this array holds 4 elements, and its values come to 2
 
 .list order {
     one
@@ -33,29 +33,29 @@ COUNT = 4
 
 ; What a name stands for is not the declaration an index reaches into.
 .macro row(arr) {
-    lda arr[1]              ;! error: `arr` is a macro parameter, and `[i]` reaches an element of data
+    lda arr[1]              ;! error[not-indexable]: `arr` is a macro parameter, and `[i]` reaches an element of data
 }
 
 .segment CODE
 .proc main {
     row!(buffer)
     .repeat 2, i {
-        lda i[0]            ;! error: `i` is a repetition binding, and `[i]` reaches an element of data
+        lda i[0]            ;! error[not-indexable]: `i` is a repetition binding, and `[i]` reaches an element of data
     }
-    lda order[0]            ;! error: `order` is a list, and `[i]` reaches an element of data
-    lda buffer[4]           ;! error: `buffer` holds 4 elements, and the last of them is 3
-    lda buffer[-1]          ;! error: an element index is never negative, and this one is -1
-    lda buffer[one]         ;! error: an element index is a constant: an index worked out as the program runs is what `buffer,x` is for
-    lda buffer[nope]        ;! error: `nope` is not declared
-    lda outside[0]          ;! error: `outside` is an imported address, and `[i]` reaches an element of data
-    lda one[1]              ;! error: `one` holds 1 element, and the last of them is 0
-    lda stub[0]             ;! error: `stub` is mixed data, which has bytes and no elements
-    lda main[0]             ;! error: `main` is a routine, and `[i]` reaches an element of data
-    lda #COUNT[0]           ;! error: `COUNT` is a constant, and `[i]` reaches an element of data
-    lda #Point[0]           ;! error: `Point` is a structure, and `[i]` reaches an element of data
-    lda buffer[]            ;! error: expected the element: `name[i]` is the i-th of what `name` declares
-    lda buffer[1            ;! error: expected `]`
-    lda #.sizeof(buffer[1]) ;! error: `.sizeof` measures a declaration, and `buffer[1]` is a place in one
+    lda order[0]            ;! error[not-indexable]: `order` is a list, and `[i]` reaches an element of data
+    lda buffer[4]           ;! error[element-index-out-of-range]: `buffer` holds 4 elements, and the last of them is 3
+    lda buffer[-1]          ;! error[element-index-out-of-range]: an element index is never negative, and this one is -1
+    lda buffer[one]         ;! error[element-index-not-constant]: an element index is a constant: an index worked out as the program runs is what `buffer,x` is for
+    lda buffer[nope]        ;! error[not-declared]: `nope` is not declared
+    lda outside[0]          ;! error[not-indexable]: `outside` is an imported address, and `[i]` reaches an element of data
+    lda one[1]              ;! error[element-index-out-of-range]: `one` holds 1 element, and the last of them is 0
+    lda stub[0]             ;! error[not-indexable]: `stub` is mixed data, which has bytes and no elements
+    lda main[0]             ;! error[not-indexable]: `main` is a routine, and `[i]` reaches an element of data
+    lda #COUNT[0]           ;! error[not-indexable]: `COUNT` is a constant, and `[i]` reaches an element of data
+    lda #Point[0]           ;! error[not-indexable]: `Point` is a structure, and `[i]` reaches an element of data
+    lda buffer[]            ;! error[expected-element-index]: expected the element: `name[i]` is the i-th of what `name` declares
+    lda buffer[1            ;! error[expected-bracket]: expected `]`
+    lda #.sizeof(buffer[1]) ;! error[measures-a-declaration]: `.sizeof` measures a declaration, and `buffer[1]` is a place in one
     rts
 }
 

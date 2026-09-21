@@ -1,27 +1,27 @@
 {
   // The project file is read as data: a key it does not know, or a value of the wrong shape,
   // is reported and the rest of the file is still read. Comments are for these notes.
-  "cpu": "6809",          // ;! error: `6809` is not a processor nt65 knows: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
-  "files": "*.nt65",      // ;! error: `files` is a list of strings
-  "outputs": "build",     // ;! error: `outputs` is not a nt65.json key
-  "define": {},           // ;! error: `define` is not a nt65.json key; `defines` is
+  "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a processor nt65 knows: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
+  "files": "*.nt65",      // ;! error[project-not-a-list]: `files` is a list of strings
+  "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a nt65.json key
+  "define": {},           // ;! error[project-key-unknown]: `define` is not a nt65.json key; `defines` is
   "defines": {
-    "SIZE": "twelve"      // ;! error: `SIZE` is not a number, and a define is a number
+    "SIZE": "twelve"      // ;! error[define-not-a-number]: `SIZE` is not a number, and a define is a number
   },
   "segments": {
-    "VRAM": { "size": "word" },  // ;! error: segment "VRAM" needs a `size` of "zp", "abs" or "far"
-    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
-    "WIDE": { "size": "abs", "bank": 256 },    // ;! error: a bank is one byte
-    "ODD":  { "size": "abs", "base": 1 }       // ;! error: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`
+    "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment "VRAM" needs a `size` of "zp", "abs" or "far"
+    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
+    "WIDE": { "size": "abs", "bank": 256 },    // ;! error[segment-attribute-out-of-range]: a bank is one byte
+    "ODD":  { "size": "abs", "base": 1 }       // ;! error[project-segment-key-unknown]: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],
-    "$2180": ["$00"],     // ;! error: `$2180` overlaps `$2100-$21ff`: an address is in one range at most
-    "$21ff-$2100": [0],   // ;! error: `$21ff-$2100` is not a range of absolute addresses, such as "$2100-$21ff"
-    "$4200": ["$00-$1ff"] // ;! error: `$4200`: "$00-$1ff" is not a bank or a range of banks
+    "$2180": ["$00"],     // ;! error[ranges-overlap]: `$2180` overlaps `$2100-$21ff`: an address is in one range at most
+    "$21ff-$2100": [0],   // ;! error[range-invalid]: `$21ff-$2100` is not a range of absolute addresses, such as "$2100-$21ff"
+    "$4200": ["$00-$1ff"] // ;! error[bank-invalid]: `$4200`: "$00-$1ff" is not a bank or a range of banks
   },
   "configurations": {
-    "fast": { "cpu": "65816" },   // ;! error: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines` and `out`
-    "slow down": {}               // ;! error: `slow down` is not a configuration name: one is letters, digits, `_` and `-`
+    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines` and `out`
+    "slow down": {}               // ;! error[configuration-name-invalid]: `slow down` is not a configuration name: one is letters, digits, `_` and `-`
   }
 }

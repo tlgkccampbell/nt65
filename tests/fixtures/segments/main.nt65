@@ -11,8 +11,8 @@
 .segment WRAM
 .data buffer: .byte[256]
 
-.segment NOWHERE  ;! error: segment "NOWHERE" is not declared
+.segment NOWHERE  ;! error[segment-undeclared]: segment "NOWHERE" is not declared
 .data lost: .byte
 
-.segment ZP2: zp          ;! error: segment "ZP2" is already declared
-.segment ZEROPAGE: zp     ;! error: segment "ZEROPAGE" is already declared
+.segment ZP2: zp          ;! error[segment-declared-twice]: segment "ZP2" is already declared
+.segment ZEROPAGE: zp     ;! error[segment-declared-twice]: segment "ZEROPAGE" is already declared

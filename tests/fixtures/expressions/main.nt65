@@ -22,11 +22,11 @@ HERE    = *
 SCOPED  = ::main::SCREEN
 
 ; An operand of a shift or a bitwise operator may not be a different binary operator.
-BAD_SHIFT = 1 << P + 1      ;! error: `<<` and `+` need parentheses to show which applies first
-BAD_MASK  = P & $0f == 0    ;! error: `&` and `==` need parentheses to show which applies first
+BAD_SHIFT = 1 << P + 1      ;! error[operators-need-parentheses]: `<<` and `+` need parentheses to show which applies first
+BAD_MASK  = P & $0f == 0    ;! error[operators-need-parentheses]: `&` and `==` need parentheses to show which applies first
 
 ; The logical operators may not be mixed.
-BAD_LOGIC = P || Q && R     ;! error: `||` and `&&` need parentheses to show which applies first
+BAD_LOGIC = P || Q && R     ;! error[operators-need-parentheses]: `||` and `&&` need parentheses to show which applies first
 
 ; A byte operator reads as if it applied to the whole expression.
-BAD_BYTE  = <SCREEN + 1     ;! error: unary `<` before `+` needs parentheses to show what `<` applies to
+BAD_BYTE  = <SCREEN + 1     ;! error[byte-operator-needs-parentheses]: unary `<` before `+` needs parentheses to show what `<` applies to

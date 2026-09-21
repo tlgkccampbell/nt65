@@ -7,13 +7,13 @@
 
 SIZE = -1
 .data turns: .byte[] {
-    .repeat here, i {           ;! error: a `.repeat` count is a constant, and this is not one
+    .repeat here, i {           ;! error[repeat-count-not-constant]: a `.repeat` count is a constant, and this is not one
         i
     }
-    .repeat SIZE, i {           ;! error: a `.repeat` count cannot be negative, and this one is -1
+    .repeat SIZE, i {           ;! error[repeat-count-negative]: a `.repeat` count cannot be negative, and this one is -1
         i
     }
-    .each SIZE, h {             ;! error: `.each` walks a list or an enum, and this is neither
+    .each SIZE, h {             ;! error[each-not-over-a-list]: `.each` walks a list or an enum, and this is neither
         h
     }
 }
@@ -21,7 +21,7 @@ SIZE = -1
 ; A repetition's body is written out once per turn, so it holds nothing that is one thing
 ; for the whole file.
 .repeat 2, i {
-    .export here                ;! error: an export or an import belongs outside a repetition: it names one symbol, and a repetition's body is written out once per turn
+    .export here                ;! error[declaration-in-a-repetition]: an export or an import belongs outside a repetition: it names one symbol, and a repetition's body is written out once per turn
 }
 
 .enum Cmd {
@@ -40,7 +40,7 @@ SIZE = -1
 .segment RODATA
 .data by_command: .addr[] {
     .each Cmd, c {
-        actions::c              ;! error: `actions` has no `fire`, which `c` stands for on this turn
+        actions::c              ;! error[family-member-missing]: `actions` has no `fire`, which `c` stands for on this turn
     }
 }
 
@@ -50,7 +50,7 @@ SIZE = -1
 
 .data by_handler: .addr[] {
     .each handlers, h {
-        actions::h              ;! error: `h` does not walk an enum, so it names no member: a path ends in a repetition's name only over an enum's members
+        actions::h              ;! error[binding-not-over-an-enum]: `h` does not walk an enum, so it names no member: a path ends in a repetition's name only over an enum's members
     }
 }
 
@@ -64,13 +64,13 @@ SIZE = -1
 
 .data lots {
     big!(20000)
-    big!(20000)                 ;! error: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
+    big!(20000)                 ;! error[expansion-limit]: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
 }
 
 ; One repetition that runs further than nt65 unrolls is said where its count is written,
 ; whatever the file comes to in all.
 .data too_many {
-    .repeat 70000 {             ;! error: this repetition runs 70000 times, and 65536 turns is as far as nt65 goes
+    .repeat 70000 {             ;! error[repeat-too-many]: this repetition runs 70000 times, and 65536 turns is as far as nt65 goes
         .byte 0
     }
 }

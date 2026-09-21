@@ -3,21 +3,21 @@
 
 .segment CODE
 .proc main {
-    .byte 'ab'            ;! error: a character literal holds exactly one character
-    lda #$1G            ;! error: invalid hexadecimal number `$1G`
+    .byte 'ab'            ;! error[character-too-long]: a character literal holds exactly one character
+    lda #$1G            ;! error[number-invalid]: invalid hexadecimal number `$1G`
 
     ; A literal the lexer refused is worth nothing: what is wrong with it is said once, and
     ; nothing downstream reads digits that are not digits.
-    lda #'\xZZ'         ;! error: `\x` must be followed by two hexadecimal digits
-    lda #'\q'           ;! error: unknown escape `\q`
+    lda #'\xZZ'         ;! error[escape-hex-digits]: `\x` must be followed by two hexadecimal digits
+    lda #'\q'           ;! error[escape-unknown]: unknown escape `\q`
 
     ; `_` separates the digits of a number; it is not one, so it stands between two.
-    lda #$_ff           ;! error: `$_ff` has a `_` that separates no digits: a separator stands between two of them
-    lda #%1010_         ;! error: `%1010_` has a `_` that separates no digits: a separator stands between two of them
-    lda #1__0           ;! error: `1__0` has a `_` that separates no digits: a separator stands between two of them
-    m!({                ;! error: expected an expression ;! error: `m` is not declared
+    lda #$_ff           ;! error[number-separator]: `$_ff` has a `_` that separates no digits: a separator stands between two of them
+    lda #%1010_         ;! error[number-separator]: `%1010_` has a `_` that separates no digits: a separator stands between two of them
+    lda #1__0           ;! error[number-separator]: `1__0` has a `_` that separates no digits: a separator stands between two of them
+    m!({                ;! error[expected-expression]: expected an expression;! error[not-declared]: `m` is not declared
     rts
 }
-}                       ;! error: unmatched `}`
-.proc other {           ;! error: missing `}` to close this block
+}                       ;! error[unmatched-brace]: unmatched `}`
+.proc other {           ;! error[block-not-closed]: missing `}` to close this block
     rts

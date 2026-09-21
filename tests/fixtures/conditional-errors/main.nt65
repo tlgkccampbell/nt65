@@ -4,35 +4,35 @@
 
 SIZE = 4
 
-.if SIZE > 2 {                  ;! error: `SIZE` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
+.if SIZE > 2 {                  ;! error[condition-names-the-program]: `SIZE` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
     NOPE = 1
 }
 
-.if .sizeof(SIZE) == 1 {        ;! error: `.sizeof` asks about the program. A condition tests the build configuration, and a check on the program is an `.assert`
+.if .sizeof(SIZE) == 1 {        ;! error[condition-asks-about-the-program]: `.sizeof` asks about the program. A condition tests the build configuration, and a check on the program is an `.assert`
     NOPE = 2
 }
 
-.if .defined(SIZE) {            ;! error: `SIZE` is declared by the program, and `.defined` asks only about defines: a condition tests the build configuration, and a check on the program is an `.assert`
+.if .defined(SIZE) {            ;! error[defined-asks-about-defines]: `SIZE` is declared by the program, and `.defined` asks only about defines: a condition tests the build configuration, and a check on the program is an `.assert`
     NOPE = 4
 }
 
-.if "yes" {                     ;! error: a condition is a number, and this is text
+.if "yes" {                     ;! error[condition-is-text]: a condition is a number, and this is text
     NOPE = 3
 }
 
 .if 1 {
-    .cpu 65c02                      ;! error: `.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`
+    .cpu 65c02                      ;! error[cpu-under-a-condition]: `.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`
 }
 
 .segment CODE
 .scope gfx {
-} .else {                       ;! error: `.else` continues an `.if`, and there is none to continue
+} .else {                       ;! error[else-without-if]: `.else` continues an `.if`, and there is none to continue
 }
 
-.assert SIZE == 8, "SIZE must be 8"      ;! error: SIZE must be 8
-.assert SIZE == 8, error, "SIZE must be 8"  ;! error: SIZE must be 8 ;! error: `error` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 can and otherwise at link time, so `.assert` takes only the condition and the message
+.assert SIZE == 8, "SIZE must be 8"      ;! error[assertion-failed]: SIZE must be 8
+.assert SIZE == 8, error, "SIZE must be 8"  ;! error[assertion-failed]: SIZE must be 8;! error[assert-level]: `error` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 can and otherwise at link time, so `.assert` takes only the condition and the message
 
 .if 0 {
     .error "this branch is not taken, so nothing is said"
 }
-.error "this one is"        ;! error: this one is
+.error "this one is"        ;! error[config-refused]: this one is

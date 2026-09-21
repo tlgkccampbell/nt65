@@ -8,14 +8,14 @@
 .func twice(n) = n * 2
 
 ; Functions may call functions, but not in a ring, whether or not anything calls them.
-.func ping(n) = pong(n) + 1     ;! error: `ping` is defined in terms of itself
+.func ping(n) = pong(n) + 1     ;! error[defined-in-terms-of-itself]: `ping` is defined in terms of itself
 .func pong(n) = ping(n) - 1
 
 .struct Point {
     x:      .word
     y:      .word
-    bad:    .strz "no"    ;! error: `bad` reserves no room a member may take
-    colors: .word 16        ;! error: `colors` is a member, which reserves room and holds no value: several are `.word[n]`
+    bad:    .strz "no"    ;! error[member-reserves-nothing]: `bad` reserves no room a member may take
+    colors: .word 16        ;! error[member-has-no-value]: `colors` is a member, which reserves room and holds no value: several are `.word[n]`
 }
 
 .union Value {
@@ -26,8 +26,8 @@
 ; A layout that holds itself has no size, which is the same ring any constant would be.
 ; An instance of one is still written out — every file of a wrong program is — and what
 ; writes it walks into the type, so it has to stop where the analysis stopped.
-.struct Ring {          ;! error: `Ring` is defined in terms of itself
-    self: .type Ring       ;! error: `self` reserves no room a member may take
+.struct Ring {          ;! error[defined-in-terms-of-itself]: `Ring` is defined in terms of itself
+    self: .type Ring       ;! error[member-reserves-nothing]: `self` reserves no room a member may take
 }
 
 .segment RODATA
@@ -42,18 +42,18 @@
 }
 
 .segment RODATA
-.data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res` ;! error: $012c does not fit in `count`, a `.byte` ;! error: `title` has room for 3 bytes, and this is 4
+.data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error[member-not-text]: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res`;! error[value-too-wide]: $012c does not fit in `count`, a `.byte`;! error[member-text-too-long]: `title` has room for 3 bytes, and this is 4
 .data boss: .type Named {
-    at = { x = 1, z = 2 }   ;! error: `Point` has no member `z`
+    at = { x = 1, z = 2 }   ;! error[member-unknown]: `Point` has no member `z`
     count = 1
-    level = 1               ;! error: `Named` has no member `level`
-    count = 2               ;! error: `count` is given a value twice: a member is named at most once
+    level = 1               ;! error[member-unknown]: `Named` has no member `level`
+    count = 2               ;! error[member-given-twice]: `count` is given a value twice: a member is named at most once
 }
-.data flat: .type Named { at = 3 }   ;! error: `at` is a `Point`, which takes a braced list of its members
-.data both: .type Value { b = 1, w = 2 } ;! error: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
+.data flat: .type Named { at = 3 }   ;! error[member-needs-a-record]: `at` is a `Point`, which takes a braced list of its members
+.data both: .type Value { b = 1, w = 2 } ;! error[union-many-members-given]: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
 .data mistakes {
-    .byte screen("hi")  ;! error: `screen` does not map `h`
-    .byte twice(1, 2)   ;! error: `twice` takes 1 argument(s), and 2 were given
-    .align 100          ;! error: an `.align` boundary must be a power of two, not 100
-    .byte Point::z      ;! error: `z` is not declared in `Point`
+    .byte screen("hi")  ;! error[charmap-has-no-entry]: `screen` does not map `h`
+    .byte twice(1, 2)   ;! error[function-argument-count]: `twice` takes 1 argument(s), and 2 were given
+    .align 100          ;! error[align-boundary-not-power-of-two]: an `.align` boundary must be a power of two, not 100
+    .byte Point::z      ;! error[not-declared-in]: `z` is not declared in `Point`
 }

@@ -14,10 +14,10 @@
 ; An indirect jump and an indirect call.
 .segment CODE
 .proc indirect: a8, i8 {
-    jmp (@table,x)          ;! error: `jmp (@table,x)` goes where its operand points, which the analysis cannot see: `.next` names the labels it reaches, or `.next ?` ends the path
-@table: .addr @go           ;! error: `@go` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `indirect` naming it carries the state to it
+    jmp (@table,x)          ;! error[indirect-jump-unchecked]: `jmp (@table,x)` goes where its operand points, which the analysis cannot see: `.next` names the labels it reaches, or `.next ?` ends the path
+@table: .addr @go           ;! error[code-label-as-data]: `@go` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `indirect` naming it carries the state to it
 @go:
-    jsr (@table,x)          ;! error: `jsr (@table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+    jsr (@table,x)          ;! error[indirect-call-unchecked]: `jsr (@table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
     rts
 }
 
@@ -28,26 +28,26 @@
 .segment CODE
 .proc dispatch: a8, i8 {
     jmp (handlers,x)
-    .next handlers          ;! error: `handlers` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
+    .next handlers          ;! error[next-target-not-a-table]: `handlers` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
 }
 
 ; A computed jump.
 .proc computed: a8, i8 {
-    jmp computed+3          ;! error: `jmp computed+3` goes to a computed address, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not an instruction boundary
+    jmp computed+3          ;! error[computed-jump-unchecked]: `jmp computed+3` goes to a computed address, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not an instruction boundary
 }
 
 ; `rts` used as a jump.
 .proc pushed: a8, i8 {
-    pea @there - 1          ;! error: `@there` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `pushed` naming it carries the state to it
-    rts                     ;! error: `rts` here returns to an address this block pushed, which makes it a jump: `.next` names where it goes
+    pea @there - 1          ;! error[code-label-as-data]: `@there` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `pushed` naming it carries the state to it
+    rts                     ;! error[pushed-return-unchecked]: `rts` here returns to an address this block pushed, which makes it a jump: `.next` names where it goes
 @there:
     rts
 }
 
 ; Inline data that does not match the declaration.
 .proc talk: a8, i8 {
-    jsr print               ;! error: `print` returns past one `.strz` written after each call, and none follows this one
-    jsr beep                ;! error: `beep` returns past 2 bytes of data written after each call, and 1 byte follows this one
+    jsr print               ;! error[inline-data-missing]: `print` returns past one `.strz` written after each call, and none follows this one
+    jsr beep                ;! error[inline-data-missing]: `beep` returns past 2 bytes of data written after each call, and 1 byte follows this one
     .byte 1
     rts
 }
@@ -55,7 +55,7 @@
 ; Data reached by falling through.
 .proc skip: a8, i8 {
     lda #1
-    .byte $2c               ;! error: the instruction above runs into this data. `.next` on it says where flow goes instead
+    .byte $2c               ;! error[runs-into-data]: the instruction above runs into this data. `.next` on it says where flow goes instead
     lda #2
     rts
 }
@@ -68,7 +68,7 @@
 }
 
 .proc intruder: a8, i8 {
-    jmp owner::inner        ;! error: `inner` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
+    jmp owner::inner        ;! error[entry-not-declared]: `inner` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
 }
 
 ; A declared label, jumped into in the wrong state.
@@ -82,7 +82,7 @@
 }
 
 .proc wrong_state: a8, i8 {
-    jmp declared::entry     ;! error: `jmp entry` needs `a16`, and A is 8-bit here
+    jmp declared::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a16`, and A is 8-bit here
 }
 
 ; A declared label is checked against for the parts its `.state` gives, so those are the only
@@ -91,7 +91,7 @@
     rep #$30
     halfway:
     .state a16, native
-    ldx #$1234              ;! error: `ldx #` needs the width of X and Y, and it is not known here, because `halfway` can be entered from outside `partly`, and its `.state` does not say the width of X and Y: the `.state` after `halfway` can say `i8` or `i16`
+    ldx #$1234              ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `halfway` can be entered from outside `partly`, and its `.state` does not say the width of X and Y: the `.state` after `halfway` can say `i8` or `i16`
     sep #$30
     rts
 }
@@ -103,10 +103,10 @@
 
 ; A jump to a label on data.
 .proc onto_data: a8, i8 {
-    beq @data               ;! error: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes
+    beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes
     rts
 @data:
-    .byte $ea               ;! error: `onto_data` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
 }
 
 ; Falling off the end, and a `.next` naming a routine that is not the next one written.
@@ -116,12 +116,12 @@
 }
 
 .proc off_the_end: a8, i8 {
-    nop                     ;! error: `off_the_end` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
 }
 
 .proc not_adjacent: a8, i8 {
     nop
-    .next falls             ;! error: `.next falls` says flow runs on into `falls`, and it does not start where this statement ends: a routine runs into the one written directly after it
+    .next falls             ;! error[next-routine-not-adjacent]: `.next falls` says flow runs on into `falls`, and it does not start where this statement ends: a routine runs into the one written directly after it
 }
 
 ; A `.next` on a return says the return is a jump to the routines it names, which is a tail
@@ -132,7 +132,7 @@
 
 .proc returns_into_it: a8, i8 {
     pea landed - 1
-    rts                     ;! error: `.next landed` needs `a16`, and A is 8-bit here;! error: `.next landed` needs `i16`, and X and Y are 8-bit here;! error: `.next landed` is a tail call: `returns_into_it` returns with `a8`, and A is 16-bit when `landed` returns;! error: `.next landed` is a tail call: `returns_into_it` returns with `i8`, and X and Y are 16-bit when `landed` returns
+    rts                     ;! error[call-state-mismatch]: `.next landed` needs `a16`, and A is 8-bit here;! error[call-state-mismatch]: `.next landed` needs `i16`, and X and Y are 8-bit here;! error[return-state-mismatch]: `.next landed` is a tail call: `returns_into_it` returns with `a8`, and A is 16-bit when `landed` returns;! error[return-state-mismatch]: `.next landed` is a tail call: `returns_into_it` returns with `i8`, and X and Y are 16-bit when `landed` returns
     .next landed
 }
 
@@ -140,14 +140,14 @@
 .proc patching: a8, i8 {
 @op:
     lda $0400
-    sta @op+1               ;! error: `sta @op+1` writes into the instruction at `@op`: `.patch @op` acknowledges it
+    sta @op+1               ;! error[self-modifying-unchecked]: `sta @op+1` writes into the instruction at `@op`: `.patch @op` acknowledges it
     rts
 }
 
 ; A relative call to a far routine that pushes no bank.
 .proc relative: a8, i8 {
     per @back - 1
-    brl far_away            ;! error: `far_away` is far, and a relative call to it pushes the bank with `phk` before the `per`
+    brl far_away            ;! error[relative-call-needs-phk]: `far_away` is far, and a relative call to it pushes the bank with `phk` before the `per`
 @back:
     rts
 }
@@ -155,7 +155,7 @@
 ; An exported label inside a routine is another way in.
 .proc exported_inner: a8, i8 {
     rts
-    .export inside              ;! error: `inside` is inside `exported_inner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
+    .export inside              ;! error[exported-entry-not-declared]: `inside` is inside `exported_inner`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
     inside:
     rts
 }

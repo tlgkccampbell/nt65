@@ -18,5 +18,5 @@
     pha
     jsr twiddle
     pla
-    rts                     ;! error: `saves_across` promises `keeps a`, and A is not what the routine was entered with here: restore it before returning, or a `.state keeps a` where the value comes back says so
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, and A is not what the routine was entered with here: restore it before returning, or a `.state keeps a` where the value comes back says so
 }

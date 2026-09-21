@@ -11,66 +11,66 @@ LIMIT = 3
 
 ; A routine with no body declares what calls through it are checked against, and has nothing
 ; else to say it.
-.proc TOOLBOX = $E10000         ;! error: `TOOLBOX` declares no processor state, and an extern proc has no body to check one against: say what a caller must hold to, or `?` where nothing is known
-.import blind: proc()           ;! error: `blind` declares no processor state, and an imported routine has no body to check one against: say what a caller must hold to, or `?` where nothing is known
+.proc TOOLBOX = $E10000         ;! error[signature-missing]: `TOOLBOX` declares no processor state, and an extern proc has no body to check one against: say what a caller must hold to, or `?` where nothing is known
+.import blind: proc()           ;! error[signature-missing]: `blind` declares no processor state, and an imported routine has no body to check one against: say what a caller must hold to, or `?` where nothing is known
 
 ; One that names another routine and writes nothing takes that routine's, which is a declaration.
 .proc also_stop = stop
 
 ; A set is declared once and checked there.
 .signature std = a8, i16, dp = 0
-.signature a8 = i16             ;! error: `a8` is a signature item, and cannot name a signature set
-.signature loop = again         ;! error: `loop` names `again`, which stands for `loop` again: a signature set cannot stand for itself
-.signature again = loop         ;! error: `again` names `loop`, which stands for `again` again: a signature set cannot stand for itself
-.signature noisy = interrupt, a8 ;! error: `a8`: an interrupt handler is entered from anywhere, and assumes nothing but its mode: `interrupt, native` or `interrupt, emu`
+.signature a8 = i16             ;! error[signature-set-name-is-an-item]: `a8` is a signature item, and cannot name a signature set
+.signature loop = again         ;! error[signature-set-self-reference]: `loop` names `again`, which stands for `loop` again: a signature set cannot stand for itself
+.signature again = loop         ;! error[signature-set-self-reference]: `again` names `loop`, which stands for `again` again: a signature set cannot stand for itself
+.signature noisy = interrupt, a8 ;! error[handler-assumes-state]: `a8`: an interrupt handler is entered from anywhere, and assumes nothing but its mode: `interrupt, native` or `interrupt, emu`
 
 ; A set comes first in its list, and names a set.
 .segment CODE0
-.proc late: a8, std {           ;! error: `std` is a signature set, and comes first in its list: the items after it change what it gives
+.proc late: a8, std {           ;! error[signature-set-not-first]: `std` is a signature set, and comes first in its list: the items after it change what it gives
     rts
 }
 
-.proc wrong: LIMIT {            ;! error: `LIMIT` is a constant, and a name among a signature's items is a signature set
+.proc wrong: LIMIT {            ;! error[signature-set-not-a-set]: `LIMIT` is a constant, and a name among a signature's items is a signature set
     rts
 }
 
 ; A routine that never returns does not return, and has no exit state.
 .proc stop: std, noreturn {
-    rts                         ;! error: `stop` never returns, as its `noreturn` says, and `rts` returns
+    rts                         ;! error[noreturn-returns]: `stop` never returns, as its `noreturn` says, and `rts` returns
 }
 
-.proc crowded: a8, noreturn -> a16 { ;! error: a routine that says `noreturn` never returns, and declares nothing after `->`
+.proc crowded: a8, noreturn -> a16 { ;! error[noreturn-declares-an-exit]: a routine that says `noreturn` never returns, and declares nothing after `->`
     stp
 }
 
-.proc late_never: a8 -> noreturn { ;! error: `noreturn` describes how a routine is called, entered or left, and belongs before `->`
+.proc late_never: a8 -> noreturn { ;! error[item-belongs-at-entry]: `noreturn` describes how a routine is called, entered or left, and belongs before `->`
     rts
 }
 
-.proc doubly: interrupt, native, noreturn { ;! error: `noreturn`: an interrupt handler leaves by `rti`, and never returns to a caller in any case
+.proc doubly: interrupt, native, noreturn { ;! error[handler-noreturn]: `noreturn`: an interrupt handler leaves by `rti`, and never returns to a caller in any case
     rti
 }
 
 ; An interrupt handler leaves by `rti`, declares no exit, and is never called.
 .proc handler: interrupt, native {
-    rts                         ;! error: `handler` is an interrupt handler, and leaves by `rti` rather than `rts`
+    rts                         ;! error[handler-returns-not-rti]: `handler` is an interrupt handler, and leaves by `rti` rather than `rts`
 }
 
-.proc closed: interrupt -> a8 { ;! error: an interrupt handler leaves by `rti`, and declares nothing after `->`
+.proc closed: interrupt -> a8 { ;! error[handler-declares-an-exit]: an interrupt handler leaves by `rti`, and declares nothing after `->`
     rti
 }
 
 .proc calls: std {
-    jsr handler                 ;! error: `handler` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back
-    .state std                  ;! error: `std` describes a routine rather than a point in it, and belongs in a signature
+    jsr handler                 ;! error[handler-called]: `handler` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back
+    .state std                  ;! error[state-item-not-a-point]: `std` describes a routine rather than a point in it, and belongs in a signature
     rts
 }
 
 .proc tail: std {
-    jmp handler                 ;! error: `jmp handler` is a tail call, and `handler` is an interrupt handler, which leaves by `rti`: only a routine that never returns, or another interrupt handler, may jump to one
+    jmp handler                 ;! error[tail-call-to-handler]: `jmp handler` is a tail call, and `handler` is an interrupt handler, which leaves by `rti`: only a routine that never returns, or another interrupt handler, may jump to one
 }
 
-.macro entered(): interrupt {   ;! error: `interrupt` describes how a routine is called, and a macro is expanded
+.macro entered(): interrupt {   ;! error[macro-distance]: `interrupt` describes how a routine is called, and a macro is expanded
     nop
 }
 
@@ -81,12 +81,12 @@ LIMIT = 3
 
 .proc short: std, a16 {
     pea 1
-    jsr takes                   ;! error: `takes` takes `args 4`, pushed before the call, and only 2 bytes are pushed here
+    jsr takes                   ;! error[args-not-pushed]: `takes` takes `args 4`, pushed before the call, and only 2 bytes are pushed here
     pla
     rts
 }
 
-.proc pointed: std, args LIMIT + counter { ;! error: `args LIMIT + counter` needs a constant: it counts the bytes the caller pushes
+.proc pointed: std, args LIMIT + counter { ;! error[args-not-constant]: `args LIMIT + counter` needs a constant: it counts the bytes the caller pushes
     rts
 }
 
@@ -98,16 +98,16 @@ LIMIT = 3
 ; to may do; and a routine's address in a bank is in its home bank or a mirror.
 .segment STUBS
 .proc far_jump: std {
-    jml near_std                ;! error: `near_std` is near and in another bank, and would return with `rts` in its own bank to `far_jump`'s caller: only a routine that never returns, or an interrupt handler, enters another bank this way
+    jml near_std                ;! error[jump-across-banks]: `near_std` is near and in another bank, and would return with `rts` in its own bank to `far_jump`'s caller: only a routine that never returns, or an interrupt handler, enters another bank this way
 }
 
 .proc wrong_mirror: std, noreturn {
-    jml ($81 << 16) | .loword(near_std) ;! error: `near_std` is in "CODE0", in bank $80 and mirrored in banks $00-$3f, and this reaches it in bank $81
+    jml ($81 << 16) | .loword(near_std) ;! error[mirror-bank-mismatch]: `near_std` is in "CODE0", in bank $80 and mirrored in banks $00-$3f, and this reaches it in bank $81
 }
 
 .segment CODE0
 .proc far_near: std, noreturn {
-    jml near_std                ;! error: `near_std` is near: a jump to it is `jmp near_std`
+    jml near_std                ;! error[jump-distance-mismatch]: `near_std` is near: a jump to it is `jmp near_std`
 }
 
 ; Data in a mirrored segment is reached from its home bank and its mirrors only.
@@ -116,9 +116,9 @@ LIMIT = 3
 
 .segment CODE0
 .proc reads: a8, dbr = $c0 {
-    lda counter                 ;! error: `counter` is in "LORAM", which is in bank $7e and mirrored in banks $00-$3f, $80-$bf, and B is $c0 here
+    lda counter                 ;! error[bank-mismatch]: `counter` is in "LORAM", which is in bank $7e and mirrored in banks $00-$3f, $80-$bf, and B is $c0 here
     rts
 }
 
 ; A mirror is a bank, or a range from the lower to the higher.
-.segment SRAM: abs, bank = $70, mirrors = [$7d..$71] ;! error: a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`
+.segment SRAM: abs, bank = $70, mirrors = [$7d..$71] ;! error[segment-mirror-invalid]: a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`

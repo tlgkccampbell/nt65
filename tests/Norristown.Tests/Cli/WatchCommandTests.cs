@@ -39,7 +39,8 @@ public sealed class WatchCommandTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
 
         Write("src/main.nt65", Wrong);
-        Assert.Equal(["src/main.nt65:5:9: error: `nowhere` is not declared"], await WaitAsync(said, timeout));
+        Assert.Equal(
+            ["src/main.nt65:5:9: error: `nowhere` is not declared [not-declared]"], await WaitAsync(said, timeout));
 
         Write("src/main.nt65", Good);
         Assert.Empty(await WaitAsync(said, timeout));

@@ -14,16 +14,16 @@
 .segment CODE
 
 ; A family walks a named enum: a list has no names, and a `.repeat` counts.
-.each handlers, h {             ;! error: a family declares one routine per member of a named enum, and `handlers` is a list
+.each handlers, h {             ;! error[family-not-over-an-enum]: a family declares one routine per member of a named enum, and `handlers` is a list
     .proc h {
         rts
     }
 }
-.multiproc handlers, h {        ;! error: a family declares one routine per member of a named enum, and `handlers` is a list
+.multiproc handlers, h {        ;! error[family-not-over-an-enum]: a family declares one routine per member of a named enum, and `handlers` is a list
     rts
 }
 .repeat 2, i {
-    .proc i {                   ;! error: a `.repeat` counts its turns, and a count is no name: a family is an `.each` over a named enum, whose members are the names it declares
+    .proc i {                   ;! error[family-misplaced]: a `.repeat` counts its turns, and a count is no name: a family is an `.each` over a named enum, whose members are the names it declares
         rts
     }
 }
@@ -31,12 +31,12 @@
 ; What a binding-named block would declare is reached through it, which is one declaration
 ; per member of everything inside.
 .each Channel, ch {
-    .scope ch {                 ;! error: `ch` here would declare one scope per member, and everything inside it once for each: a family declares routines and data, so write one family per role, `note::ch` and `stop::ch`
+    .scope ch {                 ;! error[family-declares-too-much]: `ch` here would declare one scope per member, and everything inside it once for each: a family declares routines and data, so write one family per role, `note::ch` and `stop::ch`
         VALUE = 1
     }
 }
 .each Channel, ch {
-    .data ch {                  ;! error: `ch` here would declare one `.data` block per member, and everything inside it once for each: a family declares routines and data, so write one family per role, `note::ch` and `stop::ch`
+    .data ch {                  ;! error[family-declares-too-much]: `ch` here would declare one `.data` block per member, and everything inside it once for each: a family declares routines and data, so write one family per role, `note::ch` and `stop::ch`
         .byte 1
     }
 }
@@ -44,30 +44,30 @@
 ; A family declares into the scope around its repetition, so it belongs where a routine does.
 .proc outer {
     .each Channel, c {
-        .proc c {               ;! error: a family declares one routine per member into the scope around its `.each`, and this one is inside a routine: a routine belongs at file level or in a `.scope`
+        .proc c {               ;! error[family-misplaced]: a family declares one routine per member into the scope around its `.each`, and this one is inside a routine: a routine belongs at file level or in a `.scope`
             rts
         }
     }
     rts
 }
 .proc outer2 {
-    .multiproc Channel, d {     ;! error: `.multiproc` declares routines, and this one is inside a routine: a routine belongs at file level or in a `.scope`
+    .multiproc Channel, d {     ;! error[multiproc-misplaced]: `.multiproc` declares routines, and this one is inside a routine: a routine belongs at file level or in a `.scope`
         rts
     }
     rts
 }
 .macro m() {
-    .multiproc Channel, e {     ;! error: `.multiproc` belongs outside a macro body: a routine's name and signature are part of the file's interface, and a body declares nothing in its caller
+    .multiproc Channel, e {     ;! error[declaration-in-a-macro-body]: `.multiproc` belongs outside a macro body: a routine's name and signature are part of the file's interface, and a body declares nothing in its caller
         rts
     }
     .each Channel, f {
-        .proc f {               ;! error: a family declares one routine per member into the scope around its `.each`, and this one is inside a macro body: a body declares nothing in its caller
+        .proc f {               ;! error[family-misplaced]: a family declares one routine per member into the scope around its `.each`, and this one is inside a macro body: a body declares nothing in its caller
             rts
         }
     }
 }
 .each Channel, g {
-    .multiproc Channel, k {     ;! error: `.multiproc` belongs outside a repetition: it declares one routine per member of an enum, and this one would declare them again on every turn
+    .multiproc Channel, k {     ;! error[declaration-in-a-repetition]: `.multiproc` belongs outside a repetition: it declares one routine per member of an enum, and this one would declare them again on every turn
         rts
     }
 }
@@ -76,11 +76,11 @@
 .proc pulse1 {
     rts
 }
-.multiproc Channel, ch {        ;! error: `pulse1` is a member of `Channel` and is already declared in this scope: a family declares one name per member
+.multiproc Channel, ch {        ;! error[family-member-collides]: `pulse1` is a member of `Channel` and is already declared in this scope: a family declares one name per member
     rts
 }
 
 ; The name to bind is what the routines are named from, so it is not optional.
-.multiproc Channel {            ;! error: expected `,` and the name to bind: `.multiproc Channel, ch {`
+.multiproc Channel {            ;! error[expected-comma]: expected `,` and the name to bind: `.multiproc Channel, ch {`
     rts
 }

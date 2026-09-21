@@ -2,7 +2,7 @@
 ; example of `.use` brings names in from.
 .module hw
 .export .config SOUND_CHANNELS = 3
-.config PAL = 0 ;! warning: `PAL` is never used: nothing names it, and it is not exported
+.config PAL = 0 ;! warning[unused-symbol]: `PAL` is never used: nothing names it, and it is not exported
 
 .if SOUND_CHANNELS > 2 {
     VOICES = 3

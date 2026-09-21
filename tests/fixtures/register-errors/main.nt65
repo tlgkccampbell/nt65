@@ -14,7 +14,7 @@
 ; The promise is checked at every way out of the routine.
 .proc breaks_it: keeps x {
     ldx #1
-    rts                     ;! error: `breaks_it` promises `keeps x`, and X is not what the routine was entered with here: restore it before returning, or a `.state keeps x` where the value comes back says so
+    rts                     ;! error[keeps-broken]: `breaks_it` promises `keeps x`, and X is not what the routine was entered with here: restore it before returning, or a `.state keeps x` where the value comes back says so
 }
 
 ; A save that does not come back on every path is no save on the path it is missing from.
@@ -26,24 +26,24 @@
 @quiet:
     sec
     lda #0
-    rts                     ;! error: `forgets_the_carry` promises `keeps a, c`, and A, C are not what the routine was entered with here: restore them before returning, or a `.state keeps a, c` where the value comes back says so
+    rts                     ;! error[keeps-broken]: `forgets_the_carry` promises `keeps a, c`, and A, C are not what the routine was entered with here: restore them before returning, or a `.state keeps a, c` where the value comes back says so
 }
 
 ; A `.state keeps` where the register was never destroyed is one nobody needed.
 .proc says_nothing {
     lda #1
     sta slot
-    .state keeps x          ;! warning: `keeps x` says nothing here: X is already what the routine was entered with
+    .state keeps x          ;! warning[keeps-redundant]: `keeps x` says nothing here: X is already what the routine was entered with
     rts
 }
 
 ; `keeps` is about a routine from entry to exit, so it has no place after `->`, and a macro is
 ; expanded into the routine that calls it rather than called.
-.proc after_the_arrow: a8 -> a8, keeps x {     ;! error: `keeps x` is about a routine from entry to exit, and belongs before `->`
+.proc after_the_arrow: a8 -> a8, keeps x {     ;! error[item-belongs-at-entry]: `keeps x` is about a routine from entry to exit, and belongs before `->`
     rts
 }
 
-.macro spill(): keeps a {   ;! error: `keeps a` is about a routine from entry to exit, and a macro is expanded into one: what its body keeps is part of what that routine keeps
+.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` is about a routine from entry to exit, and a macro is expanded into one: what its body keeps is part of what that routine keeps
     lda #0
 }
 
