@@ -8,6 +8,12 @@ namespace Norristown.Layout;
 /// one place they are wanted is beside an instruction an editor is showing. The names are
 /// trimmed of the tail that says what the instruction works on, since the line already says
 /// that: <c>load accumulator</c> rather than <c>load accumulator with memory</c>.
+/// <para>
+/// The undocumented opcodes of the NMOS 6502 have no datasheet to take a name from, so each is
+/// named for the two documented instructions it does at once, which is what it is; the ones
+/// whose result depends on the part say so, since that is the thing a reader most needs to be
+/// told about them.
+/// </para>
 /// </summary>
 public static class Mnemonics
 {
@@ -29,8 +35,13 @@ public static class Mnemonics
     public static string? Name(string mnemonic) => Bare(mnemonic) switch
     {
         "adc" => "add with carry",
+        "alr" => "and accumulator, then shift right",
+        "anc" => "and accumulator, then copy the sign into carry",
         "and" => "and accumulator",
+        "ane" => "and x, the accumulator and the immediate (unstable)",
+        "arr" => "and accumulator, then rotate right",
         "asl" => "arithmetic shift left",
+        "axs" => "and x with the accumulator, then subtract into x",
         "bbr" => "branch on bit reset",
         "bbs" => "branch on bit set",
         "bcc" => "branch on carry clear",
@@ -53,6 +64,7 @@ public static class Mnemonics
         "cop" => "coprocessor enable",
         "cpx" => "compare index x",
         "cpy" => "compare index y",
+        "dcp" => "decrement, then compare accumulator",
         "dec" => "decrement",
         "dex" => "decrement index x",
         "dey" => "decrement index y",
@@ -60,10 +72,14 @@ public static class Mnemonics
         "inc" => "increment",
         "inx" => "increment index x",
         "iny" => "increment index y",
+        "isc" => "increment, then subtract with borrow",
+        "jam" => "stop the processor",
         "jml" => "jump long",
         "jmp" => "jump",
         "jsl" => "jump to subroutine long",
         "jsr" => "jump to subroutine",
+        "las" => "and the stack pointer, into the accumulator, x and it",
+        "lax" => "load accumulator and index x",
         "lda" => "load accumulator",
         "ldx" => "load index x",
         "ldy" => "load index y",
@@ -89,23 +105,32 @@ public static class Mnemonics
         "plx" => "pull index x",
         "ply" => "pull index y",
         "rep" => "reset status bits",
+        "rla" => "rotate left, then and accumulator",
         "rmb" => "reset memory bit",
         "rol" => "rotate left",
         "ror" => "rotate right",
+        "rra" => "rotate right, then add with carry",
         "rti" => "return from interrupt",
         "rtl" => "return from subroutine long",
         "rts" => "return from subroutine",
+        "sax" => "store accumulator and index x",
         "sbc" => "subtract with borrow",
         "sec" => "set carry",
         "sed" => "set decimal mode",
         "sei" => "set interrupt disable",
         "sep" => "set status bits",
+        "sha" => "store accumulator, x and the address high byte (unstable)",
+        "shx" => "store index x and the address high byte (unstable)",
+        "shy" => "store index y and the address high byte (unstable)",
+        "slo" => "shift left, then or accumulator",
         "smb" => "set memory bit",
+        "sre" => "shift right, then exclusive or accumulator",
         "sta" => "store accumulator",
         "stp" => "stop the clock",
         "stx" => "store index x",
         "sty" => "store index y",
         "stz" => "store zero",
+        "tas" => "transfer accumulator and x to the stack pointer, then store (unstable)",
         "tax" => "transfer accumulator to x",
         "tay" => "transfer accumulator to y",
         "tcd" => "transfer c to direct register",
@@ -157,6 +182,11 @@ public static class Mnemonics
             "cmp" or "cpx" or "cpy" => "N Z C",
             "asl" or "lsr" or "rol" or "ror" => "N Z C",
             "and" or "eor" or "ora" or "lda" or "ldx" or "ldy" => "N Z",
+
+            // The undocumented opcodes write what the pair of instructions each is writes.
+            "rra" or "isc" or "arr" => "N V Z C",
+            "slo" or "rla" or "sre" or "dcp" or "alr" or "anc" or "axs" => "N Z C",
+            "lax" or "las" or "ane" => "N Z",
             "inc" or "dec" or "inx" or "dex" or "iny" or "dey" => "N Z",
             "pla" or "plx" or "ply" or "plb" or "pld" => "N Z",
             "tax" or "tay" or "txa" or "tya" or "tsx" or "txy" or "tyx" => "N Z",

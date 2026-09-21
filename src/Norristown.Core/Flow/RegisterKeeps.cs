@@ -495,9 +495,10 @@ public static class RegisterKeeps
                 || flow.RelativeCallAt(step) is not null
                 || (transfer == Transfer.Elsewhere && Instructions.Facts(mnemonic).Calls);
 
-            // `stp` stops the processor, so nothing ever reads what it left; `rti` goes back to
-            // whatever the interrupt broke into, which is exactly where the registers matter.
-            var returns = transfer == Transfer.Return && block.Next is null && mnemonic != "stp";
+            // `stp` and `jam` stop the processor, so nothing ever reads what they left; `rti`
+            // goes back to whatever the interrupt broke into, which is exactly where the
+            // registers matter.
+            var returns = transfer == Transfer.Return && block.Next is null && mnemonic is not ("stp" or "jam");
             var tail = !calls && !returns && (block.Calls.Count > 0 || block.CallsUnknown);
             return (calls, tail, returns);
         }

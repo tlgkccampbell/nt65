@@ -11,7 +11,7 @@
     },
     "cpu": {
       "description": "The processor the program is built for. A `.cpu` item in a file must agree with it.",
-      "enum": ["6502", "65sc02", "r65c02", "65c02", "65816"]
+      "enum": ["6502", "6502x", "65sc02", "r65c02", "65c02", "65816"]
     },
     "files": {
       "type": "array",

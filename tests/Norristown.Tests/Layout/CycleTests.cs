@@ -65,6 +65,55 @@ public sealed class CycleTests
     }
 
     [Theory]
+    // The 6502's own counts, unchanged.
+    [InlineData("lda", AddressingMode.AbsoluteX, "4-5")]
+    [InlineData("jmp", AddressingMode.AbsoluteIndirect, "5")]
+    [InlineData("nop", AddressingMode.Implied, "2")]
+
+    // A read-modify-write folded into an arithmetic instruction costs what the pair costs,
+    // and pays the index cycle whatever it does.
+    [InlineData("slo", AddressingMode.Direct, "5")]
+    [InlineData("slo", AddressingMode.DirectX, "6")]
+    [InlineData("rla", AddressingMode.Absolute, "6")]
+    [InlineData("sre", AddressingMode.AbsoluteX, "7")]
+    [InlineData("rra", AddressingMode.AbsoluteY, "7")]
+    [InlineData("dcp", AddressingMode.DirectIndirectX, "8")]
+    [InlineData("isc", AddressingMode.DirectIndirectY, "8")]
+
+    // A load pays for a page crossing only when it crosses one, as the documented loads do.
+    [InlineData("lax", AddressingMode.Immediate, "2")]
+    [InlineData("lax", AddressingMode.Direct, "3")]
+    [InlineData("lax", AddressingMode.DirectY, "4")]
+    [InlineData("lax", AddressingMode.AbsoluteY, "4-5")]
+    [InlineData("lax", AddressingMode.DirectIndirectY, "5-6")]
+    [InlineData("las", AddressingMode.AbsoluteY, "4-5")]
+    [InlineData("sax", AddressingMode.Absolute, "4")]
+    [InlineData("sax", AddressingMode.DirectIndirectX, "6")]
+
+    // The immediate-only opcodes, and the indexed stores, which settle the address first.
+    [InlineData("alr", AddressingMode.Immediate, "2")]
+    [InlineData("axs", AddressingMode.Immediate, "2")]
+    [InlineData("sha", AddressingMode.AbsoluteY, "5")]
+    [InlineData("sha", AddressingMode.DirectIndirectY, "6")]
+    [InlineData("shx", AddressingMode.AbsoluteY, "5")]
+    [InlineData("tas", AddressingMode.AbsoluteY, "5")]
+
+    // `nop` reads an operand here, and its indexed form is a read like any other.
+    [InlineData("nop", AddressingMode.Direct, "3")]
+    [InlineData("nop", AddressingMode.AbsoluteX, "4-5")]
+    public void The6502xTakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
+    {
+        Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502X, mnemonic, mode)?.Count.ToString());
+    }
+
+    /// <summary>
+    /// <c>jam</c> stops the processor: there is no next cycle to reach, so it is counted
+    /// nowhere and the block it is in says why rather than quietly leaving it out.
+    /// </summary>
+    [Fact]
+    public void JamHasNoCount() => Assert.Null(Cycles.Of(Cpu.Mos6502X, "jam", AddressingMode.Implied));
+
+    [Theory]
     // What the 65C02 keeps.
     [InlineData("lda", AddressingMode.Direct, "3")]
     [InlineData("lda", AddressingMode.AbsoluteX, "4-5")]

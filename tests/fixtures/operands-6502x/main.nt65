@@ -1,0 +1,91 @@
+; Every undocumented opcode the 6502x has, in every form ca65 assembles it in, and the two
+; documented instructions the extra opcodes widen: `nop` takes operands here and nowhere else.
+; The oracle assembles this and holds ca65's bytes against the lengths nt65 worked out.
+.module main
+
+.cpu 6502x
+
+.segment ZEROPAGE
+.data ptr: .word
+
+.segment BSS
+.data buf: .byte[256]
+
+.segment CODE
+
+; The read-modify-write pairs: each is a shift or a step and then an arithmetic instruction,
+; and each takes every form the store it is built on takes.
+.proc combined {
+    slo z:ptr
+    slo z:ptr,x
+    slo a:buf
+    slo buf,x
+    slo buf,y
+    slo (ptr,x)
+    slo (ptr),y
+    rla z:ptr
+    rla buf,x
+    sre z:ptr
+    sre (ptr),y
+    rra z:ptr
+    rra buf,y
+    dcp z:ptr,x
+    dcp a:buf
+    isc (ptr,x)
+    isc buf,x
+    rts
+}
+
+; Loads and stores that move A and X together.
+.proc paired {
+    lax #$40
+    lax z:ptr
+    lax z:ptr,y
+    lax a:buf
+    lax buf,y
+    lax (ptr,x)
+    lax (ptr),y
+    sax z:ptr
+    sax z:ptr,y
+    sax a:buf
+    sax (ptr,x)
+    rts
+}
+
+; The immediate-only opcodes, which put A through an operation and the carry or the flags.
+.proc immediate {
+    alr #%11110000
+    anc #$7f
+    ane #$ff
+    arr #$0f
+    axs #1
+    rts
+}
+
+; The stores that mix the high byte of their own address into what they write, and the load
+; that reads through the stack pointer. What each leaves is unstable; how long each takes is not.
+.proc unstable {
+    sha buf,y
+    sha (ptr),y
+    shx buf,y
+    shy buf,x
+    tas buf,y
+    las buf,y
+    rts
+}
+
+; `nop` reads an operand on the 6502x, in the forms its undocumented encodings have.
+.proc idle {
+    nop
+    nop #$00
+    nop z:ptr
+    nop z:ptr,x
+    nop a:buf
+    nop buf,x
+    rts
+}
+
+; `jam` stops the processor, so nothing after it runs and the routine has no count.
+.proc halt {
+    jam
+}

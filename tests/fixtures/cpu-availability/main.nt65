@@ -29,6 +29,9 @@
     jml [ptr]               ;! error[instruction-not-on-cpu]: `jml` is not available on the 6502, and is on the 65816
     cop #1                  ;! error[instruction-not-on-cpu]: `cop` is not available on the 6502, and is on the 65816
     mvn #$7e, #$00          ;! error[instruction-not-on-cpu]: `mvn` is not available on the 6502, and is on the 65816
+    ; An undocumented opcode says what it is, rather than reading as a name nobody declared.
+    lax z:ptr               ;! error[instruction-not-on-cpu]: `lax` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
+    jam                     ;! error[instruction-not-on-cpu]: `jam` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
     jeq a:@out              ;! error[transfer-prefix]: `jeq` transfers control, and a control transfer is not sized by a prefix
     lda z:(ptr),y           ;! error[addressing-mode-missing]: `lda` has no direct-page form of this operand on the 6502
     lda d:$05               ;! error[direct-page-needs-65816]: `d:` reaches an address through the 65816's direct page, and this program is built for the 6502

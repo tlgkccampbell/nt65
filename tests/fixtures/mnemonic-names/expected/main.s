@@ -16,21 +16,23 @@
 swa = $12
 per = $34
 
+arr = $56
+
 .segment "ZEROPAGE": zeropage
 tad: .res 1
 ina: .res 1
 
 .segment "RODATA": absolute
-pair: .byte swa, per
+pair: .byte swa, per, arr
 
 .segment "CODE": absolute
-; .proc dea  main.nt65:28
+; .proc dea  main.nt65:32
 main__dea:
     lda z:tad
     rts
 ; end of dea
 
-; .proc xba  main.nt65:33
+; .proc xba  main.nt65:37
 xba:
 xba__dea:
     ldx z:ina
@@ -38,7 +40,7 @@ xba__dea:
     rts
 ; end of xba
 
-; .proc main  main.nt65:40
+; .proc main  main.nt65:44
 main__main:
     jsr main__dea
     jsr xba

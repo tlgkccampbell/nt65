@@ -12,6 +12,8 @@ public static class Instructions
 {
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> mos6502 = Build6502();
 
+    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> mos6502X = Build6502X();
+
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> cmos65SC02 = Build65SC02();
 
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> rockwell65C02 = BuildRockwell();
@@ -45,6 +47,7 @@ public static class Instructions
         var table = cpu switch
         {
             Cpu.Mos6502 => mos6502,
+            Cpu.Mos6502X => mos6502X,
             Cpu.Cmos65SC02 => cmos65SC02,
             Cpu.Rockwell65C02 => rockwell65C02,
             Cpu.Wdc65C02 => wdc65C02,
@@ -185,6 +188,19 @@ public static class Instructions
 
         Fact(table, "lda adc and bit cmp eor ora sbc", f => f with { SizedBy = WidthRegister.A });
         Fact(table, "ldx ldy cpx cpy", f => f with { SizedBy = WidthRegister.Index });
+
+        // The undocumented opcodes of the NMOS 6502, which only the 6502x has. Each is two of
+        // the documented instructions happening at once, so what it writes is what both write.
+        Fact(table, "slo rla sre alr anc arr", f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, "rra isc", f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, "dcp", f => f with { Writes = Registers.C });
+        Fact(table, "axs", f => f with { Writes = Registers.X | Registers.C });
+        Fact(table, "lax las", f => f with { Writes = Registers.A | Registers.X });
+        Fact(table, "ane", f => f with { Writes = Registers.A });
+        Fact(table, "slo rla sre rra dcp isc sax sha shx shy tas", f => f with { Stores = true });
+
+        // Nothing after `jam` runs, so what it leaves is no question anyone gets to ask.
+        Fact(table, "jam", f => f with { Writes = Registers.All });
         return table.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
@@ -229,6 +245,49 @@ public static class Instructions
         Add(table,
             "clc cld cli clv dex dey inx iny nop pha php pla plp rti rts sec sed sei tax tay tsx txa txs tya",
             AddressingMode.Implied);
+        return Freeze(table);
+    }
+
+    /// <summary>
+    /// The NMOS 6502's undocumented opcodes, in ca65's spellings and its forms, which is what
+    /// the output has to assemble as. They are not a processor's set: no datasheet lists them,
+    /// and which of them a part runs the same way is a fact about the silicon. What nt65 takes
+    /// from ca65 is the names, the modes and the encodings; what each does, and what it costs,
+    /// is read from the NMOS behaviour and is left out where it is not one answer.
+    /// <para>
+    /// The documented set also grows one instruction: <c>nop</c> takes the operands its
+    /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are instructions here
+    /// and nowhere else.
+    /// </para>
+    /// </summary>
+    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502X()
+    {
+        var table = Copy(mos6502);
+
+        // The read-modify-write pairs, each an official instruction folded into another: they
+        // take every mode the store they are built on takes.
+        Add(table, "slo rla sre rra dcp isc",
+            AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
+            AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
+        Add(table, "lax",
+            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute,
+            AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
+        Add(table, "sax",
+            AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute, AddressingMode.DirectIndirectX);
+
+        // The immediate-only ones, which pass A through an operation and the carry or the flags.
+        Add(table, "alr anc ane arr axs", AddressingMode.Immediate);
+
+        // The unstable stores, which mix the high byte of their own address into what they write.
+        Add(table, "sha", AddressingMode.AbsoluteY, AddressingMode.DirectIndirectY);
+        Add(table, "shx tas las", AddressingMode.AbsoluteY);
+        Add(table, "shy", AddressingMode.AbsoluteX);
+
+        // Every opcode that stops the processor is one word here, as ca65 spells it.
+        Add(table, "jam", AddressingMode.Implied);
+        Add(table, "nop",
+            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
+            AddressingMode.AbsoluteX);
         return Freeze(table);
     }
 

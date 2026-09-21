@@ -316,8 +316,10 @@ public static class SyntaxFacts
     };
 
     /// <summary>
-    /// The canonical WDC mnemonics of the three CPUs. ca65's alternative 65816 spellings
-    /// (<c>tad</c>, <c>tas</c>, <c>swa</c> and the rest) are ordinary identifiers.
+    /// The canonical WDC mnemonics of the CPUs, and the undocumented opcodes of the NMOS 6502
+    /// in ca65's spellings, since those have no canonical name of their own. ca65's alternative
+    /// 65816 spellings (<c>tad</c>, <c>swa</c> and the rest) are ordinary identifiers; ca65's
+    /// <c>tas</c> is not one of those, and is an undocumented opcode below.
     /// </summary>
     private static IEnumerable<string> CpuMnemonics()
     {
@@ -328,6 +330,12 @@ public static class SyntaxFacts
             "iny", "jmp", "jsr", "lda", "ldx", "ldy", "lsr", "nop", "ora", "pha", "php", "pla", "plp",
             "rol", "ror", "rti", "rts", "sbc", "sec", "sed", "sei", "sta", "stx", "sty", "tax", "tay",
             "tsx", "txa", "txs", "tya",
+        ];
+
+        string[] mos6502X =
+        [
+            "alr", "anc", "ane", "arr", "axs", "dcp", "isc", "jam", "las", "lax", "rla", "rra",
+            "sax", "sha", "shx", "shy", "slo", "sre", "tas",
         ];
 
         // bbr0..bbr7 and friends are spelled with the bit number, as in ca65.
@@ -345,7 +353,7 @@ public static class SyntaxFacts
             "pld", "rep", "rtl", "sep", "tcd", "tcs", "tdc", "tsc", "txy", "tyx", "wdm", "xba", "xce",
         ];
 
-        return mos6502.Concat(wdc65C02).Concat(wdc65816);
+        return mos6502.Concat(mos6502X).Concat(wdc65C02).Concat(wdc65816);
     }
 
     /// <summary>

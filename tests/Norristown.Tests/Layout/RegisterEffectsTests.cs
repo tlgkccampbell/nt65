@@ -101,6 +101,15 @@ public sealed class RegisterEffectsTests
         Add(Registers.A | Registers.X | Registers.Y, "mvn", "mvp");
         Add(Registers.All, "xce", "brk", "cop");
 
+        // The undocumented opcodes write what the pair of instructions each is writes; `jam`
+        // stops the processor, so nothing it leaves is ever read.
+        Add(Registers.A, "ane");
+        Add(Registers.A | Registers.C, "slo", "rla", "sre", "rra", "isc", "alr", "anc", "arr");
+        Add(Registers.A | Registers.X, "lax", "las");
+        Add(Registers.X | Registers.C, "axs");
+        Add(Registers.C, "dcp");
+        Add(Registers.All, "jam");
+
         // Everything else leaves all four alone: the stores, the pushes, the branches, the
         // jumps and returns, the flags that are not the carry, and the bit instructions.
         Add(
@@ -110,7 +119,8 @@ public sealed class RegisterEffectsTests
             "pha", "phx", "phy", "php", "phb", "phd", "phk", "pea", "pei", "per", "plb", "pld",
             "jmp", "jml", "jsr", "jsl", "rts", "rtl", "bra", "brl",
             "bcc", "bcs", "beq", "bne", "bmi", "bpl", "bvc", "bvs",
-            "jcc", "jcs", "jeq", "jne", "jmi", "jpl", "jvc", "jvs");
+            "jcc", "jcs", "jeq", "jne", "jmi", "jpl", "jvc", "jvs",
+            "sax", "sha", "shx", "shy", "tas");
         for (var bit = 0; bit < 8; bit++)
             Add(Registers.None, $"bbr{bit}", $"bbs{bit}", $"rmb{bit}", $"smb{bit}");
         return table;

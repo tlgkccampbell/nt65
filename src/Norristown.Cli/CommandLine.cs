@@ -66,7 +66,7 @@ public sealed record CommandLine(
         options:
           --project <file>      the project file, or the directory that holds nt65.json
           --config <name>       a named configuration from the project's `configurations`
-          --cpu <cpu>           6502, 65sc02, r65c02, 65c02 or 65816
+          --cpu <cpu>           6502, 6502x, 65sc02, r65c02, 65c02 or 65816
           -D NAME[=value]       adds a define, or overrides one; NAME may be a module's `.config`
           --out <dir>           where output goes, instead of the project's `out`
           --depfile <file>      writes make-style dependencies of every output

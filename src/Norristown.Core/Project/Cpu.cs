@@ -6,6 +6,9 @@ public enum Cpu
     /// <summary>The MOS 6502.</summary>
     Mos6502,
 
+    /// <summary>The NMOS 6502 with the undocumented opcodes ca65 assembles under <c>6502X</c>.</summary>
+    Mos6502X,
+
     /// <summary>The original CMOS 6502, which adds to the 6502 and has neither the bit instructions nor <c>wai</c> and <c>stp</c>.</summary>
     Cmos65SC02,
 

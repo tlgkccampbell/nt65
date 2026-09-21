@@ -200,7 +200,7 @@ public sealed class ParserTests
     [InlineData(".data x: .byte[4] 1, 2, 3, 4", "the values of an array go in braces: `.byte[n] { 1, 2 }`")]
     [InlineData(".data x: .type Point 1", "a record's values go in braces: `.type T { member = value }`")]
     [InlineData(".data x: .byte {", "values in a body need a count: `.byte[] {` counts them")]
-    [InlineData(".cpu 6510", "expected `6502`, `65sc02`, `r65c02`, `65c02` or `65816`")]
+    [InlineData(".cpu 6510", "expected `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     [InlineData(".frame", "expected a name for the frame")]
     [InlineData(".frame locals Locals", "expected `:` and the struct the frame is laid out as")]
     [InlineData(".frobnicate 1", "unknown directive `.frobnicate`")]

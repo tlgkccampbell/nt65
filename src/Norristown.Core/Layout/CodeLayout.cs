@@ -507,14 +507,21 @@ public sealed class CodeLayout
         var available = Instructions.Modes(cpu, mnemonic.Text);
         if (available.Count == 0)
         {
-            var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.Text)).Select(CpuNames.Spell).ToList();
+            var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.Text)).ToList();
+            var spelled = having.Select(CpuNames.Spell).ToList();
+
+            // The only CPU with it is the 6502 and its undocumented opcodes, so what the reader
+            // is looking at is one of those rather than an instruction they have misplaced.
+            var undocumented = having is [Cpu.Mos6502X];
             Report(mnemonic, Catalogue.InstructionNotOnCpu.Says(
                 mnemonic.Text,
                 CpuNames.Spell(cpu),
-                having.Count == 0
-                    ? ""
-                    : ", and is on the "
-                        + (having.Count == 1 ? having[0] : string.Join(", ", having.SkipLast(1)) + " and " + having[^1])));
+                spelled.Count == 0 ? ""
+                    : undocumented
+                        ? $", and is an undocumented opcode of the NMOS 6502, which the {CpuNames.Spell(Cpu.Mos6502X)} has"
+                        : ", and is on the " + (spelled.Count == 1
+                            ? spelled[0]
+                            : string.Join(", ", spelled.SkipLast(1)) + " and " + spelled[^1])));
             Unlayable();
             return;
         }

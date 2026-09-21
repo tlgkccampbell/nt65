@@ -1,7 +1,7 @@
 {
   // The project file is read as data: a key it does not know, or a value of the wrong shape,
   // is reported and the rest of the file is still read. Comments are for these notes.
-  "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a processor nt65 knows: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
+  "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a processor nt65 knows: `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
   "files": "*.nt65",      // ;! error[project-not-a-list]: `files` is a list of strings
   "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a nt65.json key
   "define": {},           // ;! error[project-key-unknown]: `define` is not a nt65.json key; `defines` is

@@ -24,8 +24,9 @@ public static class Transfers
         if (Instructions.Facts(mnemonic).Returns)
             return Transfer.Return;
 
-        // `stp` stops the processor, and nothing after it runs until a reset.
-        if (Is(mnemonic, "stp"))
+        // `stp` stops the processor, and so does an undocumented `jam`: nothing after either
+        // runs until a reset.
+        if (Is(mnemonic, "stp") || Is(mnemonic, "jam"))
             return Transfer.Return;
         if (Is(mnemonic, "bra") || Is(mnemonic, "brl"))
             return Transfer.Jump;

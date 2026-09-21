@@ -81,7 +81,7 @@ public sealed class InitCommandTests : IDisposable
     public void WhatItCannotBeAskedForSaysSo()
     {
         Assert.Equal(
-            (2, "nt65: --cpu takes 6502, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
+            (2, "nt65: --cpu takes 6502, 6502x, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
             Run(root.FullName, "init", "--cpu", "z80"));
         Assert.Equal((2, "nt65: init takes one directory\nsee `nt65 --help`\n"), Run(root.FullName, "init", "a", "b"));
         Assert.Equal((2, "nt65: `--force` is not an option\nsee `nt65 --help`\n"), Run(root.FullName, "init", "--force"));

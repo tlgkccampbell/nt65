@@ -198,7 +198,7 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   the use cannot be taken for an instruction: a member reached through `::`, and an `@local`
   label. The output has its own answer to the same problem (§13), which needs nothing of the
   programmer.
-- **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `65c02` and
+- **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `6502x`, `65c02` and
   `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
   a CPU is named (§5.1) and mean nothing anywhere else. A `_` between two of a number's digits
   separates them and is worth nothing, in any base: `$7f_ff`, `%1010_1010`, `1_000`. It stands
@@ -282,6 +282,7 @@ file that states it must agree. The CPUs are:
 | CPU | instructions | ca65 |
 |---|---|---|
 | `6502` | the NMOS 6502 | `6502` |
+| `6502x` | the NMOS 6502 and its undocumented opcodes, below | `6502X` |
 | `65sc02` | the original CMOS set: `phx`, `stz`, `bra`, `(zp)` and the rest, without the bit instructions or `wai` and `stp` | `65SC02` |
 | `r65c02` | Rockwell's: the 65SC02 and the bit instructions `bbr`, `bbs`, `rmb` and `smb` | `65C02` |
 | `65c02` | WDC's: Rockwell's, and `wai` and `stp` | `W65C02` |
@@ -295,6 +296,32 @@ and using one the target lacks is a semantic diagnostic that says which CPUs hav
 Code that differs between CPUs tests what the CPU has, `.if .has(phx)`, which holds on every
 CPU with the instruction; `.target(65c02)` names one CPU exactly (§9, §10). The CPU is
 configuration, like a define.
+
+**The undocumented opcodes.** The NMOS 6502 does something for every one of the 256 bytes it
+can read as an opcode, and what it does for the 105 nobody documented is used by C64 and NES
+programs that were counting cycles. They are the `6502x`, not the `6502`, because they are not
+a processor's instruction set: no datasheet lists them, a CMOS part does something else
+entirely with the same bytes, and a program that writes one has decided something about which
+silicon it runs on. nt65 takes their spellings, their forms and their encodings from ca65's
+`6502X` table, because what nt65 writes has to be what ca65 assembles, and there is no other
+list with a claim to be the names. `slo`, `rla`, `sre`, `rra`, `dcp` and `isc` are a
+read-modify-write and an arithmetic instruction at once; `lax` and `sax` move A and X together;
+`alr`, `anc`, `ane`, `arr` and `axs` take an immediate; `sha`, `shx`, `shy`, `tas` and `las`
+reach memory through the stack pointer or the high byte of their own address; `jam` stops the
+processor. `nop` grows operands here and nowhere else, since its undocumented encodings read
+one.
+
+What each *costs* is a fact about the NMOS timing and is counted like any other instruction.
+What each *leaves behind* is not always one answer: `ane`, `lax #`, and the stores that mix in
+the high byte of their own address depend on the part and on what the bus was last driven with.
+nt65 counts them and says on hover which are unstable, rather than refusing to count a line
+whose timing is not in doubt. `jam` is the one with no count at all — there is no next cycle to
+reach — and a routine that runs into one is shown as uncounted with that as the reason, the way
+a block move is.
+
+Writing one of them on a CPU that has not got it says so, and says what it is: `lax` on the
+6502 is "not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the
+6502x has", rather than a word nobody declared.
 
 ### 5.2 Segments
 
@@ -414,7 +441,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 }
 ```
 
-- `cpu`: `6502`, `65sc02`, `r65c02`, `65c02` or `65816`. A `.cpu` item in a file must agree.
+- `cpu`: `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`. A `.cpu` item in a file must agree.
 - `files`: globs, from the project root. Order is not significant, and a glob may reach above
   the root, so a library shared between projects is part of each.
 - `out`: where the output goes, the project root when there is none. A module's output is
@@ -3274,6 +3301,20 @@ Recorded so the reasoning survives. None is open.
   differ in whole instructions, and a program for one is wrong on another in exactly those,
   so each checks its own set and sets ca65's matching CPU. `.has` asks about an instruction,
   so code for several CPUs does not list them; `.target` stays exact.
+- **The undocumented opcodes are a CPU of their own, and their names are ca65's.** Two other
+  shapes were weighed. A project setting that turned them on for the 6502 would make which
+  instructions a program may write depend on a setting, which is the shape the mnemonic
+  decision already refused. Having them on the 6502 outright would mean a program that mistypes
+  a name gets an instruction instead of a diagnostic on the one CPU where the greatest number
+  of people are writing plain code. A sixth CPU says what it is: a program built for `6502x`
+  has decided something about which silicon it runs on, and the flow analysis, the cycle counts
+  and the lengths all follow from the one setting in the project file. The spellings are ca65's
+  `6502X` table rather than a set chosen here, because no datasheet names them and the output
+  has to be what ca65 assembles; taking the list from ca65 is what keeps it from drifting, as
+  it does for the words the emitter prefixes (§13). Their counts are counted and their results
+  are described, rather than the whole instruction being left uncounted: how long `sha` takes
+  is not in doubt, and what it stores is, so the count stands and the hover says which. Only
+  `jam` has no count, because it stops the processor.
 - **Running off the end of a proc warns off the 65816.** Nothing consumes the state there,
   but a proc that runs into the next one is still usually a missing `rts`.
 - **Text constants are text wherever a literal is,** and cross modules by value. Nothing in
@@ -3645,7 +3686,7 @@ config      := '.config' ident '=' expr                ; at file level, outside 
 assert      := '.assert' expr (',' string)?
 warning     := '.warning' string
 error       := '.error' string
-cpu         := '.cpu' ('6502' | '65sc02' | 'r65c02' | '65c02' | '65816')
+cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816')
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
 banks       := expr ('..' expr)? (',' expr ('..' expr)?)*

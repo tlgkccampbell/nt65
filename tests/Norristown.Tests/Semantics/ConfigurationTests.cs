@@ -141,7 +141,7 @@ public sealed class ConfigurationTests
     /// <summary><c>.has</c> takes a mnemonic, and <c>.target</c> a CPU.</summary>
     [Theory]
     [InlineData(".if .has(LIMIT) {", "`.has` takes a mnemonic, such as `.has(phx)`")]
-    [InlineData(".if .target(z80) {", "`.target` takes `6502`, `65sc02`, `r65c02`, `65c02` or `65816`")]
+    [InlineData(".if .target(z80) {", "`.target` takes `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     public void WhatTheCpuQuestionsTakeIsChecked(string opener, string message)
     {
         var program = Built(opener + "\nON = 1\n}\n");

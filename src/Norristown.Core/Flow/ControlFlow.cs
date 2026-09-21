@@ -487,9 +487,12 @@ public sealed class ControlFlow
     /// been reported where it is written.
     /// </summary>
     private static string? Uncounted(Step step) =>
-        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() is "mvn" or "mvp"
-            ? "a block move takes 7 cycles a byte, and how many is in A"
-            : null;
+        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() switch
+        {
+            "mvn" or "mvp" => "a block move takes 7 cycles a byte, and how many is in A",
+            "jam" => "`jam` stops the processor, and nothing after it runs until a reset",
+            _ => null,
+        };
 
     /// <summary>Why a routine has no count: the first block a path reaches that has none says so.</summary>
     private static string? Uncounted(IReadOnlyList<BasicBlock> blocks) =>

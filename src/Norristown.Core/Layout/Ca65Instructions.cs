@@ -23,6 +23,10 @@ public static class Ca65Instructions
         + "dex dey eor inc inx iny jmp jsr lda ldx ldy lsr nop ora pha php pla plp rol ror rti "
         + "rts sbc sec sed sei sta stx sty tax tay tsx txa txs tya";
 
+    // The NMOS 6502's undocumented opcodes, which ca65 reads only under `6502X`.
+    private const string Undocumented =
+        "alr anc ane arr axs dcp isc jam las lax rla rra sax sha shx shy slo sre tas";
+
     // What the CMOS parts add, `dea` and `ina` among them, which nt65 spells `dec a` and `inc a`.
     private const string Cmos = "bra dea ina phx phy plx ply stz trb tsb";
 
@@ -38,6 +42,8 @@ public static class Ca65Instructions
 
     private static readonly FrozenSet<string> mos6502 = Words(Mos6502);
 
+    private static readonly FrozenSet<string> mos6502X = Words(Mos6502, Undocumented);
+
     private static readonly FrozenSet<string> cmos65SC02 = Words(Mos6502, Cmos);
 
     private static readonly FrozenSet<string> rockwell65C02 = Words(Mos6502, Cmos, Numbered(Bits));
@@ -47,12 +53,13 @@ public static class Ca65Instructions
     private static readonly FrozenSet<string> wdc65816 = Words(Mos6502, Cmos, Wdc, Wdc65816);
 
     private static readonly FrozenSet<string> anywhere =
-        Words(Mos6502, Cmos, Numbered(Bits), Wdc, Wdc65816);
+        Words(Mos6502, Undocumented, Cmos, Numbered(Bits), Wdc, Wdc65816);
 
     /// <summary>The words ca65 has under the <c>.setcpu</c> nt65 writes for <paramref name="cpu"/>.</summary>
     public static IReadOnlySet<string> Of(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => mos6502,
+        Cpu.Mos6502X => mos6502X,
         Cpu.Cmos65SC02 => cmos65SC02,
         Cpu.Rockwell65C02 => rockwell65C02,
         Cpu.Wdc65C02 => wdc65C02,

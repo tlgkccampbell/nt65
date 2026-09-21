@@ -48,7 +48,12 @@ public static class Cycles
     /// <summary>An interrupt or its return, where the analysis could not follow the mode.</summary>
     private const string NativeMode = "+1 in native mode";
 
+    /// <summary>The undocumented opcodes that read, change and write back, which always pay the index cycle.</summary>
+    private const string Combines = "slo rla sre rra dcp isc";
+
     private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> mos6502 = Build6502();
+
+    private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> mos6502X = Build6502X();
 
     private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> wdc65C02 = Build65C02();
 
@@ -61,7 +66,12 @@ public static class Cycles
     {
         if (cpu == Cpu.Wdc65816)
             return Of65816(mnemonic.ToLowerInvariant(), mode, state ?? ProcessorState.Unknown);
-        var table = cpu == Cpu.Mos6502 ? mos6502 : wdc65C02;
+        var table = cpu switch
+        {
+            Cpu.Mos6502 => mos6502,
+            Cpu.Mos6502X => mos6502X,
+            _ => wdc65C02,
+        };
         return table.TryGetValue((mnemonic.ToLowerInvariant(), mode), out var cycles) ? cycles : null;
     }
 
@@ -239,13 +249,62 @@ public static class Cycles
         return table;
     }
 
-    private static FrozenDictionary<(string, AddressingMode), Timing> Build6502()
+    private static FrozenDictionary<(string, AddressingMode), Timing> Build6502() => Nmos6502().ToFrozenDictionary();
+
+    private static Dictionary<(string, AddressingMode), Timing> Nmos6502()
     {
         var table = Build();
 
         // The 6502's indirect jump reads its pointer without carrying into the high byte,
         // which is the bug the 65C02 fixes by spending a cycle.
         Add(table, "jmp", AddressingMode.AbsoluteIndirect, 5);
+        return table;
+    }
+
+    /// <summary>
+    /// The 6502's counts, and the undocumented opcodes' on top of them. Each of those is two
+    /// documented instructions in one, and costs what the pair costs: a read-modify-write pays
+    /// the index cycle whatever it does, and a read pays it only when it crosses a page.
+    /// <para>
+    /// What these opcodes leave behind is another matter — <c>ane</c>, <c>lax #</c> and the
+    /// stores that mix in the high byte of their own address depend on the part and on what the
+    /// bus was last driven with — but how long each takes does not, so each is counted and the
+    /// instruction says on hover what is unstable about it. <c>jam</c> is the one with no count:
+    /// it stops the processor, and there is no next cycle to reach.
+    /// </para>
+    /// </summary>
+    private static FrozenDictionary<(string, AddressingMode), Timing> Build6502X()
+    {
+        var table = Nmos6502();
+        Add(table, Combines, AddressingMode.Direct, 5);
+        Add(table, Combines, AddressingMode.DirectX, 6);
+        Add(table, Combines, AddressingMode.Absolute, 6);
+        Add(table, Combines, AddressingMode.AbsoluteX, 7);
+        Add(table, Combines, AddressingMode.AbsoluteY, 7);
+        Add(table, Combines, AddressingMode.DirectIndirectX, 8);
+        Add(table, Combines, AddressingMode.DirectIndirectY, 8);
+
+        Add(table, "lax", AddressingMode.Immediate, 2);
+        Add(table, "lax sax", AddressingMode.Direct, 3);
+        Add(table, "lax sax", AddressingMode.DirectY, 4);
+        Add(table, "lax sax", AddressingMode.Absolute, 4);
+        Add(table, "lax sax", AddressingMode.DirectIndirectX, 6);
+        Add(table, "lax las", AddressingMode.AbsoluteY, new Timing(new CycleCount(4, 5), Crossing));
+        Add(table, "lax", AddressingMode.DirectIndirectY, new Timing(new CycleCount(5, 6), Crossing));
+
+        Add(table, "alr anc ane arr axs", AddressingMode.Immediate, 2);
+
+        // The stores that mix the high byte of their own address into what they write settle
+        // the address before they write, as every indexed store does, so each is exact.
+        Add(table, "sha shx tas", AddressingMode.AbsoluteY, 5);
+        Add(table, "shy", AddressingMode.AbsoluteX, 5);
+        Add(table, "sha", AddressingMode.DirectIndirectY, 6);
+
+        Add(table, "nop", AddressingMode.Immediate, 2);
+        Add(table, "nop", AddressingMode.Direct, 3);
+        Add(table, "nop", AddressingMode.DirectX, 4);
+        Add(table, "nop", AddressingMode.Absolute, 4);
+        Add(table, "nop", AddressingMode.AbsoluteX, new Timing(new CycleCount(4, 5), Crossing));
         return table.ToFrozenDictionary();
     }
 

@@ -24,7 +24,10 @@ public sealed class InstructionFactsTests
     public void AStoreWritesWhereItsOperandPoints()
     {
         Assert.Equal(
-            ["asl", "dec", "inc", "lsr", "rol", "ror", "sta", "stx", "sty", "stz", "trb", "tsb"],
+            [
+                "asl", "dcp", "dec", "inc", "isc", "lsr", "rla", "rol", "ror", "rra", "sax", "sha",
+                "shx", "shy", "slo", "sre", "sta", "stx", "sty", "stz", "tas", "trb", "tsb",
+            ],
             Where(facts => facts.Stores));
     }
 

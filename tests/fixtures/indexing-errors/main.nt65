@@ -32,8 +32,8 @@ COUNT = 4
 }
 
 ; What a name stands for is not the declaration an index reaches into.
-.macro row(arr) {
-    lda arr[1]              ;! error[not-indexable]: `arr` is a macro parameter, and `[i]` reaches an element of data
+.macro row(items) {
+    lda items[1]              ;! error[not-indexable]: `items` is a macro parameter, and `[i]` reaches an element of data
 }
 
 .segment CODE

@@ -6,7 +6,7 @@
 .frobnicate 1           ;! error[directive-unknown]: unknown directive `.frobnicate`
 .data one: .word .frobnicate(1) ;! error[not-a-function]: `.frobnicate` is not a function
 .data two: .word (1 + 2         ;! error[expected-parenthesis]: expected `)`
-.cpu 6510               ;! error[expected-cpu]: expected `6502`, `65sc02`, `r65c02`, `65c02` or `65816`
+.cpu 6510               ;! error[expected-cpu]: expected `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
 .segment "X": zp      ;! error[segment-name-quoted]: a segment name is written without quotes: `.segment X`
 .segment Y: word      ;! error[expected-address-size]: expected `zp`, `abs` or `far`
 .import thing: quad     ;! error[expected-address-size]: expected `zp`, `abs`, `far`, `proc(...)` or what the data is

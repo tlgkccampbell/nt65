@@ -439,7 +439,8 @@ to go.
 | `.asciiz "text"` | `.strz "text"` |
 | `.dbyt` | `.beword` |
 | `.charmap $41, $01` | `.charmap screen { 'A'..'Z' = $01 }`, applied as `screen("TEXT")` |
-| `.include "hw.inc"` | a module that exports what the file declared, and `.use` |
+| `.include "hw.inc"` | a module that exports what the file declared, and `.use`; `nt65 import-inc hw.inc` writes one for a file of constants |
+| `.setcpu "6502X"` | `"cpu": "6502x"`, which is a CPU like any other |
 | `.export` with `.import` in another file | `.export` in one module, a path or `.use` in the other |
 | `.global`, `.local` | `.export`, and scoping by structure |
 | `.define NAME 5` | `NAME = 5` |
