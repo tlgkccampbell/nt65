@@ -130,6 +130,7 @@ pwsh scripts/test.ps1               # the fast suite: units, fixtures and the se
 pwsh scripts/test.ps1 -Ca65         # the output assembled with the pinned ca65
 pwsh scripts/gate.ps1               # all of the above, and the extension's client
 pwsh scripts/package.ps1            # the tool package and the extension, into artifacts
+pwsh scripts/coverage.ps1           # what the fast suite reaches, by type; CI runs this, the gate does not
 ```
 
 `scripts/test.ps1 -Fixture name` runs one fixture or corpus program, `-Update` accepts changed
