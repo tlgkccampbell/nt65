@@ -145,6 +145,12 @@ internal static class Directives
         if (line.InProc || line.InMacro || line.InRepetition)
             barred.Add(".use");
 
+        // Which settings a program has is what a build sets, so a `.config` is written where
+        // nothing decides whether it is read at all: outside every block, an open `.segment`
+        // region among them, which is a block like any other once a line is under it.
+        if (line.InBlock)
+            barred.Add(".config");
+
         // A macro declared in a routine would see its cheap locals, and a routine inside one
         // is code the outer routine's flow analysis cannot follow.
         if (line.InProc)

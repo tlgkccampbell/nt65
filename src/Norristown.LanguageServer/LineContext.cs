@@ -18,6 +18,7 @@ internal sealed class LineContext
         InProc = around.InProc;
         InMacro = around.InMacro;
         InRepetition = around.InRepetition;
+        InBlock = around.InBlock;
         RecordType = around.RecordType;
         InText = inText;
         IsFirstLine = first;
@@ -52,6 +53,13 @@ internal sealed class LineContext
 
     /// <summary>Whether a repetition holds the line, where a definition would differ on every turn.</summary>
     public bool InRepetition { get; }
+
+    /// <summary>
+    /// Whether any block holds the line at all, an open <c>.segment</c> region included. A
+    /// <c>.config</c> is written where none does: which settings a program has is part of what
+    /// a build sets, and may not itself depend on where in a file it was written.
+    /// </summary>
+    public bool InBlock { get; }
 
     /// <summary>The type a <c>.type T { }</c> initializer gives values to, or null outside one.</summary>
     public IReadOnlyList<string>? RecordType { get; }
@@ -189,7 +197,7 @@ internal sealed class LineContext
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
     {
-        var found = new Surrounding(Place.Item, false, false, false, null);
+        var found = new Surrounding(Place.Item, false, false, false, false, null);
         foreach (var block in Edits.BlockAround(tree, line)?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
             found = found.Within(block);
         return found;
@@ -240,25 +248,34 @@ internal sealed class LineContext
     /// <param name="InProc">Whether a routine holds the line.</param>
     /// <param name="InMacro">Whether a macro body holds the line.</param>
     /// <param name="InRepetition">Whether a repetition holds the line.</param>
+    /// <param name="InBlock">Whether any block holds the line, whatever kind it is.</param>
     /// <param name="RecordType">The type a record initializer gives values to.</param>
     private readonly record struct Surrounding(
-        Place Place, bool InProc, bool InMacro, bool InRepetition, IReadOnlyList<string>? RecordType)
+        Place Place, bool InProc, bool InMacro, bool InRepetition, bool InBlock, IReadOnlyList<string>? RecordType)
     {
-        /// <summary>The same, one block further in.</summary>
-        public Surrounding Within(BlockSyntax block) => block.BlockKind switch
+        /// <summary>
+        /// The same, one block further in. Every kind of block answers that one holds the line,
+        /// whatever else it says about it, because what may be written only at file level is
+        /// ruled out by the block being there rather than by which block it is.
+        /// </summary>
+        public Surrounding Within(BlockSyntax block)
         {
-            BlockKind.Proc => this with { Place = Place.Code, InProc = true },
-            BlockKind.Macro => this with { Place = Place.Code, InMacro = true },
-            BlockKind.MacroBlock => this with { Place = Place.Code },
-            BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If => this,
-            BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
-            BlockKind.Data => this with { Place = Place.Data },
-            BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Place = Place.Values },
-            BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener) },
-            BlockKind.Enum => this with { Place = Place.EnumMembers },
-            BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
-            _ => this with { Place = Place.Unknown },
-        };
+            var inside = block.BlockKind switch
+            {
+                BlockKind.Proc => this with { Place = Place.Code, InProc = true },
+                BlockKind.Macro => this with { Place = Place.Code, InMacro = true },
+                BlockKind.MacroBlock => this with { Place = Place.Code },
+                BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If => this,
+                BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
+                BlockKind.Data => this with { Place = Place.Data },
+                BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Place = Place.Values },
+                BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener) },
+                BlockKind.Enum => this with { Place = Place.EnumMembers },
+                BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
+                _ => this with { Place = Place.Unknown },
+            };
+            return inside with { InBlock = true };
+        }
 
         /// <summary>The path written after the <c>.type</c> of a record initializer's opener.</summary>
         private static IReadOnlyList<string>? TypeOf(LineSyntax opener)

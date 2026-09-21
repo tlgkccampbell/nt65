@@ -77,14 +77,12 @@ public sealed class DirectivePlacesTests
         [".else", ".elseif", ".error", ".frame", ".incbin", ".module", ".next", ".patch"];
 
     /// <summary>
-    /// What the server offers at a place and the binder refuses there, which is a list that
-    /// wants shortening. The one left is a <c>.config</c> under an open <c>.segment</c> region:
-    /// the binder wants a setting above every block, and the lists do not know a region from
-    /// a file with none.
+    /// What the server offers at a place and the binder refuses there, which is empty: nothing
+    /// the lists offer writes a line that does not build.
     /// </summary>
     private static readonly Dictionary<string, string[]> Refused = new(StringComparer.Ordinal)
     {
-        ["file level"] = [".config"],
+        ["file level"] = [],
         ["a routine"] = [],
         ["a macro body"] = [],
         ["a repetition"] = [],
@@ -137,6 +135,23 @@ public sealed class DirectivePlacesTests
 
         // And the converse, but for the few the server is stricter about than the binder.
         Assert.Equal(Stricter[place], allowed.Where(name => !offered.Contains(name)));
+    }
+
+    /// <summary>
+    /// A setting is offered where one may be written and nowhere else. The places above all sit
+    /// under the preamble's <c>.segment CODE</c>, which is a block the binder counts, so this is
+    /// where the other answer is checked: a file that has opened nothing yet.
+    /// </summary>
+    [Fact]
+    public void ASettingIsOfferedWhileNothingIsOpenAndNotAfterwards()
+    {
+        var text = ".module main\n\n.segment CODE\n\n.proc host {\n\n}\n";
+        var tree = SyntaxTree.Parse(Analysis.Path, text);
+        string[] Offers(int line) => [.. Directives.At(LineContext.At(tree, tree.LineStarts[line])).Select(item => item.Name)];
+
+        Assert.Contains(".config", Offers(1));
+        Assert.DoesNotContain(".config", Offers(3));
+        Assert.DoesNotContain(".config", Offers(5));
     }
 
     /// <summary>What the server would offer at the start of a line in <paramref name="place"/>.</summary>
