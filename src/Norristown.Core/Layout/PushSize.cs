@@ -1,4 +1,4 @@
-namespace Norristown.Flow;
+namespace Norristown.Layout;
 
 /// <summary>
 /// How much of the stack one push takes. The 65816 pushes a register as wide as the register

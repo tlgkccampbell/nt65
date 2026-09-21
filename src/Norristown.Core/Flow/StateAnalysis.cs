@@ -620,8 +620,9 @@ public sealed class StateAnalysis
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
 
     /// <summary>Whether a statement calls, directly or through a pointer.</summary>
-    private bool IsCallOrIndirectCall(Step step) =>
-        Is(step.Statement, "jsr") || Is(step.Statement, "jsl");
+    private static bool IsCallOrIndirectCall(Step step) =>
+        step.Statement is InstructionStatementSyntax instruction
+        && Instructions.Facts(instruction.Mnemonic.Text).Calls;
 
     /// <summary>
     /// A call: the state here must be what the routine expects, and becomes what it returns

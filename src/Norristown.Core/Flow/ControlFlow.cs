@@ -898,7 +898,8 @@ public sealed class ControlFlow
         return unit.Next is null && transfer is Transfer.Through or Transfer.Branch or Transfer.Call;
     }
 
-    private static bool IsCall(SyntaxNode statement) => IsInstruction(statement, "jsr") || IsInstruction(statement, "jsl");
+    private static bool IsCall(SyntaxNode statement) =>
+        statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.Mnemonic.Text).Calls;
 
     /// <summary>One statement and the annotations written under it.</summary>
     private sealed class Unit(Step step)

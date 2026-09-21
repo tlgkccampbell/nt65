@@ -2,8 +2,8 @@ namespace Norristown.Layout;
 
 /// <summary>
 /// Which registers each instruction writes, and which ones move a register's value to another
-/// register rather than making one up. It is the same table on every CPU: an instruction one
-/// CPU lacks is never asked about, and no CPU here spells one instruction two ways.
+/// register rather than making one up. What the instruction tables say is the widest answer;
+/// this narrows it where the mode or the operand decides.
 /// <para>
 /// A write is any change the caller cannot predict, so a transfer counts as one even though
 /// what lands in the register came from another: what the value is worth is
@@ -19,51 +19,23 @@ public static class RegisterEffects
     /// </summary>
     public static Registers Written(string mnemonic, AddressingMode? mode, long? constant) => mnemonic switch
     {
-        "lda" or "pla" or "txa" or "tya" or "tdc" or "tsc" or "xba" or "and" or "ora" or "eor" => Registers.A,
-        "adc" or "sbc" => Registers.A | Registers.C,
-        "ldx" or "plx" or "tax" or "tsx" or "tyx" or "inx" or "dex" => Registers.X,
-        "ldy" or "ply" or "tay" or "txy" or "iny" or "dey" => Registers.Y,
-        "cmp" or "cpx" or "cpy" or "clc" or "sec" or "plp" or "rti" => Registers.C,
-
         // A shift through the accumulator writes it; one through memory writes only the carry.
         "asl" or "lsr" or "rol" or "ror" =>
             mode == AddressingMode.Accumulator ? Registers.A | Registers.C : Registers.C,
         "inc" or "dec" => mode == AddressingMode.Accumulator ? Registers.A : Registers.None,
 
-        // A block move counts down in A and walks X and Y along the two banks.
-        "mvn" or "mvp" => Registers.A | Registers.X | Registers.Y,
-
-        // Swapping the carry with the emulation flag changes the mode, which truncates the
-        // index registers and hides half the accumulator, so nothing survives it.
-        "xce" => Registers.All,
-
         // `rep` and `sep` write the flags their operand names, and bit 0 is the carry. An
         // operand nt65 cannot work out may name it.
         "rep" or "sep" => constant is { } flags && (flags & 1) == 0 ? Registers.None : Registers.C,
 
-        // A software interrupt runs a handler this program may not even hold, so what it
-        // leaves is nothing anyone can say. The analysis takes it as a call it cannot follow,
-        // and asks this only for what it would write if it were an instruction like any other.
-        "brk" or "cop" => Registers.All,
-
-        _ => Registers.None,
+        _ => Instructions.Facts(mnemonic).Writes,
     };
 
     /// <summary>
     /// The register a transfer copies, and the one it copies to, for the transfers between the
-    /// three registers a value is held in; null for every other instruction. The stack pointer
-    /// and the 65816's D are not among them, so <c>tsx</c> and <c>tdc</c> are plain writes.
+    /// three registers a value is held in; null for every other instruction.
     /// </summary>
-    public static (Registers From, Registers To)? Moved(string mnemonic) => mnemonic switch
-    {
-        "tax" => (Registers.A, Registers.X),
-        "tay" => (Registers.A, Registers.Y),
-        "txa" => (Registers.X, Registers.A),
-        "tya" => (Registers.Y, Registers.A),
-        "txy" => (Registers.X, Registers.Y),
-        "tyx" => (Registers.Y, Registers.X),
-        _ => null,
-    };
+    public static (Registers From, Registers To)? Moved(string mnemonic) => Instructions.Facts(mnemonic).Copies;
 
     /// <summary>The register as a message and a lens name it: <c>A</c>, <c>X</c>, <c>Y</c>, <c>C</c>.</summary>
     public static string Spell(Registers registers) =>

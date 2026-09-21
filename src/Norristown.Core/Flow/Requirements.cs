@@ -133,7 +133,7 @@ internal sealed class Requirements
         var mode = layout.Of(statement, step.On)?.Mode;
         switch (Transfers.Of(statement, mode))
         {
-            case Transfer.Elsewhere when Is(statement, "jsr", "jsl"):
+            case Transfer.Elsewhere when Mnemonic(statement).Calls:
                 Report(statement, $"{Quoted(statement)} calls where its operand points, which the analysis cannot "
                     + "see: `.next` names the routines it calls");
                 break;
@@ -289,7 +289,7 @@ internal sealed class Requirements
         var transfer = Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode);
         var runsOn = (transfer is Transfer.Through or Transfer.Branch or Transfer.Call
             || flow.RelativeCallAt(step) is not null
-            || transfer == Transfer.Elsewhere && Is(step.Statement, "jsr", "jsl"))
+            || transfer == Transfer.Elsewhere && Mnemonic(step.Statement).Calls)
             && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
             diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message) { Fix = EndPath(step) });
@@ -369,7 +369,13 @@ internal sealed class Requirements
     /// <summary>Whether an instruction writes to the memory its operand names.</summary>
     private static bool Stores(SyntaxNode statement, AddressingMode? mode) =>
         mode is not (null or AddressingMode.Immediate or AddressingMode.Accumulator or AddressingMode.Implied)
-        && Is(statement, "sta", "stx", "sty", "stz", "inc", "dec", "asl", "lsr", "rol", "ror", "tsb", "trb");
+        && Mnemonic(statement).Stores;
+
+    /// <summary>What the statement's instruction is, or nothing at all where it is not one.</summary>
+    private static InstructionFacts Mnemonic(SyntaxNode statement) =>
+        statement is InstructionStatementSyntax instruction
+            ? Instructions.Facts(instruction.Mnemonic.Text)
+            : InstructionFacts.None;
 
     /// <summary>
     /// An exported label inside a routine lets other files jump into it, where this file's

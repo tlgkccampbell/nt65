@@ -20,6 +20,15 @@ public static class Instructions
 
     private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65816 = Build65816();
 
+    private static readonly FrozenDictionary<string, InstructionFacts> facts = BuildFacts();
+
+    /// <summary>
+    /// What <paramref name="mnemonic"/> is, beyond which modes it has: whether it calls or
+    /// returns, what it pushes or pulls, and which registers it leaves changed.
+    /// </summary>
+    public static InstructionFacts Facts(string mnemonic) =>
+        facts.GetValueOrDefault(mnemonic.ToLowerInvariant(), InstructionFacts.None);
+
     /// <summary>Whether <paramref name="cpu"/> has <paramref name="mnemonic"/> at all.</summary>
     public static bool Has(Cpu cpu, string mnemonic) => Modes(cpu, mnemonic).Count > 0;
 
@@ -62,15 +71,9 @@ public static class Instructions
 
     /// <summary>
     /// The register whose width sizes <paramref name="mnemonic"/>'s immediate on the 65816,
-    /// or null when its immediate is always one byte. ca65 sizes exactly these from its
-    /// <c>.a8</c>/<c>.a16</c> and <c>.i8</c>/<c>.i16</c> settings.
+    /// or null when its immediate is always one byte.
     /// </summary>
-    public static WidthRegister? SizedBy(string mnemonic) => mnemonic.ToLowerInvariant() switch
-    {
-        "lda" or "adc" or "and" or "bit" or "cmp" or "eor" or "ora" or "sbc" => WidthRegister.A,
-        "ldx" or "ldy" or "cpx" or "cpy" => WidthRegister.Index,
-        _ => null,
-    };
+    public static WidthRegister? SizedBy(string mnemonic) => Facts(mnemonic).SizedBy;
 
     /// <summary>
     /// How wide the address in an operand of this mode is, or null where the mode carries no
@@ -129,6 +132,67 @@ public static class Instructions
             _ => "vs",
         };
         return ("b" + condition, "b" + opposite);
+    }
+
+    /// <summary>
+    /// What each mnemonic is. The groups read the way the passes above ask about them: what
+    /// writes which register, what moves one to another, what calls, returns and stores, what
+    /// the stack instructions move, and what the 65816 sizes by a width.
+    /// </summary>
+    private static FrozenDictionary<string, InstructionFacts> BuildFacts()
+    {
+        var table = new Dictionary<string, InstructionFacts>(StringComparer.Ordinal);
+
+        // A shift or an increment through the accumulator writes it and one through memory
+        // does not, and which flags a `rep` or a `sep` names is in its operand; this is the
+        // widest each of them can write, and the mode and the operand narrow it.
+        Fact(table, "lda pla txa tya tdc tsc xba and ora eor", f => f with { Writes = Registers.A });
+        Fact(table, "adc sbc asl lsr rol ror", f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, "inc dec", f => f with { Writes = Registers.A });
+        Fact(table, "ldx plx tax tsx tyx inx dex", f => f with { Writes = Registers.X });
+        Fact(table, "ldy ply tay txy iny dey", f => f with { Writes = Registers.Y });
+        Fact(table, "cmp cpx cpy clc sec plp rti rep sep", f => f with { Writes = Registers.C });
+
+        // A block move counts down in A and walks X and Y along the two banks. Swapping the
+        // carry with the emulation flag truncates the index registers and hides half the
+        // accumulator, and a software interrupt runs a handler this program may not even hold.
+        Fact(table, "mvn mvp", f => f with { Writes = Registers.A | Registers.X | Registers.Y });
+        Fact(table, "xce brk cop", f => f with { Writes = Registers.All });
+
+        Fact(table, "tax", f => f with { Copies = (Registers.A, Registers.X) });
+        Fact(table, "tay", f => f with { Copies = (Registers.A, Registers.Y) });
+        Fact(table, "txa", f => f with { Copies = (Registers.X, Registers.A) });
+        Fact(table, "tya", f => f with { Copies = (Registers.Y, Registers.A) });
+        Fact(table, "txy", f => f with { Copies = (Registers.X, Registers.Y) });
+        Fact(table, "tyx", f => f with { Copies = (Registers.Y, Registers.X) });
+
+        Fact(table, "jsr jsl", f => f with { Calls = true });
+        Fact(table, "rts rtl rti", f => f with { Returns = true });
+        Fact(table, "sta stx sty stz inc dec asl lsr rol ror tsb trb", f => f with { Stores = true });
+
+        Fact(table, "pha", f => f with { Pushes = PushSize.Accumulator, Held = Registers.A });
+        Fact(table, "phx", f => f with { Pushes = PushSize.Index, Held = Registers.X });
+        Fact(table, "phy", f => f with { Pushes = PushSize.Index, Held = Registers.Y });
+        Fact(table, "php", f => f with { Pushes = PushSize.OneByte, Held = Registers.C });
+        Fact(table, "phb phk", f => f with { Pushes = PushSize.OneByte });
+        Fact(table, "phd pea pei per", f => f with { Pushes = PushSize.TwoBytes });
+        Fact(table, "pla", f => f with { Pulls = PushSize.Accumulator, Held = Registers.A });
+        Fact(table, "plx", f => f with { Pulls = PushSize.Index, Held = Registers.X });
+        Fact(table, "ply", f => f with { Pulls = PushSize.Index, Held = Registers.Y });
+        Fact(table, "plp", f => f with { Pulls = PushSize.OneByte, Held = Registers.C });
+        Fact(table, "plb", f => f with { Pulls = PushSize.OneByte });
+        Fact(table, "pld", f => f with { Pulls = PushSize.TwoBytes });
+
+        Fact(table, "lda adc and bit cmp eor ora sbc", f => f with { SizedBy = WidthRegister.A });
+        Fact(table, "ldx ldy cpx cpy", f => f with { SizedBy = WidthRegister.Index });
+        return table.ToFrozenDictionary(StringComparer.Ordinal);
+    }
+
+    private static void Fact(
+        Dictionary<string, InstructionFacts> table, string mnemonics, Func<InstructionFacts, InstructionFacts> with)
+    {
+        foreach (var mnemonic in mnemonics.Split(' '))
+            table[mnemonic] = with(table.GetValueOrDefault(mnemonic, InstructionFacts.None));
     }
 
     private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502()

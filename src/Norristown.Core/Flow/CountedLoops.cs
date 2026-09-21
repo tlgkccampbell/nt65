@@ -18,14 +18,6 @@ namespace Norristown.Flow;
 /// </summary>
 internal static class CountedLoops
 {
-    /// <summary>What writes X, so that anything else in the loop touching it rules the loop out.</summary>
-    private static readonly HashSet<string> WritesX =
-        new(StringComparer.Ordinal) { "ldx", "tax", "tsx", "plx", "inx", "dex", "tyx" };
-
-    /// <summary>The same for Y.</summary>
-    private static readonly HashSet<string> WritesY =
-        new(StringComparer.Ordinal) { "ldy", "tay", "ply", "iny", "dey", "txy" };
-
     /// <summary>
     /// Finds every counted loop in <paramref name="blocks"/> and writes what it costs on it.
     /// A loop inside another is settled first, so that the turn of the loop around it already
@@ -63,7 +55,7 @@ internal static class CountedLoops
         if (Mnemonic(steps[^1]) is not ("bne" or "bpl") || Mnemonic(steps[^2]) is not ("dex" or "dey"))
             return null;
         var counter = Mnemonic(steps[^2])!;
-        var register = counter == "dex" ? WritesX : WritesY;
+        var register = counter == "dex" ? Registers.X : Registers.Y;
 
         // The count may come down by more than one a turn, as it does where it walks an array
         // of words: every one of them runs on the turn, being written in a row before the
@@ -97,7 +89,7 @@ internal static class CountedLoops
             {
                 if (i == loop.Latch && counting.Contains(step.Statement.Position))
                     continue;
-                if (Mnemonic(step) is { } other && register.Contains(other))
+                if (Mnemonic(step) is { } other && Writes(other, register))
                     return null;
             }
         }
@@ -138,12 +130,12 @@ internal static class CountedLoops
     /// The immediate the block before the loop leaves in the register, or null when what it
     /// leaves there is anything else. The last thing it writes is what the loop starts from.
     /// </summary>
-    private static long? Started(SemanticModel model, BasicBlock before, string load, HashSet<string> register)
+    private static long? Started(SemanticModel model, BasicBlock before, string load, Registers register)
     {
         long? started = null;
         foreach (var step in Written(before))
         {
-            if (Mnemonic(step) is not { } mnemonic || !register.Contains(mnemonic))
+            if (Mnemonic(step) is not { } mnemonic || !Writes(mnemonic, register))
                 continue;
             started = mnemonic == load ? Immediate(model, step) : null;
         }
@@ -200,6 +192,10 @@ internal static class CountedLoops
                 blocks[i].LoopCycles = i == loop.Header ? cost : new CycleCount(0);
         }
     }
+
+    /// <summary>Whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
+    private static bool Writes(string mnemonic, Registers register) =>
+        Instructions.Facts(mnemonic).Writes.HasFlag(register);
 
     /// <summary>The instructions written in a block, the markers and the directives aside.</summary>
     private static List<Step> Written(BasicBlock block) =>

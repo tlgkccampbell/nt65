@@ -381,13 +381,14 @@ public static class RegisterKeeps
 
             var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
             var mode = layout.Of(statement, step.On)?.Mode;
+            var facts = Instructions.Facts(mnemonic);
 
             // A software interrupt runs a handler that may not even be in this program.
             if (mnemonic is "brk" or "cop")
                 return state.WithEach(Registers.All, RegisterValue.Unknown);
 
             // A call is the block's business, because what it does depends on what it reaches.
-            if (mnemonic is "jsr" or "jsl")
+            if (facts.Calls)
                 return state;
 
             // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
@@ -396,10 +397,10 @@ public static class RegisterKeeps
             if (mnemonic == "rti")
                 return state.With(Registers.C, state.Stack is { Depth: 0 } ? RegisterValue.Of(Registers.C) : RegisterValue.Unknown);
 
-            if (Pushed(mnemonic) is { } push)
-                return Saved(step, state, mnemonic, push);
-            if (Pulled(mnemonic) is { } pull)
-                return Restored(step, state, mnemonic, pull);
+            if (facts.Pushes is { } push)
+                return Saved(step, state, facts, push);
+            if (facts.Pulls is { } pull)
+                return Restored(step, state, facts, pull);
 
             // The stack pointer moving puts the saves somewhere nothing is known of.
             if (mnemonic is "txs" or "tcs")
@@ -451,44 +452,20 @@ public static class RegisterKeeps
             return reached!;
         }
 
-        /// <summary>The push a mnemonic makes, and what it pushes, or null when it pushes nothing.</summary>
-        private static (PushSize Size, Registers? Register)? Pushed(string mnemonic) => mnemonic switch
+        /// <summary>A push: what the register held goes on the stack, and nothing known for the rest.</summary>
+        private RegisterState Saved(Step step, RegisterState state, InstructionFacts facts, PushSize size)
         {
-            "pha" => (PushSize.Accumulator, Registers.A),
-            "phx" => (PushSize.Index, Registers.X),
-            "phy" => (PushSize.Index, Registers.Y),
-            "php" => (PushSize.OneByte, Registers.C),
-            "phb" or "phk" => (PushSize.OneByte, null),
-            "phd" or "pea" or "pei" or "per" => (PushSize.TwoBytes, null),
-            _ => null,
-        };
-
-        /// <summary>The pull a mnemonic makes, and where it puts it, or null when it pulls nothing.</summary>
-        private static (PushSize Size, Registers? Register)? Pulled(string mnemonic) => mnemonic switch
-        {
-            "pla" => (PushSize.Accumulator, Registers.A),
-            "plx" => (PushSize.Index, Registers.X),
-            "ply" => (PushSize.Index, Registers.Y),
-            "plp" => (PushSize.OneByte, Registers.C),
-            "plb" => (PushSize.OneByte, null),
-            "pld" => (PushSize.TwoBytes, null),
-            _ => null,
-        };
-
-        private RegisterState Saved(Step step, RegisterState state, string mnemonic, (PushSize Size, Registers? Register) push)
-        {
-            var value = push.Register is { } register && mnemonic != "phb" && mnemonic != "phk"
-                ? state.Of(register)
-                : RegisterValue.Unknown;
-            return state with { Stack = state.Stack?.Push(new SavedPush(value, push.Size, Width(step, push.Size))) };
+            var value = facts.Held == Registers.None ? RegisterValue.Unknown : state.Of(facts.Held);
+            return state with { Stack = state.Stack?.Push(new SavedPush(value, size, Width(step, size))) };
         }
 
-        private RegisterState Restored(Step step, RegisterState state, string mnemonic, (PushSize Size, Registers? Register) pull)
+        /// <summary>A pull: the register it fills gets back what the push it matches held.</summary>
+        private RegisterState Restored(Step step, RegisterState state, InstructionFacts facts, PushSize size)
         {
-            var width = Width(step, pull.Size);
-            var value = state.Stack?.Pulled(pull.Size, width) ?? RegisterValue.Unknown;
-            var pulled = state with { Stack = state.Stack?.Pull(pull.Size, width) };
-            return pull.Register is { } register ? pulled.With(register, value) : pulled;
+            var width = Width(step, size);
+            var value = state.Stack?.Pulled(size, width) ?? RegisterValue.Unknown;
+            var pulled = state with { Stack = state.Stack?.Pull(size, width) };
+            return facts.Held == Registers.None ? pulled : pulled.With(facts.Held, value);
         }
 
         /// <summary>
@@ -517,7 +494,7 @@ public static class RegisterKeeps
             var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() ?? "";
             var calls = transfer == Transfer.Call
                 || flow.RelativeCallAt(step) is not null
-                || (transfer == Transfer.Elsewhere && mnemonic is "jsr" or "jsl");
+                || (transfer == Transfer.Elsewhere && Instructions.Facts(mnemonic).Calls);
 
             // `stp` stops the processor, so nothing ever reads what it left; `rti` goes back to
             // whatever the interrupt broke into, which is exactly where the registers matter.

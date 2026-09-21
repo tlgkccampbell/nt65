@@ -21,7 +21,7 @@ public static class Transfers
             return Transfer.Through;
 
         var mnemonic = instruction.Mnemonic.Text;
-        if (Is(mnemonic, "rts") || Is(mnemonic, "rti") || Is(mnemonic, "rtl"))
+        if (Instructions.Facts(mnemonic).Returns)
             return Transfer.Return;
 
         // `stp` stops the processor, and nothing after it runs until a reset.
@@ -34,7 +34,7 @@ public static class Transfers
 
         // An indirect or computed target is one the operand does not name, whichever
         // instruction reaches it.
-        if (Is(mnemonic, "jsr") || Is(mnemonic, "jsl"))
+        if (Instructions.Facts(mnemonic).Calls)
             return mode is AddressingMode.Absolute or AddressingMode.Long ? Transfer.Call : Transfer.Elsewhere;
         if (Is(mnemonic, "jmp") || Is(mnemonic, "jml"))
             return mode is AddressingMode.Absolute or AddressingMode.Long ? Transfer.Jump : Transfer.Elsewhere;
