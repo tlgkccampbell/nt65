@@ -14,6 +14,9 @@ namespace Norristown.Tests.Editors;
 /// </summary>
 public sealed class ExtensionTests : IDisposable
 {
+    /// <summary>The client's own code, which the manifest has to agree with.</summary>
+    private static readonly string[] ClientFiles = ["extension.js", "views.js"];
+
     private static readonly JsonDocument Package = Read("package.json");
     private static readonly JsonDocument Schema = Read("nt65.schema.json");
     private static readonly JsonDocument Language = Read("language-configuration.json");
@@ -152,7 +155,45 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("./nt65.schema.json", validation.GetProperty("url").GetString());
         Assert.Equal("nt65", contributes.GetProperty("problemMatchers").EnumerateArray().Single().GetProperty("name").GetString());
         Assert.Equal("nt65", contributes.GetProperty("taskDefinitions").EnumerateArray().Single().GetProperty("type").GetString());
+
+        // nt65 reads the project file with comments and trailing commas allowed, so the editor
+        // is told it is JSON with comments and not JSON, or it would report what nt65 accepts.
+        Assert.Equal(
+            "jsonc",
+            contributes.GetProperty("configurationDefaults").GetProperty("files.associations")
+                .GetProperty(ProjectFile.Name).GetString());
     }
+
+    /// <summary>
+    /// Every command the client registers is one the palette offers, and every command the
+    /// palette offers is one the client registers. The one exception is the rename the server
+    /// runs, which is nobody's to type.
+    /// </summary>
+    [Fact]
+    public void TheCommandsOfferedAreTheCommandsRegistered()
+    {
+        var offered = Package.RootElement.GetProperty("contributes").GetProperty("commands")
+            .EnumerateArray().Select(command => command.GetProperty("command").GetString() ?? "")
+            .Order(StringComparer.Ordinal);
+        var registered = Registered().Where(name => name != "nt65.rename").Order(StringComparer.Ordinal);
+        Assert.Equal(offered, registered);
+
+        // A lone file gets a server: the extension starts on the language and not only on a
+        // workspace that holds a project file.
+        Assert.Contains(
+            "onLanguage:nt65",
+            Package.RootElement.GetProperty("activationEvents").EnumerateArray().Select(e => e.GetString()));
+    }
+
+    /// <summary>The commands the client's own code registers, from the calls that register them.</summary>
+    private static IEnumerable<string> Registered() =>
+        ClientFiles
+            .SelectMany(file => Regex.Matches(
+                Repo.ReadText(Repo.Path("editors", "vscode", file)),
+                @"registerCommand\('(?<name>[^']+)'",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(5)))
+            .Select(match => match.Groups["name"].Value);
 
     /// <summary>
     /// The grammar that colours a hover's grid, against the lines the server writes into one.

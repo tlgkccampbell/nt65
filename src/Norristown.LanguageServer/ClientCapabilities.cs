@@ -22,6 +22,10 @@ namespace Norristown.LanguageServer;
 /// Whether the client asks before it moves a file, so that the edits the move calls for are
 /// applied with it rather than after it.
 /// </param>
+/// <param name="WatchesWhatItIsAsked">
+/// Whether the client can be asked, after it has connected, to watch something more: which
+/// files an <c>.incbin</c> measures is the program's to say and is not known before it is read.
+/// </param>
 internal sealed record ClientCapabilities(
     bool RefreshesTokens,
     bool RefreshesLenses,
@@ -30,10 +34,11 @@ internal sealed record ClientCapabilities(
     bool DocumentChanges,
     bool HierarchicalSymbols,
     bool WorkspaceFolders,
-    bool WillRenameFiles)
+    bool WillRenameFiles,
+    bool WatchesWhatItIsAsked)
 {
     /// <summary>A client that has declared nothing, which is what a server assumes until it has.</summary>
-    public static ClientCapabilities None { get; } = new(false, false, false, false, false, false, false);
+    public static ClientCapabilities None { get; } = new(false, false, false, false, false, false, false, false);
 
     /// <summary>What the <c>capabilities</c> of an <c>initialize</c> request declare.</summary>
     public static ClientCapabilities Of(JsonElement? capabilities) => new(
@@ -45,7 +50,9 @@ internal sealed record ClientCapabilities(
         HierarchicalSymbols: Flag(
             capabilities, "textDocument", "documentSymbol", "hierarchicalDocumentSymbolSupport"),
         WorkspaceFolders: Flag(capabilities, "workspace", "workspaceFolders"),
-        WillRenameFiles: Flag(capabilities, "workspace", "fileOperations", "willRename"));
+        WillRenameFiles: Flag(capabilities, "workspace", "fileOperations", "willRename"),
+        WatchesWhatItIsAsked: Flag(
+            capabilities, "workspace", "didChangeWatchedFiles", "dynamicRegistration"));
 
     /// <summary>Whether the nested property <paramref name="path"/> names is declared true.</summary>
     private static bool Flag(JsonElement? capabilities, params string[] path)

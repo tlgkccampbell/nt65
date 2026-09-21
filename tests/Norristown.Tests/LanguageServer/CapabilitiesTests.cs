@@ -43,7 +43,8 @@ public sealed class CapabilitiesTests : IDisposable
                 "inlayHint": { "refreshSupport": true },
                 "workspaceEdit": { "documentChanges": true },
                 "workspaceFolders": true,
-                "fileOperations": { "willRename": true }
+                "fileOperations": { "willRename": true },
+                "didChangeWatchedFiles": { "dynamicRegistration": true }
               },
               "textDocument": {
                 "completion": { "completionItem": { "snippetSupport": true } },
@@ -52,7 +53,7 @@ public sealed class CapabilitiesTests : IDisposable
             }
             """).RootElement);
 
-        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true), declared);
+        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true, true), declared);
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(JsonDocument.Parse("{}").RootElement));
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(null));
 

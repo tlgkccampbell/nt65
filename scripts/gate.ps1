@@ -24,6 +24,11 @@ Step 'build' { dotnet build (Join-Path $root 'Norristown.slnx') --nologo -v q -c
 Step 'tests' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild }
 Step 'ca65 oracle' { & (Join-Path $PSScriptRoot 'test.ps1') -NoBuild -Ca65 }
 Step 'corpus builds' { & (Join-Path $PSScriptRoot 'corpus.ps1') }
-Step 'vscode client' { node --check (Join-Path $root 'editors/vscode/extension.js') }
+Step 'vscode client' {
+    foreach ($file in @('extension.js', 'views.js')) {
+        node --check (Join-Path $root "editors/vscode/$file")
+        if ($LASTEXITCODE -ne 0) { return }
+    }
+}
 
 Write-Host ("gate passed in {0:0.0}s" -f $total.Elapsed.TotalSeconds) -ForegroundColor Green

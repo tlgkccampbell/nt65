@@ -20,6 +20,18 @@ build tasks and a schema for the project file.
   instruction shows what each register holds at that line. A hover's grid of facts is
   coloured from a grammar this extension contributes, so the keys, what the analysis could
   not work out and what is about the block rather than the line each read as themselves.
+- **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
+  file you are in, as the program stands with whatever you have not saved, and the caret is the
+  link: move in the source and the lines it became are highlighted and scrolled to; move in the
+  output and the line that wrote them is highlighted. It follows your edits, and a file with
+  errors shows what could be written under a first line saying so. `nt65 build --stdout` writes
+  the same text.
+- **What a macro call becomes.** Hovering a call says it in one line — `expands to 14 lines ·
+  31 bytes · 58–64 cycles` — and shows the first eight lines of the expansion, in nt65 and not
+  in ca65: the body with your arguments in place. **Show expansion** opens the rest beside the
+  file, with the calls inside it left as calls and a lens on each to open that one too, one
+  level at a time. **Inline `name!`**, under the light bulb, writes the expansion where the
+  call was; where that would change what the line means it is offered greyed, with the reason.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.
@@ -40,7 +52,9 @@ build tasks and a schema for the project file.
 ## Getting started
 
 Open a folder holding an `nt65.json`. The extension starts there, analyzes the whole program,
-and offers its build tasks.
+and offers its build tasks. Opening a single `.nt65` file with no project anywhere works too:
+the file is its own program, and everything but the project's settings is the same.
+**nt65: Restart Server** starts the server again where it has stopped answering.
 
 The extension carries the language server and runs it on the installed .NET 10 runtime. The
 `nt65` command is a separate .NET tool, which the build tasks run from the path; point

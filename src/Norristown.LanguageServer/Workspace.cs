@@ -236,6 +236,23 @@ internal sealed class Workspace
         }
     }
 
+    /// <summary>
+    /// The files an <c>.incbin</c> was measured from, across every program, as logical paths.
+    /// They are what the editor has to be asked to watch beyond the sources and the project
+    /// files: which of them a program includes is the program's to say.
+    /// </summary>
+    public IReadOnlyList<string> Binaries()
+    {
+        lock (gate)
+        {
+            return [.. projects.Select(project => project.Analysis(open.Values))
+                .Concat(loose is null ? [] : [loose])
+                .SelectMany(analysis => analysis.Binaries)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)];
+        }
+    }
+
     /// <summary>The projects the workspace holds, as they stand.</summary>
     public IReadOnlyList<WorkspaceProject> Projects()
     {

@@ -68,6 +68,11 @@ internal sealed class Server
     // for. It is set from a request and read from the publishing, which are different threads.
     private volatile bool watchingOutput;
 
+    // The binaries the client has been asked to watch. The editor watches the sources and the
+    // project files by itself; which files an `.incbin` measures is the program's to say, and
+    // is not known before it has been read.
+    private IReadOnlyList<string> watchedBinaries = [];
+
     private Server(ServerLog log, Framing framing, Delay delay)
     {
         this.log = log;
@@ -770,6 +775,10 @@ internal sealed class Server
                 new PublishDiagnosticsParams(gone, null, [])).ConfigureAwait(false);
         }
 
+        // The binaries this program includes may have changed with it, and the editor watches
+        // only what it can know about without reading the program.
+        await WatchBinariesAsync().ConfigureAwait(false);
+
         // A view of what a file became follows the program rather than the caret, so it hears
         // once the typing has stopped, from the same wait the rest of the squiggles come on.
         if (watchingOutput)
@@ -827,6 +836,43 @@ internal sealed class Server
         await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
             new PublishDiagnosticsParams(file.Uri, file.Version, diagnostics)).ConfigureAwait(false);
         return true;
+    }
+
+    /// <summary>
+    /// Asks the client to watch the files this workspace's programs include, where it can be
+    /// asked. The editor watches the sources and the project files by itself; which files an
+    /// <c>.incbin</c> measures follows from reading the program, so it is asked for here and
+    /// asked for again whenever the set changes.
+    /// </summary>
+    private async Task WatchBinariesAsync()
+    {
+        if (!client.WatchesWhatItIsAsked)
+            return;
+        var binaries = workspace.Binaries();
+        if (binaries.SequenceEqual(watchedBinaries, StringComparer.Ordinal))
+            return;
+        const string id = "nt65-binaries";
+        try
+        {
+            if (watchedBinaries.Count > 0)
+            {
+                await rpc!.InvokeWithParameterObjectAsync<object?>("client/unregisterCapability",
+                    new UnregistrationParams([new Unregistration(id, "workspace/didChangeWatchedFiles")]))
+                    .ConfigureAwait(false);
+            }
+            watchedBinaries = binaries;
+            if (binaries.Count == 0)
+                return;
+            await rpc!.InvokeWithParameterObjectAsync<object?>("client/registerCapability",
+                new RegistrationParams([new Registration(id, "workspace/didChangeWatchedFiles",
+                    new DidChangeWatchedFilesRegistrationOptions(
+                        [.. binaries.Select(path => new Protocol.FileSystemWatcher(path))]))]))
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is RemoteInvocationException or ConnectionLostException or ObjectDisposedException)
+        {
+            log.Write($"the client did not take the files to watch: {e.Message}");
+        }
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
+const views = require('./views');
 
 let client;
 
@@ -160,8 +161,9 @@ async function renameAt(uri, line, character) {
 
 async function activate(context) {
   // The active configuration goes to the server when it starts, and again whenever the `nt65`
-  // settings change. Every file change is sent: a project file, a source no one has open, or a
-  // file an `.incbin` names may each change what is wrong, and the server knows which it reads.
+  // settings change. What is watched is what a program is made of: the sources and the project
+  // files. The binaries an `.incbin` measures are the program's to name, so the server asks to
+  // be told about those itself, once it has read the program.
   client = new LanguageClient('nt65', 'nt65',
     serverOptions(context),
     {
@@ -172,7 +174,10 @@ async function activate(context) {
       },
       synchronize: {
         configurationSection: 'nt65',
-        fileEvents: vscode.workspace.createFileSystemWatcher('**/*'),
+        fileEvents: [
+          vscode.workspace.createFileSystemWatcher('**/*.nt65'),
+          vscode.workspace.createFileSystemWatcher('**/nt65.json'),
+        ],
       },
     });
   // `nt65.rename` is the server's to run and nobody's to type, so it is registered without
@@ -180,6 +185,7 @@ async function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
     vscode.commands.registerCommand('nt65.rename', renameAt),
+    vscode.commands.registerCommand('nt65.restartServer', () => client.restart()),
     vscode.tasks.registerTaskProvider('nt65', {
       provideTasks: () => buildTasks(context),
 
@@ -192,6 +198,7 @@ async function activate(context) {
     }));
   statusItem(context);
   cycleCounts(context);
+  views.register(context, client);
   await client.start();
 }
 

@@ -10,6 +10,7 @@
   },
   "main": "./extension.js",
   "activationEvents": [
+    "onLanguage:nt65",
     "workspaceContains:**/nt65.json",
     "onTaskType:nt65"
   ],
@@ -23,6 +24,21 @@
       {
         "command": "nt65.toggleCycleCounts",
         "title": "Toggle Cycle Counts",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.showOutputBeside",
+        "title": "Show Output Beside",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.showExpansion",
+        "title": "Show Macro Expansion",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.restartServer",
+        "title": "Restart Server",
         "category": "nt65"
       }
     ],
@@ -104,6 +120,9 @@
     "configurationDefaults": {
       "[nt65]": {
         "editor.semanticHighlighting.enabled": true
+      },
+      "files.associations": {
+        "nt65.json": "jsonc"
       }
     },
     "configuration": {

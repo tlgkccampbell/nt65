@@ -3200,7 +3200,15 @@ again. What is published is every file of every project, from the moment the edi
 and a file is sent again only where what is wrong with it changed, so that an edit in a
 program of hundreds of files costs one message and not hundreds. The folders the editor has
 open are the workspace: a folder added to it brings whatever projects are in it, and one
-taken out takes its projects with it.
+taken out takes its projects with it. A single `.nt65` file opened with no project anywhere is
+served like any other: it is a program of the open files no project names, and everything the
+editor asks about it is answered from that.
+
+**What the editor watches.** The sources and the project files, which it can know about
+without reading anything: `**/*.nt65` and `**/nt65.json`. The files an `.incbin` measures are
+the program's to name and are known only once it has been read, so the server asks the editor
+to watch those once it has read it, and asks again whenever the set changes; an editor that
+cannot be asked watches the first two and hears about a binary when something else changes.
 
 **What a keystroke publishes, and when.** A squiggle never flickers, and is never about text
 that is gone. Four rules keep that:

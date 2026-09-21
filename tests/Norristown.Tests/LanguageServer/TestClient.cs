@@ -76,6 +76,7 @@ internal sealed class TestClient : IAsyncDisposable
             workspaceEdit = new { documentChanges = true },
             workspaceFolders = true,
             fileOperations = new { willRename = true },
+            didChangeWatchedFiles = new { dynamicRegistration = true },
             semanticTokens = new { refreshSupport = refreshesTokens },
             inlayHint = new { refreshSupport = refreshesHints },
         },
