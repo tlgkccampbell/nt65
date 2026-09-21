@@ -68,11 +68,12 @@ public sealed class WorkspaceRequestsTests
 
         // What the call costs, worked out from the flow of the file that declares the routine,
         // which is not the file the call is written in. It is what a caller came to ask, so it
-        // is read before where the routine lives.
+        // stands above the rule and where the routine lives stands under it.
         Assert.Contains(
-            "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\naddress",
+            "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\n```\n---\n",
             hover.Contents.Value,
             StringComparison.Ordinal);
+        Assert.Contains("address", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     [Fact]

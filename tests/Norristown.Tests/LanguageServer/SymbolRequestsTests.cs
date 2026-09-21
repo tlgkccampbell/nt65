@@ -73,7 +73,11 @@ public sealed class SymbolRequestsTests
         var constant = await client.HoverAsync(Uri, new Position(5, 0), timeout);
         Assert.NotNull(constant);
         Assert.Contains("```nt65\nSCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("value    $0400 (1024)\naddress  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
+
+        // What a constant is worth is what it is pointed at for, and stands above the rule; how
+        // wide an address it would make is the working under it.
+        Assert.Contains("value    $0400 (1024)\n```\n---\n", constant.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("address  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -177,7 +181,8 @@ public sealed class SymbolRequestsTests
         var member = await client.HoverAsync(Uri, new Position(8, 0), timeout);
         Assert.NotNull(member);
         Assert.Contains("```nt65\nmember Player::hp\n```", member.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("offset  4\nsize    1 byte", member.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("offset  4\n```\n---\n", member.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("size    1 byte", member.Contents.Value, StringComparison.Ordinal);
 
         var nested = await client.HoverAsync(Uri, new Position(7, 0), timeout);
         Assert.NotNull(nested);
@@ -201,6 +206,64 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n@loop:\n```", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("private to  init", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Every hover is read from the top down: the line that declares the thing, the comment its
+    /// author left above it, the one or two facts that kind of thing is asked about most, a
+    /// rule, and everything else under it. Nothing is left out for being far down.
+    /// </summary>
+    [Fact]
+    public async Task HoverLeadsWithWhatThatKindOfNameIsAskedAbout()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, """
+            .module main
+            .segment CODE
+
+            ; How many tiles a row holds.
+            WIDTH = 8 * 4
+
+            .proc clear {
+                rts
+            }
+            """);
+        await client.NextDiagnosticsAsync(timeout);
+
+        var constant = await client.HoverAsync(Uri, new Position(4, 0), timeout);
+        Assert.Equal("""
+            ```nt65
+            WIDTH = 8 * 4
+            ```
+
+            How many tiles a row holds.
+
+            ```nt65-hover
+            value    $20 (32)
+            ```
+            ---
+            ```nt65-hover
+            address  zp (1 byte)
+            ```
+            """.ReplaceLineEndings("\n"), constant!.Contents.Value);
+
+        // A routine is pointed at to find out what a call to it costs and what it hands back.
+        var routine = await client.HoverAsync(Uri, new Position(6, 6), timeout);
+        Assert.Equal("""
+            ```nt65
+            .proc clear
+            ```
+
+            ```nt65-hover
+            cost       6 cycles
+            preserves  A, X, Y, C
+            ```
+            ---
+            ```nt65-hover
+            address    abs (2 bytes) in CODE
+            ```
+            """.ReplaceLineEndings("\n"), routine!.Contents.Value);
     }
 
     [Fact]
@@ -305,9 +368,12 @@ public sealed class SymbolRequestsTests
         var add = await client.HoverAsync(Uri, new Position(4, 4), timeout);
         var store = await client.HoverAsync(Uri, new Position(5, 4), timeout);
 
-        // The line's own facts stand apart from what the registers hold, and the grid is
-        // fenced as a language of its own so that an editor can tell one row from another.
-        Assert.Contains("```nt65-hover\ncycles  2         block 13\nflags   N Z\n\nA       as entered\n",
+        // What the line costs is what an instruction is pointed at for, so it stands above the
+        // rule; the flags it writes and what the registers hold are the working under it. The
+        // grid is fenced as a language of its own so that an editor can tell one row from another.
+        Assert.Contains("```nt65-hover\ncycles  2         block 13\n```\n---\n", load?.Contents.Value,
+            StringComparison.Ordinal);
+        Assert.Contains("```nt65-hover\nflags   N Z\n\nA       as entered\n",
             load?.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("flags   N V Z C\n", add?.Contents.Value, StringComparison.Ordinal);
 

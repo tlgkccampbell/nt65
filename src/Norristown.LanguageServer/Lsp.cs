@@ -41,6 +41,25 @@ internal static class Lsp
     private const int MostPushes = 6;
 
     /// <summary>
+    /// What an instruction is pointed at for: how long it takes, and the state that reaches it
+    /// and sized its operand. The flags it writes, what the registers hold and what is on the
+    /// stack are the working, and stand under the rule.
+    /// </summary>
+    private static readonly IReadOnlySet<string> TimingAsked =
+        new HashSet<string>(["cycles", "state"], StringComparer.Ordinal);
+
+    /// <summary>
+    /// The same for an <c>.ensure</c>, which is pointed at to find out what it turned into:
+    /// the line says what it is for and not what it writes.
+    /// </summary>
+    private static readonly IReadOnlySet<string> EnsureAsked =
+        new HashSet<string>(["writes", "state"], StringComparer.Ordinal);
+
+    /// <summary>What an inline <c>.scope</c> is pointed at for, which is all a block hover has.</summary>
+    private static readonly IReadOnlySet<string> ScopeAsked =
+        new HashSet<string>(["cost", "preserves"], StringComparer.Ordinal);
+
+    /// <summary>
     /// Everything wrong with one file, and the branches this build leaves out. An omitted
     /// branch is not a problem, so it is a hint the client renders faded rather than
     /// anything that appears in a problem list.
@@ -86,9 +105,11 @@ internal static class Lsp
     /// What to show at <paramref name="position"/>: the name under the caret, or, where there
     /// is none, the <c>.scope</c> block the line opens or the instruction written on it.
     /// <para>
-    /// Every hover is the same three zones, and each is left out when it is empty: the line
-    /// under the caret as the language writes it, a grid of what the analysis worked out about
-    /// it, and the comment its author left above it.
+    /// Every hover is read from the top down, and each zone is left out when it is empty: the
+    /// line under the caret as the language writes it, the comment its author left above it,
+    /// the one or two facts that kind of thing is asked about most, a rule, and everything else
+    /// the analysis worked out beneath it. Nothing is left out for being far down; the first
+    /// screenful is the answer and the rest is the working.
     /// </para>
     /// </summary>
     public static Protocol.Hover? ToHover(ProgramAnalysis analysis, SemanticModel model, int position)
@@ -111,7 +132,8 @@ internal static class Lsp
         // see of a file alone keeps their models, and with them the symbols they resolved
         // to, whose file is the one from before the edit.
         var symbol = analysis.Program.Current(reference.Symbol);
-        var card = new Card(Headline(symbol, model.Tree));
+        var card = new Card(Headline(symbol, model.Tree), Asked(symbol));
+        card.Prose(DocComments.Of(symbol));
 
         // A name from another module is worth naming that module for: it is the file the
         // declaration is in, and the file whose `.export` makes it nameable here.
@@ -130,7 +152,8 @@ internal static class Lsp
             card.Row("type", type.QualifiedName);
 
         // What a routine costs and hands back is what a caller came to ask, so it is read before
-        // where the routine lives.
+        // where the routine lives. What a macro call becomes is the same question asked of a
+        // macro, and its rows belong here beside these.
         Routine(card, analysis, symbol);
 
         // How much room it takes and how many of them there are answer one question, so they
@@ -148,9 +171,33 @@ internal static class Lsp
         }
         Declares(card, model, reference);
         Written(card, analysis, symbol);
-        card.Prose(DocComments.Of(symbol));
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, reference.Span));
+    }
+
+    /// <summary>
+    /// The keys of the facts this kind of name is asked about most, which are what a hover
+    /// leads with; every other fact it knows stands under the rule, in the order it is written
+    /// above. A constant is pointed at to read its value, a member to read its offset, a
+    /// routine to find out what a call to it costs and what it hands back, and a name from
+    /// another module to find out which one.
+    /// </summary>
+    private static IReadOnlySet<string> Asked(Symbol symbol)
+    {
+        var kind = symbol.Kind switch
+        {
+            SymbolKind.Member => new[] { "offset" },
+            SymbolKind.Proc or SymbolKind.ExternProc or SymbolKind.Func => ["cost", "preserves"],
+            // What a macro call becomes is what is asked about a macro, and the row that says
+            // it leads whether or not anything writes it yet.
+            SymbolKind.Macro => ["expands to"],
+            SymbolKind.Binding => ["declares"],
+            SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
+                or SymbolKind.Label or SymbolKind.ImportedAddress or SymbolKind.AddressAlias => ["address", "size"],
+            SymbolKind.Struct or SymbolKind.Union or SymbolKind.Enum => ["size"],
+            _ => ["value"],
+        };
+        return new HashSet<string>(["from", "private to", .. kind], StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -283,7 +330,8 @@ internal static class Lsp
             {
                 if (position < scope.Opener.Start || position >= scope.Opener.End)
                     continue;
-                var card = new Card(Written(model.Tree.Text[scope.Opener.Start..scope.Opener.End]));
+                var card = new Card(
+                    Written(model.Tree.Text[scope.Opener.Start..scope.Opener.End]), ScopeAsked);
                 var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
                 card.Row("cost", CodeLenses.Spell(cost, null, null));
                 card.Row("preserves", Spell(scope.Kept, scope.Complete));
@@ -319,9 +367,9 @@ internal static class Lsp
         // is written here, since a reader who knows what `xba` stands for is not the one asking.
         var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant();
         var line = Written(model.Tree.Text[statement.Span.Start..statement.Span.End]);
-        var card = new Card(mnemonic is { } named && Mnemonics.Name(named) is { } called
-            ? $"{line}  ; {called}"
-            : line);
+        var card = new Card(
+            mnemonic is { } named && Mnemonics.Name(named) is { } called ? $"{line}  ; {called}" : line,
+            laid.Ensured is null ? TimingAsked : EnsureAsked);
 
         // What the line takes, what the block around it takes and, where the count is an
         // interval, what its top would be paid for: three scales of the one question, read
@@ -808,29 +856,38 @@ internal static class Lsp
         Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri : path;
 
     /// <summary>
-    /// One hover's text, as every hover is written: a headline holding the line under the
-    /// caret in the language's own syntax, a grid of what the analysis worked out about it,
-    /// and the comment its author left above it, with a rule between the zones and each zone
-    /// left out when it is empty.
+    /// One hover's text, in the order it is read: the line under the caret in the language's
+    /// own syntax, the comment its author left above it, the facts that kind of thing is asked
+    /// about most, a rule, and everything else the analysis worked out under it. A zone with
+    /// nothing in it is left out, and where nothing leads there is no rule either.
     /// <para>
-    /// The grid's keys are padded to one column so that the values line up under one another
-    /// and a reader's eye can run down them. A row whose fact is not known is left out rather
-    /// than written as unknown, so the grid is only what is known.
+    /// Which keys lead is the caller's to say, and the rows are written in one order whichever
+    /// side of the rule they land on, so that what a reader has learned about where a fact
+    /// stands holds from one hover to the next. Both grids are padded to one column, so that
+    /// the rule does not move the values under it.
+    /// </para>
+    /// <para>
+    /// A row whose fact is not known is left out rather than written as unknown, so the grid
+    /// is only what is known.
     /// </para>
     /// </summary>
-    private sealed class Card
+    /// <param name="headline">The line under the caret, as the language writes it.</param>
+    /// <param name="asked">The keys of the rows that stand above the rule.</param>
+    private sealed class Card(string headline, IReadOnlySet<string> asked)
     {
         /// <summary>How far the values stand off the longest key.</summary>
         private const int Gutter = 2;
 
-        /// <summary>The rows, a null standing for a blank line between two groups of them.</summary>
-        private readonly List<(string Key, string Value)?> rows = [];
-
-        private readonly string headline;
+        /// <summary>
+        /// The rows, a null standing for a blank line between two groups of them, each marked
+        /// with whether it leads.
+        /// </summary>
+        private readonly List<((string Key, string Value)? Row, bool Leads)> rows = [];
 
         private string? prose;
 
-        public Card(string headline) => this.headline = headline;
+        /// <summary>Whether the row last written leads, which an empty key carries on.</summary>
+        private bool leading;
 
         /// <summary>
         /// One row of the grid, left out when there is nothing to say. An empty key carries the
@@ -838,12 +895,15 @@ internal static class Lsp
         /// </summary>
         public void Row(string key, string? value)
         {
-            if (value is { Length: > 0 })
-                rows.Add((key, value));
+            if (value is not { Length: > 0 })
+                return;
+            if (key.Length > 0)
+                leading = asked.Contains(key);
+            rows.Add(((key, value), leading));
         }
 
         /// <summary>A blank line between two groups of rows, which keeps them in the same columns.</summary>
-        public void Gap() => rows.Add(null);
+        public void Gap() => rows.Add((null, leading));
 
         /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
         public void Prose(string? written) => prose = written;
@@ -851,19 +911,42 @@ internal static class Lsp
         /// <inheritdoc/>
         public override string ToString()
         {
-            var zones = new List<string>();
+            var column = (rows.Count == 0 ? 0 : rows.Max(row => row.Row?.Key.Length ?? 0)) + Gutter;
+
+            // A gap before the first row of a group would open the grid with a blank line, and
+            // one after the last would close it with one.
+            var lead = Trimmed(rows.Where(row => row.Leads));
+            var rest = Trimmed(rows.Where(row => !row.Leads));
+
+            // What is asked stands together, with nothing between the line, the comment and the
+            // answer; the one rule is where the answer ends and the working begins.
+            var above = new List<string>();
             if (headline.Length > 0)
-                zones.Add($"```nt65\n{headline}\n```");
-            if (rows.Count > 0)
-            {
-                var column = rows.Max(row => row?.Key.Length ?? 0) + Gutter;
-                zones.Add($"```{Grid}\n"
-                    + string.Join("\n", rows.Select(row => row is { } written ? written.Key.PadRight(column) + written.Value : ""))
-                    + "\n```");
-            }
+                above.Add($"```nt65\n{headline}\n```");
             if (prose is { Length: > 0 })
-                zones.Add(prose);
-            return string.Join("\n---\n", zones);
+                above.Add(prose);
+            if (lead.Count > 0)
+                above.Add(Written(lead, column));
+            var answer = string.Join("\n\n", above);
+            return rest.Count == 0
+                ? answer
+                : answer.Length == 0 ? Written(rest, column) : $"{answer}\n---\n{Written(rest, column)}";
         }
+
+        private static IReadOnlyList<(string Key, string Value)?> Trimmed(
+            IEnumerable<((string Key, string Value)? Row, bool Leads)> group)
+        {
+            var rows = group.Select(row => row.Row).ToList();
+            while (rows.Count > 0 && rows[0] is null)
+                rows.RemoveAt(0);
+            while (rows.Count > 0 && rows[^1] is null)
+                rows.RemoveAt(rows.Count - 1);
+            return rows;
+        }
+
+        private static string Written(IReadOnlyList<(string Key, string Value)?> rows, int column) =>
+            $"```{Grid}\n"
+                + string.Join("\n", rows.Select(row => row is { } has ? has.Key.PadRight(column) + has.Value : ""))
+                + "\n```";
     }
 }

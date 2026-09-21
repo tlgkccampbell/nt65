@@ -3032,7 +3032,13 @@ alone and without an assembler:
   written above the declaration. There is no doc-comment syntax of its own: the
   `;` lines directly above a declaration, each on a line of its own, are what its author had
   to say about it, and a blank line or a line of code between ends them. Every instance of a
-  family is declared on the family's line, so each of them shows the family's comment;
+  family is declared on the family's line, so each of them shows the family's comment. A
+  hover is read from the top down, and is ordered so that it can be: the declaring line, the
+  comment, the one or two facts that kind of thing is pointed at for — a constant's value, a
+  member's offset, what a call to a routine costs and which registers it hands back, which
+  module a name came from — then a rule, and everything else the analysis worked out under
+  it. Nothing is left out for standing far down: the first screenful is the answer and the
+  rest is the working;
 - say who calls a routine and what it calls, across modules, from the edges the cycle counts
   are already worked out over: a call, a tail jump, a `.next` under a call, and a `per` and
   branch pair (§7.4). A call nt65 cannot follow is in no list, because there is no routine to
@@ -3061,7 +3067,8 @@ alone and without an assembler:
   which registers the routine hands back as it was entered with them (§7.7);
   an instruction's own cycles and why they are an interval, its block's, the name its
   datasheet gives it, the flags it writes, and on the 65816 the state reaching it, are on
-  hover, so nothing stands in the lines as they are written;
+  hover, so nothing stands in the lines as they are written; what it costs and what state
+  reaches it lead, and the flags, the registers and the stack stand under the rule;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has
