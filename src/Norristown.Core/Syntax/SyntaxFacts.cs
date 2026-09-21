@@ -34,7 +34,7 @@ public static class SyntaxFacts
     [
         ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
         ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
-        ".defined", ".has", ".select",
+        ".defined", ".has", ".select", ".sqrt", ".muldiv", ".sin", ".cos",
     ];
 
     /// <summary>The three a macro body adds, which ask about the arguments it was given.</summary>

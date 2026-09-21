@@ -1,0 +1,76 @@
+; The built-ins that work a number out. Each takes whole numbers and answers a whole number,
+; so a sine table is a `.repeat` in a data body rather than a script in another language, and
+; the bytes are the same on every machine that builds the program.
+.module main
+
+.cpu 6502
+
+; A whole turn in the table's own units, and how far the wave reaches either way.
+TURN  = 256
+SCALE = 127
+
+.segment RODATA
+
+; The sine table a raster or a wobble is written against: one byte a step, biased so that it
+; fits an unsigned byte, which is how a table is read with `lda sine,x`.
+.data sine: .byte[TURN] {
+    .repeat TURN, i {
+        128 + .sin(i, TURN, SCALE)
+    }
+}
+
+; The cosine of the same angle is the sine a quarter turn on, and is written as itself.
+.data cosine: .byte[TURN] {
+    .repeat TURN, i {
+        128 + .cos(i, TURN, SCALE)
+    }
+}
+
+; A quarter of a circle, as a bitmap or a plotter wants it: for each step across, the height
+; that keeps the point on the circle.
+RADIUS = 64
+.data circle: .byte[RADIUS] {
+    .repeat RADIUS, across {
+        .sqrt((RADIUS * RADIUS) - (across * across))
+    }
+}
+
+; `.muldiv` works the product out exactly and then divides, so a step worked out over a whole
+; run neither overflows in the middle nor loses the fraction at the end.
+.data steps: .word[8] {
+    .repeat 8, i {
+        .muldiv(i, $10000, 8)
+    }
+}
+
+; The exact answers, written out so that what the functions promise is what they give.
+.data known: .byte[13] {
+    .sin(0, 256, 127)           ; 0
+    .sin(64, 256, 127)          ; the quarter turn, exactly the scale
+    128 + .sin(128, 256, 127)   ; half a turn is zero again
+    128 + .sin(192, 256, 127)   ; three quarters, exactly minus the scale
+    .cos(0, 256, 127)           ; a cosine starts at the scale
+    .sqrt(0), .sqrt(1), .sqrt(2), .sqrt(3), .sqrt(4), .sqrt(255)
+    .muldiv(1, 1, 2)            ; a half rounds away from zero
+    .muldiv(3, 1, 2)            ; and so does one and a half
+}
+
+; A sixth of a turn is where the sine is exactly a half, which is the one angle at which the
+; answer could sit between two whole numbers. The rule decides it: away from zero.
+.data halves: .byte[3] {
+    .sin(1, 12, 127)            ; 63.5 -> 64
+    128 + .sin(7, 12, 127)      ; -63.5 -> -64
+    .sin(1, 12, 126)            ; 63, with nothing to decide
+}
+
+.segment CODE
+.export .proc main {
+    ldx #0
+    lda sine,x
+    lda cosine,x
+    lda circle,x
+    lda known
+    lda halves
+    ldy steps
+    rts
+}

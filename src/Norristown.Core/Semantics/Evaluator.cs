@@ -877,16 +877,18 @@ internal sealed class Evaluator
 
         // `.target`, `.has`, `.defined` and the three a macro body adds are answered before
         // this point, each by the pass that knows what they ask about.
-        return Plain(name, arguments);
+        return Plain(name, function, arguments);
     }
 
     /// <summary>
     /// The built-in functions that are arithmetic on their arguments and ask nothing about the
     /// program, which are the ones a build's conditions may call as well.
     /// </summary>
-    private Value Plain(string name, IReadOnlyList<SyntaxNode> arguments)
+    private Value Plain(string name, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
     {
         var values = arguments.Select(Evaluate).ToArray();
+        if (name is ".sqrt" or ".muldiv" or ".sin" or ".cos")
+            return Worked(name, function, values);
         return name switch
         {
             ".lobyte" => Number1(values, v => v & 0xff),
@@ -905,9 +907,59 @@ internal sealed class Evaluator
         };
     }
 
+    /// <summary>
+    /// The built-ins that work a number out: a square root, a scaled product, and the sine and
+    /// the cosine a table is built with. Each takes whole numbers and answers a whole number,
+    /// and each says where what it was given has no answer rather than leaving it without one.
+    /// </summary>
+    private Value Worked(string name, SyntaxToken function, Value[] values)
+    {
+        if (values.Any(value => value.Kind != ValueKind.Number))
+            return Value.Unknown;
+        long? worked;
+        switch (name)
+        {
+            case ".sqrt" when values is [var n]:
+                worked = IntegerMath.Sqrt(n.Number);
+                if (worked is null)
+                    Report(function, Catalogue.SqrtOfANegative.Says(n.Number));
+                break;
+            case ".muldiv" when values is [var a, var b, var c]:
+                if (c.Number == 0)
+                {
+                    Report(function, Catalogue.DivisionByZero);
+                    return Value.Unknown;
+                }
+                worked = IntegerMath.MulDiv(a.Number, b.Number, c.Number);
+                if (worked is null)
+                    Report(function, Catalogue.ArithmeticOverflow.Says($"`{name}`"));
+                break;
+            case ".sin" or ".cos" when values is [var angle, var turn, var scale]:
+                if (!IntegerMath.InRange(turn.Number, scale.Number))
+                {
+                    Report(function, Catalogue.TurnOrScaleOutOfRange.Says(name, IntegerMath.Limit));
+                    return Value.Unknown;
+                }
+                worked = name == ".sin"
+                    ? IntegerMath.Sin(angle.Number, turn.Number, scale.Number)
+                    : IntegerMath.Cos(angle.Number, turn.Number, scale.Number);
+                break;
+            default:
+                Report(function, Catalogue.BuiltinArguments.Says(name, name switch
+                {
+                    ".sqrt" => "one number",
+                    ".muldiv" => "`.muldiv(a, b, c)`",
+                    _ => $"`{name}(angle, turn, scale)`",
+                }));
+                return Value.Unknown;
+        }
+        return worked is { } number ? Value.Of(number) : Value.Unknown;
+    }
+
     /// <summary>Whether a built-in is one the configuration alone can answer.</summary>
     private static bool Answerable(string name) => name is ".lobyte" or ".hibyte" or ".bankbyte"
-        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat";
+        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat"
+        or ".sqrt" or ".muldiv" or ".sin" or ".cos";
 
     /// <summary>
     /// A name in a build's condition, which can only be a define or a <c>.config</c> setting.
@@ -974,7 +1026,7 @@ internal sealed class Evaluator
             Report(function, Catalogue.ConditionAsksAboutTheProgram.Says(function.Text));
             return Value.Unknown;
         }
-        return Plain(name, given);
+        return Plain(name, function, given);
     }
 
     /// <summary>

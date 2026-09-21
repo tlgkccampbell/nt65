@@ -776,6 +776,25 @@ public static class Catalogue
         "a shift counts 0 to 63 places, and this one counts {0}",
         "A shift moves a 64-bit value by a number of places it has.");
 
+    internal static DiagnosticDescriptor SqrtOfANegative { get; } = new(
+        "sqrt-of-a-negative",
+        Severity.Error,
+        "`.sqrt` has no answer for {0}: no whole number squared is negative",
+        "`.sqrt(n)` is the largest whole number whose square is at most n, which a negative number has none of.");
+
+    internal static DiagnosticDescriptor TurnOrScaleOutOfRange { get; } = new(
+        "turn-or-scale-out-of-range",
+        Severity.Error,
+        "`{0}` takes a turn of 1 to {1} and a scale of at most that either way",
+        "A whole turn is however many units the table counts it in, and the scale is what the answer is measured "
+            + "in. Both are bounded because a value the output carries fits ca65's 32 bits anyway.");
+
+    internal static DiagnosticDescriptor BuiltinArguments { get; } = new(
+        "builtin-arguments",
+        Severity.Error,
+        "`{0}` takes {1}",
+        "The built-in was given a different number of arguments from the one it takes.");
+
     internal static DiagnosticDescriptor DivisionByZero { get; } = new(
         "division-by-zero",
         Severity.Error,

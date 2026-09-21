@@ -277,6 +277,30 @@ Expressions follow C's precedence, not ca65's, and nt65 writes whatever parenthe
 Where C's order is easy to misread, parentheses are required: `a & $0f == 0` is an error, and
 so is `#<label+1`, which is written `#<(label+1)` or `#(<label)+1` depending on which you mean.
 
+### Tables worked out at build time
+
+`.sqrt`, `.muldiv`, `.sin` and `.cos` take whole numbers and answer whole numbers, so the table
+a routine reads sits beside the routine instead of in a Python script whose output was pasted
+in. A sine table is a `.repeat` in a data body:
+
+```nt65
+TURN  = 256
+SCALE = 127
+
+.segment RODATA
+.data sine: .byte[TURN] {
+    .repeat TURN, i {
+        128 + .sin(i, TURN, SCALE)
+    }
+}
+```
+
+`.sin(angle, turn, scale)` counts a whole turn as `turn` units, so the table above steps round
+the circle 256 times and reaches 127 at the quarter turn; the `128 +` is the bias that makes it
+an unsigned byte, which is how `lda sine,x` reads it. `.cos` is the same a quarter turn on.
+Every answer is the nearest whole number, with halves going away from zero, and none of it is
+floating point, so the bytes are the same on every machine that builds the program.
+
 ## Macros
 
 A macro's parameters have kinds, a call is marked with `!`, and an argument is a value:

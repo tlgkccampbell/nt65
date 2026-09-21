@@ -1875,13 +1875,55 @@ is an expression like any other.
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
 `.endof(x)` and `.spanof(x)` (§7.6), `.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
-`.max(a, b)`, `.addrsize(x)`, the address size in bytes (1, 2 or 3) that §7.2 gives a
-symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
+`.max(a, b)`, `.sqrt(n)`, `.muldiv(a, b, c)`, `.sin(angle, turn, scale)` and
+`.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
+§7.2 gives a symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
 (§5.1), `.has(mnemonic)`, true when the program's CPU has that instruction,
 `.select(c, a, b)`, and `.defined(NAME)`, which is true if NAME is a define (§5.3) and false
 otherwise. Naming a symbol the program declares in `.defined` is an error, since
 conditions never test the program (§10). Macro bodies add `.mode`, `.byteof` and
 `.empty` (§11).
+
+**Numbers worked out at build time.** Four built-ins work a number out rather than ask about the
+program, so that a table a routine reads is written where the routine is and not in a script in
+another language. Each takes whole numbers and answers a whole number:
+
+- **`.sqrt(n)`** is the largest whole number whose square is at most `n`. A negative `n` has no
+  such number and is an error.
+- **`.muldiv(a, b, c)`** is `a * b / c`. The product is worked out exactly, however large it is,
+  so nothing overflows in the middle, and the quotient is rounded to the nearest whole number.
+  A zero `c` is an error, and so is an answer that leaves 64 bits.
+- **`.sin(angle, turn, scale)`** is `scale` times the sine of `angle`, where a whole turn is
+  `turn` of the angle's own units: `.sin(i, 256, 127)` walks a circle in 256 steps and reaches
+  127 at the quarter turn. **`.cos`** is the same a quarter turn on. The angle is taken round
+  the circle first, so a table written with a running index needs no wrapping of its own and a
+  negative angle is the same angle the other way. The turn is 1 to `$7fffffff` and the scale at
+  most that either way; outside those it is an error.
+
+**Rounding, and why it is written down.** What a declaration is worth is written into the
+output, so an answer that differed in its last bit between two machines would assemble to
+different bytes from one program. None of these is floating point and none of them may be: each
+answer is **the whole number nearest the exact value, with a half going away from zero**, and
+that is a definition every implementation can meet exactly. `.sqrt` and `.muldiv` are whole
+numbers throughout. For `.sin` and `.cos` the exact value is a real number, and the only angles
+at which it can sit exactly halfway between two whole numbers are the twelfth-turns where the
+sine or the cosine is `±1/2` — a rational multiple of π has a rational sine only at 0, `±1/2`
+and `±1` — so nt65 works those out from the fraction itself and everything else to a precision
+at which the nearest whole number is not in doubt. `.sin(1, 12, 127)` is 64 and
+`.sin(7, 12, 127)` is −64, both away from zero; `.sin(1, 12, 126)` is 63, with nothing to
+decide.
+
+```nt65
+TURN  = 256
+SCALE = 127
+
+.segment RODATA
+.data sine: .byte[TURN] {
+    .repeat TURN, i {
+        128 + .sin(i, TURN, SCALE)
+    }
+}
+```
 
 **`.select(c, a, b)`** is `a` when `c` holds and `b` when it does not. The condition must be
 a constant, and only the chosen value is evaluated and has its names checked, so the other
@@ -3290,6 +3332,20 @@ Recorded so the reasoning survives. None is open.
   something nt65 never said. Overflow is an error rather than a wrap for the same reason:
   where an expression has no value nt65 can stand behind, the one thing that must not happen
   is that it is written out for ca65 to answer instead.
+- **Compile-time arithmetic, integer only and rounded by a written rule.** A sine table, a
+  circle and a scaled step are what a 6502 program spends its build time on, and without them
+  each is a script in another language whose output is pasted in, so the table and the routine
+  that reads it drift apart and nobody can see what the numbers were. The functions are integer
+  in and integer out because everything they feed is: a byte table, a word table, a count. They
+  are not floating point, and may not be, because what nt65 works out is written into the output
+  and has to be the same on every machine that builds the program — a last bit that depended on
+  a library or a processor's rounding would be a program that assembles to different bytes in
+  two places. So the answer is defined rather than computed: the nearest whole number, halves
+  away from zero. That definition is exact everywhere, because the only angles at which the
+  value is a half are the twelfth-turns where the sine is `±1/2`, which nt65 works out from the
+  fraction; everywhere else the nearest whole number is settled long before the precision runs
+  out. `.muldiv` is there for the same reason: `a * b / c` written out overflows in the middle
+  or loses the fraction at the end, and neither is what anybody meant.
 - **Conditions test only the configuration.** `.if` sees defines and never program
   symbols, as `#if` in C and C#, `#[cfg]` in Rust and `#if` in Swift do. A conditional
   that can test program constants (ca65's `.if`, D's `static if`) makes which
@@ -3818,6 +3874,7 @@ binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' |
              | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
 builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
+             | '.sqrt' | '.muldiv' | '.sin' | '.cos'
              | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
              | '.mode' | '.byteof' | '.empty'          ; the last three in macro bodies
 ```
