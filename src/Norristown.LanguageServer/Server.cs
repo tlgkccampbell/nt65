@@ -380,7 +380,7 @@ internal sealed class Server
     {
         cancellation.ThrowIfCancellationRequested();
         return outgoing.Spell(LanguageServer.CallHierarchy.Incoming(
-            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item));
+            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
     }
 
     [JsonRpcMethod("callHierarchy/outgoingCalls")]
@@ -389,7 +389,7 @@ internal sealed class Server
     {
         cancellation.ThrowIfCancellationRequested();
         return outgoing.Spell(LanguageServer.CallHierarchy.Outgoing(
-            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item));
+            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
     }
 
     [JsonRpcMethod("textDocument/codeAction")]

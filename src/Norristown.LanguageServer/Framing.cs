@@ -194,6 +194,9 @@ internal sealed class Framing : MessageHandlerBase
     /// <summary>Why <paramref name="method"/> may not be handled now, or null when it may.</summary>
     private (JsonRpcErrorCode Code, string Why)? Refusal(string method) => (Phase, method) switch
     {
+        // Giving up on a request is the protocol looking after itself, and is never refused:
+        // a client that has stopped waiting has stopped waiting whatever the server is doing.
+        (_, "$/cancelRequest") => null,
         (ServerPhase.Starting, not ("initialize" or "exit")) =>
             (ServerNotInitialized, "the server has not been initialized"),
         (ServerPhase.Running, "initialize") =>

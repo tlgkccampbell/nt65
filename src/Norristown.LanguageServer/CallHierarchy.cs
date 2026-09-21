@@ -32,13 +32,16 @@ internal static class CallHierarchy
     }
 
     /// <summary>Everything that calls the routine <paramref name="item"/> names, across the program.</summary>
+    /// <param name="analysis">The program the routine is in.</param>
+    /// <param name="item">The routine, as the server gave it to the client.</param>
+    /// <param name="cancellation">Asked between files, since a program may hold hundreds.</param>
     public static IReadOnlyList<Protocol.CallHierarchyIncomingCall> Incoming(
-        ProgramAnalysis analysis, Protocol.CallHierarchyItem item)
+        ProgramAnalysis analysis, Protocol.CallHierarchyItem item, CancellationToken cancellation = default)
     {
         if (Routine(analysis, item) is not { } asked)
             return [];
         var callers = new Dictionary<Symbol, List<Protocol.Range>>();
-        foreach (var (caller, callee, at) in Calls(analysis))
+        foreach (var (caller, callee, at) in Calls(analysis, cancellation))
         {
             if (Same(callee, asked))
                 Note(callers, caller, at);
@@ -48,13 +51,16 @@ internal static class CallHierarchy
     }
 
     /// <summary>Everything the routine <paramref name="item"/> names calls.</summary>
+    /// <param name="analysis">The program the routine is in.</param>
+    /// <param name="item">The routine, as the server gave it to the client.</param>
+    /// <param name="cancellation">Asked between files, since a program may hold hundreds.</param>
     public static IReadOnlyList<Protocol.CallHierarchyOutgoingCall> Outgoing(
-        ProgramAnalysis analysis, Protocol.CallHierarchyItem item)
+        ProgramAnalysis analysis, Protocol.CallHierarchyItem item, CancellationToken cancellation = default)
     {
         if (Routine(analysis, item) is not { } asked)
             return [];
         var callees = new Dictionary<Symbol, List<Protocol.Range>>();
-        foreach (var (caller, callee, at) in Calls(analysis))
+        foreach (var (caller, callee, at) in Calls(analysis, cancellation))
         {
             if (Same(caller, asked))
                 Note(callees, callee, at);
@@ -70,10 +76,12 @@ internal static class CallHierarchy
     /// Every call in the program: which routine writes it, which it names, and where it is
     /// written. A call ends the block it is in, so the block's last statement is the call.
     /// </summary>
-    private static IEnumerable<(Symbol Caller, Symbol Callee, Protocol.Range At)> Calls(ProgramAnalysis analysis)
+    private static IEnumerable<(Symbol Caller, Symbol Callee, Protocol.Range At)> Calls(
+        ProgramAnalysis analysis, CancellationToken cancellation)
     {
         foreach (var flow in analysis.Flows)
         {
+            cancellation.ThrowIfCancellationRequested();
             foreach (var region in flow.Regions)
             {
                 foreach (var block in region.Blocks)

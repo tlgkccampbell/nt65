@@ -1,4 +1,5 @@
 using System.Reflection;
+using Nerdbank.Streams;
 using Norristown.LanguageServer;
 using Norristown.Syntax;
 using StreamJsonRpc;
@@ -43,5 +44,53 @@ public sealed class CancellationTests
 
         given.Cancel();
         Assert.Throws<OperationCanceledException>(() => WorkspaceSymbols.Matching(files, "count", given.Token));
+    }
+
+    /// <summary>
+    /// The client's <c>$/cancelRequest</c> reaches the token the handler is holding. The frames
+    /// are read by the server's own framing layer, which decides what crosses at all, so what
+    /// this shows is that a cancel crosses it and does what it is for.
+    /// </summary>
+    [Fact]
+    public async Task ACancelFromTheClientTripsTheHandlersToken()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        var (clientStream, serverStream) = FullDuplexStream.CreatePair();
+        var waiting = new Waiting();
+        using var framing = new Framing(serverStream, serverStream, Server.CreateFormatter());
+        using var server = new JsonRpc(framing);
+        server.AddLocalRpcTarget(waiting);
+        server.StartListening();
+        using var client = new JsonRpc(
+            new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
+        client.StartListening();
+
+        // Nothing but `initialize` is answered before it, this layer included.
+        await client.InvokeWithParameterObjectAsync<object?>("initialize", null, timeout);
+
+        using var giveUp = new CancellationTokenSource();
+        var asked = client.InvokeWithParameterObjectAsync<object?>("waitForever", null, giveUp.Token);
+        await waiting.Started.Task.WaitAsync(timeout);
+        await giveUp.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked);
+    }
+
+    /// <summary>A handler that does nothing but wait for the client to change its mind.</summary>
+    private sealed class Waiting
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>The handshake the framing layer waits for before it passes anything else on.</summary>
+        /// <returns>Whether the wait has been asked for yet, which at this point it has not.</returns>
+        [JsonRpcMethod("initialize")]
+        public bool Initialize() => Started.Task.IsCompleted;
+
+        [JsonRpcMethod("waitForever")]
+        public Task WaitForeverAsync(CancellationToken cancellation)
+        {
+            Started.TrySetResult();
+            return Task.Delay(Timeout.Infinite, cancellation);
+        }
     }
 }
