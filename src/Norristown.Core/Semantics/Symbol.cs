@@ -202,6 +202,13 @@ public sealed class Symbol
     public bool IsAddress => Kind is SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Proc
         or SymbolKind.ExternProc or SymbolKind.ImportedAddress or SymbolKind.Data;
 
+    /// <summary>
+    /// Whether the symbol says what its bytes are: a data declaration, or an import that writes
+    /// an element type. Both are sized and counted from what they declare, and both reach the
+    /// fields of the type they name.
+    /// </summary>
+    public bool IsTypedStorage => Kind == SymbolKind.Data || (Kind == SymbolKind.ImportedAddress && Data is not null);
+
     /// <summary>Whether the symbol is a layout whose members are offsets.</summary>
     public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;
 

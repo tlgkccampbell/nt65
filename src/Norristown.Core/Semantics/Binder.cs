@@ -1133,13 +1133,18 @@ internal sealed partial class Binder
         statements.Visit(statement);
     }
 
-    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
+    /// <summary>
+    /// <c>name</c>, <c>name: size</c>, <c>name: proc(...)</c>, <c>name: .word[8]</c> or a
+    /// checked <c>name = expr</c>. An element type is declared and trusted as a routine's
+    /// signature is: nt65 sizes the import and reaches its members from what the import says.
+    /// </summary>
     private void BindImportItem(ImportItemSyntax item)
     {
         var name = item.Name;
         var checkedValue = item.Value;
         var kind = checkedValue is null ? SymbolKind.ImportedAddress : SymbolKind.ImportedConstant;
-        if (Declare(name, kind, checkedValue) is { } symbol && kind == SymbolKind.ImportedAddress)
+        if (Declare(name, kind, checkedValue, data: item.Element, type: item.Element?.Type) is { } symbol
+            && kind == SymbolKind.ImportedAddress)
         {
             // An import states its own address size. An unqualified import is absolute, and so
             // is a routine, unless its signature says it is called far.
@@ -1155,6 +1160,7 @@ internal sealed partial class Binder
             }
         }
         CollectUses(checkedValue);
+        CollectUses(item.Element);
     }
 
     /// <summary>

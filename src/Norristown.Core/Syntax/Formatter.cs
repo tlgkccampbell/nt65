@@ -179,7 +179,13 @@ public static class Formatter
         var tokens = line.Tokens;
         var name = 0;
         while (tokens[name].Kind == SyntaxKind.Directive)
+        {
+            // An import writes an element type as well, and is no run of one declaration a
+            // line: a `.import` carries several items, so there is no column for it to keep.
+            if (tokens[name].Text.Equals(".import", StringComparison.OrdinalIgnoreCase))
+                return -1;
             name++;
+        }
         var colon = name + 1;
 
         // A member may be named for a register or a mnemonic, since it is only ever reached

@@ -78,11 +78,11 @@ buffer_size = BUF_SIZE
     lda #<buffer
     sta ptr1
     lda #>buffer
-    sta ptr1+1
+    sta ptr1[1]
     lda #<BUF_SIZE
     sta ptr2
     lda #>BUF_SIZE
-    sta ptr2+1
+    sta ptr2[1]
     lda #$EE
     sta tmp1
     jmp mem::memfill::fill  ; the interior entry of module mem

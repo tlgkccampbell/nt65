@@ -2,7 +2,9 @@
 ; An import keeps its own name to the linker, and each module that uses one imports it.
 .module cc65
 
-.export .import sp: zp, ptr1: zp, ptr2: zp, tmp1: zp
+; The pointers are two bytes each and the scratch byte is one, which the import says so that
+; nt65 sizes them here rather than each module repeating what asm/runtime.s reserves.
+.export .import sp: zp .byte[2], ptr1: zp .byte[2], ptr2: zp .byte[2], tmp1: zp .byte
 .export .import popa: proc(), popax: proc()
 
 ; Hand-written in asm/delay.s.

@@ -1119,6 +1119,11 @@
         <summary>The <c>proc(...)</c> after the <c>:</c>, or null.</summary>
       </PropertyComment>
     </Field>
+    <Field Name="Element" Type="DataDirectiveSyntax" Optional="true">
+      <PropertyComment>
+        <summary>The element type after the <c>:</c>, <c>.byte[16]</c> or <c>.type T</c>, or null.</summary>
+      </PropertyComment>
+    </Field>
   </Node>
 
   <Node Name="ImportSignatureSyntax" Base="SyntaxNode">

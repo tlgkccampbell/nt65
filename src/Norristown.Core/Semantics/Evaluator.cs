@@ -482,7 +482,9 @@ internal sealed class Evaluator
 
         // A data declaration takes its size and its element count from what it declares, which
         // is what `.sizeof` and `.countof` answer for it. Mixed data has bytes and no elements.
-        if (symbol.Kind == SymbolKind.Data)
+        // An import that writes an element type is sized from it in exactly the same way: what
+        // the import says is what nt65 works with, as a routine import's signature is.
+        if (symbol.Kind == SymbolKind.Data || symbol.IsTypedStorage)
         {
             // How much room a declaration takes is nt65's own arithmetic, whatever is being
             // declared around it: what the output carries of it is the count of a `.res`.
@@ -617,7 +619,8 @@ internal sealed class Evaluator
         {
             if (!resolved.TryGetValue((name.Tree, part.Span.Start), out var symbol))
                 return null;
-            if (symbol.Kind is not (SymbolKind.Data or SymbolKind.Member) || symbol is { Kind: SymbolKind.Data, Data: null })
+            if (!(symbol.IsTypedStorage || symbol.Kind == SymbolKind.Member)
+                || symbol is { Kind: SymbolKind.Data, Data: null })
             {
                 Report(index, Catalogue.NotIndexable.Says(
                     symbol.DisplayName,
@@ -1042,6 +1045,11 @@ internal sealed class Evaluator
         {
             SymbolKind.Label => "a label, which is only a position",
             SymbolKind.Scope => "a scope, which is only a namespace",
+
+            // An import says nothing about its shape unless it writes an element type, and
+            // nt65 reads no ca65 to find one out.
+            SymbolKind.ImportedAddress when symbol.Data is null =>
+                "an import that does not say what its bytes are: `.import name: .byte[n]` says",
             _ => null,
         };
         if (what is null)

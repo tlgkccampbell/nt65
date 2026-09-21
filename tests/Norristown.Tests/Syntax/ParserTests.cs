@@ -207,7 +207,11 @@ public sealed class ParserTests
     [InlineData(".word .frobnicate(1)", "`.frobnicate` is not a function")]
     [InlineData(".word .sizeof", "expected `(` after `.sizeof`")]
     [InlineData(".word (1 + 2", "expected `)`")]
-    [InlineData(".import x: quad", "expected `zp`, `abs`, `far` or `proc(...)`")]
+    [InlineData(".import x: quad", "expected `zp`, `abs`, `far`, `proc(...)` or what the data is")]
+    [InlineData(".import x: .incbin \"a.bin\"",
+        "`.incbin` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`")]
+    [InlineData(".import x: .byte 1, 2",
+        "an import of `.byte` says what its bytes are and holds none of them: the definition is in another object")]
     [InlineData(".export", "expected a name to export")]
     [InlineData("lda #1 junk", "unexpected `junk`")]
     [InlineData("label: .proc p {", "`.proc` may not follow a label")]

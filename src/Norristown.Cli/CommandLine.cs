@@ -35,6 +35,7 @@ public sealed record CommandLine(
                nt65 remap-dbg <file.dbg> [--out <file>]
                nt65 explain [<diagnostic>]
                nt65 lsp
+               nt65 import-inc <file.inc> [-o <file.nt65>] [--module <name>]
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
@@ -56,6 +57,11 @@ public sealed record CommandLine(
 
         `lsp` serves the language server on standard input and output, for an editor that speaks
         LSP; it takes nothing else, and what it says about itself goes to standard error.
+
+        `import-inc` writes an nt65 module of constants from a ca65 include file of them, once,
+        for a person to read and keep. It writes to standard output unless `-o` names a file.
+        A line it cannot convert is written out as a comment saying so and counted on standard
+        error. nt65 reads no ca65 at build time, and this does not change that.
 
         options:
           --project <file>      the project file, or the directory that holds nt65.json

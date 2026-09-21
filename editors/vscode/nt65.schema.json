@@ -239,6 +239,8 @@
         "ident-parameter-declared",
         "immediate-in-emulation",
         "immediate-too-wide",
+        "import-holds-no-values",
+        "import-needs-an-element-type",
         "incbin-unreadable",
         "indirect-call-unchecked",
         "indirect-jump-unchecked",

@@ -499,7 +499,11 @@ internal sealed partial class Parser
         return new ImportDirectiveSyntax(keyword, ParseSeparatedList(ParseImportItem));
     }
 
-    /// <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
+    /// <summary>
+    /// <c>name</c>, <c>name: size</c>, <c>name: proc(...)</c>, <c>name: .word[8]</c> or a
+    /// checked <c>name = expr</c>. An element type may follow a size, which is where an
+    /// import of data in the zero page says both what it is and where it lives.
+    /// </summary>
     private GreenNode? ParseImportItem()
     {
         if (!AtName)
@@ -513,6 +517,7 @@ internal sealed partial class Parser
         GreenToken? colon = null;
         GreenToken? addressSize = null;
         ImportSignatureSyntax? signature = null;
+        DataDirectiveSyntax? element = null;
 
         if (Kind == SyntaxKind.Equals)
         {
@@ -523,13 +528,52 @@ internal sealed partial class Parser
         {
             colon = Advance();
             if (AtWord("proc"))
+            {
                 signature = ParseImportSignature();
-            else if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
-                addressSize = Advance();
+            }
             else
-                Report(Catalogue.ExpectedAddressSize.Says("`zp`, `abs`, `far` or `proc(...)`"));
+            {
+                if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
+                    addressSize = Advance();
+                if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
+                    element = ParseImportElement();
+                else if (addressSize is null)
+                    Report(Catalogue.ExpectedAddressSize.Says("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
+            }
         }
-        return new ImportItemSyntax(name, equals, value, colon, addressSize, signature);
+        return new ImportItemSyntax(name, equals, value, colon, addressSize, signature, element);
+    }
+
+    /// <summary>
+    /// The element type of a typed import: what a <c>.data</c> declaration would write, with a
+    /// count and without values. The bytes are in another object, so there is nothing here to
+    /// give values to and nothing to read from a file.
+    /// </summary>
+    private DataDirectiveSyntax ParseImportElement()
+    {
+        var at = index;
+        var directive = Advance();
+        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
+        var element = record || SyntaxFacts.ElementSize(directive.Text) is not null;
+        NameExpressionSyntax? type = null;
+        if (record)
+        {
+            if (AtName || Kind == SyntaxKind.ColonColon)
+                type = ParseName();
+            else
+                Report(Catalogue.ExpectedDataType.Says("the type: `.type T`"));
+        }
+        else if (!element)
+        {
+            Report(at, Catalogue.ImportNeedsAnElementType.Says(directive.Text));
+        }
+        var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
+
+        // One cause, one diagnostic: a directive that is no element type has been reported
+        // already, and what stands after it is the same mistake.
+        if (element && !AtEnd && Kind != SyntaxKind.Comma)
+            Report(Catalogue.ImportHoldsNoValues.Says(directive.Text));
+        return new DataDirectiveSyntax(directive, type, count, null);
     }
 
     private ImportSignatureSyntax ParseImportSignature()

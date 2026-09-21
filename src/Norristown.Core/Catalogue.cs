@@ -247,7 +247,22 @@ public static class Catalogue
         Severity.Error,
         "expected {0}",
         "How wide an address is has three spellings and no others: `zp`, `abs` and `far`. An import may also give "
-            + "a routine signature in place of a size.");
+            + "a routine signature or an element type in place of a size.");
+
+    internal static DiagnosticDescriptor ImportNeedsAnElementType { get; } = new(
+        "import-needs-an-element-type",
+        Severity.Error,
+        "`{0}` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`",
+        "A typed import describes storage another object holds, so it writes an element type and a count. A "
+            + "directive that reads a file or writes text describes bytes this program would emit, and an import "
+            + "emits none.");
+
+    internal static DiagnosticDescriptor ImportHoldsNoValues { get; } = new(
+        "import-holds-no-values",
+        Severity.Error,
+        "an import of `{0}` says what its bytes are and holds none of them: the definition is in another object",
+        "An import declares what a symbol another object defines looks like, so that nt65 can size it and reach "
+            + "its members. The bytes themselves belong to whoever defines it.");
 
     internal static DiagnosticDescriptor ExpectedSegmentAttribute { get; } = new(
         "expected-segment-attribute",

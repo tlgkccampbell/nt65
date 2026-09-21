@@ -482,6 +482,17 @@ object per line, with `file`, `line`, `column`, `endColumn`, `severity`, `id`, `
 What nt65 says about itself, the `nt65:` lines, stays on standard error either way, because it
 is not about the program.
 
+**Bringing a ca65 include over.** `nt65 import-inc <file.inc>` writes an nt65 module of
+constants from a ca65 include file of them, to standard output or to the file `-o` names, with
+`--module` naming the module. It is run once, by a person, and what it writes is the module's
+own source from then on: a build reads no ca65, and a change to the include file is brought
+over by running the command again. A `NAME = expr` or `NAME := expr` line whose expression nt65
+reads becomes a constant and is exported, a comment is carried over, and every other line is
+written out as a comment saying it was not converted and counted on standard error, so nothing
+in the file is dropped where nobody sees it. What nt65 reads is nt65's own reader, so a ca65
+operator nt65 does not have, and an expression whose order §9 asks to see in parentheses, are
+both left for a person rather than written out as something that will not build.
+
 **Explaining one.** `nt65 explain <name>` prints what the one line had no room for: what the
 diagnostic is about, and the line a project file would write to switch it. Named nothing, it
 lists every name there is; named something nt65 has no entry for, it says the name that one is
@@ -1439,6 +1450,8 @@ is only a namespace.
 | an enum | error | members |
 | a label | error | error |
 | `.scope` | error | error |
+| an import with an element type | as the element type says | as the element type says |
+| an import with none | error | error |
 
 ```nt65
     ldx #.spanof(reloc)             ; bytes to copy
@@ -2533,6 +2546,8 @@ points) are declared explicitly:
 .import _printf: proc(a8, i16)      ; a routine, with its signature (§7.3)
 .import zp_scratch: zp
 .import far_table: far
+.import sp: zp .byte[2]             ; storage, with what its bytes are
+.import actors: .type Actor[8]
 .import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
 ```
@@ -2540,14 +2555,29 @@ points) are declared explicitly:
 On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
 empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
 
+**A typed import** says what the bytes another object defines are, in the element types a
+`.data` declaration is written with (§8): `.import sp: .byte[2]`, `.import actors: .type Actor[8]`.
+What it says is what nt65 works with, exactly as a `proc(...)` import's signature is: `.sizeof`
+and `.countof` answer from the element type and the count, an element is reached with `name[i]`,
+a record's fields are reached through it, `actors[2]::hp`, and each of those is the address the
+type works out, in the import's own address size. An element type carries no values — the bytes
+belong to whoever defines them — and it may be written after a size, `.import sp: zp .byte[2]`,
+which is where an import of zero-page storage says both what it is and where it lives. The
+output is the same plain `.import` with the same address size: what the import says is checked
+nowhere, as a signature is checked nowhere, and getting it wrong is getting the other object's
+declaration wrong.
+
 - **ca65 modules** export symbols in the usual way. cc65's runtime library already
   exports its zero-page variables, so `.import sp: zp` needs nothing more. An import keeps
   its own name to the linker.
 - **Constants defined only in a ca65 include file**, such as hardware registers and
-  struct offsets, reach nt65 through a small ca65 module that includes the file and
-  `.export`s the names needed. An imported symbol is opaque to nt65: it can be an
-  operand, sized by its import, but it cannot appear where nt65 needs its value (`.res`,
-  `.repeat`, the `ranges` check of §7.5).
+  struct offsets, reach nt65 two ways. Where the value has to stay the ca65 file's, a small
+  ca65 module includes the file and `.export`s the names needed, and nt65 declares each as a
+  checked import, below. Where the include file is a list of constants and nothing else,
+  `nt65 import-inc` writes it out once as an nt65 module of constants (§5.3), which is then the
+  module's own source. An import whose element type an import does not state is opaque to
+  nt65: it can be an operand, sized by its import, but it cannot appear where nt65 needs its
+  value (`.res`, `.repeat`, the `ranges` check of §7.5), and has no size to measure.
 - **A checked import**, `.import NAME = value`, gives nt65 the value. nt65 uses `value`
   wherever `NAME` appears, and the output of each module that uses it imports `NAME` and
   asserts `NAME = value` with `lderror`, so ld65 fails the link if the ca65 definition differs.
@@ -3292,6 +3322,19 @@ Recorded so the reasoning survives. None is open.
   declaration-only subset, would put nt65 in the business of parsing ca65 and require
   existing files to fit a layout. Symbols already cross at the link, and a checked
   import covers the values nt65 needs.
+- **An import may say what its bytes are, and `nt65 import-inc` runs once.** Interop ran one
+  way: `--c-header` sent types out and an import came back opaque, with no size, no members
+  and no elements, so a project that shared a record with hand-written ca65 wrote its layout
+  twice and kept the two in step by hand. A typed import is the same answer the language
+  already gives for a routine: a `proc(...)` import declares a signature nothing checks, and a
+  typed import declares a shape nothing checks. Both are trusted because the other side of the
+  link is not nt65's to read, and both put the declaration where a reader of this module can
+  see it. The alternative, reading the ca65 declaration, is the boundary above, and it stays
+  refused. For a file that is only constants, which is what most hardware include files are,
+  reading it once is not the same question: `nt65 import-inc` is a person's command, its output
+  is an ordinary module to read and keep, and no build depends on it. That is why it writes a
+  comment for every line it could not convert and counts them: a converter nobody checks is a
+  silent half-translation, and this one is written to be checked.
 - **Language features before macros.** Where ca65 code reaches for a macro, nt65 first
   asks whether the pattern needs analysis, and if it does, makes it a language feature
   (Appendix B). Macros keep what does not, which is what lets them stay restricted.
@@ -3561,8 +3604,9 @@ different ca65. Breaking changes wait for version 2. These are not breaking:
   about, bytes that differ from what this document says they are, or a program accepted that
   this document says is an error;
 - a new warning, a better message, and anything the editor does;
-- a new directive, built-in function, project file key or command-line option, because every
-  `.word` already lexes as a directive and an unknown key or option is already an error;
+- a new directive, built-in function, project file key, command or command-line option, because
+  every `.word` already lexes as a directive and an unknown key, command or option is already
+  an error;
 - a new CPU. It reserves nothing anywhere (§4) and widens the warning of §4 for every
   program, which a new warning is allowed to do.
 
@@ -3709,8 +3753,10 @@ use         := '.use' module-path (('::' '*') | ('::' '{' use-item (',' use-item
                | ('as' ident))?                       ; at a module's top level
 use-item    := ident ('as' ident)?
 import      := '.import' import-item (',' import-item)*
-import-item := ident (':' (size | 'proc' '(' state? ('->' state)? ')'))?
+import-item := ident (':' import-type)?
              | ident '=' expr                        ; checked import
+import-type := size | 'proc' '(' state? ('->' state)? ')'
+             | size? element count?                  ; a typed import: no values
 size        := 'zp' | 'abs' | 'far'
 expr        := unary (binop unary)*                   ; precedence, and where parentheses
                                                       ; are required, in §9

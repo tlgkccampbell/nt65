@@ -1,0 +1,47 @@
+; An import may say what its bytes are, as a `.data` declaration spells it. What the import
+; says is what nt65 works with: it sizes the symbol, counts its elements and reaches the
+; fields of the type it names, exactly as if the declaration were here. The output is still a
+; plain `.import` with the address size the item gives it.
+.module main
+
+.cpu 6502
+
+.struct Actor {
+    x:  .word
+    y:  .word
+    hp: .byte
+}
+
+; The cc65 runtime's zero-page pointers, which are two bytes each.
+.import sp: zp .word
+.import tmp1: zp .byte
+
+; Storage another object defines, with its type and its count.
+.import actors: .type Actor[8]
+.import screen: .byte[1024]
+.import vectors: .addr[4]
+
+; An import with no element type is an address and nothing else, as it always was.
+.import printf: proc()
+.import plain
+
+.segment CODE
+.export .proc main {
+    ; A field of an imported record, and an element of the array, are the addresses the
+    ; type works them out to be.
+    lda actors::hp
+    lda actors[2]::x
+    sta sp
+    sta tmp1
+
+    ; The shape is the import's, so it is a constant here.
+    ldx #.sizeof(Actor)
+    ldy #.countof(actors)
+    lda #<.sizeof(screen)
+    lda #.countof(vectors)
+
+    lda screen
+    lda plain
+    jsr printf
+    rts
+}
