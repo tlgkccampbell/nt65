@@ -99,10 +99,13 @@ internal static class InlayHints
     /// </summary>
     private static Protocol.InlayHint Ended(SyntaxTree tree, int line, IReadOnlyList<Mark> marks)
     {
+        // After the comment, not before it: an editor draws a hint into the line, and one drawn
+        // between the code and its comment pushes the comment out of the column its neighbours
+        // keep. At the very end nothing stands to its right to be moved.
         var tooltip = string.Join("\n\n", marks.Select(mark =>
             mark == marks[0] ? mark.Tooltip : $"**{mark.Label}** — {mark.Tooltip}"));
         return new Protocol.InlayHint(
-            Lsp.ToPosition(tree, LineContext.CodeEnd(tree, line)),
+            Lsp.ToPosition(tree, LineContext.TextEnd(tree, line)),
             Shortened(marks[0].Label),
             marks[0].Kind,
             Protocol.MarkupContent.Markdown(tooltip),
