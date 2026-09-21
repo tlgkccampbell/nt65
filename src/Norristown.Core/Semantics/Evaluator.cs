@@ -398,6 +398,18 @@ internal sealed class Evaluator
     private static AddressSize? Widest(AddressSize? a, AddressSize? b) =>
         a is null ? b : b is null ? a : (AddressSize)Math.Max((int)a, (int)b);
 
+    /// <summary>
+    /// Works <paramref name="symbol"/> out unless it has been worked out already. Only the
+    /// pass that reports may: by the time anything else asks, every symbol has been evaluated
+    /// and every type laid out, and answering a question must never write to a symbol another
+    /// thread is reading.
+    /// </summary>
+    private void Settle(Symbol symbol)
+    {
+        if (diagnostics is not null)
+            EvaluateSymbol(symbol);
+    }
+
     private void EvaluateSymbol(Symbol symbol)
     {
         if (settled?.Invoke(symbol) == true)
@@ -616,7 +628,7 @@ internal sealed class Evaluator
             }
 
             // A count nt65 cannot work out has already been reported where it is written.
-            EvaluateSymbol(symbol);
+            Settle(symbol);
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
 
@@ -664,7 +676,7 @@ internal sealed class Evaluator
                 return Value.Unknown;
             if (part.Kind != SymbolKind.Member)
                 continue;
-            EvaluateSymbol(part);
+            Settle(part);
             if (part.Value.AsNumber() is not { } own)
                 return Value.Unknown;
             offset += own;
@@ -684,7 +696,7 @@ internal sealed class Evaluator
         {
             if (resolved.TryGetValue((name.Tree, token.Span.Start), out var part) && part.IsAddress)
             {
-                EvaluateSymbol(part);
+                Settle(part);
                 return part;
             }
         }
@@ -709,10 +721,7 @@ internal sealed class Evaluator
     /// </summary>
     private Value ValueOfSymbol(Symbol symbol)
     {
-        // Only the pass that reports may evaluate, so answering an editor's question never
-        // writes to a symbol another thread is reading.
-        if (diagnostics is not null)
-            EvaluateSymbol(symbol);
+        Settle(symbol);
         return symbol.Value;
     }
 
@@ -838,7 +847,7 @@ internal sealed class Evaluator
             if (measured.Kind == SymbolKind.Proc)
                 return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
 
-            EvaluateSymbol(measured);
+            Settle(measured);
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
             {
@@ -1274,14 +1283,18 @@ internal sealed class Evaluator
         return count is { } many and >= 0 ? new DataSize(width * many, many) : null;
     }
 
-    /// <summary>How many bytes one element of an element type takes: a record's is its type's size.</summary>
+    /// <summary>
+    /// How many bytes one element of an element type takes: a record's is its type's size. The
+    /// type is laid out when the program's symbols are evaluated, whether or not anything
+    /// names it, so asking how much room a declaration takes never lays one out.
+    /// </summary>
     private long? ElementWidth(DataDirectiveSyntax directive)
     {
         if (directive.Type is not { } named)
             return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
         if (SymbolOf(named) is not { } type)
             return null;
-        EvaluateSymbol(type);
+        Settle(type);
         return type.IsLayout ? type.Size : null;
     }
 

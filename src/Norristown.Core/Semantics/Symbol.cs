@@ -8,6 +8,9 @@ namespace Norristown.Semantics;
 /// </summary>
 public sealed class Symbol
 {
+    private readonly List<(Symbol Callee, Span At)> calls = [];
+    private readonly List<(Symbol Used, Span At)> uses = [];
+
     internal Symbol(string name, SymbolKind kind, Scope scope, SyntaxTree tree, TextSpan nameSpan)
     {
         Name = name;
@@ -119,14 +122,20 @@ public sealed class Symbol
     /// The macros this macro's body calls, with the call each was named at. A macro may not
     /// reach itself through them, which is what makes every expansion bounded.
     /// </summary>
-    public List<(Symbol Callee, Span At)> Calls { get; } = [];
+    public IReadOnlyList<(Symbol Callee, Span At)> Calls => calls;
+
+    /// <summary>Remembers that this macro's body calls <paramref name="callee"/>, named at <paramref name="at"/>.</summary>
+    internal void AddCall(Symbol callee, Span at) => calls.Add((callee, at));
 
     /// <summary>
     /// The names a macro's body uses that it did not declare and was not given: what an
     /// expansion of it needs wherever it lands. A file that calls the macro has to be able to
     /// reach all of them, and its output brings in the ones another file declares.
     /// </summary>
-    public List<(Symbol Used, Span At)> Uses { get; } = [];
+    public IReadOnlyList<(Symbol Used, Span At)> Uses => uses;
+
+    /// <summary>Remembers that this macro's body uses <paramref name="used"/>, written at <paramref name="at"/>.</summary>
+    internal void AddUse(Symbol used, Span at) => uses.Add((used, at));
 
     /// <summary>A list's items, or a function's body as its single item.</summary>
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];

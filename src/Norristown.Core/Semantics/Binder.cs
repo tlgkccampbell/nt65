@@ -1421,7 +1421,7 @@ internal sealed partial class Binder
                 continue;
             }
             if (inside is not null)
-                inside.Calls.Add((symbol, tree.GetSpan(callee.Span)));
+                inside.AddCall(symbol, tree.GetSpan(callee.Span));
             else
                 called.Add(symbol);
 

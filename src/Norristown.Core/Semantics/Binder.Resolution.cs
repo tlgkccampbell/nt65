@@ -100,7 +100,7 @@ internal sealed partial class Binder
                 return true;
         }
         if (last && !macro.Uses.Any(seen => seen.Used == used))
-            macro.Uses.Add((used, token.Parent.Tree.GetSpan(token.Span)));
+            macro.AddUse(used, token.Parent.Tree.GetSpan(token.Span));
         return true;
     }
 
