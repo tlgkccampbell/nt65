@@ -152,7 +152,7 @@ patching__op:
     rts
 ; end of patching
 
-; .proc enter: a16 -> a8  main.nt65:148
+; .proc enter: a16 -> a8  main.nt65:150
 main__enter:
     .a16
     lda #$1234
@@ -163,7 +163,7 @@ enter__into:
     rts
 ; end of enter
 
-; .proc jumper: a8, i8  main.nt65:157
+; .proc jumper: a8, i8  main.nt65:159
 main__jumper:
     jmp enter__into
 ; end of jumper

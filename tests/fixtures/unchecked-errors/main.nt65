@@ -85,6 +85,22 @@
     jmp declared::entry     ;! error: `jmp entry` needs `a16`, and A is 8-bit here
 }
 
+; A declared label is checked against for the parts its `.state` gives, so those are the only
+; parts it may assume: what the routine's own path leaves is no promise to whoever jumps in.
+.proc partly: a8, i8 {
+    rep #$30
+    halfway:
+    .state a16, native
+    ldx #$1234              ;! error: `ldx #` needs the width of X and Y, and it is not known here, because `halfway` can be entered from outside `partly`, and its `.state` does not say the width of X and Y: the `.state` after `halfway` can say `i8` or `i16`
+    sep #$30
+    rts
+}
+
+.proc from_elsewhere: a8, i8 {
+    rep #$20
+    jmp partly::halfway
+}
+
 ; A jump to a label on data.
 .proc onto_data: a8, i8 {
     beq @data               ;! error: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes

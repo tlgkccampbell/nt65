@@ -32,6 +32,10 @@ public sealed class StateAnalysis
     // spliced into one, which is what the end of it is checked against and hands back.
     private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
 
+    // The labels this file names from a routine other than the one they are in, worked out the
+    // first time a declared label asks and kept for the rest of them.
+    private HashSet<Symbol>? namedFromOutside;
+
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
         this.model = model;
@@ -131,6 +135,51 @@ public sealed class StateAnalysis
             ? StateValue.Of(value)
             : StateValue.Unknown;
 
+    /// <summary>
+    /// What is known where control arrives from outside the routine's own paths: nothing,
+    /// except that a part the routine promises to hand back unchanged is taken to be left alone
+    /// on the way there too, so only a routine that declares a part needs its labels to.
+    /// </summary>
+    private static ProcessorState Outside(Signature signature)
+    {
+        var entry = signature.Entry;
+        return new ProcessorState(
+            entry.A == Width.Unchanged ? Width.Unchanged : Width.Unknown,
+            entry.Index == Width.Unchanged ? Width.Unchanged : Width.Unknown,
+            entry.E == ProcessorMode.Unchanged ? ProcessorMode.Unchanged : ProcessorMode.Unknown,
+            entry.D.Kind == StateValueKind.Unchanged ? StateValue.Unchanged : StateValue.Unknown,
+            entry.B.Kind == StateValueKind.Unchanged ? StateValue.Unchanged : StateValue.Unknown);
+    }
+
+    /// <summary>
+    /// Which parts of the state a declared label's <c>.state</c> gives, which are the parts a
+    /// jump into it is checked for and so the only parts it may assume. <c>?</c> gives them all,
+    /// as unknown.
+    /// </summary>
+    private static HashSet<StatePart> Given(BasicBlock block)
+    {
+        var given = new HashSet<StatePart>();
+        foreach (var item in StateItem.Read(block.Steps[0].Statement))
+        {
+            if (item.Part == StatePart.AllUnknown)
+            {
+                given.UnionWith(
+                    [StatePart.A, StatePart.Index, StatePart.E, StatePart.DirectPage, StatePart.DataBank]);
+            }
+            else
+            {
+                given.Add(item.Part);
+            }
+        }
+        return given;
+    }
+
+    /// <summary>Why a width at a declared label is unknown: the declaration does not say.</summary>
+    private static WidthCause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
+        $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
+            + $"say the width of {register}",
+        $"the `.state` after `{label.DisplayName}` can say `{item}8` or `{item}16`");
+
     private static AnalysisStack? Push(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Push(StackEntry.Opaque, count) : null;
 
@@ -157,24 +206,32 @@ public sealed class StateAnalysis
         }
         Settle();
 
-        // A label a `.state` declares is an entry point in its own right. One that some path
-        // already reaches is checked against that path; one nothing reaches starts from what
-        // the directive says, over a state otherwise unknown. A routine that promises to hand
-        // back D or B unchanged is taken to have left them alone on the way to the label too,
-        // so only a routine that declares them needs its labels to.
+        // A label a `.state` declares is an entry point in its own right. One nothing reaches
+        // starts from what the directive says, over a state otherwise unknown. One some path
+        // already reaches is checked against that path, and, where the label can also be
+        // entered from outside the routine, keeps only the parts the declaration gives: what
+        // the paths inside leave is no promise to whoever jumps in.
         foreach (var block in blocks)
         {
-            if (block.IsDeclared && reached[block.Index] is null)
+            if (!block.IsDeclared)
+                continue;
+            if (reached[block.Index] is null)
             {
-                var unknown = ProcessorState.Unknown;
-                if (signature.Entry.D.Kind == StateValueKind.Unchanged)
-                    unknown = unknown with { D = StateValue.Unchanged };
-                if (signature.Entry.B.Kind == StateValueKind.Unchanged)
-                    unknown = unknown with { B = StateValue.Unchanged };
-                reached[block.Index] = new FlowState(unknown, null);
-                pending.Add(block.Index);
-                Settle();
+                reached[block.Index] = new FlowState(Outside(signature), null);
             }
+            else if (EnteredFromOutside(block, region))
+            {
+                var entered = Entered(block, reached[block.Index]!, signature, region.Routine);
+                if (entered.Equals(reached[block.Index]))
+                    continue;
+                reached[block.Index] = entered;
+            }
+            else
+            {
+                continue;
+            }
+            pending.Add(block.Index);
+            Settle();
         }
 
         checks.Final = true;
@@ -223,6 +280,78 @@ public sealed class StateAnalysis
                 yield return edge.To;
             }
         }
+    }
+
+    /// <summary>
+    /// Whether control may reach a declared label from outside the routine it is in: another
+    /// module may jump to an exported one, and this file may name one from another routine.
+    /// A sibling joined by <c>.next</c> is part of the same routine as far as state goes, so a
+    /// path from one is not from outside.
+    /// </summary>
+    private bool EnteredFromOutside(BasicBlock block, FlowRegion region)
+    {
+        if (block.Label is not { } label)
+            return false;
+        if (label.IsExported)
+            return true;
+        namedFromOutside ??= NamedFromOutside();
+        return namedFromOutside.Contains(label);
+    }
+
+    /// <summary>
+    /// Every label this file names from a routine other than the one the label is in: a jump
+    /// into another routine, and a path naming one as data.
+    /// </summary>
+    private HashSet<Symbol> NamedFromOutside()
+    {
+        var found = new HashSet<Symbol>();
+        foreach (var step in layout.Steps)
+        {
+            if (step.Routine is not { } routine)
+                continue;
+            foreach (var name in step.Statement.DescendantNodes().OfType<NameExpressionSyntax>())
+            {
+                if (Targets.Of(model, name, step.On)?.Symbol is { Kind: SymbolKind.Label, Routine: { } owner } label
+                    && owner != routine && !owner.IsSiblingOf(routine))
+                {
+                    found.Add(label);
+                }
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// The state at a declared label that can be entered from outside the routine: the parts
+    /// its <c>.state</c> gives keep what reaches the label, which the directive itself then
+    /// checks, and every part it leaves out becomes unknown, because a jump from outside is
+    /// checked for the parts the declaration gives and for nothing else.
+    /// </summary>
+    private FlowState Entered(BasicBlock block, FlowState reached, Signature signature, Symbol routine)
+    {
+        var given = Given(block);
+        var here = reached.Processor;
+        var outside = Outside(signature);
+        var label = block.Label!;
+        var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
+        var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
+        return reached with
+        {
+            Processor = new ProcessorState(
+                a,
+                index,
+                given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown,
+                given.Contains(StatePart.DirectPage) ? here.D : StateValue.Merge(here.D, outside.D),
+                given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
+            WhyA = a == Width.Unknown && !given.Contains(StatePart.A)
+                ? Undeclared(label, routine, "A", "a")
+                : reached.WhyA,
+            WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
+                ? Undeclared(label, routine, "X and Y", "i")
+                : reached.WhyIndex,
+        };
+
+        static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
     }
 
     /// <summary>The state through one block, from the state that reaches it.</summary>

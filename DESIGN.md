@@ -991,6 +991,13 @@ known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`
 `dp?`) deliberately forgets. `emu` also makes both widths 8, which is what emulation mode
 pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
+Where such a label can also be entered from outside its routine — it is exported, or a path
+from another routine names it — the declaration is everything the label assumes: a part it does
+not give is unknown there, whatever the routine's own paths leave, except a part the routine's
+signature says `*`, which stays unchanged there as it does at a label nothing reaches. The two
+sides meet in the middle, then: a jump in is checked for the parts the declaration gives, and
+the code after the label assumes no more than those.
+
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
 them hold, emitting only what the analysis says is needed: nothing where the widths
 already hold, otherwise the `sep` or `rep` that sets them. Its effect on the state does
@@ -1215,7 +1222,7 @@ label:
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives. Such a label may be a jump target, never a call target |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). Such a label may be a jump target, never a call target |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816 |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
