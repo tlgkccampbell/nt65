@@ -32,6 +32,14 @@ build tasks and a schema for the project file.
   file, with the calls inside it left as calls and a lens on each to open that one too, one
   level at a time. **Inline `name!`**, under the light bulb, writes the expansion where the
   call was; where that would change what the line means it is offered greyed, with the reason.
+- **Hints in the line, for what the line does not say.** A width, the mode, D or B changing on
+  a line that does not spell it (`rep #$30` ` a16 i16`, `jsr widen` ` → a16`); `long` on a
+  branch that became the five-byte form; a value nobody wrote (an enum member, a member's
+  offset, a constant that is not a literal); parameter names at a macro call. Cycle counts are
+  off until **nt65: Toggle Cycle Counts** or the status bar switches them on. A hint stands
+  beside the code it is about, so on a line with a comment it moves the comment over; if you
+  keep your comments in a column and would rather see hints only when you ask, set
+  `"[nt65]": { "editor.inlayHints.enabled": "offUnlessPressed" }` and hold Ctrl+Alt.
 - **The comment above a declaration** on hover and beside its completion. There is no
   doc-comment syntax to learn: the `;` lines directly above it, each on a line of its own, are
   what you had to say about it.
@@ -67,6 +75,8 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.configuration` | the named configuration the editor analyzes the program as; empty for the project's own settings |
 | `nt65.server.path` | a language server to run in place of the one the extension carries |
 | `nt65.cli.path` | the `nt65` command the build tasks run, in place of the one on the path |
+| `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
+| `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
 
 ## The language
 
