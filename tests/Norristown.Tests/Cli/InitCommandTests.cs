@@ -88,7 +88,7 @@ public sealed class InitCommandTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(root.FullName));
     }
 
-    private (int Code, string Said) Run(string directory, params string[] arguments)
+    private static (int Code, string Said) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

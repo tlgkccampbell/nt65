@@ -85,7 +85,7 @@ public sealed class FormatCommandTests : IDisposable
         Assert.Equal((2, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, said));
     }
 
-    private (int Code, string Said) Run(string directory, params string[] arguments)
+    private static (int Code, string Said) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

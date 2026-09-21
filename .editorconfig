@@ -24,5 +24,26 @@ dotnet_diagnostic.IDE0161.severity = warning
 # Whitespace and wrapping, as dotnet format would write them.
 dotnet_diagnostic.IDE0055.severity = warning
 
+# The CA rules run (AnalysisLevel in Directory.Build.props). These four are wrong here, and
+# each is off with its reason rather than suppressed one site at a time.
+
+# A boundary says what it gives, not what it happens to be built from: the parser returns the
+# green node a dispatch switches on, and a collection crosses one as a read-only view.
+dotnet_diagnostic.CA1859.severity = none
+
+# A type named for a stack is a stack: `AnalysisStack` and `SavedStack` are what the analysis
+# follows, not collections a consumer pushes to.
+dotnet_diagnostic.CA1711.severity = none
+
+# `Step` is what nt65 calls one writing of one statement, and is not renamed for Visual Basic.
+dotnet_diagnostic.CA1716.severity = none
+
+# `Long` is the 65816's addressing mode, named as its datasheet names it.
+dotnet_diagnostic.CA1720.severity = none
+
+# Every method here is a JSON-RPC handler, which the dispatcher finds on the instance.
+[src/Norristown.LanguageServer/Server.cs]
+dotnet_diagnostic.CA1822.severity = none
+
 [*.{json,yml,yaml}]
 indent_size = 2

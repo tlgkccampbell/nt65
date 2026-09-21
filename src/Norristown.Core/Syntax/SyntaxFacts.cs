@@ -8,6 +8,9 @@ public static class SyntaxFacts
     // Static field initializers run in text order, so each field here is declared after the
     // fields its initializer reads.
 
+    // The Rockwell bit instructions, each of which is spelled with a bit number after it.
+    private static readonly string[] BitOps = ["bbr", "bbs", "rmb", "smb"];
+
     /// <summary>The long branches, which reach any near target.</summary>
     public static readonly FrozenSet<string> LongBranches =
         new[] { "jeq", "jne", "jcs", "jcc", "jmi", "jpl", "jvs", "jvc" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
@@ -332,7 +335,7 @@ public static class SyntaxFacts
         [
             "bra", "phx", "phy", "plx", "ply", "stz", "trb", "tsb", "stp", "wai",
             .. from bit in Enumerable.Range(0, 8)
-               from op in new[] { "bbr", "bbs", "rmb", "smb" }
+               from op in BitOps
                select op + bit,
         ];
 

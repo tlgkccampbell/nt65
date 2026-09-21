@@ -652,7 +652,7 @@ public sealed class Emitter
     }
 
     /// <summary>Where a call was written, as the comment before its expansion names it.</summary>
-    private string Where(StatementSyntax call)
+    private static string Where(StatementSyntax call)
     {
         return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
@@ -874,7 +874,7 @@ public sealed class Emitter
     /// <paramref name="node"/> rendered without the comment its edits collected, which is given
     /// back instead, to go after whatever the line puts in front of the text.
     /// </summary>
-    private string Bare(SyntaxNode node, Edits edits, out string? comment)
+    private static string Bare(SyntaxNode node, Edits edits, out string? comment)
     {
         comment = edits.Comments.Count == 0 ? null : string.Join(", ", edits.Comments);
         edits.Comments.Clear();
@@ -1278,7 +1278,7 @@ public sealed class Emitter
     /// <paramref name="node"/> rendered to go inside another line: its comments are that
     /// line's, given to <paramref name="comments"/>, or kept on the text when there is none.
     /// </summary>
-    private string Inline(SyntaxNode node, Edits edits, List<string>? comments)
+    private static string Inline(SyntaxNode node, Edits edits, List<string>? comments)
     {
         if (comments is null)
             return Render(node, edits).Trim();
@@ -1585,7 +1585,7 @@ public sealed class Emitter
     /// source had something else. What the source indented it by is not kept; where the line
     /// goes is the caller's to say (<see cref="Body"/>).
     /// </summary>
-    private string Render(SyntaxNode statement, Edits edits, string indent = "")
+    private static string Render(SyntaxNode statement, Edits edits, string indent = "")
     {
         var text = new StringBuilder();
         var tokens = Tokens(statement);

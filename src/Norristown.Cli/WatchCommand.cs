@@ -83,7 +83,7 @@ internal static class WatchCommand
             // several files; one build answers all of it.
             if (cancellation.WaitHandle.WaitOne(Settle))
                 return 0;
-            changed.Wait(0);
+            changed.Wait(0, CancellationToken.None);
         }
     }
 

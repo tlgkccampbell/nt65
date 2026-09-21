@@ -481,8 +481,8 @@ public sealed class Configuration
             evaluating.Remove(setting);
             if (written.IsString && setting.Expression is { } text)
                 reader.Report(text.Span, Catalogue.ConfigIsText);
-            if (values.ContainsKey(setting))
-                return values[setting];
+            if (values.TryGetValue(setting, out var already))
+                return already;
             return values[setting] = setting.Given ?? written.AsNumber();
         }
 

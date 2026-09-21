@@ -311,14 +311,15 @@ public sealed class BuildCommandTests : IDisposable
         Assert.StartsWith("usage: nt65 build", said);
     }
 
-    private (int Code, string Said) Run(string directory, params string[] arguments)
+    private static (int Code, string Said) Run(string directory, params string[] arguments)
     {
         var (code, output, error) = Apart(directory, false, arguments);
         return (code, output + error);
     }
 
     /// <summary>The two streams kept apart, for what is written to one and not to the other.</summary>
-    private (int Code, string Output, string Error) Apart(string directory, bool colour, params string[] arguments)
+    private static (int Code, string Output, string Error) Apart(
+        string directory, bool colour, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

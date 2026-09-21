@@ -55,7 +55,7 @@ public static class Paths
         var shared = 0;
         while (shared < from.Length && shared < to.Length - 1 && from[shared] == to[shared])
             shared++;
-        if (from[shared..].Contains(".."))
+        if (from.AsSpan(shared).Contains(".."))
             return path;
         return string.Join('/', Enumerable.Repeat("..", from.Length - shared).Concat(to[shared..]));
     }

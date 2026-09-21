@@ -335,7 +335,8 @@ public static class RegisterKeeps
             !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
 
         /// <summary>Whether a routine's promise holds where a path leaves it, and what to write when it does not.</summary>
-        private void Check(FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
+        private static void Check(
+            FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
         {
             if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
                 return;
@@ -413,7 +414,7 @@ public static class RegisterKeeps
         }
 
         /// <summary>What a <c>.state keeps</c> says: from here, those registers hold what the routine was entered with.</summary>
-        private RegisterState Asserted(Step step, RegisterState state, List<Diagnostic>? report)
+        private static RegisterState Asserted(Step step, RegisterState state, List<Diagnostic>? report)
         {
             foreach (var item in StateItem.Read(step.Statement))
             {

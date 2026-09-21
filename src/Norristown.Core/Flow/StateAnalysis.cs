@@ -327,7 +327,8 @@ public sealed class StateAnalysis
     /// checks, and every part it leaves out becomes unknown, because a jump from outside is
     /// checked for the parts the declaration gives and for nothing else.
     /// </summary>
-    private FlowState Entered(BasicBlock block, FlowState reached, Signature signature, Symbol routine)
+    private static FlowState Entered(
+        BasicBlock block, FlowState reached, Signature signature, Symbol routine)
     {
         var given = Given(block);
         var here = reached.Processor;

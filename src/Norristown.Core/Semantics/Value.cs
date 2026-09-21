@@ -18,7 +18,7 @@ namespace Norristown.Semantics;
 public readonly record struct Value(ValueKind Kind, long Number, string? Text)
 {
     /// <summary>No value.</summary>
-    public static readonly Value Unknown = default;
+    public static readonly Value Unknown;
 
     /// <summary>Whether the value is known at all.</summary>
     public bool IsKnown => Kind != ValueKind.Unknown;
