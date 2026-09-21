@@ -40,7 +40,7 @@ const held = new Held();
 // The view's own document URI: the scheme, a path that names the window, and the source it is
 // of, so that one source has one view and reopening it reuses the window.
 function addressed(scheme, path, source) {
-  return vscode.Uri.from({ scheme, path, query: source });
+  return vscode.Uri.from({ scheme, path: path.startsWith('/') ? path : `/${path}`, query: source });
 }
 
 // The runs of output lines one source line became, as the server sends them.
@@ -164,27 +164,21 @@ async function showExpansion(client, uri, line, character, into, all) {
 function lenses(document) {
   const view = shown.get(document.uri.toString());
   if (!view || view.kind !== EXPANSION) return [];
+  const at = view.at;
+  const opens = (title, into, all) => ({
+    title,
+    command: 'nt65.showExpansion',
+    arguments: [at.uri, at.position.line, at.position.character, into, all],
+  });
   const top = new vscode.Range(0, 0, 0, 0);
-  const found = [{ range: top, command: { title: view.summary, command: '' } }];
+  const found = [new vscode.CodeLens(top, { title: view.summary, command: '' })];
   if (view.links.length > 0) {
-    found.push({
-      range: top,
-      command: {
-        title: 'Expand all',
-        command: 'nt65.showExpansion',
-        arguments: [view.at.uri, view.at.position.line, view.at.position.character, [], true],
-      },
-    });
+    found.push(new vscode.CodeLens(top, opens('Expand all', [], true)));
   }
   for (const link of view.links) {
-    found.push({
-      range: new vscode.Range(link.line, 0, link.line, 0),
-      command: {
-        title: `Show expansion of ${link.text}`,
-        command: 'nt65.showExpansion',
-        arguments: [view.at.uri, view.at.position.line, view.at.position.character, link.into, false],
-      },
-    });
+    found.push(new vscode.CodeLens(
+      new vscode.Range(link.line, 0, link.line, 0),
+      opens(`Show expansion of ${link.text}`, link.into, false)));
   }
   return found;
 }
