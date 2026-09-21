@@ -1551,8 +1551,30 @@ out of which hands off like that does not come back either, which is worked out 
 call graph and shown as what it takes to get there and then never returning: the shape of every
 program's entry point, which sets up and hands over to a loop that runs for ever.
 
-There are still no cycle-count built-ins for `.assert`: what tooling shows is a bound on one
-pass, and an `.assert` would be read as a bound on the program.
+**A span's cycles, for an `.assert`.** `.mincycles(from, to)` and `.maxcycles(from, to)` are
+what one pass from `from` to `to` costs: the fewest cycles and the most. Both ends are
+positions in code — a label, or a routine's own name for its first position — in one routine
+and one stream of bytes, and the span is the instructions from the first up to the second,
+which is where the pass arrives rather than a line it runs. The two answers are the sum of
+each instruction's own interval, so they are one number where every instruction is exact, and
+a range where a page crossing, a taken branch or a width nobody knows widens one of them:
+
+```nt65
+.assert .mincycles(raster::top, raster::bottom) == 17, "the raster line moved"
+.assert .maxcycles(raster::top, raster::bottom) == 17, "the raster line moved"
+```
+
+A sum along a run of instructions bounds one pass only where the run is one pass, so **the
+span may hold no call and no loop**, and one that does is an error saying which it found: a
+call takes as long as the routine it names, a loop takes its body as many times as it turns,
+and a jump nt65 cannot follow could go anywhere, this span included. The ends being in two
+routines, or the second coming before the first, are errors of the same kind.
+
+Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
+operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
+element count), because what it is worth depends on how the file was laid out and how much room
+a declaration takes is what the file is laid out from. Unlike them, nt65 writes the number
+itself: ca65 knows nothing about cycles.
 
 ### 7.7 What a routine keeps
 
@@ -1874,7 +1896,8 @@ is an expression like any other.
 
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
-`.endof(x)` and `.spanof(x)` (§7.6), `.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
+`.endof(x)` and `.spanof(x)` (§7.6), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
+`.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
 `.max(a, b)`, `.sqrt(n)`, `.muldiv(a, b, c)`, `.sin(angle, turn, scale)` and
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
 §7.2 gives a symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
@@ -3318,8 +3341,19 @@ Recorded so the reasoning survives. None is open.
   state, so its annotations would be ceremony.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a
   separate proc in a `.scope` gives the same privacy and namespace without that.
-- **No cycle-count built-ins.** A sum along one path cannot be a true bound once a loop
-  or a call is on it.
+- **Cycle counts are two built-ins over a span, not one over a routine.** They were refused
+  outright at first, because a sum along one path is no bound once a loop or a call is on it
+  and a built-in that answered a number anyway would be read as a bound on the program. What
+  that argument rules out is a count of a *routine*; it does not rule out a count of a span
+  with neither in it, and §7.6 already works those out exactly — they are the raster lines and
+  the interrupt prologues that anybody counting cycles is counting. So the refusal moves to
+  where it belongs: the span says what it may not hold, and an error names the call or the loop
+  it found rather than a number quietly standing for something it is not. There are two
+  built-ins rather than one because the count is an interval wherever a page crossing, a taken
+  branch or an unknown width makes it one, and a single `.cyclesof` would have had to choose
+  which end of the interval to be. `.mincycles` and `.maxcycles` say which end is being asserted
+  on, and where the count is exact they are the same number, which is what a raster routine
+  wants to write down.
 - **Sixty-four bits while nt65 computes, thirty-two where the output carries a value** (§9).
   One width for both was weighed and refused from either end. ca65's 32 everywhere costs the
   room an intermediate wants, and a language whose `.repeat` count and whose `.if` condition
@@ -3874,7 +3908,7 @@ binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' |
              | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
 builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
-             | '.sqrt' | '.muldiv' | '.sin' | '.cos'
+             | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
              | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
              | '.mode' | '.byteof' | '.empty'          ; the last three in macro bodies
 ```

@@ -282,11 +282,14 @@ public sealed class SemanticModel
     /// <paramref name="spans"/> answers how many bytes a routine or a data declaration takes,
     /// for a caller that has laid the file out; without it a span is simply unknown, as an
     /// address is. The model stays read-only either way: what only layout knows is supplied by
-    /// whoever asks rather than kept here.
+    /// whoever asks rather than kept here, and <paramref name="cycles"/> answers what one pass
+    /// over a span of code costs the same way.
     /// </para>
     /// </summary>
-    public Value ValueOf(SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null) =>
-        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans);
+    public Value ValueOf(
+        SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null,
+        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles);
 
     /// <summary>
     /// The symbol a written name stands for, or null when it names none. <paramref name="on"/>
@@ -316,8 +319,9 @@ public sealed class SemanticModel
     /// </summary>
     public void Check(
         SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
-        Func<Symbol, long?>? spans = null) =>
-        Evaluator.Check(expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans);
+        Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Evaluator.Check(
+            expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles);
 
     /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
     public IReadOnlyList<long>? BytesOf(SyntaxNode operand, Expansion? on = null) =>

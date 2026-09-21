@@ -1,0 +1,68 @@
+; A sum along a run of instructions bounds one pass only where the run is one pass, so a span
+; with a call or a loop in it has no bound and says which it found. The ends are positions in
+; one routine, and anything else is a span that is not one.
+.module main
+
+.cpu 6502
+
+.segment ZEROPAGE
+.data count: .byte
+
+.segment CODE
+.export .proc work {
+    rts
+}
+
+.export .proc calling {
+    before:
+    lda count
+    jsr work
+    after:
+    rts
+}
+
+.export .proc looping {
+    start:
+    ldx #8
+    again:
+    dex
+    bne again
+    done:
+    rts
+}
+
+.export .proc elsewhere {
+    here:
+    jmp (count)
+    .next ?
+    gone:
+    rts
+}
+
+.export .proc other {
+    far_off:
+    rts
+}
+
+; A call takes as long as the routine it names, which is no part of this sum.
+.assert .mincycles(calling::before, calling::after) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` has no bound over this span: it holds a call, `jsr`, which takes as long as what it calls
+
+; A loop takes its body as many times as it turns, which the sum counts once.
+.assert .maxcycles(looping::start, looping::done) == 0     ;! error[cycles-span-has-no-bound]: `.maxcycles` has no bound over this span: it holds a loop: `bne` goes back to `again`
+
+; A target nt65 cannot follow could be anywhere, this span included.
+.assert .mincycles(elsewhere::here, elsewhere::gone) == 0  ;! error[cycles-span-has-no-bound]: `.mincycles` has no bound over this span: it holds `jmp`, whose target nt65 cannot follow
+
+; Two positions in different routines are not a span at all.
+.assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` has no bound over this span: it holds the two are not positions in one routine
+
+; The second position comes first, so the pass runs the other way.
+.assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` has no bound over this span: it holds `before` comes before `after`
+
+; Neither end is a position in code.
+LIMIT = 4
+.assert .mincycles(LIMIT, calling::after) == 0             ;! error[cycles-needs-a-position]: `LIMIT` is a constant, and a cycle span runs from one position in code to another
+
+; A span is layout, not a shape, so it cannot say how much room a declaration reserves.
+.segment BSS
+.data room: .byte[.mincycles(calling::before, calling::after)]  ;! error[element-count-not-constant]: an array's count is a constant

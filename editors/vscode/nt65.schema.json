@@ -142,6 +142,8 @@
         "countof-has-no-elements",
         "cpu-disagrees",
         "cpu-under-a-condition",
+        "cycles-needs-a-position",
+        "cycles-span-has-no-bound",
         "data-body-holds-values",
         "data-body-needs-a-count",
         "data-needs-a-name",

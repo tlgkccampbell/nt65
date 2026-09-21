@@ -40,6 +40,10 @@ internal sealed class Evaluator
     // only a caller that has laid the file out can answer it.
     private readonly Func<Symbol, long?>? spans;
 
+    // What one pass over a span of code costs, which only layout knows and only a caller that
+    // has laid the file out can answer.
+    private readonly Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles;
+
     // For a program in which one file changed: the symbols of the files that did not, whose
     // values stand as they were, and which of them this file's symbols read.
     private readonly Func<Symbol, bool>? settled;
@@ -82,6 +86,7 @@ internal sealed class Evaluator
         Func<string, long?>? binaryLength = null,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
+        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null,
         Func<Symbol, bool>? settled = null,
         List<string>? owners = null,
         Configuration? configuration = null,
@@ -96,6 +101,7 @@ internal sealed class Evaluator
         this.diagnostics = diagnostics;
         this.binaryLength = binaryLength;
         this.spans = spans;
+        this.cycles = cycles;
 
         // A name a repetition binds stands for its value on this turn, which is what a
         // function's parameter already does for its argument.
@@ -163,8 +169,9 @@ internal sealed class Evaluator
         List<Diagnostic> diagnostics,
         Func<string, long?>? binaryLength,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
-        Func<Symbol, long?>? spans = null) =>
-        new Evaluator(segments, resolved, diagnostics, binaryLength, bound, spans).Bytes(expression);
+        Func<Symbol, long?>? spans = null,
+        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        new Evaluator(segments, resolved, diagnostics, binaryLength, bound, spans, cycles).Bytes(expression);
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
     private void Bytes(SyntaxNode operand)
@@ -255,8 +262,9 @@ internal sealed class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
-        Func<Symbol, long?>? spans = null) =>
-        new Evaluator(segments, resolved, null, null, bound, spans).Evaluate(expression);
+        Func<Symbol, long?>? spans = null,
+        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        new Evaluator(segments, resolved, null, null, bound, spans, cycles).Evaluate(expression);
 
     /// <summary>The address size of an expression, with <paramref name="segment"/> giving <c>*</c> its size.</summary>
     public static AddressSize? AddressSizeOf(
@@ -821,6 +829,35 @@ internal sealed class Evaluator
                 return Value.Unknown;
             }
             return name == ".spanof" && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
+        }
+
+        // What one pass over a span of code costs. Both ends are positions in one routine, and
+        // only a caller that has laid the file out can count what lies between them.
+        if (name is ".mincycles" or ".maxcycles")
+        {
+            if (arguments.Count != 2)
+            {
+                Report(function, Catalogue.BuiltinArguments.Says(name, $"`{name}(from, to)`"));
+                return Value.Unknown;
+            }
+            if (SymbolOf(arguments[0]) is not { } start || SymbolOf(arguments[1]) is not { } end)
+                return Value.Unknown;
+            foreach (var (at, symbol) in new[] { (arguments[0], start), (arguments[1], end) })
+            {
+                if (symbol.Kind is not (SymbolKind.Label or SymbolKind.Proc))
+                {
+                    Report(at, Catalogue.CyclesNeedsAPosition.Says(symbol.DisplayName, symbol.KindPhrase));
+                    return Value.Unknown;
+                }
+            }
+            if (cycles?.Invoke(start, end, name == ".maxcycles") is not { } counted)
+                return Value.Unknown;
+            if (counted.Problem is { } problem)
+            {
+                Report(function, Catalogue.CyclesSpanHasNoBound.Says(name, problem));
+                return Value.Unknown;
+            }
+            return counted.Value is { } number ? Value.Of(number) : Value.Unknown;
         }
 
         if (name is ".sizeof" or ".countof")

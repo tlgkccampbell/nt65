@@ -2037,6 +2037,8 @@ public sealed class Emitter
     /// it maps them to, and a function call becomes its value. A call nt65 cannot work out
     /// is refused rather than passed to ca65, which knows neither.
     /// </summary>
+    private Value Worth(SyntaxNode node) => model.ValueOf(node, expansion, cycles: layout.CyclesOf);
+
     private void Applied(CallExpressionSyntax call, Edits edits)
     {
         var tokens = Tokens(call);
@@ -2056,7 +2058,7 @@ public sealed class Emitter
         if (call.Callee is null)
         {
             // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
-            if (model.ValueOf(call, expansion).AsNumber() is null
+            if (Worth(call).AsNumber() is null
                 && Evaluator.SelectArguments(call) is [var condition, var ifHolds, var otherwise]
                 && model.ValueOf(condition, expansion).AsNumber() is { } holds)
             {
@@ -2065,7 +2067,7 @@ public sealed class Emitter
                 Replace(call, chosen.StartsWith('(') ? "+" + chosen : chosen, edits);
                 return;
             }
-            if (model.ValueOf(call, expansion).AsNumber() is { } builtin)
+            if (Worth(call).AsNumber() is { } builtin)
             {
                 Replace(call, Constant(builtin), edits);
                 return;
@@ -2304,7 +2306,8 @@ public sealed class Emitter
         /// <param name="node">The assertion.</param>
         public override void VisitAssertDirective(AssertDirectiveSyntax node)
         {
-            if (emitter.model.ValueOf(node.Condition, emitter.expansion, emitter.layout.SpanOf).AsNumber() is null)
+            if (emitter.model.ValueOf(
+                node.Condition, emitter.expansion, emitter.layout.SpanOf, emitter.layout.CyclesOf).AsNumber() is null)
                 emitter.Linked(Line, node);
         }
 

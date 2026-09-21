@@ -1,0 +1,59 @@
+; `.mincycles` and `.maxcycles` count what one pass from one position to another costs. A sum
+; along a run of instructions bounds a pass only where the run is one pass, so the span holds
+; no call and no loop, and where the count is exact both answers are the same number.
+.module main
+
+.cpu 6502
+
+.segment ZEROPAGE
+.data colour: .byte
+.data next:   .byte
+
+.segment CODE
+
+; A raster routine, whose whole point is that the line takes exactly as long as the beam does.
+; Every instruction here is exact, so the two answers are one number and the assertion says it.
+.export .proc raster {
+    top:
+    lda colour
+    sta $d020
+    lda next
+    sta colour
+    nop
+    nop
+    bottom:
+    rts
+}
+
+; The exact count is what a raster routine is written against, and the two answers agree.
+.assert .mincycles(raster::top, raster::bottom) == 17, "the raster line moved"
+.assert .maxcycles(raster::top, raster::bottom) == 17, "the raster line moved"
+
+; A branch is 2 not taken and 3 taken, and one more when a taken branch crosses a page, so a
+; span with one in it is a range rather than a number: the lowest is what the pass can cost and
+; the highest is what it can cost.
+.export .proc either {
+    start:
+    lda colour
+    beq done
+    nop
+    done:
+    rts
+}
+
+.assert .mincycles(either::start, either::done) == 7, "the short way changed"
+.assert .maxcycles(either::start, either::done) == 9, "the long way changed"
+
+; A routine's own name is its first position, which is what a span from the top is written as.
+.export .proc whole {
+    nop
+    nop
+    end:
+    rts
+}
+
+.assert .mincycles(whole, whole::end) == 4, "the routine's top moved"
+
+; A count is a number like any other, so it can be written into data the program reads.
+.segment RODATA
+.export .data budget: .byte .maxcycles(raster::top, raster::bottom)

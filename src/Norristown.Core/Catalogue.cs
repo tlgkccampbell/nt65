@@ -789,6 +789,21 @@ public static class Catalogue
         "A whole turn is however many units the table counts it in, and the scale is what the answer is measured "
             + "in. Both are bounded because a value the output carries fits ca65's 32 bits anyway.");
 
+    internal static DiagnosticDescriptor CyclesNeedsAPosition { get; } = new(
+        "cycles-needs-a-position",
+        Severity.Error,
+        "`{0}` is {1}, and a cycle span runs from one position in code to another",
+        "`.mincycles` and `.maxcycles` count what one pass from one position to another costs, so each end is a "
+            + "label or a routine's own name.");
+
+    internal static DiagnosticDescriptor CyclesSpanHasNoBound { get; } = new(
+        "cycles-span-has-no-bound",
+        Severity.Error,
+        "`{0}` has no bound over this span: it holds {1}",
+        "A sum along a run of instructions bounds one pass only where the run is one pass. A call takes as long "
+            + "as the routine it names, and a loop takes its body as many times as it turns, so neither may be in "
+            + "the span.");
+
     internal static DiagnosticDescriptor BuiltinArguments { get; } = new(
         "builtin-arguments",
         Severity.Error,

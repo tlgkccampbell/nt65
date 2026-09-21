@@ -90,11 +90,21 @@ public sealed class CodeLayout
     // recursion check, but a chain of macros over long lists is not, so it is counted too.
     private int expanded;
 
+    // The settled steps of the walk before this one, which is what a cycle span is counted
+    // over: a span may be written before the code it measures, so it cannot be counted from a
+    // walk that is still going. Null on every walk before the lengths stop moving.
+    private readonly IReadOnlyList<Step>? counted;
+
+    // Whether anything asked for a cycle span while there was no settled walk to count over,
+    // which is what says the file is worth laying out once more with one.
+    private bool wantsCycles;
+
     private CodeLayout(
         SemanticModel model, Cpu cpu, StateAnalysis? states,
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
-        Dictionary<Symbol, long> settled)
+        Dictionary<Symbol, long> settled, IReadOnlyList<Step>? counted = null)
     {
+        this.counted = counted;
         statements = new Statements(this);
         this.model = model;
         this.cpu = cpu;
@@ -138,6 +148,93 @@ public sealed class CodeLayout
     public long? SpanOf(Symbol symbol) => settled.TryGetValue(symbol, out var span) ? span : null;
 
     /// <summary>
+    /// What one pass from <paramref name="from"/> to <paramref name="to"/> costs: the fewest
+    /// cycles, or with <paramref name="most"/> the most. The two are positions in one routine,
+    /// and the span is the instructions from the first up to the second, which is where the pass
+    /// arrives rather than a line it runs.
+    /// <para>
+    /// A sum along a run of instructions is a bound on one pass only where the run is one pass:
+    /// a call takes however long the routine it names takes, and a loop takes its own body as
+    /// many times as it turns, so the span may hold neither and says which it found.
+    /// </para>
+    /// </summary>
+    public CycleSpan CyclesOf(Symbol from, Symbol to, bool most)
+    {
+        if (counted is null)
+        {
+            // The walk this is being asked during has not reached the code yet. Saying so puts
+            // the file through one more walk, where the whole of it is there to count.
+            wantsCycles = true;
+            return default;
+        }
+        if (At(from) is not { } start)
+            return new CycleSpan(null, $"nothing places `{from.DisplayName}`");
+        if (At(to) is not { } end)
+            return new CycleSpan(null, $"nothing places `{to.DisplayName}`");
+        if (counted[start].Routine is not { } routine || counted[end].Routine != routine)
+            return new CycleSpan(null, "the two are not positions in one routine");
+        if (counted[start].Stream != counted[end].Stream)
+            return new CycleSpan(null, "the two are not in one stream of bytes");
+        if (end < start)
+            return new CycleSpan(null, $"`{to.DisplayName}` comes before `{from.DisplayName}`");
+
+        var total = new CycleCount(0);
+        for (var i = start; i < end; i++)
+        {
+            var step = counted[i];
+            if (step.IsMarker || step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax)
+                continue;
+            if (step.Statement is not InstructionStatementSyntax instruction)
+                continue;
+            var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
+            if (Instructions.Facts(mnemonic).Calls)
+                return new CycleSpan(null, $"a call, `{mnemonic}`, which takes as long as what it calls");
+            if (Backwards(instruction, step, start, i) is { } loop)
+                return new CycleSpan(null, loop);
+            if (Of(step.Statement, step.On)?.Cycles is not { } cycles)
+                return new CycleSpan(null, $"`{mnemonic}`, which nt65 has no count for");
+            total += cycles;
+        }
+        return new CycleSpan(most ? total.Most : total.Least, null);
+    }
+
+    /// <summary>
+    /// Why the transfer at step <paramref name="i"/> turns the span into a loop, or null when it
+    /// does not: a branch or a jump that goes back to somewhere at or before itself and at or
+    /// after the span's start takes the code between them again, and a target nt65 cannot
+    /// follow could be any of them.
+    /// </summary>
+    private string? Backwards(InstructionStatementSyntax instruction, Step step, int start, int i)
+    {
+        var mode = Of(step.Statement, step.On)?.Mode;
+        var transfer = Flow.Transfers.Of(instruction, mode);
+        if (transfer is Flow.Transfer.Through or Flow.Transfer.Return)
+            return null;
+        var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
+        if (transfer == Flow.Transfer.Elsewhere)
+            return $"`{mnemonic}`, whose target nt65 cannot follow";
+        if (Targets.Of(model, Flow.Transfers.TargetOf(instruction, mode), step.On) is not { } target)
+            return null;
+        return At(target.Symbol) is { } landing && landing >= start && landing <= i
+            ? $"a loop: `{mnemonic}` goes back to `{target.Symbol.DisplayName}`"
+            : null;
+    }
+
+    /// <summary>
+    /// Which settled step a symbol stands at: the step that declares it as a label, or the
+    /// routine's first step for a routine's own name. Null for a symbol the walk did not place.
+    /// </summary>
+    private int? At(Symbol symbol)
+    {
+        for (var i = 0; i < counted!.Count; i++)
+        {
+            if (counted[i].Label == symbol || (symbol.Kind == SymbolKind.Proc && counted[i].Routine == symbol))
+                return i;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>. On the 65816,
     /// <paramref name="states"/> says what state reaches each statement, which is what sizes
     /// its immediates, its <c>.ensure</c> directives and its frame slots; without it the
@@ -160,6 +257,14 @@ public sealed class CodeLayout
         }
         while (layout.Lengthen() | layout.Settle());
 
+        // A cycle span is counted over a walk that has finished, because the code it measures
+        // may be written after the expression that measures it. Only a file that asks for one
+        // is laid out again, so nothing else pays for it.
+        if (layout.wantsCycles)
+        {
+            layout = new CodeLayout(model, cpu, states, lengthened, measured, settled, layout.steps);
+            layout.Walk(model.Tree.Root.Members, from: 0);
+        }
         layout.CheckBranchRange();
         layout.Diagnostics = Norristown.Diagnostics.Ordered(layout.diagnostics);
         return layout;
@@ -535,7 +640,7 @@ public sealed class CodeLayout
         // What an operand's expressions are worth is checked here, as a data directive's
         // are, since no symbol holds them and nothing else evaluates them with anything to say.
         foreach (var expression in written?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
-            model.Check(expression, diagnostics, expansion, SpanOf);
+            model.Check(expression, diagnostics, expansion, SpanOf, CyclesOf);
         var operand = substituted?.Operand ?? written;
 
         var candidates = Plausible(operand).Where(available.Contains).ToArray();
@@ -844,7 +949,7 @@ public sealed class CodeLayout
             return;
 
         // Text is what data is written from. An operand is a number or an address.
-        if (model.ValueOf(expression, expansion, SpanOf).IsString)
+        if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).IsString)
         {
             Report(expression, Catalogue.OperandIsText.Says(expression.GetText().Trim()));
             return;
@@ -874,7 +979,7 @@ public sealed class CodeLayout
         // one that has to fit.
         if (mode != AddressingMode.Immediate || substituted is { ByteOf: true })
             return;
-        if (model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } value)
+        if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not { } value)
         {
             if (!sizeUnknown && DataLengths.TooWide(expression, bits == 16 ? 2 : 1,
                 bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", model, expansion) is { } wide)
@@ -910,7 +1015,7 @@ public sealed class CodeLayout
 
         // A constant address is taken as written: `jml $008000` leaves the current bank for
         // bank 0, which is what a long jump to a small number is for.
-        if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf).AsNumber() is not null)
+        if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not null)
             return;
         var near = mnemonic.Text.Equals("jsl", StringComparison.OrdinalIgnoreCase) ? "jsr" : "jmp";
         Report(expression, Catalogue.TargetTooNear.Says(mnemonic.Text, Spell(size.Value), near));
@@ -930,7 +1035,7 @@ public sealed class CodeLayout
             Report(operand, Catalogue.DirectPageNeeds65816.Says(CpuNames.Spell(cpu)));
             return null;
         }
-        if (model.ValueOf(expression, expansion, SpanOf).AsNumber() is not { } address)
+        if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not { } address)
         {
             Report(operand, Catalogue.DirectPagePrefixOnSymbol);
             return null;
@@ -984,9 +1089,9 @@ public sealed class CodeLayout
         var assertion = Constructs.AssertionOf(directive);
         if (assertion.Condition is not { } condition)
             return;
-        if (model.ValueOf(condition, expansion, SpanOf).AsNumber() is not { } value)
+        if (model.ValueOf(condition, expansion, SpanOf, CyclesOf).AsNumber() is not { } value)
         {
-            model.Check(condition, diagnostics, expansion, SpanOf);
+            model.Check(condition, diagnostics, expansion, SpanOf, CyclesOf);
             return;
         }
         if (value == 0)
