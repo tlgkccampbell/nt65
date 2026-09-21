@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Project;
 using Norristown.Syntax;
@@ -130,9 +131,7 @@ internal sealed class Workspace
         {
             if (!open.TryGetValue(id.Uri, out var document))
                 return null;
-            var tree = document.Tree;
-            foreach (var change in changes)
-                tree = Apply(tree, change);
+            var tree = Applied(document.Tree, changes);
             Invalidate(tree.Path);
             return open[id.Uri] = new Document(id.Uri, id.Version, tree);
         }
@@ -378,15 +377,52 @@ internal sealed class Workspace
         Paths.Normalized(path).StartsWith(Paths.Normalized(directory) + "/",
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static SyntaxTree Apply(SyntaxTree tree, TextDocumentContentChangeEvent change)
+    /// <summary>
+    /// <paramref name="tree"/> with the edits of one notification applied in order. They are
+    /// turned into text changes together and the tree is rebuilt once, because each of them
+    /// names a place in what the one before it left and the lines between the first and the
+    /// last are the only ones any of them can have touched.
+    /// </summary>
+    private static SyntaxTree Applied(SyntaxTree tree, IReadOnlyList<TextDocumentContentChangeEvent> changes)
     {
-        // No range means the whole document, which a client sends when it cannot describe the
-        // edit; there is nothing to reuse then.
-        if (change.Range is not { } range)
-            return SyntaxTree.Parse(tree.Path, change.Text);
+        var text = tree.Text;
+        var starts = tree.LineStarts;
+        var applied = new List<TextChange>(changes.Count);
+        foreach (var change in changes)
+        {
+            // No range means the whole document, which a client sends when it cannot describe
+            // the edit; there is nothing to reuse then, and nothing before it to keep either.
+            if (change.Range is not { } range)
+            {
+                applied.Clear();
+                applied.Add(new TextChange(0, text.Length, change.Text));
+                text = change.Text;
+                starts = SyntaxTree.LineOffsets(text);
+                continue;
+            }
 
-        var start = tree.GetPosition(range.Start.Line, range.Start.Character);
-        var end = tree.GetPosition(range.End.Line, range.End.Character);
-        return tree.WithChange(new TextChange(start, Math.Max(0, end - start), change.Text));
+            var start = Position(text, starts, range.Start.Line, range.Start.Character);
+            var end = Math.Max(start, Position(text, starts, range.End.Line, range.End.Character));
+            applied.Add(new TextChange(start, end - start, change.Text));
+            text = string.Concat(text.AsSpan(0, start), change.Text, text.AsSpan(end));
+            starts = SyntaxTree.LineOffsets(text);
+        }
+        return tree.WithChanges(applied);
+    }
+
+    /// <summary>
+    /// The offset of a 0-based line and character in <paramref name="text"/>, clamped to it, as
+    /// <see cref="SyntaxTree.GetPosition"/> clamps. An editor may name a position past the end
+    /// of a line or of the file, and that is not an error here.
+    /// </summary>
+    private static int Position(string text, ImmutableArray<int> starts, int line, int character)
+    {
+        if (line < 0)
+            return 0;
+        if (line >= starts.Length)
+            return text.Length;
+        var start = starts[line];
+        var end = line + 1 < starts.Length ? starts[line + 1] : text.Length;
+        return character <= 0 ? start : Math.Min(start + character, end);
     }
 }

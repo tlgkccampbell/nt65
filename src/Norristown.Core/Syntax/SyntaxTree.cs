@@ -105,6 +105,14 @@ public sealed class SyntaxTree
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
 
+    /// <summary>
+    /// Where each line of <paramref name="text"/> starts, without parsing it. It is what
+    /// <see cref="LineStarts"/> holds, for a caller placing a line and a column in a text it
+    /// has not made a tree of — an editor's edits, which name places in the text each of the
+    /// ones before it left.
+    /// </summary>
+    public static ImmutableArray<int> LineOffsets(string text) => SplitLines(text);
+
     /// <summary>Parses <paramref name="text"/> as the file at <paramref name="path"/>.</summary>
     public static SyntaxTree Parse(string path, string text)
     {
@@ -127,22 +135,46 @@ public sealed class SyntaxTree
     /// The tree for this text with <paramref name="change"/> applied. Only the lines the
     /// change touches are lexed again; every other line keeps its green node.
     /// </summary>
-    public SyntaxTree WithChange(TextChange change)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(change.Start);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(change.Start + change.Length, Text.Length);
+    public SyntaxTree WithChange(TextChange change) => WithChanges([change]);
 
-        var text = string.Concat(Text.AsSpan(0, change.Start), change.NewText, Text.AsSpan(change.Start + change.Length));
+    /// <summary>
+    /// The tree for this text with <paramref name="changes"/> applied in order, each to what
+    /// the one before it left, which is how an editor sends the edits of one keystroke. The
+    /// text is split into lines and the tree rebuilt once for the lot, rather than once per
+    /// change: only the lines between the first and the last change are lexed again.
+    /// </summary>
+    public SyntaxTree WithChanges(IReadOnlyList<TextChange> changes)
+    {
+        if (changes.Count == 0)
+            return this;
+
+        // The text before the first change and the text after the last are the same in the
+        // tree this gives as in this one, whatever the changes in between did, so they are
+        // what says which lines keep their nodes: `head` characters at the start and `tail`
+        // at the end. A change reaching further out than the ones before it widens the gap.
+        var text = Text;
+        int head = text.Length, tail = text.Length;
+        foreach (var change in changes)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(change.Start);
+            ArgumentOutOfRangeException.ThrowIfNegative(change.Length);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(change.Start + change.Length, text.Length);
+            head = Math.Min(head, change.Start);
+            tail = Math.Min(tail, text.Length - change.Start - change.Length);
+            text = string.Concat(
+                text.AsSpan(0, change.Start), change.NewText, text.AsSpan(change.Start + change.Length));
+        }
+
         var starts = SplitLines(text);
-        var oldEnd = change.Start + change.Length;
-        var delta = change.NewText.Length - change.Length;
+        var oldEnd = Text.Length - tail;
+        var delta = text.Length - Text.Length;
         int oldCount = LineStarts.Length, newCount = starts.Length;
 
         // A line keeps its node when all of its text lies outside the change and the new text
         // splits it at the same place, which also covers a \r\n joined or split by the edit.
         var prefix = 0;
         while (prefix < oldCount && prefix < newCount
-            && LineEnd(Text, LineStarts, prefix) <= change.Start
+            && LineEnd(Text, LineStarts, prefix) <= head
             && LineEnd(text, starts, prefix) == LineEnd(Text, LineStarts, prefix))
         {
             prefix++;

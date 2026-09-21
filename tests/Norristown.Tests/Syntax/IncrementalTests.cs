@@ -137,6 +137,68 @@ public sealed class IncrementalTests
         Compare(batch);
     }
 
+    /// <summary>
+    /// A keystroke's edits arrive together, and applying them in one pass gives the tree
+    /// applying them one at a time gives. The changes are random and made in runs of up to
+    /// five, each naming a place in what the ones before it left, which is how a client
+    /// writes them.
+    /// </summary>
+    [Fact]
+    public void ChangesTogetherMatchTheSameChangesOneAtATime()
+    {
+        string[] inserts = ["", " ", "\n", "\r\n", "\r", "{", "}", ".proc p {", "lda #1", "; c"];
+        var random = new Random(65816);
+        var tree = SyntaxTree.Parse("main.nt65", Corpus);
+        var batch = new List<Step>();
+
+        for (var step = 0; step < 200; step++)
+        {
+            var one = tree;
+            var changes = new List<TextChange>();
+            for (var i = random.Next(1, 6); i > 0; i--)
+            {
+                var start = random.Next(one.Text.Length + 1);
+                var change = new TextChange(
+                    start, random.Next(Math.Min(8, one.Text.Length - start) + 1), inserts[random.Next(inserts.Length)]);
+                changes.Add(change);
+                one = one.WithChange(change);
+            }
+            var together = tree.WithChanges(changes);
+            batch.Add(new Step(step, changes[0], one, together));
+            tree = together;
+
+            if (batch.Count < Batch)
+                continue;
+            Together(batch);
+            batch.Clear();
+        }
+        Together(batch);
+    }
+
+    [Fact]
+    public void NoChangesLeaveTheTreeAsItIs()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", "nop\nrts\n");
+        Assert.Same(tree, tree.WithChanges([]));
+    }
+
+    /// <summary>Compares each step's one-at-a-time tree with its all-at-once one.</summary>
+    private static void Together(List<Step> batch)
+    {
+        var failures = Repo.CollectFailures(batch, step =>
+        {
+            var (index, _, one, together) = step;
+            if (one.Text != together.Text)
+                return [$"step {index}: the text differs from applying the changes one at a time"];
+            var dump = SyntaxDump.Full(together);
+            return dump == SyntaxDump.Full(one) && dump == SyntaxDump.Full(SyntaxTree.Parse("main.nt65", together.Text))
+                ? []
+                : new[] { $"step {index}: the tree differs from applying the changes one at a time" };
+        });
+        if (failures.Count > 0)
+            Assert.Fail(failures[0]);
+    }
+
     /// <summary>Checks a batch's steps beside each other and fails on the earliest bad one.</summary>
     private static void Compare(List<Step> batch)
     {
