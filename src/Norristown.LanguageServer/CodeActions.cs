@@ -21,7 +21,9 @@ internal static class CodeActions
             changes.AddRange(Fixes.In(analysis, model, range));
         if (Wanted(only, CodeActionKinds.Rewrite) || Wanted(only, CodeActionKinds.Extract))
             changes.AddRange(Refactors.In(analysis, model, range));
-        return [.. changes.Where(change => Wanted(only, change.Kind) && change.Edits.Count > 0).Select(Spelled)];
+        return [.. changes
+            .Where(change => Wanted(only, change.Kind) && (change.Edits.Count > 0 || change.Renames is not null))
+            .Select(Spelled)];
     }
 
     /// <summary>
@@ -59,6 +61,14 @@ internal static class CodeActions
     /// </summary>
     private static Protocol.Command? Renaming(Change change)
     {
+        // A change whose whole work is to ask for another name writes nothing: the name is
+        // already there, and the caret goes on it as it stands.
+        if (change.Renames is { } written)
+        {
+            return new Protocol.Command(
+                "Rename", "nt65.rename",
+                [Lsp.ToUri(written.File), written.Line - 1, written.StartColumn - 1]);
+        }
         if (change.Names is not { } placeholder)
             return null;
         var tree = placeholder.In.Tree;

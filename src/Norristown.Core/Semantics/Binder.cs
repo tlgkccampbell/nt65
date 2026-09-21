@@ -1612,6 +1612,10 @@ internal sealed class Binder
         if (named is not { } having)
             return;
         Warn(name.Span, Catalogue.MnemonicName.Says(name.Text, CpuNames.Spell(having)));
+
+        // What is left to do about it is to call it something else, which only the programmer
+        // can decide; the editor puts the caret on the name.
+        Fixed(new DiagnosticFix(FixKind.Rename));
     }
 
     private void ResolveUses(IReadOnlyList<Use> list)

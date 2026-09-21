@@ -181,10 +181,24 @@ public sealed class FlatNames
     /// so a name it would misread is written with its module in front instead — the spelling
     /// an export already has, and one holding a <c>__</c> that no word of ca65's holds.
     /// </summary>
-    private string Spelled(string name) =>
+    private string Spelled(string name) => Prefixed(name, instructions, module) ?? name;
+
+    /// <summary>
+    /// The name the output gives <paramref name="name"/> in module <paramref name="module"/>
+    /// because ca65 would read the spelling the source gave as an instruction, or null where
+    /// the output keeps that spelling. What an editor shows about such a name comes from here,
+    /// so that it says what the emitter does and not what it once did.
+    /// </summary>
+    /// <param name="name">The name as the source writes it.</param>
+    /// <param name="cpu">The processor the program is built for, whose ca65 table decides.</param>
+    /// <param name="module">The module the name is written in, or null for a file that names none.</param>
+    public static string? Prefixed(string name, Cpu cpu, string? module) =>
+        Prefixed(name, Ca65Instructions.Of(cpu), module);
+
+    private static string? Prefixed(string name, IReadOnlySet<string> instructions, string? module) =>
         instructions.Contains(name) && module is { } own
             ? $"{own.Replace("::", "__", StringComparison.Ordinal)}__{name}"
-            : name;
+            : null;
 
     /// <summary>
     /// Whether the symbol is one a macro body or a repetition declares, and so one name per

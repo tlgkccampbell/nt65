@@ -209,6 +209,25 @@ public sealed class FixesTests
         Assert.Empty(after.Diagnostics.Select(diagnostic => diagnostic.Message));
     }
 
+    /// <summary>
+    /// A name ca65 would read as an instruction is a matter of reading, so the fix writes
+    /// nothing: it puts the caret on the name and starts a rename, because what it should be
+    /// called is the programmer's to say and nothing else's to guess.
+    /// </summary>
+    [Fact]
+    public void AMnemonicNameOffersARenameAndWritesNothing()
+    {
+        var (analysis, model) = Analyzed(Header + ".proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
+
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+
+        Assert.Equal("Rename `lda`…", action.Title);
+        Assert.Empty(action.Edit.Changes);
+        var rename = Assert.IsType<Command>(action.Command);
+        Assert.Equal("nt65.rename", rename.Name);
+        Assert.Equal([Uri, 4, 0], rename.Arguments);
+    }
+
     /// <summary>A client that asks for one kind of change is given that kind and no other.</summary>
     [Fact]
     public void OnlyTheKindsAskedForAreOffered()

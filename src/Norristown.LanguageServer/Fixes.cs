@@ -82,6 +82,18 @@ internal static class Fixes
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), nearest)]);
                 break;
 
+            case FixKind.Rename:
+                // Nothing is written: what the name should be is the programmer's to say, so
+                // the editor puts the caret on it and starts a rename.
+                var named = Edits.SpanOf(tree, diagnostic.Span);
+                yield return new Change(
+                    $"Rename `{tree.Text[named.Start..named.End]}`…",
+                    CodeActionKinds.QuickFix,
+                    [],
+                    diagnostic,
+                    Renames: diagnostic.Span);
+                break;
+
             case FixKind.AssertLevel:
                 if (WithoutLevel(tree, diagnostic.Span) is { } dropped)
                     yield return Fix(diagnostic, "Drop the level: an assertion that fails is an error", [dropped]);

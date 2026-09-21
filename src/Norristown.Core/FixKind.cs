@@ -33,6 +33,12 @@ public enum FixKind
     /// <summary>The name reported, written as the declared name it is nearly.</summary>
     NearestName,
 
+    /// <summary>
+    /// The name reported, for the programmer to give another: the editor puts the caret on it
+    /// and starts a rename, since nothing but the programmer knows what it should be called.
+    /// </summary>
+    Rename,
+
     /// <summary>ca65's assertion level, dropped: an assertion that fails here is always an error.</summary>
     AssertLevel,
 

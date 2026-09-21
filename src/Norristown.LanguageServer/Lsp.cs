@@ -59,6 +59,21 @@ internal static class Lsp
                 [Protocol.DiagnosticTag.Unnecessary])),
         ];
 
+    /// <summary>
+    /// What the output calls the symbol, where that is not what the source calls it. Only one
+    /// kind of name is written any differently: ca65 reads a word of its own instruction table
+    /// at the start of a line as an instruction, so the emitter writes such a name with its
+    /// module in front. Every other name keeps its spelling, and saying so would say nothing.
+    /// </summary>
+    private static void Written(Card card, ProgramAnalysis analysis, Symbol symbol)
+    {
+        if (symbol is { IsReachableByPath: true, LinkerName: null }
+            && Emit.FlatNames.Prefixed(symbol.FlatName, analysis.Cpu, symbol.Module) is { } prefixed)
+        {
+            card.Row("in the output", $"`{prefixed}`");
+        }
+    }
+
     /// <summary>The file's outline, nested the way its blocks are.</summary>
     public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>
         ToSymbols(tree, Outline.Build(tree));
@@ -132,6 +147,7 @@ internal static class Lsp
                 + (symbol.IsAddress && symbol.Segment is { } segment ? $" in {segment}" : ""));
         }
         Declares(card, model, reference);
+        Written(card, analysis, symbol);
         card.Prose(DocComments.Of(symbol));
         return new Protocol.Hover(
             Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, reference.Span));

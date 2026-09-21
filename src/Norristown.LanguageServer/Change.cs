@@ -15,13 +15,18 @@ namespace Norristown.LanguageServer;
 /// <param name="Names">
 /// The name it writes for the programmer to replace, or null for a change that leaves none.
 /// </param>
+/// <param name="Renames">
+/// A name already written that the change asks the programmer to replace, and its whole work,
+/// for a change that writes nothing: the editor puts the caret there and starts a rename.
+/// </param>
 internal sealed record Change(
     string Title,
     string Kind,
     IReadOnlyList<Edit> Edits,
     Diagnostic? For = null,
     bool? Preferred = null,
-    Change.Placeholder? Names = null)
+    Change.Placeholder? Names = null,
+    Span? Renames = null)
 {
     /// <summary>
     /// A name a change writes because it has to write something, and the programmer is the one

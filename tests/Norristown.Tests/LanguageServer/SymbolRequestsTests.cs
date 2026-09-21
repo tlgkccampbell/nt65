@@ -77,6 +77,28 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// The one name the output does not spell as the source does is one ca65 would read as an
+    /// instruction, which the emitter writes with its module in front. Hover says so there and
+    /// nowhere else: every other name keeps its spelling, and saying so would say nothing.
+    /// </summary>
+    [Fact]
+    public async Task HoverSaysWhatTheOutputCallsANameCa65WouldMisread()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(
+            Uri, ".module main\n.cpu 6502\n.segment CODE\n.data lda: .byte 0\n.data plain: .byte 0\n");
+        await client.NextDiagnosticsAsync(timeout);
+
+        var misread = await client.HoverAsync(Uri, new Position(3, 6), timeout);
+        var plain = await client.HoverAsync(Uri, new Position(4, 6), timeout);
+
+        Assert.Contains("`main__lda`", misread?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("in the output", misread?.Contents.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("in the output", plain?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// nt65 writes a number in hexadecimal, which is what an address or a mask is read as. A
     /// number that is also a count is worth the decimal beside it, and below ten the two are
     /// the same digit, so there is nothing to put beside it.
