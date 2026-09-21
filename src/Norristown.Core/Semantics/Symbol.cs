@@ -185,18 +185,7 @@ public sealed class Symbol
     public StateDirectiveSyntax? StateDeclaration { get; internal set; }
 
     /// <summary>The routine a label is written inside, or null for one at file level or in no routine.</summary>
-    public Symbol? Routine
-    {
-        get
-        {
-            for (var scope = Scope; scope is not null; scope = scope.Parent)
-            {
-                if (scope.Kind == ScopeKind.Proc)
-                    return scope.Owner;
-            }
-            return null;
-        }
-    }
+    public Symbol? Routine => Scope.Enclosing(ScopeKind.Proc)?.Owner;
 
     /// <summary>
     /// Whether this and <paramref name="other"/> are instances of one family: one body written

@@ -80,15 +80,7 @@ internal sealed partial class Binder
     /// <returns>Whether the name is written in a macro body.</returns>
     private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
     {
-        Scope? body = null;
-        for (var around = at; around is not null; around = around.Parent)
-        {
-            if (around.Kind == ScopeKind.Macro)
-            {
-                body = around;
-                break;
-            }
-        }
+        var body = at.Enclosing(ScopeKind.Macro);
         if (body?.Owner is not { } macro)
             return false;
 
@@ -123,7 +115,7 @@ internal sealed partial class Binder
             if (local is null)
             {
                 var near = NearestName(at, token.Text[1..], cheap: true);
-                Report(token.Span, Catalogue.NotDeclared.Says(token.Text, near is null ? "" : $"; `@{near}` is"));
+                Report(token.Span, Catalogue.NotDeclared.Says(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
                 if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
             }
@@ -172,7 +164,10 @@ internal sealed partial class Binder
             // out which.
             if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
                 return new Place(binding);
-            Report(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.Name}`"));
+            var near = Spelling.Nearest(token.Text, Lookup.Members(container));
+            Report(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
+            if (near is not null)
+                Fixed(new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }
         return new Place(CheckExported(token, member, last));
@@ -192,14 +187,14 @@ internal sealed partial class Binder
     /// </summary>
     private void ReportUndeclared(SyntaxToken token, bool last, Scope at)
     {
-        lookedUp.Add("name:" + token.Text);
+        lookedUp.Add(new LookedUpName(null, token.Text));
         var exporting = program.ModulesExporting(token.Text).ToList();
         var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
             ? Catalogue.DeclaredInAnotherModule.Says(
                 token.Text, exporting[0], exporting[0], token.Text, exporting[0], token.Text)
             : last
-                ? Catalogue.NotDeclared.Says(token.Text, nearest is null ? "" : $"; `{nearest}` is")
+                ? Catalogue.NotDeclared.Says(token.Text, Lookup.Suggesting(nearest))
                 : Catalogue.ModuleNotInTheBuild.Says(token.Text, token.Text));
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
@@ -232,9 +227,17 @@ internal sealed partial class Binder
         }
     }
 
-    /// <summary>What a lookup that reports says it on: the name it was asked about.</summary>
-    private static Action<DiagnosticMessage>? At(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
-        report is null ? null : message => report(token.Span, message);
+    /// <summary>
+    /// What a lookup that reports says it on: the name it was asked about, with the fix the
+    /// message names where it names one.
+    /// </summary>
+    private Action<DiagnosticMessage, DiagnosticFix?>? At(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
+        report is null ? null : (message, fix) =>
+        {
+            report(token.Span, message);
+            if (fix is { } written)
+                Fixed(written);
+        };
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
     private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
@@ -249,8 +252,8 @@ internal sealed partial class Binder
             : found;
     }
 
-    /// <summary>Remembers that resolving this file looked for <paramref name="member"/>, written <c>module::name</c>.</summary>
-    private void Touch(string member) => lookedUp.Add("member:" + member);
+    /// <summary>Remembers that resolving this file looked for <paramref name="name"/> in <paramref name="module"/>.</summary>
+    private void Touch(string? module, string name) => lookedUp.Add(new LookedUpName(module, name));
 
     /// <summary>
     /// A symbol another module declares may only be named if that module exports it. The
@@ -391,7 +394,7 @@ internal sealed partial class Binder
     {
         Report(token.Span, container.Body is null && container.TypeExpression is null
             ? Catalogue.NotAScope.Says(container.DisplayName, container.KindPhrase)
-            : Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.DisplayName}`"));
+            : Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.DisplayName}`", ""));
         return null;
     }
 

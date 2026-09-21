@@ -131,6 +131,22 @@ public sealed class LookupTests
         Assert.True(model.GetSymbolInfo(written, ["here", "z"]).IsNone);
     }
 
+    /// <summary>
+    /// A misspelled name in another module is told what it was nearly, as a misspelled one in
+    /// this file is, and the same fix puts it right.
+    /// </summary>
+    [Fact]
+    public void AMisspelledNameInAnotherModuleIsToldWhatItWasNearly()
+    {
+        var analysis = Analysis.Program(
+            ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),
+            ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda other::SCREN\n    rts\n}\n"));
+
+        var problem = Assert.Single(analysis.File("main.nt65").Diagnostics);
+        Assert.Equal("`SCREN` is not declared in module `other`; `SCREEN` is", problem.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.NearestName, "SCREEN"), problem.Fix);
+    }
+
     /// <summary>Every place a name is written, in every file, which is what a rename writes over.</summary>
     [Fact]
     public void ReferencesToANameSpanTheProgram()

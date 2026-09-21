@@ -110,17 +110,6 @@ public sealed class ProgramSymbols
         return new ProgramSymbols(byName, prefixes, defined);
     }
 
-    /// <summary>
-    /// Whether an export is a symbol to the linker. A macro, a charmap, a function, a list and a
-    /// signature set are used by value, a scope and a type are only the way to their members, and an import
-    /// is defined by somebody else.
-    /// </summary>
-    internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
-        or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
-        or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
-        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine
-        && !symbol.IsConfig && !symbol.Value.IsString;
-
     /// <summary>Every module of the program, by name.</summary>
     public IEnumerable<Module> Modules => modules.Values;
 
@@ -139,9 +128,10 @@ public sealed class ProgramSymbols
     /// <summary>
     /// What <paramref name="name"/> is in <paramref name="module"/>: a name its file declares at
     /// its top level, exported or not, or a name it re-exports. <paramref name="touched"/> hears
-    /// of every name looked for, as <c>module::name</c>, those a re-export leads through included.
+    /// of every name looked for, with the module it was looked for in, those a re-export leads
+    /// through included.
     /// </summary>
-    public Symbol? Member(Module module, string name, Action<string>? touched = null) =>
+    public Symbol? Member(Module module, string name, Action<string?, string>? touched = null) =>
         Member(module, name, touched, []);
 
     /// <summary>The modules that export a top-level name <paramref name="name"/>, which is what a name no one declared may have meant.</summary>
@@ -152,11 +142,22 @@ public sealed class ProgramSymbols
             .Select(module => module.Name!)
             .Order(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Whether an export is a symbol to the linker. A macro, a charmap, a function, a list and a
+    /// signature set are used by value, a scope and a type are only the way to their members, and an import
+    /// is defined by somebody else.
+    /// </summary>
+    internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
+        or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
+        or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
+        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine
+        && !symbol.IsConfig && !symbol.Value.IsString;
+
     private static string FileName(SyntaxTree tree) => tree.Path[(tree.Path.LastIndexOf('/') + 1)..];
 
-    private Symbol? Member(Module module, string name, Action<string>? touched, HashSet<(string, string)> visiting)
+    private Symbol? Member(Module module, string name, Action<string?, string>? touched, HashSet<(string, string)> visiting)
     {
-        touched?.Invoke($"{module.Name}::{name}");
+        touched?.Invoke(module.Name, name);
         if (module.FileScope.FindMember(name) is { } declared)
             return declared;
         foreach (var reexport in module.Reexports)
@@ -171,7 +172,7 @@ public sealed class ProgramSymbols
     /// The symbol a path written from the root of the modules leads to, or null. A re-export
     /// is resolved the same way, and one that leads back to itself leads nowhere.
     /// </summary>
-    private Symbol? Resolve(IReadOnlyList<string> path, Action<string>? touched, HashSet<(string, string)> visiting)
+    private Symbol? Resolve(IReadOnlyList<string> path, Action<string?, string>? touched, HashSet<(string, string)> visiting)
     {
         var at = 0;
         Module? module = null;

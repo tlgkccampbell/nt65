@@ -29,7 +29,7 @@ public sealed class ProgramModel
     private readonly Cpu cpu;
 
     // The names each file looked for in the others, found or not.
-    private readonly IReadOnlyDictionary<string, IReadOnlySet<string>> lookedUp;
+    private readonly IReadOnlyDictionary<string, IReadOnlySet<LookedUpName>> lookedUp;
 
     // What each file's own analysis found — binding, evaluating its symbols, checking its
     // macros and signatures — by file, and what only the whole program can say.
@@ -40,7 +40,7 @@ public sealed class ProgramModel
     private ProgramModel(
         IReadOnlyList<SemanticModel> files, SegmentTable segments, ProgramSymbols symbols, Cpu cpu,
         IReadOnlyList<ProgramSymbols.Module> modules, SymbolMap resolved, SymbolMap declared, Forwarding forwarding,
-        IReadOnlyDictionary<string, IReadOnlySet<string>> lookedUp,
+        IReadOnlyDictionary<string, IReadOnlySet<LookedUpName>> lookedUp,
         IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> byFile, IReadOnlyList<Diagnostic> tables,
         IReadOnlyList<Diagnostic> segmentValues)
     {
@@ -173,7 +173,7 @@ public sealed class ProgramModel
             files.Add(new SemanticModel(trees[i], segments, configuration, symbols, bound[i], resolved, declared,
                 Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), binaryLength));
         }
-        var lookedUp = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        var lookedUp = new Dictionary<string, IReadOnlySet<LookedUpName>>(StringComparer.Ordinal);
         foreach (var binder in binders)
             lookedUp.TryAdd(binder.Tree.Path, binder.LookedUp);
         return new ProgramModel(
@@ -329,8 +329,8 @@ public sealed class ProgramModel
                 continue;
             var everything = changed.Any(FileInterface.IsModuleWide);
             var heads = changed.Select(name => name.Split("::")[0])
-                .SelectMany(head => new[] { $"member:{module.Name}::{head}", "name:" + head })
-                .ToHashSet(StringComparer.Ordinal);
+                .SelectMany(head => new[] { new LookedUpName(module.Name, head), new LookedUpName(null, head) })
+                .ToHashSet();
             foreach (var other in others)
             {
                 if (other.Tree == defines)
@@ -375,7 +375,7 @@ public sealed class ProgramModel
                     declared, Expanded(binders[file.Tree.Path], forwarding.Current), all.Where(d => d.Span.File == file.Tree.Path), binaryLength)
                 : file)
             .ToList();
-        var lookups = new Dictionary<string, IReadOnlySet<string>>(lookedUp, StringComparer.Ordinal);
+        var lookups = new Dictionary<string, IReadOnlySet<LookedUpName>>(lookedUp, StringComparer.Ordinal);
         foreach (var (path, binder) in binders)
             lookups[path] = binder.LookedUp;
         return new ProgramModel(
@@ -552,11 +552,6 @@ public sealed class ProgramModel
     }
 
     /// <summary>
-    /// An export may be given a wider address size than its own, <c>.export K: abs</c>, so that
-    /// what imports it is sized to what it may later become; a narrower one would tell the
-    /// linker, and every other module, something that is not so.
-    /// </summary>
-    /// <summary>
     /// On the 65816 a routine with no body declares what every call through it is checked
     /// against, and has no body to check that declaration itself. So it has to say something: an
     /// extern proc at a constant address and an imported routine write their state rather than
@@ -581,6 +576,11 @@ public sealed class ProgramModel
         }
     }
 
+    /// <summary>
+    /// An export may be given a wider address size than its own, <c>.export K: abs</c>, so that
+    /// what imports it is sized to what it may later become; a narrower one would tell the
+    /// linker, and every other module, something that is not so.
+    /// </summary>
     private static void CheckExportSizes(IEnumerable<Symbol> symbols, Dictionary<string, List<Diagnostic>> byFile)
     {
         foreach (var symbol in symbols)

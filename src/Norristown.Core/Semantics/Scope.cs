@@ -60,6 +60,21 @@ public sealed class Scope
         }
     }
 
+    /// <summary>
+    /// The nearest scope of <paramref name="kind"/> from here outward, this one included, or
+    /// null when nothing out to the file is one: the macro body a name is written in, the
+    /// repetition a line is a turn of.
+    /// </summary>
+    public Scope? Enclosing(ScopeKind kind)
+    {
+        for (var scope = this; scope is not null; scope = scope.Parent)
+        {
+            if (scope.Kind == kind)
+                return scope;
+        }
+        return null;
+    }
+
     /// <summary>The nearest scope with a name, which is the routine or scope a name lives in.</summary>
     public Scope? NearestNamed()
     {

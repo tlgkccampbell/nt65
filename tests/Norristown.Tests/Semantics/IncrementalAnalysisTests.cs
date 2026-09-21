@@ -1,3 +1,6 @@
+using Norristown.Project;
+using Norristown.Syntax;
+
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
@@ -69,6 +72,39 @@ public sealed class IncrementalAnalysisTests
                 $"{path}: \"{find}\" analyzed {analysis.Reanalyzed} file(s), because {analysis.WholeProgram}");
         }
     }
+
+    /// <summary>
+    /// What is decided for the program as a whole changing — the files in it, the project, the
+    /// CPU — is a reason to analyze all of it, and each says which it was.
+    /// </summary>
+    [Fact]
+    public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()
+    {
+        var main = SyntaxTree.Parse("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n.proc main {\n    rts\n}\n");
+        var other = SyntaxTree.Parse("other.nt65", ".module other\nSPARE = 1\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([main], project, Nothing);
+        Assert.Equal(WholeProgramReason.NoPreviousAnalysis, first.WholeProgram);
+
+        // Nothing changed at all, so the analysis before it is the answer.
+        Assert.Same(first, Compiler.Analyze([main], project, Nothing, first));
+
+        Assert.Equal(
+            WholeProgramReason.ProjectChanged,
+            Compiler.Analyze([main], project with { Out = "elsewhere" }, Nothing, first).WholeProgram);
+        Assert.Equal(
+            WholeProgramReason.FilesAddedOrRemoved,
+            Compiler.Analyze([main, other], project, Nothing, first).WholeProgram);
+
+        var native = main.WithChange(new TextChange(main.Text.IndexOf("6502", StringComparison.Ordinal), 4, "65816"));
+        Assert.Equal(
+            WholeProgramReason.CpuChanged,
+            Compiler.Analyze([native], project, Nothing, first).WholeProgram);
+    }
+
+    /// <summary>No file of these programs has an <c>.incbin</c> in it.</summary>
+    private static long? Nothing(string path) => null;
 
     /// <summary>An <c>.incbin</c> file that changed on disk is a change to the files that include it.</summary>
     [Fact]

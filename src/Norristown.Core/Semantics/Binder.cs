@@ -89,7 +89,7 @@ internal sealed partial class Binder
 
     // Every name looked for in the other files, found or not: a file that declares or stops
     // declaring one of them, or changes what it means, changes what this file means.
-    private readonly HashSet<string> lookedUp = new(StringComparer.Ordinal);
+    private readonly HashSet<LookedUpName> lookedUp = [];
     private readonly Scope fileScope;
     private ProgramSymbols program = ProgramSymbols.Empty;
     private Scope scope;
@@ -141,11 +141,10 @@ internal sealed partial class Binder
 
     /// <summary>
     /// What resolving this file looked for in other modules, whether it found it or not: each
-    /// name in a module, as <c>member:</c> and <c>module::name</c>, and each name no one
-    /// declared, as <c>name:</c> and the name, which another module exporting would change
-    /// what is said.
+    /// name in a module, with that module's name, and each name no one declared, with none,
+    /// which another module exporting would change what is said about.
     /// </summary>
-    public IReadOnlySet<string> LookedUp => lookedUp;
+    public IReadOnlySet<LookedUpName> LookedUp => lookedUp;
 
     /// <summary>The file as the program sees it: its module's name, its top level and what it exports.</summary>
     public ProgramSymbols.Module Module => new(tree, moduleName, moduleNameSpan, fileScope, exported, reexports);
@@ -961,32 +960,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>Whether the walk is inside a <c>.repeat</c> or <c>.each</c> body, however many scopes deep.</summary>
-    private bool InRepetition
-    {
-        get
-        {
-            for (var around = scope; around is not null; around = around.Parent)
-            {
-                if (around.Kind == ScopeKind.Repetition)
-                    return true;
-            }
-            return false;
-        }
-    }
+    private bool InRepetition => scope.Enclosing(ScopeKind.Repetition) is not null;
 
     /// <summary>Whether the walk is inside a macro body, however many scopes deep.</summary>
-    private bool InMacroBody
-    {
-        get
-        {
-            for (var around = scope; around is not null; around = around.Parent)
-            {
-                if (around.Kind == ScopeKind.Macro)
-                    return true;
-            }
-            return false;
-        }
-    }
+    private bool InMacroBody => scope.Enclosing(ScopeKind.Macro) is not null;
 
     /// <summary>
     /// Whether a declaration here would land in a block argument. A routine or a macro
@@ -1388,18 +1365,7 @@ internal sealed partial class Binder
     private void BindCall(MacroCallSyntax call) => calls.Add(new Invocation(call, scope, EnclosingMacro));
 
     /// <summary>The macro whose body the walk is inside, or null when it is in none.</summary>
-    private Symbol? EnclosingMacro
-    {
-        get
-        {
-            for (var around = scope; around is not null; around = around.Parent)
-            {
-                if (around.Kind == ScopeKind.Macro)
-                    return around.Owner;
-            }
-            return null;
-        }
-    }
+    private Symbol? EnclosingMacro => scope.Enclosing(ScopeKind.Macro)?.Owner;
 
     /// <summary>
     /// Matches each call to the macro it names and resolves the arguments that are names.
@@ -1676,11 +1642,10 @@ internal sealed partial class Binder
     /// Works out what the file exports, once it has been read: each declaration written after
     /// <c>.export</c> and each name an <c>.export</c> list gives, and what exporting those
     /// spreads to. Only what the file declares is looked for, so this needs no other module.
-    /// </summary>
-    /// <summary>
-    /// Reads what the file exports. It runs after the families are declared, because their
-    /// instances are declarations of the file like any others and an <c>.export</c> before one
-    /// exports every instance.
+    /// <para>
+    /// It runs after the families are declared, because their instances are declarations of the
+    /// file like any others and an <c>.export</c> before one exports every instance.
+    /// </para>
     /// </summary>
     public void Export()
     {

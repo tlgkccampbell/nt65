@@ -55,5 +55,5 @@
     .byte screen("hi")  ;! error[charmap-has-no-entry]: `screen` does not map `h`
     .byte twice(1, 2)   ;! error[function-argument-count]: `twice` takes 1 argument(s), and 2 were given
     .align 100          ;! error[align-boundary-not-power-of-two]: an `.align` boundary must be a power of two, not 100
-    .byte Point::z      ;! error[not-declared-in]: `z` is not declared in `Point`
+    .byte Point::z      ;! error[not-declared-in]: `z` is not declared in `Point`; `x` is
 }

@@ -61,6 +61,32 @@ public sealed class Expansion : IEquatable<Expansion>
     /// </summary>
     public BlockSyntax? Body { get; }
 
+    /// <summary>How deep the expansions go, which is what bounds a runaway one.</summary>
+    public int Depth
+    {
+        get
+        {
+            var depth = 0;
+            for (var level = this; level is not null; level = level.Outer)
+                depth++;
+            return depth;
+        }
+    }
+
+    /// <summary>The macro call this line is inside, nearest first, or null when it is in none.</summary>
+    public MacroCallSyntax? NearestCall
+    {
+        get
+        {
+            for (var level = this; level is not null; level = level.Outer)
+            {
+                if (level.Call is { } call)
+                    return call;
+            }
+            return null;
+        }
+    }
+
     /// <summary>One turn of a repetition, with the name it binds and what that is worth.</summary>
     public static Expansion Turn(
         Expansion? outer, BlockSyntax block, Symbol? binding, Value value, SyntaxNode? item, int index,
@@ -159,32 +185,6 @@ public sealed class Expansion : IEquatable<Expansion>
             }
         }
         return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message);
-    }
-
-    /// <summary>How deep the expansions go, which is what bounds a runaway one.</summary>
-    public int Depth
-    {
-        get
-        {
-            var depth = 0;
-            for (var level = this; level is not null; level = level.Outer)
-                depth++;
-            return depth;
-        }
-    }
-
-    /// <summary>The macro call this line is inside, nearest first, or null when it is in none.</summary>
-    public MacroCallSyntax? NearestCall
-    {
-        get
-        {
-            for (var level = this; level is not null; level = level.Outer)
-            {
-                if (level.Call is { } call)
-                    return call;
-            }
-            return null;
-        }
     }
 
     /// <summary>Whether two levels are the same writing of the same lines.</summary>

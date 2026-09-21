@@ -71,24 +71,6 @@ public sealed class SemanticModel
                 && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))];
     }
 
-    /// <summary>
-    /// What a path ending in a repetition's name reaches: <c>reset::b</c>, where <c>b</c> walks
-    /// an enum, names a member of <c>reset</c> on every turn, so the output has to be able to
-    /// reach each of them and a member another module declares has to be imported.
-    /// </summary>
-    private static IEnumerable<Symbol> Namesakes(IReadOnlyList<SymbolReference> references)
-    {
-        for (var i = 1; i < references.Count; i++)
-        {
-            if (references[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding }
-                && references[i - 1].Symbol.Body is { } container)
-            {
-                foreach (var member in container.Symbols)
-                    yield return member;
-            }
-        }
-    }
-
     /// <summary>The file this model is of.</summary>
     public SyntaxTree Tree { get; }
 
@@ -296,12 +278,12 @@ public sealed class SemanticModel
     /// <summary>
     /// What an expression is worth, for an editor to show. <paramref name="on"/> is the turn
     /// of the repetition it was written in, whose bindings it may name.
-    /// </summary>
-    /// <summary>
-    /// <paramref name="spans"/> answers how many bytes a routine or a data
-    /// declaration takes, for a caller that has laid the file out; without it a span is
-    /// simply unknown, as an address is. The model stays read-only either way: what only
-    /// layout knows is supplied by whoever asks rather than kept here.
+    /// <para>
+    /// <paramref name="spans"/> answers how many bytes a routine or a data declaration takes,
+    /// for a caller that has laid the file out; without it a span is simply unknown, as an
+    /// address is. The model stays read-only either way: what only layout knows is supplied by
+    /// whoever asks rather than kept here.
+    /// </para>
     /// </summary>
     public Value ValueOf(SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null) =>
         Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans);
@@ -390,6 +372,24 @@ public sealed class SemanticModel
             }
         }
         return bound;
+    }
+
+    /// <summary>
+    /// What a path ending in a repetition's name reaches: <c>reset::b</c>, where <c>b</c> walks
+    /// an enum, names a member of <c>reset</c> on every turn, so the output has to be able to
+    /// reach each of them and a member another module declares has to be imported.
+    /// </summary>
+    private static IEnumerable<Symbol> Namesakes(IReadOnlyList<SymbolReference> references)
+    {
+        for (var i = 1; i < references.Count; i++)
+        {
+            if (references[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding }
+                && references[i - 1].Symbol.Body is { } container)
+            {
+                foreach (var member in container.Symbols)
+                    yield return member;
+            }
+        }
     }
 
     /// <summary>

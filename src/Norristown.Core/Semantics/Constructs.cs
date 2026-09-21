@@ -23,11 +23,6 @@ public static class Constructs
         _ => default,
     };
 
-    /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
-    /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
-    /// <param name="Message">What to say about it, or null when none was written.</param>
-    public readonly record struct Assertion(ExpressionSyntax? Condition, string? Message);
-
     /// <summary>
     /// The segment a segment block or a region line names, or null when the line is neither or
     /// names none. A name written in quotes has been reported, and still names its segment.
@@ -39,4 +34,9 @@ public static class Constructs
     // an `.error` holds the missing token that stands where the quotes belong.
     private static string? MessageOf(SyntaxToken? message) =>
         message is { IsMissing: false } written ? Literals.Text(written.Text) : null;
+
+    /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
+    /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
+    /// <param name="Message">What to say about it, or null when none was written.</param>
+    public readonly record struct Assertion(ExpressionSyntax? Condition, string? Message);
 }

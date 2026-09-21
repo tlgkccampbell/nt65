@@ -399,7 +399,7 @@ public static class Catalogue
     internal static DiagnosticDescriptor NotDeclaredIn { get; } = new(
         "not-declared-in",
         Severity.Error,
-        "`{0}` is not declared in {1}",
+        "`{0}` is not declared in {1}{2}",
         "The path names a scope, a module, a type or a routine that does not declare this last part. What a scope "
             + "holds is a set, and it is read from the declaration rather than from what happens to be written before "
             + "this line.");

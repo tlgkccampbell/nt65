@@ -24,8 +24,8 @@ internal static class Lookup
         ProgramSymbols program,
         IReadOnlyDictionary<string, Place> brought,
         IReadOnlyList<ProgramSymbols.Module> globs,
-        Action<string>? touched = null,
-        Action<DiagnosticMessage>? report = null)
+        Action<string?, string>? touched = null,
+        Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         if (brought.TryGetValue(name, out var found))
             return found with { IsAlias = found.Symbol is { } target && target.Name != name };
@@ -46,7 +46,7 @@ internal static class Lookup
             }
             if (chosen is { } other)
             {
-                report?.Invoke(Catalogue.ExportAmbiguous.Says(name, other.From, module.Name, module.Name, name));
+                report?.Invoke(Catalogue.ExportAmbiguous.Says(name, other.From, module.Name, module.Name, name), null);
                 return Place.Reported;
             }
             chosen = new Place(exported, From: module.Name);
@@ -55,11 +55,12 @@ internal static class Lookup
     }
 
     /// <summary>The first part of a path written from the root of the modules.</summary>
-    public static Place? ModuleRoot(string name, ProgramSymbols program, Action<DiagnosticMessage>? report = null)
+    public static Place? ModuleRoot(
+        string name, ProgramSymbols program, Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         if (program.IsModulePath(name))
             return new Place(null, name);
-        report?.Invoke(Catalogue.ModuleUnknown.Says(name));
+        report?.Invoke(Catalogue.ModuleUnknown.Says(name), null);
         return null;
     }
 
@@ -71,24 +72,41 @@ internal static class Lookup
         string name,
         string prefix,
         ProgramSymbols program,
-        Action<string>? touched = null,
-        Action<DiagnosticMessage>? report = null)
+        Action<string?, string>? touched = null,
+        Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         var path = $"{prefix}::{name}";
         if (program.IsModulePath(path))
             return new Place(null, path);
         if (program.ModuleNamed(prefix) is not { } module)
         {
-            report?.Invoke(Catalogue.ModuleUnknown.Says(path));
+            report?.Invoke(Catalogue.ModuleUnknown.Says(path), null);
             return null;
         }
         if (program.Member(module, name, touched) is not { } member)
         {
-            report?.Invoke(Catalogue.NotDeclaredIn.Says(name, $"module `{prefix}`"));
+            var near = Spelling.Nearest(name, Members(module));
+            report?.Invoke(
+                Catalogue.NotDeclaredIn.Says(name, $"module `{prefix}`", Suggesting(near)),
+                near is null ? null : new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }
         return new Place(member);
     }
+
+    /// <summary>The names a path may write after a scope's <c>::</c>, which a misspelling could have meant.</summary>
+    public static IEnumerable<string> Members(Scope container) =>
+        container.Symbols.Where(symbol => !symbol.IsCheapLocal).Select(symbol => symbol.Name);
+
+    /// <summary>The same for a module: what its file declares at the top level, and what it re-exports.</summary>
+    public static IEnumerable<string> Members(ProgramSymbols.Module module) =>
+        Members(module.FileScope).Concat(module.Reexports.Select(reexport => reexport.Name));
+
+    /// <summary>
+    /// A near miss as a message writes it, <c>; `count` is</c>, or nothing at all when the
+    /// name is nothing like anything declared there.
+    /// </summary>
+    public static string Suggesting(string? near) => near is null ? "" : $"; `{near}` is";
 
     /// <summary>
     /// What a name may reach into with <c>::</c>: its own scope, or the scope of the type it
