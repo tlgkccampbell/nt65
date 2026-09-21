@@ -13,7 +13,7 @@ internal sealed class GreenToken : GreenNode
     private static readonly GreenToken?[] missing = new GreenToken?[byte.MaxValue + 1];
 
     internal GreenToken(SyntaxKind kind, string text, ImmutableArray<GreenTrivia> leading,
-        ImmutableArray<GreenTrivia> trailing, string? error)
+        ImmutableArray<GreenTrivia> trailing, IReadOnlyList<string>? errors)
         : base(kind, TriviaWidth(leading) + text.Length + TriviaWidth(trailing))
     {
         Text = text;
@@ -21,8 +21,9 @@ internal sealed class GreenToken : GreenNode
         TrailingTrivia = trailing;
 
         // A lexical error covers the token's text, and arrives with the token rather than after
-        // it: the cache never shares a token that has one, so it is one token's own.
-        if (error is not null)
+        // it: the cache never shares a token that has one, so it is one token's own. A literal
+        // can be wrong in more than one way, and each of them is a separate thing to correct.
+        foreach (var error in errors ?? [])
             Report(new GreenDiagnostic(TriviaWidth(leading), text.Length, error));
     }
 

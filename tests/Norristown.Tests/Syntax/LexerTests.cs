@@ -71,6 +71,22 @@ public sealed class LexerTests
         Assert.Equal(text.Length, reported.Width);
     }
 
+    /// <summary>
+    /// Every escape a literal gets wrong is said, since each is a separate thing to correct.
+    /// What a character literal holds is not counted where an escape was refused: how many
+    /// characters it comes to is not news while one of them could not be read.
+    /// </summary>
+    [Theory]
+    [InlineData(@"""\q\z""", new[] { @"unknown escape `\q`", @"unknown escape `\z`" })]
+    [InlineData(@"""\x4\q""", new[] { @"`\x` must be followed by two hexadecimal digits", @"unknown escape `\q`" })]
+    [InlineData(@"'\xZZ'", new[] { @"`\x` must be followed by two hexadecimal digits" })]
+    [InlineData(@"""\q", new[] { @"unknown escape `\q`" })]
+    public void EveryEscapeALiteralGetsWrongIsSaid(string text, string[] errors)
+    {
+        var token = Lexer.LexLine(text).Tokens[0];
+        Assert.Equal(errors, token.Diagnostics.Select(diagnostic => diagnostic.Message));
+    }
+
     [Fact]
     public void TriviaAttachesToTheTokensOnItsLine()
     {

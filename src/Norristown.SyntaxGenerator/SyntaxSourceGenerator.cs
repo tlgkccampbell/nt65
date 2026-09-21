@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using System.Xml;
 using Microsoft.CodeAnalysis;
@@ -27,10 +28,25 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var table = context.AdditionalTextsProvider
+        // Collected rather than taken one at a time, so that a project which does not carry the
+        // table hears about the table rather than about the hundred classes it does not have.
+        var tables = context.AdditionalTextsProvider
             .Where(file => NameOf(file.Path) == TableName)
-            .Select((file, token) => new Table(file.Path, file.GetText(token)?.ToString()));
-        context.RegisterSourceOutput(table, Write);
+            .Select((file, token) => new Table(file.Path, file.GetText(token)?.ToString()))
+            .Collect();
+        context.RegisterSourceOutput(tables, Write);
+    }
+
+    private static void Write(SourceProductionContext context, ImmutableArray<Table> tables)
+    {
+        if (tables.IsEmpty)
+        {
+            Report(context, path: null, 0,
+                $"{TableName} is not among the project's AdditionalFiles, so there is no syntax to write");
+            return;
+        }
+        foreach (var table in tables)
+            Write(context, table);
     }
 
     private static void Write(SourceProductionContext context, Table table)
@@ -63,11 +79,16 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
             context.AddSource(file.Key, SourceText.From(file.Value, utf8));
     }
 
-    /// <summary>Reports a table that cannot be read, on <paramref name="line"/> when it knows one.</summary>
-    private static void Report(SourceProductionContext context, string path, int line, string message)
+    /// <summary>
+    /// Reports a table that cannot be read, on <paramref name="line"/> when it knows one and
+    /// nowhere at all when there is no file to point at.
+    /// </summary>
+    private static void Report(SourceProductionContext context, string? path, int line, string message)
     {
         var at = new LinePosition(line > 0 ? line - 1 : 0, 0);
-        var where = Location.Create(path, new TextSpan(0, 0), new LinePositionSpan(at, at));
+        var where = path is null
+            ? Location.None
+            : Location.Create(path, new TextSpan(0, 0), new LinePositionSpan(at, at));
         context.ReportDiagnostic(Diagnostic.Create(Unreadable, where, message));
     }
 

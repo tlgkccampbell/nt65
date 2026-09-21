@@ -36,6 +36,40 @@ public sealed class GeneratorDriverTests
         Assert.Empty(run.GeneratedSources);
     }
 
+    /// <summary>
+    /// A node under a class the table does not have would be a C# error in a file nobody
+    /// wrote, and one under itself a walk up the hierarchy that never ends. Both are read off
+    /// the table instead.
+    /// </summary>
+    [Theory]
+    [InlineData("<Node Name=\"WidgetSyntax\" Base=\"GadgetSyntax\"/>")]
+    [InlineData("<Node Name=\"WidgetSyntax\" Base=\"WidgetSyntax\"/>")]
+    public void ANodeUnderAClassTheTableDoesNotHaveIsADiagnostic(string node)
+    {
+        var run = Run($"<Tree>\n  {node}\n</Tree>\n");
+        var diagnostic = Assert.Single(run.Diagnostics);
+        Assert.Equal("NT1001", diagnostic.Id);
+        Assert.Contains("WidgetSyntax derives from", diagnostic.GetMessage());
+        Assert.Empty(run.GeneratedSources);
+    }
+
+    /// <summary>
+    /// A project that does not carry the table hears about the table, rather than about the
+    /// hundred classes it then does not have.
+    /// </summary>
+    [Fact]
+    public void NoTableAtAllIsADiagnostic()
+    {
+        var run = CSharpGeneratorDriver.Create(new SyntaxSourceGenerator())
+            .RunGenerators(CSharpCompilation.Create("Norristown.Core.Table"), TestContext.Current.CancellationToken)
+            .GetRunResult().Results.Single();
+
+        var diagnostic = Assert.Single(run.Diagnostics);
+        Assert.Equal("NT1001", diagnostic.Id);
+        Assert.Contains("Syntax.xml is not among the project's AdditionalFiles", diagnostic.GetMessage());
+        Assert.Empty(run.GeneratedSources);
+    }
+
     [Fact]
     public void TableTextThatIsNotXmlIsADiagnosticToo()
     {

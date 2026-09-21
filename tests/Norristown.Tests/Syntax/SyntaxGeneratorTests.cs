@@ -101,7 +101,7 @@ public sealed class SyntaxGeneratorTests
     public void TheGreenClassTakesOneParameterPerSlot()
     {
         var green = Green(Widget);
-        Assert.Contains("internal sealed class WidgetSyntax : GreenNode", green);
+        Assert.Contains("internal sealed class WidgetSyntax : StatementSyntax", green);
         Assert.Contains("GreenToken keyword,", green);
         Assert.Contains("GreenToken name,", green);
         Assert.Contains("GreenSeparatedList? parts,", green);
@@ -208,9 +208,13 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("LidSyntax", missed.Message);
     }
 
-    /// <summary>The files these nodes make; they are written without the <c>Tree</c> around them.</summary>
+    /// <summary>
+    /// The files these nodes make; they are written without the <c>Tree</c> around them, and
+    /// with <c>StatementSyntax</c> under them, since every node is under a node of the table.
+    /// </summary>
     private static SortedDictionary<string, string> Files(string nodes) =>
-        SyntaxWriter.Files(NodeTable.Read($"<Tree>\n{nodes}\n</Tree>"));
+        SyntaxWriter.Files(NodeTable.Read(
+            $"<Tree>\n<AbstractNode Name=\"StatementSyntax\" Base=\"SyntaxNode\"/>\n{nodes}\n</Tree>"));
 
     private static string Red(string table) =>
         Files(table)["Nodes/WidgetSyntax.g.cs"];

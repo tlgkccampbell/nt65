@@ -1,0 +1,14 @@
+﻿; A file written with a byte-order mark before its first line.
+; Every source in the repository is read as it is written, and this one is written the
+; way an editor on another machine writes it.
+.module bom
+
+.segment CODE: abs
+
+.segment CODE {
+    .export .proc start {
+        lda #$01
+        sta $d020
+        rts
+    }
+}

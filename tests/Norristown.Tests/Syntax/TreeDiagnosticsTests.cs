@@ -97,7 +97,7 @@ public sealed class TreeDiagnosticsTests
         var errored = Lexer.LexLine("$1G").Tokens[0];
         Assert.True(errored.ContainsDiagnostics);
         Assert.NotSame(errored, Lexer.LexLine("$1G").Tokens[0]);
-        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], "invalid hexadecimal number `$1G`"));
+        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], ["invalid hexadecimal number `$1G`"]));
 
         // The missing token of a kind is shared only while it says nothing.
         var quiet = GreenToken.Missing(SyntaxKind.OpenBrace);

@@ -1,0 +1,14 @@
+; A file whose last line has no line break after it.
+; Every source in the repository is read as it is written, and this one is written the
+; way an editor on another machine writes it.
+.module no_final_newline
+
+.segment CODE: abs
+
+.segment CODE {
+    .export .proc start {
+        lda #$01
+        sta $d020
+        rts
+    }
+}

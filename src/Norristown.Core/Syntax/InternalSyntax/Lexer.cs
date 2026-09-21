@@ -27,7 +27,7 @@ internal static class Lexer
         while (pos < content.Length && content[pos] != ';')
         {
             var start = pos;
-            var (kind, error) = Scan(content, ref pos);
+            var (kind, errors) = Scan(content, ref pos);
             var text = content[start..pos];
 
             var triviaStart = pos;
@@ -38,7 +38,7 @@ internal static class Lexer
                 trailing = trailing.Add(new GreenTrivia(SyntaxKind.CommentTrivia, content[pos..].ToString()));
                 pos = content.Length;
             }
-            tokens.Add(GreenCache.Token(kind, text, leading, trailing, error));
+            tokens.Add(GreenCache.Token(kind, text, leading, trailing, errors));
             leading = ImmutableArray<GreenTrivia>.Empty;
         }
 
@@ -56,7 +56,7 @@ internal static class Lexer
         return pos;
     }
 
-    private static (SyntaxKind Kind, string? Error) Scan(ReadOnlySpan<char> text, ref int pos)
+    private static (SyntaxKind Kind, IReadOnlyList<string>? Errors) Scan(ReadOnlySpan<char> text, ref int pos)
     {
         var c = text[pos];
         var next = pos + 1 < text.Length ? text[pos + 1] : '\0';
@@ -78,9 +78,13 @@ internal static class Lexer
         {
             var word = text[pos..SkipWord(text, pos)];
             pos += word.Length;
-            if (word.Equals("65c02", StringComparison.OrdinalIgnoreCase) || word.Equals("65sc02", StringComparison.OrdinalIgnoreCase))
+
+            // A CPU name that is no number — `65c02`, `65sc02` — is one word of its own.
+            // `6502` and `65816` are numbers, and the places that take a CPU name take either.
+            var wrong = Digits(word, '\0', "decimal", char.IsAsciiDigit);
+            if (wrong is not null && SyntaxFacts.IsCpuName(word.ToString()))
                 return (SyntaxKind.CpuName, null);
-            return (SyntaxKind.NumberLiteral, Digits(word, '\0', "decimal", char.IsAsciiDigit));
+            return (SyntaxKind.NumberLiteral, One(wrong));
         }
         if (c is '$' or '%')
         {
@@ -89,12 +93,12 @@ internal static class Lexer
             var hex = c == '$';
             if (word.IsEmpty)
             {
-                return (SyntaxKind.NumberLiteral, hex
+                return (SyntaxKind.NumberLiteral, One(hex
                     ? "expected hexadecimal digits after `$`"
-                    : "expected binary digits after `%` (the remainder operator is `.mod`)");
+                    : "expected binary digits after `%` (the remainder operator is `.mod`)"));
             }
-            return (SyntaxKind.NumberLiteral, Digits(
-                word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1'));
+            return (SyntaxKind.NumberLiteral, One(Digits(
+                word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1')));
         }
 
         switch (c)
@@ -103,7 +107,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, "expected a name after `@`");
+                    return (SyntaxKind.BadToken, One("expected a name after `@`"));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.CheapLocal, null);
@@ -116,7 +120,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, "unexpected `.`");
+                    return (SyntaxKind.BadToken, One("unexpected `.`"));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.Directive, null);
@@ -172,8 +176,11 @@ internal static class Lexer
         // One whole character, so a surrogate pair is not split.
         Rune.DecodeFromUtf16(text[pos..], out var rune, out var consumed);
         pos += consumed;
-        return (SyntaxKind.BadToken, $"unexpected character `{rune}`");
+        return (SyntaxKind.BadToken, One($"unexpected character `{rune}`"));
     }
+
+    /// <summary>The one thing wrong with a token as the list of them it is given as, or null.</summary>
+    private static IReadOnlyList<string>? One(string? error) => error is null ? null : [error];
 
     private static int SkipWord(ReadOnlySpan<char> text, int pos)
     {
@@ -210,18 +217,24 @@ internal static class Lexer
 
     /// <summary>
     /// A character or string literal, up to its closing quote or the end of the line. The
-    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Returns the first error.
+    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Every escape it cannot read is
+    /// reported, since each is a separate thing to correct; that a character literal holds
+    /// more than one character is not, where an escape it could not read is why.
     /// </summary>
-    private static string? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
+    private static IReadOnlyList<string>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {
         var isChar = quote == '\'';
-        string? error = null;
+        List<string>? errors = null;
         var characters = 0;
         pos++;
         while (true)
         {
             if (pos >= text.Length)
-                return error ?? (isChar ? "unterminated character literal" : "unterminated string");
+            {
+                if (errors is null)
+                    return One(isChar ? "unterminated character literal" : "unterminated string");
+                return errors;
+            }
             var c = text[pos];
             if (c == quote)
             {
@@ -245,7 +258,7 @@ internal static class Lexer
                     pos += 4;
                     break;
                 case 'x':
-                    error ??= "`\\x` must be followed by two hexadecimal digits";
+                    (errors ??= []).Add("`\\x` must be followed by two hexadecimal digits");
                     pos += 2;
                     break;
                 case '\0':
@@ -253,13 +266,20 @@ internal static class Lexer
                     break;
                 default:
                     Rune.DecodeFromUtf16(text[(pos + 1)..], out var rune, out var consumed);
-                    error ??= $"unknown escape `\\{rune}`";
+                    (errors ??= []).Add($"unknown escape `\\{rune}`");
                     pos += 1 + consumed;
                     break;
             }
         }
-        if (isChar && characters != 1)
-            error ??= characters == 0 ? "empty character literal" : "a character literal holds exactly one character";
-        return error;
+
+        // An escape that could not be read is why the characters do not come to one, so the
+        // count is news only where every escape was read.
+        if (isChar && characters != 1 && errors is null)
+        {
+            return One(characters == 0
+                ? "empty character literal"
+                : "a character literal holds exactly one character");
+        }
+        return errors;
     }
 }

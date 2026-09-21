@@ -72,6 +72,9 @@ internal sealed partial class Parser
     // How many expressions the parser is inside, which is what MaximumNesting bounds.
     private int nesting;
 
+    // Where each token of the line starts, for placing a diagnostic; see FullStart.
+    private int[]? starts;
+
     private Parser(GreenLine line, BlockKind context)
     {
         tokens = line.Tokens;
@@ -217,10 +220,16 @@ internal sealed partial class Parser
     /// <summary>Where token <paramref name="at"/> starts in the line, its leading trivia included.</summary>
     private int FullStart(int at)
     {
-        var offset = 0;
-        for (var i = 0; i < at; i++)
-            offset += tokens[i].FullWidth;
-        return offset;
+        // Worked out for the whole line the first time a diagnostic wants one, and kept: a line
+        // with nothing to say never pays for it, and one with several things to say pays once
+        // rather than walking the tokens before each of them.
+        if (starts is null)
+        {
+            starts = new int[tokens.Length + 1];
+            for (var i = 0; i < tokens.Length; i++)
+                starts[i + 1] = starts[i] + tokens[i].FullWidth;
+        }
+        return starts[at];
     }
 
     private static string Describe(GreenToken token) => $"`{token.Text}`";

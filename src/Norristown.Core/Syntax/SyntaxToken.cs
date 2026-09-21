@@ -112,21 +112,59 @@ public readonly record struct SyntaxToken
         // is. A token read off a line rather than off the pieces belongs to the line instead,
         // and is the one written at its place.
         var self = this;
-        var tokens = owner.DescendantTokens().ToList();
-        var at = tokens.FindIndex(token => Written(token, self) && ReferenceEquals(token.Parent, self.Parent));
-        if (at < 0)
-            at = tokens.FindIndex(token => Written(token, self));
-        if (at < 0)
+        var (found, beside) = Beside(owner, direction,
+            token => Written(token, self) && ReferenceEquals(token.Parent, self.Parent));
+        if (!found)
+            (found, beside) = Beside(owner, direction, token => Written(token, self));
+        if (!found)
             return null;
-        if (at + direction >= 0 && at + direction < tokens.Count)
-            return tokens[at + direction];
+        if (beside is { } neighbour)
+            return neighbour;
         if (owner is not LineSyntax line)
             return null;
 
         var next = line.LineIndex + direction;
         if (next < 0 || next >= line.Tree.LineCount)
             return null;
-        var beyond = line.Tree.GetLine(next).DescendantTokens().ToList();
-        return beyond.Count == 0 ? null : beyond[direction > 0 ? 0 : ^1];
+        SyntaxToken? edge = null;
+        foreach (var token in line.Tree.GetLine(next).DescendantTokens())
+        {
+            edge = token;
+            if (direction > 0)
+                break;
+        }
+        return edge;
+    }
+
+    /// <summary>
+    /// The token written beside the one <paramref name="chosen"/> picks out among
+    /// <paramref name="owner"/>'s, walked once rather than listed: a token asks for its
+    /// neighbour a great many times while an editor reads a file.
+    /// </summary>
+    /// <param name="owner">The node whose tokens to walk, which is a line.</param>
+    /// <param name="direction">1 for the token after the chosen one, −1 for the one before it.</param>
+    /// <param name="chosen">Which token to find the neighbour of.</param>
+    /// <returns>
+    /// Whether the chosen token was among them, and its neighbour, which is null where the
+    /// chosen token is the first or the last of them.
+    /// </returns>
+    private static (bool Found, SyntaxToken? Beside) Beside(
+        SyntaxNode owner, int direction, Func<SyntaxToken, bool> chosen)
+    {
+        SyntaxToken? previous = null;
+        var after = false;
+        foreach (var token in owner.DescendantTokens())
+        {
+            if (after)
+                return (true, token);
+            if (chosen(token))
+            {
+                if (direction < 0)
+                    return (true, previous);
+                after = true;
+            }
+            previous = token;
+        }
+        return (after, null);
     }
 }

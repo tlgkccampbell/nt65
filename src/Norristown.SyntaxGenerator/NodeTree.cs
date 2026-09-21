@@ -9,6 +9,9 @@ namespace Norristown.SyntaxGenerator;
 /// </summary>
 public sealed class NodeTree
 {
+    /// <summary>The hand-written class every node of the table is under, directly or not.</summary>
+    private const string Root = "SyntaxNode";
+
     private readonly Dictionary<string, NodeRow> byName;
     private readonly HashSet<string> derivedFrom;
     private readonly Dictionary<string, ImmutableArray<LaidOutSlot>> layouts = [];
@@ -20,6 +23,18 @@ public sealed class NodeTree
         Nodes = nodes;
         byName = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         derivedFrom = [.. nodes.Select(node => node.Base)];
+
+        // A Base is another row or the root the red classes hang from. One that is neither
+        // would be a C# error in a generated file nobody wrote, and one that is the row itself
+        // would be a walk up the hierarchy that never ends.
+        foreach (var node in nodes)
+        {
+            if (node.Base != Root && (node.Base == node.Name || !byName.ContainsKey(node.Base)))
+            {
+                throw new InvalidOperationException(
+                    $"{node.Name} derives from {node.Base}, which is neither another node of the table nor {Root}");
+            }
+        }
 
         // Every layout is worked out here, so reading one later is a lookup and several readers
         // at once are no trouble.

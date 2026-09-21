@@ -1,0 +1,14 @@
+; A file written with CRLF line endings, as an editor on Windows writes one.
+; Every source in the repository is read as it is written, and this one is written the
+; way an editor on another machine writes it.
+.module crlf
+
+.segment CODE: abs
+
+.segment CODE {
+    .export .proc start {
+        lda #$01
+        sta $d020
+        rts
+    }
+}

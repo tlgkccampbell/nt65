@@ -7,3 +7,6 @@
 *.bin binary
 *.chr binary
 *.png binary
+
+# Sources that are deliberately not LF-only: what an editor on another machine writes.
+tests/encodings/* -text

@@ -45,6 +45,36 @@ public sealed partial class FormattingTests
     }
 
     /// <summary>
+    /// The two properties that must hold of a file nobody has finished typing: the tree gives
+    /// its text back, every line's pieces included, and laying it out settles at once — what
+    /// was laid out is what laying it out again gives. Over every source in the repository and
+    /// every way of cutting its lines short, because a half-written file is what an editor
+    /// formats.
+    /// </summary>
+    [Fact]
+    public void AHalfWrittenSourceReadsBackWholeAndLaysOutOnce()
+    {
+        var failures = Repo.CollectFailures(Repo.Sources(), file =>
+        {
+            var name = Repo.Named(file);
+            var problems = new List<string>();
+            var cut = 0;
+            foreach (var variant in BrokenLines.Variants(Repo.ReadText(file)))
+            {
+                var tree = SyntaxTree.Parse(name, variant);
+                problems.AddRange(Syntax.Fidelity.Problems(tree).Select(problem => $"{name} cut {cut}: {problem}"));
+
+                var once = Formatter.Format(tree);
+                if (Formatter.Format(SyntaxTree.Parse(name, once)) != once)
+                    problems.Add($"{name} cut {cut}: laying it out again does not give what laying it out gave");
+                cut++;
+            }
+            return problems;
+        });
+        Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
+    }
+
+    /// <summary>
     /// The same file written every other way whitespace allows: at the margin, buried in tabs
     /// and spaces with something left after the last token of every line, and with the column a
     /// run of data lines sits on squeezed shut. Line breaks are left alone, because a file keeps
