@@ -37,7 +37,7 @@
 
 ; Ruling out every store that could have reached the byte would need addresses, which are the
 ; linker's, so a save through memory is one the analysis never sees come back.
-.proc keeps_through_memory: keeps x {
+.export .proc keeps_through_memory: keeps x {
     stx save_slot
 
     ldx #3
@@ -50,7 +50,7 @@
 
 ; `php` and `plp` hand the carry back across a call, because the stack remembers what the
 ; push held.
-.proc keeps_the_carry: keeps c {
+.export .proc keeps_the_carry: keeps c {
     php
     sec
     jsr CHROUT

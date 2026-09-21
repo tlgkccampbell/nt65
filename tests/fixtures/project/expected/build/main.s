@@ -8,6 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__start
+
 .segment "FAST": zeropage
 scratch: .res 2
 
@@ -16,7 +18,7 @@ tiles: .res 64
 
 .segment "CODE": absolute
 ; .proc start  main.nt65:13
-start:
+main__start:
     stz z:scratch
     lda #$01                        ; DEBUG
     ldx #<$0102                     ; VERSION

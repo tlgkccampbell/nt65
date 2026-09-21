@@ -242,19 +242,19 @@ public sealed class RegisterKeepsTests
 
     private static RoutineRegisters Found(string text, string routine)
     {
-        var analysis = Analysis.Program(("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text));
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text));
         var flow = analysis.FlowFor("main.nt65");
         Assert.NotNull(flow);
         return flow.Regions.Single(region => region.Routine.DisplayName == routine).Registers;
     }
 
     private static IReadOnlyList<string> Problems(string text) =>
-        [.. Analysis.Program(("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text)).Problems()
+        [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text)).Problems()
             .Select(Renumbered)];
 
     /// <summary>The same for a 65816 program, where a push is as wide as the register it moves.</summary>
     private static IReadOnlyList<string> Wide(string text) =>
-        [.. Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
+        [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
             .Select(Renumbered)];
 
     /// <summary>A problem's line as the test wrote it, without the three lines every test is given.</summary>

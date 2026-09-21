@@ -36,7 +36,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        Assert.Empty(Analysis.Program(("main.nt65", Text)).Problems());
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
     }
 
     /// <summary>
@@ -63,7 +63,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        var analysis = Analysis.Program(("main.nt65", Text));
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Text));
 
         var only = Assert.Single(analysis.Diagnostics);
         Assert.Equal(Severity.Warning, only.Severity);
@@ -94,7 +94,7 @@ public sealed class RequirementsTests
                 "main.nt65:8: `print` returns past one `.strz` written after each call, and none follows this one",
                 "main.nt65:9: the instruction above runs into this data. `.next` on it says where flow goes instead",
             ],
-            Analysis.Program(("main.nt65", Text)).Problems());
+            Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
     }
 
     /// <summary>
@@ -262,7 +262,7 @@ public sealed class RequirementsTests
         Assert.Empty(Program(Text).Problems());
     }
 
-    private static ProgramAnalysis Program(string text) => Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
+    private static ProgramAnalysis Program(string text) => Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
 
     /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)

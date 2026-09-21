@@ -8,6 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__main
+
 .segment "ZEROPAGE": zeropage
 palette: .res 32
 frames:  .res 1
@@ -59,7 +61,7 @@ draw__table: .byte 1, 2, 4, 8
 ; end of draw
 
 ; .proc main  main.nt65:62
-main:
+main__main:
     jsr gfx__init
     lda #gfx__COUNT
     lda a:draw__table

@@ -11,6 +11,7 @@
 .export main__masks
 .export main__words
 .export main__third
+.export main__main
 
 BYTES   = $7fff
 BITS    = %10101010
@@ -26,7 +27,7 @@ main__third: .byte >LONG
 
 .segment "CODE": absolute
 ; .proc main  main.nt65:26
-main:
+main__main:
     lda #%10101010
     ldx #BITS
     ldy #<BYTES

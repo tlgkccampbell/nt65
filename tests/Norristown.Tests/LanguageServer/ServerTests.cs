@@ -11,9 +11,9 @@ public sealed class ServerTests
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>A file with one syntax error on line 4 (0-based line 3).</summary>
-    private const string Broken = ".module main\n.segment CODE\n.proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
+    private const string Broken = ".module main\n.segment CODE\n.export .proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
 
-    private const string Fixed = ".module main\n.segment CODE\n.proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
+    private const string Fixed = ".module main\n.segment CODE\n.export .proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
 
     [Fact]
     public async Task InitializesLogsTheConnectionAndExits()

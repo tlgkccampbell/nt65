@@ -9,7 +9,7 @@
 
 ; Forward, and near enough: the short branch, exactly as `beq` would have been written.
 .segment CODE
-.proc close_by {
+.export .proc close_by {
     lda count
     jeq @out
     inc count
@@ -18,7 +18,7 @@
 }
 
 ; Forward, and one byte too far: the opposite branch over a `jmp` to the target.
-.proc way_off {
+.export .proc way_off {
     lda count
     jeq @out
     .repeat 43, i {
@@ -30,7 +30,7 @@
 
 ; Backwards, to a target already written, which is where ca65's own package can also
 ; choose the short form.
-.proc looping {
+.export .proc looping {
 @top:
     dec count
     jne @top

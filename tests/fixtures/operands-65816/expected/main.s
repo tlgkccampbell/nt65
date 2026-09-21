@@ -8,6 +8,9 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__long_jumps
+.export main__tail
+
 .import far_routine: far
 
 .segment "ZEROPAGE": zeropage
@@ -71,11 +74,11 @@ forms__out:
 ; end of forms
 
 ; .proc long_jumps: far  main.nt65:69
-long_jumps:
+main__long_jumps:
     jml [vector]
 ; end of long_jumps
 
 ; .proc tail: far  main.nt65:74
-tail:
+main__tail:
     jml far_routine
 ; end of tail

@@ -8,6 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__main
+
 ROWS = 25
 
 COLUMNS = $50
@@ -26,7 +28,7 @@ sizes: .byte COLUMNS, ROWS, BORDER, $ff, $07  ; clamp(300), clamp(7)
 
 .segment "CODE": absolute
 ; .proc main  main.nt65:30
-main:
+main__main:
     lda a:BUFFER
     sta a:wide + 1
     rts

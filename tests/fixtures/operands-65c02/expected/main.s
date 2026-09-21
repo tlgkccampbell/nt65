@@ -8,6 +8,8 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__forms
+
 .segment "ZEROPAGE": zeropage
 ptr:   .res 2
 flags: .res 1
@@ -17,7 +19,7 @@ table: .byte 1, 2, 4, 8
 
 .segment "CODE": absolute
 ; .proc forms  main.nt65:15
-forms:
+main__forms:
     lda (ptr)
     sta (ptr)
     jmp (table,x)

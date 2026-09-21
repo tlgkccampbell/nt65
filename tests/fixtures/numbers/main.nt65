@@ -23,7 +23,7 @@ LONG    = $01_23_45
 .data third: .byte >LONG
 
 .segment CODE
-.proc main {
+.export .proc main {
     lda #%1010_1010
     ldx #BITS
     ldy #<BYTES

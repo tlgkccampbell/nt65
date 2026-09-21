@@ -35,7 +35,7 @@ public sealed class MacroModuleTests
             ptr = $10
 
             .segment CODE
-            .proc main {
+            .export .proc main {
                 set16!(ptr, lib::SCREEN)
                 rts
             }
@@ -76,7 +76,7 @@ public sealed class MacroModuleTests
                 lda PRIVATE
             }
             """),
-            ("main.nt65", ".module main\n.use lib::show\n.segment CODE\n.proc main {\n    show!()\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.use lib::show\n.segment CODE\n.export .proc main {\n    show!()\n    rts\n}\n"));
 
         Assert.Equal(
             ["lib.nt65:6: `show!` is exported but names `PRIVATE`, which is not: a macro expands in the module "
@@ -90,7 +90,7 @@ public sealed class MacroModuleTests
     {
         var program = Analysis.Program(
             ("lib.nt65", ".module lib\n.macro hidden() {\n    nop\n}\n"),
-            ("main.nt65", ".module main\n.use lib::hidden\n.segment CODE\n.proc main {\n    hidden!()\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.use lib::hidden\n.segment CODE\n.export .proc main {\n    hidden!()\n    rts\n}\n"));
 
         Assert.Contains("main.nt65:2: `lib::hidden` is not exported by module `lib`", program.Problems());
     }
@@ -122,7 +122,7 @@ public sealed class MacroModuleTests
                 rts
             }
 
-            .proc main {
+            .export .proc main {
                 delay!(4)
                 rts
             }

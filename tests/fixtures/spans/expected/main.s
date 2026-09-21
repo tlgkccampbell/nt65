@@ -10,6 +10,7 @@
 
 .export main__header
 .export main__count
+.export main__copy
 
 .segment "CODE": absolute
 ; .proc reloc  main.nt65:10
@@ -32,7 +33,7 @@ main__count: .byte (table__end - table)
 
 .segment "CODE": absolute
 ; .proc copy  main.nt65:29
-copy:
+main__copy:
     ldx #(reloc__end - reloc)
 copy__loop:
     lda a:reloc,x

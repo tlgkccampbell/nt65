@@ -103,7 +103,7 @@ public sealed class TypeSyntaxTests
     [Fact]
     public void ATypeWritesNothingAndAnEnumWritesItsMembers()
     {
-        var output = Compiled(Source + "\n.export Color, Point, Value\n.segment CODE\n.proc main {\n    rts\n}\n");
+        var output = Compiled(Source + "\n.export Color, Point, Value\n.segment CODE\n.export .proc main {\n    rts\n}\n");
 
         Assert.Contains("Color__red = $00", output);
         Assert.Contains("Color__green = $05", output);

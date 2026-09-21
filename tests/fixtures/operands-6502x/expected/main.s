@@ -8,6 +8,13 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__combined
+.export main__paired
+.export main__immediate
+.export main__unstable
+.export main__idle
+.export main__halt
+
 .segment "ZEROPAGE": zeropage
 ptr: .res 2
 
@@ -16,7 +23,7 @@ buf: .res 256
 
 .segment "CODE": absolute
 ; .proc combined  main.nt65:18
-combined:
+main__combined:
     slo z:ptr
     slo z:ptr,x
     slo a:buf
@@ -38,7 +45,7 @@ combined:
 ; end of combined
 
 ; .proc paired  main.nt65:40
-paired:
+main__paired:
     lax #$40
     lax z:ptr
     lax z:ptr,y
@@ -54,7 +61,7 @@ paired:
 ; end of paired
 
 ; .proc immediate  main.nt65:56
-immediate:
+main__immediate:
     alr #%11110000
     anc #$7f
     ane #$ff
@@ -64,7 +71,7 @@ immediate:
 ; end of immediate
 
 ; .proc unstable  main.nt65:67
-unstable:
+main__unstable:
     sha buf,y
     sha (ptr),y
     shx buf,y
@@ -75,7 +82,7 @@ unstable:
 ; end of unstable
 
 ; .proc idle  main.nt65:78
-idle:
+main__idle:
     nop
     nop #$00
     nop z:ptr
@@ -86,6 +93,6 @@ idle:
 ; end of idle
 
 ; .proc halt  main.nt65:89
-halt:
+main__halt:
     jam
 ; end of halt

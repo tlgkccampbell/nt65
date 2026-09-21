@@ -24,7 +24,7 @@ SCREEN = $0400
 .data sums:    .byte 1 + 2 * 3, (1 + 2) * 3, 1 + 2 + 3
 
 .segment CODE
-.proc use {
+.export .proc use {
     lda #' '
     lda table+1
     rts

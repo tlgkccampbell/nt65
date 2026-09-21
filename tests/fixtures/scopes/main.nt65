@@ -59,7 +59,7 @@
     rts
 }
 
-.proc main {
+.export .proc main {
     jsr gfx::init           ; into a named scope
     lda #gfx::COUNT
     lda draw::table         ; a proc is a scope as well as a label

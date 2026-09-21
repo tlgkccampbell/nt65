@@ -9,6 +9,8 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .exportzp main__WIDTH
+.export main__main
+.export main__vectors
 .export main__detour
 
 .import other__work: abs
@@ -23,7 +25,7 @@ Mode__busy = $01
 
 .segment "CODE": absolute
 ; .proc main: a8, i8  main.nt65:37
-main:
+main__main:
     jsr other__work
     .a8
     lda #Mode__busy
@@ -43,7 +45,26 @@ main__hook:
 table: .res 3
 
 .segment "CODE": absolute
-; .proc detour: a8, i8  main.nt65:58
+; .proc left_behind: a8, i8  main.nt65:58
+left_behind:
+    rts
+; end of left_behind
+
+; .proc dispatched: a8, i8  main.nt65:63
+dispatched:
+    rts
+; end of dispatched
+
+; .proc nmi: interrupt  main.nt65:69
+nmi:
+    rti
+; end of nmi
+
+.segment "RODATA": absolute
+main__vectors: .addr dispatched
+
+.segment "CODE": absolute
+; .proc detour: a8, i8  main.nt65:79
 main__detour:
 
 .pushseg

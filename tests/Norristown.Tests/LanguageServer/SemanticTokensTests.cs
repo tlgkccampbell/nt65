@@ -36,7 +36,7 @@ public sealed class SemanticTokensTests
         .segment CODE
         .data origin: .type Point { x = 1, y = 2 }
 
-        .proc main {
+        .export .proc main {
         @loop:
             lda #Joy::A
             ldx #Point::y

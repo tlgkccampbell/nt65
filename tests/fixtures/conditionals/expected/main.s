@@ -13,6 +13,9 @@
 .export main__commands
 .export main__actions_table
 .export main__grid
+.export main__indented
+.export main__slow
+.export main__run_all
 
 LINES = 312
 
@@ -85,7 +88,7 @@ COLUMNS = 80
 
 .segment "CODE": absolute
 ; .proc indented  main.nt65:128
-indented:
+main__indented:
     lda #COLUMNS
     rts
 ; end of indented
@@ -108,7 +111,7 @@ actions__wait:
 ; end of wait
 
 ; .proc slow  main.nt65:158
-slow:
+main__slow:
     ldx #$00 + 1
 slow__delay:
     dex
@@ -134,7 +137,7 @@ slow__skip_3:
 ; end of slow
 
 ; .proc run_all  main.nt65:172
-run_all:
+main__run_all:
     jsr actions__move
     jsr actions__fire
     jsr actions__dump

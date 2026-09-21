@@ -17,6 +17,7 @@
 
 .segment CODE
 .proc top {
+    jsr draw
     rts
 }
 

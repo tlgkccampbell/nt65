@@ -96,7 +96,7 @@ public sealed class ConfigurationTests
         var program = Analysis.Program(project, ("main.nt65", """
             .module main
             .segment CODE
-            .proc main {
+            .export .proc main {
             .if .target(65c02) {
                 phx
             } .else {
@@ -185,7 +185,7 @@ public sealed class ConfigurationTests
     {
         var program = Built("""
             .segment CODE
-            .proc main {
+            .export .proc main {
             .if 1 {
             @loop:
                 jmp @loop
@@ -241,7 +241,7 @@ public sealed class ConfigurationTests
     {
         const string Source = """
             .segment CODE
-            .proc main {
+            .export .proc main {
             .if DEBUG {
                 jsr trace
             }

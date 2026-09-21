@@ -16,6 +16,7 @@
 .export main__mapped
 .export main__banner
 .export main__exact
+.export main__main
 
 .import hw__slots: abs
 
@@ -39,7 +40,7 @@ main__exact: .byte $68, $69         ; "hi"
 
 .segment "CODE": absolute
 ; .proc main  main.nt65:43
-main:
+main__main:
 
     lda a:main__buffer+3            ; buffer[3]
     lda a:main__handlers+4          ; handlers[2]

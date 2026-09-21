@@ -21,23 +21,23 @@ public sealed class CodeActionsTests
     {
         {
             "End the path here with `.next ?`",
-            ".proc main {\n    jmp ($1234)\n}\n",
-            ".proc main {\n    jmp ($1234)\n    .next ?\n}\n"
+            ".export .proc main {\n    jmp ($1234)\n}\n",
+            ".export .proc main {\n    jmp ($1234)\n    .next ?\n}\n"
         },
         {
             "Call with `jsl`",
-            ".proc far_one: far {\n    rtl\n}\n.proc main {\n    JSR far_one\n    rts\n}\n",
-            ".proc far_one: far {\n    rtl\n}\n.proc main {\n    JSL far_one\n    rts\n}\n"
+            ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSR far_one\n    rts\n}\n",
+            ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSL far_one\n    rts\n}\n"
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    rts\n}\n",
-            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".proc main: a8, i8 {\n    lda #<@here\n@here: rts\n}\n",
-            ".proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".export .proc main: a8, i8 {\n    lda #<@here\n@here: rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Make `table` a `.data` declaration",
@@ -77,7 +77,7 @@ public sealed class CodeActionsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         const string Gfx = ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
-        const string Main = ".module main\n.use gfx::fill as paint\n.segment CODE\n.proc main {\n    jsr gfx::clear\n    jsr fill\n    rts\n}\n";
+        const string Main = ".module main\n.use gfx::fill as paint\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    jsr fill\n    rts\n}\n";
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(GfxUri, Gfx);
         await client.OpenAsync(MainUri, Main);
@@ -101,7 +101,7 @@ public sealed class CodeActionsTests
 
         // On the 6502 an immediate has no width to be told, so the half-written line is only
         // what the parser says about it, and nothing can be written from here that fixes it.
-        await client.OpenAsync(MainUri, ".module main\n.cpu 6502\n.segment CODE\n.proc main {\n    lda #\n    rts\n}\n");
+        await client.OpenAsync(MainUri, ".module main\n.cpu 6502\n.segment CODE\n.export .proc main {\n    lda #\n    rts\n}\n");
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         Assert.Empty(await ActionsAsync(client, MainUri, timeout));

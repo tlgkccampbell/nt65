@@ -153,7 +153,7 @@ Another module names them with the module's path, or brings them in with `.use`:
 .use gfx::clear
 
 .segment CODE
-.proc start {
+.export .proc start {
     jsr clear
     jsr gfx::fill
     lda gfx::BORDER

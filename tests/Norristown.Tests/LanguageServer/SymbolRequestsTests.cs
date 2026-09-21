@@ -36,7 +36,7 @@ public sealed class SymbolRequestsTests
             }
         }
 
-        .proc main {
+        .export .proc main {
             jsr gfx::init
             lda ptr
             lda #<SCREEN
@@ -253,7 +253,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a16, i8 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a16, i8 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         var hover = await client.HoverAsync(Uri, new Position(5, 5), timeout);
@@ -278,7 +278,7 @@ public sealed class SymbolRequestsTests
 
         await using var wide = await TestClient.StartAsync(timeout);
         await wide.OpenAsync(
-            Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8, i8 {\n    pea $1234\n    pld\n    rts\n}\n");
+            Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, i8 {\n    pea $1234\n    pld\n    rts\n}\n");
         await wide.NextDiagnosticsAsync(timeout);
 
         var push = await wide.HoverAsync(Uri, new Position(4, 4), timeout);
@@ -298,7 +298,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(
-            Uri, ".module main\n.segment CODE\n.proc main {\n    lda #1\n    adc #2\n    sta $10\n    rts\n}\n");
+            Uri, ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    adc #2\n    sta $10\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         var load = await client.HoverAsync(Uri, new Position(3, 4), timeout);
@@ -328,7 +328,7 @@ public sealed class SymbolRequestsTests
             .module main
             .segment CODE
             .data table: .byte[300]
-            .proc main {
+            .export .proc main {
                 ldx #4
             @loop:
                 lda table,x
@@ -357,7 +357,7 @@ public sealed class SymbolRequestsTests
         // On the 65816 a direct operand costs one more where the low byte of D is not zero,
         // and a routine that says nothing about D does not say whether it is.
         await using var wide = await TestClient.StartAsync(timeout);
-        await wide.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8, i8 {\n    lda $10\n    rts\n}\n");
+        await wide.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, i8 {\n    lda $10\n    rts\n}\n");
         await wide.NextDiagnosticsAsync(timeout);
 
         var direct = await wide.HoverAsync(Uri, new Position(4, 4), timeout);
@@ -374,7 +374,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         var hover = await client.HoverAsync(Uri, new Position(4, 5), timeout);
@@ -499,7 +499,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.proc main {\n    lda #COUNT\n    rts\n}\n");
+        await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.export .proc main {\n    lda #COUNT\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         // Rename the declaration alone, and the use no longer resolves.

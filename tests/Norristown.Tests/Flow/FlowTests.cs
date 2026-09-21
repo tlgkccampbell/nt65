@@ -299,7 +299,7 @@ public sealed class FlowTests
             """;
 
         Assert.Empty(Problems(Text));
-        var p = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + Text)).Flows.Single().Regions
+        var p = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + Text)).Flows.Single().Regions
             .Single(region => region.Routine.Name == "p");
         Assert.All(p.Blocks.Skip(1), block => Assert.False(block.IsFallenInto));
     }
@@ -325,12 +325,12 @@ public sealed class FlowTests
 
     /// <summary>What is wrong with <paramref name="text"/>, placed in the code segment on a line before it.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
+        Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
 
     /// <summary>The one region of the one routine in <paramref name="text"/>.</summary>
     private static FlowRegion Region(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text));
         Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
         return Assert.Single(analysis.Flows.Single().Regions);
     }

@@ -20,6 +20,11 @@
 .export main__far_import
 .export main__padding
 .export main__fill_page
+.export main__render
+.export main__hud
+.export main__show
+.export main__skip2
+.export main__gfx__init
 
 .importzp zp_scratch
 .import far_table: far
@@ -66,7 +71,7 @@ fill_page__loop:
 ; end of fill_page
 
 ; .proc render: a16, i8 -> a8, i8  main.nt65:55
-render:
+main__render:
     .i8
     ldx #0
 render__loop:
@@ -85,21 +90,21 @@ render__shifts: .byte 1, 2, 4, 8
 ; end of render
 
 ; .proc hud: a8, i16, dp = $2100, dbr = $7e  main.nt65:71
-hud:
+main__hud:
     rts
 ; end of hud
 
 ; .proc show: a*, i*, e*, near, inline .strz  main.nt65:75
-show:
+main__show:
     rts
 ; end of show
 
 ; .proc skip2: far, inline 2  main.nt65:79
-skip2:
+main__skip2:
     rtl
 ; end of skip2
 
 ; .proc init: a8, i8  main.nt65:85
-gfx__init:
+main__gfx__init:
     rts
 ; end of init

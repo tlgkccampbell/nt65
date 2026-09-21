@@ -34,7 +34,7 @@ DEPTH = 3
 }
 
 .segment CODE
-.proc main: a8, i8 {
+.export .proc main: a8, i8 {
     jsr work
     lda #Mode::busy
 @unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used: nothing names it, and it is not exported
@@ -51,6 +51,27 @@ DEPTH = 3
 
 .segment RODATA
 .data table: .byte[3]                ;! warning[unused-symbol]: `table` is never used: nothing names it, and it is not exported
+
+; A routine is reported like anything else: nothing calls it, jumps to it or names it, and it
+; is not exported, so nothing can reach it.
+.segment CODE
+.proc left_behind: a8, i8 {     ;! warning[unused-symbol]: `left_behind` is never used: nothing names it, and it is not exported
+    rts
+}
+
+; A routine named as data is used: the table is what reaches it.
+.proc dispatched: a8, i8 {
+    rts
+}
+
+; The processor reaches a handler through a vector, which this program need not even hold, so
+; an `interrupt` signature is what says the routine is entered from outside.
+.proc nmi: interrupt {
+    rti
+}
+
+.segment RODATA
+.export .data vectors: .addr[1] { dispatched }
 
 ; Fall-through never enters a nested segment block, so code at its start with no label is
 ; somewhere nothing goes.

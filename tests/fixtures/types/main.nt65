@@ -88,7 +88,7 @@ MAX_ACTORS = 3
 .data cursor: .type Player
 
 .segment CODE
-.proc main {
+.export .proc main {
     ; A field of an instance is that instance plus the offset of the field.
     lda player::hp
     ldx actors::pos::x

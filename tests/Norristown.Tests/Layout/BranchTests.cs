@@ -88,7 +88,7 @@ public sealed class BranchTests
     [InlineData(".proc p {\n    beq elsewhere\n    rts\n}\n\n.proc elsewhere {\n    rts\n}\n")]
     public void ADistanceNt65DoesNotKnowIsNotReported(string text)
     {
-        Assert.Empty(Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems());
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text)).Problems());
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ public sealed class BranchTests
     {
         var text = ".module main\n.segment CODE\n.proc p {\n    beq @out\n    .segment RODATA {\n    .data table: .byte[200]\n    }\n@out:\n    lda table\n    rts\n}\n";
 
-        Assert.Empty(Analysis.Program(("main.nt65", text)).Problems());
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", text)).Problems());
     }
 
     /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>

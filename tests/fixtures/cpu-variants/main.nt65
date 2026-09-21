@@ -19,7 +19,7 @@
 }
 
 .segment CODE
-.proc main {
+.export .proc main {
     phx                         ; every CMOS part has these
     stz flags
     set_ready!(flags)

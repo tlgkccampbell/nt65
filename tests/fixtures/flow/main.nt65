@@ -32,7 +32,7 @@
 
 ; The `bit` skip trick: `$2c` is `bit abs`, which swallows the two bytes after it, so
 ; flow carries on past the instruction they spell rather than through it.
-.proc set {
+.export .proc set {
     beq @set_two
     lda #1
     .byte $2c           ; bit abs: swallows the next instruction
@@ -46,7 +46,7 @@
 
 ; Self-modifying code: the store writes into the operand of the instruction at `@op`,
 ; which is what `.patch` acknowledges.
-.proc patching {
+.export .proc patching {
     lda #$60
 @op:
     sta $0400

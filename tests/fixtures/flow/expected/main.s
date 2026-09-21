@@ -9,6 +9,8 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export main__dispatch
+.export main__set
+.export main__patching
 
 .segment "CODE": absolute
 ; .proc dispatch  main.nt65:16
@@ -29,7 +31,7 @@ dispatch__fire:
 ; end of dispatch
 
 ; .proc set  main.nt65:35
-set:
+main__set:
     beq set__set_two
     lda #1
     .byte $2c
@@ -41,7 +43,7 @@ set__store:
 ; end of set
 
 ; .proc patching  main.nt65:49
-patching:
+main__patching:
     lda #$60
 patching__op:
     sta a:$0400

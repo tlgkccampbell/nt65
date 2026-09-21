@@ -34,7 +34,7 @@ public sealed class MacroRequestsTests
             bne @loop
         }
         .segment CODE
-        .proc main {
+        .export .proc main {
         @target:
             set16!(ptr, SCREEN)
             times_x!(8) {

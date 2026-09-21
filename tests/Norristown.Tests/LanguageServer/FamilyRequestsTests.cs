@@ -41,7 +41,7 @@ public sealed class FamilyRequestsTests
             }
         }
 
-        .proc main {
+        .export .proc main {
             jsr play::triangle
             jsr stop::triangle
             rts

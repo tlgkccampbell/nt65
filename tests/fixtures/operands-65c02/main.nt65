@@ -12,7 +12,7 @@
 .data table: .byte 1, 2, 4, 8
 
 .segment CODE
-.proc forms {
+.export .proc forms {
     lda (ptr)               ; 65C02: through a direct-page pointer
     sta (ptr)
     jmp (table,x)           ; 65C02: through a table of pointers

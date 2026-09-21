@@ -52,7 +52,7 @@ SCREEN_PAGES = 4
 }
 
 ; A nested segment block changes the segment of its contents, not their scope.
-.proc render: a16, i8 -> a8, i8 {
+.export .proc render: a16, i8 -> a8, i8 {
     .scope {
         ldx #0
     @loop:
@@ -68,21 +68,21 @@ SCREEN_PAGES = 4
     rts
 }
 
-.proc hud: a8, i16, dp = $2100, dbr = $7e {
+.export .proc hud: a8, i16, dp = $2100, dbr = $7e {
     rts
 }
 
-.proc show: a*, i*, e*, near, inline .strz {
+.export .proc show: a*, i*, e*, near, inline .strz {
     rts
 }
 
-.proc skip2: far, inline 2 {
+.export .proc skip2: far, inline 2 {
     rtl
 }
 
 ; Procs do not nest, but a `.scope` may hold them.
 .scope gfx {
-    .proc init: a8, i8 {
+    .export .proc init: a8, i8 {
         rts
     }
 }

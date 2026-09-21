@@ -29,7 +29,7 @@ PROMPT = "PRESS START"
 }
 
 .segment CODE
-.proc length {
+.export .proc length {
     lda #.strlen(TITLE)
     rts
 }

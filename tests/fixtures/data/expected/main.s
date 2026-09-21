@@ -17,6 +17,7 @@
 .export main__escaped
 .export main__bytes
 .export main__sums
+.export main__use
 
 SCREEN = $0400
 
@@ -35,7 +36,7 @@ main__sums:    .byte 1 + (2 * 3), (1 + 2) * 3, (1 + 2) + 3
 
 .segment "CODE": absolute
 ; .proc use  main.nt65:27
-use:
+main__use:
     lda #$20                        ; ' '
     lda a:table+1
     rts

@@ -17,6 +17,17 @@ internal static class Analysis
     }
 
     /// <summary>
+    /// Settings for a test that writes a fragment rather than a program: an unexported routine
+    /// nothing calls is exactly what such a fragment is, and the tests that use this are about
+    /// something else. A test about the warning itself writes a program that could have it.
+    /// </summary>
+    public static ProjectSettings Fragment { get; } =
+        ProjectSettings.None with
+        {
+            Severities = new SortedDictionary<string, Severity?>(StringComparer.Ordinal) { ["unused-symbol"] = null },
+        };
+
+    /// <summary>
     /// The whole program for several files, the way the compiler reads it: every file sees
     /// what the others export.
     /// </summary>

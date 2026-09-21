@@ -10,7 +10,7 @@
 .data tiles: .byte[64]
 
 .segment CODE
-.proc start {
+.export .proc start {
     stz scratch             ; a 65C02 instruction, from the project's `cpu`
     lda #DEBUG              ; a define, written out as its value
     ldx #<VERSION

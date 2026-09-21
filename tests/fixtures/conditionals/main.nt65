@@ -125,7 +125,7 @@
 }
 
 .segment CODE
-.proc indented {
+.export .proc indented {
     .if DEBUG {
         lda #COLUMNS
     } .elseif PLATFORM == 1 {
@@ -155,7 +155,7 @@
 
 ; What a repetition declares is its own on every turn, as a macro expansion's is: each turn
 ; has its own `@delay`, and `skip` is a different label each time.
-.proc slow {
+.export .proc slow {
     .repeat 3, i {
         ldx #i + 1
     @delay:
@@ -169,7 +169,7 @@
 }
 
 ; The same path as an operand, called once for each member in the enum's order.
-.proc run_all {
+.export .proc run_all {
     .each Cmd, c {
         jsr actions::c
     }

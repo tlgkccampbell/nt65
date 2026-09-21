@@ -11,9 +11,14 @@
 .export main__render
 .export main__fill
 .export main__reset
+.export main__hooked
+.export main__masked
+.export main__after_it
 .export main__save
 .export main__keep
+.export main__merge
 .export main__tail
+.export main__handler
 .export main__command
 
 .segment "BSS": absolute
@@ -58,7 +63,7 @@ main__reset:
 ; end of reset
 
 ; .proc hooked: emu, a? -> a8, i16  main.nt65:49
-hooked:
+main__hooked:
     .a8
     lda #1
     clc
@@ -69,7 +74,7 @@ hooked:
 ; end of hooked
 
 ; .proc masked: emu -> emu  main.nt65:60
-masked:
+main__masked:
     rep #<value
     lda #$12
     rts
@@ -78,7 +83,7 @@ masked:
 go_emu = $8000
 
 ; .proc after_it: a16, i8 -> emu  main.nt65:70
-after_it:
+main__after_it:
     jsr go_emu
     lda #$12
     rts
@@ -105,7 +110,7 @@ main__keep:
 ; end of keep
 
 ; .proc merge: a8  main.nt65:97
-merge:
+main__merge:
     lda a:value
     beq merge__done
     rep #$20
@@ -128,7 +133,7 @@ render_again:
 ; end of render_again
 
 ; .proc handler: a?, i?  main.nt65:119
-handler:
+main__handler:
     rep #$30
     .a16
     lda #$1234

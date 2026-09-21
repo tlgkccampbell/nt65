@@ -238,7 +238,7 @@ public sealed class StateAnalysisTests
                 rts
             }
             """;
-        var analysis = Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + Text));
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + Text));
 
         var problem = Assert.Single(analysis.Diagnostics);
         Assert.Equal(9, problem.Span.Line);
@@ -411,12 +411,12 @@ public sealed class StateAnalysisTests
 
     private static int MostWalks(string text)
     {
-        var analysis = Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
         return Assert.Single(analysis.States).MostWalks;
     }
 
     private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
+        Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
             .Select(problem => Renumbered(problem))
             .ToList();
 
@@ -428,7 +428,7 @@ public sealed class StateAnalysisTests
     }
 
     private static FlowState StateAt(string text, string line) =>
-        StateAt(Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)), line);
+        StateAt(Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)), line);
 
     /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)

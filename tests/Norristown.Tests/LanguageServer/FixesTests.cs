@@ -25,8 +25,8 @@ public sealed class FixesTests
     {
         {
             "Branch with `jne`",
-            $".proc main: a8, i8 {{\n    bne @done\n{Far}@done:\n    rts\n}}\n",
-            $".proc main: a8, i8 {{\n    jne @done\n{Far}@done:\n    rts\n}}\n"
+            $".export .proc main: a8, i8 {{\n    bne @done\n{Far}@done:\n    rts\n}}\n",
+            $".export .proc main: a8, i8 {{\n    jne @done\n{Far}@done:\n    rts\n}}\n"
         },
         {
             "Leave with `rti`",
@@ -40,8 +40,8 @@ public sealed class FixesTests
         },
         {
             "Change it to `counter`",
-            ".data counter: .byte 0\n.proc main: a8, i8 {\n    lda countr\n    rts\n}\n",
-            ".data counter: .byte 0\n.proc main: a8, i8 {\n    lda counter\n    rts\n}\n"
+            ".data counter: .byte 0\n.export .proc main: a8, i8 {\n    lda countr\n    rts\n}\n",
+            ".data counter: .byte 0\n.export .proc main: a8, i8 {\n    lda counter\n    rts\n}\n"
         },
         {
             "Drop the level: an assertion that fails is an error",
@@ -50,8 +50,8 @@ public sealed class FixesTests
         },
         {
             "Declare it as `.byte[4]`",
-            ".data buffer: .res 4\n.proc main: a8, i8 {\n    lda buffer\n    rts\n}\n",
-            ".data buffer: .byte[4]\n.proc main: a8, i8 {\n    lda buffer\n    rts\n}\n"
+            ".data buffer: .res 4\n.export .proc main: a8, i8 {\n    lda buffer\n    rts\n}\n",
+            ".data buffer: .byte[4]\n.export .proc main: a8, i8 {\n    lda buffer\n    rts\n}\n"
         },
         {
             "Make `last` a member of the data",
@@ -70,18 +70,18 @@ public sealed class FixesTests
         },
         {
             "Write it as `(1 & 2) == 0`",
-            "MASK = 1 & 2 == 0\n.proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
-            "MASK = (1 & 2) == 0\n.proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
+            "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
+            "MASK = (1 & 2) == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
         {
             "Write it as `1 & (2 == 0)`",
-            "MASK = 1 & 2 == 0\n.proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
-            "MASK = 1 & (2 == 0)\n.proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
+            "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
+            "MASK = 1 & (2 == 0)\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
         {
             "Declare it `a8`, which is what the routine assumes",
-            ".proc main {\n    lda #1\n    rts\n}\n",
-            ".proc main: a8 {\n    lda #1\n    rts\n}\n"
+            ".export .proc main {\n    lda #1\n    rts\n}\n",
+            ".export .proc main: a8 {\n    lda #1\n    rts\n}\n"
         },
         {
             "Remove `SPARE`",
@@ -131,7 +131,7 @@ public sealed class FixesTests
     [Fact]
     public void AWidthThatIsNotKnownOffersEitherOne()
     {
-        const string Body = ".proc other: a8, i8 -> ? {\n    rts\n}\n.proc main: a8, i8 {\n    jsr other\n    lda #1\n    rts\n}\n";
+        const string Body = ".proc other: a8, i8 -> ? {\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr other\n    lda #1\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
         var actions = CodeActions.In(analysis, model, Whole)
@@ -143,7 +143,7 @@ public sealed class FixesTests
             actions.Select(action => action.Title));
         Assert.All(actions, action => Assert.False(action.IsPreferred));
         Assert.Equal(
-            Header + ".proc other: a8, i8 -> ? {\n    rts\n}\n.proc main: a8, i8 {\n    jsr other\n    .ensure a8\n    lda #1\n    rts\n}\n",
+            Header + ".proc other: a8, i8 -> ? {\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr other\n    .ensure a8\n    lda #1\n    rts\n}\n",
             Editing.Apply(Header + Body, actions[0].Edit.Changes[Uri]));
     }
 
@@ -152,7 +152,7 @@ public sealed class FixesTests
     public void AUseItemNothingNamesIsOfferedForRemoval()
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
-        const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n";
+        const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n";
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
@@ -166,7 +166,7 @@ public sealed class FixesTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
-            ".module main\n.use gfx::clear\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n",
+            ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
@@ -176,11 +176,11 @@ public sealed class FixesTests
     /// comment after it has the brace written before the comment rather than after it.
     /// </summary>
     [Theory]
-    [InlineData(".proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".proc main: a8, i8 {\n    rts\n}\n")]
-    [InlineData(".proc main   ; note\n}\n", "Write the `{`", ".proc main {   ; note\n}\n")]
+    [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
+    [InlineData(".export .proc main   ; note\n}\n", "Write the `{`", ".export .proc main {   ; note\n}\n")]
     [InlineData("MASK = (1 + 2\n", "Write the `)`", "MASK = (1 + 2)\n")]
-    [InlineData(".proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Write the `]`",
-        ".proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
+    [InlineData(".export .proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Write the `]`",
+        ".export .proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
     [InlineData(".use gfx::{clear\n", "Write the `}`", ".use gfx::{clear}\n")]
     public void AMissingBracketIsWrittenWhereTheTreeHoldsItsPlace(string body, string title, string written)
     {
@@ -199,7 +199,7 @@ public sealed class FixesTests
     [Fact]
     public void WritingTheMissingBraceLeavesAFileWithNothingWrong()
     {
-        const string Body = ".proc main: a8, i8\n    rts\n}\n";
+        const string Body = ".export .proc main: a8, i8\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Write the `{`");
@@ -217,7 +217,7 @@ public sealed class FixesTests
     [Fact]
     public void AMnemonicNameOffersARenameAndWritesNothing()
     {
-        var (analysis, model) = Analyzed(Header + ".proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
+        var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
 
@@ -232,7 +232,7 @@ public sealed class FixesTests
     [Fact]
     public void OnlyTheKindsAskedForAreOffered()
     {
-        var (analysis, model) = Analyzed(Header + ".proc main: a8, i8 {\n    jmp ($1234)\n}\n");
+        var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\n    jmp ($1234)\n}\n");
 
         Assert.DoesNotContain(CodeActions.In(analysis, model, Whole, ["refactor"]), action => action.Kind == "quickfix");
         Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));

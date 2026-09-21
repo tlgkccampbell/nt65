@@ -10,7 +10,7 @@ namespace Norristown.Tests.Cli;
 /// </summary>
 public sealed class BuildCommandTests : IDisposable
 {
-    private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n";
+    private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n";
     private const string Hw = ".module hw::vic\n.export BORDER = $d020\n";
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-build-");

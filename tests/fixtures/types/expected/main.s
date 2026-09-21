@@ -19,6 +19,7 @@
 .export main__lo
 .export main__blob
 .export main__part
+.export main__main
 .export main__as_word
 .export main__as_byte
 .export main__as_nothing
@@ -73,7 +74,7 @@ cursor: .res 13                     ; Player
 
 .segment "CODE": absolute
 ; .proc main  main.nt65:91
-main:
+main__main:
 
     lda a:player+4                  ; player::hp
     ldx a:actors                    ; actors::pos::x

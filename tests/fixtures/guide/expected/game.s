@@ -8,13 +8,15 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export game__start
+
 .import gfx__clear: abs
 .import _gfx_fill: abs
 gfx__BORDER = $d020
 
 .segment "CODE": absolute
 ; .proc start  game.nt65:8
-start:
+game__start:
     jsr gfx__clear
     jsr _gfx_fill
     lda a:gfx__BORDER

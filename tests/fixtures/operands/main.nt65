@@ -19,7 +19,7 @@ lo = $34
 .proc CHROUT = $ffd2
 
 .segment CODE
-.proc forms {
+.export .proc forms {
     inx                     ; implied
     asl                     ; accumulator, bare
     asl a                   ; accumulator, written out

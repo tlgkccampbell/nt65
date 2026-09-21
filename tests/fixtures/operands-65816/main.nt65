@@ -66,11 +66,11 @@
     .next ?
 }
 
-.proc long_jumps: far {
+.export .proc long_jumps: far {
     jml [vector]
     .next ?
 }
 
-.proc tail: far {
+.export .proc tail: far {
     jml far_routine
 }

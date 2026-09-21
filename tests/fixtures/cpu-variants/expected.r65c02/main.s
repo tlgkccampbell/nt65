@@ -8,12 +8,14 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__main
+
 .segment "ZEROPAGE": zeropage
 flags: .res 1
 
 .segment "CODE": absolute
 ; .proc main  main.nt65:22
-main:
+main__main:
     phx
     stz z:flags
     ; set_ready!(flags)  main.nt65:25

@@ -11,7 +11,7 @@ public sealed class LineMapTests
     private const string Program = """
         .module main
         .segment CODE
-        .proc start {
+        .export .proc start {
             lda #1
             rts
         }

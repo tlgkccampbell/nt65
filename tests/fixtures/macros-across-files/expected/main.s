@@ -8,6 +8,9 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export main__delay__loop
+.export main__main
+
 lib__SCREEN = $0400
 .import lib__tiles: abs
 
@@ -16,12 +19,12 @@ ptr: .res 2
 
 .segment "CODE": absolute
 ; .proc delay__loop  main.nt65:13
-delay__loop:
+main__delay__loop:
     rts
 ; end of delay__loop
 
 ; .proc main  main.nt65:17
-main:
+main__main:
     ; set16!(ptr, lib::SCREEN)  main.nt65:18
     lda #<lib__SCREEN
     sta z:ptr
@@ -30,17 +33,17 @@ main:
     ; end of set16!
     ; delay!(4)  main.nt65:19
     ldx #4
+delay__loop:
+    lda a:lib__tiles
+    dex
+    bne delay__loop
+    ; end of delay!
+    ; delay!(8)  main.nt65:20
+    ldx #8
 delay__loop_2:
     lda a:lib__tiles
     dex
     bne delay__loop_2
-    ; end of delay!
-    ; delay!(8)  main.nt65:20
-    ldx #8
-delay__loop_3:
-    lda a:lib__tiles
-    dex
-    bne delay__loop_3
     ; end of delay!
     rts
 ; end of main

@@ -9,6 +9,8 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export main__save_slot
+.export main__keeps_through_memory
+.export main__keeps_the_carry
 .export main__handler
 .export main__draw_row
 
@@ -35,7 +37,7 @@ keeps_by_saving:
 ; end of keeps_by_saving
 
 ; .proc keeps_through_memory: keeps x  main.nt65:40
-keeps_through_memory:
+main__keeps_through_memory:
     stx a:main__save_slot
 
     ldx #3
@@ -46,7 +48,7 @@ keeps_through_memory:
 ; end of keeps_through_memory
 
 ; .proc keeps_the_carry: keeps c  main.nt65:53
-keeps_the_carry:
+main__keeps_the_carry:
     php
     sec
     jsr CHROUT

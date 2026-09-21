@@ -21,17 +21,18 @@ main__ptr: .res 2
 .segment "CODE": absolute
 ; .proc top  main.nt65:19
 main__top:
+    jsr draw
     rts
 ; end of top
 
-; .proc inner  main.nt65:24
+; .proc inner  main.nt65:25
 outer__inner:
     lda z:z
     lda z:f
     rts
 ; end of inner
 
-; .proc draw  main.nt65:31
+; .proc draw  main.nt65:32
 draw:
     ldx #0
 draw__loop:

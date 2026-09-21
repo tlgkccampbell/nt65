@@ -15,7 +15,7 @@
 
 ; The read-modify-write pairs: each is a shift or a step and then an arithmetic instruction,
 ; and each takes every form the store it is built on takes.
-.proc combined {
+.export .proc combined {
     slo z:ptr
     slo z:ptr,x
     slo a:buf
@@ -37,7 +37,7 @@
 }
 
 ; Loads and stores that move A and X together.
-.proc paired {
+.export .proc paired {
     lax #$40
     lax z:ptr
     lax z:ptr,y
@@ -53,7 +53,7 @@
 }
 
 ; The immediate-only opcodes, which put A through an operation and the carry or the flags.
-.proc immediate {
+.export .proc immediate {
     alr #%11110000
     anc #$7f
     ane #$ff
@@ -64,7 +64,7 @@
 
 ; The stores that mix the high byte of their own address into what they write, and the load
 ; that reads through the stack pointer. What each leaves is unstable; how long each takes is not.
-.proc unstable {
+.export .proc unstable {
     sha buf,y
     sha (ptr),y
     shx buf,y
@@ -75,7 +75,7 @@
 }
 
 ; `nop` reads an operand on the 6502x, in the forms its undocumented encodings have.
-.proc idle {
+.export .proc idle {
     nop
     nop #$00
     nop z:ptr
@@ -86,6 +86,6 @@
 }
 
 ; `jam` stops the processor, so nothing after it runs and the routine has no count.
-.proc halt {
+.export .proc halt {
     jam
 }

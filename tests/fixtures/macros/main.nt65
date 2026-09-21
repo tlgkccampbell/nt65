@@ -97,7 +97,7 @@ E4     = 64
 }
 
 .segment CODE
-.proc main {
+.export .proc main {
     set16!(ptr, SCREEN)
     set16!({buf,x}, $1234)
     mov16!(ptr, {#SCREEN})

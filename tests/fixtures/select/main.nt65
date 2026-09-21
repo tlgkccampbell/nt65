@@ -27,7 +27,7 @@ BUFFER = .select(WIDE, wide, narrow)
 .data sizes: .byte COLUMNS, ROWS, BORDER, clamp(300), clamp(7)
 
 .segment CODE
-.proc main {
+.export .proc main {
     lda BUFFER
     sta .select(WIDE, wide, narrow) + 1
     rts

@@ -2,7 +2,7 @@
 .use hw::{CHANNELS as VOICES_USED, LINES}
 
 .segment CODE
-.proc main {
+.export .proc main {
     .if hw::PAL {
         lda #50                     ; frames a second
     } .else {

@@ -3071,11 +3071,15 @@ first and as a failure where it did not. An editor that crashes never says goodb
 server watches the process the editor named as its own when it connected, and leaves when that
 process does.
 
-**Unused symbols** are warnings: a label, constant, macro, struct, union, enum or data
+**Unused symbols** are warnings: a label, constant, macro, struct, union, enum, routine or data
 declaration that nothing names and the file does not export, since an export is what another
 file uses. A member of a named enum is one of a set and is not reported on its own, a label a
 `.state` declares an entry point is reached from outside, and a label flow analysis reports as
-never reached is not reported twice. Data that holds values may be there for where it lands,
+never reached is not reported twice. A routine nothing calls, jumps to or names — in data, in a
+`.next`, anywhere — and that the file does not export is a routine nothing can reach, which is
+what a finished port has left behind; a handler is the exception, because the processor reaches
+it through a vector this program may not even hold, and an `interrupt` signature is what says
+so. Data that holds values may be there for where it lands,
 as a header, the vectors or a load address are, so only a declaration that reserves storage
 and holds no values is reported. A name written in a branch the configuration leaves out
 counts as used, because the other build uses it, and a file with errors gets none.
@@ -3447,7 +3451,12 @@ Recorded so the reasoning survives. None is open.
   private function used many times gives one error where it can be fixed, not one at each use.
 - **Unused-symbol warnings stop at what could be meant.** An export is used by definition, data
   that holds values may be there for where it lands, and a name in a branch this configuration
-  leaves out is used by the other build.
+  leaves out is used by the other build. A routine is not an exception to that rule: an
+  unexported one nothing names cannot be reached from anywhere, not from this module and not
+  from ca65, so there is nothing it could have been meant for. A program's entry point is
+  exported, because whatever hands control to it — a vector table, a linker configuration,
+  hand-written ca65 — is outside the module and reaches it by its linker name. The one routine
+  reached from outside without an export is an interrupt handler, which says `interrupt`.
 - **`emu` in a signature is a state.** It pins both widths at 8, as in `.state`, and an exit
   that names a 16-bit width is in native mode without repeating `native`.
 - **Mixed data is a named block.** A header, a vector table or a BASIC stub holds data of

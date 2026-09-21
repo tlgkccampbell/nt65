@@ -10,11 +10,11 @@
 ; A name of the file's own that an expansion's label would otherwise become: the
 ; expansion's gives way, since only fixed spellings are kept.
 .segment CODE
-.proc delay__loop {
+.export .proc delay__loop {
     rts
 }
 
-.proc main {
+.export .proc main {
     set16!(ptr, lib::SCREEN)
     delay!(4)
     delay!(8)

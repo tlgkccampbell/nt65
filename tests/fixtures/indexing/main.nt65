@@ -40,7 +40,7 @@
 .data exact: .byte[2] { "hi" }
 
 .segment CODE
-.proc main {
+.export .proc main {
     ; An index on data is that data plus the elements it steps over.
     lda buffer[3]
     lda handlers[2]

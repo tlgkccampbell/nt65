@@ -31,7 +31,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    jsr gfx::clear\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    rts\n}\n"));
 
         Assert.Empty(program.Problems());
         var symbol = program.File("main.nt65").SymbolAt("clear");
@@ -45,7 +45,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n"));
 
         Assert.Equal(
             ["main.nt65:4: `clear` is not declared here, and module `gfx` exports it: write `gfx::clear`, "
@@ -67,7 +67,7 @@ public sealed class ModuleTests
         // is reported as an item that may go.
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", $".module main\n{use}\n.segment CODE\n.proc main {{\n{alsoNamed}    jsr {written}\n    rts\n}}\n"));
+            ("main.nt65", $".module main\n{use}\n.segment CODE\n.export .proc main {{\n{alsoNamed}    jsr {written}\n    rts\n}}\n"));
 
         Assert.Empty(program.Problems());
         var main = program.File("main.nt65");
@@ -111,7 +111,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    jmp gfx::clear::again\n}\n"));
+            ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jmp gfx::clear::again\n}\n"));
 
         Assert.Empty(program.Problems());
         var symbol = program.File("main.nt65").SymbolAt("again");
@@ -130,7 +130,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.use gfx::*\n.segment CODE\n.proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n}\n"));
+            ("main.nt65", ".module main\n.use gfx::*\n.segment CODE\n.export .proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n}\n"));
 
         var main = outputs["main.s"];
         Assert.Contains(".importzp gfx__ptr\n", main);
@@ -149,7 +149,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("vars.nt65", ".module vars\n.export count: abs\n.segment ZEROPAGE\n.data count: .byte\n"),
-            ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda vars::count\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda vars::count\n    rts\n}\n"));
 
         Assert.Contains(".export vars__count: abs\n", outputs["vars.s"]);
         Assert.Contains(".import vars__count: abs\n", outputs["main.s"]);
@@ -195,7 +195,7 @@ public sealed class ModuleTests
     public void ACheckedImportIsUsedByValueAndAsserted()
     {
         var main = Analysis.Outputs(
-            ("main.nt65", ".module main\n.import VIC_BORDER = $d020\n.segment CODE\n.proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
+            ("main.nt65", ".module main\n.import VIC_BORDER = $d020\n.segment CODE\n.export .proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
 
         Assert.Contains(".import VIC_BORDER: abs\n", main);
         Assert.Contains(".assert VIC_BORDER = $d020, lderror,", main);
@@ -212,7 +212,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("hw.nt65", ".module hw\n.export .import BORDER = $d020, tick: zp\n"),
-            ("main.nt65", ".module main\n.use hw::*\n.segment CODE\n.proc main {\n    sta BORDER\n    lda tick\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.use hw::*\n.segment CODE\n.export .proc main {\n    sta BORDER\n    lda tick\n    rts\n}\n"));
 
         Assert.Contains(".import BORDER: abs\n", outputs["main.s"]);
         Assert.Contains(".importzp tick\n", outputs["main.s"]);
@@ -233,7 +233,7 @@ public sealed class ModuleTests
             ("lib.nt65", ".module lib\n.segment CODE\n.export .proc outer {\n    .export inner\ninner:\n    rts\n}\n"
                 + ".export .proc other {\n    rts\n}\n"),
             ("main.nt65", ".module main\n.import unused: proc(), later: proc()\n.macro call_other() {\n    jsr lib::other\n    jsr later\n}\n"
-                + ".segment CODE\n.proc main {\n    jmp lib::outer::inner\n}\n"));
+                + ".segment CODE\n.export .proc main {\n    jmp lib::outer::inner\n}\n"));
 
         Assert.Contains(".import lib__outer__inner: abs\n", outputs["main.s"]);
         Assert.DoesNotContain("lib__outer\n", outputs["main.s"]);
@@ -249,7 +249,7 @@ public sealed class ModuleTests
         var outputs = Analysis.Outputs(
             ("gfx.nt65", ".module gfx\n.segment CODE\n.export .proc init {\n    rts\n}\n"),
             ("snd.nt65", ".module snd\n.segment CODE\n.export .proc init {\n    rts\n}\n"),
-            ("main.nt65", ".module main\n.use snd::init as snd_init\n.segment CODE\n.proc main {\n    jsr gfx::init\n    jsr snd_init\n    rts\n}\n"));
+            ("main.nt65", ".module main\n.use snd::init as snd_init\n.segment CODE\n.export .proc main {\n    jsr gfx::init\n    jsr snd_init\n    rts\n}\n"));
 
         Assert.Contains("jsr gfx__init\n", outputs["main.s"]);
         Assert.Contains("jsr snd__init\n", outputs["main.s"]);
@@ -307,7 +307,7 @@ public sealed class ModuleTests
                 }
                 }
 
-                .proc main {
+                .export .proc main {
                     jsr gfx::clear
                     rts
                 }

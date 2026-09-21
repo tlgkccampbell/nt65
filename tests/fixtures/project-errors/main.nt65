@@ -2,6 +2,6 @@
 .module main
 
 .segment CODE
-.proc start {
+.export .proc start {
     rts
 }
