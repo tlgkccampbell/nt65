@@ -177,6 +177,10 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task NextTokensRefreshAsync(CancellationToken cancellation) =>
         await notifications.TokensRefreshed.Reader.ReadAsync(cancellation);
 
+    /// <summary>Waits for the server to say that the program has settled and what a file became has moved.</summary>
+    public async Task<JsonElement> NextOutputChangedAsync(CancellationToken cancellation) =>
+        await notifications.OutputChanged.Reader.ReadAsync(cancellation);
+
     /// <summary>The next message the server logged to the client's window.</summary>
     public async Task<LogMessageParams> NextLogMessageAsync(CancellationToken cancellation) =>
         await notifications.Logged.Reader.ReadAsync(cancellation);
@@ -301,6 +305,11 @@ internal sealed class TestClient : IAsyncDisposable
         public Channel<bool> TokensRefreshed { get; } = Channel.CreateUnbounded<bool>();
 
         public Channel<bool> HintsRefreshed { get; } = Channel.CreateUnbounded<bool>();
+
+        public Channel<JsonElement> OutputChanged { get; } = Channel.CreateUnbounded<JsonElement>();
+
+        [JsonRpcMethod("nt65/outputChanged", UseSingleObjectParameterDeserialization = true)]
+        public void OnOutputChanged(JsonElement parameters) => OutputChanged.Writer.TryWrite(parameters);
 
         [JsonRpcMethod("textDocument/publishDiagnostics", UseSingleObjectParameterDeserialization = true)]
         public void OnPublishDiagnostics(PublishDiagnosticsParams parameters) => Published.Writer.TryWrite(parameters);

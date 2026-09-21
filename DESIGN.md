@@ -501,6 +501,7 @@ normally runs in; what it tells the person running it is from where they are.
 | `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
 | `--c-header <file>` | a C header of what the program exports (§13) |
 | `--check` | report and write nothing: no output, no header, no dependency file and no record of what was written |
+| `--stdout` | write the named file's ca65 to standard output and no files. It takes one file, and answers for it whatever is wrong with the rest of the program: what could be written, under a first line saying that it is incomplete and why, which is what the editor shows beside the source (§14) |
 | `--watch` | build again whenever the program changes, until interrupted |
 | `--json` | one JSON object per diagnostic on standard output, for whatever is reading nt65 that is not an editor |
 | `--help`, `--version` | |
@@ -3122,6 +3123,17 @@ alone and without an assembler:
   a call left where they were, the state they were written under declared and the label they
   start with as the name to be going on with, and ca65 in a selection read as nt65 as far as
   one line at a time can say it;
+- show what a file became, beside the file: the ca65 a build writes for its module, as the
+  program stands in the editor with whatever is not saved yet, and the caret is the link both
+  ways — moving in the source shows the lines it became, and moving in the output shows the
+  line that wrote them. Both come from the map the build already writes (§13), so nothing
+  stands in either text to say it. It opens past the header, which is there for ca65 and not
+  for the reader, and it follows the program on the same wait the rest of the squiggles come
+  on, because it is about the program rather than about the caret. A file with errors shows
+  what could be written, under a first line saying that it is incomplete and where the first
+  thing wrong with it is; that is what a build would have written, and a build writes nothing.
+  `nt65 build --stdout` (§5.3) writes the same text, so that what the editor shows and what a
+  script reads are one thing;
 - write a macro call out as what it expands to, in nt65 rather than in ca65: the body with the
   arguments in place, as the programmer would have written it by hand (§11). Hovering over a
   call says what it becomes in one line — how many lines, how many bytes and what it costs —

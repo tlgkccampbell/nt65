@@ -63,6 +63,11 @@ internal sealed class Server
     // crashes never sends `exit`, and a server nobody is talking to should not outlive it.
     private Process? parent;
 
+    // Whether anything has asked what a file became. A client showing that is told when the
+    // program has settled; one that never asked is not sent a notification it has no handler
+    // for. It is set from a request and read from the publishing, which are different threads.
+    private volatile bool watchingOutput;
+
     private Server(ServerLog log, Framing framing, Delay delay)
     {
         this.log = log;
@@ -278,6 +283,28 @@ internal sealed class Server
     /// <summary>The named configurations the workspace's projects have, for the client to offer.</summary>
     [JsonRpcMethod("nt65/configurations")]
     public IReadOnlyList<string> Configurations(JsonElement _) => workspace.Configurations();
+
+    /// <summary>
+    /// What a file became: the ca65 a build writes for it as the program stands in the editor
+    /// now, unsaved edits included, and which lines of it each line of the source wrote. A file
+    /// the program does not hold is answered with nothing, which is the client's to say.
+    /// <para>
+    /// Having been asked once, the server says whenever the program has settled after an edit,
+    /// so that a view beside the source moves when the squiggles do.
+    /// </para>
+    /// </summary>
+    [JsonRpcMethod("nt65/output")]
+    public OutputResult? Output(OutputParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        watchingOutput = true;
+        var uri = request.TextDocument.Uri;
+        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
+        cancellation.ThrowIfCancellationRequested();
+        return LanguageServer.Output.Of(
+            workspace.AnalysisFor(path), workspace.SettingsFor(path), path,
+            outgoing.Spell(uri), workspace.VersionOf(uri));
+    }
 
     /// <summary>
     /// What the macro call at a place becomes, as nt65 rather than as ca65: the body with the
@@ -714,6 +741,14 @@ internal sealed class Server
             published.TryRemove(gone, out _);
             await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
                 new PublishDiagnosticsParams(gone, null, [])).ConfigureAwait(false);
+        }
+
+        // A view of what a file became follows the program rather than the caret, so it hears
+        // once the typing has stopped, from the same wait the rest of the squiggles come on.
+        if (watchingOutput)
+        {
+            await rpc!.NotifyWithParameterObjectAsync("nt65/outputChanged",
+                new OutputChangedParams(changed)).ConfigureAwait(false);
         }
 
         // What a name in another file refers to, and what a routine costs with its calls, moved

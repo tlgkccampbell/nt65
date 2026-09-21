@@ -236,6 +236,43 @@ internal sealed class Workspace
         }
     }
 
+    /// <summary>The projects the workspace holds, as they stand.</summary>
+    public IReadOnlyList<WorkspaceProject> Projects()
+    {
+        lock (gate)
+        {
+            return [.. projects];
+        }
+    }
+
+    /// <summary>
+    /// Every program the workspace holds: one per project, and the one of the open documents no
+    /// project names. Each is built once and kept, so asking is what publishing already did.
+    /// </summary>
+    public IReadOnlyList<ProgramAnalysis> Programs()
+    {
+        lock (gate)
+        {
+            return
+            [
+                .. projects.Select(project => project.Analysis(open.Values)),
+                .. open.Values.Any(document => Owner(document.Tree.Path) is null) ? (ProgramAnalysis[])[Loose()] : [],
+            ];
+        }
+    }
+
+    /// <summary>
+    /// The project a file is built as, or the settings a file no project names is built as,
+    /// which is what says where its output would go.
+    /// </summary>
+    public ProjectSettings SettingsFor(string path)
+    {
+        lock (gate)
+        {
+            return Owner(path) is { } project ? project.Settings : ProjectSettings.None;
+        }
+    }
+
     /// <summary>
     /// The program of the open documents no project names. An open document stands in for
     /// whatever is on disk, and brings its own tree, which an edit re-parsed only in the lines

@@ -59,13 +59,10 @@ public static class Compiler
             // The defines are not a file anyone wrote, and nothing is written for them.
             if (model.Tree == analysis.Defines)
                 continue;
-            var elsewhere = measured.Where((_, j) => j != i).SelectMany(set => set)
-                .Where(symbol => symbol.Tree == model.Tree)
-                .ToHashSet();
-            var output = Emitter.Emit(
-                model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
-                project.Out, elsewhere);
-            output = output with { Dependencies = Dependencies(analysis.Program, model, direct) };
+            var output = Written(analysis, project, i, measured, diagnostics) with
+            {
+                Dependencies = Dependencies(analysis.Program, model, direct),
+            };
             outputs.Add(output);
 
             // Where its lines came from goes beside it rather than into it, so that the ca65 is
@@ -85,6 +82,26 @@ public static class Compiler
             Header = wrong ? null : header,
             IsCpuAssumed = project.Cpu is null && !ProgramCpu.IsStated(analysis.Program.Files.Select(file => file.Tree)),
         };
+    }
+
+    /// <summary>
+    /// The ca65 for one file of <paramref name="analysis"/>, whatever is wrong with the rest of
+    /// the program, or null when the program has no such file. A build writes nothing for a
+    /// program that is wrong; the editor shows what would have been written anyway, so that
+    /// seeing what a line became does not wait for the rest of the file to be right.
+    /// </summary>
+    /// <param name="analysis">The program the file belongs to.</param>
+    /// <param name="project">The project it is built as, whose <c>out</c> names where the file goes.</param>
+    /// <param name="path">The logical path of the source to write.</param>
+    public static OutputFile? EmitFile(ProgramAnalysis analysis, ProjectSettings project, string path)
+    {
+        var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
+        for (var i = 0; i < analysis.Layouts.Count; i++)
+        {
+            if (analysis.Program.Files[i] is { Tree: var tree } && tree != analysis.Defines && tree.Path == path)
+                return Written(analysis, project, i, measured, []);
+        }
+        return null;
     }
 
     /// <summary>
@@ -128,6 +145,24 @@ public static class Compiler
         if (previous is not null && Reanalyze(previous, files, project, binaryLength, out reason) is { } reused)
             return reused;
         return AnalyzeAll(files, project, binaryLength) with { WholeProgram = reason };
+    }
+
+    /// <summary>
+    /// One file of the program written out. <paramref name="measured"/> is what each file of the
+    /// program measures with <c>.endof</c> and <c>.spanof</c>, in the order the files are in:
+    /// what the other files measure of this one is what it has to label.
+    /// </summary>
+    private static OutputFile Written(
+        ProgramAnalysis analysis, ProjectSettings project, int i,
+        IReadOnlyList<IReadOnlySet<Symbol>> measured, List<Diagnostic> diagnostics)
+    {
+        var model = analysis.Program.Files[i];
+        var elsewhere = measured.Where((_, j) => j != i).SelectMany(set => set)
+            .Where(symbol => symbol.Tree == model.Tree)
+            .ToHashSet();
+        return Emitter.Emit(
+            model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
+            project.Out, elsewhere);
     }
 
     private static ProgramAnalysis AnalyzeAll(

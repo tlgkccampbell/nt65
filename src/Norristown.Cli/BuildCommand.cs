@@ -1,4 +1,6 @@
+using Norristown.Emit;
 using Norristown.Project;
+using Norristown.Syntax;
 
 namespace Norristown.Cli;
 
@@ -39,6 +41,14 @@ public static class BuildCommand
         }
         var root = projectFile is null ? directory : Path.GetDirectoryName(projectFile)!;
         string[] watched = projectFile is null ? [] : [projectFile];
+
+        // `--stdout` answers what one file became, so it is one file it is asked about.
+        if (command.Stdout && command.Files.Count != 1)
+        {
+            error.WriteLine("nt65: --stdout writes one file's output, so it takes one file");
+            error.WriteLine(CommandLine.SeeHelp);
+            return new BuildResult(2, root, watched);
+        }
         var project = projectFile is null
             ? ProjectSettings.None
             : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
@@ -96,7 +106,9 @@ public static class BuildCommand
 
         // What a crash names, so that a report says which program nt65 was reading.
         Building.Started(paths.Count == 1 ? paths[0] : $"{paths[0]} and {paths.Count - 1} more");
-        var compilation = Compiler.Compile(sources, project, path => Length(Path.Combine(root, path)), header);
+        var analysis = Compiler.Analyze(
+            [.. sources.Select(SyntaxTree.Parse)], project, path => Length(Path.Combine(root, path)));
+        var compilation = Compiler.Emit(analysis, project, header);
         Building.Nothing();
 
         // What a watch waits on is what the build read: the sources, and the binaries the outputs
@@ -112,6 +124,22 @@ public static class BuildCommand
 
         foreach (var d in compilation.Diagnostics)
             Say(d);
+
+        // `--stdout` answers what the named file became, whatever is wrong with the rest of the
+        // program: what a build would have written, under a note where it is incomplete. It is
+        // the same text the editor shows beside the source, and it writes no files.
+        if (command.Stdout)
+        {
+            if (OutputPreview.Of(analysis, project, named[0]) is not { } preview)
+            {
+                error.WriteLine($"{command.Files[0]}: error: it is not a file of this program");
+                return new BuildResult(1, root, watched);
+            }
+            output.Write(preview.Text);
+            return new BuildResult(
+                compilation.Diagnostics.Any(d => d.Severity == Severity.Error) ? 1 : 0, root, watched);
+        }
+
         if (compilation.Diagnostics.Any(d => d.Severity == Severity.Error))
             return new BuildResult(1, root, watched);
         if (compilation.IsCpuAssumed)

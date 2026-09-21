@@ -14,6 +14,7 @@ namespace Norristown.Cli;
 /// <param name="Check">Whether <c>--check</c> asked for the report without the output.</param>
 /// <param name="Watch">Whether <c>--watch</c> asked to build again whenever the program changes.</param>
 /// <param name="Json">Whether <c>--json</c> asked for the diagnostics as JSON on standard output.</param>
+/// <param name="Stdout">Whether <c>--stdout</c> asked for one file's output on standard output.</param>
 public sealed record CommandLine(
     string? Project,
     string? Configuration,
@@ -25,7 +26,8 @@ public sealed record CommandLine(
     IReadOnlyList<string> Files,
     bool Check = false,
     bool Watch = false,
-    bool Json = false)
+    bool Json = false,
+    bool Stdout = false)
 {
     /// <summary>How the command is used, as <c>--help</c> prints it.</summary>
     public const string Usage = """
@@ -72,6 +74,7 @@ public sealed record CommandLine(
           --depfile <file>      writes make-style dependencies of every output
           --c-header <file>     writes a C header of what the program exports
           --check               reports what is wrong and writes nothing
+          --stdout              writes the named file's ca65 to standard output and no files
           --watch               builds again whenever the program changes, until interrupted
           --json                writes one JSON object per diagnostic to standard output
         """;
@@ -91,7 +94,7 @@ public sealed record CommandLine(
         problem = null;
         string? project = null, configuration = null, output = null, dependencies = null, header = null;
         Cpu? cpu = null;
-        bool check = false, watch = false, json = false;
+        bool check = false, watch = false, json = false, stdout = false;
         var defines = new List<string>();
         var files = new List<string>();
         for (var i = 0; i < arguments.Count; i++)
@@ -132,6 +135,9 @@ public sealed record CommandLine(
                 case "--json":
                     json = true;
                     continue;
+                case "--stdout":
+                    stdout = true;
+                    continue;
                 case "--cpu":
                     if (value is null || CpuNames.Parse(value) is not { } named)
                     {
@@ -152,6 +158,6 @@ public sealed record CommandLine(
             i++;
         }
         return new CommandLine(project, configuration, cpu, defines, output, dependencies, header, files,
-            check, watch, json);
+            check, watch, json, stdout);
     }
 }
