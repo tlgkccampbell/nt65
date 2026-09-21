@@ -118,7 +118,6 @@
         "call-target-unknown",
         "cannot-be-written",
         "character-empty",
-        "character-not-ascii",
         "character-too-long",
         "charmap-has-no-entry",
         "charmap-value-not-a-byte",

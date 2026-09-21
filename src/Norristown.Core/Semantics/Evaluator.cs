@@ -61,6 +61,10 @@ internal sealed class Evaluator
     // The declarations already told that a value of theirs is wider than ca65 can hold. The
     // steps around such a value are the same mistake, and the first of them is the one to name.
     private readonly HashSet<Symbol> wide = [];
+
+    // The literals already told that they hold a character no encoding is settled for. A macro
+    // body is evaluated once per call, and its text is one piece of text however often it is.
+    private readonly HashSet<SyntaxNode> outsideAscii = [];
     private Symbol? owner;
 
     // The symbol whose own value is being worked out, whose every step the output carries.
@@ -298,6 +302,33 @@ internal sealed class Evaluator
     /// <summary>What is wrong with a value ca65 has no room for.</summary>
     private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Says(Value.Of(number));
 
+    /// <summary>
+    /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character typed
+    /// directly above <c>$7f</c> is an error rather than a byte of some encoding. A charmap
+    /// entry is where such a character says what it becomes, and what a data declaration holds
+    /// is checked where its bytes are laid out, which is where the charmap applied to it is
+    /// known; everything else — a constant, an operand, a condition — is said here.
+    /// </summary>
+    private void CheckAscii(LiteralExpressionSyntax literal)
+    {
+        if (!literal.Token.Text.Any(c => c > 127) || InCharmapOrData(literal) || !outsideAscii.Add(literal))
+            return;
+        Report(literal, Catalogue.TextNotAscii);
+    }
+
+    /// <summary>Whether the literal stands somewhere a charmap answers for it, or somewhere layout checks it.</summary>
+    private bool InCharmapOrData(SyntaxNode literal)
+    {
+        for (var node = literal.Parent; node is not null; node = node.Parent)
+        {
+            if (node is CharmapEntrySyntax or DataDirectiveSyntax or DataValuesSyntax)
+                return true;
+            if (node is CallExpressionSyntax { Callee: { } callee } && SymbolOf(callee)?.Kind == SymbolKind.Charmap)
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>Whether ca65 can hold a value: its own arithmetic is 32 bits, and it reads one unsigned.</summary>
     private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
 
@@ -315,9 +346,11 @@ internal sealed class Evaluator
                 return Number(Literals.Number(number.Token.Text));
 
             case CharacterExpressionSyntax character:
+                CheckAscii(character);
                 return Number(Literals.Character(character.Token.Text));
 
             case StringExpressionSyntax quoted:
+                CheckAscii(quoted);
                 return Literals.Text(quoted.Token.Text) is { } text ? Value.Of(text) : Value.Unknown;
 
             case ParenthesizedExpressionSyntax parenthesized:

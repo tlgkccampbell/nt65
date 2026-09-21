@@ -1,0 +1,27 @@
+; Outside a charmap, text is ASCII: which byte a character above $7f becomes depends on an
+; encoding nt65 does not choose, so a charmap says, or `\xHH` writes the byte itself.
+.module main
+
+.cpu 6502
+
+.charmap accents {
+    'a'..'z' = $01
+    'é'      = $7b
+}
+
+; A charmap entry is where such a character says what it becomes, and an operand the charmap
+; is applied to is where it is used, so neither is a mistake.
+.segment RODATA
+.data mapped: .byte accents("é")
+.data direct: .byte $7b
+
+; Everywhere else there is nothing to say what the byte is.
+K = 'é'                                 ;! error[text-not-ascii]: text is ASCII outside a charmap; write `\xHH` for a byte above $7f
+T = "é"                                 ;! error[text-not-ascii]: text is ASCII outside a charmap; write `\xHH` for a byte above $7f
+.data plain: .byte "é"                  ;! error[text-not-ascii]: text is ASCII outside a charmap; write `\xHH` for a byte above $7f
+
+.segment CODE
+.proc start {
+    lda #'é'                            ;! error[text-not-ascii]: text is ASCII outside a charmap; write `\xHH` for a byte above $7f
+    rts
+}

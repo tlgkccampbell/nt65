@@ -92,12 +92,11 @@ public sealed class GeneratedProgramTests
         3 => $".data d{at}: .byte[] {{\n    {Literal(random)}, {Number(random)}\n}}",
         4 => $".data d{at} {{\n    .repeat {Turns(random)}, i {{\n        .byte i\n    }}\n}}",
 
-        // A ring of names, and a type that holds itself: neither has a value or a size. An
-        // instance of that type is left out, because emission still walks the cycle the
-        // analysis reported and a stack that runs out takes the test host with it; it belongs
-        // here as soon as emission leaves alone what cannot be laid out.
+        // A ring of names, and a type that holds itself with an instance of it: neither the
+        // ring nor the type has a value or a size, and emission leaves alone what the analysis
+        // has already called cyclic rather than walking the ring until the stack runs out.
         5 => $"A{at} = B{at} {Operator(random)} 1\nB{at} = A{at} + 1",
-        6 => $".struct S{at} {{\n    inner: .type S{at}\n}}",
+        6 => $".struct S{at} {{\n    inner: .type S{at}\n}}\n.data s{at}: .type S{at}",
         _ => $".segment CODE {{\n    .export .proc p{at} {{\n"
             + $"        lda #{Nested(random, Number(random))}\n        rts\n    }}\n}}",
     };

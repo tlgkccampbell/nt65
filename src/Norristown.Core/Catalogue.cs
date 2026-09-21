@@ -86,14 +86,6 @@ public static class Catalogue
         "A character literal is one value. Several characters are text, written in double quotes, and a data "
             + "declaration writes their bytes.");
 
-    internal static DiagnosticDescriptor CharacterNotAscii { get; } = new(
-        "character-not-ascii",
-        Severity.Error,
-        "a character above $7f is a byte a charmap decides; write `\\xHH` for the byte itself",
-        "Which byte a character above $7f becomes depends on an encoding nt65 does not choose. Inside a charmap "
-            + "entry, and in a data operand a charmap is applied to, the charmap says; everywhere else there is "
-            + "nothing to say it, so the byte is written directly.");
-
     internal static DiagnosticDescriptor BlockNotClosed { get; } = new(
         "block-not-closed",
         Severity.Error,
