@@ -132,7 +132,7 @@ public sealed class CapabilitiesTests : IDisposable
         Write("opened/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         Write("later/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         Write("later/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
-        var caller = ".module main\n.segment CODE\n.proc main {\n    jsr gfx::clear\n    rts\n}\n";
+        var caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    rts\n}\n";
         Write("later/main.nt65", caller);
 
         await using var client = await TestClient.StartAsync(

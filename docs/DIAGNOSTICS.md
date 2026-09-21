@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 350 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 357 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -11,9 +11,9 @@ message, `{0}` and its siblings stand for what the diagnostic names at the place
 
 | area | names | not an error by default |
 |---|---|---|
-| [Reading a line](#reading-a-line) | 55 | — |
+| [Reading a line](#reading-a-line) | 57 | — |
 | [Names](#names) | 49 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
-| [Values](#values) | 44 | — |
+| [Values](#values) | 49 | — |
 | [Macros](#macros) | 22 | — |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 14 | — |
@@ -146,7 +146,7 @@ The escapes are a fixed set, the same in a character literal and in a string. Ev
 
 > expected {0}
 
-How wide an address is has three spellings and no others: `zp`, `abs` and `far`. An import may also give a routine signature in place of a size.
+How wide an address is has three spellings and no others: `zp`, `abs` and `far`. An import may also give a routine signature or an element type in place of a size.
 
 ### `expected-brace`
 
@@ -267,6 +267,18 @@ A message, or a linker name, is written in double quotes. nt65 has no bare-word 
 > `.export` goes before a declaration, and `{0}` declares nothing to export
 
 `.export` before a declaration exports what that declaration declares, so the directive after it has to be one that declares something.
+
+### `import-holds-no-values`
+
+> an import of `{0}` says what its bytes are and holds none of them: the definition is in another object
+
+An import declares what a symbol another object defines looks like, so that nt65 can size it and reach its members. The bytes themselves belong to whoever defines it.
+
+### `import-needs-an-element-type`
+
+> `{0}` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`
+
+A typed import describes storage another object holds, so it writes an element type and a count. A directive that reads a file or writes text describes bytes this program would emit, and an import emits none.
 
 ### `module-name-quoted`
 
@@ -562,7 +574,7 @@ Nothing in scope here declares the name. Where a name one letter away is declare
 
 ### `not-declared-in`
 
-> `{0}` is not declared in {1}
+> `{0}` is not declared in {1}{2}
 
 The path names a scope, a module, a type or a routine that does not declare this last part. What a scope holds is a set, and it is read from the declaration rather than from what happens to be written before this line.
 
@@ -672,6 +684,12 @@ Arithmetic is 64-bit and signed, and an operation that leaves those bits has no 
 
 A path may end in a repetition's name only where that name stands for an enum member, which is what makes it a name of something.
 
+### `builtin-arguments`
+
+> `{0}` takes {1}
+
+The built-in was given a different number of arguments from the one it takes.
+
 ### `charmap-has-no-entry`
 
 > `{0}` does not map `{1}`
@@ -731,6 +749,18 @@ A program is built for one processor. Where the project or the command line says
 > `.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`
 
 A condition may test the processor, so the processor is settled before any condition is answered.
+
+### `cycles-needs-a-position`
+
+> `{0}` is {1}, and a cycle span runs from one position in code to another
+
+`.mincycles` and `.maxcycles` count what one pass from one position to another costs, so each end is a label or a routine's own name.
+
+### `cycles-span-has-no-bound`
+
+> `{0}` has no bound over this span: it holds {1}
+
+A sum along a run of instructions bounds one pass only where the run is one pass. A call takes as long as the routine it names, and a loop takes its body as many times as it turns, so neither may be in the span.
 
 ### `declaration-in-a-repetition`
 
@@ -918,11 +948,23 @@ A shift moves a 64-bit value by a number of places it has.
 
 An `.align` pads by however much it takes to reach the boundary, which the linker decides. `.spanof` asks the linker instead, and is a link-time value.
 
+### `sqrt-of-a-negative`
+
+> `.sqrt` has no answer for {0}: no whole number squared is negative
+
+`.sqrt(n)` is the largest whole number whose square is at most n, which a negative number has none of.
+
 ### `target-argument`
 
 > `.target` takes {0}
 
 `.target` asks whether the program is built for one named processor, spelled as the project file spells it.
+
+### `turn-or-scale-out-of-range`
+
+> `{0}` takes a turn of 1 to {1} and a scale of at most that either way
+
+A whole turn is however many units the table counts it in, and the scale is what the answer is measured in. Both are bounded because a value the output carries fits ca65's 32 bits anyway.
 
 ## Macros
 

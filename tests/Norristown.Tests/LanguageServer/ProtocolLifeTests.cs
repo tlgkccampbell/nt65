@@ -40,7 +40,10 @@ public sealed class ProtocolLifeTests
         // A frame that is not JSON is answered where the protocol says, with no id, and the
         // next frame is read as if nothing had happened.
         await server.SendBrokenAsync(timeout);
+        // Whatever the server had to say on its own account first is not the answer.
         var broken = await server.ReceiveAsync(timeout);
+        while (!broken.RootElement.TryGetProperty("error", out _))
+            broken = await server.ReceiveAsync(timeout);
         Assert.Equal(JsonValueKind.Null, broken.RootElement.GetProperty("id").ValueKind);
         Assert.Equal(ParseError, ErrorIn(broken.RootElement));
 
