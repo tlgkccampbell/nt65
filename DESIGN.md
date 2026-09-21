@@ -3149,6 +3149,17 @@ alone and without an assembler:
   in a body, since its arguments are not known until that body is expanded. A body that
   declares anything is written out inside an anonymous `.scope`, since each expansion has its
   own locals (§6.2) and two of them in one routine would declare the same name twice;
+- change what moving a file asks the program to change, before the move rather than after it.
+  A module's name is written in its `.module` line and its output is named after that wherever
+  the source is (§13), so a source that moves changes less than it looks: nothing in any other
+  file names it. Two things do. A `files` entry that names it literally has to name it where it
+  now is; one that is a glob either still matches, in which case there is nothing to do, or
+  stops matching, and which glob was meant to cover it is the programmer's to say, so that is
+  said and not rewritten. And an `.incbin` path is resolved beside the file that writes it, so
+  it is rewritten when either end moves. Renaming a **module** is a rename of the name in its
+  `.module` line, which already rewrites every `.use`; it does not move the file, and moving
+  the file does not rename the module. The edits name the revision of each file they were
+  worked out against, where the editor takes that;
 - report on every file of every program, not only the ones that are open: a broken export is
   wrong in each module that named it, and none of them may be open. What is wrong with the
   project file is published for it too;

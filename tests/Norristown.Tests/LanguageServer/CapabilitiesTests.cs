@@ -42,7 +42,8 @@ public sealed class CapabilitiesTests : IDisposable
                 "codeLens": { "refreshSupport": true },
                 "inlayHint": { "refreshSupport": true },
                 "workspaceEdit": { "documentChanges": true },
-                "workspaceFolders": true
+                "workspaceFolders": true,
+                "fileOperations": { "willRename": true }
               },
               "textDocument": {
                 "completion": { "completionItem": { "snippetSupport": true } },
@@ -119,7 +120,7 @@ public sealed class CapabilitiesTests : IDisposable
         Assert.Equal(edit.Changes[Uri], one.Edits);
 
         // The client says the folders it has open, so the server asks to be told when they change.
-        Assert.True(client.Initialized.Capabilities.Workspace!.WorkspaceFolders.ChangeNotifications);
+        Assert.True(client.Initialized.Capabilities.Workspace!.WorkspaceFolders!.ChangeNotifications);
     }
 
     /// <summary>

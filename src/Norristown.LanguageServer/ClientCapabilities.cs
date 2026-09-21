@@ -18,6 +18,10 @@ namespace Norristown.LanguageServer;
 /// </param>
 /// <param name="HierarchicalSymbols">Whether an outline may be a tree rather than a flat list.</param>
 /// <param name="WorkspaceFolders">Whether the client opened folders, and will say when they change.</param>
+/// <param name="WillRenameFiles">
+/// Whether the client asks before it moves a file, so that the edits the move calls for are
+/// applied with it rather than after it.
+/// </param>
 internal sealed record ClientCapabilities(
     bool RefreshesTokens,
     bool RefreshesLenses,
@@ -25,7 +29,8 @@ internal sealed record ClientCapabilities(
     bool Snippets,
     bool DocumentChanges,
     bool HierarchicalSymbols,
-    bool WorkspaceFolders)
+    bool WorkspaceFolders,
+    bool WillRenameFiles)
 {
     /// <summary>A client that has declared nothing, which is what a server assumes until it has.</summary>
     public static ClientCapabilities None { get; } = new(false, false, false, false, false, false, false);
@@ -39,7 +44,8 @@ internal sealed record ClientCapabilities(
         DocumentChanges: Flag(capabilities, "workspace", "workspaceEdit", "documentChanges"),
         HierarchicalSymbols: Flag(
             capabilities, "textDocument", "documentSymbol", "hierarchicalDocumentSymbolSupport"),
-        WorkspaceFolders: Flag(capabilities, "workspace", "workspaceFolders"));
+        WorkspaceFolders: Flag(capabilities, "workspace", "workspaceFolders"),
+        WillRenameFiles: Flag(capabilities, "workspace", "fileOperations", "willRename"));
 
     /// <summary>Whether the nested property <paramref name="path"/> names is declared true.</summary>
     private static bool Flag(JsonElement? capabilities, params string[] path)

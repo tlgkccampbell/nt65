@@ -178,9 +178,16 @@ internal sealed class Server
             PositionEncoding: "utf-16",
 
             // A client that opened folders is asked to say when they change, so a folder added
-            // to the workspace brings its projects with it.
-            Workspace: client.WorkspaceFolders
-                ? new WorkspaceServerCapabilities(new WorkspaceFoldersServerCapabilities(true, true))
+            // to the workspace brings its projects with it; one that asks before it moves a file
+            // is asked about every file, because which of them a program includes is the
+            // program's to say and is not known before it has been read.
+            Workspace: client.WorkspaceFolders || client.WillRenameFiles
+                ? new WorkspaceServerCapabilities(
+                    client.WorkspaceFolders ? new WorkspaceFoldersServerCapabilities(true, true) : null,
+                    client.WillRenameFiles
+                        ? new FileOperationsServerCapabilities(new FileOperationRegistrationOptions(
+                            [new FileOperationFilter(new FileOperationPattern("**/*", "file"))]))
+                        : null)
                 : null);
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
     }
@@ -278,6 +285,26 @@ internal sealed class Server
             return Task.CompletedTask;
         log.Write($"changed on disk: {string.Join(", ", request.Changes.Select(change => change.Uri))}");
         return PublishEverythingAsync(null, cancellation);
+    }
+
+    /// <summary>
+    /// Files are about to move. A module's name is its own and its output is named after that,
+    /// so what moves with a source is small: a <c>files</c> entry that names it literally, and
+    /// the <c>.incbin</c> paths that are resolved beside whichever end moved. A glob that no
+    /// longer matches is said rather than rewritten, because which glob was meant to cover the
+    /// file is the programmer's to say.
+    /// </summary>
+    [JsonRpcMethod("workspace/willRenameFiles")]
+    public async Task<WorkspaceEdit?> WillRenameFilesAsync(
+        RenameFilesParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var (edit, said) = MovedFiles.For(
+            workspace,
+            [.. request.Files.Select(file => (Workspace.PathOf(file.OldUri), Workspace.PathOf(file.NewUri)))]);
+        foreach (var message in said)
+            await ShowAsync(MessageType.Warning, message).ConfigureAwait(false);
+        return outgoing.Spell(edit);
     }
 
     /// <summary>The named configurations the workspace's projects have, for the client to offer.</summary>

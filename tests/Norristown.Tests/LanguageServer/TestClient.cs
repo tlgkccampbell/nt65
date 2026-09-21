@@ -66,8 +66,8 @@ internal sealed class TestClient : IAsyncDisposable
 
     /// <summary>
     /// What a client of the kind nt65 is written for declares: an outline as a tree, edits
-    /// against a named revision, snippets, and the folders it has open. It is what VS Code
-    /// declares, so it is what most of the suite asks as.
+    /// against a named revision, snippets, the folders it has open, and asking before it moves
+    /// a file. It is what VS Code declares, so it is what most of the suite asks as.
     /// </summary>
     public static object Capable(bool refreshesTokens = false, bool refreshesHints = false) => new
     {
@@ -75,6 +75,7 @@ internal sealed class TestClient : IAsyncDisposable
         {
             workspaceEdit = new { documentChanges = true },
             workspaceFolders = true,
+            fileOperations = new { willRename = true },
             semanticTokens = new { refreshSupport = refreshesTokens },
             inlayHint = new { refreshSupport = refreshesHints },
         },
@@ -180,6 +181,10 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>Waits for the server to say that the program has settled and what a file became has moved.</summary>
     public async Task<JsonElement> NextOutputChangedAsync(CancellationToken cancellation) =>
         await notifications.OutputChanged.Reader.ReadAsync(cancellation);
+
+    /// <summary>The next message the server put in front of the person.</summary>
+    public async Task<ShowMessageParams> NextShowMessageAsync(CancellationToken cancellation) =>
+        await notifications.Shown.Reader.ReadAsync(cancellation);
 
     /// <summary>The next message the server logged to the client's window.</summary>
     public async Task<LogMessageParams> NextLogMessageAsync(CancellationToken cancellation) =>
@@ -307,6 +312,11 @@ internal sealed class TestClient : IAsyncDisposable
         public Channel<bool> HintsRefreshed { get; } = Channel.CreateUnbounded<bool>();
 
         public Channel<JsonElement> OutputChanged { get; } = Channel.CreateUnbounded<JsonElement>();
+
+        public Channel<ShowMessageParams> Shown { get; } = Channel.CreateUnbounded<ShowMessageParams>();
+
+        [JsonRpcMethod("window/showMessage", UseSingleObjectParameterDeserialization = true)]
+        public void OnShowMessage(ShowMessageParams parameters) => Shown.Writer.TryWrite(parameters);
 
         [JsonRpcMethod("nt65/outputChanged", UseSingleObjectParameterDeserialization = true)]
         public void OnOutputChanged(JsonElement parameters) => OutputChanged.Writer.TryWrite(parameters);
