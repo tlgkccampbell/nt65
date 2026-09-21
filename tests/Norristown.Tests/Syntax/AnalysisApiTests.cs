@@ -162,6 +162,30 @@ public sealed class AnalysisApiTests
         Assert.Equal(reported, Assert.Single(missing.GetDiagnostics()));
     }
 
+    /// <summary>Changing a tree: a fix and a rename, written the way a consumer writes them.</summary>
+    [Fact]
+    public void ChangingATree()
+    {
+        const string written = ".proc main {\n    lda #16 ; the mask\n    sta mask\n}\n";
+        var tree = SyntaxTree.Parse("main.nt65", written);
+
+        // A fix: every immediate written in decimal is written in hex instead.
+        var hex = new Hexadecimal().Visit(tree.Root)!;
+        Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta mask\n}\n", hex.ToFullString());
+
+        // A rename: one name said another way, wherever it is written.
+        var named = hex.DescendantTokens().Where(token => token is { Kind: SyntaxKind.Identifier, Text: "mask" });
+        var renamed = hex.ReplaceTokens(named, (old, _) => SyntaxFactory.Identifier("flags").WithTriviaFrom(old));
+        Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta flags\n}\n", renamed.ToFullString());
+
+        // A rewritten file is a new tree; the one it came from is what it was.
+        Assert.NotSame(tree, renamed.Tree);
+        Assert.Equal(written, tree.Text);
+
+        // A rewrite that finds nothing to do gives back the very node it was given.
+        Assert.Same(renamed, new Hexadecimal().Visit(renamed));
+    }
+
     /// <summary>Every mnemonic a file writes, in source order.</summary>
     private sealed class Mnemonics : SyntaxWalker
     {
@@ -172,5 +196,14 @@ public sealed class AnalysisApiTests
             Found.Add(node.Mnemonic.Text);
             base.VisitInstructionStatement(node);
         }
+    }
+
+    /// <summary>Every immediate operand written in decimal, written in hexadecimal instead.</summary>
+    private sealed class Hexadecimal : SyntaxRewriter
+    {
+        public override SyntaxNode? VisitNumberExpression(NumberExpressionSyntax node) =>
+            node.Parent is ImmediateOperandSyntax && int.TryParse(node.Token.Text, out var value)
+                ? node.WithToken(node.Token.WithText($"${value:x2}"))
+                : node;
     }
 }

@@ -1,9 +1,10 @@
 # The syntax API: what was built
 
 nt65 exists to have a Roslyn-style analysis API and a fully-featured editor. This was the brief
-for taking the syntax tree the rest of the way there — fixed-shape nodes, missing tokens, and a
-public surface an analyzer or an editor feature is written against — and it is now the record of
-it. The work is done; what is left is named at the end.
+for taking the syntax tree the rest of the way there — fixed-shape nodes, missing tokens, a public
+surface an analyzer or an editor feature is written against, and a way to change a tree rather than
+only read one — and it is now the record of it. The work is done; annotations are the one thing
+held back, and are named where they belong.
 
 For writing against the tree, read [the analysis API](ANALYSIS-API.md), which is the guide. This
 document says how the tree came to be the shape it is, so that the next person to change it knows
@@ -25,8 +26,9 @@ The syntax layer is `src/Norristown.Core/Syntax/`:
   additional file, so a build regenerates and the way to work is: change the table, build, fix
   what the compiler points at. Nothing is run by hand and nothing is checked in. What it writes
   lands on disk under `src/Norristown.Core/Generated`, one file per type, git-ignored, to be read
-  and grepped like any other code: the green class, the red class, `CreateRed`, `Accept`, and the
-  two visitors. A table it cannot read is diagnostic `NT1001` against `Syntax.xml`.
+  and grepped like any other code: the green class, the red class with `CreateRed`, `Accept`,
+  `Update` and a `With` per slot, the two visitors, `SyntaxFactory` and `SyntaxRewriter`. A table
+  it cannot read is diagnostic `NT1001` against `Syntax.xml`.
 - **`InternalSyntax/` is the green tree**, the lexer and the parser, and all of it is `internal`.
   A file is lexed a line at a time; `Blocks` builds the block structure over the lines; each line
   is then parsed on its own, in the kind of block around it, into one statement. That
@@ -41,7 +43,8 @@ The syntax layer is `src/Norristown.Core/Syntax/`:
   `FindTrivia`, `FindNode`, `DescendantNodes`, `DescendantTokens`, `DescendantNodesAndTokens`,
   `ChildNodesAndTokens`, `Ancestors`, `GetFirstToken`/`GetLastToken`,
   `SyntaxToken.GetNextToken`/`GetPreviousToken` and `SyntaxTree.GetLine`/`LineCount`. Dispatch is
-  `SyntaxVisitor`, `SyntaxVisitor<TResult>` and `SyntaxWalker`.
+  `SyntaxVisitor`, `SyntaxVisitor<TResult>` and `SyntaxWalker`. Changing a tree is
+  `SyntaxFactory`, `Update`, `With<Slot>`, `SyntaxRewriter` and the replacements on a node.
 - **A node's shape is fixed.** Each kind has a slot for each piece it is written with, in source
   order. A required piece the source did not write stands in its slot as a zero-width missing
   token, or as an `ErrorExpression` where a node belongs, so a required property is never null;
@@ -56,9 +59,12 @@ The syntax layer is `src/Norristown.Core/Syntax/`:
 The nets under all of this are `ShapeTests` (every node has the shape its row describes),
 `TypedNodeTests` (every property of every node is read), `BrokenSourceTests` (the whole pipeline
 and every editor request over half-written files), `NavigationTests`, `TreeDiagnosticsTests`,
-`Fidelity` (a line reads back as its text) and `IncrementalTests` (an edit reuses the lines it did
-not touch, as the same objects). Each runs over every `.nt65` source in the repository and over
-seven ways of cutting its lines short, which is what a file being typed looks like.
+`Fidelity` (a line reads back as its text), `IncrementalTests` (an edit reuses the lines it did
+not touch, as the same objects) and `RewriteTests` (a rewrite of nothing gives back the same root,
+rebuilding every name writes the file back byte for byte, replacing one number moves nothing else,
+and a normalized file reads back as the tokens it was written with). All but the last run over
+every `.nt65` source in the repository and over seven ways of cutting its lines short, which is
+what a file being typed looks like; `RewriteTests` runs over the sources as they are written.
 
 ## The target
 
@@ -91,19 +97,68 @@ new MyWalker().Visit(tree.Root) // SyntaxWalker with a VisitProcDeclaration to o
 8. **Diagnostics on the tree.** Done.
 9. **One description of the grammar.** Done.
 
-Deliberately **not** in scope, and the next work:
+## A tree that can be rewritten
 
-- **`SyntaxFactory`** — thin wrappers over the typed green constructors the generator already
-  writes; the table knows every slot's type, so the factory methods generate from the same rows.
-- **`With…` and `Update`** — one method per slot, each calling the typed constructor with one slot
-  replaced; generated from the same rows as the properties.
-- **`SyntaxRewriter`** — a `SyntaxVisitor<SyntaxNode>` whose default rewrites a node's children
-  and calls `Update` when one changed. It needs `Update` and nothing else.
-- **Annotations** — a field on `GreenNode` beside the diagnostics one, carried by `With…` the way
-  diagnostics are carried by the constructors.
+An analyzer could be written against the tree above; a fix could not, which is why every
+refactoring in the language server is still a text edit. That is what this adds, from the same
+rows: `SyntaxFactory`, `Update` and one `With<Slot>` per slot, `SyntaxRewriter`, and the
+replacements on a node. [The analysis API](ANALYSIS-API.md) is how to use them; this is why they
+are the shape they are. **Annotations** are still deliberately out: they are a field on `GreenNode`
+beside the diagnostics one, and they go in when a refactoring first needs one.
 
-They are what refactorings want; the language server's refactorings work on text edits today. Add
-them when a feature first needs them.
+- **The generator writes three more things.** `Update` over every slot and a `With<Slot>` per slot
+  on the red class; a `SyntaxFactory` method per kind over the typed green constructor;
+  and a `SyntaxRewriter` method per kind that rewrites the node's slots and calls `Update`. The
+  hand-written halves are `SyntaxFactory.cs` — tokens, trivia and lists — and `SyntaxRewriter.cs`,
+  which holds `VisitToken`, the three `VisitList`s and the file, the block and the line.
+- **`Update` compares green nodes, so nothing changed means the same node.** Every slot given back
+  the green node already in it makes `Update` return `this`, which rolls up: a rewriter with no
+  override hands back the root it was given, the same object. That is the identity a fix run over a
+  file is asked about afterwards, and it is what makes the rest cheap.
+- **A statement and below is rebuilt; a line and above is written back as text.** A green line
+  holds the tokens the lexer read and *not* the statement they parse to — the statement is the
+  parse's, kept per line — so there is no green edge from a line to what is on it to rebuild
+  through. So a rewrite collects what moved on each line, writes those spans back into the file's
+  text as **one** change from the first to the last, and parses again from there. Fidelity makes
+  that exact: a piece's text *is* its span in the file, so replacing the span replaces the piece
+  and touches nothing else, and `WithChange` keeps the green nodes of every line outside the range.
+  A rewrite that reaches a line or the root therefore gives back the matching node of a new tree.
+  The alternative — threading a rebuilt statement back into the line — would mean a green line that
+  holds both its tokens and its statement, which is the design the whole layer is written against.
+- **A built node has a tree of its own.** A red node needs a tree and a position, and Roslyn's
+  answer is that a detached node is the root of its own tree; `SyntaxTree` has a second, private
+  constructor that takes one green node, so a factory-built node's spans, text and diagnostics read
+  the way a node of a file's do. Such a tree has no lines and no `Root`; asking for one says so.
+  That is one tree per factory call, which is a string and a line table, and a rewrite is what
+  takes the node out of it.
+- **Whitespace is the caller's, and the formatter cannot supply it.** `nt65 fmt` moves what stands
+  before a line's first token, drops what follows its last and sets the gap in a data line's
+  column; it never puts a separator *between* two tokens, so it cannot rescue a built `lda#0`.
+  So the factory invents nothing and there are two ways to say it: `WithTriviaFrom` keeps what
+  stood around the token being written over, which is what a fix wants, and `NormalizeWhitespace`
+  writes one space where two tokens would otherwise read as one and none where none is wanted,
+  which is what a node built out of bare tokens wants. The one exception is a separated list, whose
+  commas are written `, `, because a list has nowhere else to say it. Running `Formatter.Format`
+  over the tree a rewrite gives back is still what lays the lines out.
+- **`NormalizeWhitespace` is a pair rule with one thing the pair cannot say.** What binds tight
+  binds tight on whichever side it is written (`::`, `#`, `(`, `[`, `,` and `)` before or after),
+  a word needs telling from the word after it, and a binary operator is written clear of both
+  operands. The part two kinds cannot answer is a prefix operator, an operand's own comma and an
+  address prefix's `:`, which are written tight: that is read off the node holding the token, not
+  off the token. `RewriteTests` normalizes every source in the repository and checks it reads back
+  as the tokens it was written with, which is the guarantee — valid nt65, not the file's own
+  layout.
+- **`ReplaceNode` and the rest are the rewriter with one override.** `ReplaceNodes` is a rewriter
+  whose `Visit` answers for the nodes it was given, `ReplaceTokens` one whose `VisitToken` does,
+  and `NormalizeWhitespace` one that hands back tokens in the order they are met. A node being
+  written over is not walked into, so what replaces it is worked out from the node as it stands.
+  `RemoveNode` is a replacement with nothing: a line goes with the break that ends it, a list item
+  with the separator after it, and whatever stood after a list's last item is handed to the item
+  now at the end, so that what is left is not written up against the rest of the line. A piece the
+  table says must be there cannot go, and says so.
+- **The generator says no to a table that would break it.** A second row of the same `Name` used to
+  write one file twice and keep whichever came last; a `Base` that leads back into a circle used to
+  be walked up forever. Both are `NT1001` against `Syntax.xml` now, with the line to look at.
 
 ## What was decided, and why
 

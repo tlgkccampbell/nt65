@@ -209,6 +209,107 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
+    /// A node is changed by being rebuilt: one <c>Update</c> over every slot, in source order,
+    /// and one <c>With</c> per slot that calls it. Same green node in every slot, same node out,
+    /// which is what lets a rewrite that changes nothing come back as the tree it went in as.
+    /// </summary>
+    [Fact]
+    public void EverySlotHasAWithAndTheNodeHasAnUpdate()
+    {
+        var red = Red(Widget);
+        Assert.Contains(
+            "    public WidgetSyntax Update(\n"
+            + "        SyntaxToken keyword,\n"
+            + "        SyntaxToken name,\n"
+            + "        SeparatedSyntaxList<WidgetSyntax> parts,\n"
+            + "        SyntaxToken? closeBraceToken) =>\n",
+            red);
+        Assert.Contains(
+            "ReferenceEquals(keyword.Green, Keyword.Green)\n"
+            + "        && ReferenceEquals(name.Green, Name.Green)\n"
+            + "        && ReferenceEquals(parts.Green, Parts.Green)\n"
+            + "        && ReferenceEquals(closeBraceToken?.Green, CloseBraceToken?.Green)\n"
+            + "            ? this\n"
+            + "            : SyntaxFactory.Widget(keyword, name, parts, closeBraceToken);",
+            red);
+        Assert.Contains(
+            "    public WidgetSyntax WithName(SyntaxToken name) =>\n"
+            + "        Update(Keyword, name, Parts, CloseBraceToken);",
+            red);
+        Assert.Contains(
+            "    public WidgetSyntax WithCloseBraceToken(SyntaxToken? closeBraceToken) =>\n"
+            + "        Update(Keyword, Name, Parts, closeBraceToken);",
+            red);
+    }
+
+    /// <summary>
+    /// The factory takes a node's pieces as the red tree writes them and hands them to the typed
+    /// green constructor. A piece the source may leave out altogether may be left out here too,
+    /// where every piece after it can be.
+    /// </summary>
+    [Fact]
+    public void TheFactoryBuildsANodeFromItsPieces()
+    {
+        var factory = Files(Widget)["SyntaxFactory.g.cs"];
+        Assert.Contains("public static partial class SyntaxFactory", factory);
+        Assert.Contains(
+            "    public static WidgetSyntax Widget(\n"
+            + "        SyntaxToken keyword,\n"
+            + "        SyntaxToken name,\n"
+            + "        SeparatedSyntaxList<WidgetSyntax> parts,\n"
+            + "        SyntaxToken? closeBraceToken = null) =>\n"
+            + "        (WidgetSyntax)Detached(new InternalSyntax.WidgetSyntax(\n"
+            + "            keyword.Green,\n"
+            + "            name.Green,\n"
+            + "            parts.Green,\n"
+            + "            closeBraceToken?.Green));",
+            factory);
+    }
+
+    /// <summary>The rewriter rewrites a node's slots and calls <c>Update</c>, which does the rest.</summary>
+    [Fact]
+    public void TheRewriterRewritesEverySlotAndUpdates()
+    {
+        var rewriter = Files(Widget)["SyntaxRewriter.g.cs"];
+        Assert.Contains("public abstract partial class SyntaxRewriter", rewriter);
+        Assert.Contains(
+            "    public override SyntaxNode? VisitWidget(WidgetSyntax node) =>\n"
+            + "        node.Update(\n"
+            + "            VisitToken(node.Keyword),\n"
+            + "            VisitToken(node.Name),\n"
+            + "            VisitList(node.Parts),\n"
+            + "            VisitToken(node.CloseBraceToken));",
+            rewriter);
+    }
+
+    /// <summary>One row per class: a second row of the same name would write the same file twice.</summary>
+    [Fact]
+    public void ANodeIsWrittenOnce()
+    {
+        var twice = Assert.Throws<InvalidOperationException>(() => Files($"{Widget}\n{Widget}"));
+        Assert.Contains("WidgetSyntax is written twice", twice.Message);
+    }
+
+    /// <summary>
+    /// The classes above a node end somewhere. A base that leads back into a circle was a
+    /// hierarchy the generator walked up forever.
+    /// </summary>
+    [Fact]
+    public void AClassDoesNotDeriveFromItself()
+    {
+        var circle = Assert.Throws<InvalidOperationException>(() => Files("""
+            <Node Name="WidgetSyntax" Base="LidSyntax">
+              <Kind Name="Widget"/>
+              <TypeComment><summary>A widget.</summary></TypeComment>
+            </Node>
+            <AbstractNode Name="LidSyntax" Base="WidgetSyntax">
+              <TypeComment><summary>A lid.</summary></TypeComment>
+            </AbstractNode>
+            """));
+        Assert.Contains("run in a circle", circle.Message);
+    }
+
+    /// <summary>
     /// The files these nodes make; they are written without the <c>Tree</c> around them, and
     /// with <c>StatementSyntax</c> under them, since every node is under a node of the table.
     /// </summary>

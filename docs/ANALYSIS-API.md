@@ -2,8 +2,9 @@
 
 nt65's syntax tree is written for the two things that read it: an analyzer that wants to know what
 a file says, and an editor feature that wants to know what is at the caret. It is Roslyn's design,
-smaller: a full-fidelity immutable tree, a class per kind of node, fixed slots, missing tokens, and
-diagnostics on the nodes they are about. If you know `Microsoft.CodeAnalysis`, you know this.
+smaller: a full-fidelity immutable tree, a class per kind of node, fixed slots, missing tokens,
+diagnostics on the nodes they are about, and a factory and a rewriter for changing one. If you know
+`Microsoft.CodeAnalysis`, you know this.
 
 Everything here is `Norristown.Syntax`, in `Norristown.Core`. Every sample below is a test in
 `tests/Norristown.Tests/Syntax/AnalysisApiTests.cs`, so nothing on this page can drift from what
@@ -268,6 +269,69 @@ braces over the lines — ordered by line and column. A line answers for everyth
 a block and the root for every line under them, so the root's answer is the file's. Nothing is
 walked where `ContainsDiagnostics` says there is nothing to find, which is what makes asking cheap
 on every keystroke.
+
+## Changing a tree
+
+A tree is immutable, so changing one gives another. Every node has an `Update` over its slots and a
+`With<Slot>` per slot; `SyntaxFactory` builds a node from nothing; `SyntaxRewriter` is a visitor
+whose methods rewrite a node's slots and call `Update`; and `ReplaceNode`, `ReplaceNodes`,
+`ReplaceToken`, `ReplaceTokens` and `RemoveNode` on a node are that rewriter with one override.
+
+```csharp
+var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda #16 ; the mask\n    sta mask\n}\n");
+
+// A fix: every immediate written in decimal is written in hex instead.
+class Hexadecimal : SyntaxRewriter
+{
+    public override SyntaxNode? VisitNumberExpression(NumberExpressionSyntax node) =>
+        node.Parent is ImmediateOperandSyntax && int.TryParse(node.Token.Text, out var value)
+            ? node.WithToken(node.Token.WithText($"${value:x2}"))
+            : node;
+}
+
+var hex = new Hexadecimal().Visit(tree.Root)!;   // .proc main {\n    lda #$10 ; the mask\n …
+
+// A rename: one name said another way, wherever it is written.
+var named = hex.DescendantTokens().Where(token => token is { Kind: SyntaxKind.Identifier, Text: "mask" });
+var renamed = hex.ReplaceTokens(named, (old, _) => SyntaxFactory.Identifier("flags").WithTriviaFrom(old));
+
+renamed.Tree        // a new tree; `tree` is still the file as it was
+```
+
+Two rules hold the rest up.
+
+**A rewrite that changes nothing gives back what it was given** — the same objects, not an equal
+copy. `Update` compares each slot against the green node already in it, so a node whose pieces all
+came back unchanged is itself; that rolls up, and a rewriter with no override returns the root it
+was handed. Which is why a fix can be run over a file and asked afterwards whether it did anything.
+
+**A rewrite of one piece leaves every other character of the file alone.** A statement and
+everything under it is rebuilt where it stands, out of the green nodes its pieces already hold. A
+line, a block and the file are not: a line holds the tokens the lexer read rather than what they
+parse to, so what moved on a line is written back as one text change and the file is parsed again
+from there. So a rewrite that reaches a line or the root gives back the matching node of a **new**
+tree, which `node.Tree` answers for, and the lines the change did not touch keep the nodes they had.
+
+**Whitespace is the caller's**, because nothing else can know it. A token built by the factory
+carries only the trivia it was given, so an `Identifier("flags")` on its own prints as `flags` with
+nothing around it. Two ways to give it some:
+
+- `token.WithTriviaFrom(other)` keeps what stood around the token being written over — the
+  indentation of the line, the comment at the end of it — which is what a fix that swaps one token
+  for another wants. `WithLeadingTrivia`, `WithTrailingTrivia` and `SyntaxFactory.Space`,
+  `Whitespace` and `Comment` are there for the rest.
+- `node.NormalizeWhitespace()` throws away the trivia a node carries and writes one space where two
+  tokens would otherwise read as one and none where none is wanted, which is what a node built out
+  of bare tokens needs: without it a built `lda #0` prints as `lda#0`.
+
+`SyntaxFactory.SeparatedList(items)` is the one place the factory writes a space of its own: its
+commas are written `, `, because a list has nowhere else to say it. `RemoveNode` takes a line with
+the break that ends it and a list item with the separator written after it, and hands on whatever
+stood after the last item so that what is left is not written up against the rest of the line.
+
+What none of this does is lay a line out. `Formatter.Format(newRoot.Tree)` is the one layout an
+nt65 file is written in — indentation, trailing space, the column a run of data lines shares — and
+running it over the tree a rewrite gives back is what puts a built line where it belongs.
 
 ## Adding a node kind
 
