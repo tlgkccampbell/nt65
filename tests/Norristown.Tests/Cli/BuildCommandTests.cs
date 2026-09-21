@@ -86,7 +86,7 @@ public sealed class BuildCommandTests : IDisposable
         var (code, said) = Run(app, "build");
 
         Assert.Equal(0, code);
-        Assert.Equal("nt65: deleted build/hw/vic.s, whose module is not in the program\n", said);
+        Assert.Equal("nt65: note: deleted build/hw/vic.s, whose module is not in the program\n", said);
         Assert.False(Exists("app/build/hw/vic.s"));
         Assert.False(Directory.Exists(Path.Combine(app, "build", "hw")));
         Assert.True(Exists("app/build/main.s"));
@@ -151,6 +151,25 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal((0, ""), (code, said));
         Assert.True(Exists("app/main.s"));
         Assert.False(Exists("app/hw/vic.s"));
+    }
+
+    /// <summary>
+    /// A project file with something wrong with it is why a build finds no files far more
+    /// often than a missing `files` is, so what is wrong with it comes first and the forty
+    /// lines of usage stay away: the command line is not what there is to fix.
+    /// </summary>
+    [Fact]
+    public void AProjectFilesOwnProblemIsSaidBeforeThereAreNoFiles()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "flies": [] }""");
+        var app = Path.Combine(root.FullName, "app");
+
+        var (code, said) = Run(app, "build");
+
+        Assert.Equal(2, code);
+        Assert.StartsWith("nt65.json:1:39: error: `flies` is not a nt65.json", said);
+        Assert.Contains("nt65: no file matched the `files` globs in nt65.json", said);
+        Assert.DoesNotContain("usage: nt65 build", said);
     }
 
     /// <summary>With no project, a name from a module the build lacks says so, and an assumed CPU is noted.</summary>

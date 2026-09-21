@@ -820,7 +820,11 @@ public sealed class Emitter
         }
         else
         {
-            text = $".res {laid.Length}";
+            var reserved = Reservations(laid.Length).ToList();
+            WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], comment);
+            foreach (var rest in reserved.Skip(1))
+                Code(line, Commented($"{Body}.res {rest}", comment), (int)rest);
+            return;
         }
 
         // One text in a counted `.byte` array is padded with zero to the count, so the line
@@ -830,12 +834,29 @@ public sealed class Emitter
         Padding(line, directive);
     }
 
+    /// <summary>
+    /// How a run of reserved bytes is split across <c>.res</c> directives. ca65 reserves at
+    /// most <c>$ffff</c> bytes in one of them, and which declarations a program may write is
+    /// not the assembler's to decide, so a bigger one is written as several.
+    /// </summary>
+    private static IEnumerable<long> Reservations(long bytes)
+    {
+        if (bytes <= 0xffff)
+        {
+            yield return bytes;
+            yield break;
+        }
+        for (var left = bytes; left > 0; left -= 0xffff)
+            yield return Math.Min(left, 0xffff);
+    }
+
     /// <summary>The zeros a padded text is filled out with, where a declaration writes any.</summary>
     private void Padding(LineSyntax line, DataDirectiveSyntax directive)
     {
         if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
             return;
-        Code(line, Commented($"{Body}.res {zeros}, $00", $"padded to {count}"), (int)zeros);
+        foreach (var reserved in Reservations(zeros))
+            Code(line, Commented($"{Body}.res {reserved}, $00", $"padded to {count}"), (int)reserved);
     }
 
     /// <summary>
@@ -943,12 +964,15 @@ public sealed class Emitter
         var end = lines.Length - 1;
         for (var i = 0; i < end; i++)
         {
+            // A run longer than one `.res` reserves is left as it is: gathering it would need
+            // several directives, and a file with that many equal lines in it is a repetition
+            // nobody would have written by hand either.
             var run = 1;
-            while (i + run < end && lines[i + run] == lines[i] && Repeated(lines[i]) is not null)
+            while (i + run < end && run < 0xffff && lines[i + run] == lines[i] && Repeated(lines[i]) is not null)
                 run++;
-            if (run >= 3 && Repeated(lines[i]) is var (indent, value))
+            if (run >= 3 && Repeated(lines[i]) is var (indent, value, comment))
             {
-                kept.Add($"{indent}.res {run}, {value}");
+                kept.Add(Commented($"{indent}.res {run}, {value}", comment));
                 bytes.Add(run * (i < lineBytes.Count ? lineBytes[i] : 1));
                 sources.Add(i < lineSources.Count ? lineSources[i] : 0);
                 i += run - 1;
@@ -967,18 +991,27 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The indentation and the value of a line that is one byte and nothing else, or null for a
-    /// line that is anything more: only such a line stands for one byte of a fill.
+    /// The indentation, the value and the comment of a line that is one byte and nothing else,
+    /// or null for a line that is anything more: only such a line stands for one byte of a
+    /// fill. A generated comment stands two spaces or more past the line's own text and says
+    /// what the byte is; it belongs to the fill the run becomes as much as to one line of it.
     /// </summary>
-    private static (string Indent, string Value)? Repeated(string line)
+    private static (string Indent, string Value, string? Comment)? Repeated(string line)
     {
         var text = line.TrimStart();
+        var indent = line[..(line.Length - text.Length)];
+        string? comment = null;
+        if (text.IndexOf("  ;", StringComparison.Ordinal) is var at and >= 0)
+        {
+            comment = text[(at + 3)..].Trim();
+            text = text[..at];
+        }
         if (!text.StartsWith(".byte ", StringComparison.Ordinal))
             return null;
         var value = text[".byte ".Length..].Trim();
         return value.Length == 0 || value.Contains(',') || value.Contains(';')
             ? null
-            : (line[..(line.Length - text.Length)], value);
+            : (indent, value, comment is { Length: > 0 } said ? said : null);
     }
 
     /// <summary>The runs of lines to line up: named data lines with nothing in between.</summary>
@@ -1019,7 +1052,10 @@ public sealed class Emitter
         }
         else if (!Pads(type))
         {
-            WithName(line, symbol, $".res {room.Bytes}", (int)room.Bytes, type.QualifiedName);
+            var reserved = Reservations(room.Bytes).ToList();
+            WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], type.QualifiedName);
+            foreach (var rest in reserved.Skip(1))
+                Code(line, Commented($"{Body}.res {rest}", type.QualifiedName), (int)rest);
             return;
         }
         else
@@ -1125,10 +1161,16 @@ public sealed class Emitter
                         bytes += Fields(line, records, ValuesIn(i < items.Count ? items[i] : null), $"{named}[{i}]");
                     continue;
                 }
+                if (items.Count == 0)
+                {
+                    foreach (var reserved in Reservations(size))
+                        Field(line, $".res {reserved}", named, reserved);
+                    bytes += size;
+                    continue;
+                }
                 var (width, bigEndian) = Slot(element);
-                Field(line, items.Count == 0
-                    ? $".res {size}"
-                    : $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
+                Field(line,
+                    $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
                     named, size);
                 bytes += size;
                 continue;
@@ -1147,7 +1189,8 @@ public sealed class Emitter
 
         if (type.Kind == SymbolKind.Union && type.Size is { } whole && whole > bytes)
         {
-            Field(line, $".res {whole - bytes}, $00", path.Length == 0 ? type.Name : path, whole - bytes);
+            foreach (var reserved in Reservations(whole - bytes))
+                Field(line, $".res {reserved}, $00", path.Length == 0 ? type.Name : path, reserved);
             bytes = whole;
         }
         return bytes;
@@ -1191,7 +1234,10 @@ public sealed class Emitter
             if (used > 0)
                 yield return ($".byte {string.Join(", ", values.Take((int)used).Select(b => Hex(b & 0xff, 2)))}", used);
             if (size > used)
-                yield return ($".res {size - used}, {Hex(Fill(member), 2)}", size - used);
+            {
+                foreach (var reserved in Reservations(size - used))
+                    yield return ($".res {reserved}, {Hex(Fill(member), 2)}", reserved);
+            }
             yield break;
         }
         var (width, bigEndian) = Slot(element!);

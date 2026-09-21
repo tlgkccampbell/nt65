@@ -463,11 +463,15 @@ public static class DataLengths
         if (operands.Count > 1)
             CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
 
+        // `.res` is padding, written straight through to ca65's own, which reserves at most
+        // $ffff bytes: padding of more than a bank's worth is not padding. A declaration is
+        // not limited that way — one bigger than this is written as several directives.
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
             Report(operands[0], model, diagnostics, on, "a `.res` count must be a constant");
-        else if (count is < 0 or > 0xffffff)
-            Report(operands[0], model, diagnostics, on, $"a `.res` count must be between 0 and $ffffff, not {count}");
+        else if (count is < 0 or > 0xffff)
+            Report(operands[0], model, diagnostics, on, $"a `.res` count is between 0 and $ffff, not {count}: "
+                + "that is what ca65 reserves in one directive");
     }
 
     /// <summary>An alignment is a constant power of two, which is what ca65 will take.</summary>

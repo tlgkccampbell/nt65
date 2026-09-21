@@ -2751,7 +2751,9 @@ cc65, so C and nt65 share one declaration of each type rather than two kept in s
 Every C name is the symbol's linker name, without the `_` cc65 puts before a C name. A routine
 or data declaration exported without one, which C cannot name, is left out with a warning
 saying to export it `as "_name"`, and data of a type that is not exported is declared as
-bytes, with a warning.
+bytes, with a warning. A linker name holds `__`, which C reserves to the implementation; cc65
+does not mind, and the alternative is a second spelling of every name for one compiler's
+opinion of a name it never sees.
 
 ### Example
 

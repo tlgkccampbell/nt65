@@ -1,0 +1,21 @@
+; What the output does with room it reserves and with runs of one repeated byte. ca65
+; reserves at most $ffff bytes in one `.res`, and which declarations a program may write is
+; not the assembler's to decide, so a bigger one is written as several directives.
+.module main
+
+.segment RODATA
+
+; More than one `.res` holds: 65,535 bytes and then the rest.
+.data big: .byte[$12000]
+
+; A run of one repeated byte is the `.res` that says the same thing. Each of these lines is
+; written as the byte it is with the character it came from beside it, and that comment is
+; the fill's as much as any one line's.
+.data marks: .byte[] {
+    'x'
+    'x'
+    'x'
+    'x'
+}
+
+.export big, marks

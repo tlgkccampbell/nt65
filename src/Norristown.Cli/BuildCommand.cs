@@ -68,12 +68,26 @@ public static class BuildCommand
         }
         var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(root, glob)).Concat(named)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        void Say(Diagnostic d)
+        {
+            if (command.Json)
+                output.WriteLine(Reported.Object(d, span => Named(directory, root, span)));
+            else
+                error.WriteLine(Reported.Line(d, Named(directory, root, d.Span), colour));
+        }
+
         if (paths.Count == 0)
         {
+            // A project file with something wrong with it is why a build finds no files far
+            // more often than a missing `files` is, so what is wrong with it is said first,
+            // and the usage is left for when the command line is what there is to fix.
+            foreach (var d in project.Diagnostics)
+                Say(d);
             error.WriteLine(projectFile is null ? $"nt65: no input files, and no {ProjectFile.Name}"
                 : project.Files.Count == 0 ? $"nt65: no input files, and no `files` in {ProjectFile.Name}"
                 : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
-            error.WriteLine(CommandLine.Usage);
+            if (project.Diagnostics.Count == 0)
+                error.WriteLine(CommandLine.Usage);
             return new BuildResult(2, root, watched);
         }
 
@@ -97,12 +111,7 @@ public static class BuildCommand
         ];
 
         foreach (var d in compilation.Diagnostics)
-        {
-            if (command.Json)
-                output.WriteLine(Reported.Object(d, span => Named(directory, root, span)));
-            else
-                error.WriteLine(Reported.Line(d, Named(directory, root, d.Span), colour));
-        }
+            Say(d);
         if (compilation.Diagnostics.Any(d => d.Severity == Severity.Error))
             return new BuildResult(1, root, watched);
         if (compilation.IsCpuAssumed)
@@ -125,8 +134,11 @@ public static class BuildCommand
         // A partial build leaves alone what it did not write, so only a whole one keeps the record.
         if (only is null)
         {
+            // A build that worked says what it tidied up as the note it is: what else goes to
+            // stderr is a diagnostic, and a script that reads stderr for those should not have
+            // to know this one apart.
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
-                error.WriteLine($"nt65: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, whose module is not in the program");
+                error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, whose module is not in the program");
         }
 
         if (header is not null && compilation.Header is { } text)
@@ -160,6 +172,12 @@ public static class BuildCommand
     /// tool sees an unchanged file as unchanged. One whose text is the same but that is older than
     /// something in <paramref name="dependencies"/> is touched instead, or make would run nt65 for
     /// it on every build.
+    /// <para>
+    /// It is written beside its place and moved onto it, so that whoever reads it sees one
+    /// build's file or another's and never half of each: two builds into one <c>out</c> is
+    /// something a Makefile does by accident, and an assembler reading the file while it is
+    /// written is what would come of it.
+    /// </para>
     /// </summary>
     private static void Write(string path, string text, IReadOnlyList<string> dependencies)
     {
@@ -172,7 +190,9 @@ public static class BuildCommand
         }
         if (Path.GetDirectoryName(path) is { Length: > 0 } parent)
             Directory.CreateDirectory(parent);
-        File.WriteAllText(path, text);
+        var written = $"{path}.{Environment.ProcessId}.tmp";
+        File.WriteAllText(written, text);
+        File.Move(written, path, overwrite: true);
     }
 
     /// <summary>How long a file an <c>.incbin</c> names is, or null when it cannot be read.</summary>

@@ -10,6 +10,10 @@ public static class OutputManifest
     /// <summary>What the record is called, in the output directory.</summary>
     public const string Name = ".nt65-outputs";
 
+    /// <summary>How the file system tells two paths apart, which is not how nt65 tells two names apart.</summary>
+    private static readonly StringComparer Names =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     /// <summary>
     /// Deletes what the record in <paramref name="directory"/> names and <paramref name="written"/>
     /// does not, with any directory that leaves empty, and records <paramref name="written"/>.
@@ -23,7 +27,12 @@ public static class OutputManifest
             ? File.ReadAllLines(record).Where(line => line.Length > 0).ToList()
             : [];
         var now = written.Order(StringComparer.Ordinal).ToList();
-        var kept = now.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Whether a recorded path is one of these is a question about files rather than about
+        // names, so it is asked the way the file system would answer it: a module renamed
+        // `Gfx` to `gfx` writes the same file on Windows and a different one elsewhere, and
+        // deleting the one just written would be the worst answer either way.
+        var kept = now.ToHashSet(Names);
 
         var deleted = new List<string>();
         foreach (var path in before.Where(path => !kept.Contains(path)))
@@ -42,10 +51,14 @@ public static class OutputManifest
             }
         }
 
+        // Whether the record has to be written again is a question about its text, which is
+        // nt65's own and is compared as nt65 compares text.
         if (!before.SequenceEqual(now, StringComparer.Ordinal))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(record)!);
-            File.WriteAllText(record, string.Concat(now.Select(path => path + "\n")));
+            var beside = $"{record}.{Environment.ProcessId}.tmp";
+            File.WriteAllText(beside, string.Concat(now.Select(path => path + "\n")));
+            File.Move(beside, record, overwrite: true);
         }
         return deleted;
     }
