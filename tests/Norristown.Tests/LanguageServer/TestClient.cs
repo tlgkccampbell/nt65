@@ -69,13 +69,14 @@ internal sealed class TestClient : IAsyncDisposable
     /// against a named revision, snippets, and the folders it has open. It is what VS Code
     /// declares, so it is what most of the suite asks as.
     /// </summary>
-    public static object Capable(bool refreshesTokens = false) => new
+    public static object Capable(bool refreshesTokens = false, bool refreshesHints = false) => new
     {
         workspace = new
         {
             workspaceEdit = new { documentChanges = true },
             workspaceFolders = true,
             semanticTokens = new { refreshSupport = refreshesTokens },
+            inlayHint = new { refreshSupport = refreshesHints },
         },
         textDocument = new
         {
@@ -91,7 +92,7 @@ internal sealed class TestClient : IAsyncDisposable
     /// </summary>
     public static async Task<TestClient> StartAsync(
         object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
-        string name = "test-client", Delay? delay = null, int? processId = null)
+        string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null)
     {
         var client = new TestClient(delay);
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
@@ -101,7 +102,7 @@ internal sealed class TestClient : IAsyncDisposable
                 clientInfo = new { name, version = "1.0" },
                 capabilities,
                 rootUri,
-                initializationOptions = new { configuration },
+                initializationOptions = new { configuration, inlayHints },
             },
             cancellation);
         await client.rpc.NotifyWithParameterObjectAsync("initialized", new { });
@@ -195,6 +196,23 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.InvokeWithParameterObjectAsync<SemanticTokens>("textDocument/semanticTokens/full",
             new SemanticTokensParams(new TextDocumentIdentifier(uri)), cancellation);
 
+    /// <summary>The hints for the lines <paramref name="first"/> to <paramref name="last"/>.</summary>
+    public Task<IReadOnlyList<InlayHint>> InlayHintsAsync(
+        string uri, int first, int last, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<InlayHint>>("textDocument/inlayHint",
+            new InlayHintParams(
+                new TextDocumentIdentifier(uri),
+                new Range(new Position(first, 0), new Position(last, 0))),
+            cancellation);
+
+    /// <summary>Turns the cycle counts on or off for the session, and answers which they now are.</summary>
+    public Task<bool> ToggleCycleHintsAsync(CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<bool>("nt65/toggleCycleHints", new { }, cancellation);
+
+    /// <summary>Waits for the server to ask for the inlay hints to be fetched again.</summary>
+    public async Task NextHintsRefreshAsync(CancellationToken cancellation) =>
+        await notifications.HintsRefreshed.Reader.ReadAsync(cancellation);
+
     /// <summary>The document's foldable ranges.</summary>
     public Task<IReadOnlyList<FoldingRange>> FoldingRangesAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<FoldingRange>>("textDocument/foldingRange",
@@ -257,6 +275,8 @@ internal sealed class TestClient : IAsyncDisposable
 
         public Channel<bool> TokensRefreshed { get; } = Channel.CreateUnbounded<bool>();
 
+        public Channel<bool> HintsRefreshed { get; } = Channel.CreateUnbounded<bool>();
+
         [JsonRpcMethod("textDocument/publishDiagnostics", UseSingleObjectParameterDeserialization = true)]
         public void OnPublishDiagnostics(PublishDiagnosticsParams parameters) => Published.Writer.TryWrite(parameters);
 
@@ -267,6 +287,13 @@ internal sealed class TestClient : IAsyncDisposable
         public object? OnRefreshTokens()
         {
             TokensRefreshed.Writer.TryWrite(true);
+            return null;
+        }
+
+        [JsonRpcMethod("workspace/inlayHint/refresh")]
+        public object? OnRefreshHints()
+        {
+            HintsRefreshed.Writer.TryWrite(true);
             return null;
         }
     }

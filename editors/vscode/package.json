@@ -19,6 +19,11 @@
         "command": "nt65.selectConfiguration",
         "title": "Select Configuration",
         "category": "nt65"
+      },
+      {
+        "command": "nt65.toggleCycleCounts",
+        "title": "Toggle Cycle Counts",
+        "category": "nt65"
       }
     ],
     "languages": [
@@ -118,6 +123,31 @@
           "type": "string",
           "default": "",
           "description": "The named configuration from nt65.json the editor analyzes the program as, such as \"debug\". Empty uses the project's own settings."
+        },
+        "nt65.inlayHints.stateChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show, at the end of a line after which a width, the emulation flag, the direct page or the data bank differs, what they now are. 65816 only."
+        },
+        "nt65.inlayHints.longBranches": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show `long` on a branch whose target is out of reach of the two-byte form, which is written as the opposite branch over a `jmp`."
+        },
+        "nt65.inlayHints.impliedValues": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the value an enum member takes from the one before it, where a struct or union member lands, and what a constant written as a sum works out to."
+        },
+        "nt65.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show, before each positional argument of a macro or `.func` call, the name of the parameter it is for."
+        },
+        "nt65.inlayHints.cycles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show what every instruction costs, and above each block its total. Every line has one, so this is off until it is asked for; `nt65: Toggle Cycle Counts` turns it on for the session without saving it."
         }
       }
     }

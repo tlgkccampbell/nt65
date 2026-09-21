@@ -14,8 +14,9 @@ namespace Norristown.Tests.LanguageServer;
 public sealed class CancellationTests
 {
     /// <summary>
-    /// The four that take none: three are the server's own life, which a client does not
-    /// cancel, and the fourth answers from a list the workspace already holds.
+    /// The five that take none: three are the server's own life, which a client does not
+    /// cancel, and the other two answer from something the server already holds — the
+    /// workspace's list of configurations, and which hints this session shows.
     /// </summary>
     [Fact]
     public void EveryRequestHandlerTakesACancellationToken()
@@ -27,7 +28,7 @@ public sealed class CancellationTests
             .Select(method => method.Name)
             .Order(StringComparer.Ordinal);
 
-        Assert.Equal(["Configurations", "Exit", "Initialize", "Shutdown"], without);
+        Assert.Equal(["Configurations", "Exit", "Initialize", "Shutdown", "ToggleCycleHints"], without);
     }
 
     /// <summary>A search across a workspace of hundreds of files stops at the next one.</summary>

@@ -3067,8 +3067,8 @@ alone and without an assembler:
   which registers the routine hands back as it was entered with them (§7.7);
   an instruction's own cycles and why they are an interval, its block's, the name its
   datasheet gives it, the flags it writes, and on the 65816 the state reaching it, are on
-  hover, so nothing stands in the lines as they are written; what it costs and what state
-  reaches it lead, and the flags, the registers and the stack stand under the rule;
+  hover rather than in the line; what it costs and what state reaches it lead, and the flags,
+  the registers and the stack stand under the rule;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has
@@ -3109,6 +3109,31 @@ alone and without an assembler:
   wrong in each module that named it, and none of them may be open. What is wrong with the
   project file is published for it too;
 - run incrementally: editing one file re-parses one file; only resolution is global.
+
+**What stands in a line, and what does not.** Everything the analysis works out about a line is
+on hover, and five things are drawn in the line itself. Each of them marks a change rather than
+a state, because the width of A is worth saying on the line where it becomes sixteen and noise
+on the forty lines after: a line after which a width, the emulation flag, the direct page or
+the data bank differs, and only the parts that differ; a branch layout had to write as the
+opposite branch over a `jmp`; a value a declaration does not write, which is an enum member
+given none, where a struct or union member lands, and what a constant written as a sum comes
+to; the parameter a positional argument of a macro or `.func` call is for, where the argument
+does not name it already; and what an instruction costs, with a block's total on the label that
+opens it. A line carries at most one of them at its end, so where two would land the state
+change wins and the other is under its sentence; twelve characters is as long as one gets; and
+each says what it means in a sentence, with the declaration that decided it where there is one.
+
+The counts are off until they are asked for and the rest are on, because a file opened for the
+first time should look like the file: what is drawn by default is what is rare and surprising,
+and what is on nearly every line is switched on for as long as the server runs by one command
+rather than found in a settings page. Each kind has a switch of its own, named for what it
+shows. What is deliberately not drawn is what would stand on nearly every line and says nothing
+a reader could not have asked for: the address size chosen, which the declaration decides and
+hover gives; how many bytes a line takes, which hover gives; what the registers hold, which
+hover shows as a block a reader can run an eye down; and an address, which nt65 never knows,
+because the linker decides one. Only the lines the editor is showing are worked out, and the
+editor is asked to fetch them again when a setting changes or when an edit reaches past the
+file it was made in.
 
 **Projects in the editor.** Every `nt65.json` in the folders the editor opened, and in the
 folders beneath them, is a project, and each is its own program. A file belongs to the

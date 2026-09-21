@@ -96,6 +96,47 @@ function statusItem(context) {
   }));
 }
 
+// Which kinds of hint the editor shows, as the server reads them. They go over with the
+// `initialize` request and again, with the rest of the `nt65` settings, whenever they change.
+function hintSettings() {
+  const nt65 = vscode.workspace.getConfiguration('nt65');
+  return {
+    stateChanges: nt65.get('inlayHints.stateChanges'),
+    longBranches: nt65.get('inlayHints.longBranches'),
+    impliedValues: nt65.get('inlayHints.impliedValues'),
+    parameterNames: nt65.get('inlayHints.parameterNames'),
+    cycles: nt65.get('inlayHints.cycles'),
+  };
+}
+
+// Shows whether the cycle counts are in the lines, and switches them when clicked. They are
+// switched for as long as the server runs rather than saved: they are wanted while a routine is
+// being timed and not for the rest of the week, so the server holds which it is and this shows it.
+function cycleCounts(context) {
+  const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+  item.command = 'nt65.toggleCycleCounts';
+  item.tooltip = 'Whether nt65 shows what each instruction costs, in the line';
+  let on = vscode.workspace.getConfiguration('nt65').get('inlayHints.cycles') === true;
+  let thrown = false;
+  const show = () => {
+    item.text = `nt65: cycles ${on ? 'on' : 'off'}`;
+    item.show();
+  };
+  show();
+  context.subscriptions.push(item,
+    vscode.commands.registerCommand('nt65.toggleCycleCounts', async () => {
+      on = await client.sendRequest('nt65/toggleCycleHints', {});
+      thrown = true;
+      show();
+    }),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (!thrown && e.affectsConfiguration('nt65.inlayHints.cycles')) {
+        on = vscode.workspace.getConfiguration('nt65').get('inlayHints.cycles') === true;
+        show();
+      }
+    }));
+}
+
 async function selectConfiguration() {
   const names = await client.sendRequest('nt65/configurations', {});
   const own = 'The project\'s own settings';
@@ -125,7 +166,10 @@ async function activate(context) {
     serverOptions(context),
     {
       documentSelector: [{ language: 'nt65' }],
-      initializationOptions: { configuration: vscode.workspace.getConfiguration('nt65').get('configuration') },
+      initializationOptions: {
+        configuration: vscode.workspace.getConfiguration('nt65').get('configuration'),
+        inlayHints: hintSettings(),
+      },
       synchronize: {
         configurationSection: 'nt65',
         fileEvents: vscode.workspace.createFileSystemWatcher('**/*'),
@@ -147,6 +191,7 @@ async function activate(context) {
       },
     }));
   statusItem(context);
+  cycleCounts(context);
   await client.start();
 }
 

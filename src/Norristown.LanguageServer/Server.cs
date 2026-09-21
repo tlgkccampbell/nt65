@@ -41,6 +41,12 @@ internal sealed class Server
     private ClientCapabilities client = ClientCapabilities.None;
     private Outgoing outgoing;
 
+    // Which hints the editor shows, from its settings, and the one switch a command throws for
+    // as long as this server runs: the cycle counts are wanted while a routine is being timed
+    // and not for the rest of the week, so they are turned on for the session rather than saved.
+    private HintSettings hints = HintSettings.Default;
+    private bool? cyclesThisSession;
+
     // The editor that started this server. It is watched rather than asked: an editor that
     // crashes never sends `exit`, and a server nobody is talking to should not outlive it.
     private Process? parent;
@@ -52,6 +58,10 @@ internal sealed class Server
         settling = new Debounce(Quiet, delay);
         outgoing = new Outgoing(workspace, client);
     }
+
+    /// <summary>Which hints are shown: the editor's settings, with the session's own switch over them.</summary>
+    private HintSettings Shown =>
+        cyclesThisSession is { } session ? hints with { Cycles = session } : hints;
 
     /// <summary>
     /// Serves one client until it sends <c>exit</c>, the editor that started it goes, or the
@@ -115,6 +125,7 @@ internal sealed class Server
             ? [.. folders.Select(folder => folder.Uri)]
             : request.RootUri is { } root ? [root] : [];
         workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
+        hints = HintSettings.Of(request.InitializationOptions);
         client = ClientCapabilities.Of(request.Capabilities);
         outgoing = new Outgoing(workspace, client);
         Watch(request.ProcessId);
@@ -133,6 +144,7 @@ internal sealed class Server
             WorkspaceSymbolProvider: true,
             CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
             SemanticTokensProvider: new SemanticTokensOptions(NameHighlighting.Legend, Full: true),
+            InlayHintProvider: new InlayHintOptions(ResolveProvider: false),
             CallHierarchyProvider: true,
             DocumentLinkProvider: new DocumentLinkOptions(ResolveProvider: false),
             DocumentFormattingProvider: true,
@@ -174,7 +186,48 @@ internal sealed class Server
         var configuration = ActiveConfiguration(settings);
         log.Write($"configuration: {configuration ?? "the project's own"}");
         workspace.Configure(configuration);
+
+        // Which hints are shown is a setting like any other, and the editor is holding hints
+        // worked out under the old one.
+        var shown = HintSettings.Of(settings);
+        if (shown != hints)
+        {
+            hints = shown;
+            RefreshHints();
+        }
         return PublishEverythingAsync(null, cancellation);
+    }
+
+    /// <summary>
+    /// Turns the cycle counts on or off for as long as this server runs, and says which it now
+    /// is, for the editor to show. It is a command rather than a setting because it is wanted
+    /// while a routine is being timed and not for the rest of the week.
+    /// </summary>
+    [JsonRpcMethod("nt65/toggleCycleHints")]
+    public bool ToggleCycleHints(JsonElement _)
+    {
+        cyclesThisSession = !(cyclesThisSession ?? hints.Cycles);
+        log.Write($"cycle hints: {(cyclesThisSession.Value ? "on" : "off")}");
+        RefreshHints();
+        return cyclesThisSession.Value;
+    }
+
+    /// <summary>
+    /// The few words drawn in the lines the editor is showing. Only those lines are worked out:
+    /// hints are fetched again as a file is scrolled, and the lines nobody is looking at are
+    /// not what a keystroke should pay for.
+    /// </summary>
+    [JsonRpcMethod("textDocument/inlayHint")]
+    public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+            return [];
+        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        return analysis.ModelFor(document.Tree.Path) is not { } model
+            ? []
+            : LanguageServer.InlayHints.In(
+                analysis, model, Shown, request.Range.Start.Line, request.Range.End.Line, cancellation);
     }
 
     /// <summary>
@@ -567,6 +620,20 @@ internal sealed class Server
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
         if (client.RefreshesLenses)
             _ = RefreshAsync("workspace/codeLens/refresh", "code lenses");
+
+        // What a call costs and what state it leaves behind are what a hint says, and both move
+        // with an edit in another file.
+        RefreshHints();
+    }
+
+    /// <summary>
+    /// Asks the client to fetch the hints it is showing again, where it can be asked. What a
+    /// hint says moves when a setting changes and when an edit elsewhere in the program lands.
+    /// </summary>
+    private void RefreshHints()
+    {
+        if (client.RefreshesHints)
+            _ = RefreshAsync("workspace/inlayHint/refresh", "inlay hints");
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ namespace Norristown.LanguageServer;
 /// </summary>
 /// <param name="RefreshesTokens">Whether the client can be asked to fetch semantic tokens again.</param>
 /// <param name="RefreshesLenses">Whether it can be asked to fetch code lenses again.</param>
+/// <param name="RefreshesHints">Whether it can be asked to fetch inlay hints again.</param>
 /// <param name="Snippets">Whether a completion may write more than a word, with stops in it.</param>
 /// <param name="DocumentChanges">
 /// Whether a workspace edit may be a list of per-document edits, each naming the revision it was
@@ -20,18 +21,20 @@ namespace Norristown.LanguageServer;
 internal sealed record ClientCapabilities(
     bool RefreshesTokens,
     bool RefreshesLenses,
+    bool RefreshesHints,
     bool Snippets,
     bool DocumentChanges,
     bool HierarchicalSymbols,
     bool WorkspaceFolders)
 {
     /// <summary>A client that has declared nothing, which is what a server assumes until it has.</summary>
-    public static ClientCapabilities None { get; } = new(false, false, false, false, false, false);
+    public static ClientCapabilities None { get; } = new(false, false, false, false, false, false, false);
 
     /// <summary>What the <c>capabilities</c> of an <c>initialize</c> request declare.</summary>
     public static ClientCapabilities Of(JsonElement? capabilities) => new(
         RefreshesTokens: Flag(capabilities, "workspace", "semanticTokens", "refreshSupport"),
         RefreshesLenses: Flag(capabilities, "workspace", "codeLens", "refreshSupport"),
+        RefreshesHints: Flag(capabilities, "workspace", "inlayHint", "refreshSupport"),
         Snippets: Flag(capabilities, "textDocument", "completion", "completionItem", "snippetSupport"),
         DocumentChanges: Flag(capabilities, "workspace", "workspaceEdit", "documentChanges"),
         HierarchicalSymbols: Flag(
