@@ -70,7 +70,7 @@ internal static class ExplainCommand
     {
         var said = format;
         for (var i = 0; said.Contains('{', StringComparison.Ordinal) && i < 16; i++)
-            said = said.Replace($"{{{i.ToString(CultureInfo.InvariantCulture)}}}", "…", StringComparison.Ordinal);
+            said = said.Replace($"{{{i.ToString(CultureInfo.InvariantCulture)}}}", "...", StringComparison.Ordinal);
         return said.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
     }
 

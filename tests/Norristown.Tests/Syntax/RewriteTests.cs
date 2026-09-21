@@ -1,3 +1,4 @@
+using System.Globalization;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
@@ -161,8 +162,9 @@ public sealed class RewriteTests
         Assert.Equal("lda #0", instruction.NormalizeWhitespace().ToFullString());
 
         var data = SyntaxFactory.DataValues(SyntaxFactory.SeparatedList(
-            new[] { "1", "2", "4" }.Select(text =>
-                (SyntaxNode)SyntaxFactory.NumberExpression(SyntaxFactory.Number(text)))));
+            Enumerable.Range(0, 3).Select(power =>
+                (SyntaxNode)SyntaxFactory.NumberExpression(
+                    SyntaxFactory.Number((1 << power).ToString(CultureInfo.InvariantCulture))))));
         Assert.Equal("1, 2, 4", data.ToFullString());
     }
 
