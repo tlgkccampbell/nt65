@@ -1,0 +1,61 @@
+; Another processor's instruction set as macros over data: a few of the SPC700's, emitting
+; its bytes. The ones it shares a name with the 6502 keep that name, since a call is always
+; `name!(...)`; `.exprof` puts an operand's value in data, and `.addrsize` of it tells a
+; direct-page address from an absolute one.
+.module main
+
+.cpu 6502
+
+.export image
+
+; mov a, #imm; mov a, dp; mov a, !abs.
+.macro mov_a(src: operand(imm, zp, abs)) {
+    .if .mode(src) == imm {
+        .byte $e8, .exprof(src)
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $e4, .exprof(src)
+    } .else {
+        .byte $e5
+        .word .exprof(src)
+    }
+}
+
+; inc dp.
+.macro inc(at: operand(zp)) {
+    .byte $ab, .exprof(at)
+}
+
+; bne rel: the offset is from the byte after the instruction.
+.macro bne(target) {
+    .byte $d0, <(target - (* + 1))
+}
+
+; call !abs.
+.macro call(target) {
+    .byte $3f
+    .word target
+}
+
+.segment ZEROPAGE
+.data count: .byte
+
+.segment BSS
+.data table: .byte[4]
+
+; The routines are members of the image, and each names the others bare.
+.segment RODATA
+.data image {
+    .data main {
+        mov_a!({#5})
+        mov_a!(count)
+        mov_a!(table)
+        call!(update)
+    @loop:
+        inc!(count)
+        bne!(@loop)
+    }
+    .data update {
+        call!(main)
+        .byte $6f               ; ret
+    }
+}

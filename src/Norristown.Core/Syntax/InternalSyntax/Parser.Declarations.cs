@@ -12,11 +12,12 @@ internal sealed partial class Parser
         if (AtEnd)
             return Finish(new LabeledLineSyntax(label, null));
 
-        // A label may be followed by an instruction, a data directive or a macro call.
+        // A label may be followed by an instruction, a data directive or a macro call, whose
+        // name may be an instruction's.
+        if ((Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang) || Lines.IsCallOfMnemonic(tokens, index))
+            return Finish(new LabeledLineSyntax(label, ParseMacroCall()));
         if (Kind == SyntaxKind.Mnemonic)
             return Finish(new LabeledLineSyntax(label, ParseInstruction()));
-        if (Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang)
-            return Finish(new LabeledLineSyntax(label, ParseMacroCall()));
         if (Kind != SyntaxKind.Directive)
         {
             Report(Catalogue.ExpectedStatement.Says(

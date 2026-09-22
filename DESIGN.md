@@ -194,8 +194,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   locals are `@name` (§6.2).
 - **Reserved words:** the registers `a`, `x`, `y`, `s` (case-insensitive) and every
   `.directive` (also case-insensitive). **No mnemonic is reserved**, on any CPU. A line that
-  starts with a mnemonic is an instruction unless the token after it is `:` or `=`, which is
-  what makes `rts:` a label, `lda = 5` a constant and `jmp rts` a jump to that label; a
+  starts with a mnemonic is an instruction unless the token after it is `:` or `=`, or `!`
+  followed by `(`, which is what makes `rts:` a label, `lda = 5` a constant, `bne!(x)` a call
+  to a macro named `bne` and `jmp rts` a jump to that label, while `lda !flag` stays an
+  instruction; a
   mnemonic of a CPU the program is not built for is an error only where it is written as an
   instruction. The mnemonics are the canonical WDC names, with the bit number in
   `bbr0`–`bbr7`, `bbs0`–`bbs7`, `rmb0`–`rmb7` and `smb0`–`smb7` as ca65 spells them; ca65's
@@ -206,8 +208,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   that is also an instruction costs is a reader's double take, so **nt65 warns** where one is
   declared — `mnemonic-name`, the same in every project, on a word any CPU nt65 knows has an
   instruction by, whichever CPU this program is built for. It is quiet where the spelling at
-  the use cannot be taken for an instruction: a member reached through `::`, and an `@local`
-  label. The output has its own answer to the same problem (§13), which needs nothing of the
+  the use cannot be taken for an instruction: a member reached through `::`, an `@local`
+  label, and a macro, which is only ever called as `name!(...)`. That is what lets a library
+  of macros spell another processor's instructions as that processor does, `bne!(@loop)`
+  beside the 6502's own `bne`. The output has its own answer to the same problem (§13), which needs nothing of the
   programmer.
 - **Numbers:** `$1F` hex, `%1010` binary, `255` decimal, `'c'` character. `6502x`, `65c02` and
   `65sc02` are CPU names, one token each, and `r65c02` a word; the CPU names are reserved where
@@ -1801,7 +1805,9 @@ confused; a record is `.type T { … }` and an array of records `.type T[] { …
 - **Mixed data.** `.data name { }` holds unnamed data directives of any kind, nested `.data`
   declarations, `@` positions, unnamed `.align` and `.res`, `.repeat`, `.each` and `.if`, and
   macro calls that expand to those. It holds no instructions. A nested declaration is a
-  member, reached as `name::sub` and emitted as `name__sub`, to any depth. An `@` position is
+  member, reached as `name::sub` and emitted as `name__sub`, to any depth. The block is a
+  scope, so inside it a member's siblings are named bare, as lookup runs outward (§6.2): a
+  member `update` of `image` may write `.word play` for `image::play`. An `@` position is
   private to the block: it may be named inside it, has no size and cannot be exported. A
   plain label is an error there that suggests a member or a position.
 - **Padding.** `.res n [, fill]` is only padding: unnamed between declarations, in a mixed
@@ -1976,7 +1982,7 @@ is an expression like any other.
 (§5.1), `.has(mnemonic)`, true when the program's CPU has that instruction,
 `.select(c, a, b)`, and `.defined(NAME)`, which is true if NAME is a define (§5.3) and false
 otherwise. Naming a symbol the program declares in `.defined` is an error, since
-conditions never test the program (§10). Macro bodies add `.mode`, `.byteof` and
+conditions never test the program (§10). Macro bodies add `.mode`, `.byteof`, `.exprof` and
 `.empty` (§11).
 
 **Numbers worked out at build time.** Four built-ins work a number out rather than ask about the
@@ -2415,6 +2421,26 @@ inputs changed.
 
     mov16!(ptr, {#SCREEN})
     mov16!(ptr, other_ptr)
+```
+
+- **An operand's expression.** `.exprof(p)` is the expression inside the operand the call
+  passed as `p`: `5` for `{#5}`, `ptr` for `{(ptr),y}`, `buf` for `{buf,x}`. It is an
+  expression, so it stands wherever one may, a data directive included, and
+  `.addrsize(.exprof(p))` tells a direct-page argument from an absolute one, which `.mode`
+  does not. That is what a macro needs to emit another processor's instructions as data,
+  one macro per instruction rather than one per addressing mode:
+
+```nt65
+.macro mov_a(src: operand(imm, zp, abs)) {
+    .if .mode(src) == imm {
+        .byte $e8, .exprof(src)
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $e4, .exprof(src)
+    } .else {
+        .byte $e5
+        .word .exprof(src)
+    }
+}
 ```
 
 - **Words.** A `one(...)` argument is a bare word: an identifier, a register or a
@@ -3531,6 +3557,9 @@ Recorded so the reasoning survives. None is open.
   is a question about the line rather than about the CPU. It leaves the backend's one limit
   to the emitter, which prefixes the few names ca65 would misread and takes its list from
   ca65's own tables (§13). And it never changes — not for a new CPU, not for a new ca65.
+  A macro is exempt from the warning: its name only ever appears before a `!`, and a library
+  of macros for another processor wants that processor's spellings, most of which the 6502
+  shares.
   What a reader loses when a label is called `rts` is a warning's business, the same in
   every project. Registers stay reserved: `asl a` is a question about an operand, which
   position cannot answer.
@@ -4059,8 +4088,8 @@ is in the sections above.
 ; mirrors, as, proc, zp, abs, far and the state items) match without regard to case.
 ; What the parser reads and the binder then rejects is noted in comments.
 ; No mnemonic is reserved (§4), so every `ident` that names a declaration below may also be
-; a mnemonic: `rts:` is a label and `lda = 5` a constant, because what follows the first
-; word is what decides. A register may not, except as a `member-name`.
+; a mnemonic: `rts:` is a label, `lda = 5` a constant and `bne!(x)` a macro call, because
+; what follows the first word is what decides. A register may not, except as a `member-name`.
 file        := module-decl item* (region item*)*
 module-decl := '.module' module-path                  ; first
 region      := '.segment' ident NL                    ; at file level only
@@ -4201,7 +4230,7 @@ builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.s
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
              | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
-             | '.mode' | '.byteof' | '.empty'          ; the last three in macro bodies
+             | '.mode' | '.byteof' | '.exprof' | '.empty' ; the last four in macro bodies
 ```
 
 ## Appendix B. ca65 macro patterns

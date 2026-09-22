@@ -37,8 +37,8 @@ public static class SyntaxFacts
         ".defined", ".has", ".select", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles", ".maxcycles",
     ];
 
-    /// <summary>The three a macro body adds, which ask about the arguments it was given.</summary>
-    public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".empty"];
+    /// <summary>The four a macro body adds, which ask about the arguments it was given.</summary>
+    public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".exprof", ".empty"];
 
     /// <summary>
     /// The CPU names, lower case, in the order nt65 lists them. Which processors there are is

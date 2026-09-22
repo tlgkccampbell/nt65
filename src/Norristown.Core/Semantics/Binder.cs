@@ -1523,10 +1523,13 @@ internal sealed partial class Binder
         // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. A
         // register elsewhere is reported, and declared all the same, so that what uses it and
         // what counts it are not wrong a second time; a mnemonic is only warned about.
+        // A macro is only ever called as `name!(...)`, which no reader takes for an
+        // instruction, so one spelled like an instruction is not warned about either.
         if (kind != SymbolKind.Member && scope.Kind != ScopeKind.Type)
         {
             CheckReservedWord(name);
-            WarnAboutMnemonic(name);
+            if (kind != SymbolKind.Macro)
+                WarnAboutMnemonic(name);
         }
 
         var cheap = name.Kind == SyntaxKind.CheapLocal;

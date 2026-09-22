@@ -426,6 +426,14 @@ public sealed class SemanticModel
         return argument.Word is { } word ? Value.Word(word) : Value.Unknown;
     }
 
+    /// <summary>
+    /// For <c>.exprof(p)</c> at <paramref name="on"/>, the expression inside the operand the call
+    /// passed as <c>p</c>: <c>5</c> for <c>{#5}</c>, <c>ptr</c> for <c>{(ptr),y}</c>. Null when
+    /// <c>p</c> is not an <c>operand</c> parameter.
+    /// </summary>
+    public SyntaxNode? ExprOf(CallExpressionSyntax call, Expansion? on) =>
+        Evaluator.ExprOf(call, resolved, BindingsOf(on));
+
     /// <summary>The enum an enum kind names, where the macro that declares the parameter is written; null when it names none.</summary>
     public Symbol? EnumOf(ArgumentKind kind) =>
         kind.Enum is { } name && SymbolOf(name) is { Kind: SymbolKind.Enum } named ? named : null;

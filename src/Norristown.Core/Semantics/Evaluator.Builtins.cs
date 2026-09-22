@@ -156,6 +156,19 @@ internal sealed partial class Evaluator
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }
 
+        // `.exprof(p)` is the expression inside the operand the call passed as `p`: `5` for
+        // `{#5}`, `ptr` for `{(ptr),y}`. It lets a body put an operand's value in data.
+        if (name == ".exprof")
+        {
+            if (ExprOf(call) is { } inner)
+                return Evaluate(inner);
+
+            // Outside an expansion the parameter stands for nothing yet, which is no mistake.
+            if (arguments.Count != 1 || Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
+                Report(function, Catalogue.BuiltinArguments.Says(".exprof", "an `operand` parameter"));
+            return Value.Unknown;
+        }
+
         // `.addrsize` asks about the shape of its argument rather than its value.
         if (name == ".addrsize")
         {
@@ -396,9 +409,53 @@ internal sealed partial class Evaluator
         return true;
     }
 
-    /// <summary>What a name's macro parameter was given, or null when it names no parameter.</summary>
-    private MacroArgument? Argument(SyntaxNode name) =>
-        SymbolOf(name) is { } symbol ? given.GetValueOrDefault(symbol) : null;
+    /// <summary>
+    /// The expression inside the operand the call passed as <c>p</c> in <c>.exprof(p)</c>: <c>5</c>
+    /// for <c>{#5}</c>, <c>ptr</c> for <c>{(ptr),y}</c>. Where the call passed another macro's
+    /// <c>operand</c> parameter, it is the expression inside what that one was passed. Null when
+    /// <c>p</c> is not an <c>operand</c> parameter.
+    /// </summary>
+    internal SyntaxNode? ExprOf(CallExpressionSyntax call)
+    {
+        var arguments = call.Arguments.Arguments;
+        if (arguments.Count != 1)
+            return null;
+        SyntaxNode? inner = arguments[0];
+        for (var steps = 0; steps < 64 && inner is NameExpressionSyntax; steps++)
+        {
+            if (Argument(inner) is not { Parameter.Kind: ParameterKind.Operand, Operand: { } operand })
+                return steps == 0 ? null : inner;
+            inner = Operands.ExpressionOf(operand);
+        }
+        return inner;
+    }
+
+    /// <summary>
+    /// What a name's macro parameter was given, or null when it names no parameter. A
+    /// parameter given another macro's parameter stands for what that one was given; one given
+    /// anything else stands for that, even a plain name, which is not followed any further.
+    /// </summary>
+    private MacroArgument? Argument(SyntaxNode name)
+    {
+        var argument = Parameter(name) is { } parameter ? given.GetValueOrDefault(parameter) : null;
+        for (var steps = 0; steps < 64 && argument?.Value is NameExpressionSyntax passed; steps++)
+        {
+            if (Parameter(passed) is not { Kind: SymbolKind.MacroParameter } outer
+                || !given.TryGetValue(outer, out var next))
+            {
+                break;
+            }
+            argument = next;
+        }
+        return argument;
+    }
+
+    /// <summary>The symbol a one-part name was resolved to where it is written, not what a binding stands it for.</summary>
+    private Symbol? Parameter(SyntaxNode name) =>
+        name is NameExpressionSyntax { Names.Length: 1, SimpleName: { } only } written
+        && resolved.TryGetValue((written.Tree, only.Span.Start), out var symbol)
+            ? symbol
+            : null;
 
     /// <summary>
     /// A charmap or a function called by name. A charmap maps one character to its byte; a

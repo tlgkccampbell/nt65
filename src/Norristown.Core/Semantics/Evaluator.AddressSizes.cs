@@ -50,6 +50,13 @@ internal sealed partial class Evaluator
             {
                 return;
             }
+            // `.exprof(p)` is as wide as the expression it stands for.
+            if (node is CallExpressionSyntax exprOf && Operands.IsExprOf(exprOf))
+            {
+                if (ExprOf(exprOf) is { } inner)
+                    Walk(inner);
+                return;
+            }
             if (node is CurrentAddressExpressionSyntax)
             {
                 named = true;

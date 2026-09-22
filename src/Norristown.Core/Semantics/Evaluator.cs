@@ -210,6 +210,17 @@ internal sealed partial class Evaluator
             ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(written)
             : null;
 
+    /// <summary>
+    /// For <c>.exprof(p)</c>, the expression inside the operand the call passed as <c>p</c>, with
+    /// <paramref name="bound"/> saying what each parameter was passed; null when <c>p</c> is not an
+    /// <c>operand</c> parameter.
+    /// </summary>
+    public static SyntaxNode? ExprOf(
+        CallExpressionSyntax call,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound) =>
+        new Evaluator(SegmentTable.Standard, resolved, null, null, bound).ExprOf(call);
+
     /// <summary>The items a name stands for when it names a list, or null when it does not.</summary>
     public static IReadOnlyList<SyntaxNode>? ItemsOf(
         SyntaxNode argument,

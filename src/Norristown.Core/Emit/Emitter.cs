@@ -2322,6 +2322,16 @@ public sealed class Emitter
             return;
         }
 
+        // `.exprof(p)` is replaced by the expression inside the operand the call passed as `p`
+        // (`5` for `{#5}`, `ptr` for `{(ptr),y}`), unless it is a constant, which the path
+        // below writes as a number.
+        if (Semantics.Operands.IsExprOf(call) && Worth(call).AsNumber() is null
+            && model.ExprOf(call, expansion) is { } inner)
+        {
+            Replace(call, "(" + Substituted(inner, edits.Comments) + ")", edits);
+            return;
+        }
+
         // A built-in the analysis answers keeps the ordinary path.
         if (call.Callee is null)
         {

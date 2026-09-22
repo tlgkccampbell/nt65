@@ -229,6 +229,30 @@ public sealed class AnalysisApiTests
         Assert.Equal(plot, model.DeclaredBy(((BlockSyntax)plot.Definition!).Opener.Statement, null));
     }
 
+    /// <summary>What <c>.exprof(p)</c> in a macro body stands for at one expansion of it.</summary>
+    [Fact]
+    public void WhatAnOperandsExpressionIs()
+    {
+        var model = Analysis.Model("""
+            .module main
+            .macro put(src: operand) {
+                .byte .exprof(src)
+            }
+
+            .segment RODATA
+            .data bytes {
+                put!({#5})
+            }
+            """);
+        var call = model.Tree.Root.DescendantNodes().OfType<MacroCallSyntax>().Single();
+        var put = model.MacroAt(call)!;
+        var exprOf = ((BlockSyntax)put.Definition!).DescendantNodes().OfType<CallExpressionSyntax>().Single();
+
+        var on = Expansion.Of(null, call, (BlockSyntax)put.Definition!);
+        Assert.Equal("5", model.ExprOf(exprOf, on)!.GetText().Trim());
+        Assert.Null(model.ExprOf(exprOf, null));
+    }
+
     /// <summary>The program the files are part of, and what it can be asked as a whole.</summary>
     [Fact]
     public void TheProgramTheFilesArePartOf()

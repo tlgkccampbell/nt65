@@ -31,6 +31,7 @@ internal static class Lines
         return first switch
         {
             SyntaxKind.Identifier when second == SyntaxKind.Bang => LineKind.MacroCall,
+            SyntaxKind.Mnemonic when IsCallOfMnemonic(tokens, 0) => LineKind.MacroCall,
             SyntaxKind.Identifier when second == SyntaxKind.EndOfLine => LineKind.BareIdentifier,
             SyntaxKind.Mnemonic => LineKind.Instruction,
             _ => LineKind.Expression,
@@ -99,6 +100,16 @@ internal static class Lines
         return true;
     }
 
+    /// <summary>
+    /// Whether the mnemonic at <paramref name="at"/> names a macro being called: a macro may be
+    /// named after an instruction, as another processor's are. Only <c>!(</c> after it makes a
+    /// call, because <c>lda !flag</c> is an instruction whose operand is the logical not of
+    /// <c>flag</c>.
+    /// </summary>
+    public static bool IsCallOfMnemonic(ImmutableArray<GreenToken> tokens, int at) =>
+        at + 2 < tokens.Length && tokens[at].Kind == SyntaxKind.Mnemonic
+        && tokens[at + 1].Kind == SyntaxKind.Bang && tokens[at + 2].Kind == SyntaxKind.OpenParen;
+
     public static BlockKind BlockKindOf(ImmutableArray<GreenToken> tokens, LineKind kind)
     {
         // The statement that opens the block: after a label, or after the } of a continuation.
@@ -118,6 +129,8 @@ internal static class Lines
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
             return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOfDirective(token.Text);
+        if (IsCallOfMnemonic(tokens, start))
+            return BlockKind.MacroBlock;
         if (token.Kind == SyntaxKind.Identifier)
         {
             var next = tokens[start + 1].Kind;

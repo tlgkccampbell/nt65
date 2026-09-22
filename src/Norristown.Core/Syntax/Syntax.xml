@@ -1401,9 +1401,10 @@
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The macro's name.</summary>
+        <summary>The macro's name, which may be spelled as an instruction is.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
+      <Kind Name="Mnemonic"/>
     </Field>
     <Field Name="BangToken" Type="SyntaxToken">
       <PropertyComment>

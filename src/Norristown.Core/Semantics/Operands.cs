@@ -61,6 +61,27 @@ public static class Operands
     }
 
     /// <summary>
+    /// The expression an operand addresses, or its immediate value: <c>buf</c> of <c>buf,x</c>,
+    /// <c>ptr</c> of <c>(ptr),y</c>, <c>5</c> of <c>#5</c>. An argument written without braces is
+    /// the expression itself; the accumulator has none.
+    /// </summary>
+    public static SyntaxNode? ExpressionOf(SyntaxNode operand) => operand switch
+    {
+        AbsoluteOperandSyntax absolute => absolute.Address,
+        ImmediateOperandSyntax immediate => immediate.Value,
+        IndirectOperandSyntax indirect => indirect.Address,
+        IndexedIndirectOperandSyntax indexed => indexed.Address,
+        LongIndirectOperandSyntax far => far.Address,
+        AccumulatorOperandSyntax => null,
+        _ => operand,
+    };
+
+    /// <summary>Whether a call is <c>.exprof</c>.</summary>
+    public static bool IsExprOf(CallExpressionSyntax call) =>
+        call.Function is { } function
+        && function.Text.Equals(".exprof", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The mode an operand is in, as <c>.mode(p)</c> spells it. An argument written
     /// without braces is an expression, and a plain address operand by being one.
     /// </summary>

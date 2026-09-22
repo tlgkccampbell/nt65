@@ -22,7 +22,7 @@ public static class Macros
 
     /// <summary>The macro a call names.</summary>
     public static SyntaxToken? CalleeOf(MacroCallSyntax call) =>
-        call.Name is { Kind: SyntaxKind.Identifier } name ? name : null;
+        call.Name is { Kind: SyntaxKind.Identifier or SyntaxKind.Mnemonic } name ? name : null;
 
     /// <summary>The call a line holds, whether it stands alone or follows a label.</summary>
     public static MacroCallSyntax? CallIn(StatementSyntax? statement) => statement switch

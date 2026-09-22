@@ -374,6 +374,13 @@ internal sealed class MacroExpansion
             if (Operands.Substituted(model, operand, at) is { } given && Argument(given) is { } written)
                 edits[operand.Span.Start] = (operand.Span.End, written);
         }
+        // `.exprof(p)` is replaced by the expression inside the operand the call passed as `p`:
+        // `5` for `{#5}`, `ptr` for `{(ptr),y}`.
+        foreach (var exprOf in Under(statement).OfType<CallExpressionSyntax>().Where(Operands.IsExprOf))
+        {
+            if (model.ExprOf(exprOf, at) is { } inner)
+                edits[exprOf.Span.Start] = (exprOf.Span.End, "(" + inner.GetText().Trim() + ")");
+        }
         foreach (var name in Under(statement).OfType<NameExpressionSyntax>())
         {
             if (edits.Any(edit => edit.Key <= name.Span.Start && edit.Value.End >= name.Span.End))

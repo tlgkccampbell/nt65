@@ -31,16 +31,7 @@ public sealed record OperandSubstitution(
     private bool IsOperandForm => Operand is OperandSyntax;
 
     /// <summary>The expression the argument addresses, which is what an address size comes from.</summary>
-    public SyntaxNode? Expression => Operand switch
-    {
-        AbsoluteOperandSyntax absolute => absolute.Address,
-        ImmediateOperandSyntax immediate => immediate.Value,
-        IndirectOperandSyntax indirect => indirect.Address,
-        IndexedIndirectOperandSyntax indexed => indexed.Address,
-        LongIndirectOperandSyntax far => far.Address,
-        AccumulatorOperandSyntax => null,
-        _ => Operand,
-    };
+    public SyntaxNode? Expression => Operands.ExpressionOf(Operand);
 
     /// <summary>
     /// Whether the mode the argument gave has a next byte at all. An immediate, the
