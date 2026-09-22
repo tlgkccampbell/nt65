@@ -4,7 +4,8 @@
   "segments": {
     "ZP2":   { "size": "zp",  "dp": "$2100" },
     "WRAM":  { "size": "abs", "bank": "$7e" },
-    "BANK1": { "size": "abs", "bank": 1 }
+    "BANK1": { "size": "abs", "bank": 1 },
+    "BSS":   { "size": "abs", "bank": 0, "mirrors": ["$01-$3f", "$7e", "$80-$bf"] }
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],

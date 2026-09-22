@@ -9,7 +9,7 @@
 
 .export resetstub
 
-; The DIRECT segment starts at $000010 in the linker script, so that $000000-$00000F are
+; The ZEROPAGE segment starts at $000010 in the linker script, so that $000000-$00000F are
 ; free for local variables, and it is reached with the direct page at $0000: `dp = 0` in every
 ; signature, which nt65 checks every direct-page operand against.
 ZEROPAGE_BASE = $0000
@@ -36,7 +36,7 @@ MEMSEL_LONG = $80420D
 ; For advanced users: Long stretches of STZ are a useful place to shuffle code when
 ; watermarking your binary.
 
-.segment CODE0
+.segment CODE
 .proc resetstub: emu, dp?, dbr?, noreturn {
     sei                         ; turn off IRQs
     clc

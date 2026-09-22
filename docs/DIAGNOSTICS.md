@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 357 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 358 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -17,7 +17,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Values](#values) | 49 | — |
 | [Macros](#macros) | 22 | — |
 | [Data](#data) | 30 | — |
-| [Placement](#placement) | 14 | — |
+| [Placement](#placement) | 15 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
 | [Control flow](#control-flow) | 28 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
 | [Processor state](#processor-state) | 36 | — |
@@ -1368,6 +1368,12 @@ A mirror is a bank, or a range written from the lower bank to the higher.
 > segment "{0}" gives `mirrors` and no `bank`: a mirror shows a segment's home bank in another bank
 
 A mirror shows a segment's home bank in another bank, so there has to be a home bank for it to show.
+
+### `segment-standard-size`
+
+> "{0}" is a standard segment, which is `{1}`
+
+A standard segment may be declared once, to give it a direct page, a bank or mirrors, and keeps the size it is predeclared with, which is the one ca65 gives it in every object.
 
 ### `segment-undeclared`
 

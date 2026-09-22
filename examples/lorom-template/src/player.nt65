@@ -11,7 +11,7 @@
 .export player_xlo, player_xhi, player_dxlo, player_yhi
 .export player_frame_sub, player_frame, player_facing
 
-.segment DIRECT
+.segment ZEROPAGE
 
 ; Game variables
 .data player_xlo:       .byte   ; horizontal position is xhi + xlo/256 px

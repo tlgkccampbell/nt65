@@ -369,8 +369,11 @@ A segment's address size (`zp`, `abs`, `far`) is declared **exactly once** per p
 by a `.segment NAME: size` declaration item in any one file or in the project
 configuration; a size after `:` is what makes the line a declaration rather than a region.
 Regions and blocks only name the segment. The standard names are predeclared (`ZEROPAGE` as
-`zp`, and `CODE`, `DATA`, `BSS` and `RODATA` as `abs`). A region or block that names a
-segment declared nowhere is an error, so a misspelled name is caught before ld65 runs.
+`zp`, and `CODE`, `DATA`, `BSS` and `RODATA` as `abs`), and the predeclaration is what stands
+when the program says nothing: a program may declare a standard segment once, as it declares
+any other, to give it a direct page, a bank or mirrors, and at a size other than its own that
+declaration is an error. A region or block that names a segment declared nowhere is an error,
+so a misspelled name is caught before ld65 runs.
 The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
 a fold over every file.
@@ -475,7 +478,8 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   a project's to turn down, and says so; a name nt65 has no entry for is an error, with the
   name it is nearly.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
-  be declared in a file. Its `mirrors` are written as `ranges` writes banks.
+  be declared in a file, and a standard one keeps its size here too. Its `mirrors` are
+  written as `ranges` writes banks.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
@@ -3621,6 +3625,14 @@ Recorded so the reasoning survives. None is open.
   themselves and keeps proc bodies out of a file's interface. `.sizeof` of a proc is its
   span, with a span's limits, because a routine has no shape to measure instead.
 - **Segments are declared.** A misspelled segment name is an error, not a new segment.
+- **A standard segment's predeclaration is a default.** It could not be declared again, so it
+  could never carry a direct page, a bank or mirrors, and a 65816 program that wanted the checks
+  on its standard segments renamed them. The rename leaked into the linker configuration, and
+  since ca65 creates the standard segments in every object, the vacated names still existed
+  while the new ones did not. Declared once at its own size, the segment says where it is, and
+  "declared exactly once" keeps its meaning: the built-in table is what stands where a program
+  says nothing. The size stays fixed because it is the one ca65 gives the segment in every
+  object, whatever nt65 writes.
 - **The output does not depend on ca65's command line.** A project passes one set of
   ca65 options to every `.s` file, so nt65 output resets or avoids everything those
   options can change, and is tested against ca65 built from one pinned cc65 commit,

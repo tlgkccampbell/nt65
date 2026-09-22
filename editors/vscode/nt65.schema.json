@@ -372,6 +372,7 @@
         "segment-mirrors-need-a-bank",
         "segment-name-quoted",
         "segment-region-misplaced",
+        "segment-standard-size",
         "segment-undeclared",
         "select-arguments",
         "select-condition-is-text",

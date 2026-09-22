@@ -7,10 +7,12 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The program's segments. The standard names are predeclared; every other segment
-/// is declared exactly once, by a <c>.segment NAME: size</c> item in one file or in
-/// <c>nt65.json</c>. A segment block naming a segment declared nowhere is an
-/// error, so a misspelled name is caught before ld65 runs.
+/// The program's segments. Every segment is declared exactly once, by a
+/// <c>.segment NAME: size</c> item in one file or in <c>nt65.json</c>; the standard names are
+/// predeclared, and that predeclaration is what stands when the program says nothing, so a
+/// program may declare one of them once, at its own size, to give it a direct page, a bank or
+/// mirrors. A segment block naming a segment declared nowhere is an error, so a misspelled
+/// name is caught before ld65 runs.
 /// </summary>
 public sealed class SegmentTable
 {
@@ -62,12 +64,9 @@ public sealed class SegmentTable
         var table = new SegmentTable(segments);
         foreach (var segment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
         {
-            if (segments.TryGetValue(segment.Name, out var predeclared))
+            if (segments.TryGetValue(segment.Name, out var predeclared)
+                && !Redeclares(predeclared, segment.Size, segment.Declaration!.Value, diagnostics))
             {
-                diagnostics.Add(new Diagnostic(segment.Declaration!.Value,
-                    Catalogue.SegmentDeclaredTwice.Says(segment.Name),
-                    [new RelatedSpan(segment.Declaration.Value,
-                        $"\"{predeclared.Name}\" is one of the standard segment names, which are predeclared")]));
                 continue;
             }
             segments[segment.Name] = segment;
@@ -83,16 +82,10 @@ public sealed class SegmentTable
         foreach (var (node, name, span) in declarations)
         {
             var declared = node.Tree.GetSpan(span);
-            if (segments.TryGetValue(name, out var existing))
-            {
-                diagnostics.Add(new Diagnostic(declared,
-                    Catalogue.SegmentDeclaredTwice.Says(name),
-                    existing.Declaration is { } first
-                        ? [new RelatedSpan(first, "declared here")]
-                        : [new RelatedSpan(declared, "it is one of the standard segment names, which are predeclared")]));
+            var size = SizeOf(node);
+            if (segments.TryGetValue(name, out var existing) && !Redeclares(existing, size, declared, diagnostics))
                 continue;
-            }
-            segments[name] = new Segment(name, SizeOf(node), declared);
+            segments[name] = new Segment(name, size, declared);
             table.attributes[name] = node.Attributes;
         }
         return table;
@@ -198,6 +191,34 @@ public sealed class SegmentTable
         }
         return banks;
     }
+
+    /// <summary>
+    /// Whether a declaration of a segment the table already holds takes its place: it does when
+    /// what is there is the predeclaration of a standard name, at the same size, and is otherwise
+    /// reported. A standard name is declared at most once, like any other.
+    /// </summary>
+    private static bool Redeclares(Segment existing, AddressSize size, Span declared, List<Diagnostic> diagnostics)
+    {
+        if (existing.Declaration is { } first)
+        {
+            diagnostics.Add(new Diagnostic(declared,
+                Catalogue.SegmentDeclaredTwice.Says(existing.Name), [new RelatedSpan(first, "declared here")]));
+            return false;
+        }
+        if (size == existing.Size)
+            return true;
+        diagnostics.Add(new Diagnostic(declared,
+            Catalogue.SegmentStandardSize.Says(existing.Name, SpellSize(existing.Size))));
+        return false;
+    }
+
+    /// <summary>An address size as a declaration writes it.</summary>
+    private static string SpellSize(AddressSize size) => size switch
+    {
+        AddressSize.ZeroPage => "zp",
+        AddressSize.Absolute => "abs",
+        _ => "far",
+    };
 
     private static Dictionary<string, Segment> Predeclared() =>
         standard.ToDictionary(pair => pair.Key, pair => new Segment(pair.Key, pair.Value, null), StringComparer.Ordinal);

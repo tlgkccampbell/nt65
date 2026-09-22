@@ -4,11 +4,21 @@
 
 .cpu 65816
 
-.export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail
+.export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail, standard
 
 ; A segment declared in a file may give its direct page by a constant.
 HUD_PAGE = $0300
 .segment HUD: zp, dp = HUD_PAGE
+
+; A standard segment keeps its size and may be declared once to say where it is: this file
+; gives ZEROPAGE its direct page, and the project file gives BSS its bank and mirrors.
+.segment ZEROPAGE: zp, dp = 0
+
+.segment ZEROPAGE
+.data temp: .byte
+
+.segment BSS
+.data frames: .byte
 
 .segment ZP2
 .data ptr: .word
@@ -125,4 +135,11 @@ HUD_PAGE = $0300
 ; A tail call is checked against the routine it jumps to, D and B included.
 .proc tail: a8, i16, dp = $2100, dbr = $7e {
     jmp hud
+}
+
+; The standard segments are checked like any other once they are declared.
+.proc standard: a8, i8, dp = 0, dbr = $80 {
+    lda temp
+    sta frames
+    rts
 }

@@ -118,9 +118,6 @@ The linked image is byte for byte the upstream build, except where the following
 - `reset_fastrom` reads the header's map mode through its bank $80 address, which is the same
   byte.
 - The unused `irqstub` is gone; the IRQ vector reaches `irq_handler` directly, as upstream.
-- The standard segment names ca65 predeclares are `DIRECT`, `LORAM`, `CODE0` and `RODATA0`
-  here, because nt65 does not redeclare a predeclared segment, and these need a direct page
-  and a bank.
 - `USE_AUDIO`, `USE_PSEUDOHIRES` and `USE_INTERLACE` are `.config` settings, set with
   `nt65 build -D main::USE_AUDIO=0`.
 

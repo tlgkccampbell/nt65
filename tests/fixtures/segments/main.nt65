@@ -1,8 +1,10 @@
 ; A segment's address size is declared exactly once per program, and a block may only
-; name a segment that something declares.
+; name a segment that something declares. A standard segment is predeclared, and a program
+; may declare it once, at the size it is predeclared with.
 .module main
 
 .segment ZP2: zp
+.segment ZEROPAGE: zp
 .segment WRAM: abs, bank = $7e
 
 .segment ZP2
@@ -16,3 +18,4 @@
 
 .segment ZP2: zp          ;! error[segment-declared-twice]: segment "ZP2" is already declared
 .segment ZEROPAGE: zp     ;! error[segment-declared-twice]: segment "ZEROPAGE" is already declared
+.segment RODATA: zp       ;! error[segment-standard-size]: "RODATA" is a standard segment, which is `abs`

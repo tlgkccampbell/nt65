@@ -23,11 +23,11 @@
 ; What the demo writes to PPURES: split horizontal pixels, interlace, both or neither.
 PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0)
 
-.segment DIRECT
+.segment ZEROPAGE
 .data nmis:     .byte
 .data oam_used: .word
 
-.segment LORAM
+.segment BSS
 .data OAM:   .byte[512]
 .data OAMHI: .byte[512]
 ; OAMHI contains bit 8 of X (the horizontal position) and the size bit for each sprite.
@@ -36,7 +36,7 @@ PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, IN
 ; OBC1 coprocessor used in the game Metal Combat: Falcon's Revenge performs the same packing
 ; function in hardware, possibly as a copy protection method.
 
-.segment CODE0
+.segment CODE
 
 ; Minimalist NMI handler that only acknowledges NMI and signals to the main thread that NMI
 ; has occurred.

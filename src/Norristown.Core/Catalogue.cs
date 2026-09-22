@@ -15,7 +15,7 @@ namespace Norristown;
 public static class Catalogue
 {
     // The heading last read. An entry takes the one written above it rather than naming one,
-    // which would be a line on all 357 of them: a static initializer runs where it is written,
+    // which would be a line on all 358 of them: a static initializer runs where it is written,
     // so the headings and the entries between them are read in the order they are laid out.
     private static DiagnosticArea? opening;
 
@@ -1438,6 +1438,13 @@ public static class Catalogue
         Severity.Error,
         "segment \"{0}\" is already declared",
         "A segment is declared once across the whole program, so that every file reaches it the same way.");
+
+    internal static DiagnosticDescriptor SegmentStandardSize { get; } = Entry(
+        "segment-standard-size",
+        Severity.Error,
+        "\"{0}\" is a standard segment, which is `{1}`",
+        "A standard segment may be declared once, to give it a direct page, a bank or mirrors, and keeps the "
+            + "size it is predeclared with, which is the one ca65 gives it in every object.");
 
     internal static DiagnosticDescriptor SegmentAttributeTwice { get; } = Entry(
         "segment-attribute-twice",

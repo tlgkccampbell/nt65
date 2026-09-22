@@ -17,6 +17,14 @@
 .segment BANK1
 .data pair: .type Pair
 
+.segment ZEROPAGE: zp, dp = $2000
+
+.segment ZEROPAGE
+.data temp: .byte
+
+.segment BSS
+.data frames: .byte
+
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
 .segment SLOW: abs, dp = $2100        ;! error[segment-dp-not-zp]: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
 .segment WIDE: abs, bank = $100       ;! error[segment-attribute-out-of-range]: a bank is one byte
@@ -40,6 +48,13 @@
 ; The design's catch: a register mirrored only in some banks, reached from bank $7e.
 .proc mirrored: a8, i8, dbr = $7e {
     sta $2100               ;! error[range-bank-mismatch]: $2100 is reached only from banks $00-$3f, $80-$bf, and B is $7e here
+    rts
+}
+
+; A standard segment, once declared, is checked like any other.
+.proc standard: a8, i8, dp = 0, dbr = $00 {
+    lda temp                ;! error[direct-page-mismatch]: `temp` is in "ZEROPAGE", which is reached through the direct page at $2000, and D is $0000 here
+    sta frames              ;! error[bank-mismatch]: `frames` is in "BSS", which is in bank $7e, and B is $00 here
     rts
 }
 

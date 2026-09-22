@@ -20,8 +20,15 @@
 .export main__relay
 .export main__fast
 .export main__tail
+.export main__standard
 
 HUD_PAGE = $0300
+
+.segment "ZEROPAGE": zeropage
+temp: .res 1
+
+.segment "BSS": absolute
+frames: .res 1
 
 .segment "ZP2": zeropage
 ptr: .res 2
@@ -33,7 +40,7 @@ lives: .res 1
 score: .res 2
 
 .segment "CODE": absolute
-; .proc hud: a8, i16, dp = $2100, dbr = $7e  main.nt65:24
+; .proc hud: a8, i16, dp = $2100, dbr = $7e  main.nt65:34
 main__hud:
     lda z:ptr
     sta a:score
@@ -42,7 +49,7 @@ main__hud:
     rts
 ; end of hud
 
-; .proc setup: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:33
+; .proc setup: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:43
 main__setup:
     .a16
     lda #$2100
@@ -57,7 +64,7 @@ main__setup:
     rts
 ; end of setup
 
-; .proc pushed: a8, i8 -> a8, i8, dp = $0300  main.nt65:46
+; .proc pushed: a8, i8 -> a8, i8, dp = $0300  main.nt65:56
 main__pushed:
     pea HUD_PAGE
     pld
@@ -65,7 +72,7 @@ main__pushed:
     rts
 ; end of pushed
 
-; .proc keep: a8, i8  main.nt65:55
+; .proc keep: a8, i8  main.nt65:65
 main__keep:
     phd
     phb
@@ -81,14 +88,14 @@ main__keep:
     rts
 ; end of keep
 
-; .proc registers: a8, i8, dp = $2100  main.nt65:71
+; .proc registers: a8, i8, dp = $2100  main.nt65:81
 main__registers:
     lda z:$05
     sta z:$00,x
     rts
 ; end of registers
 
-; .proc ppu: a8, i8, dbr = $80  main.nt65:78
+; .proc ppu: a8, i8, dbr = $80  main.nt65:88
 main__ppu:
     sta a:$2100
     stz a:$4200
@@ -98,7 +105,7 @@ main__ppu:
 ; end of ppu
 
 .segment "BANK1": absolute
-; .proc from_k: a8, i8 -> a8, i8, dbr = $01  main.nt65:88
+; .proc from_k: a8, i8 -> a8, i8, dbr = $01  main.nt65:98
 main__from_k:
     phk
     plb
@@ -106,7 +113,7 @@ main__from_k:
 ; end of from_k
 
 .segment "CODE": absolute
-; .proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:96
+; .proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:106
 main__caller:
     jsr main__setup
     lda z:ptr
@@ -114,14 +121,14 @@ main__caller:
     rts
 ; end of caller
 
-; .proc move: a16, i16 -> a16, i16, dbr = $7e  main.nt65:104
+; .proc move: a16, i16 -> a16, i16, dbr = $7e  main.nt65:114
 main__move:
     mvn #$00, #$7e
     sta a:score
     rts
 ; end of move
 
-; .proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100  main.nt65:111
+; .proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100  main.nt65:121
 main__relay:
     beq relay__skip
     lda #1
@@ -130,13 +137,20 @@ relay__skip:
     rts
 ; end of relay
 
-; .proc fast: a8, i8, dp = $2180  main.nt65:120
+; .proc fast: a8, i8, dp = $2180  main.nt65:130
 main__fast:
     lda z:$01
     rts
 ; end of fast
 
-; .proc tail: a8, i16, dp = $2100, dbr = $7e  main.nt65:126
+; .proc tail: a8, i16, dp = $2100, dbr = $7e  main.nt65:136
 main__tail:
     jmp main__hud
 ; end of tail
+
+; .proc standard: a8, i8, dp = 0, dbr = $80  main.nt65:141
+main__standard:
+    lda z:temp
+    sta a:frames
+    rts
+; end of standard
