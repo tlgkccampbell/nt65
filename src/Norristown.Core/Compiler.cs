@@ -57,12 +57,17 @@ public static class Compiler
         {
             var model = analysis.Program.Files[i];
 
-            // The defines are not a file anyone wrote, and nothing is written for them.
-            if (model.Tree == analysis.Defines)
+            // The defines are not a file anyone wrote, and nothing is written for them. A module
+            // another places has no output of its own: it is written into its unit's.
+            if (model.Tree == analysis.Defines || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
+            var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
             var output = Written(analysis, project, i, measured, diagnostics) with
             {
-                Dependencies = Dependencies(analysis.Program, model, direct),
+                Dependencies = [.. members
+                    .SelectMany(member => analysis.ModelFor(member.Path) is { } file ? Dependencies(analysis.Program, file, direct) : [])
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal)],
             };
             outputs.Add(output);
 
@@ -89,17 +94,21 @@ public static class Compiler
     /// The ca65 for one file of <paramref name="analysis"/>, whatever is wrong with the rest of
     /// the program, or null when the program has no such file. A build writes nothing for a
     /// program that is wrong; the editor shows what would have been written anyway, so that
-    /// seeing what a line became does not wait for the rest of the file to be right.
+    /// seeing what a line became does not wait for the rest of the file to be right. For a
+    /// module another places, it is the output of the translation unit it is written in.
     /// </summary>
     /// <param name="analysis">The program the file belongs to.</param>
     /// <param name="project">The project it is built as, whose <c>out</c> names where the file goes.</param>
     /// <param name="path">The logical path of the source to write.</param>
     public static OutputFile? EmitFile(ProgramAnalysis analysis, ProjectSettings project, string path)
     {
+        if (analysis.ModelFor(path) is not { } model || model.Tree == analysis.Defines)
+            return null;
+        var root = analysis.Placements.UnitOf(model.Tree)?.Root.Path ?? path;
         var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
         for (var i = 0; i < analysis.Layouts.Count; i++)
         {
-            if (analysis.Program.Files[i] is { Tree: var tree } && tree != analysis.Defines && tree.Path == path)
+            if (analysis.Program.Files[i].Tree.Path == root)
                 return Written(analysis, project, i, measured, []);
         }
         return null;
@@ -158,12 +167,41 @@ public static class Compiler
         IReadOnlyList<IReadOnlySet<Symbol>> measured, List<Diagnostic> diagnostics)
     {
         var model = analysis.Program.Files[i];
-        var elsewhere = measured.Where((_, j) => j != i).SelectMany(set => set)
-            .Where(symbol => symbol.Tree == model.Tree)
+        IReadOnlySet<Symbol> Elsewhere(int at) => measured.Where((_, j) => j != at).SelectMany(set => set)
+            .Where(symbol => symbol.Tree == analysis.Program.Files[at].Tree)
             .ToHashSet();
-        return Emitter.Emit(
-            model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
-            project.Out, elsewhere);
+        if (analysis.Placements.UnitOf(model.Tree) is not { IsPlaced: true } unit)
+        {
+            return Emitter.Emit(
+                model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
+                project.Out, Elsewhere(i));
+        }
+
+        // The modules of a translation unit share one output, and so one table of names, which
+        // the root claims from first.
+        var members = new List<(SemanticModel, CodeLayout, FlatNames, IReadOnlySet<Symbol>)>();
+        FlatNames? names = null;
+        foreach (var tree in unit.Members)
+        {
+            var at = Index(analysis, tree.Path);
+            if (at < 0)
+                continue;
+            var member = analysis.Program.Files[at];
+            names = FlatNames.Create(member, analysis.Cpu, diagnostics, names, placed: members.Count > 0);
+            members.Add((member, analysis.Layouts[at], names, Elsewhere(at)));
+        }
+        return Emitter.Emit(members, analysis.Placements, diagnostics, project.Out);
+    }
+
+    /// <summary>Where the file at <paramref name="path"/> is among the program's, or -1.</summary>
+    private static int Index(ProgramAnalysis analysis, string path)
+    {
+        for (var i = 0; i < analysis.Program.Files.Count; i++)
+        {
+            if (analysis.Program.Files[i].Tree.Path == path)
+                return i;
+        }
+        return -1;
     }
 
     private static ProgramAnalysis AnalyzeAll(
@@ -220,14 +258,21 @@ public static class Compiler
         // file's own answers are in.
         Flow.CallCosts.Compose(flows);
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
+
+        // Which modules place which follows from the files alone, and what a routine runs
+        // into across a `.place` from the layouts of every file in its translation unit.
+        var placements = Placements.Of(trees, defines);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, target, layouts, flows, states, defines, configuration,
-            Collected(project, target, cpu, program, reuse, registers))
+            Collected(project, target, cpu, program, reuse, [
+                .. registers, .. placements.Diagnostics,
+                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]))
         {
             Reused = reuse,
             Reanalyzed = program.Files.Count,
+            Placements = placements,
         };
     }
 
@@ -345,13 +390,20 @@ public static class Compiler
         // file that changed.
         Flow.CallCosts.Compose(flows);
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
+
+        // An edit to any module of a translation unit can move what the others run into, so
+        // the units are laid out again whichever file changed.
+        var placements = Placements.Of(trees, previous.Defines);
         var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
             program, previous.Cpu, layouts, flows, states, previous.Defines, configuration,
-            Collected(project, previous.Cpu, cpu, program, reused, registers))
+            Collected(project, previous.Cpu, cpu, program, reused, [
+                .. registers, .. placements.Diagnostics,
+                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]))
         {
             Reused = reused,
             Reanalyzed = dirty.Count,
+            Placements = placements,
         };
     }
 
@@ -392,14 +444,18 @@ public static class Compiler
         return (layout, flow, state, collapsed);
     }
 
-    /// <summary>Everything wrong with the program, from what each part of the analysis found.</summary>
+    /// <summary>
+    /// Everything wrong with the program, from what each part of the analysis found.
+    /// <paramref name="composed"/> is what was found once every file's own analysis was in:
+    /// what routines keep across calls, and what the translation units say.
+    /// </summary>
     private static IReadOnlyList<Diagnostic> Collected(
         ProjectSettings project, Cpu target, IReadOnlyList<Diagnostic> cpu, ProgramModel program,
-        ProgramAnalysis.Reuse reuse, IReadOnlyList<Diagnostic> registers)
+        ProgramAnalysis.Reuse reuse, IReadOnlyList<Diagnostic> composed)
     {
         var diagnostics = new List<Diagnostic>(project.Diagnostics);
         diagnostics.AddRange(cpu);
-        diagnostics.AddRange(registers);
+        diagnostics.AddRange(composed);
         diagnostics.AddRange(reuse.Conditions.Values.SelectMany(found => found));
         diagnostics.AddRange(reuse.SegmentTable);
         diagnostics.AddRange(reuse.Trees.SelectMany(tree => tree.Diagnostics));

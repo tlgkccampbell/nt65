@@ -131,7 +131,8 @@ internal sealed partial class Ca65Oracle
             if (cached is not null)
             {
                 Directory.CreateDirectory(cacheDirectory!);
-                var temp = cached + "." + Environment.ProcessId + ".tmp";
+                // Two outputs of one text are one entry, and two threads may write it at once.
+                var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 File.WriteAllText(temp, string.Join(",", bytes));
                 File.Move(temp, cached, overwrite: true);
             }

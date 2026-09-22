@@ -211,6 +211,7 @@ internal static class TextMateGrammar
             // What a macro parameter takes: the kind's word, the modes an `operand` lists and the
             // words a `one` does. The enum an enum kind names is a use, which only the server can see.
             ParameterKindSyntax kind when token == kind.Keyword => Kind,
+            ModuleDirectiveSyntax module when token == module.Placement => Kind,
             IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
                 when keyword.Equals("one", StringComparison.OrdinalIgnoreCase) => EnumMember,
             IdentifierNameSyntax { Parent: ParameterKindSyntax } =>
@@ -349,6 +350,10 @@ internal static class TextMateGrammar
             Rule.Block($@"(?i)(\.import)\b", "$", [Directive],
                 [parentheses, Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})(?=\s*=(?!=))", Constant),
                     Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})", Variable), include]),
+
+            // Whether a module may be placed, the word after its name's `:`.
+            Rule.Block($@"(?i)(\.module)\b", "$", [Directive],
+                [Rule.Scoped(@"(?i)(?<!:):(?!:)\s*\b(placed|placeable)\b", Kind), include]),
 
             // The name a repetition binds, last before its brace.
             Rule.Block($@"(?i)(\.(?:repeat|each))\b", @"(?=\{)|$", [Directive],

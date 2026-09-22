@@ -46,6 +46,9 @@ public sealed partial class CodeLayout
     // reads: it is this walk that expands the macros and unrolls the repetitions.
     private readonly List<Step> steps = [];
 
+    // Where each `.place` stands among the steps, which is where another module's bytes go.
+    private readonly List<PlacePoint> placePoints = [];
+
     // The routines holding an instruction this CPU does not have, or does not take that
     // operand for. Such a line is reported and left out of the stream, so nothing downstream
     // sees it at all, and a count of what the routine costs would be a count of the rest.
@@ -124,6 +127,12 @@ public sealed partial class CodeLayout
 
     /// <summary>Every statement of the file, in the order its bytes are written.</summary>
     public IReadOnlyList<Step> Steps => steps;
+
+    /// <summary>
+    /// Every <c>.place</c> of the file that places anything, in the order they are written,
+    /// with where each stands among <see cref="Steps"/>.
+    /// </summary>
+    public IReadOnlyList<PlacePoint> PlacePoints => placePoints;
 
     /// <summary>
     /// The routines an instruction of which could not be laid out. What such a routine costs
@@ -835,6 +844,9 @@ public sealed partial class CodeLayout
 
         /// <inheritdoc/>
         public override void VisitEnsureDirective(EnsureDirectiveSyntax node) => layout.Ensure(node);
+
+        /// <inheritdoc/>
+        public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => layout.PlaceModule(node);
 
         /// <summary>A statement that writes no bytes and stands in the stream for what it says.</summary>
         private void NoBytes(StatementSyntax statement) => layout.steps.Add(

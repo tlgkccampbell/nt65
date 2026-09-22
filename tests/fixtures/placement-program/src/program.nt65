@@ -1,0 +1,8 @@
+; A ca65 program built as one file of `.include`s, brought over: the root places the rest in
+; order and holds nothing else, so the whole program is one object, program.s, and its layout
+; is written in the source.
+.module program
+
+.place header                       ; each is declared `.module header: placed`
+.place tokens
+.place interpreter

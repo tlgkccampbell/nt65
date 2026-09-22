@@ -1,0 +1,16 @@
+; The platform's check for control-C runs into STOP, which is flow1's: the placement puts
+; iscntc between RESTORE and STOP, and nt65 checks that ISCNTC ends where STOP starts.
+.module flow1: placed
+
+.segment CODE
+.proc RESTORE {
+    ldx #0
+    rts
+}
+
+.place iscntc                       ; this platform's check for control-C
+
+.export .proc STOP {
+    jsr RESTORE
+    rts
+}

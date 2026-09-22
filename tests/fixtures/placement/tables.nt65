@@ -1,0 +1,15 @@
+; A placed module keeps its privacy: `count` and `rest` are its own, and main's `count` is
+; another name. In the output they are `tables__count` and `tables__rest`.
+.module tables: placed
+
+count = 2
+
+.segment RODATA
+.export .data first: .byte $11, $22
+.data rest:          .byte count
+
+.segment CODE
+.export .proc touch {
+    lda rest
+    rts
+}

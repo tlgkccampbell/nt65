@@ -1,4 +1,5 @@
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
 
@@ -38,7 +39,14 @@ internal static class NameHighlighting
             var (type, modifiers) = Classify(reference.Symbol);
             return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
         });
-        foreach (var (span, type, modifiers) in names.Concat(words).OrderBy(token => token.Span.Start))
+
+        // A module is no symbol, and the path a `.place` names one by is coloured as the path
+        // of one all the same.
+        var modules = tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()
+            .SelectMany(place => place.Name.Names)
+            .Where(part => !part.IsMissing)
+            .Select(part => (part.Span, Type: IndexOf("namespace"), Modifiers: 0));
+        foreach (var (span, type, modifiers) in names.Concat(words).Concat(modules).OrderBy(token => token.Span.Start))
         {
             // A macro body's names are recorded for each of its uses; each is written once.
             if (span.Start < end || span.Length == 0)

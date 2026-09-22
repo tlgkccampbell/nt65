@@ -531,6 +531,7 @@ to go.
 | `.dbyt` | `.beword` |
 | `.charmap $41, $01` | `.charmap screen { 'A'..'Z' = $01 }`, applied as `screen("TEXT")` |
 | `.include "hw.inc"` | a module that exports what the file declared, and `.use`; `nt65 import-inc hw.inc` writes one for a file of constants |
+| `.include "part.s"` of code, whose bytes must land where the line is | a module declared `placed`, and `.place part` where the `.include` was |
 | `.setcpu "6502X"` | `"cpu": "6502x"`, which is a CPU like any other |
 | `.export` with `.import` in another file | `.export` in one module, a path or `.use` in the other |
 | `.global`, `.local` | `.export`, and scoping by structure |
@@ -573,6 +574,48 @@ the selection as nt65*, and the spellings, the block words, the segment directiv
 operator words are written the nt65 way. What needs a decision rather than a spelling — an
 unnamed label, a macro call, an `.include` — is left exactly as it was, for you and the
 diagnostics to work through.
+
+### A program built from includes
+
+Some ca65 programs are one translation unit: a top file that `.include`s the rest in order,
+with code in one file running straight into code in the next, or a platform's routine
+included in the middle of a shared file. Modules on their own cannot say that, because each
+is its own object and ld65 puts objects in whatever order the build lists them. Placement
+says it in the source:
+
+```nt65
+.module program
+
+.place header                       ; each is declared `.module header: placed`
+.place tokens
+.place interpreter
+```
+
+```nt65
+.module interpreter: placed
+
+.segment CODE
+.proc restore {
+    ...
+    rts
+}
+
+.place iscntc                       ; this platform's check for control-C, which runs into stop
+
+.export .proc stop {
+    ...
+}
+```
+
+A module declared `placed` is emitted where its `.place` stands, in every segment it writes
+to, and has no output of its own; it is still a module, with its own names, exports and
+privacy. Within one translation unit a routine may run into another module's with `.next
+interpreter::stop`, and nt65 checks that it does. The whole program above builds to one
+`program.s`, so there is no link order to get right. `.place` is never under an `.if`:
+platform code is a placed module whose items are under an `.if` of their own. A module that
+one program places and another links on its own is declared `placeable`.
+
+New programs rarely need this; it is for bringing over ones that were written this way.
 
 ### Ten things that will catch you out
 

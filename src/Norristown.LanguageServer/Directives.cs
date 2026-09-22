@@ -27,7 +27,7 @@ internal static class Directives
     [
         ".cpu", ".config", ".use", ".import", ".export", ".segment", ".proc", ".multiproc", ".scope", ".macro",
         ".func", ".signature", ".data", ".enum", ".struct", ".union", ".charmap", ".list", ".if", ".repeat",
-        ".each", ".assert", ".error", ".warning", ".res", ".align",
+        ".each", ".assert", ".error", ".warning", ".res", ".align", ".place",
     ];
 
     /// <summary>What only code holds: what the processor state is, and where control goes.</summary>
@@ -79,6 +79,7 @@ internal static class Directives
         [".multiproc"] = "one routine per member of an enum",
         [".next"] = "where control goes from here",
         [".patch"] = "the target this instruction is patched to",
+        [".place"] = "another module's bytes, written here",
         [".proc"] = "a routine",
         [".repeat"] = "write the block a number of times",
         [".res"] = "reserve bytes",
@@ -131,7 +132,7 @@ internal static class Directives
     private static string[] InCode(LineContext line) =>
         line.Place == Place.Unknown
             ? [.. Items, ".module", .. Data, .. CodeOnly]
-            : [.. Items.Except([".cpu", ".config"], StringComparer.Ordinal), .. Data, .. CodeOnly];
+            : [.. Items.Except([".cpu", ".config", ".place"], StringComparer.Ordinal), .. Data, .. CodeOnly];
 
     /// <summary>What the blocks around the line rule out of <paramref name="names"/>.</summary>
     private static IEnumerable<string> Without(IEnumerable<string> names, LineContext line)
@@ -150,6 +151,11 @@ internal static class Directives
         // region among them, which is a block like any other once a line is under it.
         if (line.InBlock)
             barred.Add(".config");
+
+        // Which modules share a translation unit is structure, read from the files alone, so a
+        // `.place` is written at file level, where a `.segment` region is no block of its own.
+        if (!line.AtFileLevel)
+            barred.Add(".place");
 
         // A macro declared in a routine would see its cheap locals, and a routine inside one
         // is code the outer routine's flow analysis cannot follow.

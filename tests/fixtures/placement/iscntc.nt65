@@ -1,0 +1,13 @@
+; Code one configuration wants is a module that is always placed, with its items under an
+; `.if` of their own: built without KIM, it places nothing at all.
+.module iscntc: placed
+
+.segment CODE
+
+.if KIM {
+    .export .proc ISCNTC {
+        lda $1742
+        cmp #$03
+        .next flow1::STOP           ; runs into STOP, which the placement puts next
+    }
+}

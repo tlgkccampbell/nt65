@@ -1,0 +1,10 @@
+.module inner: placed
+
+.segment CODE
+.export .proc head {
+    rts
+}
+
+.export .proc second {
+    rts
+}

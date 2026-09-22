@@ -24,6 +24,12 @@ namespace Norristown.Emit;
 /// <c>__</c> that no word of ca65's does.
 /// </para>
 /// <para>
+/// A module another places is written into that one's output, beside the other modules of its
+/// translation unit, so each name it does not export is written with its module in front,
+/// <c>iscntc__loop</c>, and the names of one output are handed out from one table: two
+/// modules' private names never meet in the file they share.
+/// </para>
+/// <para>
 /// What a macro body declares is local to each expansion, and what a repetition declares to
 /// each turn, so one symbol there is many names in the output, one per writing. Those are handed out as the expansions are written, which is
 /// as deterministic as the writing itself, and each is made unique against everything
@@ -32,10 +38,10 @@ namespace Norristown.Emit;
 /// </summary>
 public sealed class FlatNames
 {
-    private IReadOnlyList<Family> families = [];
     private readonly Dictionary<Symbol, string> names = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), string> perExpansion = [];
-    private readonly Dictionary<string, Symbol?> taken = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Symbol?> taken;
+    private IReadOnlyList<Family> families = [];
 
     // What ca65 would read as an instruction in the file being written, and what a name it
     // would misread is written with in front. The module is null only for a file that names
@@ -43,32 +49,58 @@ public sealed class FlatNames
     private IReadOnlySet<string> instructions = new HashSet<string>();
     private string? module;
 
-    private FlatNames() { }
+    // What a module another places writes in front of each name it does not export, or the
+    // empty string for a module whose output is its own.
+    private string placedPrefix = "";
+
+    private FlatNames(Dictionary<string, Symbol?> taken) => this.taken = taken;
 
     /// <summary>
     /// Assigns every symbol in <paramref name="model"/> its output name, for a program built
     /// for <paramref name="cpu"/>, whose instructions decide which names ca65 would misread.
     /// </summary>
-    public static FlatNames Create(SemanticModel model, Cpu cpu, List<Diagnostic> diagnostics)
+    public static FlatNames Create(SemanticModel model, Cpu cpu, List<Diagnostic> diagnostics) =>
+        Create(model, cpu, diagnostics, sharing: null, placed: false);
+
+    /// <summary>
+    /// The same for one module of a translation unit, whose names share one output with the
+    /// names <paramref name="sharing"/> hands out, or with none when it is null.
+    /// <paramref name="placed"/> says the module is placed in another's output, and so writes
+    /// each name it does not export with its module in front.
+    /// </summary>
+    internal static FlatNames Create(
+        SemanticModel model, Cpu cpu, List<Diagnostic> diagnostics, FlatNames? sharing, bool placed)
     {
-        var flat = new FlatNames
+        var flat = new FlatNames(sharing?.taken ?? new Dictionary<string, Symbol?>(StringComparer.Ordinal))
         {
             families = model.Families,
             instructions = Ca65Instructions.Of(cpu),
             module = model.FileScope.Module,
+            placedPrefix = placed && model.FileScope.Module is { } path
+                ? path.Replace("::", "__", StringComparison.Ordinal) + "__"
+                : "",
         };
         var taken = flat.taken;
 
         // What another file exports keeps the spelling it was exported under, because that is
-        // the name in the object file; a local name claims its spelling after them.
+        // the name in the object file; a local name claims its spelling after them. In an output
+        // several modules share, a name another of them already writes is a collision.
         foreach (var symbol in model.ExternalSymbols)
+        {
+            if (sharing is not null && taken.TryGetValue(symbol.OutputName, out var other) && other is not null
+                && other != symbol && other.QualifiedName != symbol.QualifiedName && other.Tree != symbol.Tree)
+            {
+                diagnostics.Add(new Diagnostic(other.DeclarationSpan,
+                    Catalogue.OutputNameCollision.Says(other.QualifiedName, $"`{symbol.QualifiedName}`", symbol.OutputName)));
+            }
             taken[symbol.OutputName] = symbol;
+        }
 
         // The fixed spellings next, so that a generated name gives way to them and not the
         // other way round.
         foreach (var symbol in model.Symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var name = symbol.LinkerName ?? flat.Spelled(symbol.FlatName);
+            var name = symbol.LinkerName ?? flat.Spelled(flat.placedPrefix + symbol.FlatName);
             if (taken.TryGetValue(name, out var other))
             {
                 // Two declarations of the same name in the same scope are one problem, which
@@ -94,7 +126,7 @@ public sealed class FlatNames
         foreach (var symbol in model.Symbols.Where(symbol =>
             !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
-            var basis = flat.Spelled(symbol.FlatName);
+            var basis = flat.Spelled(flat.placedPrefix + symbol.FlatName);
             var name = basis;
             for (var n = 2; taken.ContainsKey(name); n++)
                 name = $"{basis}_{n}";
@@ -148,7 +180,7 @@ public sealed class FlatNames
             if (family.Block == owning.Body && family.InstanceFor(owning.Member) is { } instance)
                 return $"{Of(instance)}__{symbol.Name}";
         }
-        return symbol.FlatName;
+        return placedPrefix + symbol.FlatName;
     }
 
     /// <summary>What already has <paramref name="name"/> in the output, or null when nothing has.</summary>

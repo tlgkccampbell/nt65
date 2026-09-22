@@ -1,0 +1,8 @@
+; A module one program may place and another links on its own: nothing places it here, so it
+; stands alone and has an output of its own.
+.module util: placeable
+
+.segment CODE
+.export .proc beep {
+    rts
+}

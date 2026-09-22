@@ -103,6 +103,38 @@ public sealed class DebugFileTests
         Assert.Equal(once, Remap(once));
     }
 
+    /// <summary>
+    /// A translation unit of several modules is one object, which the debug file names by the
+    /// root's source; each placed module's lines name its own source, so that stepping into a
+    /// placed routine shows the file it was written in.
+    /// </summary>
+    [Fact]
+    public void APlacedModulesLinesNameItsOwnSource()
+    {
+        if (Linkable().FirstOrDefault(f => f.Name == "placement") is not { } fixture)
+        {
+            Assert.NotNull(Repo.Selection);
+            return;
+        }
+        var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
+        var maps = compilation.Outputs
+            .Where(output => output.Kind == OutputKind.LineMap)
+            .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
+        var result = Ca65Oracle.Pinned.Link(
+            LinkConfig(fixture), [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))], debugFile: true);
+        Assert.True(result.Succeeded, result.Messages);
+        var remapped = DebugFile.Remap(result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var problem);
+        Assert.True(remapped is not null, problem);
+
+        // The object main.s became is named by main's source, and every source of its unit has
+        // lines of its own.
+        var module = Records(remapped, "mod").Single(record => record["name"] == "main.o");
+        Assert.Equal("main.nt65", Files(remapped)[module["file"]]);
+        var lines = Records(remapped, "line").Where(record => record.GetValueOrDefault("type") == "1").ToList();
+        foreach (var source in new[] { "main.nt65", "tables.nt65", "flow1.nt65", "iscntc.nt65" })
+            Assert.Contains(lines, record => record["file"] == Id(remapped, source));
+    }
+
     /// <summary>The fixtures that hold a linker configuration, which are the ones that can link.</summary>
     private static IReadOnlyList<FixtureCase> Linkable() =>
         [.. FixtureCase.All().Where(fixture => File.Exists(LinkConfigPath(fixture)))];

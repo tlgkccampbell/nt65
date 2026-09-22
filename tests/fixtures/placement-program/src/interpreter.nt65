@@ -1,0 +1,14 @@
+.module interpreter: placed
+
+.segment CODE
+.proc restore {
+    lda #<tokens::words
+    rts
+}
+
+.place iscntc                       ; this platform's check for control-C, which runs into stop
+
+.export .proc stop {
+    jsr restore
+    rts
+}

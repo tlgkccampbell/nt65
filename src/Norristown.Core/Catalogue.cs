@@ -290,6 +290,13 @@ public static class Catalogue
         "What a segment declaration may say beyond its address size is fixed: the direct page it is reached "
             + "through, the bank it sits in, and the banks it is mirrored in.");
 
+    internal static DiagnosticDescriptor ExpectedPlacement { get; } = Entry(
+        "expected-placement",
+        Severity.Error,
+        "expected {0}",
+        "A module's declaration may say whether another module places it, with `placed` or `placeable` after a "
+            + "`:`, and there is nothing else it may say there.");
+
     internal static DiagnosticDescriptor ExpectedParameterKind { get; } = Entry(
         "expected-parameter-kind",
         Severity.Error,
@@ -592,6 +599,44 @@ public static class Catalogue
         "modules `{0}` and `{1}` differ only in case, and a file system that ignores case writes both to one file",
         "Output is named after the module, and on a file system that ignores case two such names are one file. "
             + "The build would depend on which ran last.");
+
+    internal static DiagnosticDescriptor PlaceMisplaced { get; } = Entry(
+        "place-misplaced",
+        Severity.Error,
+        "a `.place` is written at file level, outside every block: which modules share a translation unit depends on no condition",
+        "Which modules make up one translation unit, and so one `.s`, is structure, read from the files alone. A "
+            + "`.place` stands at file level, in a `.segment` region or before any, and never under an `.if`, a scope, "
+            + "a routine, a segment block, a repetition or a macro body. Code one configuration wants is a module "
+            + "that is always placed, with its items under an `.if` of their own.");
+
+    internal static DiagnosticDescriptor PlaceNotPlaceable { get; } = Entry(
+        "place-not-placeable",
+        Severity.Error,
+        "module `{0}` stands alone, so it may not be placed: its declaration says whether it may, `.module {0}: placed`",
+        "A module that says nothing in its declaration is its own translation unit with an output of its own. One "
+            + "another module places says so where it is declared, `placed` or `placeable`, so that it can be read "
+            + "correctly from its own file. The fix marks it `placed`.");
+
+    internal static DiagnosticDescriptor PlacedTwice { get; } = Entry(
+        "placed-twice",
+        Severity.Error,
+        "module `{0}` is already placed by `{1}`: a module's bytes stand in one place",
+        "A placed module's bytes are written where its `.place` stands, which is one place. Code two programs share "
+            + "is a module each program places once.");
+
+    internal static DiagnosticDescriptor PlacementCycle { get; } = Entry(
+        "placement-cycle",
+        Severity.Error,
+        "a module may not place itself, and this `.place` would: {0}",
+        "A module and everything it places are laid out as one translation unit, in the order the `.place` lines "
+            + "say, which a cycle cannot be.");
+
+    internal static DiagnosticDescriptor PlacedNowhere { get; } = Entry(
+        "placed-nowhere",
+        Severity.Error,
+        "module `{0}` is declared `placed`, and nothing places it: `.place {0}` goes where its bytes belong, or `placeable` lets it stand alone",
+        "A module declared `placed` has no output of its own: its bytes are written where another module places "
+            + "it. One that nothing places would be written nowhere.");
 
     internal static DiagnosticDescriptor NameIsAModulePath { get; } = Entry(
         "name-is-a-module-path",
@@ -1814,6 +1859,14 @@ public static class Catalogue
         "`.next {0}` says flow runs on into `{1}`, and it does not start where this statement ends: a routine runs into the one written directly after it",
         "A routine runs on into the one written directly after it. Naming any other routine would be saying "
             + "something the bytes do not do.");
+
+    internal static DiagnosticDescriptor NextRoutineNotPlaced { get; } = Entry(
+        "next-routine-not-placed",
+        Severity.Error,
+        "`.next {0}` says flow runs on into `{1}`, which is in module `{2}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them",
+        "Across translation units the order of the bytes is the link's, which nt65 does not know. Where one "
+            + "module places the other, both are laid out in one `.s`, and a routine running into another module's "
+            + "is checked there as it is within a file.");
 
     internal static DiagnosticDescriptor IndirectCallUnchecked { get; } = Entry(
         "indirect-call-unchecked",

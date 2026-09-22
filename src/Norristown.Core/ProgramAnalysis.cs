@@ -46,6 +46,9 @@ public sealed record ProgramAnalysis(
     /// <summary>Why every file was analyzed, or null when only the file that changed was.</summary>
     public WholeProgramReason? WholeProgram { get; internal init; }
 
+    /// <summary>Which modules place which, and so which translation units the program is written as.</summary>
+    public Placements Placements { get; internal init; } = Placements.None;
+
     /// <summary>What a later analysis of the same program, one edit on, needs to keep the rest of this one.</summary>
     internal Reuse? Reused { get; init; }
 

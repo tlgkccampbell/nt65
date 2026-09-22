@@ -399,7 +399,10 @@ internal sealed partial class Parser
         return new ExportItemSyntax(name, colon, addressSize, asKeyword, linkerName);
     }
 
-    /// <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
+    /// <summary>
+    /// <c>.module name</c> or <c>.module outer::inner</c>, with <c>: placed</c> or
+    /// <c>: placeable</c> after it where another module may place this one.
+    /// </summary>
     private GreenNode ParseModule()
     {
         var keyword = Advance();
@@ -409,9 +412,28 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.StringLiteral)
         {
             Report(Catalogue.ModuleNameQuoted);
-            return new ModuleDirectiveSyntax(keyword, MissingName(null));
+            return new ModuleDirectiveSyntax(keyword, MissingName(null), null, null);
         }
-        return new ModuleDirectiveSyntax(keyword, ParsePath(Catalogue.ExpectedName.Says("the module's name: `.module name`")));
+        var name = ParsePath(Catalogue.ExpectedName.Says("the module's name: `.module name`"));
+        if (Kind != SyntaxKind.Colon)
+            return new ModuleDirectiveSyntax(keyword, name, null, null);
+        var colon = Advance();
+        if (AtWord("placed") || AtWord("placeable"))
+            return new ModuleDirectiveSyntax(keyword, name, colon, Advance());
+        return new ModuleDirectiveSyntax(keyword, name, colon, Missing(SyntaxKind.Identifier,
+            Catalogue.ExpectedPlacement.Says("`placed` or `placeable`: `.module name: placed`")));
+    }
+
+    /// <summary><c>.place name</c> or <c>.place outer::inner</c>: the module whose bytes go here.</summary>
+    private GreenNode ParsePlace()
+    {
+        var keyword = Advance();
+        if (Kind == SyntaxKind.StringLiteral)
+        {
+            Report(Catalogue.ModuleNameQuoted);
+            return new PlaceDirectiveSyntax(keyword, MissingName(null));
+        }
+        return new PlaceDirectiveSyntax(keyword, ParsePath(Catalogue.ExpectedName.Says("the module to place: `.place name`")));
     }
 
     /// <summary>

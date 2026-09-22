@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 374 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 381 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -12,14 +12,14 @@ siblings stand for what the diagnostic names at the place it is reported.
 
 | area | names | not an error by default |
 |---|---|---|
-| [Reading a line](#reading-a-line) | 58 | — |
-| [Names](#names) | 49 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
+| [Reading a line](#reading-a-line) | 59 | — |
+| [Names](#names) | 54 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
 | [Values](#values) | 49 | — |
 | [Macros](#macros) | 29 | `comparison-never-holds` (warning) |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
-| [Control flow](#control-flow) | 28 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
+| [Control flow](#control-flow) | 29 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
 | [Processor state](#processor-state) | 36 | — |
 | [Output](#output) | 6 | `c-header-name-left-out` (warning), `c-header-untyped` (warning), `omitted-branch` (info) |
 | [The project file](#the-project-file) | 24 | — |
@@ -244,6 +244,12 @@ A macro parameter says what it takes, and the words it may say are fixed. A para
 > expected {0}
 
 A parameter list, an argument list or a parenthesised expression is unbalanced or unopened.
+
+### `expected-placement`
+
+> expected {0}
+
+A module's declaration may say whether another module places it, with `placed` or `placeable` after a `:`, and there is nothing else it may say there.
 
 ### `expected-segment-attribute`
 
@@ -590,6 +596,36 @@ The path names a scope, a module, a type or a routine that does not declare this
 > `{0}` is not exported by module `{1}`
 
 A module names what other modules may see, and this is not among it. The fix is an `.export` on the declaration in the module that owns it.
+
+### `place-misplaced`
+
+> a `.place` is written at file level, outside every block: which modules share a translation unit depends on no condition
+
+Which modules make up one translation unit, and so one `.s`, is structure, read from the files alone. A `.place` stands at file level, in a `.segment` region or before any, and never under an `.if`, a scope, a routine, a segment block, a repetition or a macro body. Code one configuration wants is a module that is always placed, with its items under an `.if` of their own.
+
+### `place-not-placeable`
+
+> module `{0}` stands alone, so it may not be placed: its declaration says whether it may, `.module {0}: placed`
+
+A module that says nothing in its declaration is its own translation unit with an output of its own. One another module places says so where it is declared, `placed` or `placeable`, so that it can be read correctly from its own file. The fix marks it `placed`.
+
+### `placed-nowhere`
+
+> module `{0}` is declared `placed`, and nothing places it: `.place {0}` goes where its bytes belong, or `placeable` lets it stand alone
+
+A module declared `placed` has no output of its own: its bytes are written where another module places it. One that nothing places would be written nowhere.
+
+### `placed-twice`
+
+> module `{0}` is already placed by `{1}`: a module's bytes stand in one place
+
+A placed module's bytes are written where its `.place` stands, which is one place. Code two programs share is a module each program places once.
+
+### `placement-cycle`
+
+> a module may not place itself, and this `.place` would: {0}
+
+A module and everything it places are laid out as one translation unit, in the order the `.place` lines say, which a cycle cannot be.
 
 ### `reexport-module`
 
@@ -1700,6 +1736,12 @@ Nothing falls into the label and nothing branches, jumps or calls to it.
 > `.next {0}` says flow runs on into `{1}`, and it does not start where this statement ends: a routine runs into the one written directly after it
 
 A routine runs on into the one written directly after it. Naming any other routine would be saying something the bytes do not do.
+
+### `next-routine-not-placed`
+
+> `.next {0}` says flow runs on into `{1}`, which is in module `{2}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+
+Across translation units the order of the bytes is the link's, which nt65 does not know. Where one module places the other, both are laid out in one `.s`, and a routine running into another module's is checked there as it is within a file.
 
 ### `next-table-has-no-labels`
 

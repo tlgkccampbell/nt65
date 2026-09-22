@@ -24,11 +24,18 @@ public sealed class ControlFlow
     private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations = [];
     private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls = [];
     private readonly HashSet<(int Position, Expansion? On)> returnAddresses = [];
+    private readonly List<RunningOn> runningOn = [];
+
+    // Whether the file places another module or may be placed itself, so that a routine in it
+    // may run into one whose bytes the file's own layout does not say are next.
+    private readonly bool placing;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
     {
         this.model = model;
         this.layout = layout;
+        placing = layout.PlacePoints.Count > 0
+            || Placements.Declaration(model.Tree) is { } module && Placements.MarkerOf(module) != ModulePlacement.Alone;
     }
 
     /// <summary>Every routine in the file, one region each.</summary>
@@ -36,6 +43,13 @@ public sealed class ControlFlow
 
     /// <summary>What is wrong with the paths through this file.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
+
+    /// <summary>
+    /// Every <c>.next</c> saying that flow runs on into a routine this file's own layout cannot
+    /// show is next: one in another module, or one past a <c>.place</c>. Whether it is next is
+    /// a question about the translation unit, answered once every file in it is laid out.
+    /// </summary>
+    public IReadOnlyList<RunningOn> RunningOn => runningOn;
 
     /// <summary>
     /// What the registers hold at each statement of the file, or null before it has been worked
@@ -844,7 +858,9 @@ public sealed class ControlFlow
     /// <summary>
     /// A <c>.next</c> that names a routine where flow would otherwise run on says that flow
     /// runs into that routine, which is true only when the routine starts where the statement
-    /// ends, in the same stream of bytes.
+    /// ends, in the same stream of bytes. Where the file places another module or may be
+    /// placed, the routine may be another module's, or past a <c>.place</c>, and what is
+    /// next is then the translation unit's to say: the claim is kept for that.
     /// </summary>
     private void CheckRunningOn(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -861,9 +877,14 @@ public sealed class ControlFlow
             {
                 if (Targets.Of(model, written, unit.Step.On) is not { Symbol: { Signature: not null } routine })
                     continue;
-                if (end is { } here && layout.Placed(routine) is { } there
+                if (end is { } here && routine.Tree == model.Tree && layout.Placed(routine) is { } there
                     && there.Stream == here.Stream && there.Offset == here.End)
                 {
+                    continue;
+                }
+                if (placing || routine.Tree != model.Tree)
+                {
+                    runningOn.Add(new RunningOn(unit.Step.Statement, unit.Step.On, routine, written));
                     continue;
                 }
                 diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),

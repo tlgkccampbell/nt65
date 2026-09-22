@@ -44,7 +44,8 @@ The priority is working alongside existing ca65 and cc65 code in the same build,
 accepting ca65 source. nt65 promises a project that mixes them:
 
 1. **Toolchain.** `nt65 build` writes one ca65 source file per module, named after it, and a
-   line map beside each (§13). The project
+   line map beside each (§13); a module another places (§12) is written into that one's file
+   instead of a file of its own. The project
    assembles those files with its existing ca65, built from the cc65 commit nt65 pins
    (§13), and links them with its existing ld65 configuration. nt65 never runs ca65 or ld65, and never reads,
    requires or changes a linker configuration. A build that wants source-level debugging runs
@@ -55,7 +56,8 @@ accepting ca65 source. nt65 promises a project that mixes them:
    declared name, ca65 reports an error.
 3. **Segments.** Output goes only to segments named in the source or in `nt65.json`,
    each with its declared address size. Within a file, items keep their source order in
-   each segment; the order across files is the project's link order.
+   each segment, and a placed module's items stand where its `.place` does; the order across
+   files is the project's link order.
 4. **Symbols.** Everything shared with ca65 is an ordinary linker symbol (§12). An
    export is spelled as its path with its module's in front, joined with `__`
    (`gfx__clear` for `clear` in module `gfx`, `gfx__clear__again` for an exported interior
@@ -275,8 +277,8 @@ A program is the set of `.nt65` files handed to the transpiler. Each file is a m
 begins by saying which, `.module name` (§12). After that it is a sequence of **items**:
 constants, `.config` settings, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
 `.charmap`, `.list`, `.func`, `.signature`, `.export`, `.import`, `.use`, `.if`, `.repeat` and
-`.each` at item level, unnamed `.res` and `.align` padding, segment declarations, segment regions and
-segment blocks.
+`.each` at item level, unnamed `.res` and `.align` padding, segment declarations, segment regions,
+segment blocks and `.place`.
 
 Outside a proc there are no instructions and no labels. Code lives in a `.proc`, and every
 byte outside one belongs to a `.data` declaration (§8), except unnamed `.res` and `.align`,
@@ -514,7 +516,8 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   the root, so a library shared between projects is part of each.
 - `out`: where the output goes, the project root when there is none. A module's output is
   named after it, `.module gfx::sprite` in `out/gfx/sprite.s`, wherever its source is, so
-  moving a source does not move its output. nt65 records what it wrote in
+  moving a source does not move its output. A module another places has none of its own: it
+  is in the output of the module at the root of its translation unit (§12). nt65 records what it wrote in
   `out/.nt65-outputs`, and a later build deletes the output of a module that has gone from the
   program; it deletes nothing the record does not name.
 - `defines`: the build configuration. Each define is a constant visible in every file,
@@ -567,7 +570,7 @@ normally runs in; what it tells the person running it is from where they are.
 | `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
 | `--c-header <file>` | a C header of what the program exports (§13) |
 | `--check` | report and write nothing: no output, no header, no dependency file and no record of what was written |
-| `--stdout` | write the named file's ca65 to standard output and no files. It takes one file, and answers for it whatever is wrong with the rest of the program: what could be written, under a first line saying that it is incomplete and why, which is what the editor shows beside the source (§14) |
+| `--stdout` | write the named file's ca65 to standard output and no files. It takes one file, and answers for it whatever is wrong with the rest of the program: what could be written, under a first line saying that it is incomplete and why, which is what the editor shows beside the source (§14). For a module another places, it is that module's part of its translation unit's output (§12), from the comment that opens the part to the one that closes it |
 | `--watch` | build again whenever the program changes, until interrupted |
 | `--json` | one JSON object per diagnostic on standard output, for whatever is reading nt65 that is not an editor |
 | `--help`, `--version` | |
@@ -1369,7 +1372,7 @@ label:
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
-| falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816 |
+| falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816. The next proc may be another module's where placement puts the two in one translation unit (§12) |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
@@ -2725,11 +2728,84 @@ Every file is a module, and says which first:
 A file without one is an error, a single-file build included, and two files may not be the
 same module. A module's name may be a path, and a path is only a name: `gfx::sprite` needs no
 module `gfx`, and has no special view into it or into `gfx::tile`. **A module is one file**,
-so it is one ca65 translation unit. That buys what no module spread over files could have:
-a private name is private to one `.s`, where no other object can see it, and nt65 never
-chooses the order of two files' bytes in a segment, which the build's link order states. A
-large module is split into submodules, `hw::vic` and `hw::sid`, that share names by exporting
-them.
+and unless something places it (below) it is one ca65 translation unit. That buys what no
+module spread over files could have: a private name is private to one module, where no other
+can see it, and nt65 never chooses the order of two files' bytes in a segment, which the
+program's placements or the build's link order state. A large module is split into
+submodules, `hw::vic` and `hw::sid`, that share names by exporting them.
+
+**Placement.** A program brought over from ca65 is often one translation unit assembled from
+`.include`s, and some of what it includes lands in the middle of another file: a platform's
+routine that the including file's code runs into, or bytes that have to sit where the
+original put them. nt65 has no text inclusion, and says the same with `.place`, which puts a
+module's bytes where the line stands without making it any less a module:
+
+```nt65
+.module iscntc: placed
+
+.segment CODE
+
+.if KIM {
+    .export .proc ISCNTC {
+        ...
+        cmp #$03
+        .next flow1::STOP           ; runs into STOP, which the placement puts next
+    }
+}
+```
+
+```nt65
+.module flow1: placed
+
+.segment CODE
+.proc RESTORE {
+    ...
+    rts
+}
+
+.place iscntc                       ; this platform's check for control-C
+
+.export .proc STOP {
+    ...
+}
+```
+
+`.place m` emits module `m` where it stands, in the output of the module that places it:
+every item of `m`, in each segment `m` writes to, at that point in that segment, in `m`'s own
+order. A module, what it places, and what those place are one translation unit, written as
+one `.s` named after the module at the root (§13). Placement moves bytes and nothing else: a
+placed module keeps its file, its names, its privacy, its exports and its interface, is
+analyzed as itself, and is named by its path like any other module.
+
+A module's declaration says whether it may be placed:
+
+- `.module m`, as every module is unless it says otherwise, stands alone. Its output is its
+  own, and placing it is an error that offers to mark it.
+- `.module m: placed` is placed exactly once and has no output of its own. One that nothing
+  places is an error at its declaration. This is the form for code that depends on where it
+  lands, which is true of it wherever it is used.
+- `.module m: placeable` is placed at most once, and stands alone when nothing places it: a
+  module one program places and another links as an object of its own.
+
+`.place` stands at file level, in a `.segment` region or before any and in no other block,
+never under an `.if`, so which modules
+share a translation unit follows from the files and not from the configuration. Code that
+belongs to one configuration is a module that is always placed and whose items stand under
+an `.if` of their own; in any other configuration it places nothing. A module is placed at
+most once, placement forms no cycle, and what a module places does not touch its regions: the
+line after a `.place` is in the region the line before it was.
+
+Placement is what lets a routine run into another module's. A `.next` to another module's
+routine (§7.4) requires the two to be in one translation unit, where nt65 lays out every byte
+and checks that the target starts where the routine ends, as it does within a file. Across
+translation units the order is the link's, which nt65 does not know, so there the `.next` is
+an error that names placement as the way to say it; that includes a `placeable` module that
+nothing places in this program. A root module that places the rest of a program in order is
+the nt65 form of a ca65 program built as one file of `.include`s: the program is one object,
+and its layout is written in the source, with nothing left for a build to put in order.
+
+Most programs need none of this. A module that owns its routines and ends each one is laid
+out correctly by any link order, and placement is for the code that is not.
 
 A module's symbols are private unless exported. `.export` goes before a declaration, or
 lists names:
@@ -2901,7 +2977,12 @@ declaration wrong.
 ## 13. Transpilation
 
 One module produces one `.s`, named after it: `.module gfx::sprite` is `gfx/sprite.s` under
-the project's `out` (§5.3), with its line map `gfx/sprite.s.lines` beside it. The output is
+the project's `out` (§5.3), with its line map `gfx/sprite.s.lines` beside it. A translation
+unit of several modules (§12) is one `.s`, named after its root, with each placed module's
+items written where its `.place` stands and a comment naming the module and its source above
+and below them. A reference between two modules of one unit needs no import: the name is
+defined in the same file. An export is written as it would be anyway, since code outside
+nt65 may name it. The output is
 readable ca65 with a header comment and source spellings preserved where possible: it is the
 program and nothing else, with everything a debugger needs in the map.
 
@@ -2961,7 +3042,10 @@ of addressing modes.
 `.enum`, `.struct` or cheap local labels, so it never depends on how ca65 resolves
 names. An export is its linker name (§12), its path with its module's in front,
 `gfx__clear`, or the name its `as` gives. A top-level name that is not exported keeps its
-spelling, a scoped name `outer::inner` becomes `outer__inner`, and the end label behind
+spelling and a scoped name `outer::inner` becomes `outer__inner`, except that a module
+another places writes each name it does not export with its module in front, `iscntc__loop`
+and `iscntc__outer__inner`, so that two modules' private names never meet in one file. The
+end label behind
 `.endof(f)` is `f__end` after whatever `f` is written as; these spellings are fixed, because
 other modules and hand-written ca65 refer to them. Cheap
 locals, labels from macro expansions and labels from `.repeat` iterations get names
@@ -3005,9 +3089,10 @@ object code is that a person can read it, so what the output would have said is 
 beside it instead, and put into the debug file after the link.
 
 Each `foo.s` is written with a `foo.s.lines` next to it, the module's *line map*. It holds
-one record a line: `version`, the format's, which is checked; `file`, naming the source by
-its path from the project root and its size in bytes, so that a debugger can tell the source
-has changed under it; and one `line` per line of the `.s` that produces bytes, saying which
+one record a line: `version`, the format's, which is checked; one `file` per source the `.s`
+was written from — its root's, and each placed module's (§12) — naming it by its path from the
+project root and its size in bytes, so that a debugger can tell the source has changed under
+it; and one `line` per line of the `.s` that produces bytes, saying which
 line of which source it came from. A line that produces no bytes gets no record: ld65
 attaches a span to whichever line is in effect while bytes are generated, so a record for a
 label or a constant would cover nothing, which nothing can step to or break on, and a label's
@@ -3022,7 +3107,8 @@ that file, finds the `foo.s.lines` beside each `.s` it names, and adds what they
 `file` record for each source, one `line` record per source line carrying the spans of every
 generated line that came from it, recorded as an external source line as cc65 does for C, and
 that line on each `sym` defined or used there. Only a module's `file` changes, to the source
-it was written from, because it names one file and the one worth naming is the source.
+it was written from, because it names one file and the one worth naming is the source; for a
+translation unit of several modules, that is its root's, and the lines name the rest.
 Everything that was there stays, so a debugger that was showing the generated ca65 still can.
 
 It needs nothing but the debug file, which names every `.s` the program was built from, and
@@ -3082,6 +3168,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.incbin "f"` | `.incbin` with the path made relative to the output file |
 | `.export .struct T {`, `.export .union T {` | its members as constants, and `m__T__sizeof`, its size |
 | `.module`, `.use`, `.export .use` | nothing |
+| `.place m` | `m`'s items where the line stands, in each segment it writes to, between `; .place m  file:line` and `; end of m`, and the placing file's segment written again after them where `m` left another |
 | reference to another module's address | `.import m__s` or `.importzp m__s` in the referencing module, or an import's own name |
 | reference to another module's constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing module |
 | `NAME = expr` | `NAME = expr`, for a constant or an address alias, written where it stands and opening no segment; one using `*` is in its segment |
@@ -3470,8 +3557,9 @@ editor shows them faded. The editor has a setting for which named configuration 
 is; a project that has no configuration of that name builds its own settings, and the name is
 a mistake only when no project has it.
 
-**The incremental boundary is the file's interface**: its module's name, what it
-re-exports, and its exported declarations, each
+**The incremental boundary is the file's interface**: its module's name and whether it is
+placed, what it places and in what order among its own items, what it re-exports, and its
+exported declarations, each
 carrying everything a user of it needs (a constant's value, a label's address size, a
 data declaration's `.sizeof` and `.countof`, a routine's signature, a list's items, a function's
 body, a macro's kind and body and the exported symbols it uses). A family's instances are among
@@ -3492,7 +3580,9 @@ its body is reported at the call with that line named beside it. Nothing in the 
 depends on `*`: code sizes are layout, left to the linker (§7.6). If an edit leaves
 the interface unchanged, no other file is re-analyzed, and the file it is in is laid out and
 followed again whole: where control goes is read off the order layout wrote the bytes in, so
-the unit is the file rather than the proc. The only program-wide tables are the defines, the
+the unit is the file rather than the proc. Where the file is one of several in a translation
+unit (§12), the unit is laid out again, since a `.next` from one of its modules into another
+is checked against that layout. The only program-wide tables are the defines, the
 module table, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
 signatures declared rather than inferred is what protects this: inference would make
 every caller depend on every callee's body.
@@ -3596,6 +3686,20 @@ Recorded so the reasoning survives. None is open.
   private name private at the link, where ca65 has no namespace but the global one, and
   keeps nt65 from choosing the order of two files' bytes. A module's path is only a name,
   with no relative paths and no special view of its neighbours.
+- **Layout across modules is placement, stated in the source.** A ca65 program built as one
+  file of `.include`s puts one file's routine in the middle of another's and lets it run into
+  what follows, and a module being one object could not say that. A `.next` into another
+  module checked at link time, with the build's object list keeping the order, was considered
+  and rejected: it hands the programmer ld65's object order to get right, catches a mistake
+  only at the link, and still cannot put one module's bytes inside another's. `.place` states
+  the layout where upstream stated it, keeps every module a module, and lets nt65 check a
+  cross-module `.next` as it checks one within a file. What a translation unit holds is
+  structure, so `.place` is never under an `.if`. Whether a module may be placed is said in
+  its declaration, because a module that runs into code it does not hold cannot be read
+  correctly from its own file otherwise, and so that forgetting to place it, or placing one
+  that was not meant for it, is an error where the mistake is: `placed` must be, `placeable`
+  may be, and a module that says neither is what every module was before, since most programs
+  have no use for any of it.
 - **A local name beats a `*`, and an explicit `.use` may not collide.** Another module adding
   an export can never change what a name here means, and a name brought in on purpose that a
   declaration would hide is a mistake to say so about.
@@ -4161,19 +4265,21 @@ is in the sections above.
 ```text
 ; Quoted words are tokens, except that 'a?', 'dp*', 'z:' and the like are a name and the
 ; mark after it. Directives, mnemonics, registers and the contextual words (dp, bank,
-; mirrors, as, proc, zp, abs, far and the state items) match without regard to case.
+; mirrors, as, proc, zp, abs, far, placed, placeable and the state items) match without
+; regard to case.
 ; What the parser reads and the binder then rejects is noted in comments.
 ; No mnemonic is reserved (§4), so every `ident` that names a declaration below may also be
 ; a mnemonic: `rts:` is a label, `lda = 5` a constant and `bne!(x)` a macro call, because
 ; what follows the first word is what decides. A register may not, except as a `member-name`.
 file        := module-decl item* (region item*)*
-module-decl := '.module' module-path                  ; first
+module-decl := '.module' module-path (':' ('placed' | 'placeable'))?   ; first
 region      := '.segment' ident NL                    ; at file level only
 item        := const | config | data-decl | padding | proc | multiproc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
-             | warning | error
+             | warning | error | place
 config      := '.config' ident '=' expr                ; at file level, outside every block
+place       := '.place' module-path                    ; at file level, in no block but a region
 assert      := '.assert' expr (',' string)?
 warning     := '.warning' string
 error       := '.error' string

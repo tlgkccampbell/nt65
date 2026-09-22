@@ -193,6 +193,74 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
+    /// A placed module's bytes land where its <c>.place</c> stands, in every segment it writes
+    /// to: in CODE between the routines around the line, and in RODATA after what the placing
+    /// file had written there and before what it writes next. The linked image says so, byte for
+    /// byte, against the same program written as one file by hand.
+    /// </summary>
+    [Fact]
+    public void APlacedModulesBytesLandWhereItsPlaceStands()
+    {
+        const string Main = """
+            .module main
+            .segment RODATA
+            .data before: .byte $01
+            .segment CODE
+            .export .proc start {
+                lda #$aa
+                rts
+            }
+            .place part
+            .export .proc finish {
+                lda #$bb
+                rts
+            }
+            .segment RODATA
+            .data after: .byte $03
+            """;
+        const string Part = """
+            .module part: placed
+            .segment RODATA
+            .data middle: .byte $02
+            .segment CODE
+            .export .proc between {
+                lda #$cc
+                rts
+            }
+            """;
+        const string ByHand = """
+            .setcpu "6502"
+            .segment "RODATA": absolute
+                .byte $01
+            .segment "CODE": absolute
+                lda #$aa
+                rts
+            .segment "RODATA": absolute
+                .byte $02
+            .segment "CODE": absolute
+                lda #$cc
+                rts
+                lda #$bb
+                rts
+            .segment "RODATA": absolute
+                .byte $03
+            """;
+
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Main), new SourceFile("part.nt65", Part)], Processor.Cpu.Mos6502);
+        Assert.DoesNotContain(generated.Diagnostics, d => d.Severity == Severity.Error);
+
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Ca65).Text)]);
+        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
+
+        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
+        Assert.True(fromHand.Succeeded, fromHand.Messages);
+        Assert.Equal([0xa9, 0xaa, 0x60, 0xa9, 0xcc, 0x60, 0xa9, 0xbb, 0x60, 0x01, 0x02, 0x03], fromHand.Binary);
+        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+    }
+
+    /// <summary>
     /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and reports each
     /// way ca65 disagrees with it: any message at all, or a line whose byte count is not the
     /// one nt65 computed.

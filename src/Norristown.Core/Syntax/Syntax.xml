@@ -1577,6 +1577,18 @@
         <summary>The module's name, which is a path from the root of the modules.</summary>
       </PropertyComment>
     </Field>
+    <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The <c>:</c> before whether the module may be placed, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Colon"/>
+    </Field>
+    <Field Name="Placement" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The <c>placed</c> or <c>placeable</c> after the <c>:</c>, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+    </Field>
   </Node>
 
   <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax">
@@ -1844,6 +1856,24 @@
     <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>The label of the instruction written to, or null when no name was written.</summary>
+      </PropertyComment>
+    </Field>
+  </Node>
+
+  <Node Name="PlaceDirectiveSyntax" Base="StatementSyntax">
+    <Kind Name="PlaceDirective"/>
+    <TypeComment>
+      <summary><c>.place name</c>: another module's bytes, emitted where the line stands.</summary>
+    </TypeComment>
+    <Field Name="Keyword" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The <c>.place</c> that starts the line.</summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="Name" Type="NameExpressionSyntax">
+      <PropertyComment>
+        <summary>The module placed, as a path from the root of the modules.</summary>
       </PropertyComment>
     </Field>
   </Node>

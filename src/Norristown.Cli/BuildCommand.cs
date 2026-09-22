@@ -154,8 +154,11 @@ public static class BuildCommand
         if (command.Check)
             return new BuildResult(0, root, watched);
 
+        // A named module another places is written as the translation unit it is in.
         var only = named.Count > 0 && project.Files.Count > 0 ? named.ToHashSet(StringComparer.Ordinal) : null;
-        var written = compilation.Outputs.Where(o => only is null || only.Contains(o.Source)).ToList();
+        var written = compilation.Outputs
+            .Where(o => only is null || o.AllSources.Any(source => only.Contains(source.Path)))
+            .ToList();
         string[] extra = projectFile is null ? [] : [ProjectFile.Name];
         foreach (var o in written)
             Write(Path.Combine(root, o.Path), o.Text, [.. o.Dependencies.Concat(extra).Select(dependency => Path.Combine(root, dependency))]);
@@ -165,9 +168,9 @@ public static class BuildCommand
         {
             // A build that worked says what it tidied up as the note it is: what else goes to
             // stderr is a diagnostic, and a script that reads stderr for those should not have
-            // to know this one apart.
+            // to know this one apart. The module may have gone, or be placed in another's output.
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
-                error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, whose module is not in the program");
+                error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, which the program no longer writes");
         }
 
         if (header is not null && compilation.Header is { } text)

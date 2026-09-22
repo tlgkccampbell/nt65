@@ -86,7 +86,7 @@ public sealed class BuildCommandTests : IDisposable
         var (code, said) = Run(app, "build");
 
         Assert.Equal(0, code);
-        Assert.Equal("nt65: note: deleted build/hw/vic.s, whose module is not in the program\n", said);
+        Assert.Equal("nt65: note: deleted build/hw/vic.s, which the program no longer writes\n", said);
         Assert.False(Exists("app/build/hw/vic.s"));
         Assert.False(Directory.Exists(Path.Combine(app, "build", "hw")));
         Assert.True(Exists("app/build/main.s"));
@@ -340,6 +340,43 @@ public sealed class BuildCommandTests : IDisposable
 
         // It answers about one file, so it is one file it is asked about.
         Assert.Equal(2, Run(app, "build", "--stdout").Code);
+    }
+
+    /// <summary>
+    /// A module another places has no output of its own. <c>--stdout</c> on its file writes its
+    /// part of its unit's output, between the comments that open and close it, which is what the
+    /// editor shows beside it; naming it writes the unit it is in; and the output it had while it
+    /// stood alone is deleted by the next whole build, as any output the program no longer
+    /// writes is.
+    /// </summary>
+    [Fact]
+    public void APlacedModuleIsWrittenAsItsPartOfTheUnit()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        var app = Path.Combine(root.FullName, "app");
+        File("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n");
+        File("app/part.nt65", ".module part: placeable\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n");
+        Assert.Equal(0, Run(app, "build").Code);
+        Assert.True(Exists("app/build/part.s"));
+
+        File("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n");
+        var (code, written, said) = Apart(app, false, "build", "--stdout", "part.nt65");
+        Assert.Equal((0, ""), (code, said));
+        Assert.Equal(
+            "; .place part  main.nt65:8\n; .proc tail  part.nt65:4\npart__tail:\n    rts\n; end of tail\n; end of part\n",
+            written);
+
+        Assert.Equal(0, Run(app, "build", "part.nt65").Code);
+        Assert.Contains("; .place part  main.nt65:8\n", Read("app/build/main.s"), StringComparison.Ordinal);
+        Assert.True(Exists("app/build/part.s"));
+
+        var (whole, deleted) = Run(app, "build");
+        Assert.Equal(0, whole);
+        Assert.Equal(
+            "nt65: note: deleted build/part.s, which the program no longer writes\n"
+                + "nt65: note: deleted build/part.s.lines, which the program no longer writes\n",
+            deleted);
+        Assert.False(Exists("app/build/part.s"));
     }
 
     private static (int Code, string Said) Run(string directory, params string[] arguments)

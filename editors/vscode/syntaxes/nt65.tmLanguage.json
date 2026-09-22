@@ -157,6 +157,28 @@
           ]
         },
         {
+          "begin": "(?i)(\\.module)\\b",
+          "end": "$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "(?i)(?<!:):(?!:)\\s*\\b(placed|placeable)\\b",
+              "captures": {
+                "1": {
+                  "name": "storage.type.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
           "begin": "(?i)(\\.(?:repeat|each))\\b",
           "end": "(?=\\{)|$",
           "beginCaptures": {

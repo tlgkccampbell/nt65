@@ -20,7 +20,7 @@ namespace Norristown.Emit;
 /// nt65 makes no claim about.
 /// </param>
 /// <param name="Source">
-/// The line of this file's source it came from, counting from one, or 0 for one that came
+/// The line of its module's source it came from, counting from one, or 0 for one that came
 /// from nowhere the map should name.
 /// </param>
 /// <param name="Label">
@@ -28,5 +28,9 @@ namespace Norristown.Emit;
 /// Null for every other line, the ones whose name stands on a line of its own included.
 /// </param>
 /// <param name="Comment">What nt65 says about the line, written at a column of its own.</param>
+/// <param name="File">
+/// Which of the translation unit's sources <see cref="Source"/> counts in: 0 for the module the
+/// output is named after, and one more for each module placed in it, in the order it writes them.
+/// </param>
 internal sealed record EmittedLine(
-    string Text, int Bytes = 0, int Source = 0, string? Label = null, string? Comment = null);
+    string Text, int Bytes = 0, int Source = 0, string? Label = null, string? Comment = null, int File = 0);

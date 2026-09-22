@@ -1,0 +1,3 @@
+.module stray: placed
+
+.place twice                        ;! error[placed-twice]: module `twice` is already placed by `main`: a module's bytes stand in one place

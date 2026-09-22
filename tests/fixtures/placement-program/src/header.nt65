@@ -1,0 +1,8 @@
+.module header: placed
+
+.segment RODATA
+.export .data banner: .byte "BASIC", 0
+
+; tokens is placed after this module, so what ca65 needs here as it reaches the line is
+; written as its value.
+.align tokens::ENTRY

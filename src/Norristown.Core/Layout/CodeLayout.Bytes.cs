@@ -24,6 +24,21 @@ public sealed partial class CodeLayout
     /// <summary>Whether a distance is one a branch can reach.</summary>
     private static bool InRange(int reach) => reach is >= -128 and <= 127;
 
+    /// <summary>
+    /// A <c>.place</c>, where another module's bytes go. Whatever that module writes stands
+    /// between the bytes before the line and the bytes after it, so nothing after it is at a
+    /// distance this file knows from anything before it: what is known across it is the
+    /// translation unit's to say, once every module in it is laid out. One written anywhere
+    /// but at file level places nothing, and has been reported.
+    /// </summary>
+    private void PlaceModule(PlaceDirectiveSyntax directive)
+    {
+        if (expansion is not null || !Placements.AtFileLevel(directive))
+            return;
+        measuredIn[Stream] = nextStream++;
+        placePoints.Add(new PlacePoint(directive, steps.Count, Measured, segment));
+    }
+
     /// <summary>Records what a line assembles to on this writing of it.</summary>
     private void Laid(StatementSyntax statement, LineLayout laid)
     {

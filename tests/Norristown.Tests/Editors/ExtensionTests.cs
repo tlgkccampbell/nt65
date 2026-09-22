@@ -109,7 +109,7 @@ public sealed class ExtensionTests : IDisposable
         // What the command says about itself has no position, so the Problems panel is left
         // holding only what is wrong with the program.
         Assert.DoesNotMatch(matcher, "nt65: no input files, and no nt65.json");
-        Assert.DoesNotMatch(matcher, "nt65: deleted build/gone.s, whose module is not in the program");
+        Assert.DoesNotMatch(matcher, "nt65: deleted build/gone.s, which the program no longer writes");
     }
 
     /// <summary>The severities the matcher knows are the ones a diagnostic can have.</summary>

@@ -1,0 +1,2 @@
+; Declared to be placed, and placed nowhere: its bytes would be written nowhere.
+.module lonely: placed              ;! error[placed-nowhere]: module `lonely` is declared `placed`, and nothing places it: `.place lonely` goes where its bytes belong, or `placeable` lets it stand alone

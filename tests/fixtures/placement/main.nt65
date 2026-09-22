@@ -1,0 +1,30 @@
+; A program laid out as one translation unit: main places tables and flow1, and flow1 places
+; iscntc, so main.s holds all four and none of them has an output of its own. What main names
+; in them needs no import, because it is defined in the same file.
+.module main
+
+.cpu 6502
+
+; A private name tables writes too: each placed module writes its own with the module in front.
+count = 3
+
+.segment CODE
+.export .proc start {
+    lda #count
+    lda tables::first
+    jsr flow1::STOP
+    rts
+}
+
+; Its bytes go here in CODE, and in RODATA where RODATA has reached, in its own order.
+.place tables
+
+.segment RODATA
+.data last: .byte $ee, count
+
+.segment CODE
+.place flow1
+
+.export .proc finish {
+    rts
+}

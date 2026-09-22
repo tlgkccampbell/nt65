@@ -427,7 +427,8 @@ internal sealed class Server
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request, CancellationToken cancellation) =>
         At(request, cancellation) is { } asked
-            && Lsp.ToDefinition(asked.Program, asked.Model, asked.Position) is { } where
+            && (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
+                ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
             ? outgoing.Spell(where)
             : null;
 

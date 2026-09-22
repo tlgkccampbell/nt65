@@ -8,12 +8,18 @@ namespace Norristown.Emit;
 /// writes nothing for a program that is wrong, and this writes what the emitter got to anyway,
 /// under a first line saying that it is incomplete and why.
 /// <para>
+/// A module another places has no file of its own: what it became is its part of the file its
+/// translation unit is written as, from the comment that opens the part to the one that closes
+/// it, what it places in turn included. What it exports and imports is at the top of that file,
+/// with every other module's.
+/// </para>
+/// <para>
 /// Where each line came from is carried beside the text rather than in it, as it is in the map
 /// a build writes: the ca65 shown is the ca65 that would be assembled, and not a listing with
 /// the source numbered through it.
 /// </para>
 /// </summary>
-/// <param name="Path">Where the file goes, relative to the project root.</param>
+/// <param name="Path">Where the file goes, relative to the project root: for a placed module, the file its part is in.</param>
 /// <param name="Source">The logical path of the source it was written from.</param>
 /// <param name="Text">The ca65, always with <c>\n</c> line endings.</param>
 /// <param name="SourceLines">
@@ -34,11 +40,33 @@ public sealed record OutputPreview(
     {
         if (Compiler.EmitFile(analysis, project, path) is not { } output)
             return null;
+        var (text, lines) = PartOf(output, path);
         var note = Incomplete(analysis, path);
         return note is null
-            ? new OutputPreview(output.Path, path, output.Text, output.LineSources, null)
-            : new OutputPreview(
-                output.Path, path, $"; {note}\n{output.Text}", [0, .. output.LineSources], note);
+            ? new OutputPreview(output.Path, path, text, lines, null)
+            : new OutputPreview(output.Path, path, $"; {note}\n{text}", [0, .. lines], note);
+    }
+
+    /// <summary>
+    /// The part of <paramref name="output"/> <paramref name="path"/> wrote, and which of that
+    /// source's lines each of its lines came from: the whole file for the module it is named
+    /// after, and the lines of its part for a module placed in it. A line another module wrote
+    /// came from nowhere this source did.
+    /// </summary>
+    private static (string Text, IReadOnlyList<int> Lines) PartOf(OutputFile output, string path)
+    {
+        if (output.Source == path)
+            return (output.Text, output.LineSources);
+        var index = output.Sources.ToList().FindIndex(source => source.Path == path);
+        if (index < 0)
+            return ("", []);
+        var part = output.Sources[index];
+        var all = output.Text.Split('\n');
+        var text = string.Concat(all.Skip(part.First).Take(part.Count).Select(line => line + "\n"));
+        var lines = Enumerable.Range(part.First, part.Count)
+            .Select(i => i < output.LineFiles.Count && output.LineFiles[i] == index ? output.LineSources[i] : 0)
+            .ToList();
+        return (text, lines);
     }
 
     /// <summary>

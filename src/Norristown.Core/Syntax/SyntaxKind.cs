@@ -232,6 +232,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.module hw::vic</c>: the name of the module a file is.</summary>
     ModuleDirective,
 
+    /// <summary><c>.place hw::vic</c>: another module's bytes, emitted where the line stands.</summary>
+    PlaceDirective,
+
     /// <summary><c>.use hw::init</c>, <c>.use hw::{a, b}</c>, <c>.use hw::*</c>, <c>.use hw::init as i</c>.</summary>
     UseDirective,
 

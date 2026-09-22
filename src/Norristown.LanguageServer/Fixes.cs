@@ -57,6 +57,11 @@ internal static class Fixes
                     [Exported(declaring, name)]);
                 break;
 
+            case FixKind.Placed when fix.At is { } at && analysis.ModelFor(at.File) is { } declaring:
+                yield return Fix(diagnostic, $"Declare `{declaring.FileScope.Module}` as placed",
+                    [new Edit(declaring.Tree, new TextSpan(Edits.SpanOf(declaring.Tree, at).End, 0), ": placed")]);
+                break;
+
             case FixKind.Use when fix.Text is { } path:
                 yield return Fix(diagnostic, $"Bring in `{path}` with `.use`", [Used(tree, path)]);
                 break;

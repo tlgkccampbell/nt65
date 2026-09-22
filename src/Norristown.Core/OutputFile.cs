@@ -39,6 +39,22 @@ public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> Lin
     /// </summary>
     public IReadOnlyList<int> LineSources { get; init; } = [];
 
+    /// <summary>
+    /// Which of <see cref="Sources"/> each line's entry in <see cref="LineSources"/> counts in,
+    /// one entry per line, or empty where every line came from <see cref="Source"/>.
+    /// </summary>
+    public IReadOnlyList<int> LineFiles { get; init; } = [];
+
+    /// <summary>
+    /// Every source the file was written from: <see cref="Source"/> first, and then each module
+    /// placed in it, in the order it writes them. Empty where the file is one module's.
+    /// </summary>
+    public IReadOnlyList<OutputSource> Sources { get; init; } = [];
+
+    /// <summary>The sources the file was written from, <see cref="Source"/> alone where it is one module's.</summary>
+    public IReadOnlyList<OutputSource> AllSources =>
+        Sources.Count > 0 ? Sources : [new OutputSource(Source, SourceSize, 0, LineBytes.Count)];
+
     /// <summary>A file whose lengths nothing has worked out, such as one a test wrote by hand.</summary>
     public OutputFile(string path, string text) : this(path, text, []) { }
 }

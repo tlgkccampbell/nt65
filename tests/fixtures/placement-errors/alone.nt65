@@ -1,0 +1,6 @@
+.module alone
+
+.segment CODE
+.export .proc entry {
+    rts
+}

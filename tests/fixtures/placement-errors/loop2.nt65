@@ -1,0 +1,3 @@
+.module loop2: placed
+
+.place loop1                        ;! error[placement-cycle]: a module may not place itself, and this `.place` would: `loop1` places `loop2`, which places `loop1`

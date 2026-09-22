@@ -1,0 +1,6 @@
+.module spare: placeable
+
+.segment CODE
+.export .proc go {
+    rts
+}

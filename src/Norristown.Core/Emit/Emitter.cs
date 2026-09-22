@@ -14,6 +14,11 @@ namespace Norristown.Emit;
 /// the output is flat and nothing in it opens a block the source's would stand for. It is
 /// deterministic: the same source always gives the same bytes.
 /// <para>
+/// A module another places has no file of its own. One emitter writes each module of a
+/// translation unit, and the one at the root writes each placed module's lines where its
+/// <c>.place</c> stands, so that the unit is one file.
+/// </para>
+/// <para>
 /// Everything the output depends on is written into it. The header fixes the CPU and
 /// switches off every ca65 option that changes syntax; every segment carries its address
 /// size; every addressing mode that could be read two ways carries its prefix; and character
@@ -50,6 +55,13 @@ public sealed class Emitter
     private readonly List<Diagnostic> diagnostics;
     private readonly string source;
     private readonly string output;
+
+    // Which of the translation unit's sources this module is, which every line it writes names.
+    private readonly int file;
+
+    // Where the part of the output each placed module wrote opens and closes: the modules this
+    // one places, and what they place in turn.
+    private readonly List<(string Source, EmittedLine Opens, EmittedLine Closes)> parts = [];
 
     // The output, a line at a time and in its parts until the last of it is written: what a
     // run of named data lines lines up on, and what a run of equal bytes becomes, are
@@ -89,12 +101,17 @@ public sealed class Emitter
 
     // The line an expansion's output maps back to. The lines of an expansion map to the line
     // of the call, the way a C debugger treats a preprocessor macro, and only a line of this
-    // file can be named: the line map names one source, and a body may belong to another.
+    // file can be named: the line map names the module's source, and a body may belong to another.
     private LineSyntax? callLine;
+
+    // The modules this one places, by the `.place` that places each, and the files of the
+    // translation unit, whose names are defined in the same output and need no import.
+    private IReadOnlyDictionary<PlaceDirectiveSyntax, Emitter> placing = new Dictionary<PlaceDirectiveSyntax, Emitter>();
+    private IReadOnlySet<string> unit = new HashSet<string>(StringComparer.Ordinal);
 
     private Emitter(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
-        string source, string output, IReadOnlySet<Symbol> measuredElsewhere)
+        string source, string output, IReadOnlySet<Symbol> measuredElsewhere, int file = 0)
     {
         statements = new Statements(this);
         this.measuredElsewhere = measuredElsewhere;
@@ -104,6 +121,7 @@ public sealed class Emitter
         this.diagnostics = diagnostics;
         this.source = source;
         this.output = output;
+        this.file = file;
     }
 
     /// <summary>
@@ -120,16 +138,75 @@ public sealed class Emitter
             model.Tree.Path, path, measuredElsewhere ?? new HashSet<Symbol>());
         emitter.Ends();
         emitter.Header();
-        emitter.Exports();
-        emitter.Imports();
+        emitter.Linkage(emitter.Exports());
+        emitter.Linkage(emitter.Imports());
         emitter.WalkContainer(model.Tree.Root);
         emitter.Columns();
         emitter.Filled();
         return new OutputFile(path, emitter.Written(), [.. emitter.lines.Select(line => line.Bytes)])
         {
             Source = model.Tree.Path,
-            SourceSize = Encoding.UTF8.GetByteCount(model.Tree.Text),
+            SourceSize = SizeOf(model),
             LineSources = [.. emitter.lines.Select(line => line.Source)],
+        };
+    }
+
+    /// <summary>
+    /// The ca65 for a translation unit of several modules, one <c>.s</c> named after the first of
+    /// <paramref name="members"/>, which is the module at the root; the others are the modules
+    /// placed in it, in the order it writes them. Each placed module's items are written where
+    /// its <c>.place</c> stands, between a comment naming it and its source and one closing it,
+    /// and what every module exports and imports is gathered at the top: an import once however
+    /// many modules make it, and none at all of what a module of the unit defines.
+    /// </summary>
+    internal static OutputFile Emit(
+        IReadOnlyList<(SemanticModel Model, CodeLayout Layout, FlatNames Names, IReadOnlySet<Symbol> MeasuredElsewhere)> members,
+        Placements placements, List<Diagnostic> diagnostics, string? outRoot = null)
+    {
+        var root = members[0].Model;
+        var path = OutputPath(root, outRoot);
+        var unit = members.Select(member => member.Model.Tree.Path).ToHashSet(StringComparer.Ordinal);
+        var emitters = members
+            .Select((member, i) => new Emitter(member.Model, member.Layout, member.Names, diagnostics,
+                member.Model.Tree.Path, path, member.MeasuredElsewhere, i))
+            .ToList();
+        var byPath = emitters.ToDictionary(emitter => emitter.source, StringComparer.Ordinal);
+        foreach (var emitter in emitters)
+        {
+            emitter.unit = unit;
+            emitter.placing = emitter.model.Tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()
+                .Where(place => placements.Placed(place) is { } placed && byPath.ContainsKey(placed.Path))
+                .ToDictionary(place => place, place => byPath[placements.Placed(place)!.Path]);
+            emitter.Ends();
+        }
+
+        var first = emitters[0];
+        first.Header();
+        first.Linkage([.. emitters.SelectMany(emitter => emitter.Exports()).Distinct(StringComparer.Ordinal)]);
+        first.Linkage([.. emitters.SelectMany(emitter => emitter.Imports()).Distinct(StringComparer.Ordinal)]);
+        first.WalkContainer(root.Tree.Root);
+        first.Columns();
+        first.Filled();
+
+        // Each placed module's part is found by the lines that open and close it, which are the
+        // same lines however many the passes above took away before them.
+        var lines = first.lines;
+        var sources = new List<OutputSource> { new(root.Tree.Path, SizeOf(root), 0, lines.Count) };
+        foreach (var member in members.Skip(1))
+        {
+            var part = first.parts.FirstOrDefault(part => part.Source == member.Model.Tree.Path);
+            var opens = part.Opens is null ? -1 : lines.FindIndex(line => ReferenceEquals(line, part.Opens));
+            var closes = part.Closes is null ? -1 : lines.FindIndex(line => ReferenceEquals(line, part.Closes));
+            sources.Add(new OutputSource(
+                member.Model.Tree.Path, SizeOf(member.Model), Math.Max(opens, 0), opens < 0 ? 0 : closes - opens + 1));
+        }
+        return new OutputFile(path, first.Written(), [.. lines.Select(line => line.Bytes)])
+        {
+            Source = root.Tree.Path,
+            SourceSize = SizeOf(root),
+            LineSources = [.. lines.Select(line => line.Source)],
+            LineFiles = [.. lines.Select(line => line.File)],
+            Sources = sources,
         };
     }
 
@@ -156,6 +233,9 @@ public sealed class Emitter
                 && name.EndsWith(".nt65", StringComparison.OrdinalIgnoreCase) ? name[..^5] + ".s" : name + ".s";
         return string.IsNullOrEmpty(outRoot) || outRoot == "." ? path : $"{outRoot.TrimEnd('/')}/{path}";
     }
+
+    /// <summary>How many bytes a module's source is, which the line map records.</summary>
+    private static int SizeOf(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
 
     /// <summary>A number as the output writes it: hexadecimal, at the width it is used at.</summary>
     private static string Hex(long value, int digits) =>
@@ -269,36 +349,38 @@ public sealed class Emitter
     /// become. An import is somebody else's, and every module that uses one imports it.
     /// </para>
     /// </summary>
-    private void Exports()
+    private List<string> Exports()
     {
-        var any = false;
+        var written = new List<string>();
         foreach (var symbol in model.Symbols)
         {
             if (IsSized(symbol) && symbol.Tree == model.Tree)
-            {
-                if (!any)
-                    Blank();
-                any = true;
-                Line(Linked(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeOf(symbol)));
-            }
+                written.Add(Linked(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeOf(symbol)));
             if (!symbol.IsExported || !ProgramSymbols.IsLinked(symbol))
                 continue;
-            if (!any)
-                Blank();
-            any = true;
             exported.Add(symbol);
 
             // A constant is as wide as its value, which is how ca65 sizes one it is given.
             var size = symbol.ExportSize
                 ?? Implicit(symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize());
-            Line(Linked(".export", size, Named(symbol)));
+            written.Add(Linked(".export", size, Named(symbol)));
 
             // Another module that measures the declaration names its end, which goes with it.
             if (measuredElsewhere.Contains(symbol))
-                Line(Linked(".export", size, EndOf(symbol)));
+                written.Add(Linked(".export", size, EndOf(symbol)));
         }
-        if (any)
-            pendingBlank = true;
+        return written;
+    }
+
+    /// <summary>A run of exports or imports, set off from what is around it by a blank line.</summary>
+    private void Linkage(IReadOnlyList<string> written)
+    {
+        if (written.Count == 0)
+            return;
+        Blank();
+        foreach (var text in written)
+            Line(text);
+        pendingBlank = true;
     }
 
     /// <summary>
@@ -313,26 +395,23 @@ public sealed class Emitter
     /// uses, and an assertion that the definition it will be linked against agrees.
     /// </para>
     /// </summary>
-    private void Imports()
+    private List<string> Imports()
     {
-        var any = false;
+        var written = new List<string>();
         var used = model.Used.ToHashSet();
         foreach (var symbol in model.Symbols
             .Where(symbol => symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant && used.Contains(symbol))
-            .Concat(model.ExternalSymbols))
+            .Concat(model.ExternalSymbols.Where(symbol => !DefinedInTheUnit(symbol))))
         {
             if (Import(symbol) is not { } line)
                 continue;
-            if (!any)
-                Blank();
-            any = true;
-            Line(line);
+            written.Add(line);
 
             // A checked import is checked by every module that uses it, since each was built
             // against the value.
             if (symbol is { Kind: SymbolKind.ImportedConstant } && symbol.Value.AsNumber() is { } checkedValue)
             {
-                Line($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
+                written.Add($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
                     + $"\"{Named(symbol)} is not {Constant(checkedValue)}, which is what "
                     + $"{source} was built against\"");
             }
@@ -340,26 +419,27 @@ public sealed class Emitter
 
         // What the linker defines for a segment this file asks about, or a macro it calls does.
         foreach (var (name, size) in SegmentImports())
-        {
-            if (!any)
-                Blank();
-            any = true;
-            Line(Linked(".import", size, name));
-        }
+            written.Add(Linked(".import", size, name));
 
         // The end of what this file measures in another file comes from that file, which
         // exports it beside the declaration.
-        foreach (var measured in Extents.MeasuredIn(model).Where(symbol => symbol.Tree != model.Tree)
+        foreach (var measured in Extents.MeasuredIn(model)
+            .Where(symbol => symbol.Tree != model.Tree && !DefinedInTheUnit(symbol))
             .OrderBy(symbol => Named(symbol), StringComparer.Ordinal))
         {
-            if (!any)
-                Blank();
-            any = true;
-            Line(Linked(".import", measured.AddressSizeIn(model.Tree), EndOf(measured)));
+            written.Add(Linked(".import", measured.AddressSizeIn(model.Tree), EndOf(measured)));
         }
-        if (any)
-            pendingBlank = true;
+        return written;
     }
+
+    /// <summary>
+    /// Whether another module of the translation unit defines <paramref name="symbol"/>, in the
+    /// same output as this one: it is named there as it is, and importing it, or writing a
+    /// constant out by value beside its definition, would define it twice. What a module
+    /// imports from outside the program is imported however many modules of the unit use it.
+    /// </summary>
+    private bool DefinedInTheUnit(Symbol symbol) =>
+        unit.Contains(symbol.Tree.Path) && symbol.Kind is not (SymbolKind.ImportedAddress or SymbolKind.ImportedConstant);
 
     /// <summary>
     /// The names ld65 defines for the segments this file's <c>.loadof</c>, <c>.runof</c> and
@@ -1868,7 +1948,33 @@ public sealed class Emitter
     /// </summary>
     private void Line(string text) => Write(new EmittedLine(text));
 
-    private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd() });
+    private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
+
+    /// <summary>
+    /// A <c>.place</c>: the module it places, written here in full, between a comment naming it
+    /// and where the line is and one closing it. The placed module's lines go where the line
+    /// stands in whichever segment each of them is in, which is what writing them here does; the
+    /// segment this file is in is written again before its next line wherever the placed module
+    /// left another.
+    /// </summary>
+    private void Place(PlaceDirectiveSyntax directive)
+    {
+        if (!placing.TryGetValue(directive, out var placed) || Placements.PathOf(directive.Name) is not { } name)
+            return;
+        Blank();
+        Line($"; .place {name}  {Where(directive)}");
+        var opens = lines[^1];
+        placed.written = written;
+        placed.WalkContainer(placed.model.Tree.Root);
+        placed.Columns();
+        placed.Filled();
+        lines.AddRange(placed.lines);
+        Line($"; end of {name}");
+        parts.Add((placed.source, opens, lines[^1]));
+        parts.AddRange(placed.parts);
+        written = placed.written;
+        pendingBlank = true;
+    }
 
     /// <summary>
     /// The statement's own text with the edits applied: the source's spacing between its
@@ -1994,11 +2100,12 @@ public sealed class Emitter
                         InPlace(value, width, bigEndian, edits);
                     return;
                 }
-                if (DataSyntax.NameOf(directive) == ".res"
-                    && directive.Tail is InlineDataSyntax { Values: [var count, var fill] })
+                if (DataSyntax.NameOf(directive) is ".res" or ".align"
+                    && directive.Tail is InlineDataSyntax { Values: [var count, .. var fills] })
                 {
-                    Substitute(count, edits, nested: false);
-                    InPlace(fill, 1, bigEndian: false, edits);
+                    Counted(count, edits);
+                    foreach (var fill in fills)
+                        InPlace(fill, 1, bigEndian: false, edits);
                     return;
                 }
                 break;
@@ -2056,6 +2163,24 @@ public sealed class Emitter
     }
 
     /// <summary>One value of a slot, written as <see cref="Datum"/> says where it says anything, and as it stands otherwise.</summary>
+    /// <summary>
+    /// A count ca65 needs as it reaches the line — how much a <c>.res</c> reserves, what an
+    /// <c>.align</c> aligns to — which a name defined further down the output is not yet: one a
+    /// name gives is written as its value, with what the source wrote beside it.
+    /// </summary>
+    private void Counted(SyntaxNode count, Edits edits)
+    {
+        var named = count.DescendantNodes().Prepend(count).OfType<NameExpressionSyntax>().Any(name =>
+            name.Names is [.., var last] && model.SymbolAt(last) is { Kind: not (SymbolKind.Binding or SymbolKind.MacroParameter) });
+        if (named && model.ValueOf(count, expansion).AsNumber() is { } known)
+        {
+            edits.Comments.Add(count.GetText().Trim());
+            Replace(count, Constant(known), edits);
+            return;
+        }
+        Substitute(count, edits, nested: false);
+    }
+
     private void InPlace(SyntaxNode value, int width, bool bigEndian, Edits edits)
     {
         if (Datum(value, width, bigEndian, edits.Comments) is { } text)
@@ -2631,5 +2756,8 @@ public sealed class Emitter
 
         /// <inheritdoc/>
         public override void VisitBlockSplice(BlockSpliceSyntax node) => emitter.Splice(node);
+
+        /// <inheritdoc/>
+        public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => emitter.Place(node);
     }
 }

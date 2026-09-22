@@ -38,6 +38,7 @@ internal sealed partial class Parser
         SyntaxKind.ExportDirective => ParseExport(),
         SyntaxKind.ImportDirective => ParseImport(),
         SyntaxKind.ModuleDirective => ParseModule(),
+        SyntaxKind.PlaceDirective => ParsePlace(),
         SyntaxKind.UseDirective => ParseUse(),
         SyntaxKind.EnumDeclaration => ParseTypeBlock(SyntaxKind.EnumDeclaration, named: false),
         SyntaxKind.StructDeclaration => ParseTypeBlock(SyntaxKind.StructDeclaration, named: false),

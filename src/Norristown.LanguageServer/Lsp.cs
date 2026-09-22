@@ -79,10 +79,11 @@ internal static class Lsp
         ];
 
     /// <summary>
-    /// What the output calls the symbol, where that is not what the source calls it. Only one
-    /// kind of name is written any differently: ca65 reads a word of its own instruction table
-    /// at the start of a line as an instruction, so the emitter writes such a name with its
-    /// module in front. Every other name keeps its spelling, and saying so would say nothing.
+    /// What the output calls the symbol, where that is not what the source calls it. Two kinds
+    /// of name are written any differently: ca65 reads a word of its own instruction table at
+    /// the start of a line as an instruction, so the emitter writes such a name with its module
+    /// in front, and a module another places writes every name it does not export that way.
+    /// Every other name keeps its spelling, and saying so would say nothing.
     /// </summary>
     private static void Written(Card card, ProgramAnalysis analysis, Symbol symbol)
     {
@@ -90,6 +91,14 @@ internal static class Lsp
             && Emit.FlatNames.Prefixed(symbol.FlatName, analysis.Cpu, symbol.Module) is { } prefixed)
         {
             card.Row("in the output", $"`{prefixed}`");
+            return;
+        }
+
+        // A module another places writes each name it does not export with its module in front.
+        if (symbol is { IsReachableByPath: true, LinkerName: null, Module: { } module }
+            && analysis.Placements.PlacerOf(symbol.Tree) is not null)
+        {
+            card.Row("in the output", $"`{module.Replace("::", "__", StringComparison.Ordinal)}__{symbol.FlatName}`");
         }
     }
 
@@ -117,7 +126,58 @@ internal static class Lsp
         var flow = analysis.FlowFor(model.Tree.Path);
         return model.ReferenceAt(position) is { } reference
             ? ToName(analysis, model, reference)
-            : ToComparedWord(model, position) ?? ToParameterKind(analysis, model, position) ?? ToScope(model, flow, position) ?? ToTiming(analysis, model, flow, position);
+            : ToPlaced(analysis, model, position) ?? ToComparedWord(model, position)
+                ?? ToParameterKind(analysis, model, position) ?? ToScope(model, flow, position)
+                ?? ToTiming(analysis, model, flow, position);
+    }
+
+    /// <summary>
+    /// Where the module a <c>.place</c> names is declared, with the caret on its path: a module
+    /// is no symbol, so no reference stands there to answer.
+    /// </summary>
+    public static Protocol.Location? ToPlacedDefinition(ProgramAnalysis analysis, SemanticModel model, int position) =>
+        PlacedAt(analysis, model, position) is { Tree: var tree } && Placements.Declaration(tree) is { } declared
+            ? new Protocol.Location(ToUri(tree.Path), ToRange(tree, declared.Name.Span))
+            : null;
+
+    /// <summary>
+    /// The module a <c>.place</c> names, with the caret on its path: its file, what its
+    /// declaration says about placing it, and which translation unit it is written in.
+    /// </summary>
+    private static Protocol.Hover? ToPlaced(ProgramAnalysis analysis, SemanticModel model, int position)
+    {
+        if (PlacedAt(analysis, model, position) is not { } placed)
+            return null;
+        var placements = analysis.Placements;
+        var card = new Card($"module {placed.Path}", new HashSet<string>(["declared", "written in"], StringComparer.Ordinal));
+        card.Row("declared", placements.DeclaredFor(placed.Tree) switch
+        {
+            ModulePlacement.Placed => "placed: its bytes are written where it is placed",
+            ModulePlacement.Placeable => "placeable: placed at most once, and alone where nothing places it",
+            _ => "alone: it has an output of its own, and is not placed",
+        });
+        if (placements.UnitOf(placed.Tree) is { IsPlaced: true, Root: var root }
+            && analysis.ModelFor(root.Path)?.FileScope.Module is { } unit)
+        {
+            card.Row("written in", $"the output of `{unit}`");
+        }
+        card.Row("file", placed.Tree.Path);
+        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, placed.Span));
+    }
+
+    /// <summary>The module whose path a <c>.place</c> writes at <paramref name="position"/>, or null.</summary>
+    private static (SyntaxTree Tree, string Path, TextSpan Span)? PlacedAt(
+        ProgramAnalysis analysis, SemanticModel model, int position)
+    {
+        var token = model.Tree.Root.FindToken(position);
+        if (token.Parent?.AncestorsAndSelf().OfType<PlaceDirectiveSyntax>().FirstOrDefault() is not { } place
+            || !place.Name.Span.Contains(position) && place.Name.Span.End != position
+            || Placements.PathOf(place.Name) is not { } path
+            || analysis.Placements.ModuleNamed(path) is not { } tree)
+        {
+            return null;
+        }
+        return (tree, path, place.Name.Span);
     }
 
     /// <summary>

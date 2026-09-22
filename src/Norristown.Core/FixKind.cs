@@ -71,4 +71,7 @@ public enum FixKind
     /// <c>{</c> a block needs, or the <c>)</c>, <c>]</c> or <c>}</c> that closes what is open.
     /// </summary>
     MissingPiece,
+
+    /// <summary>The declaration of the module a <c>.place</c> names, marked <c>placed</c>.</summary>
+    Placed,
 }

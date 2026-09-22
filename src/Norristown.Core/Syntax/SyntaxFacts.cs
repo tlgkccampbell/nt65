@@ -75,6 +75,7 @@ public static class SyntaxFacts
         [".export"] = new(SyntaxKind.ExportDirective),
         [".import"] = new(SyntaxKind.ImportDirective, Exportable: true),
         [".module"] = new(SyntaxKind.ModuleDirective),
+        [".place"] = new(SyntaxKind.PlaceDirective),
         [".use"] = new(SyntaxKind.UseDirective, Exportable: true),
         [".byte"] = new(SyntaxKind.DataDirective),
         [".word"] = new(SyntaxKind.DataDirective),

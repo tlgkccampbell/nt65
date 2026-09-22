@@ -1,0 +1,9 @@
+; Placed between restore and stop, so that its last instruction runs into stop.
+.module iscntc: placed
+
+.segment CODE
+.export .proc check {
+    lda $c000
+    cmp #$03
+    .next interpreter::stop
+}

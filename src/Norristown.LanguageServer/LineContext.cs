@@ -19,6 +19,7 @@ internal sealed class LineContext
         InMacro = around.InMacro;
         InRepetition = around.InRepetition;
         InBlock = around.InBlock;
+        AtFileLevel = !around.PastFileLevel;
         RecordType = around.RecordType;
         InText = inText;
         IsFirstLine = first;
@@ -60,6 +61,13 @@ internal sealed class LineContext
     /// a build sets, and may not itself depend on where in a file it was written.
     /// </summary>
     public bool InBlock { get; }
+
+    /// <summary>
+    /// Whether the line is at file level: in no block but an open <c>.segment</c> region, which
+    /// is where a <c>.place</c> goes. Which modules share a translation unit depends on no
+    /// condition, and the region the line is in is only where the file's own bytes are going.
+    /// </summary>
+    public bool AtFileLevel { get; }
 
     /// <summary>The type a <c>.type T { }</c> initializer gives values to, or null outside one.</summary>
     public IReadOnlyList<string>? RecordType { get; }
@@ -197,7 +205,7 @@ internal sealed class LineContext
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
     {
-        var found = new Surrounding(Place.Item, false, false, false, false, null);
+        var found = new Surrounding(Place.Item, false, false, false, false, null, false);
         foreach (var block in Edits.BlockAround(tree, line)?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
             found = found.Within(block);
         return found;
@@ -250,8 +258,10 @@ internal sealed class LineContext
     /// <param name="InRepetition">Whether a repetition holds the line.</param>
     /// <param name="InBlock">Whether any block holds the line, whatever kind it is.</param>
     /// <param name="RecordType">The type a record initializer gives values to.</param>
+    /// <param name="PastFileLevel">Whether a block other than a <c>.segment</c> region holds the line.</param>
     private readonly record struct Surrounding(
-        Place Place, bool InProc, bool InMacro, bool InRepetition, bool InBlock, IReadOnlyList<string>? RecordType)
+        Place Place, bool InProc, bool InMacro, bool InRepetition, bool InBlock, IReadOnlyList<string>? RecordType,
+        bool PastFileLevel)
     {
         /// <summary>
         /// The same, one block further in. Every kind of block answers that one holds the line,
@@ -274,7 +284,7 @@ internal sealed class LineContext
                 BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
                 _ => this with { Place = Place.Unknown },
             };
-            return inside with { InBlock = true };
+            return inside with { InBlock = true, PastFileLevel = PastFileLevel || block.BlockKind != BlockKind.Region };
         }
 
         /// <summary>The path written after the <c>.type</c> of a record initializer's opener.</summary>

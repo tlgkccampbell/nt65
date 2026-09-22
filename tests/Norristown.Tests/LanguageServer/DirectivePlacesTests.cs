@@ -71,10 +71,11 @@ public sealed class DirectivePlacesTests
     /// The ones that are not a line of their own, and so are held to nothing here: two
     /// continue a block that has to be open above them, two are about the statement above
     /// them, one is about where the stack has been left, one names the module and may only be
-    /// a file's first line, one names a file on disk, and one fails the build on purpose.
+    /// a file's first line, one places a module that has to say it may be placed, one names a
+    /// file on disk, and one fails the build on purpose.
     /// </summary>
     private static readonly string[] Partial =
-        [".else", ".elseif", ".error", ".frame", ".incbin", ".module", ".next", ".patch"];
+        [".else", ".elseif", ".error", ".frame", ".incbin", ".module", ".next", ".patch", ".place"];
 
     /// <summary>
     /// What the server offers at a place and the binder refuses there, which is empty: nothing
@@ -152,6 +153,23 @@ public sealed class DirectivePlacesTests
         Assert.Contains(".config", Offers(1));
         Assert.DoesNotContain(".config", Offers(3));
         Assert.DoesNotContain(".config", Offers(5));
+    }
+
+    /// <summary>
+    /// A <c>.place</c> is offered at file level, before any region and in one, and inside no
+    /// block: which modules share a translation unit depends on nothing a block could decide.
+    /// </summary>
+    [Fact]
+    public void APlaceIsOfferedAtFileLevelOnly()
+    {
+        var text = ".module main\n\n.segment CODE\n\n.scope area {\n\n}\n\n.if 1 {\n\n}\n";
+        var tree = SyntaxTree.Parse(Analysis.Path, text);
+        string[] Offers(int line) => [.. Directives.At(LineContext.At(tree, tree.LineStarts[line])).Select(item => item.Name)];
+
+        Assert.Contains(".place", Offers(1));
+        Assert.Contains(".place", Offers(3));
+        Assert.DoesNotContain(".place", Offers(5));
+        Assert.DoesNotContain(".place", Offers(9));
     }
 
     /// <summary>What the server would offer at the start of a line in <paramref name="place"/>.</summary>
