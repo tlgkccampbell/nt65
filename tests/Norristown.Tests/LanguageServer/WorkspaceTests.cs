@@ -16,12 +16,11 @@ public sealed class WorkspaceTests
     private const string Source = ".module main\n.proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
     /// <summary>
-    /// What <see cref="Uri"/> is as a path. A drive letter is one on Windows and part of a
-    /// rooted path anywhere else, which is what the workspace carries either way: a path is a
-    /// name to the analysis, and only the editor's URI has to come back unchanged.
+    /// What <see cref="Uri"/> is as a path, the same on every host: the workspace takes the
+    /// drive's colon for a drive wherever it runs, since a path is a name to the analysis and
+    /// only the editor's URI has to come back unchanged.
     /// </summary>
-    private static readonly string Named =
-        OperatingSystem.IsWindows() ? "c:/work/main.nt65" : "/c:/work/main.nt65";
+    private const string Named = "c:/work/main.nt65";
 
     private static Workspace OpenSource(out Document document)
     {
