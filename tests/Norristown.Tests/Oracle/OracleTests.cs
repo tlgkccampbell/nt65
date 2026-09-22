@@ -261,6 +261,55 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
+    /// A repetition in the body of a macro another module exports counts in the module that
+    /// calls it: every turn's binding is the turn's number there as it is at home, so the turns
+    /// are written as the bytes they come to rather than as the body's text with the name left
+    /// in, which ca65 would take for a symbol nobody declared. The linked image is the text's
+    /// bytes, the last with its top bit set, and so is the same call made at home.
+    /// </summary>
+    [Fact]
+    public void ARepetitionInAnotherModulesMacroCountsWhereItIsCalled()
+    {
+        const string Library = """
+            .module lib
+            .export htasc
+            .macro htasc(text) {
+                .repeat .strlen(text) - 1, i {
+                    .byte .strat(text, i)
+                }
+                .byte .strat(text, .strlen(text) - 1) | $80
+            }
+            """;
+        const string Main = """
+            .module main
+            .use lib::htasc
+            .macro athome(text) {
+                .repeat .strlen(text) - 1, i {
+                    .byte .strat(text, i)
+                }
+                .byte .strat(text, .strlen(text) - 1) | $80
+            }
+            .segment RODATA
+            .data words {
+                htasc!("NEXT WITHOUT FOR")
+                athome!("FOR")
+            }
+            """;
+
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Main), new SourceFile("lib.nt65", Library)], Processor.Cpu.Mos6502);
+        Assert.Empty(generated.Diagnostics);
+        var output = generated.Ca65.Single(o => o.Path.EndsWith("main.s", StringComparison.Ordinal));
+        Assert.DoesNotContain(".strat", output.Text, StringComparison.Ordinal);
+
+        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
+        Assert.True(linked.Succeeded, linked.Messages);
+        byte[] expected = [.. "NEXT WITHOUT FO"u8, (byte)('R' | 0x80), .. "FO"u8, (byte)('R' | 0x80)];
+        Assert.Equal(expected, linked.Binary);
+    }
+
+    /// <summary>
     /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and reports each
     /// way ca65 disagrees with it: any message at all, or a line whose byte count is not the
     /// one nt65 computed.

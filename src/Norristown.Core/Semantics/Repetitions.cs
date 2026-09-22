@@ -56,8 +56,11 @@ public static class Repetitions
             MultiProcDeclarationSyntax family => family.Name,
             _ => null,
         };
-        return name is { } bound && model.ReferenceAt(bound.Span.Start) is { IsDeclaration: true } declared
-            ? declared.Symbol
+        // The name is looked up where it was written rather than at a position in the model's
+        // own file: a macro another module exports is expanded here, and its body's repetitions
+        // bind names of that module's file.
+        return name is { IsMissing: false } bound && model.SymbolAt(bound) is { Kind: SymbolKind.Binding } declared
+            ? declared
             : null;
     }
 
