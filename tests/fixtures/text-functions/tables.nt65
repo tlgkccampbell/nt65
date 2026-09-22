@@ -1,0 +1,29 @@
+; A function whose body is text returns text, and is evaluated with the constants, so what it
+; writes has a length when constants are worked out: the distance of a message from the start
+; of its table is a constant a one-byte immediate takes. msbasic's `htasc` sets bit 7 on the
+; last byte of a text.
+.module tables
+.cpu 6502
+.config SHORT = 0
+; A text with bit 7 set on its last byte
+.export .func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+.func message(short, long) = htasc(.select(SHORT, short, long))
+CR = 13
+LF = 10
+.segment RODATA
+.export .data ERROR_MESSAGES {
+    .data NOFOR:  .byte message("NF", "NEXT WITHOUT FOR")
+    .data SYNTAX: .byte message("SN", "SYNTAX")
+}
+.export ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; a constant: 16
+.segment CODE
+.export .proc f {
+    ldx #ERR_SYNTAX
+    rts
+}
+.proc PRIMM = $DE42: inline .strz
+.export .proc g {
+    jsr PRIMM
+    .strz .strcat(CR, CR, ">>", CR, LF)
+    rts
+}

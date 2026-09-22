@@ -1,0 +1,52 @@
+; Text a function builds is text wherever a literal is: in data, in `.strz`, as what a charmap
+; is applied to, in `.strlen` and `.strat`, as a `.type` member's value, as a macro argument, and
+; as the value of a text constant. It crosses modules with the function, by value.
+.module main
+.cpu 6502
+.use tables::{htasc, ERROR_MESSAGES, ERR_SYNTAX}
+
+.export keywords, first, greeting, entry, padded, labels, screened, parts, length
+
+; A text constant defined by a call is text, as one defined by a literal is.
+GREETING = htasc("HELLO")
+
+.assert .sizeof(ERROR_MESSAGES) == 22, "the table is as long as its two messages"
+.assert ERR_SYNTAX == 16, "a distance past built text is a constant"
+
+.charmap screen {
+    'A'..'Z' = $01
+    '\xc1'..'\xda' = $41            ; a letter with bit 7 set, as `.strcat` and `\xHH` write it
+}
+
+.struct Entry {
+    name:  .res 6
+    score: .byte
+}
+
+.macro label(words) {
+    .strz words
+}
+
+.segment RODATA
+.data keywords {
+    .data END:  .byte htasc("END")
+    .data FOR:  .byte htasc("FOR")
+    .data NEXT: .byte htasc("NEXT")
+}
+TOKEN_NEXT = keywords::NEXT - keywords
+.data first:    .byte .strat(GREETING, 4), .strlen(GREETING), TOKEN_NEXT
+.data greeting: .strz GREETING
+.data entry:    .type Entry { name = htasc("NT65"), score = 1 }
+.data padded:   .byte[8] { htasc("PAD") }
+.data labels {
+    label!(htasc("GO"))
+}
+.data screened: .byte screen(htasc("AB"))
+.data parts:    .byte .select(1, .strsub("ABCDEF", 2, 3), "?"), .strcat('X', "YZ", 0)
+
+.segment CODE
+.proc length {
+    lda #.strlen(htasc("ANY"))
+    ldx #TOKEN_NEXT
+    rts
+}

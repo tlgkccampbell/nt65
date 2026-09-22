@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 386 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 388 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -14,7 +14,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 |---|---|---|
 | [Reading a line](#reading-a-line) | 59 | — |
 | [Names](#names) | 54 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
-| [Values](#values) | 50 | — |
+| [Values](#values) | 52 | — |
 | [Macros](#macros) | 29 | `comparison-never-holds` (warning) |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
@@ -929,7 +929,7 @@ nt65 computes in 64 signed bits and ca65 in 32, so a value that reaches the outp
 
 > `{0}` cannot be used on a string
 
-Text is a sequence of bytes for a data declaration to write. The arithmetic and bitwise operators are on numbers.
+Text is a sequence of bytes for a data declaration to write. The arithmetic and bitwise operators are on numbers: `.strcat` joins texts, `.strsub` takes part of one, and `.strat` reads one of its bytes.
 
 ### `repeat-count-negative`
 
@@ -1002,6 +1002,18 @@ Constants and shapes are worked out before any macro is expanded, so nothing a c
 > `.sqrt` has no answer for {0}: no whole number squared is negative
 
 `.sqrt(n)` is the largest whole number whose square is at most n, which a negative number has none of.
+
+### `strcat-not-a-byte`
+
+> `.strcat` joins a number as one byte, and {0} is not 0 to 255
+
+A text is bytes, so a number `.strcat` joins is the byte it is, `$80 | 'X'` among them. A number no byte holds would be cut to one nobody wrote.
+
+### `strsub-out-of-range`
+
+> `.strsub` asks for {0}, and the text is {1}
+
+`.strsub(s, start, count)` is `count` bytes of `s` from `start`, counting from 0. A start or a count that reaches outside the text would be a part nobody wrote, so it is an error rather than a shorter text.
 
 ### `target-argument`
 
@@ -1349,7 +1361,7 @@ A `.res` reserves room inside a declaration. A declaration of its own says what 
 
 ### `strz-not-text`
 
-> `.strz` takes one text: a string, a string constant, or a charmap applied to one
+> `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
 
 `.strz` writes text and the zero that ends it, so it takes exactly one text.
 

@@ -264,6 +264,8 @@ internal static class Lsp
             card.Row("offset", symbol.Value.ToString());
         else if (symbol.Value.IsKnown)
             card.Row("value", Spell(symbol.Value));
+        else if (symbol.Kind == SymbolKind.Func && Called(model, reference) is { IsKnown: true } called)
+            card.Row("value", Spell(called));
         if (symbol.Type is { } type)
             card.Row("type", type.QualifiedName);
 
@@ -309,7 +311,10 @@ internal static class Lsp
         var kind = symbol.Kind switch
         {
             SymbolKind.Member => new[] { "offset" },
-            SymbolKind.Proc or SymbolKind.ExternProc or SymbolKind.Func => ["cost", "preserves"],
+            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "preserves"],
+
+            // What a call is worth is what is asked of a function where it is called.
+            SymbolKind.Func => ["value"],
             // What a macro call becomes is what is asked about a macro, and the row that says
             // it leads whether or not anything writes it yet.
             SymbolKind.Macro => ["expands to"],
@@ -321,6 +326,18 @@ internal static class Lsp
             _ => ["value"],
         };
         return new HashSet<string>(["from", "private to", .. kind], StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// What the call a function's name is written in is worth, text among it, or nothing when the
+    /// name is not called there or the call is worth nothing nt65 knows, as in a body whose
+    /// parameters stand for nothing yet.
+    /// </summary>
+    private static Value Called(SemanticModel model, SymbolReference reference)
+    {
+        var token = model.Tree.Root.FindToken(reference.Span.Start);
+        var name = token.Parent?.AncestorsAndSelf().OfType<NameExpressionSyntax>().FirstOrDefault();
+        return name?.Parent is CallExpressionSyntax call && call.Callee == name ? model.ValueOf(call) : Value.Unknown;
     }
 
     /// <summary>

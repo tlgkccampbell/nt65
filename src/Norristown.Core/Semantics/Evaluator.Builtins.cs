@@ -24,7 +24,7 @@ internal sealed partial class Evaluator
 
     /// <summary>Whether a built-in is one the configuration alone can answer.</summary>
     private static bool Answerable(string name) => name is ".lobyte" or ".hibyte" or ".bankbyte"
-        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat"
+        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat" or ".strsub" or ".strcat"
         or ".sqrt" or ".muldiv" or ".sin" or ".cos";
 
     /// <summary>
@@ -209,6 +209,8 @@ internal sealed partial class Evaluator
         var values = arguments.Select(Evaluate).ToArray();
         if (name is ".sqrt" or ".muldiv" or ".sin" or ".cos")
             return Worked(name, function, values);
+        if (name is ".strsub" or ".strcat")
+            return Built(name, function, arguments, values);
         return name switch
         {
             ".lobyte" => Number1(values, v => v & 0xff),
@@ -225,6 +227,72 @@ internal sealed partial class Evaluator
                 : Value.Unknown,
             _ => Value.Unknown,
         };
+    }
+
+    /// <summary>
+    /// The built-ins that build text: <c>.strsub(s, start, count)</c>, part of a text, and
+    /// <c>.strcat(part, ...)</c>, texts and bytes joined. Text is bytes, so a number joined is the
+    /// one byte it is, and a part that reaches outside the text is refused rather than cut to fit.
+    /// A part nt65 has no value for leaves the text unknown, which is how a function's body reads
+    /// before anything is given to it.
+    /// </summary>
+    private Value Built(string name, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments, Value[] values)
+    {
+        if (name == ".strsub")
+        {
+            if (values.Length != 3 || values[0].Kind is ValueKind.Number or ValueKind.Word
+                || values[1].Kind is ValueKind.String or ValueKind.Word
+                || values[2].Kind is ValueKind.String or ValueKind.Word)
+            {
+                Report(function, Catalogue.BuiltinArguments.Says(name, "`.strsub(text, start, count)`: a text and two numbers"));
+                return Value.Unknown;
+            }
+            if (values is not [{ Kind: ValueKind.String, Text: { } whole }, { Kind: ValueKind.Number } from,
+                { Kind: ValueKind.Number } taken])
+            {
+                return Value.Unknown;
+            }
+            if (from.Number < 0 || taken.Number < 0 || from.Number + taken.Number > whole.Length)
+            {
+                Report(function, Catalogue.StrsubOutOfRange.Says(
+                    $"{taken.Number} {(taken.Number == 1 ? "byte" : "bytes")} from {from.Number}",
+                    $"{whole.Length} {(whole.Length == 1 ? "byte" : "bytes")} long"));
+                return Value.Unknown;
+            }
+            return Value.Of(whole.Substring((int)from.Number, (int)taken.Number));
+        }
+
+        if (values.Length == 0)
+        {
+            Report(function, Catalogue.BuiltinArguments.Says(name, "`.strcat(part, ...)`: at least one text or number"));
+            return Value.Unknown;
+        }
+        var joined = new System.Text.StringBuilder();
+        var known = true;
+        for (var i = 0; i < values.Length; i++)
+        {
+            switch (values[i])
+            {
+                case { Kind: ValueKind.String, Text: { } text }:
+                    joined.Append(text);
+                    break;
+                case { Kind: ValueKind.Number, Number: >= 0 and <= 0xff } one:
+                    joined.Append((char)one.Number);
+                    break;
+                case { Kind: ValueKind.Number } wide:
+                    Report(arguments[i], Catalogue.StrcatNotAByte.Says(wide));
+                    known = false;
+                    break;
+                case { Kind: ValueKind.Word }:
+                    Report(arguments[i], Catalogue.BuiltinArguments.Says(name, "texts and numbers"));
+                    known = false;
+                    break;
+                default:
+                    known = false;
+                    break;
+            }
+        }
+        return known ? Value.Of(joined.ToString()) : Value.Unknown;
     }
 
     /// <summary>

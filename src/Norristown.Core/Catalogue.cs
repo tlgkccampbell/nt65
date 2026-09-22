@@ -849,6 +849,21 @@ public static class Catalogue
         "`.sqrt` has no answer for {0}: no whole number squared is negative",
         "`.sqrt(n)` is the largest whole number whose square is at most n, which a negative number has none of.");
 
+    internal static DiagnosticDescriptor StrsubOutOfRange { get; } = Entry(
+        "strsub-out-of-range",
+        Severity.Error,
+        "`.strsub` asks for {0}, and the text is {1}",
+        "`.strsub(s, start, count)` is `count` bytes of `s` from `start`, counting from 0. A start or a count "
+            + "that reaches outside the text would be a part nobody wrote, so it is an error rather than a "
+            + "shorter text.");
+
+    internal static DiagnosticDescriptor StrcatNotAByte { get; } = Entry(
+        "strcat-not-a-byte",
+        Severity.Error,
+        "`.strcat` joins a number as one byte, and {0} is not 0 to 255",
+        "A text is bytes, so a number `.strcat` joins is the byte it is, `$80 | 'X'` among them. A number no byte "
+            + "holds would be cut to one nobody wrote.");
+
     internal static DiagnosticDescriptor TurnOrScaleOutOfRange { get; } = Entry(
         "turn-or-scale-out-of-range",
         Severity.Error,
@@ -888,7 +903,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` cannot be used on a string",
         "Text is a sequence of bytes for a data declaration to write. The arithmetic and bitwise operators are on "
-            + "numbers.");
+            + "numbers: `.strcat` joins texts, `.strsub` takes part of one, and `.strat` reads one of its bytes.");
 
     internal static DiagnosticDescriptor ScopeHasNoAddress { get; } = Entry(
         "scope-has-no-address",
@@ -1445,7 +1460,7 @@ public static class Catalogue
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
         "strz-not-text",
         Severity.Error,
-        "`.strz` takes one text: a string, a string constant, or a charmap applied to one",
+        "`.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one",
         "`.strz` writes text and the zero that ends it, so it takes exactly one text.");
 
     internal static DiagnosticDescriptor StrzZeroInText { get; } = Entry(

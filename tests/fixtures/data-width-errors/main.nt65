@@ -11,9 +11,9 @@ TEXT = "AB"
 }
 
 .segment RODATA
-.data two:     .strz "A", "B"          ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, or a charmap applied to one
-.data number:  .strz 5                 ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, or a charmap applied to one
-.data letter:  .strz 'A'               ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, or a charmap applied to one
+.data two:     .strz "A", "B"          ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
+.data number:  .strz 5                 ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
+.data letter:  .strz 'A'               ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
 .data early:   .strz screen("A@B")     ;! error[strz-zero-in-text]: `screen` maps `@` to $00, which would end the text early: `.strz` writes the zero that ends it
 .data zero:    .strz "A\x00B"          ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
 .data short:   .strz "A\0B"            ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it

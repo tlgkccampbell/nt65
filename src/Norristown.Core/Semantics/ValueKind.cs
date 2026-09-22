@@ -9,7 +9,10 @@ public enum ValueKind
     /// <summary>A number.</summary>
     Number,
 
-    /// <summary>A string, which only <c>.strlen</c>, <c>.strat</c> and data directives accept.</summary>
+    /// <summary>
+    /// A string of bytes, which data directives, <c>.strz</c>, a charmap, <c>.strlen</c>,
+    /// <c>.strat</c>, <c>.strsub</c> and <c>.strcat</c> accept, and a function may return.
+    /// </summary>
     String,
 
     /// <summary>

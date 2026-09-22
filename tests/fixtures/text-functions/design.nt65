@@ -1,0 +1,15 @@
+; The design's example of a function that returns text.
+.module design
+.cpu 6502
+
+.export ERROR_MESSAGES, ERR_SYNTAX
+
+; A text with bit 7 set on its last byte
+.func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+
+.segment RODATA
+.data ERROR_MESSAGES {
+    .data NOFOR:  .byte htasc("NEXT WITHOUT FOR")
+    .data SYNTAX: .byte htasc("SYNTAX")
+}
+ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; 16, a constant

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Norristown.Processor;
 
 namespace Norristown.Semantics;
@@ -61,7 +62,7 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     public override string ToString() => Kind switch
     {
         ValueKind.Number => Format(Number),
-        ValueKind.String => $"\"{Text}\"",
+        ValueKind.String => Quoted(Text ?? ""),
         ValueKind.Word => Text ?? "?",
         _ => "?",
     };
@@ -79,6 +80,26 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
         <= 0xffffff => Hex(number, 6),
         _ => Hex(number, 8),
     };
+
+    /// <summary>
+    /// Text as a literal would write it: a byte that is no printable ASCII character, such as one
+    /// with bit 7 set that a function built, is written <c>\xHH</c>, so what is shown can be
+    /// written back. A character above <c>$ff</c>, which only a charmap can map, is kept as it was typed.
+    /// </summary>
+    private static string Quoted(string text)
+    {
+        var quoted = new StringBuilder("\"");
+        foreach (var c in text)
+        {
+            if (c is '"' or '\\')
+                quoted.Append('\\').Append(c);
+            else if (c is < ' ' or (>= '\x7f' and <= '\xff'))
+                quoted.Append(CultureInfo.InvariantCulture, $"\\x{(int)c:x2}");
+            else
+                quoted.Append(c);
+        }
+        return quoted.Append('"').ToString();
+    }
 
     private static string Hex(long number, int digits) =>
         "$" + number.ToString($"x{digits}", CultureInfo.InvariantCulture);

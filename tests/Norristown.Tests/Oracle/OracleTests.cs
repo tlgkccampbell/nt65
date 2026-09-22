@@ -361,6 +361,58 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
+    /// Text a function builds links to the bytes the same text written for ca65 does: msbasic's
+    /// `htasc` sets bit 7 on a message's last byte, and because a function is evaluated with the
+    /// constants, a message's offset in the table is a constant a one-byte immediate takes.
+    /// </summary>
+    [Fact]
+    public void TextAFunctionBuildsIsTheTextCa65Writes()
+    {
+        const string Nt65 = """
+            .module main
+            .func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+            .segment RODATA
+            .data messages {
+                .data NOFOR: .byte htasc("NEXT WITHOUT FOR")
+                .data SYNTAX: .byte htasc("SYNTAX")
+            }
+            ERR_SYNTAX = messages::SYNTAX - messages
+            .data prompt: .strz .strcat(13, ">>", .strsub("?!", 0, 1), 10)
+            .segment CODE
+            .export .proc start {
+                ldx #ERR_SYNTAX
+                rts
+            }
+            """;
+        const string ByHand = """
+            .setcpu "6502"
+            .export main__start
+            .segment "RODATA": absolute
+            messages:
+            NOFOR: .byte "NEXT WITHOUT FO", 'R' | $80
+            SYNTAX: .byte "SYNTA", 'X' | $80
+            prompt: .byte 13, ">>?", 10, 0
+            .segment "CODE": absolute
+            main__start:
+                ldx #SYNTAX - messages
+                rts
+            """;
+
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
+        Assert.Empty(generated.Diagnostics);
+        var output = Assert.Single(generated.Ca65).Text;
+        Assert.Contains("ERR_SYNTAX = $10", output, StringComparison.Ordinal);
+
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
+        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
+
+        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
+        Assert.True(fromHand.Succeeded, fromHand.Messages);
+        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+    }
+
+    /// <summary>
     /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and reports each
     /// way ca65 disagrees with it: any message at all, or a line whose byte count is not the
     /// one nt65 computed.

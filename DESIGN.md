@@ -1914,8 +1914,8 @@ confused; a record is `.type T { … }` and an array of records `.type T[] { …
   count is an error that names both, rather than padding with zeros, because a short jump
   table is exactly the mistake a count is there to catch; padding is written with a
   `.repeat` in the body. `[]` with no values at all is an error. One text is the exception:
-  a counted `.byte` array whose only value is one string, a text constant or a charmap
-  applied to one, `.data title: .byte[21] { "NT65" }`, is filled out with zero to its count,
+  a counted `.byte` array whose only value is one text (a string, a text constant, a call
+  that returns text, or a charmap applied to one), `.data title: .byte[21] { "NT65" }`, is filled out with zero to its count,
   as `char title[21] = "..."` is in C. A text is not a table, so nothing else is padded: two
   texts, or one character, are a list again and a short one is the error it always was, and a
   pad other than zero is what a structure's `.res n, pad` member is for (§6.3).
@@ -2002,7 +2002,9 @@ A data declaration's `.sizeof` is its bytes and its `.countof` its elements (§7
 counts one element per item, and a string one element per byte. Mixed data has a size and
 no count. One holding an `.align` has no size nt65 knows, and neither has one holding a macro
 call, whose bytes exist only once it is expanded, after every constant has its value (§3.1):
-each is an error naming the reason, and its `.spanof` measures it. `.endof` and `.spanof` work
+`.sizeof` of either is an error naming the reason, and its `.spanof` measures it. Text a
+`.func` returns is no macro call: a call is worked out with the constants (§9), so the bytes it
+writes are known when they are, and so is the size of what holds them. `.endof` and `.spanof` work
 on every data declaration.
 
 **Distances inside a declaration.** nt65 never knows where a declaration lands, but it lays out
@@ -2014,7 +2016,9 @@ reached through a record, and any of those a constant away. The difference of tw
 is, sizes as its value does (§7.2), so a one-byte immediate takes it, hover shows it, and the
 output writes it as its value. An `.align` between the two makes the length depend on where the
 declaration lands, and a macro call between them writes bytes only once it is expanded, so
-either leaves the difference an address expression, sized and written as one. Code has no such
+either leaves the difference an address expression, sized and written as one. A table whose
+entries a macro would write is written with a function that returns text instead, and its
+distances are constants (§9). Code has no such
 distances: a routine's size is layout (§14).
 
 ```nt65
@@ -2055,17 +2059,42 @@ a declaration, not a mode, and is applied explicitly where text is emitted:
 
 A mapping may name any character, ASCII or not, and a character with no mapping is an
 error when the mapping is applied. A mapping is an ordinary declaration,
-exported and used across modules like a constant. `.strlen(s)` and `.strat(s, i)` remain
-for the cases a `.repeat` needs.
+exported and used across modules like a constant.
 
-**Text constants.** `TITLE = "NT65"` is usable wherever a string literal is: in data, in a
-`.strz`, as what a charmap is applied to, in `.strlen` and `.strat`, as a `.type` member's
-value and as a macro argument. It crosses modules by value, like any constant, and never
-reaches ca65 as a symbol. There is no arithmetic or concatenation on text, and a define is
-never text.
+**Text.** A text is a string of bytes. A string literal writes one, ASCII outside a charmap and
+`\xHH` for any byte. Text is usable in data, in a `.strz`, as what a charmap is applied to, in
+`.strlen` and `.strat`, as a `.type` member's value and as a macro argument, and wherever one is
+usable, each of these is:
 
-**`.strz`** writes one text and the zero that ends it: a string literal, a text constant or a
-charmap applied to one. Numbers and further arguments are errors. A `$00` inside the text is
+- **a text constant**, `TITLE = "NT65"`, which crosses modules by value like any constant and
+  never reaches ca65 as a symbol;
+- **a call of a function whose body is text** (§9), `htasc("SYNTAX")`, which is text when its
+  body is and may define a text constant, `GREETING = htasc("HI")`;
+- **`.select(c, a, b)`** choosing between texts;
+- **`.strsub(s, start, count)`**, the `count` bytes of `s` from `start`, counting from 0. A start
+  or a count below zero, or one that reaches past the end, is an error rather than a shorter
+  text;
+- **`.strcat(part, ...)`**, its parts joined: a text part gives its bytes and a number part the
+  one byte it is, which has to be 0 to 255, so `.strcat(13, "READY.", 13)` needs no escapes and
+  `.strcat(.strsub(s, 0, n - 1), .strat(s, n - 1) | $80)` sets bit 7 on the last byte.
+
+`.strlen(s)` is how many bytes `s` is, and `.strat(s, i)` the byte at `i`. There are no
+operators on text: `+` and the rest are on numbers, and joining is `.strcat`. A define is never
+text, and a literal a call builds text from is ASCII as any literal outside a charmap is.
+
+Text never reaches ca65: the output writes its bytes, with the source expression in a comment,
+whether it was written as a literal or built. Because a function is worked out with the
+constants, the length of what one returns is known when they are, so a table of such texts has
+a size and constant distances inside it (above), which a table a macro writes cannot have.
+
+A charmap applied to built text maps each byte as the character of that code, exactly as it
+maps a literal: a byte at `$80` or above, from `\xHH` or from `.strcat`, is the character
+U+0080 to U+00FF of that number, which the charmap maps if it names that character, as in
+`'\xc1'..'\xda' = $41`, and refuses otherwise. Bit 7 is not a flag the charmap looks past,
+because which bytes a charmap gives is the charmap's to say and not a rule of nt65's.
+
+**`.strz`** writes one text and the zero that ends it: a string literal, a text constant, a call
+that returns text or a charmap applied to one. Numbers and further arguments are errors. A `$00` inside the text is
 an error that names the character, as with `screen("A@B")` when `screen` maps `@` to `$00`:
 the text would end early, and a routine declared `inline .strz` would return into the middle
 of it. The name is the terminator's: DEC's `.ASCIZ`, by way of ca65's `.asciiz`, said "ASCII",
@@ -2121,7 +2150,7 @@ is an expression like any other.
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
 `.endof(x)` and `.spanof(x)` (§7.6), `.loadof(S)`, `.runof(S)` and `.spanof(S)` of a segment (§5.2), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
-`.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
+`.strlen(s)`, `.strat(s, i)`, `.strsub(s, start, count)` and `.strcat(part, ...)` (§8), `.min(a, b)`,
 `.max(a, b)`, `.sqrt(n)`, `.muldiv(a, b, c)`, `.sin(angle, turn, scale)` and
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
 §7.2 gives a symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
@@ -2202,7 +2231,24 @@ function is a declaration of the program, and conditions are answered before any
 is read (§10). Functions may call functions, but not in a cycle, which is an error whether or
 not anything calls them. A function
 is exported and used across modules like a constant, and the output writes each call as
-its parenthesized body.
+its parenthesized body, or as its value where nt65 has one.
+
+**A function may return text.** A call is text when its body is: a string, a text constant, a
+parameter given text, `.select` choosing text, `.strsub` or `.strcat` (§8). It is then usable
+wherever a string is, and the output writes its bytes, as it writes a literal's. A call is
+worked out with the constants, before anything is expanded (§3.1), so what it writes has a
+length when they do, and a distance past it in a data declaration is a constant:
+
+```nt65
+; A text with bit 7 set on its last byte
+.func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+
+.data ERROR_MESSAGES {
+    .data NOFOR: .byte htasc("NEXT WITHOUT FOR")
+    .data SYNTAX: .byte htasc("SYNTAX")
+}
+ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; 16, a constant
+```
 
 nt65 evaluates every expression it can (anything built only from constants) and uses
 the value for sizing and diagnostics. The difference of two places in one data declaration is
@@ -3251,7 +3297,8 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
 | `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
-| a `.func` call | its body, with each parameter replaced by its parenthesized argument |
+| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument |
+| a `.func` call, `.strsub`, `.strcat` or `.select` that is text | its bytes, with the source expression in a comment, as a literal's are |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |
 | `.strz "s"`, `.strz TEXT` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
@@ -3967,9 +4014,18 @@ Recorded so the reasoning survives. None is open.
 - **Running off the end of a proc warns off the 65816.** Nothing consumes the state there,
   but a proc that runs into the next one is still usually a missing `rts`, and one that means
   to says so with `.fallthrough`.
-- **Text constants are text wherever a literal is,** and cross modules by value. Nothing in
-  ca65 can hold one, so none reaches it, and without arithmetic or concatenation on text a
-  constant cannot build text a literal could not have written.
+- **Text is built by functions, and is text wherever a literal is.** A text constant crosses
+  modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
+  arithmetic or concatenation on text, so a constant could not build text a literal could not
+  have written, and text that had to be built, msbasic's `htasc` setting bit 7 on a keyword's
+  last byte, was a macro. A macro's bytes exist only once it is expanded, after every constant
+  has its value, so a distance into a table of such texts could never be a constant, and
+  `ldx #ERR_SYNTAX` was refused. Letting constants wait for expansion would change §3.1's order
+  for everything; a `.func` is already evaluated with the constants, so letting it return text
+  keeps the order and gives the table its lengths. The text a function builds is still bytes
+  nt65 writes out itself, never text for ca65, and `.strsub` and `.strcat` are the two
+  built-ins that building it needs; there are still no operators on text, so `"A" + "B"` is not
+  a second spelling of `.strcat` and `+` stays arithmetic.
 - **Signed data.** A number slot takes a signed or an unsigned value of its width, as the
   bytes are the same, and the output writes the two's complement ca65 needs; an address is
   never negative.
@@ -4535,7 +4591,8 @@ primary     := number | char | string | cpu-name | '*' | '(' expr ')'
 binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' | '>='
              | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
 builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
-             | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
+             | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.strsub' | '.strcat'
+             | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
              | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
              | '.loadof' | '.runof'                     ; of a segment

@@ -297,15 +297,23 @@ internal sealed partial class Evaluator
         Report(literal, Catalogue.TextNotAscii);
     }
 
-    /// <summary>Whether the literal stands somewhere a charmap answers for it, or somewhere layout checks it.</summary>
+    /// <summary>
+    /// Whether the literal stands somewhere a charmap answers for it, or somewhere layout checks
+    /// it. Text a call builds from it is checked here: layout sees only what the call gave.
+    /// </summary>
     private bool InCharmapOrData(SyntaxNode literal)
     {
+        var built = false;
         for (var node = literal.Parent; node is not null; node = node.Parent)
         {
-            if (node is CharmapEntrySyntax or DataDirectiveSyntax or DataValuesSyntax)
+            if (node is CharmapEntrySyntax)
                 return true;
+            if (node is DataDirectiveSyntax or DataValuesSyntax)
+                return !built;
             if (node is CallExpressionSyntax { Callee: { } callee } && SymbolOf(callee)?.Kind == SymbolKind.Charmap)
                 return true;
+            if (node is CallExpressionSyntax)
+                built = true;
         }
         return false;
     }

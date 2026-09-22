@@ -125,6 +125,30 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// A function whose body is text is worth that text where it is called, and hover on the call
+    /// says what it is, with a byte that is no printable character written as a literal writes it.
+    /// A text constant defined by a call is text as well.
+    /// </summary>
+    [Fact]
+    public async Task HoverGivesTheTextACallIsWorth()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(
+            Uri,
+            ".module main\n.cpu 6502\n"
+                + ".func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)\n"
+                + "GREETING = htasc(\"HI\")\n.segment RODATA\n.data t: .byte htasc(\"OK\")\n");
+        await client.NextDiagnosticsAsync(timeout);
+
+        var call = await client.HoverAsync(Uri, new Position(5, 16), timeout);
+        var constant = await client.HoverAsync(Uri, new Position(3, 0), timeout);
+
+        Assert.Contains("value  \"O\\xcb\"", call?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("\"H\\xc9\"", constant?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// nt65 writes a number in hexadecimal, which is what an address or a mask is read as. A
     /// number that is also a count is worth the decimal beside it, and below ten the two are
     /// the same digit, so there is nothing to put beside it.

@@ -2508,6 +2508,22 @@ public sealed class Emitter
         // A built-in the analysis answers keeps the ordinary path.
         if (call.Callee is null)
         {
+            // Text a built-in builds or chooses is written as its bytes, as a literal is: ca65
+            // never sees text.
+            if (Worth(call).IsString)
+            {
+                if (model.BytesOf(call, expansion) is { } built)
+                {
+                    Replace(call, BytesText(built), edits);
+                    edits.Comments.Add(call.GetText().Trim());
+                }
+                else
+                {
+                    NotTranspiled(call);
+                }
+                return;
+            }
+
             // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
             if (Worth(call).AsNumber() is null
                 && Evaluator.SelectArguments(call) is [var condition, var ifHolds, var otherwise]
@@ -2528,8 +2544,8 @@ public sealed class Emitter
         }
 
         string? text = null;
-        if (model.BytesOf(call, expansion) is { Count: > 0 } bytes)
-            text = string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
+        if (model.BytesOf(call, expansion) is { } bytes && (bytes.Count > 0 || Worth(call).IsString))
+            text = BytesText(bytes);
         else if (model.ValueOf(call, expansion).AsNumber() is { } value)
             text = Constant(value);
 
@@ -2541,6 +2557,13 @@ public sealed class Emitter
         Replace(call, text, edits);
         edits.Comments.Add(call.GetText().Trim());
     }
+
+    /// <summary>
+    /// Text as the byte values it is. Empty text is no bytes, which ca65 writes as an empty
+    /// string, as it does for an empty literal.
+    /// </summary>
+    private static string BytesText(IReadOnlyList<long> bytes) =>
+        bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
     /// <summary>Text becomes byte values, with the source spelling kept in a comment.</summary>
     private void Text(LiteralExpressionSyntax literal, Edits edits)

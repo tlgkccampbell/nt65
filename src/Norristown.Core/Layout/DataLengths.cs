@@ -189,8 +189,9 @@ public static class DataLengths
         if (at < 0)
             return;
         Report(operand, model, diagnostics, on, Catalogue.StrzZeroInText.Says(
-            operand is CallExpressionSyntax call && at < text.Length
-                ? $"`{(call.Callee ?? (SyntaxNode)call.Arguments).GetText().Trim()}` maps `{text[at]}` to $00, "
+            operand is CallExpressionSyntax { Callee: { } callee } && at < text.Length
+                && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap }
+                ? $"`{callee.GetText().Trim()}` maps `{text[at]}` to $00, "
                     + "which would end the text early"
                 : "the text holds a zero, which would end it early"));
     }

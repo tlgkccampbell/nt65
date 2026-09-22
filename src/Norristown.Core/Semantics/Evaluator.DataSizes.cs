@@ -376,8 +376,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The bytes an operand becomes: a string or character literal is its characters, and a
-    /// charmap applied to one is what the mapping gives them. Null for anything else.
+    /// The bytes an operand becomes: a string or character literal is its characters, a
+    /// charmap applied to one is what the mapping gives them, and text built by a call is its
+    /// bytes. Null for anything else.
     /// </summary>
     private IReadOnlyList<long>? BytesIn(SyntaxNode operand)
     {
@@ -404,7 +405,7 @@ internal sealed partial class Evaluator
         if (operand is not CallExpressionSyntax { Callee: { } callee } call
             || SymbolOf(callee) is not { Kind: SymbolKind.Charmap } charmap)
         {
-            return null;
+            return BuiltText(operand);
         }
 
         var given = call.Arguments.Arguments;
@@ -430,6 +431,35 @@ internal sealed partial class Evaluator
             bytes.Add(b);
         }
         return bytes;
+    }
+
+    /// <summary>
+    /// The bytes of text an expression builds rather than writes: a function whose body is text,
+    /// <c>.strcat</c> and <c>.strsub</c>, a <c>.select</c> that chooses text, and a parameter or a
+    /// binding that stands for any of them. Null for anything that is not text, and for text
+    /// holding a character above <c>$ff</c>, which only a charmap turns into a byte and which is
+    /// said to be wrong where it is written. Nothing else is evaluated here, because a
+    /// declaration's size is asked for while it is being sized, and a value that measures the
+    /// declaration it is written in would ask itself.
+    /// </summary>
+    private IReadOnlyList<long>? BuiltText(SyntaxNode operand)
+    {
+        switch (operand)
+        {
+            case ParenthesizedExpressionSyntax parenthesized:
+                return BytesIn(parenthesized.Expression);
+            case CallExpressionSyntax when SelectArguments(operand) is not null:
+                return ChosenBy(operand) is { } chosen ? BytesIn(chosen) : null;
+            case CallExpressionSyntax { Function: { } function }
+                when function.Text.ToLowerInvariant() is ".strsub" or ".strcat":
+            case CallExpressionSyntax { Callee: { } callee } when SymbolOf(callee) is { Kind: SymbolKind.Func }:
+            case NameExpressionSyntax name when SymbolOf(name) is { Kind: SymbolKind.MacroParameter or SymbolKind.Binding }:
+                return Evaluate(operand) is { Kind: ValueKind.String, Text: { } text } && text.All(c => c <= 0xff)
+                    ? [.. text.Select(c => (long)c)]
+                    : null;
+            default:
+                return null;
+        }
     }
 
     /// <summary>

@@ -291,6 +291,8 @@ public sealed class EditingRequestsTests
         { "body", "    poke!(twice(|", "twice(n)", 0 },
         { "body", "    poke!(twice(1), |", "poke!(address: expr, value: const = 0)", 1 },
         { "top", "X = .select(1, 2, |", ".select(condition, chosen, otherwise)", 2 },
+        { "top", "X = .strsub(\"HELLO\", 1, |", ".strsub(text, start, count)", 2 },
+        { "top", "X = .strcat(\"A\", 1, 2, |", ".strcat(part, ...)", 0 },
     };
 
     [Theory]

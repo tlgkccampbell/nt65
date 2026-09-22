@@ -437,6 +437,8 @@
         "state-value-out-of-range",
         "state-width-mismatch",
         "stray-dot",
+        "strcat-not-a-byte",
+        "strsub-out-of-range",
         "strz-not-text",
         "strz-zero-in-text",
         "tail-call-distance-mismatch",

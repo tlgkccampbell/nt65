@@ -5,10 +5,24 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// What the call the caret is in takes: a macro's parameters as its declaration writes them, a
-/// function's, or the three parts of a <c>.select</c>, with the one the caret is in the argument for.
+/// function's, or the parts of a built-in such as <c>.select</c> or <c>.strsub</c>, with the one the caret is in
+/// the argument for.
 /// </summary>
 internal static class CallHelp
 {
+    // The built-ins whose parts are worth naming as they are written, with what each gives. A
+    // part written `...` stands for as many more as the call gives.
+    private static readonly Dictionary<string, (string[] Parameters, string Documentation)> builtins =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [".select"] = (["condition", "chosen", "otherwise"],
+                "the second argument when the condition holds, and the third when it does not"),
+            [".strlen"] = (["text"], "how many bytes the text is"),
+            [".strat"] = (["text", "index"], "the byte of the text at the index, counting from 0"),
+            [".strsub"] = (["text", "start", "count"], "`count` bytes of the text from `start`, counting from 0"),
+            [".strcat"] = (["part", "..."], "the parts joined into one text: a text's bytes, and a number as one byte, 0 to 255"),
+        };
+
     /// <summary>The call at <paramref name="position"/>, or null when the caret is in none.</summary>
     public static Protocol.SignatureHelp? At(ProgramModel program, SemanticModel model, int position)
     {
@@ -24,10 +38,12 @@ internal static class CallHelp
             var argument = call.Argument;
             var open = call.Open;
             if (open >= 1 && before[open - 1] is { Kind: SyntaxKind.Directive } directive
-                && directive.Text.Equals(".select", StringComparison.OrdinalIgnoreCase))
+                && builtins.TryGetValue(directive.Text, out var builtin))
             {
-                return Help(".select(", ["condition", "chosen", "otherwise"], ")",
-                    "the second argument when the condition holds, and the third when it does not", Math.Min(argument, 2));
+                var parameters = builtin.Parameters;
+                var last = parameters[^1] == "..." ? parameters.Length - 2 : parameters.Length - 1;
+                return Help($"{directive.Text.ToLowerInvariant()}(", parameters, ")", builtin.Documentation,
+                    Math.Min(argument, last));
             }
             if (open >= 2 && before[open - 1].Kind == SyntaxKind.Bang
                 && Completion.Callee(model, line, open - 1) is { Kind: SymbolKind.Macro } macro)

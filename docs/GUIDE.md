@@ -258,7 +258,24 @@ LINES = 25                          ; a constant
 }
 ```
 
-A `.func` takes values, not tokens: `rgb15(1 + 1, 0, 0)` passes 2. An `.if` condition tests
+A `.func` takes values, not tokens: `rgb15(1 + 1, 0, 0)` passes 2. A function whose body is
+text returns text, built with `.strcat` and `.strsub`, and is usable wherever a string is. It is
+worked out with the constants, so what it writes has a length before anything is expanded: an
+offset into a table of such texts is a constant a one-byte immediate takes, where the same text
+written by a macro would only be known once the macro is expanded.
+
+```nt65
+; msbasic's `htasc`: a text with bit 7 set on its last byte
+.func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+
+.data messages {
+    .data NOFOR: .byte htasc("NEXT WITHOUT FOR")
+    .data SYNTAX: .byte htasc("SYNTAX")
+}
+ERR_SYNTAX = messages::SYNTAX - messages     ; 16
+```
+
+An `.if` condition tests
 only the configuration, meaning defines from `nt65.json` or `-D` and `.config` settings, never
 a symbol of the program. A check on the program, such as a table's size, is an `.assert`,
 which nt65 evaluates as you type when it can and leaves to ld65 when it cannot.
@@ -535,6 +552,7 @@ to go.
 | `.asciiz "text"` | `.strz "text"` |
 | `.dbyt` | `.beword` |
 | `.charmap $41, $01` | `.charmap screen { 'A'..'Z' = $01 }`, applied as `screen("TEXT")` |
+| `.sprintf`, `.concat`, `.left` on text, or a macro that writes text a byte at a time | `.strcat`, `.strsub` and `.strat` in a `.func` whose body is text |
 | `.include "hw.inc"` | a module that exports what the file declared, and `.use`; `nt65 import-inc hw.inc` writes one for a file of constants |
 | `.include "part.s"` of code, whose bytes must land where the line is | a module declared `placed`, and `.place part` where the `.include` was |
 | `.setcpu "6502X"` | `"cpu": "6502x"`, which is a CPU like any other |
