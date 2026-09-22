@@ -110,8 +110,8 @@ The images are the originals, byte for byte. What reads differently:
 - Applesoft lite by Tom Greene helped a lot, too.
 - Thanks to Joe Zbicak for help with Intellivision Keyboard BASIC.
 
-## Legal
+## License
 
-msbasic is distributed under the 2-clause BSD license, and this port keeps it. It is an
-altered version of the original, which is at the address above. The original ROM images are
-not part of this port; `original.sha256` holds their SHA-256 hashes.
+2-clause BSD, by Michael Steil, as upstream states it; this port keeps it. It is an altered
+version of the original, which is at the address above. The original ROM images are not part
+of this port; `original.sha256` holds their SHA-256 hashes.
