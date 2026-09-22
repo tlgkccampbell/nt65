@@ -118,8 +118,8 @@ The linked image is byte for byte the upstream build, except where the following
   bank, in place of `.smart`, `.a8`, `.i16` and the `seta8` family; nt65 checks the body
   against the declaration.
 - `ppu_clear_nt` called into its own middle and fell through to the same place. The tail is
-  its own routine, `doonedma`, joined to the first by `.next`, as `ppu_copy_oam` is to
-  `ppu_copy`.
+  its own routine, `doonedma`, that the first falls through into with `.fallthrough`, as
+  `ppu_copy_oam` does into `ppu_copy`.
 - `main` points the data bank at its own bank before the calls that load graphics rather than
   after them, so that every routine it calls runs with B known.
 - `move_player` keeps its scratch byte in a declared direct-page variable rather than at

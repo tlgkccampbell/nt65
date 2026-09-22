@@ -62,6 +62,16 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
+    /// A <c>.fallthrough</c>, which generates nothing and stands where the routine's bytes end:
+    /// where the routine it names has to start, which is asked of it the way it is of a label.
+    /// </summary>
+    private void FallsThrough(FallthroughDirectiveSyntax directive)
+    {
+        placements[(directive.Position, expansion)] = new Placement(Measured, filled.GetValueOrDefault(Measured), 0);
+        steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
+    }
+
+    /// <summary>
     /// Records where a label stands: at the first byte generated after it, which is the
     /// address a branch to it reaches.
     /// </summary>

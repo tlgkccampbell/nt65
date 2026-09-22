@@ -836,6 +836,17 @@ public sealed partial class CodeLayout
         /// <inheritdoc cref="VisitNextDirective"/>
         public override void VisitPatchDirective(PatchDirectiveSyntax node) => NoBytes(node);
 
+        /// <summary>
+        /// The end of a routine's body, where the routine a <c>.fallthrough</c> names has to start.
+        /// One anywhere else has been reported, and stands for nothing.
+        /// </summary>
+        /// <param name="node">The directive.</param>
+        public override void VisitFallthroughDirective(FallthroughDirectiveSyntax node)
+        {
+            if (node.Parent is LineSyntax line && Fallthrough.EndsABody(line))
+                layout.FallsThrough(node);
+        }
+
         /// <inheritdoc cref="VisitNextDirective"/>
         public override void VisitStateDirective(StateDirectiveSyntax node) => NoBytes(node);
 

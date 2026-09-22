@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 381 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 385 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -19,7 +19,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
-| [Control flow](#control-flow) | 29 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
+| [Control flow](#control-flow) | 33 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
 | [Processor state](#processor-state) | 36 | — |
 | [Output](#output) | 6 | `c-header-name-left-out` (warning), `c-header-untyped` (warning), `omitted-branch` (info) |
 | [The project file](#the-project-file) | 24 | — |
@@ -219,7 +219,7 @@ A `keeps` names the registers a routine hands back as it was entered with them, 
 
 > expected {0}
 
-A `.next` names where flow goes and a `.patch` names the instruction being written into; each takes a label, and `.next` also takes `?` for a path that ends.
+A `.next` names where flow goes, a `.fallthrough` the routine flow runs into, and a `.patch` the instruction being written into; each takes a label, and `.next` also takes `?` for a path that ends.
 
 ### `expected-member-value`
 
@@ -1665,6 +1665,36 @@ A jump into the middle of another routine arrives where that routine's own analy
 
 An exported label inside a routine is a door other modules may come through, and this module's analysis never sees them arrive.
 
+### `fallthrough-misplaced`
+
+> `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+
+A `.fallthrough` is about the end of a routine's body rather than about the statement above it, so it stands last in the body of a `.proc`: not under an `.if`, in a macro body or a block argument, or with anything after it.
+
+### `fallthrough-not-a-routine`
+
+> `{0}` is {1}, and `.fallthrough` names the routine flow runs into
+
+A routine runs into another routine's first byte, and what is named here is not a routine.
+
+### `fallthrough-not-adjacent`
+
+> `.fallthrough {0}` says flow runs on into `{0}`, and it does not start where this routine ends: a routine runs into the one written directly after it
+
+A routine runs on into the one written directly after it in the same segment. Naming any other routine would be saying something the bytes do not do.
+
+### `fallthrough-not-placed`
+
+> `.fallthrough {0}` says flow runs on into `{0}`, which is in module `{1}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+
+Across translation units the order of the bytes is the link's, which nt65 does not know. Where one module places the other, both are laid out in one `.s`, and a routine running into another module's is checked there as it is within a file.
+
+### `fallthrough-other-segment`
+
+> `.fallthrough {0}` runs on in segment "{1}", and `{0}` is in segment "{2}": a routine runs only into what its own segment holds next
+
+A segment's bytes are laid down in the order they are written, whatever other segments are written between them, so the end of a routine is followed by what its own segment holds next. Across a `.place` that is the placed module's first routine in the segment the placing file is in, or what that file writes next in it.
+
 ### `handler-called`
 
 > `{0}` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back
@@ -1731,17 +1761,11 @@ The register is already what the routine was entered with, so saying so again sa
 
 Nothing falls into the label and nothing branches, jumps or calls to it.
 
-### `next-routine-not-adjacent`
+### `next-successors-known`
 
-> `.next {0}` says flow runs on into `{1}`, and it does not start where this statement ends: a routine runs into the one written directly after it
+> `.next` names where flow goes after a statement nt65 cannot follow, and {0} {1}{2}
 
-A routine runs on into the one written directly after it. Naming any other routine would be saying something the bytes do not do.
-
-### `next-routine-not-placed`
-
-> `.next {0}` says flow runs on into `{1}`, which is in module `{2}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
-
-Across translation units the order of the bytes is the link's, which nt65 does not know. Where one module places the other, both are laid out in one `.s`, and a routine running into another module's is checked there as it is within a file.
+A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, or data that flow runs into: statements whose successors nt65 cannot read for itself. After any other statement it already knows where flow goes, and a `.next` could only contradict that. A routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end a path after any statement.
 
 ### `next-table-has-no-labels`
 
@@ -1775,9 +1799,9 @@ The block pushes an address and returns to it, which is a jump written as a retu
 
 ### `routine-runs-off-the-end` — warning
 
-> `{0}` runs off {1} into whatever {2}: `.next` {3}, or `.next ?` ends the path
+> `{0}` runs off {1} into whatever {2}: {3}, or `.next ?` ends the path
 
-The routine ends without transferring control, so flow carries on into whatever the linker puts after it. Where that was meant, a `.next` names it and the tail call is then checked.
+The routine ends without transferring control, so flow carries on into whatever the linker puts after it. Where that was meant, a `.fallthrough` as the last line of the body names the routine it runs into, which is then checked to start there and checked as a tail call.
 
 ### `runs-into-data`
 

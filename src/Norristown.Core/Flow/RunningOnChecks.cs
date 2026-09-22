@@ -4,10 +4,12 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Whether each routine said to run into another does, where the file it is in cannot say on
-/// its own: into another module's routine, or past a <c>.place</c>. Within one translation unit
-/// nt65 lays out every byte, and the answer is read off that layout; across units the order of
-/// the bytes is the link's, which nt65 does not know, so the claim is an error there.
+/// Whether each routine a <c>.fallthrough</c> says runs into another does, where the file it is
+/// in cannot say on its own: into another module's routine, or past a <c>.place</c>. Within one
+/// translation unit nt65 lays out every byte, each segment's in the order the unit writes it,
+/// and the answer is read off that layout: what a placed module writes to other segments does
+/// not stand between two routines of one. Across units the order of the bytes is the link's,
+/// which nt65 does not know, so the claim is an error there.
 /// </summary>
 internal static class RunningOnChecks
 {
@@ -39,9 +41,8 @@ internal static class RunningOnChecks
                 if (unit is null || placements.UnitOf(routine.Tree)?.Root.Path != unit.Root.Path)
                 {
                     found.Add(new Diagnostic(span, routine.Tree.Path == model.Tree.Path
-                        ? Catalogue.NextRoutineNotAdjacent.Says(routine.DisplayName, routine.DisplayName)
-                        : Catalogue.NextRoutineNotPlaced.Says(
-                            routine.DisplayName, routine.DisplayName, routine.Module ?? routine.Tree.Path)));
+                        ? Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)
+                        : Catalogue.FallthroughNotPlaced.Says(routine.DisplayName, routine.Module ?? routine.Tree.Path)));
                     continue;
                 }
                 if (!laid.TryGetValue(unit.Root.Path, out var layout))
@@ -57,8 +58,7 @@ internal static class RunningOnChecks
                     : null;
                 if (here is null || here != there)
                 {
-                    found.Add(new Diagnostic(span, Catalogue.NextRoutineNotAdjacent.Says(
-                        routine.DisplayName, routine.DisplayName)));
+                    found.Add(new Diagnostic(span, Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)));
                 }
             }
             diagnostics.AddRange(Family.Collapsed(model.Families, found));

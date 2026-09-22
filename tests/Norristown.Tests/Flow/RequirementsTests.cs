@@ -41,7 +41,8 @@ public sealed class RequirementsTests
 
     /// <summary>
     /// Off the 65816 a routine that runs off its end is likely a mistake rather than something
-    /// the analysis cannot follow, so it is a warning, and <c>.next</c> says it was meant.
+    /// the analysis cannot follow, so it is a warning, and <c>.fallthrough</c> says it was meant.
+    /// The fix names the routine written next.
     /// </summary>
     [Fact]
     public void RunningOffTheEndWarnsOnThe6502()
@@ -55,7 +56,7 @@ public sealed class RequirementsTests
             }
             .proc second: a8, i8 {
                 lda #2
-                .next third
+                .fallthrough third
             }
             .proc third: a8, i8 {
                 tax
@@ -67,8 +68,10 @@ public sealed class RequirementsTests
 
         var only = Assert.Single(analysis.Diagnostics);
         Assert.Equal(Severity.Warning, only.Severity);
-        Assert.Equal("`first` runs off its end into whatever is written after it: `.next` naming the routine it runs "
-            + "into says so, or `.next ?` ends the path", only.Message);
+        Assert.Equal("`first` runs off its end into whatever is written after it: a `.fallthrough` naming the routine "
+            + "it runs into says so, or `.next ?` ends the path", only.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", only.Fix?.At), only.Fix);
+        Assert.Equal(6, only.Fix?.At?.Line);
     }
 
     /// <summary>A routine returns past its inline data whatever the processor, so the data is checked on every CPU.</summary>
@@ -238,7 +241,7 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             ["main.nt65:8: `p` runs off the end of a segment block into whatever that segment holds next: "
-                + "`.next` says where flow goes, or `.next ?` ends the path"],
+                + "a `.next` says where flow goes, or `.next ?` ends the path"],
             Program(Text).Problems());
     }
 

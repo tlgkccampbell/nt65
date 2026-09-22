@@ -5,7 +5,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// Placement: which modules share a translation unit, and what a routine may run into there.
-/// Within a unit nt65 lays out every byte, so a <c>.next</c> into the routine after a
+/// Within a unit nt65 lays out every byte, so a <c>.fallthrough</c> into the routine after a
 /// <c>.place</c>, or into another module's, is checked against that layout; the fixtures hold
 /// the programs, and these the cases that turn on what a build or an edit leaves in between.
 /// </summary>
@@ -17,7 +17,7 @@ public sealed class PlacementTests
         .segment CODE
         .export .proc first {
             lda #1
-            .next second
+            .fallthrough second
         }
 
         .place platform
@@ -32,7 +32,7 @@ public sealed class PlacementTests
     /// <summary>
     /// A placed module whose items are all under an <c>.if</c> the build leaves out places
     /// nothing, so the routine before its <c>.place</c> runs into the one after it; one the
-    /// build takes stands between them, and the same <c>.next</c> is then wrong.
+    /// build takes stands between them, and the same <c>.fallthrough</c> is then wrong.
     /// </summary>
     [Theory]
     [InlineData(0, false)]
@@ -42,7 +42,7 @@ public sealed class PlacementTests
         var analysis = Analyze(Main, Platform(kim));
 
         var problems = analysis.Diagnostics.Where(d => d.Severity == Severity.Error).Select(d => $"{d.Span.File}:{d.Span.Line}: {d.Id}");
-        Assert.Equal(between ? ["main.nt65:6: next-routine-not-adjacent"] : [], problems);
+        Assert.Equal(between ? ["main.nt65:6: fallthrough-not-adjacent"] : [], problems);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class PlacementTests
 
         Assert.Equal(1, after.Reanalyzed);
         Assert.Equal(fresh.Diagnostics.Select(d => d.ToString()), after.Diagnostics.Select(d => d.ToString()));
-        Assert.Contains(after.Diagnostics, d => d.Id == "next-routine-not-adjacent");
+        Assert.Contains(after.Diagnostics, d => d.Id == "fallthrough-not-adjacent");
     }
 
     /// <summary>
@@ -86,6 +86,118 @@ public sealed class PlacementTests
         Assert.Contains("\nloop = 1\n", output.Text, StringComparison.Ordinal);
         Assert.Contains("\nplatform__loop = 2\n", output.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(".import", output.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Across a <c>.place</c> what a routine runs into is read in the segment the placing file is
+    /// in at the line: the routine before it runs into the placed module's first routine there,
+    /// and the placed module's last routine there runs into what the placing file writes next in
+    /// it. What the placed module writes to other segments in between does not stand between
+    /// them, as it does not in the one <c>.s</c> ca65 lays each segment down from in order.
+    /// </summary>
+    [Fact]
+    public void AFallthroughAcrossAPlaceIsReadInThePlacingFilesSegment()
+    {
+        const string Placing = """
+            .module main
+            .segment CODE
+            .export .proc before {
+                lda #1
+                .fallthrough part::enter
+            }
+            .place part
+            .export .proc after {
+                rts
+            }
+            """;
+        const string Placed = """
+            .module part: placed
+            .segment CODE
+            .export .proc enter {
+                lda #2
+                .fallthrough leave
+            }
+            .segment RODATA
+            .data table: .byte 1, 2, 3
+            .segment CODE
+            .export .proc leave {
+                lda #3
+                .fallthrough main::after
+            }
+            """;
+
+        var analysis = Analyze(Placing, Placed);
+
+        Assert.DoesNotContain(analysis.Diagnostics, d => d.Severity == Severity.Error);
+    }
+
+    /// <summary>
+    /// A routine runs only into what its own segment holds next, so a <c>.fallthrough</c> across
+    /// a <c>.place</c> into a routine the placed module writes to another segment is an error that
+    /// names both segments.
+    /// </summary>
+    [Fact]
+    public void AFallthroughAcrossAPlaceIntoAnotherSegmentIsAnError()
+    {
+        const string Placing = """
+            .module main
+            .segment CODE
+            .export .proc before {
+                lda #1
+                .fallthrough part::enter
+            }
+            .place part
+            """;
+        const string Placed = """
+            .module part: placed
+            .segment BANKED: abs
+            .segment BANKED
+            .export .proc enter {
+                rts
+            }
+            """;
+
+        var analysis = Analyze(Placing, Placed);
+
+        var error = Assert.Single(analysis.Diagnostics, d => d.Severity == Severity.Error);
+        Assert.Equal("fallthrough-other-segment", error.Id);
+        Assert.Equal(
+            "`.fallthrough enter` runs on in segment \"CODE\", and `enter` is in segment \"BANKED\": a routine runs "
+                + "only into what its own segment holds next",
+            error.Message);
+    }
+
+    /// <summary>
+    /// Across translation units the order of the bytes is the link's, so a <c>.fallthrough</c>
+    /// into a module nothing places with this one is an error naming placement, while the same
+    /// routine placed is accepted.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AFallthroughIntoAnotherModuleNeedsOneTranslationUnit(bool placed)
+    {
+        var placing = """
+            .module main
+            .segment CODE
+            .export .proc before {
+                lda #1
+                .fallthrough part::enter
+            }
+            """ + (placed ? "\n.place part\n" : "\n");
+        var part = $$"""
+            .module part{{(placed ? ": placed" : "")}}
+            .segment CODE
+            .export .proc enter {
+                rts
+            }
+            """;
+
+        var problems = Analyze(placing, part).Diagnostics
+            .Where(d => d.Severity == Severity.Error)
+            .Select(d => d.Id);
+
+        Assert.Equal(placed ? [] : ["fallthrough-not-placed"], problems);
     }
 
     private static string Platform(int kim) => $$"""

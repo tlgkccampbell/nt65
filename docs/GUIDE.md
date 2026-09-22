@@ -363,9 +363,12 @@ cmd_fire:
 }
 ```
 
-The same goes for a `.byte $2c` skip (`.next` after it), self-modifying code (`.patch`), a
-routine that returns past inline data (an `inline` signature) and a proc that runs into the
-next (`.next next_proc`). Everything else is assembly as usual.
+The same goes for a `.byte $2c` skip (`.next` after it), self-modifying code (`.patch`) and a
+routine that returns past inline data (an `inline` signature). `.next` is only ever about the
+statement above it, and only where nt65 cannot see where that statement goes: after an ordinary
+instruction or a direct `jsr` it is an error. A proc that runs into the one written after it says
+so with `.fallthrough next_proc` as the last line of its body, whatever the body ends in, an
+`.if` chain included. Everything else is assembly as usual.
 
 ## The 65816
 
@@ -441,7 +444,7 @@ every routine; then fix the handful that differ. A routine with no signature is 
 `a8, i8`, native and near, which for a program that runs in `a8, i16` is an error on nearly
 every line — so the set is what to do before reading any of them.
 
-**Second entry points as adjacent procs joined by `.next`.** A ca65 routine often has a second
+**Second entry points as adjacent procs joined by `.fallthrough`.** A ca65 routine often has a second
 label part-way down that another routine jumps into, and a fall-through from the first into the
 second. nt65 has no jumping into the middle of a routine from outside it: the label is a
 position private to its routine's own flow. Cut the routine in two at that label, and say that
@@ -450,7 +453,7 @@ the first runs into the second:
 ```nt65
 .proc setup: port {
     lda #0
-    .next fill                  ; it runs into `fill`, which is written next
+    .fallthrough fill           ; it runs into `fill`, which is written next
 }
 
 .proc fill: port {
@@ -459,9 +462,11 @@ the first runs into the second:
 }
 ```
 
-`.next` is what says the fall-through was meant; without it the first routine is reported as
-running off its end. The second is an ordinary routine, so it takes a signature and callers
-check against it.
+`.fallthrough` is what says the fall-through was meant; without it the first routine is reported
+as running off its end, and the fix writes the `.fallthrough`. nt65 checks that `fill` is the
+routine written directly after `setup`, in the same segment, and checks the fall-through as it
+would a `jmp fill`. The second is an ordinary routine, so it takes a signature and callers check
+against it.
 
 **ROM addresses as extern procs.** A monitor or toolbox entry is `JSR $FFD2` in ca65 and a
 constant address here, declared with the state it is called in:
@@ -609,8 +614,9 @@ says it in the source:
 
 A module declared `placed` is emitted where its `.place` stands, in every segment it writes
 to, and has no output of its own; it is still a module, with its own names, exports and
-privacy. Within one translation unit a routine may run into another module's with `.next
-interpreter::stop`, and nt65 checks that it does. The whole program above builds to one
+privacy. Within one translation unit a routine may run into another module's with
+`.fallthrough interpreter::stop`, and nt65 checks that it does, in the segment the placing file
+is in at the `.place`: what the placed module writes to other segments does not come between. The whole program above builds to one
 `program.s`, so there is no link order to get right. `.place` is never under an `.if`:
 platform code is a placed module whose items are under an `.if` of their own. A module that
 one program places and another links on its own is declared `placeable`.

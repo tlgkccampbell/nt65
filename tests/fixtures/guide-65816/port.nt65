@@ -1,5 +1,6 @@
 ; The three things a 65816 port writes down first: a signature on every routine, a second
-; entry point as its own routine with a `.next` into it, and a ROM address as an extern proc.
+; entry point as its own routine that the one above falls through into, and a ROM address as an
+; extern proc.
 .module port
 
 .export draw, widen, setup, fill
@@ -18,7 +19,7 @@
 
 .proc setup: port {
     lda #0
-    .next fill                  ; it runs into `fill`, which is written next
+    .fallthrough fill           ; it runs into `fill`, which is written next
 }
 
 .proc fill: port {

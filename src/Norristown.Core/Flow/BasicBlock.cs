@@ -70,6 +70,12 @@ public sealed class BasicBlock
     public NextDirectiveSyntax? Next { get; internal set; }
 
     /// <summary>
+    /// The routine a <c>.fallthrough</c> ending the block names, or null. The block is then the
+    /// end of the routine's body, and every path through it runs on into that routine.
+    /// </summary>
+    public Symbol? RunsInto { get; internal set; }
+
+    /// <summary>
     /// Whether a <c>.state</c> stands directly after the block's label, which declares the
     /// label an entry point: the state there is what the directive says. One carrying nothing
     /// but <c>keeps</c> is not such a declaration, because it says what a register holds and

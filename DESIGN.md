@@ -1086,7 +1086,7 @@ this: its body is checked against whatever it declares, defaults included.
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
-| `jmp f`, `jml f`, or a branch or `.next` edge to f, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
+| `jmp f`, `jml f`, a branch or `.next` edge to f, or a `.fallthrough f`, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
 | `jsr (t,x)` with `.next` naming routines | state must match every entry; becomes the merge of their exits |
 | `rts`, `rtl` | state must match the proc's exit; path ends. An error in a proc that says `noreturn` or `interrupt` |
 | `rti`, `stp` | path ends, nothing checked |
@@ -1144,7 +1144,7 @@ jump in has not, they disagree, and the stack after the label is one nothing is 
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
 a label, and a second entry point that reads what its caller pushed says so with `args n`,
 which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
-across an entry point, adjacent procs joined by `.next` (§7.4) included: each of those is
+across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
@@ -1231,7 +1231,8 @@ analysis stack, so a frame reaches them:
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
   import). A local subroutine is a separate proc, grouped with its callers in a
   `.scope` when a shared namespace helps; procs do not nest (§6.1). A routine with
-  several entry points is written as adjacent procs joined by `.next` (§7.4). On the
+  several entry points is written as adjacent procs, each ending in a `.fallthrough` into the
+  one written after it (§7.4). On the
   6502 and its CMOS variants, where there is no state to contract, a call may target any address
   expression.
 
@@ -1343,22 +1344,39 @@ state, so the annotations are accepted and their names checked, but none is requ
 unreachable-label warning applies on every CPU, and so does falling off the end of a proc,
 which is a warning there and an error on the 65816.
 
-Two directives carry all of it. Each applies to the statement immediately above it (for
+Two annotations carry most of it. Each applies to the statement immediately above it (for
 a macro call, the last statement of its expansion, §11.3) and comes before any following
 label:
 
-- `.next @a, @b` replaces the analyzer's reading of where flow goes after the
-  statement. Each named target gets an edge carrying the current state; on a call, the
-  targets are routines and the state after the call is the merge of their exits.
-  Targets may be cheap locals, scoped paths (`gfx::init`) and, inside a macro body,
+- `.next @a, @b` names where flow goes after a statement whose successors nt65 cannot read
+  for itself: an indirect jump or call, an `rts` or `rtl` used as a jump, a jump to a
+  computed address, data flow runs into, the last statement of a nested segment block, and a
+  macro call whose expansion ends in one of those. Each named target gets an edge carrying
+  the current state; on a call, the targets are routines and the state after the call is the
+  merge of their exits. Anywhere else a routine named is a jump to its first byte, checked
+  like a tail call: it says where flow goes, and never that the routine is the one written
+  next. Targets may be cheap locals, scoped paths (`gfx::init`) and, inside a macro body,
   `ident` parameters. A target naming a list (§6.4), or data declared as addresses
   (`.addr` or `.faraddr`, or such a member of a `.data` block) whose items are all code
   labels, each optionally minus 1 as in an RTS dispatch table, stands for every one of those
   labels, whether the items are written on the declaration's line or in its body. A target
   naming data of any other type is an error that asks for the address type. `.next ?` ends
-  the path with nothing checked.
+  the path with nothing checked, and may stand after any statement. A `.next` that names
+  targets after a statement whose successors nt65 already knows — an ordinary instruction, a
+  direct `jsr`, `jmp` or branch to a label or routine — is an error, since it could only
+  contradict them; where it is the last line of a routine's body its message says
+  `.fallthrough` is what was meant, and its fix writes that.
 - `.patch @op` acknowledges that the store above it writes into the instruction at
   `@op`.
+
+The third directive is about the end of a routine rather than a statement:
+
+- `.fallthrough next_proc` says every path that reaches the end of the routine's body runs
+  on into `next_proc`, whatever stands above it: an instruction, a call, an `.if` chain with
+  or without an `.else`, a label. It is the last line of a `.proc` body and stands nowhere
+  else: not under an `.if`, not in a macro body or a block argument. `next_proc` has to be
+  the routine written directly after this one, in the same segment of the same translation
+  unit, and is checked like a tail call against its signature.
 
 | quirk | how it is recognized | what is required |
 |---|---|---|
@@ -1369,11 +1387,11 @@ label:
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
-| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
+| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
-| falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816. The next proc may be another module's where placement puts the two in one translation unit (§12) |
-| falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
+| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; a warning off the 65816, whose fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
+| falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
 | other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
@@ -1437,6 +1455,47 @@ The `bit` skip trick:
     lda #2
 @store:
     sta value
+```
+
+The same trick across routines, where the bytes skipped are the first instruction of the
+routine written next and the skip lands on the one after it. The `.next` names a routine
+that is not the next one written, which is a jump there, checked as a tail call; the routine
+in between runs into it and says so with `.fallthrough`:
+
+```nt65
+.proc set_one: a8 {
+    lda #1
+    .byte $2c           ; bit abs: swallows the `lda #2` of `set_two`
+    .next store
+}
+
+.proc set_two: a8 {
+    lda #2
+    .fallthrough store
+}
+
+.proc store: a8 {
+    sta value
+    rts
+}
+```
+
+A routine whose body ends in an `.if` chain, taken or not, runs into the next routine from
+every branch, and the `.fallthrough` after the chain says so for all of them:
+
+```nt65
+.proc prepare: a8 {
+    lda #0
+    .if FAST {
+        asl a
+    }
+    .fallthrough draw
+}
+
+.proc draw: a8 {
+    sta value
+    rts
+}
 ```
 
 The one honest limit: recognition is complete for what is written. A pointer built by
@@ -1722,13 +1781,14 @@ registers it did not save unknown, and the answer says it is not the whole one.
 A path that hands control to another routine is not a call but a way out: control lands in that
 routine and that routine returns to this one's caller. What a routine hands back across such a
 path is therefore what the routine handed to hands back. A `jmp` to a routine's own entry is
-taken at that word, and so is a jump into another routine's interior (§7.4), since control
-comes back from neither. A branch says the same on the path where it is taken, whether it names
-the routine or a label inside it, and a `.next` says it for the statement it stands under, which
-is how a jump through a pointer, or a routine that runs on into the next one, says where control
-goes. So a routine whose only way out hands control to another promises no more than the routine
-it hands off to: where that one promises nothing, this one can promise nothing, and what is
-reported names where control went, the routine it went to and the `keeps` that belongs there.
+taken at that word, and so is a jump into another routine's interior (§7.4), since control comes
+back from neither. A branch says the same on the path where it is taken, whether it names the
+routine or a label inside it, a `.next` says it for the statement it stands under, which is how
+a jump through a pointer says where control goes, and a `.fallthrough` says it for the end of a
+routine that runs on into the next one. So a routine whose only way out hands control to another
+promises no more than the routine it hands off to: where that one promises nothing, this one can
+promise nothing, and what is reported names where control went, the routine it went to and the
+`keeps` that belongs there.
 
 **`keeps a, x` is the promise.** On a routine with a body it is checked at every `rts`, `rtl`
 and `rti`: a register the routine cannot be shown to hand back is reported there, with what to
@@ -2565,8 +2625,9 @@ expansion is code, data or both is a property of the expansion, not a declared k
 macro, because nothing that runs before expansion needs to know it.
 
 A `.next` or `.patch` directly after a macro call applies to the last statement of its
-expansion, as it would to any statement above it (§7.4). That is how a caller annotates a
-macro that leaves data in the instruction stream:
+expansion, as it would to any statement above it (§7.4), and a `.next` there names targets
+only where that statement is one whose successors nt65 cannot read. That is how a caller
+annotates a macro that leaves data in the instruction stream:
 
 ```nt65
 .macro skip2() {
@@ -2600,6 +2661,7 @@ never gives the caller a shape.
 | `.proc` | inside a proc it would nest (§6.1); at item level it would need a name from the caller, and its signature is part of the file's interface. A wrapper is a block macro called inside a proc the caller declares |
 | `.import` | redundant: a body resolves names where the macro is declared, and the output imports what an expansion uses (§12) |
 | `.macro`, `.func` | a definition in a body could capture the enclosing macro's parameters, which would make definitions into templates, for no common use |
+| `.fallthrough` | it is the last line of a routine's own body (§7.4), which a macro body is not; the routine that calls the macro says what it runs into |
 
 `.macro` appears only at file level or in a `.scope` outside any proc. A macro declared
 in a proc would see that proc's `@locals`, and an expansion in another
@@ -2749,7 +2811,7 @@ module's bytes where the line stands without making it any less a module:
     .export .proc ISCNTC {
         ...
         cmp #$03
-        .next flow1::STOP           ; runs into STOP, which the placement puts next
+        .fallthrough flow1::STOP    ; runs into STOP, which the placement puts next
     }
 }
 ```
@@ -2795,14 +2857,20 @@ an `.if` of their own; in any other configuration it places nothing. A module is
 most once, placement forms no cycle, and what a module places does not touch its regions: the
 line after a `.place` is in the region the line before it was.
 
-Placement is what lets a routine run into another module's. A `.next` to another module's
-routine (§7.4) requires the two to be in one translation unit, where nt65 lays out every byte
-and checks that the target starts where the routine ends, as it does within a file. Across
-translation units the order is the link's, which nt65 does not know, so there the `.next` is
-an error that names placement as the way to say it; that includes a `placeable` module that
-nothing places in this program. A root module that places the rest of a program in order is
-the nt65 form of a ca65 program built as one file of `.include`s: the program is one object,
-and its layout is written in the source, with nothing left for a build to put in order.
+Placement is what lets a routine run into another module's. A `.fallthrough` into another
+module's routine (§7.4) requires the two to be in one translation unit, where nt65 lays out
+every byte and checks that the target starts where the routine ends, as it does within a file.
+Across a `.place` it is read in the segment the placing file is in at that line, as ca65 lays
+each segment's bytes down in the order one `.s` writes them: the routine before the `.place`
+runs into the placed module's first routine in that segment, the placed module's last routine in
+that segment runs into what the placing file writes next in it, and what the placed module
+writes to other segments in between does not stand between them. A `.fallthrough` across a
+`.place` whose two ends are not both in that segment is an error that names the segments. Across
+translation units the order is the link's, which nt65 does not know, so there the `.fallthrough`
+is an error that names placement as the way to say it; that includes a `placeable` module that
+nothing places in this program. A root module that places the rest of a program in order is the
+nt65 form of a ca65 program built as one file of `.include`s: the program is one object, and its
+layout is written in the source, with nothing left for a build to put in order.
 
 Most programs need none of this. A module that owns its routines and ends each one is laid
 out correctly by any link order, and placement is for the code that is not.
@@ -3134,7 +3202,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `lda d:$2105` | `lda z:$05`, from the known D (§7.5) |
 | `jeq t` | `beq t`, or `bne` over `jmp t` to a generated label (§7.6) |
 | a width-dependent immediate (65816) | preceded by `.a8`/`.a16` or `.i8`/`.i16`, unless the previous immediate for that register had the same width (§7.3) |
-| `.next`, `.patch`, `dp =`, `bank =`, `inline` | nothing; they exist only for the analysis |
+| `.next`, `.fallthrough`, `.patch`, `dp =`, `bank =`, `inline` | nothing; they exist only for the analysis |
 | `.state` | nothing; the widths it establishes size later immediates (§7.3) |
 | `.ensure a16, i8` | the `rep` or `sep` the analysis requires there, or nothing |
 | `.frame`, `locals::count,s` | nothing; the operand is its offset, with a comment naming the path |
@@ -3379,20 +3447,22 @@ alone and without an assembler:
   on, so a list of hundreds is not mostly prose nobody is reading;
 - find a declaration anywhere in the workspace by name;
 - fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
-  transfer or a routine runs off its end, `jsl` for a `jsr` to a far routine and the other way,
-  the long branch where a short one cannot reach, `rti` where an interrupt handler returns,
-  the missing `.export` in the module that declares a name or the `.use` that brings it in,
-  a `.state` after a label flow may reach unseen, saying what the analysis finds reaching it,
-  a label outside a routine, with the data under it, as a `.data` declaration, a label in
-  mixed data as a member of it or a position in it, the nt65 spelling of a ca65 directive,
-  the declared name a misspelling is within a letter or two of, ca65's assertion level
-  dropped, a `.res` as the `.byte[n]` that reserves the same room, an export widened to the
-  address size it exports, the width item a routine assumes written into its signature, and
-  the declaration or `.use` item nothing names, taken out or exported. Where the fix is a name
-  nobody but the programmer can give — a name ca65 would read as an instruction (§4) — nothing
-  is written: the caret goes on the name and a rename starts. Where a line has two
-  readings — an expression that needs parentheses, a width the analysis cannot work out —
-  each is offered and none is preferred, because which was meant is the programmer's to say;
+  transfer, a `.fallthrough` naming the routine written next where a routine runs off its end (a
+  `.next ?` where nothing is known to be next), `.fallthrough` for a `.next` that ends a
+  routine's body after a statement nt65 can follow, `jsl` for a `jsr` to a far routine and the
+  other way, the long branch where a short one cannot reach, `rti` where an interrupt handler
+  returns, the missing `.export` in the module that declares a name or the `.use` that brings it
+  in, a `.state` after a label flow may reach unseen, saying what the analysis finds reaching
+  it, a label outside a routine, with the data under it, as a `.data` declaration, a label in
+  mixed data as a member of it or a position in it, the nt65 spelling of a ca65 directive, the
+  declared name a misspelling is within a letter or two of, ca65's assertion level dropped, a
+  `.res` as the `.byte[n]` that reserves the same room, an export widened to the address size it
+  exports, the width item a routine assumes written into its signature, and the declaration or
+  `.use` item nothing names, taken out or exported. Where the fix is a name nobody but the
+  programmer can give — a name ca65 would read as an instruction (§4) — nothing is written: the
+  caret goes on the name and a rename starts. Where a line has two readings — an expression that
+  needs parentheses, a width the analysis cannot work out — each is offered and none is
+  preferred, because which was meant is the programmer's to say;
 - rewrite what is asked for at a selection, which nothing reported: a path written out in
   full brought in with a `.use` and one brought in written out in full, the `.use` items
   ordered with what nothing names gone, a declaration exported or no longer exported, what a
@@ -3535,13 +3605,13 @@ declaration that nothing names and the file does not export, since an export is 
 file uses. A member of a named enum is one of a set and is not reported on its own, a label a
 `.state` declares an entry point is reached from outside, and a label flow analysis reports as
 never reached is not reported twice. A routine nothing calls, jumps to or names — in data, in a
-`.next`, anywhere — and that the file does not export is a routine nothing can reach, which is
-what a finished port has left behind; a handler is the exception, because the processor reaches
-it through a vector this program may not even hold, and an `interrupt` signature is what says
-so. Data that holds values may be there for where it lands,
-as a header, the vectors or a load address are, so only a declaration that reserves storage
-and holds no values is reported. A name written in a branch the configuration leaves out
-counts as used, because the other build uses it, and a file with errors gets none.
+`.next` or a `.fallthrough`, anywhere — and that the file does not export is a routine nothing
+can reach, which is what a finished port has left behind; a handler is the exception, because
+the processor reaches it through a vector this program may not even hold, and an `interrupt`
+signature is what says so. Data that holds values may be there for where it lands, as a header,
+the vectors or a load address are, so only a declaration that reserves storage and holds no
+values is reported. A name written in a branch the configuration leaves out counts as used,
+because the other build uses it, and a file with errors gets none.
 
 A `.use` item that brings in a name the file never writes is reported the same way, on the
 name the item writes rather than on the whole line, so that one item of several in braces is
@@ -3581,8 +3651,8 @@ depends on `*`: code sizes are layout, left to the linker (§7.6). If an edit le
 the interface unchanged, no other file is re-analyzed, and the file it is in is laid out and
 followed again whole: where control goes is read off the order layout wrote the bytes in, so
 the unit is the file rather than the proc. Where the file is one of several in a translation
-unit (§12), the unit is laid out again, since a `.next` from one of its modules into another
-is checked against that layout. The only program-wide tables are the defines, the
+unit (§12), the unit is laid out again, since a `.fallthrough` from one of its modules into
+another is checked against that layout. The only program-wide tables are the defines, the
 module table, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
 signatures declared rather than inferred is what protects this: inference would make
 every caller depend on every callee's body.
@@ -3688,12 +3758,12 @@ Recorded so the reasoning survives. None is open.
   with no relative paths and no special view of its neighbours.
 - **Layout across modules is placement, stated in the source.** A ca65 program built as one
   file of `.include`s puts one file's routine in the middle of another's and lets it run into
-  what follows, and a module being one object could not say that. A `.next` into another
+  what follows, and a module being one object could not say that. A fall-through into another
   module checked at link time, with the build's object list keeping the order, was considered
   and rejected: it hands the programmer ld65's object order to get right, catches a mistake
   only at the link, and still cannot put one module's bytes inside another's. `.place` states
   the layout where upstream stated it, keeps every module a module, and lets nt65 check a
-  cross-module `.next` as it checks one within a file. What a translation unit holds is
+  cross-module `.fallthrough` as it checks one within a file. What a translation unit holds is
   structure, so `.place` is never under an `.if`. Whether a module may be placed is said in
   its declaration, because a module that runs into code it does not hold cannot be read
   correctly from its own file otherwise, and so that forgetting to place it, or placing one
@@ -3775,7 +3845,21 @@ Recorded so the reasoning survives. None is open.
   Every call takes some register away; what a reader wants is to see what the registers are
   doing, not a list of the places they changed.
 - **`.state keeps`, not a third annotation directive.** `keeps a` means the same at a point as
-  at an exit, so `.state` carries it, and §7.4's two directives stay two.
+  at an exit, so `.state` carries it, and §7.4's two annotations stay two.
+- **`.next` and `.fallthrough` are two directives.** `.next` once did two jobs: it named the
+  successors of a statement nt65 cannot follow, and it said a routine runs into the one written
+  after it, with an adjacency check. The two collided. After a direct `jsr X`, `.next Y` was
+  read as the call's targets where the author meant "then run into `Y`"; a routine whose last
+  statement is an `.if` chain had no statement for it to stand under; and a `.byte $2c` that
+  lands on a routine other than the next one written could not be said, because naming a
+  routine made the adjacency claim. Now `.next` is only about the statement above it, where
+  that statement's successors are unreadable, and a routine it names is a jump checked as a
+  tail call; `.fallthrough` is only about the end of a routine's body, whatever ends it. Go's
+  `fallthrough` statement and C++17's `[[fallthrough]]` make the same choice: falling into
+  what is written next is said with a word of its own, at the end of the thing that falls,
+  rather than inferred or folded into a general jump. A `.next` that could only repeat or
+  contradict what nt65 reads is an error, so the old spelling of a fall-through is caught
+  where it stands, with a fix that writes the new one.
 - **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the
   state, so its annotations would be ceremony.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a
@@ -3849,7 +3933,8 @@ Recorded so the reasoning survives. None is open.
   is not in doubt, and what it stores is, so the count stands and the hover says which. Only
   `jam` has no count, because it stops the processor.
 - **Running off the end of a proc warns off the 65816.** Nothing consumes the state there,
-  but a proc that runs into the next one is still usually a missing `rts`.
+  but a proc that runs into the next one is still usually a missing `rts`, and one that means
+  to says so with `.fallthrough`.
 - **Text constants are text wherever a literal is,** and cross modules by value. Nothing in
   ca65 can hold one, so none reaches it, and without arithmetic or concatenation on text a
   constant cannot build text a literal could not have written.
@@ -4313,7 +4398,7 @@ value       := expr | braced
 value-line  := values-list NL
              | if-block | repeat-block | each-block  ; their contents value lines too
 init        := member-name '=' value
-proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body '}'
+proc        := '.proc' ident (':' state ('->' state)?)? '{' NL body fallthrough? '}'
 multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL body '}'
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
@@ -4349,6 +4434,7 @@ width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
 annotation  := '.next' (target (',' target)* | '?')
              | '.patch' target
+fallthrough := '.fallthrough' path                    ; the last line of a proc's body
 target      := path                                   ; or an ident parameter, in macros;
                                                       ; a list, or data declared as addresses,
                                                       ; stands for its labels

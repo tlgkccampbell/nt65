@@ -150,22 +150,22 @@
     beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes
     rts
 @data:
-    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is written after it: a `.fallthrough` naming the routine it runs into says so, or `.next ?` ends the path
 }
 
-; Falling off the end, and a `.next` naming a routine that is not the next one written.
+; Falling off the end, and a `.fallthrough` naming a routine that is not the next one written.
 .proc falls: a8, i8 {
     nop
     .next ?
 }
 
 .proc off_the_end: a8, i8 {
-    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is written after it: `.next` naming the routine it runs into says so, or `.next ?` ends the path
+    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is written after it: a `.fallthrough` naming the routine it runs into says so, or `.next ?` ends the path
 }
 
 .proc not_adjacent: a8, i8 {
     nop
-    .next falls             ;! error[next-routine-not-adjacent]: `.next falls` says flow runs on into `falls`, and it does not start where this statement ends: a routine runs into the one written directly after it
+    .fallthrough falls      ;! error[fallthrough-not-adjacent]: `.fallthrough falls` says flow runs on into `falls`, and it does not start where this routine ends: a routine runs into the one written directly after it
 }
 
 ; A `.next` on a return says the return is a jump to the routines it names, which is a tail

@@ -159,6 +159,8 @@ public sealed class ParserTests
     [InlineData(".next @move, @fire", SyntaxKind.NextDirective)]
     [InlineData("    .next gfx::init, ::top", SyntaxKind.NextDirective)]
     [InlineData("    .next ?", SyntaxKind.NextDirective)]
+    [InlineData("    .fallthrough next_proc", SyntaxKind.FallthroughDirective)]
+    [InlineData("    .fallthrough flow1::STOP", SyntaxKind.FallthroughDirective)]
     [InlineData("    .patch @op", SyntaxKind.PatchDirective)]
     [InlineData("boss: .type Actor { x = 100 }", SyntaxKind.LabeledLine)]
     [InlineData(".enum Color {", SyntaxKind.EnumDeclaration)]

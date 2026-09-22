@@ -361,9 +361,7 @@ internal sealed class StateChecks
         Step step, string mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
     {
         var own = routine.Signature ?? Signature.Default;
-        var what = mnemonic == ".next"
-            ? $"`.next {target.DisplayName}`"
-            : $"`{mnemonic} {target.DisplayName}`";
+        var what = $"`{mnemonic} {target.DisplayName}`";
         var returns = !own.HasNoCaller && !callee.NeverReturns;
 
         // A long jump to a near routine is how code enters another bank, which is where the
@@ -378,7 +376,7 @@ internal sealed class StateChecks
                 Report(step, Catalogue.JumpAcrossBanks.Says(target.DisplayName, routine.DisplayName));
             }
         }
-        else if (mnemonic is not ("jml" or ".next") && callee.IsFar)
+        else if (mnemonic is not ("jml" or ".next" or ".fallthrough") && callee.IsFar)
         {
             Report(step, Catalogue.JumpDistanceMismatch.Says(target.DisplayName, "far", "jml", target.DisplayName));
         }
@@ -413,9 +411,7 @@ internal sealed class StateChecks
         var own = routine.Signature ?? Signature.Default;
         if (own.HasNoCaller || callee.NeverReturns)
             return;
-        var what = mnemonic == ".next"
-            ? $"`.next {label.DisplayName}`"
-            : $"`{mnemonic} {label.DisplayName}`";
+        var what = $"`{mnemonic} {label.DisplayName}`";
         if (callee.IsInterrupt)
         {
             Report(step, Catalogue.TailCallToHandler.Says(what, owner.DisplayName));

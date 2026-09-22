@@ -6,9 +6,9 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// Which of a file's labels control may reach from outside the routine they are in: another
-/// module may jump to an exported one, and this file may name one from another routine. A
-/// sibling joined by <c>.next</c> is part of the same routine as far as the analysis goes, so
-/// a path from one is not from outside.
+/// module may jump to an exported one, and this file may name one from another routine. An
+/// instance of the same family is part of the same routine as far as the analysis goes, so a
+/// path from one is not from outside.
 /// <para>
 /// The labels this file names are worked out the first time one is asked about and kept for
 /// the rest of them: the answer is the same question of every routine in the file.

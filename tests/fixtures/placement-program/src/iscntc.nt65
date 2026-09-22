@@ -5,5 +5,5 @@
 .export .proc check {
     lda $c000
     cmp #$03
-    .next interpreter::stop
+    .fallthrough interpreter::stop
 }

@@ -205,7 +205,7 @@ once" keeps its meaning: the built-in table is what stands when a program says n
 ## Considered and not recommended
 
 - **A call into a routine's interior.** `ppu_clear_nt` called into its own middle and fell
-  through to the same place. Splitting it at `doonedma` with `.next` made the second entry a
+  through to the same place. Splitting it at `doonedma` with `.fallthrough` made the second entry a
   routine with its own signature. The design forbids the call on purpose, and the split is
   clearer than what it replaced.
 - **`.incbin` measured before the build.** It forces asset conversion ahead of nt65, but

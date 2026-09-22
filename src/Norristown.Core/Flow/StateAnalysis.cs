@@ -416,8 +416,22 @@ public sealed class StateAnalysis : IProcessorStates
             return Framed(step, frame, state);
         if (step.IsMarker)
             return Marked(step, state);
-        if (step.Statement is not InstructionStatementSyntax statement)
+
+        // Running off the end into the routine a `.fallthrough` names is a tail call to it.
+        if (step.Statement is FallthroughDirectiveSyntax { Target: { } into }
+            && Targets.Of(model, into, step.On)?.Symbol is { Kind: SymbolKind.Proc, Signature: { } signature } runsInto)
+        {
+            checks.CheckTailCall(step, ".fallthrough", runsInto, signature, state.Processor, routine);
             return state;
+        }
+
+        // Data flow runs into goes where its `.next` says, which is a jump to each place named.
+        if (step.Statement is not InstructionStatementSyntax statement)
+        {
+            if (next is not null && step.Statement is DataDirectiveSyntax or DataValuesSyntax)
+                CheckNamed(step, next, state, routine);
+            return state;
+        }
 
         var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
         var mode = layout.Of(statement, step.On)?.Mode;
@@ -609,16 +623,23 @@ public sealed class StateAnalysis : IProcessorStates
             checks.CheckJumpInto(step, mnemonic, target, owner, state.Processor, routine);
         }
         if (next is not null)
-        {
-            foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
-            {
-                if (named.Signature is { } signature)
-                    checks.CheckTailCall(step, ".next", named, signature, state.Processor, routine);
-                else if (Interior(named, routine) is { } inside)
-                    checks.CheckJumpInto(step, ".next", named, inside, state.Processor, routine);
-            }
-        }
+            CheckNamed(step, next, state, routine);
         return state;
+    }
+
+    /// <summary>
+    /// What a <c>.next</c> names, each a jump from here: to a routine's start a tail call, and to
+    /// a label inside another routine a jump into it.
+    /// </summary>
+    private void CheckNamed(Step step, NextDirectiveSyntax next, FlowState state, Symbol routine)
+    {
+        foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
+        {
+            if (named.Signature is { } signature)
+                checks.CheckTailCall(step, ".next", named, signature, state.Processor, routine);
+            else if (Interior(named, routine) is { } inside)
+                checks.CheckJumpInto(step, ".next", named, inside, state.Processor, routine);
+        }
     }
 
     /// <summary>The routines a <c>.next</c> names; the labels it names are edges of the routine's own.</summary>

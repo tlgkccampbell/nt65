@@ -40,6 +40,13 @@ internal static class Fixes
                     [Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}.next ?")]);
                 break;
 
+            case FixKind.Fallthrough when fix is { Text: { } routine, At: { } closer }:
+                var last = closer.Line - 1;
+                yield return Fix(diagnostic, $"Say it runs into `{routine}` with `.fallthrough`",
+                    [new Edit(tree, new TextSpan(tree.LineStarts[last], 0),
+                        $"{Edits.IndentOf(tree, last)}    .fallthrough {routine}\n")]);
+                break;
+
             case FixKind.Mnemonic when fix.Text is { } mnemonic && Written(tree, line, mnemonic) is { } call:
                 yield return Fix(diagnostic, $"Call with `{mnemonic}`", [call]);
                 break;

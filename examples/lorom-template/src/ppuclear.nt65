@@ -29,7 +29,7 @@
     lda #INC_DATAHI             ; +1 on PPUDATA high byte write
     sta PPUCTRL
     lda #$01                    ; point at high byte of Y
-    .next doonedma              ; and run into the second DMA
+    .fallthrough doonedma       ; and run into the second DMA
 }
 
 ; One half of ppu_clear_nt: DMA 1024 bytes of the value at $0000 + A to VRAM at X.
@@ -106,7 +106,7 @@
     lda #DMAMODE_OAMDATA
     ldx #OAM
     ldy #544
-    .next ppu_copy              ; falls through to ppu_copy
+    .fallthrough ppu_copy       ; falls through to ppu_copy
 }
 
 ; Copies data to the S-PPU using DMA channel 0.  Entered and left in the caller's widths.

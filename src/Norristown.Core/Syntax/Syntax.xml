@@ -926,6 +926,24 @@
     </Field>
   </Node>
 
+  <Node Name="FallthroughDirectiveSyntax" Base="StatementSyntax">
+    <Kind Name="FallthroughDirective"/>
+    <TypeComment>
+      <summary><c>.fallthrough next</c>: the last line of a routine's body, naming the routine every path that reaches the end runs into.</summary>
+    </TypeComment>
+    <Field Name="Keyword" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The <c>.fallthrough</c> that starts the line.</summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>The routine flow runs into, or null when no name was written.</summary>
+      </PropertyComment>
+    </Field>
+  </Node>
+
   <Node Name="FileSyntax" Base="SyntaxNode" HandWritten="true">
     <Kind Name="File"/>
   </Node>

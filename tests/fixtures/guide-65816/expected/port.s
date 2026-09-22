@@ -15,24 +15,24 @@
 .export port__calls
 
 .segment "CODE": absolute
-; .proc draw: port  port.nt65:10
+; .proc draw: port  port.nt65:11
 port__draw:
     rts
 ; end of draw
 
-; .proc widen: port -> a16, i16  port.nt65:14
+; .proc widen: port -> a16, i16  port.nt65:15
 port__widen:
     rep #$20
     rts
 ; end of widen
 
-; .proc setup: port  port.nt65:19
+; .proc setup: port  port.nt65:20
 port__setup:
     .a8
     lda #0
 ; end of setup
 
-; .proc fill: port  port.nt65:24
+; .proc fill: port  port.nt65:25
 port__fill:
     sta a:$2100
     rts
@@ -41,7 +41,7 @@ port__fill:
 CHROUT = $ffd2
 TOOLBOX = $00e10000
 
-; .proc calls: port  port.nt65:32
+; .proc calls: port  port.nt65:33
 port__calls:
     jsr CHROUT
     rep #$20

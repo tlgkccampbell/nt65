@@ -1134,6 +1134,8 @@ internal sealed partial class Binder
         if (statement is not (BlankLineSyntax or ModuleDirectiveSyntax))
             pastFirstItem = true;
         CheckAnnotation(line, statement);
+        if (statement is FallthroughDirectiveSyntax fallthrough && !Fallthrough.EndsABody(line))
+            Report(fallthrough.Keyword.Span, Catalogue.FallthroughMisplaced);
         var label = bareLabel;
         if (statement is not BlankLineSyntax)
             bareLabel = null;
@@ -2013,6 +2015,9 @@ internal sealed partial class Binder
 
         /// <inheritdoc cref="VisitNextDirective"/>
         public override void VisitPatchDirective(PatchDirectiveSyntax node) => binder.CollectUses(node);
+
+        /// <inheritdoc cref="VisitNextDirective"/>
+        public override void VisitFallthroughDirective(FallthroughDirectiveSyntax node) => binder.CollectUses(node);
 
         /// <inheritdoc/>
         public override void VisitSegmentDeclaration(SegmentDeclarationSyntax node) => Valued(node);

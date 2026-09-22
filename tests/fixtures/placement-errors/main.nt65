@@ -1,29 +1,29 @@
-; What placement refuses, and a `.next` into another module that placement does not make true.
+; What placement refuses, and a `.fallthrough` into another module that placement does not make true.
 .module main
 
 .segment CODE
 .export .proc first {
     lda #1
-    .next inner::second             ;! error[next-routine-not-adjacent]: `.next second` says flow runs on into `second`, and it does not start where this statement ends: a routine runs into the one written directly after it
+    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `.fallthrough second` says flow runs on into `second`, and it does not start where this routine ends: a routine runs into the one written directly after it
 }
 
 .place inner
 
 .export .proc third {
     lda #3
-    .next fourth                    ;! error[next-routine-not-adjacent]: `.next fourth` says flow runs on into `fourth`, and it does not start where this statement ends: a routine runs into the one written directly after it
+    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `.fallthrough fourth` says flow runs on into `fourth`, and it does not start where this routine ends: a routine runs into the one written directly after it
 }
 
 .place middle                       ; its bytes stand between the two
 
 .export .proc fourth {
     lda #4
-    .next alone::entry              ;! error[next-routine-not-placed]: `.next entry` says flow runs on into `entry`, which is in module `alone`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+    .fallthrough alone::entry       ;! error[fallthrough-not-placed]: `.fallthrough entry` says flow runs on into `entry`, which is in module `alone`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
 }
 
 .export .proc fifth {
     lda #5
-    .next spare::go                 ;! error[next-routine-not-placed]: `.next go` says flow runs on into `go`, which is in module `spare`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+    .fallthrough spare::go          ;! error[fallthrough-not-placed]: `.fallthrough go` says flow runs on into `go`, which is in module `spare`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
 }
 
 .if FAST {

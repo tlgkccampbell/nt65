@@ -58,7 +58,7 @@ internal sealed class Requirements
 
     /// <summary>
     /// Warns about each routine in <paramref name="flow"/>'s file that runs off its end, which is
-    /// all a CPU without the 65816's analysis asks for: <c>.next</c> says the routine meant it.
+    /// all a CPU without the 65816's analysis asks for: <c>.fallthrough</c> says the routine meant it.
     /// </summary>
     public static void CheckEnds(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
@@ -243,8 +243,8 @@ internal sealed class Requirements
 
     /// <summary>
     /// A routine that does not end in a transfer of control runs off its end into whatever is
-    /// written after it, which a <c>.next</c> naming that routine says, and is then checked
-    /// as a tail call.
+    /// written after it, which a <c>.fallthrough</c> naming that routine says, and is then
+    /// checked as a tail call.
     /// </summary>
     private void CheckEnd(FlowRegion region)
     {
@@ -267,17 +267,25 @@ internal sealed class Requirements
         var routine = region.Routine.DisplayName;
         var message = own
             ? Catalogue.RoutineRunsOffTheEnd.Says(
-                routine, "its end", "is written after it", "naming the routine it runs into says so")
+                routine, "its end", "is written after it",
+                "a `.fallthrough` naming the routine it runs into says so")
             : Catalogue.RoutineRunsOffTheEnd.Says(
-                routine, "the end of a segment block", "that segment holds next", "says where flow goes");
+                routine, "the end of a segment block", "that segment holds next", "a `.next` says where flow goes");
+
+        // Where the routine written next is known, the fix names it; anywhere else it ends the
+        // path, which says nothing about what comes next.
+        var after = own ? flow.WrittenAfter(region) : null;
+        var runsInto = after is { } next
+            ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
+            : null;
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;
-            diagnostics.Add(new Diagnostic(at.DeclarationSpan, runningOff, message));
+            diagnostics.Add(new Diagnostic(at.DeclarationSpan, runningOff, message) { Fix = runsInto });
             return;
         }
         var step = last.Steps[^1];
-        if (last.Next is not null)
+        if (last.Next is not null || step.Statement is FallthroughDirectiveSyntax)
             return;
         var transfer = Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode);
         var runsOn = (transfer is Transfer.Through or Transfer.Branch or Transfer.Call
@@ -285,8 +293,20 @@ internal sealed class Requirements
             || transfer == Transfer.Elsewhere && Mnemonic(step.Statement).Calls)
             && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
-            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message) { Fix = EndPath(step) });
+        {
+            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message)
+            {
+                Fix = runsInto ?? EndPath(step),
+            });
+        }
     }
+
+    /// <summary>
+    /// How <paramref name="routine"/> is written from inside <paramref name="from"/>: by its own
+    /// name where the two are declared in one scope, and by its path from anywhere else.
+    /// </summary>
+    private static string Named(Symbol routine, Symbol from) =>
+        routine.Scope == from.Scope ? routine.Name : routine.QualifiedName;
 
     /// <summary>
     /// Every place a label on code is named other than as the target of a branch, a jump or a

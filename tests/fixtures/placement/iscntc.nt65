@@ -8,6 +8,6 @@
     .export .proc ISCNTC {
         lda $1742
         cmp #$03
-        .next flow1::STOP           ; runs into STOP, which the placement puts next
+        .fallthrough flow1::STOP    ; runs into STOP, which the placement puts next
     }
 }

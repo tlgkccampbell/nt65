@@ -112,6 +112,7 @@ public static class SyntaxFacts
         [".warning"] = new(SyntaxKind.ErrorDirective),
         [".macro"] = new(SyntaxKind.MacroDeclaration, BlockKind.Macro, Exportable: true),
         [".next"] = new(SyntaxKind.NextDirective),
+        [".fallthrough"] = new(SyntaxKind.FallthroughDirective),
         [".patch"] = new(SyntaxKind.PatchDirective),
         [".state"] = new(SyntaxKind.StateDirective),
         [".ensure"] = new(SyntaxKind.EnsureDirective),

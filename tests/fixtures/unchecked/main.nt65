@@ -122,12 +122,12 @@
     rtl
 }
 
-; One routine running into the next: the `.next` is checked as a tail call, and the two
+; One routine running into the next: the `.fallthrough` is checked as a tail call, and the two
 ; have to be written one after the other.
 .proc first: a16 -> a8 {
     lda #$1234
     sep #$20
-    .next second
+    .fallthrough second
 }
 .proc second: a8 {
     lda #$12

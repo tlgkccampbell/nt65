@@ -25,6 +25,16 @@ public sealed class CodeActionsTests
             ".export .proc main {\n    jmp ($1234)\n    .next ?\n}\n"
         },
         {
+            "Say it runs into `after` with `.fallthrough`",
+            ".export .proc main {\n    .if 1 {\n        nop\n    }\n}\n.export .proc after {\n    rts\n}\n",
+            ".export .proc main {\n    .if 1 {\n        nop\n    }\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
+        },
+        {
+            "Write it as `.fallthrough`",
+            ".export .proc main {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
+            ".export .proc main {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
+        },
+        {
             "Call with `jsl`",
             ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSR far_one\n    rts\n}\n",
             ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSL far_one\n    rts\n}\n"

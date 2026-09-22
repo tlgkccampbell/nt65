@@ -616,7 +616,8 @@ public static class RegisterKeeps
 
         /// <summary>
         /// What a block hands control to: the other routines, and the labels inside them, that
-        /// its jump or its branch names, or that a <c>.next</c> on it names in their place.
+        /// its jump or its branch names, that a <c>.next</c> on it names in their place, or that
+        /// the <c>.fallthrough</c> ending it runs into.
         /// Control never comes back from one, because that routine returns to this routine's
         /// caller, so the path ends there as a tail call's does.
         /// </summary>
@@ -625,6 +626,12 @@ public static class RegisterKeeps
             if (block.Steps.Count == 0 || Ends(block) is { Calls: true } or { Returns: true })
                 yield break;
             var step = block.Steps[^1];
+            if (block.RunsInto is { } runsInto)
+            {
+                if (Outside(runsInto, routine))
+                    yield return runsInto;
+                yield break;
+            }
             if (block.Next is { } next)
             {
                 foreach (var (symbol, _) in flow.Named(next, step.On))

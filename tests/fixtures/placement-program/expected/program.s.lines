@@ -4,7 +4,7 @@ file 0, "src/program.nt65", 345
 file 1, "src/header.nt65", 213
 file 2, "src/tokens.nt65", 105
 file 3, "src/interpreter.nt65", 238
-file 4, "src/iscntc.nt65", 197
+file 4, "src/iscntc.nt65", 204
 line 19, 1, 4
 line 21, 1, 8
 line 27, 2, 6

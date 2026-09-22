@@ -1,0 +1,88 @@
+; What `.fallthrough` and `.next` refuse. `.fallthrough` stands last in a routine's body and
+; names the routine written directly after it in the same segment; `.next` names successors
+; only where the statement above it has none nt65 can read.
+.module main
+
+.cpu 65816
+
+.export misplaced, under_an_if, not_adjacent, first, second, other_segment, not_a_routine
+.export after_lda, after_call, in_the_middle, narrows, wants_wide
+
+.segment BANKED: abs
+
+.segment ZEROPAGE
+.data value: .byte
+
+.segment CODE
+.proc misplaced: a8 {
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+    rts
+}
+
+.proc under_an_if: a8 {
+    lda #0
+    .if 1 {
+        .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+    }
+    rts
+}
+
+.proc not_adjacent: a8 {
+    lda #1
+    .fallthrough second ;! error[fallthrough-not-adjacent]: `.fallthrough second` says flow runs on into `second`, and it does not start where this routine ends: a routine runs into the one written directly after it
+}
+
+.proc first: a8 {
+    rts
+}
+
+.proc second: a8 {
+    lda #2
+    .fallthrough other_segment  ;! error[fallthrough-other-segment]: `.fallthrough other_segment` runs on in segment "CODE", and `other_segment` is in segment "BANKED": a routine runs only into what its own segment holds next
+}
+
+.segment BANKED
+.proc other_segment: a8 {
+    rts
+}
+
+.segment CODE
+.proc not_a_routine: a8 {
+    lda #3
+    .fallthrough value  ;! error[fallthrough-not-a-routine]: `value` is a data declaration, and `.fallthrough` names the routine flow runs into
+}
+
+; A macro body is no routine's body, whoever calls it.
+.macro runs_on() {
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+}
+
+; The spelling a fall-through had before `.fallthrough`: after an ordinary instruction and after
+; a direct call nt65 knows where flow goes, and the `.next` ending the body says what to write.
+.proc after_lda: a8 {
+    lda #4
+    .next after_call    ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `lda #4` runs on into what follows it: a routine that runs into the one after it says so with `.fallthrough`
+}
+
+.proc after_call: a8 {
+    jsr first
+    .next in_the_middle ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `jsr first` calls `first` and comes back: a routine that runs into the one after it says so with `.fallthrough`
+}
+
+; A `.next` in the middle of a body says nothing that is not already known either.
+.proc in_the_middle: a8 {
+    beq @out
+    .next @out          ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `beq @out` goes to `@out` or on into what follows it
+@out:
+    rts
+}
+
+; A fall-through is a tail call: the next routine is entered with A 8 bits wide where it wants 16.
+.proc narrows: a8 {
+    lda #5
+    .fallthrough wants_wide ;! error[call-state-mismatch]: `.fallthrough wants_wide` needs `a16`, and A is 8-bit here;! error[return-state-mismatch]: `.fallthrough wants_wide` is a tail call: `narrows` returns with `a8`, and A is 16-bit when `wants_wide` returns
+}
+
+.proc wants_wide: a16 {
+    rts
+}

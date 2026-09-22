@@ -320,8 +320,8 @@ public static class Catalogue
         "expected-label",
         Severity.Error,
         "expected {0}",
-        "A `.next` names where flow goes and a `.patch` names the instruction being written into; each takes a "
-            + "label, and `.next` also takes `?` for a path that ends.");
+        "A `.next` names where flow goes, a `.fallthrough` the routine flow runs into, and a `.patch` the "
+            + "instruction being written into; each takes a label, and `.next` also takes `?` for a path that ends.");
 
     internal static DiagnosticDescriptor NestingTooDeep { get; } = Entry(
         "nesting-too-deep",
@@ -1830,9 +1830,10 @@ public static class Catalogue
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         "routine-runs-off-the-end",
         Severity.Warning,
-        "`{0}` runs off {1} into whatever {2}: `.next` {3}, or `.next ?` ends the path",
+        "`{0}` runs off {1} into whatever {2}: {3}, or `.next ?` ends the path",
         "The routine ends without transferring control, so flow carries on into whatever the linker puts after "
-            + "it. Where that was meant, a `.next` names it and the tail call is then checked.");
+            + "it. Where that was meant, a `.fallthrough` as the last line of the body names the routine it runs "
+            + "into, which is then checked to start there and checked as a tail call.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         "next-target-not-code",
@@ -1853,17 +1854,50 @@ public static class Catalogue
         "`{0}` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds",
         "A `.next` that names data reads the labels the data holds, so the data has to be addresses.");
 
-    internal static DiagnosticDescriptor NextRoutineNotAdjacent { get; } = Entry(
-        "next-routine-not-adjacent",
+    internal static DiagnosticDescriptor NextSuccessorsKnown { get; } = Entry(
+        "next-successors-known",
         Severity.Error,
-        "`.next {0}` says flow runs on into `{1}`, and it does not start where this statement ends: a routine runs into the one written directly after it",
-        "A routine runs on into the one written directly after it. Naming any other routine would be saying "
-            + "something the bytes do not do.");
+        "`.next` names where flow goes after a statement nt65 cannot follow, and {0} {1}{2}",
+        "A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, "
+            + "or data that flow runs into: statements whose successors nt65 cannot read for itself. After any "
+            + "other statement it already knows where flow goes, and a `.next` could only contradict that. A "
+            + "routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end "
+            + "a path after any statement.");
 
-    internal static DiagnosticDescriptor NextRoutineNotPlaced { get; } = Entry(
-        "next-routine-not-placed",
+    internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
+        "fallthrough-misplaced",
         Severity.Error,
-        "`.next {0}` says flow runs on into `{1}`, which is in module `{2}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them",
+        "`.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into",
+        "A `.fallthrough` is about the end of a routine's body rather than about the statement above it, so it "
+            + "stands last in the body of a `.proc`: not under an `.if`, in a macro body or a block argument, or "
+            + "with anything after it.");
+
+    internal static DiagnosticDescriptor FallthroughNotARoutine { get; } = Entry(
+        "fallthrough-not-a-routine",
+        Severity.Error,
+        "`{0}` is {1}, and `.fallthrough` names the routine flow runs into",
+        "A routine runs into another routine's first byte, and what is named here is not a routine.");
+
+    internal static DiagnosticDescriptor FallthroughNotAdjacent { get; } = Entry(
+        "fallthrough-not-adjacent",
+        Severity.Error,
+        "`.fallthrough {0}` says flow runs on into `{0}`, and it does not start where this routine ends: a routine runs into the one written directly after it",
+        "A routine runs on into the one written directly after it in the same segment. Naming any other routine "
+            + "would be saying something the bytes do not do.");
+
+    internal static DiagnosticDescriptor FallthroughOtherSegment { get; } = Entry(
+        "fallthrough-other-segment",
+        Severity.Error,
+        "`.fallthrough {0}` runs on in segment \"{1}\", and `{0}` is in segment \"{2}\": a routine runs only into what its own segment holds next",
+        "A segment's bytes are laid down in the order they are written, whatever other segments are written "
+            + "between them, so the end of a routine is followed by what its own segment holds next. Across a "
+            + "`.place` that is the placed module's first routine in the segment the placing file is in, or what "
+            + "that file writes next in it.");
+
+    internal static DiagnosticDescriptor FallthroughNotPlaced { get; } = Entry(
+        "fallthrough-not-placed",
+        Severity.Error,
+        "`.fallthrough {0}` says flow runs on into `{0}`, which is in module `{1}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them",
         "Across translation units the order of the bytes is the link's, which nt65 does not know. Where one "
             + "module places the other, both are laid out in one `.s`, and a routine running into another module's "
             + "is checked there as it is within a file.");

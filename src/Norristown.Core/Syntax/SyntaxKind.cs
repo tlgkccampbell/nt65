@@ -373,6 +373,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.next @a, @b</c> or <c>.next ?</c>: where flow goes after the statement above.</summary>
     NextDirective,
 
+    /// <summary><c>.fallthrough next</c>: the routine every path reaching the end of this one runs into.</summary>
+    FallthroughDirective,
+
     /// <summary><c>.patch @op</c>: the store above writes into the instruction at that label.</summary>
     PatchDirective,
 

@@ -45,9 +45,9 @@ public sealed class ControlFlow
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
-    /// Every <c>.next</c> saying that flow runs on into a routine this file's own layout cannot
-    /// show is next: one in another module, or one past a <c>.place</c>. Whether it is next is
-    /// a question about the translation unit, answered once every file in it is laid out.
+    /// Every <c>.fallthrough</c> saying that flow runs on into a routine this file's own layout
+    /// cannot show is next: one in another module, or one past a <c>.place</c>. Whether it is
+    /// next is a question about the translation unit, answered once every file in it is laid out.
     /// </summary>
     public IReadOnlyList<RunningOn> RunningOn => runningOn;
 
@@ -91,7 +91,8 @@ public sealed class ControlFlow
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
             flow.CheckDataReachedByFallingThrough(units, flow.CheckInlineData(units, diagnostics), diagnostics);
-            flow.CheckRunningOn(units, diagnostics);
+            flow.CheckNextIsNeeded(units, diagnostics);
+            flow.CheckFallthrough(units, diagnostics);
             flow.CheckReturnsAndCalls(routine, units, diagnostics);
         }
 
@@ -226,7 +227,7 @@ public sealed class ControlFlow
         {
             if (step.On is null)
                 within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
-            if (!within || step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax || step.IsMarker)
+            if (!within || TakesNoTime(step))
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
                 return null;
@@ -393,6 +394,9 @@ public sealed class ControlFlow
         {
             blocks[i].IsFallenInto = fallenInto[i];
             blocks[i].Next = tails[i]?.Next;
+            blocks[i].RunsInto = tails[i]?.Step is { Statement: FallthroughDirectiveSyntax { Target: { } into } } end
+                ? RoutineNamed(into, end.On)
+                : null;
             blocks[i].Cycles = Counted(blocks[i]);
         }
         return blocks;
@@ -479,9 +483,7 @@ public sealed class ControlFlow
         var total = new CycleCount(0);
         foreach (var step in block.Steps)
         {
-            // A `.state` and a `.frame` take no time, because they are not there at all, and
-            // neither do the ends of an expansion.
-            if (step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax || step.IsMarker)
+            if (TakesNoTime(step))
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
             {
@@ -495,6 +497,13 @@ public sealed class ControlFlow
         // label, and running none of it takes no time at all.
         return total;
     }
+
+    /// <summary>
+    /// Whether a step is one that takes no time, because it is not there at all: a <c>.state</c>,
+    /// a <c>.frame</c>, a <c>.fallthrough</c>, and the ends of an expansion.
+    /// </summary>
+    private static bool TakesNoTime(Step step) =>
+        step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax or FallthroughDirectiveSyntax || step.IsMarker;
 
     /// <summary>
     /// Why a statement nt65 knows has no count, for the lens that would otherwise leave the
@@ -855,42 +864,150 @@ public sealed class ControlFlow
             : null;
     }
 
+    /// <summary>The routine a <c>.fallthrough</c> names, or null where it names something else or nothing.</summary>
+    private Symbol? RoutineNamed(NameExpressionSyntax written, Expansion? on) =>
+        Targets.Of(model, written, on)?.Symbol is { Kind: SymbolKind.Proc, Signature: not null } routine ? routine : null;
+
     /// <summary>
-    /// A <c>.next</c> that names a routine where flow would otherwise run on says that flow
-    /// runs into that routine, which is true only when the routine starts where the statement
-    /// ends, in the same stream of bytes. Where the file places another module or may be
-    /// placed, the routine may be another module's, or past a <c>.place</c>, and what is
-    /// next is then the translation unit's to say: the claim is kept for that.
+    /// A <c>.next</c> names where flow goes after a statement nt65 cannot follow: an indirect
+    /// jump or call, a return, a jump to a computed address, data flow runs into, and the last
+    /// statement of a nested segment block, which runs into whatever that segment holds next.
+    /// After any other statement nt65 already knows where flow goes, and the <c>.next</c> could
+    /// only contradict it. <c>.next ?</c> ends a path wherever it stands.
     /// </summary>
-    private void CheckRunningOn(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    private void CheckNextIsNeeded(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
+        if (units.Count == 0)
+            return;
+        var own = units[0].Step.Stream;
+        var endsASegmentBlock = units
+            .Where(unit => unit.Step.Stream != own && !unit.Step.IsMarker && unit.Step.Label is null)
+            .GroupBy(unit => unit.Step.Stream)
+            .Select(stream => stream.Last())
+            .ToHashSet();
         foreach (var unit in units)
         {
-            if (unit.Next is not { } next || unit.Step.Label is not null
-                || Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode)
-                    != Transfer.Through)
+            if (unit.Next is not { QuestionToken: null } next || endsASegmentBlock.Contains(unit)
+                || Known(unit) is not { } does)
             {
                 continue;
             }
-            var end = layout.Placed(unit.Step.Statement, unit.Step.On);
-            foreach (var written in next.Targets)
+
+            // Where the `.next` ends a routine's body, what was meant is nearly always that the
+            // routine runs into the one after it, which is what `.fallthrough` says.
+            var ends = next.Parent is LineSyntax line && Fallthrough.EndsABody(line);
+            var rewrite = ends && next.Tree == model.Tree && next.Targets.Count == 1
+                && RoutineNamed(next.Targets[0], null) is not null;
+            diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
+                Catalogue.NextSuccessorsKnown.Says(
+                    $"`{unit.Step.Statement.GetText().Trim()}`", does,
+                    ends ? ": a routine that runs into the one after it says so with `.fallthrough`" : ""))
             {
-                if (Targets.Of(model, written, unit.Step.On) is not { Symbol: { Signature: not null } routine })
-                    continue;
-                if (end is { } here && routine.Tree == model.Tree && layout.Placed(routine) is { } there
-                    && there.Stream == here.Stream && there.Offset == here.End)
-                {
-                    continue;
-                }
-                if (placing || routine.Tree != model.Tree)
-                {
-                    runningOn.Add(new RunningOn(unit.Step.Statement, unit.Step.On, routine, written));
-                    continue;
-                }
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
-                    Catalogue.NextRoutineNotAdjacent.Says(routine.DisplayName, routine.DisplayName)));
-            }
+                Fix = rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null,
+            });
         }
+    }
+
+    /// <summary>
+    /// Where flow goes after a statement, in the words of a message, where nt65 can read it for
+    /// itself; null where it cannot, which is where a <c>.next</c> is what says it.
+    /// </summary>
+    private string? Known(Unit unit)
+    {
+        if (unit.Step.Statement is not InstructionStatementSyntax statement)
+            return null;
+        if (RelativeCallAt(unit.Step) is { } relative)
+            return $"calls `{relative.Routine.DisplayName}` and comes back";
+        var mode = layout.Of(statement, unit.Step.On)?.Mode;
+        var transfer = Transfers.Of(statement, mode);
+        if (transfer == Transfer.Through)
+            return "runs on into what follows it";
+        if (transfer is not (Transfer.Branch or Transfer.Jump or Transfer.Call)
+            || Targets.Of(model, Transfers.TargetOf(statement, mode), unit.Step.On) is not { Symbol.IsAddress: true } target)
+        {
+            return null;
+        }
+        var named = target.Symbol.DisplayName;
+        return transfer switch
+        {
+            Transfer.Call => $"calls `{named}` and comes back",
+            Transfer.Jump => $"goes to `{named}`",
+            _ => $"goes to `{named}` or on into what follows it",
+        };
+    }
+
+    /// <summary>
+    /// A <c>.fallthrough</c> says that every path reaching the end of the routine runs into the
+    /// routine it names, which is true only when that routine starts where this one ends, in the
+    /// same segment. Where the file places another module or may be placed, the routine may be
+    /// another module's, or past a <c>.place</c>, and what is next is then the translation
+    /// unit's to say: the claim is kept for that.
+    /// </summary>
+    private void CheckFallthrough(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
+    {
+        foreach (var unit in units)
+        {
+            if (unit.Step is not { Statement: FallthroughDirectiveSyntax { Target: { } written } directive, On: null } step)
+                continue;
+            if (Targets.Of(model, written, null) is not { } target)
+                continue;
+            if (RoutineNamed(written, null) is not { } routine)
+            {
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                    Catalogue.FallthroughNotARoutine.Says(target.Symbol.DisplayName, target.Symbol.KindPhrase)));
+                continue;
+            }
+            if (step.Segment is { } here && routine.Segment is { } there && here != there)
+            {
+                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                    Catalogue.FallthroughOtherSegment.Says(routine.DisplayName, here, there)));
+                continue;
+            }
+            if (layout.Placed(directive) is { } end && routine.Tree == model.Tree && layout.Placed(routine) is { } start
+                && start.Stream == end.Stream && start.Offset == end.End)
+            {
+                continue;
+            }
+            if (placing || routine.Tree != model.Tree)
+            {
+                runningOn.Add(new RunningOn(directive, null, routine, written));
+                continue;
+            }
+            diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)));
+        }
+    }
+
+    /// <summary>
+    /// The routine written directly after <paramref name="region"/>'s, in the same run of bytes,
+    /// and the <c>}</c> that closes this one's body, which is where a <c>.fallthrough</c> naming
+    /// it goes; null where anything with bytes, or nothing at all, comes next.
+    /// </summary>
+    internal (Symbol Routine, Span Closer)? WrittenAfter(FlowRegion region)
+    {
+        var steps = layout.Steps;
+        var opened = -1;
+        var last = -1;
+        for (var i = 0; i < steps.Count; i++)
+        {
+            if (steps[i].Label == region.Routine && steps[i].Statement is ProcDeclarationSyntax)
+                opened = i;
+            if (opened >= 0 && steps[i].Routine == region.Routine && steps[i].Stream == steps[opened].Stream)
+                last = i;
+        }
+        if (opened < 0 || steps[opened].Statement.Parent?.Parent is not BlockSyntax { Closer: { } closer })
+            return null;
+        for (var i = last + 1; i < steps.Count; i++)
+        {
+            var step = steps[i];
+            if (step.Stream != steps[opened].Stream)
+                continue;
+            if (step.Label is { Kind: SymbolKind.Proc, Signature: not null } next && step.Statement is ProcDeclarationSyntax)
+                return (next, closer.Tree.GetSpan(closer.Span));
+            if (step.Label is not null || layout.Placed(step.Statement, step.On) is { Length: not 0 })
+                return null;
+        }
+        return null;
     }
 
     /// <summary>
@@ -899,7 +1016,7 @@ public sealed class ControlFlow
     /// edge leaves a block at its end.
     /// </summary>
     private bool EndsBlock(Unit unit) =>
-        unit.Next is not null
+        unit.Next is not null || unit.Step.Statement is FallthroughDirectiveSyntax
         || Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode)
             != Transfer.Through;
 
@@ -910,6 +1027,8 @@ public sealed class ControlFlow
     /// </summary>
     private bool RunsOn(Unit unit)
     {
+        if (unit.Step.Statement is FallthroughDirectiveSyntax)
+            return false;
         if (CalledAt(unit) is { Signature.NeverReturns: true })
             return false;
         var transfer = Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode);

@@ -1,0 +1,106 @@
+; A routine that runs into the one written after it says so with `.fallthrough` as the last line
+; of its body, whatever ends the body: an instruction, a call, an `.if` chain taken or not, a
+; label. The routine it names has to start where this one ends, and the fall-through is checked
+; as a tail call against its signature. A `.next` is only about the statement above it: after
+; data flow runs into, a routine it names is a jump there, which need not be the next one.
+.module main
+
+.cpu 65816
+
+.config FAST = 1
+
+.export set_one, set_two, store, prepare, draw, after_call, after_else, after_label, labelled
+.export skips, skipped, landing, wide
+
+.segment ZEROPAGE
+.data value: .byte
+
+.segment CODE
+.proc set_one: a8 {
+    lda #1
+    .byte $2c           ; bit abs: swallows the `lda #2` of `set_two`
+    .next store
+}
+
+.proc set_two: a8 {
+    lda #2
+    .fallthrough store
+}
+
+.proc store: a8 {
+    sta value
+    rts
+}
+
+; An `.if` chain with no `.else` ends the body whether or not its branch is taken.
+.proc prepare: a8 {
+    lda #0
+    .if FAST {
+        asl a
+    }
+    .fallthrough draw
+}
+
+.proc draw: a8 {
+    sta value
+    rts
+}
+
+; After a call: the call comes back, and what follows it is the next routine.
+.proc after_call: a8 {
+    jsr draw
+    .fallthrough after_else
+}
+
+; An `.if` chain with an `.else`, each branch running off the end.
+.proc after_else: a8 {
+    .if FAST {
+        lda #1
+    } .else {
+        lda #2
+    }
+    .fallthrough after_label
+}
+
+; A label the body ends at, which a branch reaches as well as the line above it.
+.proc after_label: a8 {
+    beq @done
+    lda #3
+@done:
+    .fallthrough labelled
+}
+
+.proc labelled: a8 {
+    rts
+}
+
+; A skip that lands past the next routine on one that is not written next: the `.next` is a
+; jump to it, checked as a tail call, and nothing says the two are adjacent.
+.proc skips: a8, i8 {
+    lda #1
+    .byte $2c           ; bit abs: swallows the `ldx #2` of `skipped`
+    .next landing
+}
+
+.proc skipped: a8, i8 {
+    ldx #2
+    .fallthrough landing
+}
+
+.proc landing: a8, i8 {
+    stx value
+    rts
+}
+
+; A routine entered 16 bits wide that narrows A on the way into the next, which takes it 8 bits
+; wide: the fall-through is a tail call, checked against the next routine's entry and exit.
+.proc wide: a16 -> a8 {
+    lda #$1234
+    sep #$20
+    .fallthrough narrow
+}
+
+.proc narrow: a8 {
+    sta value
+    rts
+}

@@ -70,12 +70,15 @@ public sealed class DirectivePlacesTests
     /// <summary>
     /// The ones that are not a line of their own, and so are held to nothing here: two
     /// continue a block that has to be open above them, two are about the statement above
-    /// them, one is about where the stack has been left, one names the module and may only be
-    /// a file's first line, one places a module that has to say it may be placed, one names a
-    /// file on disk, and one fails the build on purpose.
+    /// them, one may only be the last line of a routine's body, one is about where the stack
+    /// has been left, one names the module and may only be a file's first line, one places a
+    /// module that has to say it may be placed, one names a file on disk, and one fails the
+    /// build on purpose.
     /// </summary>
     private static readonly string[] Partial =
-        [".else", ".elseif", ".error", ".frame", ".incbin", ".module", ".next", ".patch", ".place"];
+    [
+        ".else", ".elseif", ".error", ".fallthrough", ".frame", ".incbin", ".module", ".next", ".patch", ".place",
+    ];
 
     /// <summary>
     /// What the server offers at a place and the binder refuses there, which is empty: nothing

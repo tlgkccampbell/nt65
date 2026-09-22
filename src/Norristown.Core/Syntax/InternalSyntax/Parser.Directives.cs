@@ -55,6 +55,7 @@ internal sealed partial class Parser
         SyntaxKind.AssertDirective => ParseAssert(),
         SyntaxKind.ErrorDirective => ParseError(),
         SyntaxKind.NextDirective => ParseNext(),
+        SyntaxKind.FallthroughDirective => ParseFallthrough(),
         SyntaxKind.StateDirective => ParseState(),
         SyntaxKind.EnsureDirective => ParseEnsure(),
         SyntaxKind.FrameDirective => ParseFrame(),
@@ -203,6 +204,14 @@ internal sealed partial class Parser
         return new NextDirectiveSyntax(
             keyword, null, ParseSeparatedList(() => ParseTarget(Catalogue.ExpectedLabel.Says(
                 "a label flow continues at, or `?`"))));
+    }
+
+    /// <summary><c>.fallthrough next</c>: the routine flow runs into past the end of this one.</summary>
+    private GreenNode ParseFallthrough()
+    {
+        var keyword = Advance();
+        return new FallthroughDirectiveSyntax(
+            keyword, ParseTarget(Catalogue.ExpectedLabel.Says("the routine flow runs into")));
     }
 
     /// <summary>

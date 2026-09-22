@@ -74,4 +74,10 @@ public enum FixKind
 
     /// <summary>The declaration of the module a <c>.place</c> names, marked <c>placed</c>.</summary>
     Placed,
+
+    /// <summary>
+    /// A <c>.fallthrough</c> naming the routine written next, as the last line of the body the
+    /// fix's <see cref="DiagnosticFix.At"/> closes.
+    /// </summary>
+    Fallthrough,
 }

@@ -31,7 +31,7 @@ internal static class Directives
     ];
 
     /// <summary>What only code holds: what the processor state is, and where control goes.</summary>
-    private static readonly string[] CodeOnly = [".state", ".ensure", ".frame", ".next", ".patch"];
+    private static readonly string[] CodeOnly = [".state", ".ensure", ".frame", ".next", ".fallthrough", ".patch"];
 
     /// <summary>What a macro body may not declare, because a macro is expanded rather than written once.</summary>
     private static readonly string[] NotInMacro =
@@ -64,6 +64,7 @@ internal static class Directives
         [".enum"] = "a set of named constants",
         [".error"] = "fail the build with a message",
         [".export"] = "make a name visible to other modules",
+        [".fallthrough"] = "the routine this one runs into",
         [".faraddr"] = "three-byte addresses",
         [".frame"] = "the stack frame the code from here works in",
         [".func"] = "a function of its arguments",
@@ -156,6 +157,11 @@ internal static class Directives
         // `.place` is written at file level, where a `.segment` region is no block of its own.
         if (!line.AtFileLevel)
             barred.Add(".place");
+
+        // A `.fallthrough` is the last line of a routine's own body, which no macro body or
+        // repetition is.
+        if (!line.InProc || line.InMacro || line.InRepetition)
+            barred.Add(".fallthrough");
 
         // A macro declared in a routine would see its cheap locals, and a routine inside one
         // is code the outer routine's flow analysis cannot follow.

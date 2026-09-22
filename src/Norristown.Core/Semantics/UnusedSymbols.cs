@@ -163,7 +163,7 @@ public static class UnusedSymbols
     /// address — so only storage that holds nothing is reported.
     /// <para>
     /// A routine is reported like anything else it declares: an unexported <c>.proc</c> nothing
-    /// calls, jumps to, names in data or names as a <c>.next</c> target is a routine the program
+    /// calls, jumps to, names in data or names in a <c>.next</c> or a <c>.fallthrough</c> is a routine the program
     /// has left behind, which is what someone finishing a port most wants to find. A handler is
     /// the exception the language already knows about: the processor reaches it through a vector
     /// this program may not even hold, so an <c>interrupt</c> signature is what names it.
