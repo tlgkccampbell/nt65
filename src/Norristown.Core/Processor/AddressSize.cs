@@ -1,4 +1,4 @@
-namespace Norristown.Semantics;
+namespace Norristown.Processor;
 
 /// <summary>
 /// How wide an address is. The values are the width in bytes, which is what

@@ -1,4 +1,4 @@
-namespace Norristown.Layout;
+namespace Norristown.Semantics;
 
 /// <summary>
 /// What <c>.mincycles</c> or <c>.maxcycles</c> comes to over a span of code, or why it comes to

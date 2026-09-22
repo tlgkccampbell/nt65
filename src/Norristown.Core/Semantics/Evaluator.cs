@@ -42,7 +42,7 @@ internal sealed partial class Evaluator
 
     // What one pass over a span of code costs, which only layout knows and only a caller that
     // has laid the file out can answer.
-    private readonly Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles;
+    private readonly Func<Symbol, Symbol, bool, CycleSpan>? cycles;
 
     // For a program in which one file changed: the symbols of the files that did not, whose
     // values stand as they were, and which of them this file's symbols read.
@@ -86,7 +86,7 @@ internal sealed partial class Evaluator
         Func<string, long?>? binaryLength = null,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null,
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
         Func<Symbol, bool>? settled = null,
         List<string>? owners = null,
         Configuration? configuration = null,
@@ -170,7 +170,7 @@ internal sealed partial class Evaluator
         Func<string, long?>? binaryLength,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
         new Evaluator(segments, resolved, diagnostics, binaryLength, bound, spans, cycles).Bytes(expression);
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
@@ -230,7 +230,7 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
         new Evaluator(segments, resolved, null, null, bound, spans, cycles).Evaluate(expression);
 
     /// <summary>

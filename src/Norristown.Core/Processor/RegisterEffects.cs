@@ -1,4 +1,4 @@
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// Which registers each instruction writes, and which ones move a register's value to another

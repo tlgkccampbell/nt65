@@ -1,7 +1,8 @@
 using System.Collections.Frozen;
 using Norristown.Project;
+using Norristown.Syntax;
 
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// Which addressing modes each mnemonic has, on each CPU, and how long each one is. Syntax
@@ -39,7 +40,7 @@ public static class Instructions
     /// the CPU's own instructions, and the long branches, which nt65 writes on every CPU.
     /// </summary>
     public static bool Writable(Cpu cpu, string mnemonic) =>
-        Has(cpu, mnemonic) || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic);
+        Has(cpu, mnemonic) || SyntaxFacts.LongBranches.Contains(mnemonic);
 
     /// <summary>The modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, empty if it has none.</summary>
     public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, string mnemonic)
@@ -82,25 +83,25 @@ public static class Instructions
     /// How wide the address in an operand of this mode is, or null where the mode carries no
     /// address to size: one byte for the direct page, two for absolute and three for long.
     /// </summary>
-    public static Semantics.AddressSize? Width(AddressingMode mode) => mode switch
+    public static AddressSize? Width(AddressingMode mode) => mode switch
     {
         AddressingMode.Direct or AddressingMode.DirectX or AddressingMode.DirectY
             or AddressingMode.DirectIndirect or AddressingMode.DirectIndirectX
             or AddressingMode.DirectIndirectY or AddressingMode.DirectRelative
-            or AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY => Semantics.AddressSize.ZeroPage,
+            or AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY => AddressSize.ZeroPage,
         AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
             or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX
-            or AddressingMode.AbsoluteIndirectLong => Semantics.AddressSize.Absolute,
-        AddressingMode.Long or AddressingMode.LongX => Semantics.AddressSize.Far,
+            or AddressingMode.AbsoluteIndirectLong => AddressSize.Absolute,
+        AddressingMode.Long or AddressingMode.LongX => AddressSize.Far,
         _ => null,
     };
 
     /// <summary>The <c>z:</c>, <c>a:</c> or <c>f:</c> that makes a mode's width explicit.</summary>
     public static string? Prefix(AddressingMode mode) => Width(mode) switch
     {
-        Semantics.AddressSize.ZeroPage => "z:",
-        Semantics.AddressSize.Absolute => "a:",
-        Semantics.AddressSize.Far => "f:",
+        AddressSize.ZeroPage => "z:",
+        AddressSize.Absolute => "a:",
+        AddressSize.Far => "f:",
         _ => null,
     };
 
@@ -113,7 +114,7 @@ public static class Instructions
     public static bool IsControlTransfer(string mnemonic) =>
         CpuNames.All.Any(cpu => Modes(cpu, mnemonic).Any(mode =>
             mode is AddressingMode.Relative or AddressingMode.DirectRelative or AddressingMode.RelativeLong))
-        || Syntax.SyntaxFacts.LongBranches.Contains(mnemonic)
+        || SyntaxFacts.LongBranches.Contains(mnemonic)
         || mnemonic.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl";
 
     /// <summary>

@@ -52,7 +52,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// routine that promises nothing. A routine with a body is checked against it; one without
     /// is taken at its word, which is the only way to know anything about a body that is not here.
     /// </summary>
-    public Layout.Registers Keeps { get; init; }
+    public Processor.Registers Keeps { get; init; }
 
     /// <summary>How the routine is called and left, as the item that says so.</summary>
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
@@ -81,8 +81,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             entry += $", args {Arguments}";
         if (NeverReturns)
             entry += ", noreturn";
-        if (Keeps != Layout.Registers.None)
-            entry += $", keeps {Layout.RegisterEffects.Spell(Keeps).ToLowerInvariant()}";
+        if (Keeps != Processor.Registers.None)
+            entry += $", keeps {Processor.RegisterEffects.Spell(Keeps).ToLowerInvariant()}";
         return entry + (NeverReturns || IsInterrupt || Exit == Entry ? "" : $" -> {Exit}");
     }
 
@@ -231,11 +231,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         // The registers the list promises. A list that writes `keeps` itself says which they
         // are; one that writes none takes what the signature set it names gives.
-        static Layout.Registers Promised(Parts parts)
+        static Processor.Registers Promised(Parts parts)
         {
             var own = parts.Keeps.Where(kept => !kept.FromSet).ToList();
             return (own.Count > 0 ? own : parts.Keeps)
-                .Aggregate(Layout.Registers.None, (all, kept) => all | kept.Item.Registers);
+                .Aggregate(Processor.Registers.None, (all, kept) => all | kept.Item.Registers);
         }
 
         // An interrupt handler is entered from anywhere, so all it may say is which mode the
@@ -408,7 +408,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                         Catalogue.ItemBelongsAtEntry.Says(item.Text, "is about a routine from entry to exit"));
                     break;
                 case StatePart.Keeps:
-                    if (item.Registers == Layout.Registers.None)
+                    if (item.Registers == Processor.Registers.None)
                         break;
                     parts.Keeps.Add((item, fromSet));
                     break;

@@ -1,4 +1,5 @@
 using Norristown.Layout;
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -19,7 +20,7 @@ namespace Norristown.Flow;
 /// wrong with it.
 /// </para>
 /// </summary>
-public sealed class StateAnalysis
+public sealed class StateAnalysis : IProcessorStates
 {
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
@@ -84,6 +85,16 @@ public sealed class StateAnalysis
     /// </summary>
     public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
         slots.TryGetValue((statement.Position, on), out var slot) ? slot : null;
+
+    /// <summary>
+    /// The same as <see cref="Before"/>, narrowed to the processor's own state, which is all
+    /// layout asks of the analysis.
+    /// </summary>
+    /// <param name="statement">The statement.</param>
+    /// <param name="on">The writing of it being asked about.</param>
+    /// <returns>The processor state reaching it, or null.</returns>
+    ProcessorState? IProcessorStates.Before(SyntaxNode statement, Expansion? on) =>
+        Before(statement, on)?.Processor;
 
     /// <summary>
     /// The state reaching a statement, whichever writing of it is asked about. An editor asks

@@ -1,4 +1,4 @@
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// An addressing mode, as ca65 spells it in an operand. The modes that differ only

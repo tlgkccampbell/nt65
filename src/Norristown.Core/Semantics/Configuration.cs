@@ -126,7 +126,7 @@ public sealed class Configuration
                     report(function.Span, Catalogue.HasArgument);
                     return Value.Unknown;
                 }
-                return Value.Of(Layout.Instructions.Writable(cpu, mnemonic.Text));
+                return Value.Of(Processor.Instructions.Writable(cpu, mnemonic.Text));
 
             default:
                 return null;

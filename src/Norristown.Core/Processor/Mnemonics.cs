@@ -1,6 +1,6 @@
 using Norristown.Project;
 
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// What each instruction is called, and which of the processor's flags it writes. Neither is

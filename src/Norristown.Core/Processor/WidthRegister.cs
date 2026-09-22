@@ -1,4 +1,4 @@
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>Which register's width sizes a 65816 immediate.</summary>
 public enum WidthRegister

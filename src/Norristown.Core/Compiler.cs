@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Norristown.Emit;
 using Norristown.Layout;
+using Norristown.Processor;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;

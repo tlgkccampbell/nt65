@@ -26,7 +26,7 @@ public readonly record struct ProcessorState(
         Width.Unknown, Width.Unknown, ProcessorMode.Unknown, StateValue.Unknown, StateValue.Unknown);
 
     /// <summary>The width of <paramref name="register"/>.</summary>
-    public Width Of(Layout.WidthRegister register) => register == Layout.WidthRegister.A ? A : Index;
+    public Width Of(Processor.WidthRegister register) => register == Processor.WidthRegister.A ? A : Index;
 
     /// <summary>
     /// The state as a signature writes it: <c>a16, i8, native</c>, with the direct page and the

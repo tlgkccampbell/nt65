@@ -1,7 +1,7 @@
 using System.Collections.Frozen;
 using Norristown.Project;
 
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// The words ca65 reads as an instruction under the <c>.setcpu</c> nt65 writes for each CPU.

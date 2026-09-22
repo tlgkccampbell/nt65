@@ -1,4 +1,4 @@
-namespace Norristown.Flow;
+namespace Norristown.Processor;
 
 /// <summary>What a statement does to the path running through it.</summary>
 public enum Transfer

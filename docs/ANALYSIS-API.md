@@ -11,6 +11,11 @@ what its expressions are worth, and how the files of a program see one another. 
 design there too — a model per file, built once and then read-only, with `LookupSymbols`,
 `GetSymbolInfo` and a symbol for every declaration.
 
+Below both is `Norristown.Processor`: what a mnemonic is on each CPU — which addressing modes it
+has, whether it calls or returns, what it moves on and off the stack, which registers it leaves
+changed — along with `AddressSize`, how wide an address anything here reaches. It is datasheet
+fact and ca65's own tables, and it names nothing above itself, so the layers above may all read it.
+
 Everything here is in `Norristown.Core`. Every sample on the syntax half is a test in
 `tests/Norristown.Tests/Syntax/AnalysisApiTests.cs` and every sample on the semantic half one in
 `tests/Norristown.Tests/Semantics/AnalysisApiTests.cs`, so nothing on this page can drift from

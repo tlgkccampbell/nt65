@@ -1,4 +1,4 @@
-namespace Norristown.Layout;
+namespace Norristown.Processor;
 
 /// <summary>
 /// What a mnemonic is, beyond which addressing modes it has: whether it calls or returns,

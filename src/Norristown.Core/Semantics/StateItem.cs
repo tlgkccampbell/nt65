@@ -26,16 +26,16 @@ public readonly record struct StateItem(
     public bool IsStrz => Node is StateInlineItemSyntax;
 
     /// <summary>The registers a <see cref="StatePart.Keeps"/> item names; none for every other item.</summary>
-    public Layout.Registers Registers
+    public Processor.Registers Registers
     {
         get
         {
             if (Node is not StateKeepsItemSyntax keeps)
-                return Layout.Registers.None;
-            var registers = Layout.Registers.None;
+                return Processor.Registers.None;
+            var registers = Processor.Registers.None;
             foreach (var register in keeps.Registers)
             {
-                if (Layout.RegisterEffects.Named(register.Name.Text) is { } named)
+                if (Processor.RegisterEffects.Named(register.Name.Text) is { } named)
                     registers |= named;
             }
             return registers;

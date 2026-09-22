@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using Norristown.Flow;
+using Norristown.Processor;
 using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -31,7 +31,7 @@ public sealed partial class CodeLayout
 
     // What the processor-state analysis found reaching each statement, which sizes a 65816
     // immediate and times its instructions. Null on the first walk, before there is any.
-    private readonly StateAnalysis? states;
+    private readonly IProcessorStates? states;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly Dictionary<(SyntaxTree Tree, int Position), LineLayout> anyWriting = [];
     private readonly List<Diagnostic> diagnostics = [];
@@ -100,7 +100,7 @@ public sealed partial class CodeLayout
     private bool wantsCycles;
 
     private CodeLayout(
-        SemanticModel model, Cpu cpu, StateAnalysis? states,
+        SemanticModel model, Cpu cpu, IProcessorStates? states,
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
         Dictionary<Symbol, long> settled, IReadOnlyList<Step>? counted = null)
     {
@@ -200,13 +200,13 @@ public sealed partial class CodeLayout
     private string? Backwards(InstructionStatementSyntax instruction, Step step, int start, int i)
     {
         var mode = Of(step.Statement, step.On)?.Mode;
-        var transfer = Flow.Transfers.Of(instruction, mode);
-        if (transfer is Flow.Transfer.Through or Flow.Transfer.Return)
+        var transfer = Transfers.Of(instruction, mode);
+        if (transfer is Transfer.Through or Transfer.Return)
             return null;
         var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
-        if (transfer == Flow.Transfer.Elsewhere)
+        if (transfer == Transfer.Elsewhere)
             return $"`{mnemonic}`, whose target nt65 cannot follow";
-        if (Targets.Of(model, Flow.Transfers.TargetOf(instruction, mode), step.On) is not { } target)
+        if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is not { } target)
             return null;
         return At(target.Symbol) is { } landing && landing >= start && landing <= i
             ? $"a loop: `{mnemonic}` goes back to `{target.Symbol.DisplayName}`"
@@ -234,7 +234,7 @@ public sealed partial class CodeLayout
     /// immediates are laid out a byte wide and every <c>.ensure</c> writes all it could, which
     /// is enough to find where control goes, since no edge depends on a length.
     /// </summary>
-    public static CodeLayout Create(SemanticModel model, Cpu cpu, StateAnalysis? states = null)
+    public static CodeLayout Create(SemanticModel model, Cpu cpu, IProcessorStates? states = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until
         // none changes, which terminates because a branch only ever grows. Only the last
@@ -557,7 +557,7 @@ public sealed partial class CodeLayout
         // On the 65816 an immediate is as wide as the register it goes to, which is what the
         // analysis found reaching it. Where it found nothing it has said so, and a byte keeps
         // the rest of the file laid out.
-        var state = states?.Before(statement, expansion)?.Processor;
+        var state = states?.Before(statement, expansion);
         int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } register
             ? state?.Of(register) == Width.Sixteen ? 16 : 8
             : null;
@@ -659,7 +659,7 @@ public sealed partial class CodeLayout
     /// </summary>
     private void Ensure(EnsureDirectiveSyntax directive)
     {
-        var state = states?.Before(directive, expansion)?.Processor;
+        var state = states?.Before(directive, expansion);
 
         // On the 6502 and its CMOS variants there is no processor state to set, and no `rep` or
         // `sep` to set it with, so an `.ensure` is accepted and writes nothing. That is what

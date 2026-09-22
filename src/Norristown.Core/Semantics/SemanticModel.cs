@@ -1,3 +1,4 @@
+using Norristown.Processor;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -297,7 +298,7 @@ public sealed class SemanticModel
     /// </summary>
     public Value ValueOf(
         SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
         Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles);
 
     /// <summary>
@@ -328,7 +329,7 @@ public sealed class SemanticModel
     /// </summary>
     public void Check(
         SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
-        Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, Layout.CycleSpan>? cycles = null) =>
+        Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
         Evaluator.Check(
             expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles);
 
