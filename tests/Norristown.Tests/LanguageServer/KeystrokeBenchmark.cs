@@ -50,8 +50,10 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
     [Trait("Category", "Benchmark")]
     public void AKeystrokeInALargeFile()
     {
+        // Each routine is exported, as a module's routines are: one nothing calls and nothing
+        // exports is warned about, and what is measured here is the file's size and not that.
         var text = GeneratedProject.Text(0, 1) + string.Concat(Enumerable.Range(0, 200).Select(i => $$"""
-            .proc big{{i}}: a8, i8 {
+            .export .proc big{{i}}: a8, i8 {
                 ldx #0
             @loop:
                 lda m000_table,x
