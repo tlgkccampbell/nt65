@@ -45,10 +45,22 @@ internal static class CallHelp
     }
 
     /// <summary>
-    /// A macro's parameters as it writes them. An argument written <c>name = value</c> is for the
-    /// parameter it names, and one written in order for the parameter in that place; a
+    /// The parameter of <paramref name="macro"/> the argument the caret is in is for: the one it
+    /// names when it is written <c>name = value</c>, and otherwise the one in its place. A
     /// <c>block</c> parameter takes the block after the parentheses, not a place in them.
     /// </summary>
+    /// <param name="macro">The macro called.</param>
+    /// <param name="before">The tokens of the line before the caret.</param>
+    /// <param name="open">Where among them the call's <c>(</c> is.</param>
+    /// <param name="end">Where the argument the caret is in ends, exclusive.</param>
+    /// <param name="argument">How many arguments come before it.</param>
+    public static MacroParameter? ParameterAt(
+        Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument) =>
+        Active(macro, before, open, end, argument) is var active && active >= 0 && active < macro.Parameters.Count
+            ? macro.Parameters[active]
+            : null;
+
+    /// <summary>A macro's parameters as it writes them, with the one the caret's argument is for.</summary>
     private static Protocol.SignatureHelp ForMacro(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
@@ -56,7 +68,13 @@ internal static class CallHelp
             ? ((definition.Opener.Statement as MacroDeclarationSyntax)?.Parameters?.Parameters ?? [])
                 .Select(parameter => parameter.GetText().Trim()).ToList()
             : [.. macro.Parameters.Select(parameter => parameter.Name)];
+        return Help($"{macro.Name}!(", written, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
+    }
 
+    /// <summary>Where among <paramref name="macro"/>'s parameters the one the caret's argument is for stands; -1 for none.</summary>
+    private static int Active(
+        Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
+    {
         // The argument the caret is in starts after the last comma at this depth.
         var start = end;
         var depth = 0;
@@ -72,18 +90,11 @@ internal static class CallHelp
                 break;
             start = i;
         }
-        int active;
         if (start + 1 < end && before[start + 1].Kind == SyntaxKind.Equals)
-        {
-            active = macro.Parameters.ToList().FindIndex(parameter => parameter.Name == before[start].Text);
-        }
-        else
-        {
-            var inParentheses = macro.Parameters.Select((parameter, index) => (parameter, index))
-                .Where(pair => !pair.parameter.IsBlock).Select(pair => pair.index).ToList();
-            active = argument < inParentheses.Count ? inParentheses[argument] : inParentheses.Count > 0 ? inParentheses[^1] : 0;
-        }
-        return Help($"{macro.Name}!(", written, ")", macro.KindText, Math.Max(0, active));
+            return macro.Parameters.ToList().FindIndex(parameter => parameter.Name == before[start].Text);
+        var inParentheses = macro.Parameters.Select((parameter, index) => (parameter, index))
+            .Where(pair => !pair.parameter.IsBlock).Select(pair => pair.index).ToList();
+        return argument < inParentheses.Count ? inParentheses[argument] : inParentheses.Count > 0 ? inParentheses[^1] : -1;
     }
 
     /// <summary>A signature written as <paramref name="opening"/>, the parameters with <c>, </c> between them, and <paramref name="closing"/>.</summary>

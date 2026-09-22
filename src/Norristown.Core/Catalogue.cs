@@ -1262,6 +1262,15 @@ public static class Catalogue
         "The modes are the words `.mode` gives, and `zp`, `zpx` and `zpy` for the direct-page addresses among "
             + "`abs`, `absx` and `absy`.");
 
+    internal static DiagnosticDescriptor ComparisonNeverHolds { get; } = Entry(
+        "comparison-never-holds",
+        Severity.Warning,
+        "`{0}` is never `{1}`, so this comparison {2}: {3}",
+        "A word a condition compares with `.mode(p)`, or with a `one(...)` parameter, is never looked up, so a "
+            + "misspelt word, or one the parameter can never be, is no error of its own: the branch is quietly never "
+            + "taken, or always taken. The modes are the ones `.mode` gives, which for an `operand(...)` that lists "
+            + "its modes are those it lists, with `zp`, `zpx` and `zpy` as `abs`, `absx` and `absy`.");
+
     internal static DiagnosticDescriptor ExpansionLimit { get; } = Entry(
         "expansion-limit",
         Severity.Error,

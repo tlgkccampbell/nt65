@@ -57,6 +57,15 @@ public sealed class EditingRequestsTests
         .macro poke(address: expr, value: const = 0) {
             |macro
         }
+        .enum Pitch {
+            low
+            high
+        }
+        .macro tone(p: Pitch, w: one(up, down), s: list(Pitch)) {
+        }
+        .macro pick(src: operand(imm, zp), reg: one(x, y)) {
+            |pick
+        }
         .proc main {
         @loop:
             |body
@@ -98,7 +107,25 @@ public sealed class EditingRequestsTests
         { "top", ".proc |", [], ["clear"] },
         { "top", ".proc other |", [], ["clear", "lda", ".proc", "near"] },
         { "top", ".macro m(|", [], ["clear", "expr"] },
-        { "top", ".macro m(a: |", ["expr", "const", "operand", "block", "one"], ["clear", "lda"] },
+        { "top", ".macro m(a: |", ["expr", "const", "operand", "block", "one", "Pitch"], ["clear", "lda"] },
+
+        // Inside a kind: the modes an `operand` may list, what a `list`'s items may be, and
+        // nothing in a `one`, whose words the macro makes up.
+        { "top", ".macro m(a: operand(|", ["imm", "zpx", "longy"], ["expr", "clear", "Pitch"] },
+        { "top", ".macro m(a: operand(imm, |", ["zp", "abs"], ["expr", "clear"] },
+        { "top", ".macro m(a: list(|", ["const", "one", "Pitch"], ["imm", "clear"] },
+        { "top", ".macro m(a: one(|", [], ["expr", "imm", "clear"] },
+
+        // An argument is offered what its parameter takes: an enum's members by their bare
+        // names, and a `one`'s words, in its place or named.
+        { "body", "    tone!(|", ["low", "high", "p", "w"], ["up"] },
+        { "body", "    tone!(low, |", ["up", "down"], ["low"] },
+        { "body", "    tone!(low, up, |", ["low", "high"], ["up"] },
+        { "body", "    tone!(w = |", ["up", "down"], ["low"] },
+
+        // A condition compares `.mode(p)` with the modes it may give, and a `one` with its words.
+        { "pick", "    .if .mode(src) == |", ["imm", "abs"], ["zp", "absx", "clear", "src"] },
+        { "pick", "    .if reg != |", ["x", "y"], ["imm", "clear"] },
 
         // Past what finishes an expression an operator goes, and never a name.
         { "body", "    lda clear |", [], ["clear", "x", "#"] },

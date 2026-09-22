@@ -487,7 +487,11 @@ public sealed class ProgramModel
             symbol.Signature = symbol.Signature?.Resolved(ValueOf, SetOf, Report);
             symbol.MacroSignature = symbol.MacroSignature?.Resolved(ValueOf, SetOf, Report);
             if (symbol.Kind == SymbolKind.Macro)
+            {
                 ArgumentChecks.CheckHeader(symbol, ValueOf, SetOf, Report);
+                ArgumentChecks.CheckComparisons(symbol, SetOf, (span, message) =>
+                    byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), message)));
+            }
 
             // A routine is imported as far when its signature says so, which a set it names may.
             if (symbol is { Kind: SymbolKind.ImportedAddress, Signature.IsFar: true })

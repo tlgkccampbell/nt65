@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
@@ -34,6 +35,8 @@ internal static class TextMateGrammar
     public const string Register = "variable.language.register.nt65";
     public const string Identifier = "variable.other.nt65";
     public const string Operator = "keyword.operator.nt65";
+    public const string Kind = "storage.type.nt65";
+    public const string Mode = "constant.language.mode.nt65";
 
     // The scopes VS Code gives the server's token types, which a theme colours them by.
     public const string Macro = "entity.name.function.preprocessor.nt65";
@@ -205,6 +208,13 @@ internal static class TextMateGrammar
         var first = !token.Parent.ChildTokens.TakeWhile(earlier => earlier != token).Any(IsName);
         return token.Parent switch
         {
+            // What a macro parameter takes: the kind's word, the modes an `operand` lists and the
+            // words a `one` does. The enum an enum kind names is a use, which only the server can see.
+            ParameterKindSyntax kind when token == kind.Keyword => Kind,
+            IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
+                when keyword.Equals("one", StringComparison.OrdinalIgnoreCase) => EnumMember,
+            IdentifierNameSyntax { Parent: ParameterKindSyntax } =>
+                ArgumentKind.OperandModes.Contains(token.Text.ToLowerInvariant()) ? Mode : Identifier,
             LabelSyntax when first => body is BlockKind.Struct or BlockKind.Union ? Property : Label,
             ProcDeclarationSyntax or ExternProcDeclarationSyntax or FuncDeclarationSyntax when first => Function,
             MacroDeclarationSyntax when first => Macro,
@@ -279,6 +289,21 @@ internal static class TextMateGrammar
         // Brackets inside a header or a call, so that their `)` does not close it.
         var parentheses = new Rule(Begin: @"\(", End: @"\)", Patterns: [include]);
 
+        // What a macro parameter takes, from its `:` to the `,`, `)` or `=` after the kind: the
+        // kind's word, the modes an `operand(...)` lists, the words a `one(...)` does, what each
+        // item of a `list(...)` is, or the range of a `const(...)`. An enum's name is a use.
+        var kind = Rule.Including("kind");
+        rules["kind"] =
+        [
+            Rule.Block(@"(?i)\b(operand)\s*(\()", @"\)", [Kind, null],
+                [Rule.Scoped($@"(?i)\b({string.Join("|", ArgumentKind.OperandModes)})\b", Mode), include]),
+            Rule.Block(@"(?i)\b(one)\s*(\()", @"\)", [Kind, null], [Rule.Scoped($@"\b({Word})", EnumMember), include]),
+            Rule.Block(@"(?i)\b(list)\s*(\()", @"\)", [Kind, null], [kind]),
+            Rule.Block(@"(?i)\b(const)\s*(\()", @"\)", [Kind, null], [include]),
+            Rule.Scoped(@"(?i)\b(expr|const|ident|operand|block)\b", Kind),
+            include,
+        ];
+
         // A record's values, on the directive's line or the lines after it. A `{` inside one is a
         // record or a list of its own. A member's match starts with the space before it, so that
         // it starts where a constant declaration's would and wins the tie.
@@ -315,7 +340,7 @@ internal static class TextMateGrammar
             layout,
             Rule.Block($@"(?i)(\.type)\b", "$", [Directive], [record, include]),
             Rule.Block($@"(?i)(\.macro)\s+({Word})\s*(\()", @"\)", [Directive, Macro],
-                [parentheses, Rule.Scoped($@"(?<=[(,])\s*({Word})(?=\s*[,):=])", Parameter), include]),
+                [new Rule(Begin: ":", End: @"(?=[,)=])", Patterns: [kind]), parentheses, Rule.Scoped($@"(?<=[(,])\s*({Word})(?=\s*[,):=])", Parameter), include]),
 
             // The names an import declares, each first in its item: a constant given a value, or
             // an address. A routine's signature is in brackets of its own. "First in its item" is

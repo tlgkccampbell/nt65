@@ -87,6 +87,15 @@
           },
           "patterns": [
             {
+              "begin": ":",
+              "end": "(?=[,)=])",
+              "patterns": [
+                {
+                  "include": "#kind"
+                }
+              ]
+            },
+            {
               "begin": "\\(",
               "end": "\\)",
               "patterns": [
@@ -371,6 +380,93 @@
         {
           "match": "->|\\.\\.|<<|>>|<=|>=|==|!=|&&|\\|\\||\\^\\^|[-+*/&|^~!<>=#?]",
           "name": "keyword.operator.nt65"
+        }
+      ]
+    },
+    "kind": {
+      "patterns": [
+        {
+          "begin": "(?i)\\b(operand)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "(?i)\\b(imm|acc|abs|absx|absy|zp|zpx|zpy|ind|indx|indy|sr|sry|long|longy)\\b",
+              "captures": {
+                "1": {
+                  "name": "constant.language.mode.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)\\b(one)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.enummember.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)\\b(list)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#kind"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)\\b(const)\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "match": "(?i)\\b(expr|const|ident|operand|block)\\b",
+          "captures": {
+            "1": {
+              "name": "storage.type.nt65"
+            }
+          }
+        },
+        {
+          "include": "#line"
         }
       ]
     },

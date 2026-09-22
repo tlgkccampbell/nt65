@@ -136,6 +136,7 @@
         "code-in-a-data-space",
         "code-label-as-data",
         "code-unreachable",
+        "comparison-never-holds",
         "computed-jump-unchecked",
         "condition-asks-about-the-program",
         "condition-calls-a-function",

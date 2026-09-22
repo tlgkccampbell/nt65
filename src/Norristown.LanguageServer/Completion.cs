@@ -44,9 +44,6 @@ internal static class Completion
     /// <summary>What a segment declaration says about where it lands.</summary>
     private static readonly string[] SegmentAttributes = ["dp = ", "bank = ", "mirrors = "];
 
-    /// <summary>What a macro parameter accepts.</summary>
-    private static readonly string[] ParameterKinds = ["expr", "const", "ident", "operand", "block", "one(", "list("];
-
     /// <summary>The directives that declare the name written after them, where nothing is completed.</summary>
     private static readonly HashSet<string> Declaring = new(StringComparer.Ordinal)
     {
@@ -196,6 +193,10 @@ internal static class Completion
                 return;
             }
         }
+        else if (directive == ".macro" && InParameterKind(model, line, items))
+        {
+            return;
+        }
         else if (AfterMark(line, directive) is { } written)
         {
             AddWords(written.Words, written.Detail, items);
@@ -228,21 +229,141 @@ internal static class Completion
             return;
         }
 
-        // An argument of a macro call may name the parameter it is for.
+        // An argument of a macro call is offered what the parameter it is for takes, and where an
+        // argument starts, the parameters it may name.
         if (line.OpenCall() is { } call && call.Open >= 2 && before[call.Open - 1].Kind == SyntaxKind.Bang
-            && before[^1].Kind is SyntaxKind.OpenParen or SyntaxKind.Comma
+            && before[^1].Kind is SyntaxKind.OpenParen or SyntaxKind.Comma or SyntaxKind.Equals
             && Callee(model, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
         {
-            foreach (var parameter in macro.Parameters)
+            if (before[^1].Kind != SyntaxKind.Equals)
             {
-                items.TryAdd(parameter.Symbol.Name, new Suggestion(
-                    Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}",
-                    parameter.Symbol.Name + " = ", Band: Suggestion.InScope));
+                foreach (var parameter in macro.Parameters)
+                {
+                    items.TryAdd(parameter.Symbol.Name, new Suggestion(
+                        Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}",
+                        parameter.Symbol.Name + " = ", Band: Suggestion.InScope, Order: 1));
+                }
             }
+            if (CallHelp.ParameterAt(macro, before, call.Open, before.Count, call.Argument) is { } taking)
+                Accepted(model, taking, items);
+        }
+
+        // A comparison with what a parameter stands for takes one of the words it may be.
+        if (Compared(model, line) is var (name, accepts, isMode))
+        {
+            foreach (var word in ComparedWord.ChoicesFor(accepts, isMode))
+            {
+                items.TryAdd(word, new Suggestion(
+                    Protocol.CompletionItemKind.EnumMember,
+                    isMode ? ParameterKinds.Mode(word) : $"a word {name} takes", word, Band: Suggestion.InScope));
+            }
+            return;
         }
 
         if (!Ends(before[^1].Kind))
             AddExpression(program, model, line, items);
+    }
+
+    /// <summary>
+    /// What the caret's comparison is with, when the caret follows <c>==</c> or <c>!=</c> after
+    /// <c>.mode(p)</c> of an <c>operand</c> parameter, or after the name of a <c>one</c> parameter
+    /// or of a repetition's binding over a <c>list(one(...))</c>: its name, what it takes, and
+    /// whether the word compared is a mode.
+    /// </summary>
+    private static (string Name, ArgumentKind Accepts, bool IsMode)? Compared(SemanticModel model, LineContext line)
+    {
+        var before = line.Before;
+        if (before is not [.., var left, (SyntaxKind.EqualsEquals or SyntaxKind.BangEquals, _, _)])
+            return null;
+        if (left.Kind == SyntaxKind.CloseParen && before is [.., (SyntaxKind.Directive, var mode, _), (SyntaxKind.OpenParen, _, _),
+                (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic, var name, _), _, _]
+            && mode.Equals(".mode", StringComparison.OrdinalIgnoreCase))
+        {
+            return model.GetSymbolInfo(line.Caret, [name]).Symbol is { Parameter: { Kind: ParameterKind.Operand } operand }
+                ? (operand.Name, operand.Accepts, true)
+                : null;
+        }
+        return LineContext.IsWord(left.Kind)
+            && model.GetSymbolInfo(line.Caret, [left.Text]).Symbol is { } symbol
+            && ComparedWord.WordsOf(symbol, name => model.SymbolOf(name)) is { } words
+                ? (symbol.Name, words, false)
+                : null;
+    }
+
+    /// <summary>
+    /// What a macro's header may say at the caret about what a parameter takes: after a
+    /// parameter's <c>:</c> and in a <c>list(...)</c>, the kinds and the enums in scope, and in an
+    /// <c>operand(...)</c>, the modes it may list.
+    /// </summary>
+    /// <returns>Whether the caret is in a kind, so that nothing else is offered there.</returns>
+    private static bool InParameterKind(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
+    {
+        var before = line.Before;
+        if (line.OpenCall() is not { } open || before.Count == 0)
+            return false;
+
+        // A parenthesis inside the header's own is a kind's: the word before it says which.
+        if (open.Open >= 1 && line.OpenCall(open.Open) is not null
+            && before[open.Open - 1] is { Kind: SyntaxKind.Identifier } word)
+        {
+            switch (word.Text.ToLowerInvariant())
+            {
+                case "operand":
+                    foreach (var mode in ArgumentKind.OperandModes)
+                    {
+                        items.TryAdd(mode, new Suggestion(
+                            Protocol.CompletionItemKind.EnumMember, ParameterKinds.Mode(mode), mode));
+                    }
+                    return true;
+                case "list":
+                    Kinds(model, line, items);
+                    return true;
+                case "one":
+                    // The words a `one` takes are the macro's to make up.
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        if (before[^1].Kind != SyntaxKind.Colon)
+            return false;
+        Kinds(model, line, items);
+        return true;
+    }
+
+    /// <summary>The kinds a parameter may be, and the enums in scope, whose members a parameter may take.</summary>
+    private static void Kinds(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
+    {
+        foreach (var (written, takes) in ParameterKinds.Written)
+            AddWord(written, takes, items);
+        AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Enum);
+    }
+
+    /// <summary>
+    /// What an argument for <paramref name="parameter"/> may be, offered before every other name:
+    /// the members of the enum an enum kind names, by their bare names, and the words a
+    /// <c>one(...)</c> lists. A <c>list</c> of either takes them too.
+    /// </summary>
+    private static void Accepted(SemanticModel model, MacroParameter parameter, Dictionary<string, Suggestion> items)
+    {
+        var accepts = parameter.Accepts.Kind == ParameterKind.List ? parameter.Accepts.Element : parameter.Accepts;
+        if (accepts is { Kind: ParameterKind.Enum } && model.EnumOf(accepts) is { Body: { } body })
+        {
+            foreach (var member in body.Symbols.Where(member => member.Kind == SymbolKind.Constant))
+            {
+                items.TryAdd(member.Name, new Suggestion(
+                    Protocol.CompletionItemKind.EnumMember, Detail(member), member.Name, DocComments.Of(member),
+                    Suggestion.InScope));
+            }
+        }
+        else if (accepts is { Kind: ParameterKind.One })
+        {
+            foreach (var word in accepts.Words)
+            {
+                items.TryAdd(word, new Suggestion(
+                    Protocol.CompletionItemKind.EnumMember, $"a word {parameter.Name} takes", word, Band: Suggestion.InScope));
+            }
+        }
     }
 
     /// <summary>
@@ -486,7 +607,6 @@ internal static class Completion
             return null;
         return directive switch
         {
-            ".macro" when line.OpenCall() is not null => (ParameterKinds, "what the argument may be"),
             ".import" => ([.. Directives.Sizes, "proc("], "how the name is reached"),
             ".export" or ".segment" => (Directives.Sizes, "address size"),
             ".data" => (Directives.Data, "what it holds"),

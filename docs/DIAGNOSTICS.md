@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 373 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 374 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -15,7 +15,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Reading a line](#reading-a-line) | 58 | — |
 | [Names](#names) | 49 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
 | [Values](#values) | 49 | — |
-| [Macros](#macros) | 28 | — |
+| [Macros](#macros) | 29 | `comparison-never-holds` (warning) |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
@@ -1030,6 +1030,12 @@ A `} name {` closes one block argument and opens the next, and there is no call 
 > `{0}` has no `block` parameter called `{1}`
 
 A block argument after the parentheses names a `block` parameter the macro declares.
+
+### `comparison-never-holds` — warning
+
+> `{0}` is never `{1}`, so this comparison {2}: {3}
+
+A word a condition compares with `.mode(p)`, or with a `one(...)` parameter, is never looked up, so a misspelt word, or one the parameter can never be, is no error of its own: the branch is quietly never taken, or always taken. The modes are the ones `.mode` gives, which for an `operand(...)` that lists its modes are those it lists, with `zp`, `zpx` and `zpy` as `abs`, `absx` and `absy`.
 
 ### `const-argument-out-of-range`
 

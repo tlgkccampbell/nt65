@@ -49,6 +49,8 @@ public sealed class TextMateGrammarTests
             mac!(dest = 1, 2, w = b)
         }
         mac!(dest = {x}, w = (a))
+        .macro typed(p: const(0..15), q: operand(imm, zp, nope), r: Joy, s: list(one(a, lda)), t: gfx::Kind, u: ident = x) {
+        }
         .func twice(n, m) = n * 2
         .export .proc main: a8, dp = 0 {
         }

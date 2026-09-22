@@ -2701,6 +2701,13 @@ parameters are used. A call is checked for each argument against its parameter's
 `operand`. What depends on a particular binding, such as `stx dest` with `dest` bound to
 `buf,x`, is reported at the call with a note naming the line in the body.
 
+A word a condition compares with what a parameter stands for is never looked up, so a
+misspelt one would quietly never match. A comparison of `.mode(p)` with a word that is not a
+mode, or not one of the modes `p` lists, and of a `one` parameter, or a repetition's binding
+over a `list(one(...))`, with a word it does not list, is a warning at the definition: it
+holds for no argument at all. An `operand(zp)` is `abs` to `.mode`, so that is what such a
+parameter is compared with.
+
 ### 11.7 Output
 
 nt65 expands macros itself and emits flat code, with a comment naming the invocation.

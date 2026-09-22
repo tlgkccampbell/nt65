@@ -28,22 +28,31 @@ internal static class NameHighlighting
         var tree = model.Tree;
         var data = new List<int>();
         var (line, character, end) = (0, 0, -1);
-        foreach (var reference in model.References.OrderBy(reference => reference.Span.Start))
+
+        // A word a condition compares with a parameter is one of a set the parameter names, as
+        // a member is one of its enum's, and is coloured as one.
+        var words = ComparedWords.In(model)
+            .Select(word => (Span: word.Word.Span, Type: IndexOf("enumMember"), Modifiers: ReadOnly));
+        var names = model.References.Select(reference =>
+        {
+            var (type, modifiers) = Classify(reference.Symbol);
+            return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
+        });
+        foreach (var (span, type, modifiers) in names.Concat(words).OrderBy(token => token.Span.Start))
         {
             // A macro body's names are recorded for each of its uses; each is written once.
-            if (reference.Span.Start < end || reference.Span.Length == 0)
+            if (span.Start < end || span.Length == 0)
                 continue;
-            var at = Lsp.ToPosition(tree, reference.Span.Start);
+            var at = Lsp.ToPosition(tree, span.Start);
             if (at.Line < first || at.Line > last)
                 continue;
-            var (type, modifiers) = Classify(reference.Symbol);
             data.AddRange([
                 at.Line - line,
                 at.Line == line ? at.Character - character : at.Character,
-                reference.Span.Length,
+                span.Length,
                 type,
-                modifiers | (reference.IsDeclaration ? Declaration : 0)]);
-            (line, character, end) = (at.Line, at.Character, reference.Span.End);
+                modifiers]);
+            (line, character, end) = (at.Line, at.Character, span.End);
         }
         return new Protocol.SemanticTokens(data);
     }

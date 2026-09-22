@@ -49,8 +49,8 @@ public sealed class SemanticModel
         Configuration = configuration;
         FileScope = bound.FileScope;
         Symbols = bound.Symbols;
-        References = bound.References;
         this.resolved = resolved;
+        References = WithMembersNamedBare(bound.References);
         regions = bound.Regions;
         Brought = bound.Brought;
         Globs = bound.Globs;
@@ -433,6 +433,50 @@ public sealed class SemanticModel
     /// </summary>
     public SyntaxNode? ExprOf(CallExpressionSyntax call, Expansion? on) =>
         Evaluator.ExprOf(call, resolved, BindingsOf(on));
+
+    /// <summary>
+    /// The references the binder recorded, with each member of an enum that a call names by its
+    /// bare name, as an argument of an enum kind, referring to that member. The binder reads such
+    /// a name as a word, since the enum of the macro's parameter answers it rather than the
+    /// caller, and so records nothing for it, or records whatever the caller's scope has by that
+    /// name; the member is what the argument means, and what an editor shows and renames.
+    /// </summary>
+    private IReadOnlyList<SymbolReference> WithMembersNamedBare(IReadOnlyList<SymbolReference> references)
+    {
+        var members = new List<SymbolReference>();
+        foreach (var call in Tree.Root.DescendantNodes().OfType<MacroCallSyntax>())
+        {
+            if (MacroAt(call) is not { } macro
+                || !macro.Parameters.Any(parameter => (parameter.Accepts.Element ?? parameter.Accepts).Kind == ParameterKind.Enum)
+                || InvocationAt(call) is not { } invocation)
+            {
+                continue;
+            }
+            var inMacro = call.Ancestors().Any(node => node is BlockSyntax { Opener.Statement: MacroDeclarationSyntax });
+            foreach (var argument in invocation.Arguments.Where(argument => argument.Written))
+            {
+                var accepts = argument.Parameter.Accepts;
+                var kind = accepts.Kind == ParameterKind.List ? accepts.Element : accepts;
+                if (kind is not { Kind: ParameterKind.Enum } || EnumOf(kind) is not { Body: { } body })
+                    continue;
+                var written = accepts.Kind == ParameterKind.List ? argument.Items : argument.Value is { } value ? [value] : [];
+                foreach (var name in written)
+                {
+                    if (name is NameExpressionSyntax { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
+                        && body.FindMember(word.Text) is { Kind: SymbolKind.Constant } member)
+                    {
+                        members.Add(new SymbolReference(member, word.Span, false, InMacro: inMacro));
+                    }
+                }
+            }
+        }
+        if (members.Count == 0)
+            return references;
+        var at = members.Select(reference => reference.Span.Start).ToHashSet();
+        return [.. references.Where(reference => !at.Contains(reference.Span.Start))
+            .Concat(members)
+            .OrderBy(reference => reference.Span.Start)];
+    }
 
     /// <summary>The enum an enum kind names, where the macro that declares the parameter is written; null when it names none.</summary>
     public Symbol? EnumOf(ArgumentKind kind) =>

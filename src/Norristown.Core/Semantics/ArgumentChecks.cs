@@ -126,6 +126,30 @@ public static class ArgumentChecks
         }
     }
 
+    /// <summary>
+    /// What a macro's conditions are checked for once names are resolved: that each word one
+    /// compares with what a parameter stands for is one the parameter may be. A comparison with a
+    /// word it never is holds for no argument at all, which is true of the definition, not of a call.
+    /// </summary>
+    public static void CheckComparisons(
+        Symbol macro, Func<NameExpressionSyntax, Symbol?> symbolOf, Action<TextSpan, DiagnosticMessage> report)
+    {
+        if (macro.Definition is not { } definition)
+            return;
+        foreach (var compared in ComparedWord.In(definition, symbolOf).Where(compared => !compared.CanHold))
+        {
+            var comparison = compared.Word.Parent!.AncestorsAndSelf().OfType<BinaryExpressionSyntax>().First();
+            var why = compared.IsMode && !ComparedWord.Modes.Contains(compared.Word.Text.ToLowerInvariant())
+                ? $"`.mode` gives {Spell(ComparedWord.Modes)}"
+                : compared.IsMode
+                    ? $"`{compared.Name}` takes an operand in {Spell(compared.Choices)}"
+                    : $"`{compared.Name}` is {Spell(compared.Choices)}";
+            report(compared.Word.Span, Catalogue.ComparisonNeverHolds.Says(
+                compared.Compared, compared.Word.Text,
+                comparison.OperatorToken.Kind == SyntaxKind.EqualsEquals ? "never holds" : "always holds", why));
+        }
+    }
+
     /// <summary>The range a <c>const(low..high)</c> takes, or null when it names none or the header is wrong.</summary>
     private static (long Low, long High)? Range(SemanticModel model, ArgumentKind accepts) =>
         accepts is { Low: { } low, High: { } high }

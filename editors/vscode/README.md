@@ -32,6 +32,14 @@ build tasks and a schema for the project file.
   file, with the calls inside it left as calls and a lens on each to open that one too, one
   level at a time. **Inline `name!`**, under the light bulb, writes the expansion where the
   call was; where that would change what the line means it is offered greyed, with the reason.
+- **What a macro parameter takes.** Hovering a parameter, or anything in the kind after its
+  `:`, says it in words: `a constant from 0 to 15`, `an operand in imm or zp mode`, and for a
+  mode, how an operand in it is written. Completion offers the kinds and the enums in scope
+  after the `:` and the modes inside `operand(...)`, and at a call, the members of the enum a
+  parameter takes or the words its `one(...)` lists. A member passed by its bare name is the
+  member, for colour, hover, going to its definition and renaming it. In a condition,
+  `.mode(src) == imm` and `reg == x` complete, colour and hover their words the same way, and
+  a hover says when the parameter can never be the word compared.
 - **Hints in the line, for what the line does not say.** A width, the mode, D or B changing on
   a line that does not spell it (`rep #$30` ` a16 i16`, `jsr widen` ` → a16`); `long` on a
   branch that became the five-byte form; a value nobody wrote (an enum member, a member's

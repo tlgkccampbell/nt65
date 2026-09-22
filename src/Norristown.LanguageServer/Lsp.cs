@@ -117,7 +117,57 @@ internal static class Lsp
         var flow = analysis.FlowFor(model.Tree.Path);
         return model.ReferenceAt(position) is { } reference
             ? ToName(analysis, model, reference)
-            : ToScope(model, flow, position) ?? ToTiming(analysis, model, flow, position);
+            : ToComparedWord(model, position) ?? ToParameterKind(analysis, model, position) ?? ToScope(model, flow, position) ?? ToTiming(analysis, model, flow, position);
+    }
+
+    /// <summary>
+    /// A word a condition compares with what a parameter stands for, <c>imm</c> in
+    /// <c>.mode(src) == imm</c> or <c>x</c> in <c>reg == x</c>: what the word is, what it is
+    /// compared with and what that parameter takes, and when the parameter can never be it,
+    /// that the comparison never holds.
+    /// </summary>
+    private static Protocol.Hover? ToComparedWord(SemanticModel model, int position)
+    {
+        if (ComparedWords.At(model, position) is not { } compared)
+            return null;
+        var (word, isMode) = (compared.Word, compared.IsMode);
+        var text = word.Text.ToLowerInvariant();
+        var card = new Card(isMode ? $"mode {text}" : $"word {word.Text}", new HashSet<string>(["mode", "never"], StringComparer.Ordinal));
+        if (isMode)
+            card.Row("mode", ParameterKinds.Mode(text) is { } written ? $"{text}: {written}" : null);
+        card.Row("compared with", compared.Compared);
+        card.Row("takes", ParameterKinds.Takes(compared.Accepts));
+        if (!compared.CanHold)
+        {
+            card.Row("never", isMode && !ComparedWord.Modes.Contains(text)
+                ? $"{text} is not a mode .mode gives: {string.Join(", ", ComparedWord.Modes)}"
+                : $"{compared.Name} is never {word.Text}: it may be {string.Join(", ", compared.Choices)}");
+        }
+        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, word.Span));
+    }
+
+    /// <summary>
+    /// What the kind written after a macro parameter's <c>:</c> takes, wherever in it the caret
+    /// is: the parameter's own card, which says, and for a mode an <c>operand(...)</c> lists,
+    /// what an operand in that mode is written as. A kind is read as words, not names, so no
+    /// reference stands there to answer; the enum an enum kind names is one, and answers itself.
+    /// </summary>
+    private static Protocol.Hover? ToParameterKind(ProgramAnalysis analysis, SemanticModel model, int position)
+    {
+        var token = model.Tree.Root.FindToken(position);
+        if (token.Parent?.AncestorsAndSelf().OfType<ParameterKindSyntax>().FirstOrDefault() is not { } kind
+            || kind.Ancestors().OfType<MacroParameterSyntax>().FirstOrDefault() is not { } parameter
+            || model.ReferenceAt(parameter.Name.Span.Start) is not { } declared)
+        {
+            return null;
+        }
+        var mode = token.Parent is IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
+            && keyword.Equals("operand", StringComparison.OrdinalIgnoreCase)
+            && ParameterKinds.Mode(token.Text) is { } written
+                ? $"{token.Text.ToLowerInvariant()}: {written}"
+                : null;
+        var hover = ToName(analysis, model, declared, mode);
+        return hover with { Range = ToRange(model.Tree, token.Span) };
     }
 
     /// <summary>
@@ -126,7 +176,8 @@ internal static class Lsp
     /// back are shown wherever it is named and not only where it is declared, because what a
     /// call costs is the question asked at the call.
     /// </summary>
-    private static Protocol.Hover ToName(ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
+    private static Protocol.Hover ToName(
+        ProgramAnalysis analysis, SemanticModel model, SymbolReference reference, string? mode = null)
     {
         // The declaration as the program has it now: an edit that leaves what other files
         // see of a file alone keeps their models, and with them the symbols they resolved
@@ -144,6 +195,11 @@ internal static class Lsp
         // private to is worth saying instead.
         if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
             card.Row("private to", owner);
+
+        // What a macro's parameter takes is what its kind is written to check, said in words.
+        card.Row("mode", mode);
+        if (symbol.Parameter is { } parameter)
+            card.Row("takes", ParameterKinds.Takes(parameter.Accepts));
         if (symbol.Kind == SymbolKind.Member)
             card.Row("offset", symbol.Value.ToString());
         else if (symbol.Value.IsKnown)
@@ -198,6 +254,7 @@ internal static class Lsp
             // it leads whether or not anything writes it yet.
             SymbolKind.Macro => ["expands to"],
             SymbolKind.Binding => ["declares"],
+            SymbolKind.MacroParameter => ["mode", "takes"],
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
                 or SymbolKind.Label or SymbolKind.ImportedAddress or SymbolKind.AddressAlias => ["address", "size"],
             SymbolKind.Struct or SymbolKind.Union or SymbolKind.Enum => ["size"],
@@ -215,6 +272,8 @@ internal static class Lsp
     private static string Headline(Symbol symbol, SyntaxTree asked)
     {
         var named = symbol.Tree != asked ? symbol.PathName : symbol.QualifiedName;
+        if (symbol.Parameter is { Accepts.Kind: not ParameterKind.Expr } parameter)
+            return $"{symbol.KindText} {named}: {parameter.Accepts}";
         return symbol.Kind is SymbolKind.Member or SymbolKind.MacroParameter or SymbolKind.Binding
             || symbol.Bound is not null
             || Declaring(symbol, named) is not { Length: > 0 } line

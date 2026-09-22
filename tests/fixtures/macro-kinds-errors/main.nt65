@@ -39,6 +39,28 @@
     lda p
 }
 
+; A word a condition compares with a parameter is one the parameter may be. `zp` is a mode
+; `.mode` spells `abs`, so that comparison may hold.
+.macro pick(src: operand(imm, zp), reg: one(x, y), regs: list(one(a, x))) {
+    .if .mode(src) == imm {
+        nop
+    } .elseif .mode(src) == abs {
+        nop
+    } .elseif .mode(src) == imx {       ;! warning[comparison-never-holds]: `.mode(src)` is never `imx`, so this comparison never holds: `.mode` gives one of `imm`, `acc`, `abs`, `absx`, `absy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long`, `longy`
+        nop
+    } .elseif .mode(src) == absx {      ;! warning[comparison-never-holds]: `.mode(src)` is never `absx`, so this comparison never holds: `src` takes an operand in one of `imm`, `abs`
+        nop
+    }
+    .if reg != z {                      ;! warning[comparison-never-holds]: `reg` is never `z`, so this comparison always holds: `reg` is one of `x`, `y`
+        nop
+    }
+    .each regs, r {
+        .if r == y {                    ;! warning[comparison-never-holds]: `r` is never `y`, so this comparison never holds: `r` is one of `a`, `x`
+            nop
+        }
+    }
+}
+
 SPEED = 3
 
 .segment ZEROPAGE
