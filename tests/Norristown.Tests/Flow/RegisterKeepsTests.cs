@@ -205,6 +205,21 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// So does a branch to one, on the path it is taken, and so does a `.next` naming one: a
+    /// path that hands control to another routine is a way out of this one.
+    /// </summary>
+    [Fact]
+    public void ABranchToARoutineTakesWhatItBranchesTo()
+    {
+        var branch = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    ldx #0\n    bne q\n    rts\n}\n";
+        var next = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    jmp (slot)\n    .next q\n}\n"
+            + ".segment BSS\n.data slot: .addr\n";
+
+        Assert.Equal(Registers.A | Registers.C, Kept(branch, "p"));
+        Assert.Equal(Registers.A | Registers.X | Registers.C, Kept(next, "p"));
+    }
+
+    /// <summary>
     /// A `.state` carrying nothing but `keeps` says what a register holds, not what the
     /// processor state at a label is, so it neither declares the label nor answers what a
     /// routine with no body assumes.

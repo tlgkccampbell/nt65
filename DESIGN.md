@@ -1633,15 +1633,16 @@ counts, which leave no total at all for a routine that can reach itself. A call 
 follow — through a pointer, or to a routine with no body that promises nothing — leaves the
 registers it did not save unknown, and the answer says it is not the whole one.
 
-A jump into another routine's interior (§7.4) is not a call but a way out: control lands in
-that routine and that routine returns to this one's caller. What a routine hands back across
-such a jump is therefore what the routine the label is in hands back — the same word a `jmp` to
-that routine's own entry is taken at, since control comes back from neither. A branch into one
-says the same on the path where it is taken, and a `.next` naming such a label says it for the
-statement it stands under. So a routine whose only way out is a jump into another promises no
-more than the routine it hands off to: where that one promises nothing, this one can promise
-nothing, and what is reported names the label, the routine it is inside and the `keeps` that
-belongs on that routine.
+A path that hands control to another routine is not a call but a way out: control lands in that
+routine and that routine returns to this one's caller. What a routine hands back across such a
+path is therefore what the routine handed to hands back. A `jmp` to a routine's own entry is
+taken at that word, and so is a jump into another routine's interior (§7.4), since control
+comes back from neither. A branch says the same on the path where it is taken, whether it names
+the routine or a label inside it, and a `.next` says it for the statement it stands under, which
+is how a jump through a pointer, or a routine that runs on into the next one, says where control
+goes. So a routine whose only way out hands control to another promises no more than the routine
+it hands off to: where that one promises nothing, this one can promise nothing, and what is
+reported names where control went, the routine it went to and the `keeps` that belongs there.
 
 **`keeps a, x` is the promise.** On a routine with a body it is checked at every `rts`, `rtl`
 and `rti`: a register the routine cannot be shown to hand back is reported there, with what to

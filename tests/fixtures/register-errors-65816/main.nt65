@@ -6,9 +6,13 @@
 
 .export saves_across, jumps_in
 .export hands_off, widens, hands_on, holds
+.export branches_off, next_hands_off, branches_on
 
 ; A routine whose widths nothing says, which is what a hardware entry point looks like.
 .proc twiddle = $8000: a? -> a?
+
+.segment BSS
+.data vector: .addr
 
 .segment CODE
 
@@ -59,5 +63,25 @@
     partway:
     .state a8, i8, native
     ldx #$12
+    rts
+}
+
+; A branch that names the routine itself, and a `.next` naming one on a jump through a pointer,
+; hand control on the same way: control comes back from neither.
+.proc branches_off: a8, i8, keeps a {
+    ldx #1
+    bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `widens`, which does not promise to keep a: a `keeps a` on `widens` says it hands it back, and a `.next ?` here ends the path with nothing checked
+    rts
+}
+
+.proc next_hands_off: a8, i8, keeps a {
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `widens`, which does not promise to keep a: a `keeps a` on `widens` says it hands it back, and a `.next ?` here ends the path with nothing checked
+    .next widens
+}
+
+; And where the routine handed to promises to keep A, the branch is certified.
+.proc branches_on: a8, i8, keeps a {
+    ldx #1
+    bne holds
     rts
 }

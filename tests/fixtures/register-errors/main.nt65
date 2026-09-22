@@ -6,9 +6,11 @@
 
 .export breaks_it, forgets_the_carry, says_nothing, jumps_in
 .export hands_off, loses_a, branches_in, loses_x, hands_on, holds_a
+.export branches_off, next_hands_off, loses_it, branches_on, holds_it
 
 .segment BSS
-.data slot: .byte
+.data slot:   .byte
+.data vector: .addr
 
 .segment CODE
 
@@ -102,6 +104,37 @@
 .proc holds_a: keeps a {
     partway:
     .state ?
+    ldy #0
+    rts
+}
+
+; A branch that names the routine itself is the same way out as one that names a label inside
+; it: on the path it is taken, control goes there and comes back to this routine's caller.
+.proc branches_off: keeps a {
+    ldx #1
+    bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `loses_it`, which does not promise to keep a: a `keeps a` on `loses_it` says it hands it back, and a `.next ?` here ends the path with nothing checked
+    rts
+}
+
+; And so is a `.next` naming one, which is how a jump through a pointer says where it goes.
+.proc next_hands_off: keeps a {
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `loses_it`, which does not promise to keep a: a `keeps a` on `loses_it` says it hands it back, and a `.next ?` here ends the path with nothing checked
+    .next loses_it
+}
+
+.proc loses_it {
+    lda #0
+    rts
+}
+
+; Where the routine handed to promises to keep the register, the branch is certified.
+.proc branches_on: keeps a {
+    ldx #1
+    bne holds_it
+    rts
+}
+
+.proc holds_it: keeps a {
     ldy #0
     rts
 }

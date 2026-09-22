@@ -190,12 +190,12 @@ public static class RegisterKeeps
                 }
                 var after = Through(block, state, of, report);
 
-                // A jump into another routine's interior is a way out of this one, checked
-                // against what the routine the label is in hands back.
+                // A path that hands control to another routine is a way out of this one,
+                // checked against what the routine it is handed to hands back.
                 var left = false;
                 foreach (var into in Leaves(block, region.Routine))
                 {
-                    var handed = of(into.Routine!);
+                    var handed = of(into);
                     if (!handed.Complete)
                         complete = false;
                     var carried = Handed(after, handed);
@@ -366,7 +366,7 @@ public static class RegisterKeeps
                 leaves = true;
                 var after = Through(blocks[i], state, of, null);
                 foreach (var into in left)
-                    after = Handed(after, of(into.Routine!));
+                    after = Handed(after, of(into));
                 kept &= after.Kept;
             }
             return leaves ? new RoutineRegisters(kept, complete) : null;
@@ -399,8 +399,8 @@ public static class RegisterKeeps
 
         /// <summary>
         /// Whether a routine's promise holds where a path leaves it, and what to write when it
-        /// does not. <paramref name="into"/> is the label in another routine the path leaves
-        /// by, where it leaves by one, and <paramref name="kept"/> what that routine hands back.
+        /// does not. <paramref name="into"/> is what the path hands control to, where it hands
+        /// it to another routine, and <paramref name="kept"/> what that routine hands back.
         /// </summary>
         private static void Check(
             FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
@@ -418,7 +418,7 @@ public static class RegisterKeeps
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
 
-            // What the routine the jump lands in promises nothing about is what this routine
+            // What the routine the path lands in promises nothing about is what this routine
             // cannot promise either, and the promise belongs where the code that has to hold
             // to it is.
             var missing = into is not null ? broken & ~kept : Registers.None;
@@ -437,17 +437,24 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// What to write where a jump into another routine is what loses the registers: the
-        /// promise goes on the routine the label is in, since that is the code the register has
+        /// What to write where handing control to another routine is what loses the registers:
+        /// the promise goes on the routine handed to, since that is the code the register has
         /// to come back through, and control never comes back here to restore anything.
         /// </summary>
         private static string Handing(Symbol into, Registers missing)
         {
-            var owner = into.Routine!.DisplayName;
+            var owner = Owner(into)!;
+            var name = owner.DisplayName;
             var items = RegisterEffects.Spell(missing).ToLowerInvariant();
             var one = RegisterEffects.Each(missing).Count() == 1;
-            return $": control does not come back from `{into.DisplayName}`, and `{owner}` does not promise to "
-                + $"keep {items}: a `keeps {items}` on `{owner}` says it hands {(one ? "it" : "them")} back, "
+
+            // Where the path names a label rather than the routine itself, both names are worth
+            // writing: one says where control went, the other where the promise belongs.
+            var gone = owner == into
+                ? $"control does not come back from `{name}`, which does not promise to keep {items}"
+                : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
+                    + $"to keep {items}";
+            return $": {gone}: a `keeps {items}` on `{name}` says it hands {(one ? "it" : "them")} back, "
                 + "and a `.next ?` here ends the path with nothing checked";
         }
 
@@ -608,10 +615,10 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// The labels inside other routines a block leaves by: what its jump or its branch
-        /// names, or what a <c>.next</c> on it names in their place. Control never comes back
-        /// from one, because the routine the label is in returns to this routine's caller, so
-        /// the path ends there as a tail call's does.
+        /// What a block hands control to: the other routines, and the labels inside them, that
+        /// its jump or its branch names, or that a <c>.next</c> on it names in their place.
+        /// Control never comes back from one, because that routine returns to this routine's
+        /// caller, so the path ends there as a tail call's does.
         /// </summary>
         private IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
         {
@@ -628,22 +635,38 @@ public static class RegisterKeeps
                 yield break;
             }
             var mode = layout.Of(step.Statement, step.On)?.Mode;
-            if (Transfers.Of(step.Statement, mode) is not (Transfer.Jump or Transfer.Branch))
+            var transfer = Transfers.Of(step.Statement, mode);
+            if (transfer is not (Transfer.Jump or Transfer.Branch))
                 yield break;
-            if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is { } target
-                && Outside(target, routine))
+            if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target
+                || !Outside(target, routine))
             {
-                yield return target;
+                yield break;
             }
+
+            // A `jmp` to a routine's entry is the tail call the block already counts, and what
+            // it hands back is taken off there. A branch counts as nothing, and neither does a
+            // jump into a routine's interior, so both are read here.
+            if (transfer != Transfer.Jump || target.Signature is null)
+                yield return target;
         }
 
         /// <summary>
-        /// Whether a target names a label inside a routine other than <paramref name="routine"/>.
+        /// Whether a target hands control to a routine other than <paramref name="routine"/>.
         /// One instance of a family is not another routine: its body is this one written once.
         /// </summary>
         private static bool Outside(Symbol target, Symbol routine) =>
-            target is { Kind: SymbolKind.Label, Routine: { } owner }
-                && owner != routine && !owner.IsSiblingOf(routine);
+            Owner(target) is { } owner && owner != routine && !owner.IsSiblingOf(routine);
+
+        /// <summary>
+        /// The routine a target hands control to: the routine itself where it names one, the
+        /// routine a label is written inside where it names a label, and null where it names
+        /// neither, which is a target this analysis has nothing to say about.
+        /// </summary>
+        private static Symbol? Owner(Symbol target) =>
+            target.Signature is not null ? target
+                : target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner
+                : null;
 
         /// <summary>The value of an immediate operand, where it is known.</summary>
         private long? Constant(Step step) =>
