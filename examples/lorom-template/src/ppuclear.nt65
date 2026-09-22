@@ -1,0 +1,147 @@
+; Useful subroutines for interacting with the S-PPU.
+.module ppuclear
+
+.cpu 65816
+
+.use snes::*
+.use main::{OAM, OAMHI}
+
+.export ppu_copy_oam, ppu_pack_oamhi, ppu_clear_oam
+.export ppu_copy, ppu_clear_nt, ppu_vsync
+
+.segment CODE3
+
+; Clears 2048 bytes ($400 words) of video memory to a constant value.  This can be one
+; nametable, 128 2bpp tiles, 64 4bpp tiles, or 32 8bpp tiles.  Must be called during
+; vertical or forced blank.
+; @param X starting address of nametable in VRAM (16-bit)
+; @param Y value to write (16-bit)
+.proc ppu_clear_nt: i16, far, dp = 0, dbr* -> a8, i16 {
+    sty d:$0000                 ; the value, at $000000-$000001 for the DMA to read
+    ldy #1024                   ; number of bytes to clear
+
+    ; Clear low bytes
+    sep #$20
+    stz PPUCTRL                 ; +1 on PPUDATA low byte write
+    lda #$00                    ; point at low byte of Y
+    jsl doonedma
+
+    lda #INC_DATAHI             ; +1 on PPUDATA high byte write
+    sta PPUCTRL
+    lda #$01                    ; point at high byte of Y
+    .next doonedma              ; and run into the second DMA
+}
+
+; One half of ppu_clear_nt: DMA 1024 bytes of the value at $0000 + A to VRAM at X.
+.proc doonedma: a8, i16, far, dbr* {
+    stx PPUADDR
+    sta DMAADDR
+    ora #<PPUDATA
+    sta DMAPPUREG
+    lda #DMA_CONST | DMA_LINEAR
+    sta DMAMODE
+    sty DMALEN
+    stz DMAADDRHI
+    stz DMAADDRBANK
+    lda #$01
+    sta COPYSTART
+    rtl
+}
+
+; Moves remaining entries in the CPU's local copy of OAM to (-128, 225) to get them
+; offscreen.
+; @param X index of first sprite in OAM (0-508)
+.proc ppu_clear_oam: far, dbr* -> a16, i16 {
+    rep #$30
+@lowoamloop:
+    lda #(225 << 8) | (<-128)
+    sta OAM,x
+    lda #$0100                  ; bit 8: offscreen
+    sta OAMHI,x
+    inx
+    inx
+    inx
+    inx
+    cpx #512                    ; 128 sprites times 4 bytes per sprite
+    bcc @lowoamloop
+    rtl
+}
+
+; Converts high OAM (sizes and X sign bits) to the packed format expected by the S-PPU.
+.proc ppu_pack_oamhi: far, dbr* -> a16, i16 {
+    rep #$10
+    ldx #0
+    txy
+@packloop:
+    ; pack four sprites' size+xhi bits from OAMHI
+    sep #$20
+    lda OAMHI + 13,y
+    asl a
+    asl a
+    ora OAMHI + 9,y
+    asl a
+    asl a
+    ora OAMHI + 5,y
+    asl a
+    asl a
+    ora OAMHI + 1,y
+    sta OAMHI,x
+    rep #$21                    ; 16-bit A, and clear carry for the following addition
+
+    ; move to the next set of 4 OAM entries
+    inx
+    tya
+    adc #16
+    tay
+
+    ; done yet?
+    cpx #32                     ; 128 sprites divided by 4 sprites per byte
+    bcc @packloop
+    rtl
+}
+
+; Copies packed OAM data to the S-PPU using DMA channel 0.
+.proc ppu_copy_oam: far, dbr* -> a16, i16 {
+    rep #$30
+    lda #DMAMODE_OAMDATA
+    ldx #OAM
+    ldy #544
+    .next ppu_copy              ; falls through to ppu_copy
+}
+
+; Copies data to the S-PPU using DMA channel 0.  Entered and left in the caller's widths.
+; @param X source address
+; @param DBR source bank
+; @param Y number of bytes to copy
+; @param A 15-8: destination PPU register; 7-0: DMA mode
+;        useful constants:
+; DMAMODE_PPUDATA, DMAMODE_CGDATA, DMAMODE_OAMDATA
+.proc ppu_copy: far, dbr* {
+    php
+    rep #$30
+    sta DMAMODE
+    stx DMAADDR
+    sty DMALEN
+    sep #$20
+    phb
+    pla
+    sta DMAADDRBANK
+    lda #%00000001
+    sta COPYSTART
+    plp
+    rtl
+}
+
+; Waits for the start of vertical blanking.  Entered and left in the caller's widths.
+.proc ppu_vsync: far, dbr* {
+    php
+    sep #$20
+@loop1:
+    bit VBLSTATUS               ; Wait for leaving previous vblank
+    bmi @loop1
+@loop2:
+    bit VBLSTATUS               ; Wait for start of this vblank
+    bpl @loop2
+    plp
+    rtl
+}

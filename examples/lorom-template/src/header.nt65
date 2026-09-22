@@ -1,0 +1,127 @@
+; Definition of the internal header and vectors at $00FFB0-$00FFFF in the Super NES address
+; space, and the stubs in bank $00 the vectors point at.
+.module header
+
+.cpu 65816
+
+.use init::resetstub
+.use main::{nmi_handler, irq_handler}
+
+.export RomHeader, header
+
+.export Mapper, RomSpeed, MemSize, Region
+
+.enum Mapper {
+    ; LoROM is mapped to $808000-$FFFFFF in 32K blocks, skipping a15 and a23.  Most is
+    ; mirrored down to $008000.
+    lorom   = $20               ; a15 skipped
+    ; HiROM is mapped to $C00000-$FFFFFF linearly.  It is mirrored down to $400000, and the
+    ; second half of each 64K bank is mirrored to $008000 and $808000.
+    hirom   = $21               ; C00000-FFFFFF skipping a22, a23
+    ; ExHiROM is mapped to $C00000-$FFFFFF followed by $400000-$7FFFFF.  There are two
+    ; inaccessible 32K holes near the end, and two 32K blocks that are accessible only through
+    ; their mirrors to $3E8000 and $3F8000.
+    exhirom = $25               ; skipping a22, inverting a23
+}
+
+; If `fast` is turned on, the game will be pressed on more expensive "fast ROM" that allows
+; the CPU to run at its full 3.6 MHz when accessing ROM at $808000 and up.
+.enum RomSpeed {
+    slow_200ns = $00
+    fast_120ns = $10
+}
+
+; ROM and backup RAM sizes are expressed as ceil(log2(size in bytes)) - 10
+.enum MemSize {
+    none   = $00
+    kb2    = $01
+    kb4    = $02
+    kb8    = $03
+    kb16   = $04
+    kb32   = $05
+    kb64   = $06
+    kb128  = $07                ; values from here up are for SRAM
+    kb256  = $08                ; values from here down are for ROM
+    kb512  = $09                ; Super Mario World
+    mb1    = $0A                ; Mario Paint
+    mb2    = $0B                ; Mega Man X, Super Mario All-Stars, original SF2
+    mb4    = $0C                ; Turbo/Super SF2, all Donkey Kong Country
+    mb8    = $0D                ; ExHiROM only: Tales of Phantasia, SF Alpha 2
+}
+
+.enum Region {
+    japan   = $00
+    america = $01
+    pal     = $02
+}
+
+; The extended header at $FFB0, then the header proper at $FFC0.
+.struct RomHeader {
+    publisher_id:        .res 2, ' '    ; ASCII
+    game_code:           .res 4, ' '    ; as in SNS-xxxx-USA
+    reserved:            .res 6
+    flash_size:          .byte          ; log2(backup flash size) - 10
+    expansion_ram_size:  .byte          ; log2(expansion work RAM size) - 10
+    special_version:     .byte          ; related to promo versions
+    coprocessor:         .byte          ; coprocessor subtype
+    title:               .res 21, ' '   ; no longer than 21 characters, space padded
+    map_mode:            .byte
+    cart_type:           .byte          ; 00: no extra RAM; 02: RAM with battery
+    rom_size:            .byte          ; log2(ROM size) - 10; 08-0C typical
+    ram_size:            .byte          ; log2(backup RAM size) - 10; 01,03,05 typical
+    region:              .byte
+    developer:           .byte          ; publisher ID, or $33 for see 16 bytes before header
+    version:             .byte          ; ROM revision number
+    checksum_complement: .word          ; $FFFF minus the sum of all bytes, poked after linking
+    checksum:            .word          ; the sum of all bytes, poked after linking
+}
+.assert .sizeof(RomHeader) == $30, "the header must run from $FFB0 to $FFE0"
+
+.segment SNESHEADER
+.data header: .type RomHeader {
+    publisher_id = "  "
+    game_code = "XLRW"
+    flash_size = MemSize::none
+    expansion_ram_size = MemSize::none
+    special_version = 0
+    coprocessor = 0
+    ; Longest possible is "PINO'S LOROM TEMPLATE"
+    title = "PINO'S LOROM TEMPLATE"
+    map_mode = Mapper::lorom | RomSpeed::slow_200ns
+    cart_type = $00
+    rom_size = MemSize::kb256
+    ram_size = MemSize::none
+    region = Region::america
+    developer = $33
+    version = $00
+    checksum_complement = $0000
+    checksum = $0000
+}
+
+; The vectors follow the header, at $FFE0.
+.data vectors {
+    ; unused, unused, COP, BRK, ABORT, NMI, unused, IRQ
+    ; native mode vectors: reset unused because reset switches to 6502 mode
+    .data native: .addr[8] {
+        $FFFF, $FFFF, unused_handler, unused_handler, unused_handler, nmistub, $FFFF, irq_handler
+    }
+    ; unused, unused, COP, unused, ABORT, NMI, RESET, IRQ and BRK
+    ; 6502 mode vectors: brk unused because 6502 mode uses the irq handler and pushes the
+    ; X flag clear for /IRQ or set for BRK
+    .data emulation: .addr[8] {
+        $FFFF, $FFFF, unused_handler, $FFFF, unused_handler, unused_handler, resetstub, unused_handler
+    }
+}
+
+.segment CODE0
+
+; Jumping out of bank $00 is especially important if you're using ROMSPEED_120NS.
+.proc nmistub: interrupt, native {
+    jml nmi_handler
+}
+
+; COP, BRK and ABORT in either mode, and NMI and IRQ in 6502 mode, none of which this program
+; uses.
+.proc unused_handler: interrupt {
+    rti
+}

@@ -50,7 +50,8 @@ function Sources([string]$directory, [string]$pattern) {
 }
 
 # Each program: where it is, what `nt65 build` is given, where the output lands, the linker
-# configuration, the image, and the hand-written ca65 and C beside it.
+# configuration, the image, the hand-written ca65 and C beside it, and a script that makes
+# what the sources include before nt65 measures it.
 $programs = @(
     @{ Name = 'c64';    Directory = 'tests/corpus/c64';    Build = @();
        Generated = 'build';             Config = 'c64.cfg';  Image = 'build/game.prg' }
@@ -60,8 +61,9 @@ $programs = @(
        Build = @('--config', 'release', '--depfile', 'build/release/nt65.d', '--c-header', 'build/release/gen/nt65.h');
        Generated = 'build/release/gen'; Config = 'link.cfg';  Image = 'build/release/app.bin';
        HandWritten = 'asm'; HandWrittenCpu = '65c02'; C = 'c' }
-    @{ Name = 'snes-hello'; Directory = 'examples/snes-hello'; Build = @();
-       Generated = 'build';             Config = 'snes.cfg'; Image = 'build/hello.sfc' }
+    @{ Name = 'lorom-template'; Directory = 'examples/lorom-template'; Build = @();
+       Generated = 'build';             Config = 'lorom256k.cfg'; Image = 'build/lorom-template.sfc';
+       HandWritten = 'spc'; HandWrittenCpu = 'none'; Prepare = 'tools/convert.ps1' }
 )
 
 foreach ($program in $programs) {
@@ -71,6 +73,10 @@ foreach ($program in $programs) {
         # From nothing every time: the gate is asking whether a build works, not whether an
         # incremental one does, and a stale object file would link either way.
         if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }
+        if ($program.Prepare) {
+            & (Join-Path (Get-Location) $program.Prepare)
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
         Run $nt65 (@('build') + $program.Build) -MayWarn
 
         $objects = @()

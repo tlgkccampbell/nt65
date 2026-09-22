@@ -1,0 +1,144 @@
+; PPU and CPU I/O initialization code.
+.module init
+
+.cpu 65816
+
+.use snes::*
+.use header::header
+.use main::main
+
+.export resetstub
+
+; The DIRECT segment starts at $000010 in the linker script, so that $000000-$00000F are
+; free for local variables, and it is reached with the direct page at $0000: `dp = 0` in every
+; signature, which nt65 checks every direct-page operand against.
+ZEROPAGE_BASE = $0000
+
+; Make sure these conform to the linker script (e.g. lorom256k.cfg).
+STACK_BASE      = $0100
+STACK_SIZE      = $0100
+LAST_STACK_ADDR = STACK_BASE + STACK_SIZE - 1
+
+PPU_BASE   = $2100
+CPUIO_BASE = $4200
+
+; MMIO is mirrored into $21xx, $42xx, and $43xx of all banks $00-$3F and $80-$BF.  To make it
+; work no matter the current data bank, we can use a long address in a nonzero bank.
+; Bit 0 of MEMSEL enables fast ROM access above $808000.
+MEMSEL_LONG = $80420D
+
+; A tiny stub in bank $00 needs to set interrupt priority to 1, leave 6502 emulation mode, and
+; long jump to the rest of init code in another bank.  This should set 16-bit mode, turn off
+; decimal mode, set the stack pointer, load a predictable state into writable MMIO ports of the
+; S-PPU and S-CPU, and set the direct page base.  For explanation of the values that this
+; writes, see docs/init.txt
+;
+; For advanced users: Long stretches of STZ are a useful place to shuffle code when
+; watermarking your binary.
+
+.segment CODE0
+.proc resetstub: emu, dp?, dbr?, noreturn {
+    sei                         ; turn off IRQs
+    clc
+    xce                         ; turn off 6502 emulation mode
+    cld                         ; turn off decimal ADC/SBC
+    jml reset_fastrom           ; Bank $00 is not fast, but its mirror $80 is
+}
+
+.segment CODE7
+.proc reset_fastrom: a8, i8, far, dp?, dbr?, noreturn {
+    rep #$30                    ; 16-bit AXY
+    ldx #LAST_STACK_ADDR
+    txs                         ; set the stack pointer
+
+    ; Initialize the CPU I/O registers to predictable values.  The direct page is moved to
+    ; the S-CPU I/O area for the duration, and `d:` reaches each register through it: nt65
+    ; checks that D covers the address and writes the direct-page offset.
+    lda #CPUIO_BASE
+    tcd
+    lda #$FF00
+    sta d:NMITIMEN              ; disable NMI and HVIRQ; don't drive controller port pin 6
+    stz d:WRMPYA                ; clear multiplier factors
+    stz d:WRDIVL                ; clear dividend
+    stz d:WRDIVB                ; clear divisor and low byte of hcount
+    stz d:HTIMEH                ; clear high bit of hcount and low byte of vcount
+    stz d:VTIMEH                ; clear high bit of vcount and disable DMA copy
+    stz d:HDMAEN                ; disable HDMA and fast ROM
+
+    ; Initialize the PPU registers to predictable values
+    lda #PPU_BASE
+    tcd                         ; temporarily move direct page to PPU I/O area
+
+    ; first clear the regs that take a 16-bit write
+    lda #$0080
+    sta d:INIDISP               ; Forced blank, brightness 0, sprite size 8/16 from VRAM $0000
+    stz d:OAMADDL               ; OAM address = 0
+    stz d:BGMODE                ; BG mode 0, no mosaic
+    stz d:BG1SC                 ; BG 1-2 map 32x32 from VRAM $0000
+    stz d:BG3SC                 ; BG 3-4 map 32x32 from VRAM $0000
+    stz d:BG12NBA               ; BG tiles from $0000
+    stz d:VMADDL                ; VRAM address $0000
+    stz d:W12SEL                ; disable BG window
+    stz d:WH0                   ; clear window 1 x range
+    stz d:WH2                   ; clear window 2 x range
+    stz d:WBGLOG                ; clear window mask logic
+    stz d:TM                    ; disable all layers on main and sub
+    stz d:TMW                   ; disable all layers on main and sub in window
+    ldx #$0030
+    stx d:CGWSEL                ; disable color math and mode 3/4/7 direct color
+    ldy #$00E0
+    sty d:COLDATA               ; clear RGB components of COLDATA; disable interlace+pseudo hires
+
+    ; now clear the regs that need 8-bit writes
+    sep #$20
+    sta d:VMAIN                 ; still $80: add 1 to VRAM pointer after high byte write
+    stz d:M7SEL                 ; enable mode 7 wrapping and disable flipping
+    stz d:CGADD                 ; set CGRAM address to color 0
+    stz d:WOBJSEL               ; disable obj and math window
+
+    ; The scroll registers $210D-$2114 need double 8-bit writes
+    .repeat 8, i {
+        stz d:(BG1HOFS + i)
+        stz d:(BG1HOFS + i)
+    }
+
+    ; As do the mode 7 registers, which we set to the identity matrix
+    ; [ $0100  $0000 ]
+    ; [ $0000  $0100 ]
+    lda #$01
+    stz d:M7A
+    sta d:M7A
+    stz d:M7B
+    stz d:M7B
+    stz d:M7C
+    stz d:M7C
+    stz d:M7D
+    sta d:M7D
+    stz d:M7X
+    stz d:M7X
+    stz d:M7Y
+    stz d:M7Y
+
+    ; Set fast ROM if the internal header so requests: bit 4 of the byte at $FFD5 in the
+    ; cartridge header specifies whether a game should be manufactured with slow or fast ROM.
+    lda f:header::map_mode
+    and #$10
+    beq @not_fastrom
+    inc a
+@not_fastrom:
+    sta f:MEMSEL_LONG
+
+    rep #$20
+    lda #ZEROPAGE_BASE
+    tcd                         ; return direct page to real zero page
+
+    ; Unlike on the NES, we don't have to wait 2 vblanks to do any of the following
+    ; remaining tasks.
+    ; * Fill or clear areas of VRAM that will be used
+    ; * Clear areas of WRAM that will be used
+    ; * Load palette data into CGRAM
+    ; * Fill shadow OAM and then copy it to OAM
+    ; * Boot the S-SMP
+    ; The main routine can do these in any order.
+    jml main
+}

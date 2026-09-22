@@ -42,6 +42,12 @@ jobs:
         with:
           node-version: 22
 
+      # The example converts its pictures and sounds with Python tools before nt65 sees them.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - run: python -m pip install --quiet Pillow
+
       # The pinned cc65: the tools, headers and asminc under .cache/cc65, and the source
       # checkout under .cache/cc65-src, which the tests read. Both are what the pinned
       # commit says they are, so the commit and the system are the whole key. On a hit

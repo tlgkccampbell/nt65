@@ -1,0 +1,143 @@
+; High-level interface to SPC-700 bootloader
+; Originally by "blargg" (Shay Green)
+; https://wiki.superfamicom.org/how-to-write-to-dsp-registers-without-any-spc-700-code
+;
+; 1. Call spc_wait_boot
+; 2. To upload data:
+;       A. Call spc_begin_upload
+;       B. Call spc_upload_byte any number of times
+;       C. Go back to A to upload to different addr
+; 3. To begin execution, call spc_execute
+;
+; Have your SPC code jump to $FFC0 to re-run bootloader.
+; Be sure to call spc_wait_boot after that.
+.module blarggapu
+
+.cpu 65816
+
+.use snes::*
+
+.export spc_write_dsp, spc_boot_apu
+
+; The sound driver is hand-written ca65 for the SPC700, linked into ROM7 and copied to the
+; sound CPU's RAM by spc_boot_apu.  ld65 defines where it was loaded, where it runs and how
+; big it is; the driver exports where to start it.
+.import __SPCIMAGE_LOAD__: abs
+.import __SPCIMAGE_RUN__: abs
+.import __SPCIMAGE_SIZE__: abs
+.import spc_entry: abs
+
+.segment CODE2
+
+; Waits for SPC to finish booting.  Call before first using SPC or after bootrom has been
+; re-run.
+; Preserved: X, Y
+.proc spc_wait_boot: i16, keeps x, y -> a8, i16 {
+    ; Clear command port in case it already has $CC at reset
+    sep #$20
+    stz APU0
+
+    ; Wait for the SPC to signal it's ready with APU0=$AA, APU1=$BB
+    rep #$20
+    lda #$BBAA
+@waitBBAA:
+    cmp APU0
+    bne @waitBBAA
+    sep #$20
+    rts
+}
+
+; Starts upload to SPC addr Y and sets Y to 0 for use as index with spc_upload_byte.
+; Preserved: X
+.proc spc_begin_upload: i16, keeps x -> a8, i16 {
+    sep #$20
+    sty APU2
+
+    ; Tell the SPC to set the start address.  The first value written to APU0 must be $CC,
+    ; and each subsequent value must be nonzero and at least $02 above the index LSB
+    ; previously written to $00.  Adding $22 always works because APU0 starts at $AA.
+    lda APU0
+    clc
+    adc #$22
+    bne @skip                   ; ensure nonzero, as zero means start execution
+    inc a
+@skip:
+    sta APU1
+    sta APU0
+
+    ; Wait for acknowledgement
+@wait:
+    cmp APU0
+    bne @wait
+
+    ; Initialize index into block
+    ldy #0
+    rts
+}
+
+; Uploads byte A to SPC and increments Y.  The low byte of Y must not change between calls,
+; as it is the index the SPC expects next.
+; Preserved: X
+.proc spc_upload_byte: a8, i16, keeps x {
+    sta APU1
+
+    ; Signal that it's ready
+    tya
+    sta APU0
+    iny
+
+    ; Wait for acknowledgement
+@wait:
+    cmp APU0
+    bne @wait
+    rts
+}
+
+; Starts executing at SPC addr Y
+; Preserved: X, Y
+.proc spc_execute: a8, i16, keeps x, y {
+    sty APU2
+    stz APU1
+    lda APU0
+    clc
+    adc #$22
+    sta APU0
+
+    ; Wait for acknowledgement
+@wait:
+    cmp APU0
+    bne @wait
+    rts
+}
+
+; Writes high byte of X to SPC-700 DSP register in low byte of X
+.proc spc_write_dsp: i16, far, dbr* -> a8, i16 {
+    phx
+    ; Just do a two-byte upload to $00F2-$00F3, so we set the DSP address, then write the
+    ; byte into that.
+    ldy #$00F2
+    jsr spc_begin_upload
+    pla
+    jsr spc_upload_byte         ; low byte of X to $F2
+    pla
+    jsr spc_upload_byte         ; high byte of X to $F3
+    rtl
+}
+
+; Boots the sound CPU: uploads the sound driver to its RAM and starts it.
+.proc spc_boot_apu: i16, far, dbr* -> a8, i16 {
+    jsr spc_wait_boot
+
+    ; Upload the driver to SPC RAM where it runs
+    ldy #__SPCIMAGE_RUN__
+    jsr spc_begin_upload
+@next_byte:
+    tyx
+    lda f:__SPCIMAGE_LOAD__,x
+    jsr spc_upload_byte
+    cpy #__SPCIMAGE_SIZE__
+    bne @next_byte
+    ldy #spc_entry
+    jsr spc_execute
+    rtl
+}

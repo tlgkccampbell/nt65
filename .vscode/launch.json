@@ -39,7 +39,7 @@
       "args": [
         "--new-window",
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
-        "${workspaceFolder}/examples/snes-hello"
+        "${workspaceFolder}/examples/lorom-template"
       ],
       "preLaunchTask": "build",
       "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],

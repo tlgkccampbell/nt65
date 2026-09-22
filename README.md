@@ -113,13 +113,15 @@ points it at another build.
 
 ## Examples
 
-[`examples/snes-hello`](examples/snes-hello) is a small SNES program: a backdrop colour mixed
-with the joypad.
+[`examples/lorom-template`](examples/lorom-template) is Damian Yerrick's LoROM template for
+the SNES ported to nt65: a character walking across a background, with a sound driver that
+stays hand-written ca65 for the SPC700 and links in beside the nt65 output.
 
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and
-a C compiler on the path — on Windows a MinGW gcc — and the extension needs Node.js. The
+a C compiler on the path — on Windows a MinGW gcc — the extension needs Node.js, and the
+example's asset conversion needs Python 3 with Pillow. The
 scripts run on Windows and on Linux; the corpus's shell scripts want a `sh`, which on Windows
 is Git Bash.
 

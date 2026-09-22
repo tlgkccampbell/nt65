@@ -502,7 +502,7 @@ file. Settings: `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues
 
 **Check.** A server test per kind, including each *absence* above (no hint on `.ensure`, none
 for a matching argument name, none on a line whose state did not change). A snapshot of
-`examples/snes-hello/src/main.nt65` with default settings, read by a person once: if it looks
+`examples/lorom-template/src/main.nt65` with default settings, read by a person once: if it looks
 busy, the defaults are wrong.
 
 #### H2. What this became: the output beside the source

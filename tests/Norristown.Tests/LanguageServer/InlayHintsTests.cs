@@ -241,7 +241,7 @@ public sealed class InlayHintsTests
     public async Task TheExampleWithTheDefaultsStillLooksLikeTheFile()
     {
         var timeout = TestContext.Current.CancellationToken;
-        var folder = Repo.Path("examples", "snes-hello");
+        var folder = Repo.Path("examples", "lorom-template");
         var file = Path.Combine(folder, "src", "main.nt65");
         var text = File.ReadAllText(file).ReplaceLineEndings("\n");
         var uri = new Uri(file).AbsoluteUri;
@@ -250,32 +250,31 @@ public sealed class InlayHintsTests
         await client.OpenAsync(uri, text);
         await client.NextDiagnosticsAsync(uri, timeout);
 
-        // Twenty hints in a hundred and seventy lines, every one on a line that moves the
-        // processor state and says so nowhere else, and nothing at all on the other hundred
-        // and fifty. Nothing else in the file earns one: its data is declared and not laid
-        // out, its constants are written as literals, and every branch reaches.
+        // Seventeen hints in a hundred and seventy-four lines: the lines that move the
+        // processor state and say so nowhere else, the calls that leave a width other than
+        // the one they were given, the one constant worked out from the settings, and the
+        // store before the loop head, where the widths of the first pass and the loop's own
+        // meet and A's is forgotten. Nothing else in the file earns one: its data is declared
+        // and not laid out, and every branch reaches.
         Assert.Equal(
             [
-                "27: xce native                         ; native, both widths 8",
-                "28: rep #$38 a16 i16                    ; a16, i16, binary mode",
-                "32: tcd dp = $0000                         ; D = $0000",
-                "34: plb dbr = $00                         ; B = $00",
-                "35: sep #$20 a8",
-                "45: rep #$20 a16",
+                "23: PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0) = 0",
+                "50: plb dbr = $80",
                 "52: sep #$20 a8",
-                "77: rep #$20 a16",
-                "82: sep #$20 a8",
-                "92: rep #$20 a16",
-                "114: sep #$20 a8",
-                "120: rep #$20 a16",
-                "131: sep #$20 a8",
-                "139: rep #$30 a16 i16",
-                "144: plb dbr = $00",
-                "146: tcd dp = $0000",
-                "147: sep #$20 a8",
-                "158: rep #$20 a16",
-                "160: plb dbr?",
-                "161: pld dp?",
+                "57: plb dbr?",
+                "74: plb dbr = $81",
+                "83: jsl spc_boot_apu → a8",
+                "86: jsl load_bg_tiles → a16           ; fill pattern table",
+                "87: jsl draw_bg → a8                 ; fill nametable",
+                "88: jsl load_player_tiles → a16",
+                "91: sep #$20 a8",
+                "133: rep #$30 a16",
+                "136: sta player_xlo a?",
+                "139: jsl move_player → a8 i8",
+                "142: rep #$30 a16 i16",
+                "144: jsl draw_player_sprite → a8",
+                "150: jsl ppu_clear_oam → a16",
+                "157: sep #$20 a8",
             ],
             Shown(text, await client.InlayHintsAsync(uri, 0, 400, timeout)));
     }
