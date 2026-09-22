@@ -16,14 +16,14 @@
 .cpu 65816
 
 .use snes::*
+.use spcimage::spc_entry
 
 .export spc_write_dsp, spc_boot_apu
 
-; The sound driver is hand-written ca65 for the SPC700, linked into ROM7 and copied to the
-; sound CPU's RAM by spc_boot_apu.  Its segment is in the sound CPU's address space, and
-; `.loadof`, `.runof` and `.spanof` say where ld65 loaded it, where it runs and how big it
-; is; the driver exports where to start it, which is an address in that space too.
-.import spc_entry: abs in SPCIMAGE
+; The sound driver is linked into ROM7 and copied to the sound CPU's RAM by spc_boot_apu.
+; Its segment is in the sound CPU's address space, and `.loadof`, `.runof` and `.spanof` say
+; where ld65 loaded it, where it runs and how big it is; where to start it, spc_entry, is an
+; address in that space too, which this code may pass on as a value and never call.
 
 .segment CODE2
 

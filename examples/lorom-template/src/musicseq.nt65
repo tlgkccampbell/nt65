@@ -1,0 +1,447 @@
+; Music data: the instruments, the songs' conductor tracks and their patterns.
+.module musicseq
+
+.cpu 65816
+
+.use pently::*
+
+.export music_inst_table, pently_songs, pently_patterns
+
+; The instruments, in the order of the instrument table.
+.enum Instrument {
+    kick
+    snare
+    hat
+    pling_8
+    pling_4
+    pling_2
+    bassguitar
+    bassclar
+    hornblat
+    xylshort
+    xylmed
+}
+
+; The patterns, in the order of the pattern table, which names each in the scope `music`.
+.enum Pattern {
+    sq1_0200
+    sq2_0200
+    bass_0200
+    drums_0200
+    round_clear_sq1
+    drum_0300
+    bass1_0300
+    bass2_0300
+    sq2_1_0300
+    sq1_1_0300
+    sq2_2_0300
+    sq1_0400
+    sq2_0400
+    drums_0400
+    drums_2_0400
+    sq1_1600
+    sq2_1600
+    tri_1600
+    drums_1600
+    sqloop_0500
+    triloop_0500
+    melody_0500
+    restore_vol
+}
+
+; The songs, in the order of the song table: song 0 is the one the driver starts.
+.enum Song {
+    song_0500
+    song_0200
+    song_0300
+    song_0400
+    round_clear
+    song_1600
+}
+
+; A drum pattern plays a middle C with the instrument a note names in place of its pitch.
+PD_KICK = Instrument::kick * 8
+PD_SNARE = Instrument::snare * 8
+PD_HAT = Instrument::hat * 8
+
+; Instrument format
+; $00: Left volume (bit 7-4) and right volume (bit 3-0),
+;      used for balance and panning
+; $01: Length of period in 16-sample units, or note 24 freq / 4186 Hz
+; $02: Sample number, in the driver's sample directory
+; $03: Attack and decay rates
+; $04: Sustain threshold and rate
+; $05-$07: Not used yet
+.macro inst(name: Instrument, lvol: const(0..15), rvol: const(0..15), freqscale: const(0..255), samplenum: const(0..7), attack: const(1..31), decay: const(16..31), sustain: const(0..31), sustainlevel: const(1..8)) {
+    .assert (attack & 1) == 1, "attack must be odd"
+    .assert * - music_inst_table == name * 8, "the instruments are in the order of Instrument"
+    .byte (lvol << 4) | rvol
+    .byte freqscale
+    .byte samplenum
+    .byte (attack >> 1) | ((decay >> 1) << 4)
+    .byte sustain | ((sustainlevel - 1) << 5)
+    .byte $00, $00, $00
+}
+
+; Conductor macros that name the song's patterns and instruments.
+.macro playPat(ch: const(0..NUM_CHANNELS - 1), pattern: Pattern, transpose: const(0..127), instrument: Instrument) {
+    .byte CON_PLAYPAT | ch, pattern, transpose, instrument
+}
+
+.macro playDrumPat(ch: const(0..NUM_CHANNELS - 1), pattern: Pattern) {
+    .byte CON_PLAYPAT | ch, pattern, $80, $80
+}
+
+; A pattern command: the instrument the channel's notes play from here on.
+.macro instrument(instrument: Instrument) {
+    .byte INSTRUMENT, instrument
+}
+
+.segment SPCIMAGE
+
+; Music data ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; TODO: Make a version of pentlyas.py that can output this format
+
+.data music_inst_table {
+    ;     name         lv  rv frq smp att dec sus lvl
+    inst!(kick,        11, 10,  3,  6, 31, 17,  0,  8)
+    inst!(snare,       10, 15,  3,  7, 31, 17,  0,  8)
+    inst!(hat,          3,  5,  3,  5, 31, 17,  0,  8)
+    inst!(pling_8,      3, 10,  1,  0, 31, 19, 15,  2)
+    inst!(pling_4,      7,  7,  1,  1, 31, 19, 15,  2)
+    inst!(pling_2,      9,  6,  1,  2, 31, 17, 15,  2)
+    inst!(bassguitar,  12, 12,  1,  4, 31, 17, 15,  8)
+    inst!(bassclar,    12, 12,  1,  2, 21, 21, 27,  4)
+    inst!(hornblat,     3,  9,  1,  0, 21, 21, 27,  4)
+    inst!(xylshort,    10,  6,  1,  2, 31, 23, 20,  2)
+    inst!(xylmed,      10,  6,  1,  2, 31, 19, 17,  2)
+}
+
+.data pently_patterns: .addr[] {
+    .each Pattern, p {
+        music::p
+    }
+}
+
+.data pently_songs: .addr[] {
+    .each Song, song {
+        music::song
+    }
+}
+
+.scope music {
+
+    ;____________________________________________________________________
+    ; 2am theme
+    ; This is the famous first eight bars of the second movement of
+    ; Beethoven's "Pathetique" done in 9/8 like ACWW 2am.
+
+    .data song_0200 {
+        setTempo!(300)
+        playPat!(0, sq1_0200, 24, pling_4)
+        playPat!(1, sq2_0200, 24, pling_4)
+        playPat!(2, bass_0200, 12, pling_4)
+        waitRows!(36)
+        playDrumPat!(3, drums_0200)
+        waitRows!(144)
+        dalSegno!()
+    }
+
+    .data sq1_0200 {
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_FS|D_D4
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_FS|D_D4
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_FS|D_D4
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_FS|D_D4
+        .byte REST|D_D8, N_A|D_D4, REST|D_D8, N_B|D_D8, N_DSH|D_D8
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_GS|D_D4
+        .byte REST|D_D8, N_GS|D_D4, REST|D_D8, N_GS|D_D4
+        .byte REST|D_D8, N_A|D_D4, REST|D_D8, N_E|D_D4
+        .byte REST|D_D8, N_FS|D_D4, REST|D_D8, N_D|D_D4
+        .byte REST|D_D8, N_D|D_D4, REST|D_D8, N_CS|D_D4
+        .byte PATEND
+    }
+
+    .data sq2_0200 {
+        .byte REST|D_D8, N_CSH|D_D4, REST|D_D8, N_B|D_D4
+        .byte REST|D_D8, N_CSH|D_D4, REST|D_D8, N_B|D_D4
+        .byte N_CSH|D_2, REST, N_B|D_2, REST
+        .byte N_EH|D_2, N_TIE, REST|D_D4, N_DH|D_D8
+        .byte N_CSH|D_4, N_TIE, N_EH|D_4, N_AH|D_D8, N_BH|D_D4
+        .byte N_EH|D_2, N_TIE, REST|D_D4, N_FH|D_D8
+        .byte N_FSH|D_2, REST, N_B|D_D4, N_CSH|D_8, N_DH
+        .byte N_EH|D_2, REST, N_AS|D_2, REST
+        .byte N_DH|D_2, REST, N_CSH|D_8, N_B|D_D8, N_A|D_D8, N_GS
+        .byte N_B|D_2, REST, N_A|D_2, REST
+        .byte PATEND
+    }
+
+    .data bass_0200 {
+        .byte N_A|D_2, REST, N_G|D_2, REST
+        .byte N_A|D_2, REST, N_G|D_2, REST
+        .byte N_A|D_2, REST, N_G|D_2, REST
+        .byte N_A|D_2, REST, N_G|D_2, REST
+        .byte N_FS|D_2, REST, N_B|D_2, REST
+        .byte N_E|D_2, REST, N_E|D_2, REST
+        .byte N_DH|D_2, REST, N_DH|D_2, REST
+        .byte N_CSH|D_2, REST, N_FS|D_2, REST
+        .byte N_B|D_2, REST, N_E|D_2, REST
+        .byte N_A|D_2, REST, N_A|D_2, REST
+        .byte PATEND
+    }
+
+    .data drums_0200 {
+        .byte PD_KICK|D_D8, PD_HAT|D_8, PD_HAT, PD_HAT|D_D8, PD_SNARE|D_D8, PD_HAT|D_D4
+        .byte PATEND
+    }
+
+    ;____________________________________________________________________
+    ; 3am theme
+
+    .data song_0300 {
+        playDrumPat!(0, drum_0300)
+        playPat!(3, bass1_0300, 0, bassclar)
+        waitRows!(48)
+        playPat!(1, sq2_1_0300, 24, pling_2)
+        playPat!(2, sq1_1_0300, 24, pling_2)
+        waitRows!(96)
+        playPat!(3, bass2_0300, 0, bassclar)
+        playPat!(1, sq2_2_0300, 19, pling_2)
+        playPat!(2, sq2_2_0300, 24, pling_2)
+        waitRows!(96)
+        stopPat!(1)
+        stopPat!(2)
+        dalSegno!()
+    }
+
+    .data drum_0300 {
+        .byte PD_KICK|D_D8, PD_HAT|D_8, PD_KICK, PD_SNARE|D_8, PD_HAT, PD_HAT|D_8, PD_HAT
+        .byte PD_KICK|D_8, PD_HAT, PD_HAT|D_8, PD_KICK, PD_SNARE|D_D8, PD_HAT|D_D8
+        .byte PATEND
+    }
+
+    .data bass1_0300 {
+        .byte N_E|D_8, REST, N_EH|D_8, N_E|D_8, REST, N_EH|D_8, REST|D_8
+        .byte REST|D_D2
+        .byte N_A|D_8, REST, N_AH|D_8, N_A|D_8, REST, N_AH|D_8, REST|D_8
+        .byte REST|D_D2
+        .byte PATEND
+    }
+
+    .data bass2_0300 {
+        .byte N_B|D_8, REST, N_BH|D_8, N_B|D_8, REST, N_BH|D_8, REST|D_8
+        .byte REST|D_D2
+        .byte N_A|D_8, REST, N_AH|D_8, N_A|D_8, REST, N_AH|D_8, REST|D_8
+        .byte REST|D_D2
+        .byte PATEND
+    }
+
+    .data sq2_1_0300 {
+        .byte N_EH|D_D2, N_DH|D_D2, N_CSH|D_D2, N_CH|D_D2
+        .byte PATEND
+    }
+
+    .data sq1_1_0300 {
+        .byte N_CSH|D_D2, N_B|D_D2, N_A|D_D2, N_G|D_D2
+        .byte PATEND
+    }
+
+    .data sq2_2_0300 {
+        .byte REST|D_D8, N_B|D_4, N_TIE, N_DH|D_4
+        .byte N_CSH|D_4, N_TIE, N_A|D_4, N_TIE|D_D8
+        .byte REST|D_D8, N_A|D_4, N_TIE, N_CH|D_4
+        .byte N_B|D_4, N_TIE, N_G|D_4, N_TIE|D_D8
+        .byte PATEND
+    }
+
+    ;____________________________________________________________________
+    ; 4am theme
+
+    .data song_0400 {
+        setTempo!(300)
+        playPat!(1, sq1_0400, 12, xylshort)
+        playPat!(2, sq2_0400, 12, xylshort)
+        waitRows!(6)
+        playDrumPat!(0, drums_0400)
+        waitRows!(84)
+        playDrumPat!(0, drums_2_0400)
+        segno!()
+        waitRows!(192)
+        dalSegno!()
+    }
+
+    .data sq1_0400 {
+        instrument!(xylshort)
+        .byte N_FH|D_8, N_EH|D_4, N_DH|D_D8
+        instrument!(hornblat)
+        .byte N_DH, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_EH|D_8, N_DH|D_4, N_CH|D_D8
+        instrument!(hornblat)
+        .byte N_CH, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_DH|D_8, N_CH|D_4, N_BB|D_D8
+        instrument!(hornblat)
+        .byte N_BB, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_BB|D_8, N_A|D_4, N_G|D_D8
+        instrument!(hornblat)
+        .byte N_DH, REST|D_2, REST|D_D4
+        .byte PATEND
+    }
+
+    .data sq2_0400 {
+        instrument!(xylshort)
+        .byte N_AH|D_D8, N_GH|D_D8, N_FH|D_D8
+        instrument!(hornblat)
+        .byte N_FH, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_GH|D_D8, N_FH|D_D8, N_EH|D_D8
+        instrument!(hornblat)
+        .byte N_EH, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_FH|D_D8, N_EH|D_D8, N_DH|D_D8
+        instrument!(hornblat)
+        .byte N_DH, REST|D_2, REST|D_D4
+        instrument!(xylshort)
+        .byte N_DH|D_D8, N_CH|D_D8, N_B|D_D8
+        instrument!(hornblat)
+        .byte N_GH, REST|D_2, REST|D_D4
+        .byte PATEND
+    }
+
+    ; The second drum pattern plays a bar of its own and goes on into the first.
+    .data drums_2_0400 {
+        .byte PD_KICK|D_D8, PD_HAT|D_D8, PD_SNARE|D_D8, PD_HAT|D_8, PD_KICK
+    }
+
+    .data drums_0400 {
+        .byte PD_KICK|D_D8, PD_HAT|D_D4, PD_HAT|D_8, PD_KICK
+        .byte PATEND
+    }
+
+    ;____________________________________________________________________
+    ; 5am theme
+    ;
+    ; This is melodies from the third movement of Beethoven's
+    ; "Pathetique" combined with rhythms from ACPG 5am.
+    ; At the time I transcribed this, there were about 400 bytes left
+    ; in the RODATA segment of the PRG ROM.
+
+    .data song_0500 {
+        setTempo!(300)
+        playDrumPat!(0, drum_0300)
+        playPat!(2, sqloop_0500, 24, pling_4)
+        playPat!(1, sqloop_0500, 19, pling_4)
+        waitRows!(96)
+        playPat!(4, melody_0500, 24, xylmed)
+        playPat!(3, triloop_0500, 0, bassclar)
+        waitRows!(190)
+        playPat!(2, restore_vol, 24, pling_4)
+        playPat!(1, restore_vol, 19, pling_4)
+        waitRows!(2)
+        stopPat!(3)
+        stopPat!(4)
+        dalSegno!()
+    }
+
+    .data restore_vol {
+        chVolume!(4)
+        .byte REST|D_D2
+        .byte PATEND
+    }
+
+    .data sqloop_0500 {
+        instrument!(pling_4)
+        .byte REST|D_8, N_E, N_A|D_8, N_B, N_CSH|D_8, REST, N_DH|D_8, N_B|D_8
+        instrument!(pling_8)
+        .byte REST, N_E, N_A|D_8, N_B, N_CSH|D_8, REST, N_DH|D_8, N_B|D_8
+        .byte REST, REST|D_D4, REST|D_1
+        instrument!(pling_4)
+        .byte REST|D_8, N_E, N_A|D_8, N_B, N_CSH|D_8, REST, N_B|D_8, N_G|D_8
+        instrument!(pling_8)
+        .byte REST, N_E, N_A|D_8, N_B, N_CSH|D_8, REST, N_B|D_8, N_G|D_8
+        .byte REST, REST|D_D4
+        chVolume!(3)
+        .byte REST|D_1
+        .byte PATEND
+    }
+
+    .data triloop_0500 {
+        .byte N_A|D_8, REST, N_G|D_8, N_FS|D_8, REST, N_G|D_8, REST|D_2
+        .byte N_FS|D_8, REST, N_F|D_8, N_E|D_8
+        .byte REST|D_D8, REST|D_4, REST|D_1
+        .byte PATEND
+    }
+
+    .data melody_0500 {
+        .byte REST, N_CSH, N_DH, N_CSH, N_B, N_CSH, N_DH, N_EH|D_8, N_EH|D_8, N_EH|D_D8
+        .byte REST|D_8, REST|D_1, REST|D_1
+        .byte N_EH|D_8, N_CSH, N_DH|D_8, N_EH|D_D8, N_DH, N_CSH|D_8, N_FSH|D_D8
+        .byte REST|D_8, REST|D_1, REST|D_1
+        .byte N_CSH|D_8, N_A, N_B|D_8, N_CSH|D_D8, N_B, N_A|D_8, N_DH|D_D8
+        .byte REST|D_8, REST|D_1, REST|D_1
+        .byte N_E|D_D8, N_E|D_D8, N_E|D_D8, N_E|D_8, N_A|D_D8
+        .byte REST|D_8, REST|D_1, REST|D_1
+        .byte PATEND
+    }
+
+    ;____________________________________________________________________
+    ; round cleared theme
+
+    .data round_clear {
+        setTempo!(60)
+        playPat!(0, round_clear_sq1, 12, pling_2)
+        playPat!(1, round_clear_sq1, 21, pling_2)
+        waitRows!(5)
+        fine!()
+    }
+
+    .data round_clear_sq1 {
+        .byte N_F, N_A, N_G, N_C|D_8
+        .byte PATEND
+    }
+
+    ;____________________________________________________________________
+    ; 4pm theme
+
+    .data song_1600 {
+        setTempo!(300)
+        playPat!(1, sq1_1600, 12, xylshort)
+        playPat!(2, sq2_1600, 12, xylshort)
+        playPat!(3, tri_1600, 0, bassguitar)
+        playDrumPat!(0, drums_1600)
+        waitRows!(48)
+        dalSegno!()
+    }
+
+    .data sq2_1600 {
+        .byte N_FH|D_D8, N_CH|D_D8, N_FH|D_D8, N_CH|D_8, N_FH
+        .byte N_EBH|D_D8, N_BB|D_D8, N_EBH|D_D8, N_BB|D_8, N_EBH
+        .byte N_FH|D_D8, N_DH|D_D8, N_FH|D_D8, N_DH|D_8, N_FH
+        .byte N_GH|D_D8, N_DH|D_D8, N_GH|D_D8, N_CH|D_8, N_GH
+        .byte PATEND
+    }
+
+    .data sq1_1600 {
+        .byte N_AH|D_D4, N_AH|D_D4
+        .byte N_AH|D_D4, N_AH|D_D4
+        .byte N_AH|D_D4, N_AH|D_4, N_TIE, N_AH
+        .byte N_BBH|D_D4, N_BBH|D_4, N_TIE, N_BBH
+        .byte PATEND
+    }
+
+    .data tri_1600 {
+        .byte N_FH|D_8, REST|D_D4, N_CH|D_8, REST|D_8
+        .byte N_EBH|D_8, REST|D_D4, N_BB|D_8, REST|D_8
+        .byte N_DH|D_8, REST|D_D4, N_A|D_8, REST|D_8
+        .byte N_GH|D_8, REST|D_D4, N_CH|D_8, REST|D_8
+        .byte PATEND
+    }
+
+    .data drums_1600 {
+        .byte PD_KICK|D_D8, PD_SNARE|D_D8, PD_HAT|D_8, PD_KICK, PD_SNARE|D_D8
+        .byte PATEND
+    }
+
+}

@@ -617,7 +617,7 @@ public sealed partial class CodeLayout
                 Catalogue.BranchOperandNotTaken.Says(mnemonic.Text));
             return;
         }
-        if (WrittenPrefix(operand) is not null)
+        if (Operands.WrittenPrefix(operand) is not null)
         {
             Report(operand,
                 Catalogue.TransferPrefix.Says(mnemonic.Text));

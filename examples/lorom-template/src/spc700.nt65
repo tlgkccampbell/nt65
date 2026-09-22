@@ -1,0 +1,299 @@
+; The SPC700's instructions as macros over data, in the 65C02 spelling blargg's macro pack for
+; ca65 gave them: `lda!({#5})` is `mov a, #5`, `lda!({(ptr),y})` is `mov a, [ptr]+y`, and
+; `jsr!(f)` is `call !f`.  Each emits the instruction's bytes, so a routine for the sound CPU
+; is a data block of calls, and each checks the operand it is given: the modes a parameter
+; lists are the ones the SPC700 has for it, and a direct-page address is reached through
+; the direct page unless the operand says `a:`.
+;
+; Only the instructions the sound driver uses are here, with every mode each has in this
+; spelling.  The SPC700 instructions with no 65C02 spelling are written as the SPC700 writes
+; them: `mul!()` is `mul ya` and `xcn!()` is `xcn a`, and `stya!(d)` is `movw d, ya`.
+.module spc700
+
+.cpu 65816
+
+.export ora, and, eor, cmp, adc, sbc, lda, sta, ldx, ldy, sty, cpx, cpy
+.export asl, rol, lsr, ror, dec, inc, inx, iny, dex, dey
+.export tax, tay, txa, tya, pha, pla, clc, sec, nop, rts, mul, xcn, stya
+.export jsr, jmp, bpl, bmi, bcc, bcs, bne, beq, bra
+
+; The accumulator's arithmetic and logic, and mov a: `op a, src` in each of its modes, from
+; the opcode of the group, which the modes add to.
+.macro alu(group: const, src: operand(imm, abs, absx, absy, indx, indy)) {
+    .if .mode(src) == imm {
+        .byte group + $08, .exprof(src)
+    } .elseif .mode(src) == indx {
+        .byte group + $07, .exprof(src)              ; [d+x]
+    } .elseif .mode(src) == indy {
+        .byte group + $17, .exprof(src)              ; [d]+y
+    } .elseif .mode(src) == absy {
+        .byte group + $16                            ; !a+y
+        .word .exprof(src)
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .if .mode(src) == absx {
+            .byte group + $14, .exprof(src)          ; d+x
+        } .else {
+            .byte group + $04, .exprof(src)          ; d
+        }
+    } .elseif .mode(src) == absx {
+        .byte group + $15                            ; !a+x
+        .word .exprof(src)
+    } .else {
+        .byte group + $05                            ; !a
+        .word .exprof(src)
+    }
+}
+
+.macro ora(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($00, src)
+}
+
+.macro and(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($20, src)
+}
+
+.macro eor(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($40, src)
+}
+
+.macro cmp(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($60, src)
+}
+
+.macro adc(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($80, src)
+}
+
+.macro sbc(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($A0, src)
+}
+
+.macro lda(src: operand(imm, abs, absx, absy, indx, indy)) {
+    alu!($E0, src)
+}
+
+; mov dest, a, which has the modes of mov a, src other than an immediate.
+.macro sta(dest: operand(abs, absx, absy, indx, indy)) {
+    alu!($C0, dest)
+}
+
+; mov x, src and mov y, src: an immediate, a direct-page or absolute address, and a
+; direct-page address indexed by the other register.
+.macro ldx(src: operand(imm, abs, zpy)) {
+    .if .mode(src) == imm {
+        .byte $CD, .exprof(src)
+    } .elseif .mode(src) == absy {
+        .byte $F9, .exprof(src)                      ; d+y
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $F8, .exprof(src)
+    } .else {
+        .byte $E9
+        .word .exprof(src)
+    }
+}
+
+.macro ldy(src: operand(imm, abs, zpx)) {
+    .if .mode(src) == imm {
+        .byte $8D, .exprof(src)
+    } .elseif .mode(src) == absx {
+        .byte $FB, .exprof(src)                      ; d+x
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $EB, .exprof(src)
+    } .else {
+        .byte $EC
+        .word .exprof(src)
+    }
+}
+
+; mov dest, y: a direct-page or absolute address, or a direct-page address plus x.
+.macro sty(dest: operand(abs, zpx)) {
+    .if .mode(dest) == absx {
+        .byte $DB, .exprof(dest)                     ; d+x
+    } .elseif .addrsize(.exprof(dest)) == 1 {
+        .byte $CB, .exprof(dest)
+    } .else {
+        .byte $CC
+        .word .exprof(dest)
+    }
+}
+
+; cmp x, src and cmp y, src.
+.macro cpx(src: operand(imm, abs)) {
+    .if .mode(src) == imm {
+        .byte $C8, .exprof(src)
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $3E, .exprof(src)
+    } .else {
+        .byte $1E
+        .word .exprof(src)
+    }
+}
+
+.macro cpy(src: operand(imm, abs)) {
+    .if .mode(src) == imm {
+        .byte $AD, .exprof(src)
+    } .elseif .addrsize(.exprof(src)) == 1 {
+        .byte $7E, .exprof(src)
+    } .else {
+        .byte $5E
+        .word .exprof(src)
+    }
+}
+
+; The shifts, the rotates, inc and dec, on the accumulator or in memory, from the opcode of
+; the group: `{a}`, a direct-page or absolute address, or a direct-page address plus x.
+.macro rmw(group: const, dest: operand(acc, abs, zpx)) {
+    .if .mode(dest) == acc {
+        .byte group + $1C
+    } .elseif .mode(dest) == absx {
+        .byte group + $1B, .exprof(dest)             ; d+x
+    } .elseif .addrsize(.exprof(dest)) == 1 {
+        .byte group + $0B, .exprof(dest)             ; d
+    } .else {
+        .byte group + $0C                            ; !a
+        .word .exprof(dest)
+    }
+}
+
+.macro asl(dest: operand(acc, abs, zpx)) {
+    rmw!($00, dest)
+}
+
+.macro rol(dest: operand(acc, abs, zpx)) {
+    rmw!($20, dest)
+}
+
+.macro lsr(dest: operand(acc, abs, zpx)) {
+    rmw!($40, dest)
+}
+
+.macro ror(dest: operand(acc, abs, zpx)) {
+    rmw!($60, dest)
+}
+
+.macro dec(dest: operand(acc, abs, zpx)) {
+    rmw!($80, dest)
+}
+
+.macro inc(dest: operand(acc, abs, zpx)) {
+    rmw!($A0, dest)
+}
+
+.macro inx() {
+    .byte $3D
+}
+
+.macro iny() {
+    .byte $FC
+}
+
+.macro dex() {
+    .byte $1D
+}
+
+.macro dey() {
+    .byte $DC
+}
+
+.macro tax() {
+    .byte $5D                                        ; mov x, a
+}
+
+.macro tay() {
+    .byte $FD                                        ; mov y, a
+}
+
+.macro txa() {
+    .byte $7D                                        ; mov a, x
+}
+
+.macro tya() {
+    .byte $DD                                        ; mov a, y
+}
+
+.macro pha() {
+    .byte $2D                                        ; push a
+}
+
+.macro pla() {
+    .byte $AE                                        ; pop a
+}
+
+.macro clc() {
+    .byte $60                                        ; clrc
+}
+
+.macro sec() {
+    .byte $80                                        ; setc
+}
+
+.macro nop() {
+    .byte $00
+}
+
+.macro rts() {
+    .byte $6F                                        ; ret
+}
+
+; mul ya: y times a, into ya.
+.macro mul() {
+    .byte $CF
+}
+
+; xcn a: swaps the accumulator's nibbles.
+.macro xcn() {
+    .byte $9F
+}
+
+; movw d, ya: a to d and y to d + 1, in one instruction.
+.macro stya(dest: operand(zp)) {
+    .byte $DA, .exprof(dest)
+}
+
+; call !a.
+.macro jsr(target) {
+    .byte $3F
+    .word target
+}
+
+; jmp !a.
+.macro jmp(target) {
+    .byte $5F
+    .word target
+}
+
+; A branch to within 128 bytes either way of the instruction that follows it.
+.macro branch(opcode: const, target) {
+    .byte opcode, <(target - @next)
+@next:
+    .assert target - @next >= -128 && target - @next <= 127, "branch out of range"
+}
+
+.macro bpl(target) {
+    branch!($10, target)
+}
+
+.macro bmi(target) {
+    branch!($30, target)
+}
+
+.macro bcc(target) {
+    branch!($90, target)
+}
+
+.macro bcs(target) {
+    branch!($B0, target)
+}
+
+.macro bne(target) {
+    branch!($D0, target)
+}
+
+.macro beq(target) {
+    branch!($F0, target)
+}
+
+; bra, which the SPC700 has and the 6502 does not.
+.macro bra(target) {
+    branch!($2F, target)
+}

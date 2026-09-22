@@ -161,8 +161,8 @@ public static class ArgumentChecks
         if (mode is not ("abs" or "absx" or "absy"))
             return (mode, null);
         var direct = "zp" + mode[3..];
-        if (operand is AbsoluteOperandSyntax { Prefix: { } prefix })
-            return prefix.Name.Text.Equals("z", StringComparison.OrdinalIgnoreCase) ? (mode, direct) : (mode, null);
+        if (Operands.WrittenPrefix(operand) is { } written)
+            return written == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
         var expression = operand is AbsoluteOperandSyntax absolute ? absolute.Address : operand;
         return model.AddressSizeOf(expression, segment, at) == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
     }

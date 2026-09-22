@@ -423,19 +423,29 @@ internal sealed partial class Evaluator
     /// <c>operand</c> parameter, it is the expression inside what that one was passed. Null when
     /// <c>p</c> is not an <c>operand</c> parameter.
     /// </summary>
-    internal SyntaxNode? ExprOf(CallExpressionSyntax call)
+    internal SyntaxNode? ExprOf(CallExpressionSyntax call) =>
+        OperandOf(call) is { } operand ? Operands.ExpressionOf(operand) : null;
+
+    /// <summary>
+    /// The operand the call passed as <c>p</c> in <c>.exprof(p)</c>, followed through another
+    /// macro's <c>operand</c> parameter to what that one was passed; null when <c>p</c> is not an
+    /// <c>operand</c> parameter.
+    /// </summary>
+    internal SyntaxNode? OperandOf(CallExpressionSyntax call)
     {
         var arguments = call.Arguments.Arguments;
         if (arguments.Count != 1)
             return null;
+        SyntaxNode? operand = null;
         SyntaxNode? inner = arguments[0];
         for (var steps = 0; steps < 64 && inner is NameExpressionSyntax; steps++)
         {
-            if (Argument(inner) is not { Parameter.Kind: ParameterKind.Operand, Operand: { } operand })
-                return steps == 0 ? null : inner;
-            inner = Operands.ExpressionOf(operand);
+            if (Argument(inner) is not { Parameter.Kind: ParameterKind.Operand, Operand: { } passed })
+                break;
+            operand = passed;
+            inner = Operands.ExpressionOf(passed);
         }
-        return inner;
+        return operand;
     }
 
     /// <summary>

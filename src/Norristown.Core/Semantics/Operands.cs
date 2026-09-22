@@ -1,3 +1,4 @@
+using Norristown.Processor;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -75,6 +76,23 @@ public static class Operands
         AccumulatorOperandSyntax => null,
         _ => operand,
     };
+
+    /// <summary>
+    /// The address-size prefix written in the operand, which wins over everything. <c>d:</c>
+    /// makes a direct operand of a constant address, reached through the direct page.
+    /// </summary>
+    public static AddressSize? WrittenPrefix(SyntaxNode operand)
+    {
+        if (operand is not AbsoluteOperandSyntax { Prefix: { } prefix })
+            return null;
+        return char.ToLowerInvariant(prefix.Name.Text[0]) switch
+        {
+            'z' or 'd' => AddressSize.ZeroPage,
+            'a' => AddressSize.Absolute,
+            'f' => AddressSize.Far,
+            _ => null,
+        };
+    }
 
     /// <summary>Whether a call is <c>.exprof</c>.</summary>
     public static bool IsExprOf(CallExpressionSyntax call) =>

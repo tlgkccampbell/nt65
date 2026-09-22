@@ -1,0 +1,111 @@
+; The music format the sound driver plays, S-Pently: a conductor track per song that starts
+; patterns on channels, and patterns of notes.  The driver reads it, and the music module
+; writes it with the conductor's commands, the notes and durations here.
+.module pently
+
+.cpu 65816
+
+; The driver's eight channels, and how loud a channel may be set: an instrument's volume, 0
+; to 15, times the channel's times 2 must fit the S-DSP's signed volume.
+.export NUM_CHANNELS = 8
+.export MAX_CHANNEL_VOLUME = 4
+
+; Conductor commands.
+.export CON_PLAYPAT = $00       ; low bits: channel; next: pattern, transpose, instrument
+.export CON_WAITROWS = $20      ; next: number of rows to wait minus 1
+.export CON_FINE = $21          ; stop music now
+.export CON_SEGNO = $22         ; set loop point
+.export CON_DALSEGNO = $23      ; jump to loop point. if no point was set, jump to start of song.
+.export CON_NOTEON = $28
+.export CON_SETTEMPO = $30      ; low bits: bits 10-8 of tempo in rows/min; next: bits 7-0 of tempo
+
+; Pattern commands: a note is its pitch times 8, ored with a duration.
+.export N_C  =  0*8
+.export N_CS =  1*8
+.export N_D  =  2*8
+.export N_DS =  3*8
+.export N_E  =  4*8
+.export N_F  =  5*8
+.export N_FS =  6*8
+.export N_G  =  7*8
+.export N_GS =  8*8
+.export N_A  =  9*8
+.export N_AS = 10*8
+.export N_B  = 11*8
+.export N_DB = N_CS
+.export N_EB = N_DS
+.export N_GB = N_FS
+.export N_AB = N_GS
+.export N_BB = N_AS
+.export N_CH  = N_C  + 12*8
+.export N_CSH = N_CS + 12*8
+.export N_DBH = N_DB + 12*8
+.export N_DH  = N_D  + 12*8
+.export N_DSH = N_DS + 12*8
+.export N_EBH = N_EB + 12*8
+.export N_EH  = N_E  + 12*8
+.export N_FH  = N_F  + 12*8
+.export N_FSH = N_FS + 12*8
+.export N_GBH = N_GB + 12*8
+.export N_GH  = N_G  + 12*8
+.export N_GSH = N_GS + 12*8
+.export N_ABH = N_AB + 12*8
+.export N_AH  = N_A  + 12*8
+.export N_ASH = N_AS + 12*8
+.export N_BBH = N_BB + 12*8
+.export N_BH  = N_B  + 12*8
+.export N_CHH = N_CH + 12*8
+.export N_TIE = 25*8
+.export REST  = 26*8
+.export INSTRUMENT = $D8
+.export ARPEGGIO = $D9
+.export LEGATO_OFF = $DA
+.export LEGATO_ON = $DB
+.export TRANSPOSE = $DC
+.export GRACE = $DD
+.export VIBRATO = $DE
+.export CHVOLUME = $DF
+.export PATEND = $FF
+
+; The default duration is one row (a sixteenth note in the tracker).
+; OR the pitch with one of these constants.
+.export D_8  = 1
+.export D_D8 = 2
+.export D_4  = 3
+.export D_D4 = 4
+.export D_2  = 5
+.export D_D2 = 6
+.export D_1  = 7
+
+.export stopPat, waitRows, fine, segno, dalSegno, setTempo, chVolume
+
+; Conductor macros.  Starting a pattern names the song's patterns and instruments, so those
+; are the music's own.
+.macro stopPat(ch: const(0..NUM_CHANNELS - 1)) {
+    .byte CON_PLAYPAT | ch, 255, 0, 0
+}
+
+.macro waitRows(n: const(1..256)) {
+    .byte CON_WAITROWS, n - 1
+}
+
+.macro fine() {
+    .byte CON_FINE
+}
+
+.macro segno() {
+    .byte CON_SEGNO
+}
+
+.macro dalSegno() {
+    .byte CON_DALSEGNO
+}
+
+.macro setTempo(rowsPerMin: const(0..$7FF)) {
+    .byte CON_SETTEMPO | >rowsPerMin, <rowsPerMin
+}
+
+; A pattern command: the channel's volume from here on.
+.macro chVolume(volume: const(0..MAX_CHANNEL_VOLUME)) {
+    .byte CHVOLUME, volume
+}

@@ -59,11 +59,19 @@ internal sealed partial class Evaluator
             {
                 return;
             }
-            // `.exprof(p)` is as wide as the expression it stands for.
+            // `.exprof(p)` is as wide as the prefix the operand was written with, `{a:ptr}`, or
+            // else as the expression it stands for.
             if (node is CallExpressionSyntax exprOf && Operands.IsExprOf(exprOf))
             {
-                if (ExprOf(exprOf) is { } inner)
+                if (OperandOf(exprOf) is { } operand && Operands.WrittenPrefix(operand) is { } written)
+                {
+                    named = true;
+                    widest = Widest(widest, written);
+                }
+                else if (ExprOf(exprOf) is { } inner)
+                {
                     Walk(inner);
+                }
                 return;
             }
             if (node is CurrentAddressExpressionSyntax)

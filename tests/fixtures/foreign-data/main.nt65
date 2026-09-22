@@ -48,6 +48,7 @@
     .data main {
         mov_a!({#5})
         mov_a!(count)
+        mov_a!({a:count})       ; a prefix says how wide the operand is
         mov_a!(table)
         call!(update)
     @loop:

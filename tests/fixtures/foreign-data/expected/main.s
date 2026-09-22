@@ -27,23 +27,27 @@ main__image__main:
     ; mov_a!(count)  main.nt65:50
     .byte $e4, (count)
     ; end of mov_a!
-    ; mov_a!(table)  main.nt65:51
+    ; mov_a!({a:count})  main.nt65:51
+    .byte $e5
+    .word (count)
+    ; end of mov_a!
+    ; mov_a!(table)  main.nt65:52
     .byte $e5
     .word (table)
     ; end of mov_a!
-    ; call!(update)  main.nt65:52
+    ; call!(update)  main.nt65:53
     .byte $3f
     .word main__image__update
     ; end of call!
 image__main__loop:
-    ; inc!(count)  main.nt65:54
+    ; inc!(count)  main.nt65:55
     .byte $ab, (count)
     ; end of inc!
-    ; bne!(@loop)  main.nt65:55
+    ; bne!(@loop)  main.nt65:56
     .byte $d0, <(image__main__loop - (* + 1))
     ; end of bne!
 main__image__update:
-    ; call!(main)  main.nt65:58
+    ; call!(main)  main.nt65:59
     .byte $3f
     .word main__image__main
     ; end of call!

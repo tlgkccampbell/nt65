@@ -42,17 +42,10 @@ try {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
 
-    # The sound driver is SPC700 code: ca65 assembles it with no CPU of its own, through the
-    # macro pack in spc/, and it is linked into the last bank for spc_boot_apu to upload.
-    New-Item -ItemType Directory -Force build/spc | Out-Null
-    foreach ($source in 'spcimage', 'musicseq') {
-        & $Ca65 --cpu none -g -I spc "spc/$source.s" -o "build/spc/$source.o"
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    }
-
+    # The sound driver and the music are linked into the last bank for spc_boot_apu to upload.
     $objects = @(
         'build/header.o', 'build/init.o', 'build/main.o', 'build/bg.o', 'build/player.o'
-        'build/ppuclear.o', 'build/blarggapu.o', 'build/spc/spcimage.o', 'build/spc/musicseq.o'
+        'build/ppuclear.o', 'build/blarggapu.o', 'build/spcimage.o', 'build/musicseq.o'
     )
     & $Ld65 -C lorom256k.cfg -o build/lorom-template.sfc --dbgfile build/lorom-template.dbg -m build/lorom-template.map @objects
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -67,9 +60,10 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     # The same driver as an SPC700 state file, for music players.
-    & $Ca65 -g spcfile/spcheader.s -o build/spc/spcheader.o
+    New-Item -ItemType Directory -Force build/spcfile | Out-Null
+    & $Ca65 -g spcfile/spcheader.s -o build/spcfile/spcheader.o
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & $Ld65 -C spcfile/spc.cfg -o build/lorom-template.spc -m build/lorom-template.spc.map build/spc/spcheader.o build/spc/spcimage.o build/spc/musicseq.o
+    & $Ld65 -C spcfile/spc.cfg -o build/lorom-template.spc -m build/lorom-template.spc.map build/spcfile/spcheader.o build/spcimage.o build/musicseq.o
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {

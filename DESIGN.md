@@ -2480,8 +2480,10 @@ inputs changed.
   passed as `p`: `5` for `{#5}`, `ptr` for `{(ptr),y}`, `buf` for `{buf,x}`. It is an
   expression, so it stands wherever one may, a data directive included, and
   `.addrsize(.exprof(p))` tells a direct-page argument from an absolute one, which `.mode`
-  does not. That is what a macro needs to emit another processor's instructions as data,
-  one macro per instruction rather than one per addressing mode:
+  does not. An argument written with a prefix is as wide as the prefix says: `{a:ptr}` is
+  absolute wherever `ptr` is declared. That is what a macro needs to emit another
+  processor's instructions as data, one macro per instruction rather than one per addressing
+  mode:
 
 ```nt65
 .macro mov_a(src: operand(imm, zp, abs)) {

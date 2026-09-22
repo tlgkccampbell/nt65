@@ -102,23 +102,6 @@ public sealed partial class CodeLayout
         return false;
     }
 
-    /// <summary>
-    /// The address-size prefix written in the operand, which wins over everything. <c>d:</c>
-    /// makes a direct operand of a constant address, reached through the direct page.
-    /// </summary>
-    private static AddressSize? WrittenPrefix(SyntaxNode operand)
-    {
-        if (operand is not AbsoluteOperandSyntax { Prefix: { } prefix })
-            return null;
-        return char.ToLowerInvariant(prefix.Name.Text[0]) switch
-        {
-            'z' or 'd' => AddressSize.ZeroPage,
-            'a' => AddressSize.Absolute,
-            'f' => AddressSize.Far,
-            _ => null,
-        };
-    }
-
     private static string Spell(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "direct-page",
@@ -143,7 +126,7 @@ public sealed partial class CodeLayout
             // A prefix wins, so one the only form cannot honour is an error rather than a
             // prefix quietly dropped: `lda z:($10),y` has no direct form, and ca65 would read
             // the text as `(dp),y`. `d:` says what is wrong with it where its offset is worked out.
-            if (WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
+            if (Operands.WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
                 && Instructions.Width(candidates[0]) is { } width && width != written
                 && !Instructions.IsControlTransfer(mnemonic.Text))
             {
@@ -155,7 +138,7 @@ public sealed partial class CodeLayout
             // takes a zero-page pointer, and an absolute one would be cut to its low byte by
             // the linker, if it noticed at all. A control transfer's target is checked for
             // distance instead.
-            else if (WrittenPrefix(operand) is null
+            else if (Operands.WrittenPrefix(operand) is null
                 && !(Instructions.IsControlTransfer(mnemonic.Text) && candidates[0] is AddressingMode.Absolute
                     or AddressingMode.Long or AddressingMode.Relative or AddressingMode.RelativeLong
                     or AddressingMode.DirectRelative)
@@ -170,7 +153,7 @@ public sealed partial class CodeLayout
             return candidates[0];
         }
 
-        var required = WrittenPrefix(operand) ?? (Expression(operand) is { } expression
+        var required = Operands.WrittenPrefix(operand) ?? (Expression(operand) is { } expression
             ? model.AddressSizeOf(expression, segment, expansion)
             : null);
 
@@ -211,7 +194,7 @@ public sealed partial class CodeLayout
                 or AddressingMode.AbsoluteIndirectLong
             && Instructions.IsControlTransfer(mnemonic.Text))
         {
-            if (WrittenPrefix(operand) is not null)
+            if (Operands.WrittenPrefix(operand) is not null)
             {
                 Report(operand,
                     Catalogue.TransferPrefix.Says(mnemonic.Text));

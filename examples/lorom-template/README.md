@@ -17,7 +17,8 @@ Concepts illustrated:
 - sprite drawing and animation, with horizontal flipping
 - conversion of graphics to tile data in both 2-bit-per-pixel and 4-bit-per-pixel formats
 - booting the S-SMP (SPC700 audio CPU)
-- writing SPC700 code using 65C02 syntax using blargg's [SPC700 macro pack] for ca65
+- writing SPC700 code in 65C02 syntax, as nt65 macros after blargg's [SPC700 macro pack] for
+  ca65
 - use of SPC700 timers to control playback
 - reading a sequence of pitches and converting them to frequencies
 - compression of sampled sound to BRR format
@@ -73,19 +74,24 @@ last.
   is what lets nt65 check every direct-page operand, every absolute operand and every call
   against D, B and the bank the code runs in. `lorom256k.cfg` places the segments for ld65.
 
-### The SPC700 side, in ca65
+### The SPC700 side, in nt65 data
 
-nt65 has no SPC700, so the sound driver stays what it was upstream: hand-written ca65,
-assembled with no CPU through blargg's macro pack, and linked into the image the way any
-hand-written ca65 links with nt65 output. `nt65.json` puts its segment, `SPCIMAGE`, in the
-sound CPU's address space, so `spc_boot_apu` names where ld65 loaded it, where it runs and how
-big it is with `.loadof`, `.runof` and `.spanof`, and imports the entry point it exports as a
-name in that segment, which nt65 lets it pass as a value and refuses as a call target.
+nt65 has no SPC700 and needs none. The sound driver is data: each routine is a `.data` block of
+calls to macros that emit SPC700 instructions, as upstream's was ca65 with no CPU and blargg's
+macro pack. `nt65.json` puts its segments, `SPCIMAGE` and `SPCZEROPAGE`, in the sound CPU's
+address space, which holds data and no 65816 instructions. `spc_boot_apu` names where ld65
+loaded the image, where it runs and how big it is with `.loadof`, `.runof` and `.spanof`, and
+passes the driver's entry point on as a value, which nt65 refuses as a call target.
 
-- `spc/spcimage.s`: the sound driver.
-- `spc/musicseq.s`: the music.
-- `spc/spc-ca65.inc`, `spc/spc-65c02.inc`, `spc/pentlyseq.inc`: the macro pack that produces
-  SPC700 instructions from 65C02 syntax, and the music sequence macros.
+- `src/spc700.nt65`: the SPC700 instructions the driver uses, as macros in 65C02 spelling:
+  `lda!({(ptr),y})` is `mov a, [ptr]+y`. Each parameter lists the addressing modes the SPC700
+  has for it, and an address is reached through the direct page when its declaration puts it
+  there.
+- `src/spcimage.nt65`: the sound driver, S-Pently.
+- `src/pently.nt65`: the music format: the conductor's commands, the notes and durations.
+- `src/musicseq.nt65`: the music. The instruments, patterns and songs are enums, the macros
+  that name them take their members, and the pattern and song tables are built from the enums
+  in their order. `inst!` checks each instrument's volumes and envelope against their ranges.
 - `spcfile/spcheader.s` and `spcfile/spc.cfg`: the header and linker configuration for the
   `.spc` state file, which the `.sfc` does not use.
 
@@ -123,6 +129,10 @@ The linked image is byte for byte the upstream build, except where the following
 - The unused `irqstub` is gone; the IRQ vector reaches `irq_handler` directly, as upstream.
 - `USE_AUDIO`, `USE_PSEUDOHIRES` and `USE_INTERLACE` are `.config` settings, set with
   `nt65 build -D main::USE_AUDIO=0`.
+- The sound driver reaches its direct-page variables through the direct page wherever it
+  names them. Upstream's macro pack took a plain name as absolute unless `<` said otherwise,
+  and the driver wrote `<` in some places and not others; the image is 80 bytes smaller for
+  it. The two variables it declared and never used are gone.
 
 ## Greets
 
