@@ -1,0 +1,39 @@
+; CHRGET: fetch the next character of the program. It runs in zero page, where init copies
+; it from the ROM, so that it can keep TXTPTR, the text pointer, as the operand of its own
+; `lda` and step it with one `inc`.
+.module chrget: placed
+
+.use defines::*
+.use misc3::*
+
+.segment CHRGET
+.export .proc CHRGET {
+    inc TXTPTR
+    bne CHRGOT
+    inc TXTPTR+1
+    .fallthrough CHRGOT
+}
+
+; The character TXTPTR points at, again.
+.export .proc CHRGOT {
+    lda $EA60                           ; its operand is TXTPTR
+    .if KBD {
+        jsr LF430
+    }
+    cmp #$3A
+    bcs CHRGOT2::L4058
+    .fallthrough CHRGOT2
+}
+
+.export .proc CHRGOT2 {
+    cmp #$20
+    beq CHRGET
+    sec
+    sbc #$30
+    sec
+    sbc #$D0
+    L4058:
+    rts
+}
+
+.export TXTPTR = CHRGOT + 1

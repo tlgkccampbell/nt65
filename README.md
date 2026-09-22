@@ -117,6 +117,10 @@ points it at another build.
 the SNES ported to nt65: a character walking across a background, with a sound driver that
 stays hand-written ca65 for the SPC700 and links in beside the nt65 output.
 
+[`examples/msbasic`](examples/msbasic) is Michael Steil's msbasic ported to nt65: one source
+that builds ten versions of Microsoft BASIC for the 6502, from Commodore's first PET BASIC to
+Intellivision's Keyboard Component, each byte for byte the original ROM.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

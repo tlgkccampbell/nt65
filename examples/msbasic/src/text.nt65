@@ -1,0 +1,11 @@
+; Text as BASIC's tables hold it.
+.module text
+
+; A text with bit 7 set on its last byte, which is how BASIC finds where each one ends
+; (by Tom Greene).
+.export .func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+
+; Text with bit 7 set on every byte, as the Apple writes it.
+.export .charmap high {
+    ' '..'~' = $A0
+}

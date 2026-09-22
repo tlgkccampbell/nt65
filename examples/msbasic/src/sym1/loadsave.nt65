@@ -1,0 +1,92 @@
+.module sym1::loadsave: placed
+
+.use defines::*
+.use text::*
+.use chrget::*
+.use flow1::*
+.use print::*
+.use program::*
+.use zeropage::*
+
+.segment CODE
+.if SYM1 {
+
+    .export .proc SAVE {
+        beq L2739
+        sta P1L
+        jsr CHRGET
+        bne NULL-1
+
+        lda TXTTAB
+        ldy TXTTAB+1
+        sta P2L
+        sty P2H
+
+        lda VARTAB
+        ldy VARTAB+1
+        sta P3L
+        sty P3H
+
+        ldy #$80
+        jsr USR2
+        bcs LC6DD
+        lda #<SAVED
+        ldy #>SAVED
+        jmp STROUT
+    }
+
+    .data LOADED {
+        .byte "LOADED", CR, LF
+        .byte "OK", CR, LF, 0
+    }
+
+    .data SAVED {
+        .byte "SAVED", CR, LF, 0
+    }
+
+    .export .proc LOAD {
+        beq L2739
+        sta $A64E
+        jsr CHRGET
+        bne L2738
+        ldy #$80
+        jsr USR3
+        bcs LC6EF
+
+        lda #<LOADED
+        ldy #>LOADED
+        jsr STROUT
+
+        ldx P3L
+        ldy P3H
+        txa
+        stx VARTAB
+        sty VARTAB+1
+        jmp FIX_LINKS
+
+    }
+
+    .proc LC6DD {
+        lda #<BAD_SAVE
+        ldy #>BAD_SAVE
+        jmp STROUT
+    }
+
+    .data BAD_SAVE {
+        .byte htasc("BAD SAVE")
+        .byte CR, LF, 0
+    }
+    .proc LC6EF {
+        lda #<BAD_LOAD
+        ldy #>BAD_LOAD
+        jsr STROUT
+        jsr SCRTCH
+        jmp RESTART
+
+    }
+
+    .data BAD_LOAD {
+        .byte htasc("BAD LOAD")
+        .byte CR, LF, 0
+    }
+}

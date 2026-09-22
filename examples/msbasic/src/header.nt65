@@ -1,0 +1,55 @@
+; What a machine expects at the very start of the ROM: an entry point, or a table of them.
+.module header: placed
+
+.use defines::*
+.use extra::*
+.use init::*
+.use misc2::*
+.use array::*
+.use program::*
+.use flow1::*
+
+.segment HEADER
+.if W65C816SXB {
+    ; The monitor starts BASIC with the 65816 in native mode, and BASIC runs in emulation mode.
+    .export .proc START {
+        sec
+        .byte $FB                       ; xce, which the 6502 this is built for does not have
+        .next @emulation
+    @emulation:
+        jsr INITUSBSERIAL
+        ; Give the monitor a moment to connect the terminal before anything is printed.
+        ldy #0
+        ldx #0
+    @loop:
+        dex
+        bne @loop
+        dey
+        bne @loop
+        jmp COLD_START
+    }
+}
+
+.if KBD {
+    .export .proc START {
+        jmp LE68C
+    }
+    .data UNKNOWN: .byte $00, $13, $56
+}
+
+.if AIM65 {
+    .export .proc COLD {
+        jmp COLD_START
+    }
+    .export .proc WARM {
+        jmp RESTART
+    }
+    ; for machine code that converts between numbers and FAC
+    .export .data CONVERSIONS: .addr AYINT, GIVAYF
+}
+
+.if SYM1 {
+    .export .proc START {
+        jmp PR_WRITTEN_BY
+    }
+}

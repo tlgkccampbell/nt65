@@ -1,0 +1,12 @@
+; The W65C816SXB has nowhere to load a program from or save one to.
+.module w65c816sxb::loadsave: placed
+
+.use defines::*
+
+.segment CODE
+.if W65C816SXB {
+    .export .proc LOAD {
+        rts
+    }
+    .export .proc SAVE = LOAD
+}

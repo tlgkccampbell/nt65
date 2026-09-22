@@ -1,0 +1,182 @@
+.module inline: placed
+
+.use defines::*
+.use extra::*
+.use print::*
+.use zeropage::*
+
+.segment CODE
+
+.if !CONFIG_NO_INPUTBUFFER_ZP {
+    .proc L2420 {
+        .if OSI {
+            jsr OUTDO
+        }
+        dex
+        .if AIM65 {
+            bmi L2423
+            jsr PSLS
+            jmp INLIN::INLIN2
+            LB35F:
+            jsr OUTDO
+        } .else {
+            bpl INLIN::INLIN2
+        }
+        L2423:
+        .if OSI {
+            jsr OUTDO
+        }
+        jsr CRDO
+        .fallthrough INLIN
+    }
+}
+
+; ----------------------------------------------------------------------------
+; READ A LINE, AND STRIP OFF SIGN BITS
+; ----------------------------------------------------------------------------
+.if APPLE {
+    .export .proc INLIN {
+        ldx #$DD
+        INLIN1:
+        .export INLIN1
+        stx $33
+        jsr L2900
+        cpx #$EF
+        bcs L0C32
+        ldx #$EF
+        L0C32:
+        lda #$00
+        sta INPUTBUFFER,x
+        ldx #<(INPUTBUFFER-1)
+        ldy #>(INPUTBUFFER-1)
+        rts
+    }
+} .elseif !KBD {
+    .export .proc INLIN {
+        ldx #$00
+        INLIN2:
+        jsr GETLN
+        .if AIM65 {
+            cmp #$1A
+            bne INLINAIM
+            jsr DU13
+            jmp INLIN
+            INLINAIM:
+        }
+        .if !CONFIG_NO_LINE_EDITING {
+            cmp #$07
+            beq L2443
+        }
+        cmp #$0D
+        beq L2453
+        .if !CONFIG_NO_LINE_EDITING {
+            cmp #$20
+            .if AIM65 {
+                bcc L244E
+            } .else {
+                bcc INLIN2
+            }
+            .if MICROTAN {
+                cmp #$80
+            } .else {
+                .if AIM65 {
+                    cmp #$7F
+                    beq L2420
+                }
+                cmp #$7D
+            }
+            bcs INLIN2
+            cmp #$40                    ; @
+            .if AIM65 {
+                beq L2420::LB35F
+            } .else {
+                beq L2420::L2423
+                .if MICROTAN {
+                    cmp #$7F            ; DEL
+                } .else {
+                    cmp #$5F            ; _
+                }
+                beq L2420
+            }
+            L2443:
+            .if MICROTAN {
+                cpx #$4F
+            } .else {
+                cpx #$47
+            }
+            bcs L244C
+        }
+        sta INPUTBUFFER,x
+        inx
+        .if OSI || AIM65 {
+            .byte $2C                   ; bit abs: skips the `lda` below
+            .next L244E
+        } .else {
+            bne INLIN2
+        }
+        L244C:
+        .if !CONFIG_NO_LINE_EDITING {
+            lda #$07                    ; BEL
+            L244E:
+            jsr OUTDO
+            bne INLIN2
+        }
+        L2453:
+        jmp L29B9
+    }
+}
+
+.if APPLE {
+    .export .proc RDKEY {
+        jsr LFD0C
+        and #$7F
+        .fallthrough CTRL_O
+    }
+} .elseif !KBD {
+    .export .proc GETLN {
+        .if CONFIG_FILE {
+            jsr CHRIN
+            ldy CURDVC
+            bne CTRL_O::L2465
+        } .else {
+            jsr MONRDKEY
+        }
+        .if OSI {
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            and #$7F
+        }
+        .fallthrough CTRL_O
+    }
+}
+
+.if !KBD {
+    ; ^O, or ^T on the SYM-1, turns output off, and on again
+    .proc CTRL_O {
+        .if SYM1 {
+            cmp #$14
+        } .else {
+            cmp #$0F
+        }
+        bne L2465
+        pha
+        lda Z14
+        eor #$FF
+        sta Z14
+        pla
+        L2465:
+        rts
+    }
+}

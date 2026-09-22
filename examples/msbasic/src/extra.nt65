@@ -1,0 +1,42 @@
+.module extra: placed
+
+.use defines::*
+
+.segment EXTRA
+
+.place kim::extra
+
+.place cbm1::patches
+
+.place kbd::extra
+
+.place apple::extra
+
+.place microtan::extra
+
+.place aim65::extra
+
+.if SYM1 {
+    .res 3
+}
+
+.place w65c816sxb::extra
+
+.if AIM65 {
+    .export .use aim65::extra::LCFFA
+}
+.if APPLE {
+    .export .use apple::extra::{INLINX, L2900, PLT, USR_FUNC}
+}
+.if CONFIG_CBM1_PATCHES {
+    .export .use cbm1::patches::{PATCH1, PATCH2, PATCH3, PATCH4, PATCH5, PATCH6}
+}
+.if KBD {
+    .export .use kbd::extra::{LFE0B, LFFD6, LFFED, OUTQUESSP, PSAV, VLOD, VSAV}
+}
+.if MICROTAN {
+    .export .use microtan::extra::{LE21C, LE21F}
+}
+.if W65C816SXB {
+    .export .use w65c816sxb::extra::INITUSBSERIAL
+}

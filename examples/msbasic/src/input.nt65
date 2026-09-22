@@ -1,0 +1,511 @@
+.module input: placed
+
+.use defines::*
+.use array::*
+.use kbd::extra::*
+.use inline::*
+.use chrget::*
+.use error::*
+.use eval::*
+.use extra::*
+.use float::*
+.use flow1::*
+.use flow2::*
+.use misc1::*
+.use misc2::*
+.use misc3::*
+.use print::*
+.use program::*
+.use string::*
+.use var::*
+.use zeropage::*
+
+.segment CODE
+
+; ----------------------------------------------------------------------------
+; INPUT CONVERSION ERROR:  ILLEGAL CHARACTER
+; IN NUMERIC FIELD.  MUST DISTINGUISH
+; BETWEEN INPUT, READ, AND GET
+; ----------------------------------------------------------------------------
+.proc INPUTERR {
+    lda INPUTFLG
+    beq RESPERR  ; INPUT
+    .if !SYM1 {
+        .if !CONFIG_SMALL {
+            .if CONFIG_10A {
+                ; without this, it treats GET errors
+                ; like READ errors
+                bmi L2A63  ; READ
+                ldy #$FF  ; GET
+                bne L2A67
+                L2A63:
+            }
+        }
+    }
+    .if CONFIG_CBM1_PATCHES {
+        jsr PATCH5
+        nop
+    } .else {
+        lda Z8C
+        ldy Z8C+1
+    }
+    L2A67:
+    sta CURLIN
+    sty CURLIN+1
+    .fallthrough SYNERR4
+}
+.export .proc SYNERR4 {
+    jmp SYNERR
+}
+
+.proc RESPERR {
+    .if CONFIG_FILE {
+        lda CURDVC
+        beq LCA8F
+        ldx #ERR_BADDATA
+        jmp ERROR
+        LCA8F:
+    }
+    lda #<ERRREENTRY
+    ldy #>ERRREENTRY
+    jsr STROUT
+    lda OLDTEXT
+    ldy OLDTEXT+1
+    sta TXTPTR
+    sty TXTPTR+1
+    RTS20:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; "GET" STATEMENT
+; ----------------------------------------------------------------------------
+.if SYM1 {
+    .export .proc GET = IQERR               ; the SYM-1 has no GET
+} .elseif !CONFIG_SMALL {
+    .export .proc GET {
+        jsr ERRDIR
+        ; CBM: if GET#, then switch input
+        .if CONFIG_FILE {
+            cmp #'#'
+            bne LCAB6
+            jsr CHRGET
+            jsr GETBYT
+            lda #','
+            jsr SYNCHR
+            jsr CHKIN
+            stx CURDVC
+            LCAB6:
+        }
+        ldx #<(INPUTBUFFER+1)
+        ldy #>(INPUTBUFFER+1)
+        .if CONFIG_NO_INPUTBUFFER_ZP {
+            lda #$00
+            sta INPUTBUFFER+1
+        } .else {
+            sty INPUTBUFFER+1
+        }
+        lda #$40
+        jsr PROCESS_INPUT_LIST
+        ; CBM: if GET#, then switch input back
+        .if CONFIG_FILE {
+            ldx CURDVC
+            bne LCAD6::LCAD8
+        }
+        rts
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "INPUT#" STATEMENT
+; ----------------------------------------------------------------------------
+.if CONFIG_FILE {
+    .export .proc INPUTH {
+        jsr GETBYT
+        lda #$2C
+        jsr SYNCHR
+        jsr CHKIN
+        stx CURDVC
+        jsr L2A9E
+        .fallthrough LCAD6
+    }
+
+    .export .proc LCAD6 {
+        lda CURDVC
+        LCAD8:
+        jsr CLRCH
+        ldx #$00
+        stx CURDVC
+        rts
+    }
+}
+
+.if SYM1 {
+    .proc LC9B0 {
+        jsr OUTQUES                     ; '?'
+        jsr OUTSP
+        jmp L2A9E
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "INPUT" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc INPUT {
+    .if !KBD {
+        lsr Z14
+    }
+    .if AIM65 {
+        lda PRIFLG
+        sta ZBE
+        jsr LCFFA
+    }
+    cmp #$22
+    .if SYM1 {
+        bne LC9B0
+    } .else {
+        bne L2A9E
+    }
+    jsr STRTXT
+    lda #$3B
+    jsr SYNCHR
+    jsr STRPRT
+    .fallthrough L2A9E
+}
+.proc L2A9E {
+    jsr ERRDIR
+    lda #$2C
+    sta INPUTBUFFER-1
+    LCAF8:
+    .if APPLE {
+        jsr INLINX
+    } .elseif SYM1 {
+        jsr INLIN
+    } .else {
+        jsr NXIN
+    }
+    .if KBD {
+        bmi READ::L2ABE
+    } .else {
+        .if CONFIG_FILE {
+            lda CURDVC
+            beq LCB0C
+            lda Z96
+            and #$02
+            beq LCB0C
+            jsr LCAD6
+            jmp DATA
+            LCB0C:
+        }
+        lda INPUTBUFFER
+        bne READ::L2ABE
+        .if CONFIG_FILE {
+            lda CURDVC
+            bne LCAF8
+        }
+        .if CONFIG_CBM1_PATCHES {
+            jmp PATCH1
+        } .else {
+            clc
+            jmp CONTROL_C_TYPED
+        }
+    }
+    .fallthrough NXIN
+}
+
+.export .proc NXIN {
+    .if KBD {
+        jsr INLIN
+        bmi RESPERR::RTS20
+        pla
+        jmp LE86C
+    } .else {
+        .if CONFIG_FILE {
+            lda CURDVC
+            bne LCB21
+        }
+        jsr OUTQUES  ; '?'
+        jsr OUTSP
+        LCB21:
+        jmp INLIN
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "GETC" STATEMENT
+; ----------------------------------------------------------------------------
+.if KBD {
+    .export .proc GETC {
+        jsr CONINT
+        jsr LF43D
+        jmp LE664
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "READ" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc READ {
+    ldx DATPTR
+    ldy DATPTR+1
+    .if CONFIG_NO_READ_Y_IS_ZERO_HACK {
+        ; AppleSoft II, too
+        lda #$98                        ; READ
+        .byte $2C                       ; bit abs: skips the `lda` below
+        .next PROCESS_INPUT_LIST
+        L2ABE:
+        lda #$00                        ; INPUT
+    } .else {
+        .byte $A9                       ; lda #, whose operand is the `tya` below: $98 for READ
+        .next PROCESS_INPUT_LIST
+        L2ABE:
+        tya                             ; INPUT: Y is zero
+    }
+    .fallthrough PROCESS_INPUT_LIST
+}
+
+; ----------------------------------------------------------------------------
+; PROCESS INPUT LIST
+;
+; (Y,X) IS ADDRESS OF INPUT DATA STRING
+; (A) = VALUE FOR INPUTFLG:  $00 FOR INPUT
+;                                 $40 FOR GET
+;                                $98 FOR READ
+; ----------------------------------------------------------------------------
+.proc PROCESS_INPUT_LIST {
+    sta INPUTFLG
+    stx INPTR
+    sty INPTR+1
+    PROCESS_INPUT_ITEM:
+    jsr PTRGET
+    sta FORPNT
+    sty FORPNT+1
+    lda TXTPTR
+    ldy TXTPTR+1
+    sta TXPSV
+    sty TXPSV+1
+    ldx INPTR
+    ldy INPTR+1
+    stx TXTPTR
+    sty TXTPTR+1
+    jsr CHRGOT
+    bne INSTART
+    bit INPUTFLG
+    .if !CONFIG_SMALL {  ; GET
+        .if !SYM1 {
+            bvc L2AF0
+            .if MICROTAN {
+                jsr MONRDKEY2
+            } .elseif AIM65 {
+                jsr MONRDKEY2
+            } .else {
+                jsr MONRDKEY
+            }
+            .if CONFIG_IO_MSB {
+                and #$7F
+            }
+            sta INPUTBUFFER
+            ; BUG: The beq/bne L2AF8 below is supposed
+            ; to be always taken. For this to happen,
+            ; the last load must be a 0 for beq
+            ; and != 0 for bne. The original Microsoft
+            ; code had ldx/ldy/bne here, which was only
+            ; correct for a non-ZP INPUTBUFFER. Commodore
+            ; fixed it in CBMBASIC V1 by swapping the
+            ; ldx and the ldy. It was broken on KIM,
+            ; but okay on APPLE and CBM2, because
+            ; these used a non-ZP INPUTBUFFER.
+            ; Microsoft fixed this somewhere after KIM
+            ; and before MICROTAN, by using beq instead
+            ; of bne in the ZP case.
+            .if CBM1 {
+                ldy #>(INPUTBUFFER-1)
+                ldx #<(INPUTBUFFER-1)
+            } .else {
+                ldx #<(INPUTBUFFER-1)
+                ldy #>(INPUTBUFFER-1)
+            }
+            .if CONFIG_2 && (!CONFIG_NO_INPUTBUFFER_ZP) {
+                beq L2AF8  ; always
+            } .else {
+                bne L2AF8  ; always
+            }
+            L2AF0:
+        }
+    }
+    bmi FINDATA
+    .if CONFIG_FILE {
+        lda CURDVC
+        bne LCB64
+    }
+    .if KBD {
+        jsr OUTQUESSP
+    } .else {
+        jsr OUTQUES
+    }
+    LCB64:
+    jsr NXIN
+    L2AF8:
+    stx TXTPTR
+    sty TXTPTR+1
+
+    ; ----------------------------------------------------------------------------
+    INSTART:
+    jsr CHRGET
+    bit VALTYP
+    bpl L2B34
+    .if !CONFIG_SMALL {  ; GET
+        .if !SYM1 {
+            bit INPUTFLG
+            bvc L2B10
+            .if CONFIG_CBM1_PATCHES {
+                lda #$00
+                jsr PATCH4
+                nop
+            } .else {
+                inx
+                stx TXTPTR
+                lda #$00
+                sta CHARAC
+                beq L2B1C
+            }
+            L2B10:
+        }
+    }
+    sta CHARAC
+    cmp #$22
+    beq L2B1C::L2B1D
+    lda #$3A
+    sta CHARAC
+    lda #$2C
+    .fallthrough L2B1C
+}
+.export .proc L2B1C {
+    clc
+    L2B1D:
+    sta ENDCHR
+    lda TXTPTR
+    ldy TXTPTR+1
+    adc #$00
+    bcc L2B28
+    iny
+    L2B28:
+    jsr STRLT2
+    jsr POINT
+    .if CONFIG_SMALL {
+        jsr LETSTRING
+    } .else {
+        jsr PUTSTR
+    }
+    jmp L2B34::INPUT_MORE
+}
+; ----------------------------------------------------------------------------
+.proc L2B34 {
+    jsr FIN
+    .if CONFIG_SMALL {
+        jsr SETFOR
+    } .else {
+        lda VALTYP+1
+        jsr LET2
+    }
+    ; ----------------------------------------------------------------------------
+    INPUT_MORE:
+    jsr CHRGOT
+    beq L2B48
+    cmp #$2C
+    beq L2B48
+    jmp INPUTERR
+    L2B48:
+    lda TXTPTR
+    ldy TXTPTR+1
+    sta INPTR
+    sty INPTR+1
+    lda TXPSV
+    ldy TXPSV+1
+    sta TXTPTR
+    sty TXTPTR+1
+    jsr CHRGOT
+    beq INPDONE
+    jsr CHKCOM
+    jmp PROCESS_INPUT_LIST::PROCESS_INPUT_ITEM
+}
+; ----------------------------------------------------------------------------
+.proc FINDATA {
+    jsr DATAN
+    iny
+    tax
+    bne L2B7C
+    ldx #ERR_NODATA
+    iny
+    lda (TXTPTR),y
+    beq GERR
+    iny
+    lda (TXTPTR),y
+    sta Z8C
+    iny
+    lda (TXTPTR),y
+    iny
+    sta Z8C+1
+    L2B7C:
+    lda (TXTPTR),y
+    tax
+    jsr ADDON
+    cpx #$83
+    bne FINDATA
+    jmp PROCESS_INPUT_LIST::INSTART
+}
+; ---NO MORE INPUT REQUESTED------
+.proc INPDONE {
+    lda INPTR
+    ldy INPTR+1
+    ldx INPUTFLG
+    .if CONFIG_SMALL && (!CONFIG_11) {
+        beq L2B94  ; INPUT
+    } .else {
+        bpl L2B94  ; INPUT or GET
+    }
+    jmp SETDA
+    L2B94:
+    ldy #$00
+    .if AIM65 {
+        jsr LB8B1
+    }
+    lda (INPTR),y
+    beq L2BA1
+    .if CONFIG_FILE {
+        lda CURDVC
+        bne L2BA1
+    }
+    lda #<ERREXTRA
+    ldy #>ERREXTRA
+    jmp STROUT
+    L2BA1:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+.export .data ERREXTRA {
+    .if KBD {
+        .byte "?Extra"
+    } .else {
+        .byte "?EXTRA IGNORED"
+    }
+    .byte $0D, $0A, $00
+}
+.export .data ERRREENTRY {
+    .if KBD {
+        .byte "What?"
+    } .else {
+        .byte "?REDO FROM START"
+    }
+    .byte $0D, $0A, $00
+}
+.if KBD {
+    .export .data LEA30 {
+        .byte "B"
+        .byte $FD
+        .byte "GsBASIC"
+        .byte $00, $1B, $0D, $13
+        .byte " BASIC"
+    }
+}

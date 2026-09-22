@@ -1,0 +1,33 @@
+; LOAD and SAVE. On some machines they are the monitor's routines, and on the others
+; BASIC's own, one module per machine.
+.module loadsave: placed
+
+.use defines::*
+
+.segment CODE
+.place apple::loadsave
+.place kim::loadsave
+.place microtan::loadsave
+.place aim65::loadsave
+.place sym1::loadsave
+
+.if CBM1 || CBM2 {
+    .export .proc LOAD = $FFD5
+    .export .proc SAVE = $FFD8
+} .elseif OSI {
+    .export .proc LOAD = $FFF4
+    .export .proc SAVE = $FFF7
+} .elseif AIM65 {
+    .export .proc LOAD = $E848
+    .export .use aim65::loadsave::SAVE
+} .elseif APPLE {
+    .export .use apple::loadsave::{LOAD, SAVE}
+} .elseif KIM {
+    .export .use kim::loadsave::{LOAD, SAVE}
+} .elseif MICROTAN {
+    .export .use microtan::loadsave::{LOAD, SAVE}
+} .elseif SYM1 {
+    .export .use sym1::loadsave::{LOAD, SAVE}
+} .elseif W65C816SXB {
+    .export .use w65c816sxb::loadsave::{LOAD, SAVE}
+}

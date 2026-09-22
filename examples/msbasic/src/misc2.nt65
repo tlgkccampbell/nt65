@@ -1,0 +1,202 @@
+.module misc2: placed
+
+.use defines::*
+.use chrget::*
+.use array::*
+.use error::*
+.use eval::*
+.use float::*
+.use flow2::*
+.use program::*
+.use string::*
+.use token::*
+.use var::*
+.use zeropage::*
+
+.segment CODE
+
+; ----------------------------------------------------------------------------
+; "FRE" FUNCTION
+;
+; COLLECTS GARBAGE AND RETURNS # BYTES OF MEMORY LEFT
+; ----------------------------------------------------------------------------
+.export .proc FRE {
+    lda VALTYP
+    beq L3188
+    jsr FREFAC
+    L3188:
+    jsr GARBAG
+    sec
+    lda FRETOP
+    sbc STREND
+    tay
+    lda FRETOP+1
+    sbc STREND+1
+    .fallthrough GIVAYF
+}
+; FALL INTO GIVAYF TO FLOAT THE VALUE
+; NOTE THAT VALUES OVER 32767 WILL RETURN AS NEGATIVE
+
+; ----------------------------------------------------------------------------
+; FLOAT THE SIGNED INTEGER IN A,Y
+; ----------------------------------------------------------------------------
+.export .proc GIVAYF {
+    ldx #$00
+    stx VALTYP
+    sta FAC+1
+    sty FAC+2
+    ldx #$90
+    jmp FLOAT1
+}
+.export .proc POS {
+    ldy POSX
+    .fallthrough SNGFLT
+}
+
+; ----------------------------------------------------------------------------
+; FLOAT (Y) INTO FAC, GIVING VALUE 0-255
+; ----------------------------------------------------------------------------
+.export .proc SNGFLT {
+    lda #$00
+    beq GIVAYF
+    .fallthrough ERRDIR
+}
+
+; ----------------------------------------------------------------------------
+; CHECK FOR DIRECT OR RUNNING MODE
+; GIVING ERROR IF DIRECT MODE
+; ----------------------------------------------------------------------------
+.export .proc ERRDIR {
+    ldx CURLIN+1
+    inx
+    bne RTS9
+    ldx #ERR_ILLDIR
+    .if CONFIG_2 {
+        .byte $2C
+        .next @past_LD288
+        LD288:
+        ldx #ERR_UNDEFFN
+    @past_LD288:
+    }
+    L31AF:
+    jmp ERROR
+}
+.export .proc DEF {
+    jsr FNC
+    jsr ERRDIR
+    jsr CHKOPN
+    lda #$80
+    sta SUBFLG
+    jsr PTRGET
+    jsr CHKNUM
+    jsr CHKCLS
+    lda #Token::EQUAL
+    jsr SYNCHR
+    .if !CONFIG_SMALL {
+        pha
+    }
+    lda VARPNT+1
+    pha
+    lda VARPNT
+    pha
+    lda TXTPTR+1
+    pha
+    lda TXTPTR
+    pha
+    jsr DATA
+    jmp L31F3::L3250
+}
+.proc FNC {
+    lda #Token::FN
+    jsr SYNCHR
+    ora #$80
+    sta SUBFLG
+    jsr PTRGET3
+    sta FNCNAM
+    sty FNCNAM+1
+    jmp CHKNUM
+}
+.export .proc L31F3 {
+    jsr FNC
+    lda FNCNAM+1
+    pha
+    lda FNCNAM
+    pha
+    jsr PARCHK
+    jsr CHKNUM
+    pla
+    sta FNCNAM
+    pla
+    sta FNCNAM+1
+    ldy #$02
+    .if !CONFIG_2 {
+        ldx #ERR_UNDEFFN
+    }
+    lda (FNCNAM),y
+    .if !CONFIG_2 {
+        beq ERRDIR::L31AF
+    }
+    sta VARPNT
+    tax
+    iny
+    lda (FNCNAM),y
+    .if CONFIG_2 {
+        beq ERRDIR::LD288
+    }
+    sta VARPNT+1
+    .if !CONFIG_SMALL {
+        iny
+    }
+    L3219:
+    lda (VARPNT),y
+    pha
+    dey
+    bpl L3219
+    ldy VARPNT+1
+    jsr STORE_FAC_AT_YX_ROUNDED
+    lda TXTPTR+1
+    pha
+    lda TXTPTR
+    pha
+    lda (FNCNAM),y
+    sta TXTPTR
+    iny
+    lda (FNCNAM),y
+    sta TXTPTR+1
+    lda VARPNT+1
+    pha
+    lda VARPNT
+    pha
+    jsr FRMNUM
+    pla
+    sta FNCNAM
+    pla
+    sta FNCNAM+1
+    jsr CHRGOT
+    beq L324A
+    jmp SYNERR
+    L324A:
+    pla
+    sta TXTPTR
+    pla
+    sta TXTPTR+1
+    L3250:
+    ldy #$00
+    pla
+    sta (FNCNAM),y
+    pla
+    iny
+    sta (FNCNAM),y
+    pla
+    iny
+    sta (FNCNAM),y
+    pla
+    iny
+    sta (FNCNAM),y
+    .if !CONFIG_SMALL {
+        pla
+        iny
+        sta (FNCNAM),y
+    }
+    rts
+}

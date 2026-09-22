@@ -119,3 +119,14 @@ foreach ($program in $programs) {
         Pop-Location
     }
 }
+
+# msbasic builds ten targets, each a configuration of one program, and checks each image
+# against the original ROM's hash; its own script knows the targets and the comparison.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+& (Join-Path $root 'examples/msbasic/build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $root 'examples/msbasic/build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'msbasic: a target failed or differs from its original' -ForegroundColor Red
+    exit 1
+}
+Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)

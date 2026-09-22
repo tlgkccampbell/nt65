@@ -1,0 +1,848 @@
+.module string: placed
+
+.use defines::*
+.use chrget::*
+.use array::*
+.use error::*
+.use eval::*
+.use float::*
+.use memory::*
+.use misc2::*
+.use program::*
+.use zeropage::*
+
+.segment CODE
+; ----------------------------------------------------------------------------
+; "STR$" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc STR {
+    jsr CHKNUM
+    ldy #$00
+    jsr FOUT1
+    pla
+    pla
+    .fallthrough LD353
+}
+.export .proc LD353 {
+    lda #<(STACK2-1)
+    ldy #>(STACK2-1)
+    .if AIM65 {                         ; the only one whose STACK2 is not the stack
+        bne STRLIT
+    } .else {
+        beq STRLIT
+    }
+    .fallthrough STRINI
+}
+
+; ----------------------------------------------------------------------------
+; GET SPACE AND MAKE DESCRIPTOR FOR STRING WHOSE
+; ADDRESS IS IN FAC+3,4 AND WHOSE LENGTH IS IN A-REG
+; ----------------------------------------------------------------------------
+.export .proc STRINI {
+    ldx FAC_LAST-1
+    ldy FAC_LAST
+    stx DSCPTR
+    sty DSCPTR+1
+    .fallthrough STRSPA
+}
+
+; ----------------------------------------------------------------------------
+; GET SPACE AND MAKE DESCRIPTOR FOR STRING WHOSE
+; ADDRESS IS IN Y,X AND WHOSE LENGTH IS IN A-REG
+; ----------------------------------------------------------------------------
+.proc STRSPA {
+    jsr GETSPA
+    stx FAC+1
+    sty FAC+2
+    sta FAC
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; BUILD A DESCRIPTOR FOR STRING STARTING AT Y,A
+; AND TERMINATED BY $00 OR QUOTATION MARK
+; RETURN WITH DESCRIPTOR IN A TEMPORARY
+; AND ADDRESS OF DESCRIPTOR IN FAC+3,4
+; ----------------------------------------------------------------------------
+.export .proc STRLIT {
+    ldx #$22
+    stx CHARAC
+    stx ENDCHR
+    .fallthrough STRLT2
+}
+
+; ----------------------------------------------------------------------------
+; BUILD A DESCRIPTOR FOR STRING STARTING AT Y,A
+; AND TERMINATED BY $00, (CHARAC), OR (ENDCHR)
+;
+; RETURN WITH DESCRIPTOR IN A TEMPORARY
+; AND ADDRESS OF DESCRIPTOR IN FAC+3,4
+; ----------------------------------------------------------------------------
+.export .proc STRLT2 {
+    sta STRNG1
+    sty STRNG1+1
+    sta FAC+1
+    sty FAC+2
+    ldy #$FF
+    L3298:
+    iny
+    lda (STRNG1),y
+    beq L32A9
+    cmp CHARAC
+    beq L32A5
+    cmp ENDCHR
+    bne L3298
+    L32A5:
+    cmp #$22
+    beq L32AA
+    L32A9:
+    clc
+    L32AA:
+    sty FAC
+    tya
+    adc STRNG1
+    sta STRNG2
+    ldx STRNG1+1
+    bcc L32B6
+    inx
+    L32B6:
+    stx STRNG2+1
+    lda STRNG1+1
+    .if CONFIG_NO_INPUTBUFFER_ZP {
+        beq LD399
+        cmp #>INPUTBUFFER
+    } .elseif AIM65 {
+        beq LD399
+        cmp #$01
+    }
+    bne PUTNEW
+    LD399:
+    tya
+    jsr STRINI
+    ldx STRNG1
+    ldy STRNG1+1
+    jsr MOVSTR
+    .fallthrough PUTNEW
+}
+
+; ----------------------------------------------------------------------------
+; STORE DESCRIPTOR IN TEMPORARY DESCRIPTOR STACK
+;
+; THE DESCRIPTOR IS NOW IN FAC, FAC+1, FAC+2
+; PUT ADDRESS OF TEMP DESCRIPTOR IN FAC+3,4
+; ----------------------------------------------------------------------------
+.proc PUTNEW {
+    ldx TEMPPT
+    cpx #TEMPST+9
+    bne PUTEMP
+    ldx #ERR_FRMCPX
+    JERR:
+    jmp ERROR
+    PUTEMP:
+    lda FAC
+    sta 0,x
+    lda FAC+1
+    sta 1,x
+    lda FAC+2
+    sta 2,x
+    ldy #$00
+    stx FAC_LAST-1
+    sty FAC_LAST
+    .if CONFIG_2 {
+        sty FACEXTENSION
+    }
+    dey
+    sty VALTYP
+    stx LASTPT
+    inx
+    inx
+    inx
+    stx TEMPPT
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; MAKE SPACE FOR STRING AT BOTTOM OF STRING SPACE
+; (A)=# BYTES SPACE TO MAKE
+;
+; RETURN WITH (A) SAME,
+;        AND Y,X = ADDRESS OF SPACE ALLOCATED
+; ----------------------------------------------------------------------------
+.proc GETSPA {
+    lsr DATAFLG
+    L32F1:
+    pha
+    eor #$FF
+    sec
+    adc FRETOP
+    ldy FRETOP+1
+    bcs L32FC
+    dey
+    L32FC:
+    cpy STREND+1
+    bcc L3311
+    bne L3306
+    cmp STREND
+    bcc L3311
+    L3306:
+    sta FRETOP
+    sty FRETOP+1
+    sta FRESPC
+    sty FRESPC+1
+    tax
+    pla
+    rts
+    L3311:
+    ldx #ERR_MEMFULL
+    lda DATAFLG
+    bmi PUTNEW::JERR
+    jsr GARBAG
+    lda #$80
+    sta DATAFLG
+    pla
+    bne L32F1
+    .fallthrough GARBAG
+}
+
+; ----------------------------------------------------------------------------
+; SHOVE ALL REFERENCED STRINGS AS HIGH AS POSSIBLE
+; IN MEMORY (AGAINST HIMEM), FREEING UP SPACE
+; BELOW STRING AREA DOWN TO STREND.
+; ----------------------------------------------------------------------------
+.export .proc GARBAG {
+
+    .if KBD {                           ; the only one with CONST_MEMSIZ
+        ldx #<CONST_MEMSIZ
+        lda #>CONST_MEMSIZ
+    } .else {
+        ldx MEMSIZ
+        lda MEMSIZ+1
+    }
+    FINDHIGHESTSTRING:
+    stx FRETOP
+    sta FRETOP+1
+    ldy #$00
+    sty FNCNAM+1
+    .if CONFIG_2 {
+        sty FNCNAM  ; GC bugfix!
+    }
+    lda STREND
+    ldx STREND+1
+    sta LOWTR
+    stx LOWTR+1
+    lda #TEMPST
+    ldx #$00
+    sta INDEX
+    stx INDEX+1
+    L333D:
+    cmp TEMPPT
+    beq L3346
+    jsr CHECK_VARIABLE
+    beq L333D
+    L3346:
+    lda #BYTES_PER_VARIABLE
+    sta DSCLEN
+    lda VARTAB
+    ldx VARTAB+1
+    sta INDEX
+    stx INDEX+1
+    L3352:
+    cpx ARYTAB+1
+    bne L335A
+    cmp ARYTAB
+    beq L335F
+    L335A:
+    jsr CHECK_SIMPLE_VARIABLE
+    beq L3352
+    L335F:
+    sta HIGHDS
+    stx HIGHDS+1
+    lda #$03  ; OSI GC bugfix -> $04 ???
+    sta DSCLEN
+    L3367:
+    lda HIGHDS
+    ldx HIGHDS+1
+    L336B:
+    cpx STREND+1
+    bne L3376
+    cmp STREND
+    bne L3376
+    jmp MOVE_HIGHEST_STRING_TO_TOP
+    L3376:
+    sta INDEX
+    stx INDEX+1
+    .if CONFIG_SMALL {
+        ldy #$01
+    } .else {
+        ldy #$00
+        lda (INDEX),y
+        tax
+        iny
+    }
+    lda (INDEX),y
+    php
+    iny
+    lda (INDEX),y
+    adc HIGHDS
+    sta HIGHDS
+    iny
+    lda (INDEX),y
+    adc HIGHDS+1
+    sta HIGHDS+1
+    plp
+    bpl L3367
+    .if !CONFIG_SMALL {
+        txa
+        bmi L3367
+    }
+    iny
+    lda (INDEX),y
+    .if CONFIG_CBM1_PATCHES {
+        jsr LE7F3  ; XXX patch, call into screen editor
+    } .else {
+        .if CONFIG_11 {
+            ldy #$00  ; GC bugfix
+        }
+        asl a
+        adc #$05
+    }
+    adc INDEX
+    sta INDEX
+    bcc L33A7
+    inc INDEX+1
+    L33A7:
+    ldx INDEX+1
+    L33A9:
+    cpx HIGHDS+1
+    bne L33B1
+    cmp HIGHDS
+    beq L336B
+    L33B1:
+    jsr CHECK_VARIABLE
+    beq L33A9
+    .fallthrough CHECK_SIMPLE_VARIABLE
+}
+
+; ----------------------------------------------------------------------------
+; PROCESS A SIMPLE VARIABLE
+; ----------------------------------------------------------------------------
+.proc CHECK_SIMPLE_VARIABLE {
+    .if !CONFIG_SMALL {
+        lda (INDEX),y
+        bmi CHECK_VARIABLE::CHECK_BUMP
+    }
+    iny
+    lda (INDEX),y
+    bpl CHECK_VARIABLE::CHECK_BUMP
+    iny
+    .fallthrough CHECK_VARIABLE
+}
+
+; ----------------------------------------------------------------------------
+; IF STRING IS NOT EMPTY, CHECK IF IT IS HIGHEST
+; ----------------------------------------------------------------------------
+.proc CHECK_VARIABLE {
+    lda (INDEX),y
+    beq CHECK_BUMP
+    iny
+    lda (INDEX),y
+    tax
+    iny
+    lda (INDEX),y
+    cmp FRETOP+1
+    bcc L33D5
+    bne CHECK_BUMP
+    cpx FRETOP
+    bcs CHECK_BUMP
+    L33D5:
+    cmp LOWTR+1
+    bcc CHECK_BUMP
+    bne L33DF
+    cpx LOWTR
+    bcc CHECK_BUMP
+    L33DF:
+    stx LOWTR
+    sta LOWTR+1
+    lda INDEX
+    ldx INDEX+1
+    sta FNCNAM
+    stx FNCNAM+1
+    lda DSCLEN
+    sta Z52
+
+    ; ----------------------------------------------------------------------------
+    ; ADD (DSCLEN) TO PNTR IN INDEX
+    ; RETURN WITH Y=0, PNTR ALSO IN X,A
+    ; ----------------------------------------------------------------------------
+    CHECK_BUMP:
+    lda DSCLEN
+    clc
+    adc INDEX
+    sta INDEX
+    bcc L33FA
+    inc INDEX+1
+    L33FA:
+    ldx INDEX+1
+    ldy #$00
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; FOUND HIGHEST NON-EMPTY STRING, SO MOVE IT
+; TO TOP AND GO BACK FOR ANOTHER
+; ----------------------------------------------------------------------------
+.proc MOVE_HIGHEST_STRING_TO_TOP {
+    .if CONFIG_2 {
+        lda FNCNAM+1  ; GC bugfix
+        ora FNCNAM
+    } .else {
+        ldx FNCNAM+1
+    }
+    beq CHECK_VARIABLE::L33FA
+    lda Z52
+    .if !CONFIG_10A {
+        sbc #$03
+    } .else {
+        and #$04
+    }
+    lsr a
+    tay
+    sta Z52
+    lda (FNCNAM),y
+    adc LOWTR
+    sta HIGHTR
+    lda LOWTR+1
+    adc #$00
+    sta HIGHTR+1
+    lda FRETOP
+    ldx FRETOP+1
+    sta HIGHDS
+    stx HIGHDS+1
+    jsr BLTU2
+    ldy Z52
+    iny
+    lda HIGHDS
+    sta (FNCNAM),y
+    tax
+    inc HIGHDS+1
+    lda HIGHDS+1
+    iny
+    sta (FNCNAM),y
+    jmp GARBAG::FINDHIGHESTSTRING
+}
+
+; ----------------------------------------------------------------------------
+; CONCATENATE TWO STRINGS
+; ----------------------------------------------------------------------------
+.export .proc CAT {
+    lda FAC_LAST
+    pha
+    lda FAC_LAST-1
+    pha
+    jsr FRM_ELEMENT
+    jsr CHKSTR
+    pla
+    sta STRNG1
+    pla
+    sta STRNG1+1
+    ldy #$00
+    lda (STRNG1),y
+    clc
+    adc (FAC_LAST-1),y
+    bcc L3454
+    ldx #ERR_STRLONG
+    jmp ERROR
+    L3454:
+    jsr STRINI
+    jsr MOVINS
+    lda DSCPTR
+    ldy DSCPTR+1
+    jsr FRETMP
+    jsr MOVSTR1
+    lda STRNG1
+    ldy STRNG1+1
+    jsr FRETMP
+    jsr PUTNEW
+    jmp FRMEVL2
+}
+
+; ----------------------------------------------------------------------------
+; GET STRING DESCRIPTOR POINTED AT BY (STRNG1)
+; AND MOVE DESCRIBED STRING TO (FRESPC)
+; ----------------------------------------------------------------------------
+.export .proc MOVINS {
+    ldy #$00
+    lda (STRNG1),y
+    pha
+    iny
+    lda (STRNG1),y
+    tax
+    iny
+    lda (STRNG1),y
+    tay
+    pla
+    .fallthrough MOVSTR
+}
+
+; ----------------------------------------------------------------------------
+; MOVE STRING AT (Y,X) WITH LENGTH (A)
+; TO DESTINATION WHOSE ADDRESS IS IN FRESPC,FRESPC+1
+; ----------------------------------------------------------------------------
+.proc MOVSTR {
+    stx INDEX
+    sty INDEX+1
+    .fallthrough MOVSTR1
+}
+.proc MOVSTR1 {
+    tay
+    beq L3490
+    pha
+    L3487:
+    dey
+    lda (INDEX),y
+    sta (FRESPC),y
+    tya
+    bne L3487
+    pla
+    L3490:
+    clc
+    adc FRESPC
+    sta FRESPC
+    bcc L3499
+    inc FRESPC+1
+    L3499:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; IF (FAC) IS A TEMPORARY STRING, RELEASE DESCRIPTOR
+; ----------------------------------------------------------------------------
+.proc FRESTR {
+    jsr CHKSTR
+    .fallthrough FREFAC
+}
+
+; ----------------------------------------------------------------------------
+; IF STRING DESCRIPTOR POINTED TO BY FAC+3,4 IS
+; A TEMPORARY STRING, RELEASE IT.
+; ----------------------------------------------------------------------------
+.export .proc FREFAC {
+    lda FAC_LAST-1
+    ldy FAC_LAST
+    .fallthrough FRETMP
+}
+
+; ----------------------------------------------------------------------------
+; IF STRING DESCRIPTOR WHOSE ADDRESS IS IN Y,A IS
+; A TEMPORARY STRING, RELEASE IT.
+; ----------------------------------------------------------------------------
+.export .proc FRETMP {
+    sta INDEX
+    sty INDEX+1
+    jsr FRETMS
+    php
+    ldy #$00
+    lda (INDEX),y
+    pha
+    iny
+    lda (INDEX),y
+    tax
+    iny
+    lda (INDEX),y
+    tay
+    pla
+    plp
+    bne L34CD
+    cpy FRETOP+1
+    bne L34CD
+    cpx FRETOP
+    bne L34CD
+    pha
+    clc
+    adc FRETOP
+    sta FRETOP
+    bcc L34CC
+    inc FRETOP+1
+    L34CC:
+    pla
+    L34CD:
+    stx INDEX
+    sty INDEX+1
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; RELEASE TEMPORARY DESCRIPTOR IF Y,A = LASTPT
+; ----------------------------------------------------------------------------
+.export .proc FRETMS {
+    .if KBD {
+        cpy #$00
+    } .else {
+        cpy LASTPT+1
+    }
+    bne L34E2
+    cmp LASTPT
+    bne L34E2
+    sta TEMPPT
+    sbc #$03
+    sta LASTPT
+    ldy #$00
+    L34E2:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; "CHR$" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc CHRSTR {
+    jsr CONINT
+    txa
+    pha
+    lda #$01
+    jsr STRSPA
+    pla
+    ldy #$00
+    sta (FAC+1),y
+    pla
+    pla
+    jmp PUTNEW
+}
+
+; ----------------------------------------------------------------------------
+; "LEFT$" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc LEFTSTR {
+    jsr SUBSTRING_SETUP
+    cmp (DSCPTR),y
+    tya
+    SUBSTRING1:
+    bcc L3503
+    lda (DSCPTR),y
+    tax
+    tya
+    L3503:
+    pha
+    SUBSTRING2:
+    txa
+    SUBSTRING3:
+    pha
+    jsr STRSPA
+    lda DSCPTR
+    ldy DSCPTR+1
+    jsr FRETMP
+    pla
+    tay
+    pla
+    clc
+    adc INDEX
+    sta INDEX
+    bcc L351C
+    inc INDEX+1
+    L351C:
+    tya
+    jsr MOVSTR1
+    jmp PUTNEW
+}
+
+; ----------------------------------------------------------------------------
+; "RIGHT$" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc RIGHTSTR {
+    jsr SUBSTRING_SETUP
+    clc
+    sbc (DSCPTR),y
+    eor #$FF
+    jmp LEFTSTR::SUBSTRING1
+}
+
+; ----------------------------------------------------------------------------
+; "MID$" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc MIDSTR {
+    lda #$FF
+    sta FAC_LAST
+    jsr CHRGOT
+    cmp #$29
+    beq L353F
+    jsr CHKCOM
+    jsr GETBYT
+    L353F:
+    jsr SUBSTRING_SETUP
+    .if CONFIG_2 {
+        beq GOIQ
+    }
+    dex
+    txa
+    pha
+    clc
+    ldx #$00
+    sbc (DSCPTR),y
+    bcs LEFTSTR::SUBSTRING2
+    eor #$FF
+    cmp FAC_LAST
+    bcc LEFTSTR::SUBSTRING3
+    lda FAC_LAST
+    bcs LEFTSTR::SUBSTRING3
+    .fallthrough SUBSTRING_SETUP
+}
+
+; ----------------------------------------------------------------------------
+; COMMON SETUP ROUTINE FOR LEFT$, RIGHT$, MID$:
+; REQUIRE ")"; POP RETURN ADRS, GET DESCRIPTOR
+; ADDRESS, GET 1ST PARAMETER OF COMMAND
+; ----------------------------------------------------------------------------
+.proc SUBSTRING_SETUP {
+    jsr CHKCLS
+    pla
+    .if !CONFIG_11 {
+        sta JMPADRS+1
+        pla
+        sta JMPADRS+2
+    } .else {
+        tay
+        pla
+        sta Z52
+    }
+    pla
+    pla
+    pla
+    tax
+    pla
+    sta DSCPTR
+    pla
+    sta DSCPTR+1
+    .if CONFIG_11 {
+        lda Z52
+        pha
+        tya
+        pha
+    }
+    ldy #$00
+    txa
+    .if !CONFIG_2 {
+        beq GOIQ
+    }
+    .if !CONFIG_11 {
+        inc JMPADRS+1
+        jmp (JMPADRS+1)
+    } .else {
+        rts
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "LEN" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc LEN {
+    jsr GETSTR
+    SNGFLT1:
+    jmp SNGFLT
+}
+
+; ----------------------------------------------------------------------------
+; IF LAST RESULT IS A TEMPORARY STRING, FREE IT
+; MAKE VALTYP NUMERIC, RETURN LENGTH IN Y-REG
+; ----------------------------------------------------------------------------
+.proc GETSTR {
+    jsr FRESTR
+    ldx #$00
+    stx VALTYP
+    tay
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; "ASC" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc ASC {
+    jsr GETSTR
+    beq GOIQ
+    ldy #$00
+    lda (INDEX),y
+    tay
+    .if !CONFIG_11A {
+        jmp LEN::SNGFLT1
+    } .else {
+        jmp SNGFLT
+    }
+}
+; ----------------------------------------------------------------------------
+.export .proc GOIQ {
+    jmp IQERR
+}
+
+; ----------------------------------------------------------------------------
+; SCAN TO NEXT CHARACTER AND CONVERT EXPRESSION
+; TO SINGLE BYTE IN X-REG
+; ----------------------------------------------------------------------------
+.export .proc GTBYTC {
+    jsr CHRGET
+    .fallthrough GETBYT
+}
+
+; ----------------------------------------------------------------------------
+; EVALUATE EXPRESSION AT TXTPTR, AND
+; CONVERT IT TO SINGLE BYTE IN X-REG
+; ----------------------------------------------------------------------------
+.export .proc GETBYT {
+    jsr FRMNUM
+    .fallthrough CONINT
+}
+
+; ----------------------------------------------------------------------------
+; CONVERT (FAC) TO SINGLE BYTE INTEGER IN X-REG
+; ----------------------------------------------------------------------------
+.export .proc CONINT {
+    jsr MKINT
+    ldx FAC_LAST-1
+    bne GOIQ
+    ldx FAC_LAST
+    jmp CHRGOT
+}
+
+; ----------------------------------------------------------------------------
+; "VAL" FUNCTION
+; ----------------------------------------------------------------------------
+.export .proc VAL {
+    jsr GETSTR
+    bne L35AC
+    jmp ZERO_FAC
+    L35AC:
+    ldx TXTPTR
+    ldy TXTPTR+1
+    stx STRNG2
+    sty STRNG2+1
+    ldx INDEX
+    stx TXTPTR
+    clc
+    adc INDEX
+    sta DEST
+    ldx INDEX+1
+    stx TXTPTR+1
+    bcc L35C4
+    inx
+    L35C4:
+    stx DEST+1
+    ldy #$00
+    lda (DEST),y
+    pha
+    lda #$00
+    sta (DEST),y
+    jsr CHRGOT
+    jsr FIN
+    pla
+    ldy #$00
+    sta (DEST),y
+    .fallthrough POINT
+}
+
+; ----------------------------------------------------------------------------
+; COPY STRNG2 INTO TXTPTR
+; ----------------------------------------------------------------------------
+.export .proc POINT {
+    ldx STRNG2
+    ldy STRNG2+1
+    stx TXTPTR
+    sty TXTPTR+1
+    rts
+}

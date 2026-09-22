@@ -1,0 +1,21 @@
+.module microtan::iscntc: placed
+
+.use defines::*
+
+.segment CODE
+.if MICROTAN {
+    .export .proc ISCNTC {
+        lda $01
+        cmp #$03
+        beq LC6EF
+        lda #$01
+        rts
+    }
+    .proc LC6EF {
+        nop
+        nop
+        cmp #$03
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}

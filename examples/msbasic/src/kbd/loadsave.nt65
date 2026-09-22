@@ -1,0 +1,55 @@
+.module kbd::loadsave: placed
+
+.use defines::*
+.use float::*
+.use kbd::extra::*
+.use misc3::*
+.use program::*
+.use zeropage::*
+
+.segment CODE
+.if KBD {
+    .export .proc SLOD {
+        ldx #$01
+        .byte $2C
+        .next PLOD::PLOD2
+    }
+    .export .proc PLOD {
+        ldx #$00
+        PLOD2:
+        ldy CURLIN+1
+        iny
+        sty JMPADRS
+        jsr LFFD3
+        jsr VARTAB_MINUS_2_TO_AY
+        ldx #$02
+        jsr LFF64
+        ldx #$6F
+        ldy #$00
+        jsr LE39A
+        jsr LE33D
+        jmp CLEARC
+    }
+    .res 3, $FF
+
+    ; ----------------------------------------------------------------------------
+    .export .proc VER {
+        lda #$13
+        ldx FAC
+        beq LE397
+        lda $DFF9
+        LE397:
+        jmp FLOAT
+    }
+    .export .proc LE39A {
+        lda VARTAB,x
+        clc
+        adc $051B,y
+        sta VARTAB,y
+        lda VARTAB+1,x
+        adc $051C,y
+        sta VARTAB+1,y
+        .fallthrough program::RET3
+    }
+    ; !!! next instruction is an RTS!
+}

@@ -1,0 +1,68 @@
+.module cbm1::patches: placed
+
+.use defines::*
+.use chrget::*
+.use eval::*
+.use flow1::*
+.use input::*
+.use zeropage::*
+
+.segment INIT
+.if CONFIG_CBM1_PATCHES {
+
+    .export .proc PATCH1 {
+        clc
+        jmp CONTROL_C_TYPED
+    }
+    .export .proc PATCH2 {
+        bit FAC+4
+        bpl LE1AA
+        cmp #$54
+        bne LE1AA
+        jmp FRM_VARIABLE::LCE3B
+        LE1AA:
+        rts
+    }
+    .export .proc PATCH3 {
+        bit FAC+4
+        bmi LE1B2
+        jmp LCE90
+        LE1B2:
+        cmp #$54
+        beq LE1B9
+        jmp LCE82
+        LE1B9:
+        jmp LCE69
+    }
+    .export .proc PATCH4 {
+        sta CHARAC
+        inx
+        jmp PATCH6::LE1D9
+    }
+    .export .proc PATCH5 {
+        bpl LE1C9
+        lda Z8C
+        ldy Z8C+1
+        rts
+        LE1C9:
+        ldy #$FF
+        rts
+    }
+    .export .proc PATCH6 {
+        bne LE1D8
+        LE1CE:
+        inc POSX
+        bne LE1D8
+        lda $E2
+        sta POSX
+        bne LE1CE
+        LE1D8:
+        rts
+        LE1D9:
+        stx TXTPTR
+        pla
+        pla
+        tya
+        jmp L2B1C
+    }
+}

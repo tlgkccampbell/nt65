@@ -1,0 +1,158 @@
+; BASIC's variables in zero page. They sit in four blocks, ZP1 to ZP4, whose addresses are
+; each machine's and are given in its linker configuration; the blocks may overlap, where a
+; machine's original BASIC shared the locations.
+.module zeropage: placed
+
+.use defines::*
+
+.segment ZP1
+.export .data GORESTART: .byte[3]
+.export .data GOSTROUT:  .byte[3]
+.export .data GOAYINT:   .word
+.export .data GOGIVEAYF: .word
+
+.segment ZP2
+.export .data Z15: .byte
+.if CBM2 {
+    .res 1
+    .export POSX = $C6                  ; the KERNAL's
+} .else {
+    .export .data POSX: .byte
+}
+.if KBD {
+    .res 2
+    .export Z17 = $06FC
+    .export Z18 = $06FD
+} .else {
+    .export .data Z17: .byte
+    .export .data Z18: .byte
+}
+.export .data LINNUM: .word
+.if !(CONFIG_NO_INPUTBUFFER_ZP || AIM65 || SYM1) {
+    .export INPUTBUFFER = *             ; up to the next block
+}
+
+.segment ZP3
+.export .data CHARAC:   .byte
+.export .data ENDCHR:   .byte
+.export .data EOLPNTR:  .byte
+.export .data DIMFLG:   .byte
+.export .data VALTYP:   .byte[.select(CONFIG_SMALL, 1, 2)]
+.export .data DATAFLG:  .byte
+.export .data SUBFLG:   .byte
+.export .data INPUTFLG: .byte
+.export .data CPRMASK:  .byte
+.export .data Z14:      .byte
+
+.segment ZP4
+.export .data TEMPPT: .byte
+.export .data LASTPT: .word
+.export .data TEMPST: .byte[9]
+.export .data INDEX:  .word
+.export .data DEST:   .word
+.export .data RESULT: .byte[BYTES_FP]
+.export RESULT_LAST = RESULT + BYTES_FP - 1
+.export .data TXTTAB:  .word
+.export .data VARTAB:  .word
+.export .data ARYTAB:  .word
+.export .data STREND:  .word
+.export .data FRETOP:  .word
+.export .data FRESPC:  .word
+.export .data MEMSIZ:  .word
+.export .data CURLIN:  .word
+.export .data OLDLIN:  .word
+.export .data OLDTEXT: .word
+.export .data Z8C:     .word
+.export .data DATPTR:  .word
+.export .data INPTR:   .word
+.export .data VARNAM:  .word
+.export .data VARPNT:  .word
+.export .data FORPNT:  .word
+.export .data LASTOP:  .word
+.export .data CPRTYP:  .byte
+.export .data FNCNAM:  .word
+.export TEMP3 = FNCNAM
+.export .data DSCPTR: .byte[.select(CONFIG_SMALL, 2, 3)]
+.export .data DSCLEN: .word
+.export .data Z52:    .byte
+.if CONFIG_SMALL {
+    .export ARGEXTENSION = TEMP1
+} .else {
+    .export .data ARGEXTENSION: .byte
+}
+.export .data TEMP1:  .byte
+.export .data HIGHDS: .word
+.export .data HIGHTR: .word
+.if !CONFIG_SMALL {
+    .export .data TEMP2: .byte
+}
+.export .data INDX: .byte
+.export TMPEXP = INDX
+.if CONFIG_SMALL {
+    .export TEMP2 = INDX
+}
+.export .data EXPON:  .byte
+.export .data LOWTR:  .byte
+.export .data EXPSGN: .byte
+.export .data FAC:    .byte[BYTES_FP]
+.export FAC_LAST = FAC + BYTES_FP - 1
+.export .data FACSIGN:      .byte
+.export .data SERLEN:       .byte
+.export .data SHIFTSIGNEXT: .byte
+.export .data ARG:          .byte[BYTES_FP]
+.export ARG_LAST = ARG + BYTES_FP - 1
+.export .data ARGSIGN: .byte
+.export .data STRNG1:  .word
+.export SGNCPR = STRNG1
+.export FACEXTENSION = STRNG1 + 1
+.export .data STRNG2: .word
+.if AIM65 {
+    .export .data ATN: .byte[3]
+    .export .data ZBE: .byte
+}
+.if SYM1 {
+    .export .data USR1: .byte[3]
+    .export .data USR2: .byte[3]
+    .export .data USR3: .byte[3]
+}
+; CHRGET runs after these, in ZP4 (see chrget).
+
+; ----------------------------------------------------------------------------
+; Where a machine's BASIC keeps one of these somewhere else
+; ----------------------------------------------------------------------------
+.if CBM2 || AIM65 || SYM1 {
+    .export TXPSV = LASTOP
+} .elseif KBD {
+    .export TXPSV = $0049
+} .elseif MICROTAN {
+    .export TXPSV = $00BA
+} .else {
+    .export TXPSV = LINNUM
+}
+.if KBD {
+    .export JMPADRS = $0093
+    .export LOWTRX = $0094              ; $AB also EXPSGN?
+} .else {
+    .export JMPADRS = DSCLEN + 1
+    .export LOWTRX = LOWTR
+}
+.if CBM2 || APPLE {
+    .export INPUTBUFFER = $0200
+} .elseif KBD {
+    .export INPUTBUFFER = $0700
+} .elseif AIM65 {
+    .export INPUTBUFFER = $0016
+} .elseif SYM1 {
+    .export INPUTBUFFER = $001E
+}
+.export INPUTBUFFERX = .select(CONFIG_NO_INPUTBUFFER_ZP, INPUTBUFFER & $FF00, 0)
+
+.if CBM1 || CBM2 {
+    .export USR = GORESTART
+} .elseif MICROTAN {
+    .export USR = $0021
+} .elseif AIM65 {
+    .export USR = $03
+} .elseif OSI || APPLE || SYM1 || W65C816SXB {
+    .export USR = $000A
+}

@@ -1,0 +1,23 @@
+.module osi::iscntc: placed
+
+.use defines::*
+.use misc3::*
+.use inline::*
+.use flow1::*
+
+.segment CODE
+.if OSI {
+    .export .proc ISCNTC {
+        jmp MONISCNTC
+        nop
+        nop
+        nop
+        nop
+        lsr a
+        bcc RET2
+        jsr GETLN
+        cmp #$03
+        .fallthrough flow1::STOP
+    }
+    ;!!! *used*to* run into "STOP"
+}

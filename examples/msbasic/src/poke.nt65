@@ -1,0 +1,139 @@
+.module poke: placed
+
+.use defines::*
+.use chrget::*
+.use eval::*
+.use float::*
+.use misc2::*
+.use string::*
+.use zeropage::*
+
+.segment CODE
+
+.if !CONFIG_NO_POKE {
+    ; ----------------------------------------------------------------------------
+    ; EVALUATE "EXP1,EXP2"
+    ;
+    ; CONVERT EXP1 TO 16-BIT NUMBER IN LINNUM
+    ; CONVERT EXP2 TO 8-BIT NUMBER IN X-REG
+    ; ----------------------------------------------------------------------------
+    .proc GTNUM {
+        jsr FRMNUM
+        jsr GETADR
+        .fallthrough COMBYTE
+    }
+
+    ; ----------------------------------------------------------------------------
+    ; EVALUATE ",EXPRESSION"
+    ; CONVERT EXPRESSION TO SINGLE BYTE IN X-REG
+    ; ----------------------------------------------------------------------------
+    .proc COMBYTE {
+        jsr CHKCOM
+        jmp GETBYT
+    }
+
+    ; ----------------------------------------------------------------------------
+    ; CONVERT (FAC) TO A 16-BIT VALUE IN LINNUM
+    ; ----------------------------------------------------------------------------
+    .proc GETADR {
+        lda FACSIGN
+        .if APPLE {
+            nop  ; PATCH
+            nop
+        } .else {
+            bmi GOIQ
+        }
+        lda FAC
+        cmp #$91
+        bcs GOIQ
+        jsr QINT
+        lda FAC_LAST-1
+        ldy FAC_LAST
+        sty LINNUM
+        sta LINNUM+1
+        rts
+    }
+
+    ; ----------------------------------------------------------------------------
+    ; "PEEK" FUNCTION
+    ; ----------------------------------------------------------------------------
+    .export .proc PEEK {
+        .if CONFIG_PEEK_SAVE_LINNUM {
+            lda LINNUM+1
+            pha
+            lda LINNUM
+            pha
+        }
+        jsr GETADR
+        ldy #$00
+        .if CBM1 {
+            ; disallow PEEK between $C000 and $DFFF
+            cmp #$C0
+            bcc LD6F3
+            cmp #$E1
+            bcc LD6F6
+            LD6F3:
+        }
+        .if CBM2 {
+            nop  ; patch that disables the compares above
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+            nop
+        }
+        lda (LINNUM),y
+        tay
+        .if CONFIG_PEEK_SAVE_LINNUM {
+            pla
+            sta LINNUM
+            pla
+            sta LINNUM+1
+        }
+        LD6F6:
+        jmp SNGFLT
+    }
+
+    ; ----------------------------------------------------------------------------
+    ; "POKE" STATEMENT
+    ; ----------------------------------------------------------------------------
+    .export .proc POKE {
+        jsr GTNUM
+        txa
+        ldy #$00
+        sta (LINNUM),y
+        rts
+    }
+
+    ; ----------------------------------------------------------------------------
+    ; "WAIT" STATEMENT
+    ; ----------------------------------------------------------------------------
+    .export .proc WAIT {
+        jsr GTNUM
+        stx FORPNT
+        ldx #$00
+        jsr CHRGOT
+        .if CONFIG_EASTER_EGG {
+            beq EASTER_EGG
+        } .else {
+            beq L3628
+        }
+        jsr COMBYTE
+        .fallthrough L3628
+    }
+    .export .proc L3628 {
+        stx FORPNT+1
+        ldy #$00
+        L362C:
+        lda (LINNUM),y
+        eor FORPNT+1
+        and FORPNT
+        beq L362C
+        .fallthrough RTS3
+    }
+    .export .proc RTS3 {
+        rts
+    }
+}

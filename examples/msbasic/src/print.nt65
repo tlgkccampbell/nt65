@@ -1,0 +1,461 @@
+.module print: placed
+
+.use defines::*
+.use chrget::*
+.use array::*
+.use eval::*
+.use extra::*
+.use float::*
+.use flow1::*
+.use input::*
+.use misc1::*
+.use string::*
+.use token::*
+.use zeropage::*
+
+.segment CODE
+
+.if AIM65 {
+    .export .proc PRINT {
+        lda PRIFLG
+        sta ZBE
+        jsr L297E
+        .fallthrough LB8B1
+    }
+    .export .proc LB8B1 {
+        lda ZBE
+        sta PRIFLG
+        rts
+    }
+}
+
+.proc PRSTRING {
+    jsr STRPRT
+    .fallthrough L297E
+}
+.export .proc L297E {
+    jsr CHRGOT
+    .fallthrough PRINT1
+}
+
+; ----------------------------------------------------------------------------
+; "PRINT" STATEMENT
+; ----------------------------------------------------------------------------
+.proc PRINT1 {
+    beq CRDO
+    PRINT2:
+    beq PRINTNULLS::L29DD
+    .if AIM65 {
+        jsr LB89D
+        beq PRINTNULLS::L29DD
+    }
+    cmp #Token::TAB
+    beq PRINTNULLS::L29F5
+    cmp #Token::SPC
+    .if CONFIG_2 {
+        clc  ; also AppleSoft II
+    }
+    beq PRINTNULLS::L29F5
+    cmp #','
+    ; Pre-KIM had no CLC. KIM added the CLC
+    ; here. Post-KIM moved the CLC up...
+    ; (makes no sense on KIM, liveness = 0)
+    .if CONFIG_11A && (!CONFIG_2) {
+        clc
+    }
+    beq PRINTNULLS::L29DE
+    cmp #$3B
+    beq PRINTNULLS::L2A0D
+    jsr FRMEVL
+    bit VALTYP
+    bmi PRSTRING
+    jsr FOUT
+    jsr STRLIT
+    .if !CONFIG_NO_CR {
+        ldy #$00
+        lda (FAC_LAST-1),y
+        clc
+        adc POSX
+        .if KBD {
+            cmp #$28
+        } .else {
+            cmp Z17
+        }
+        bcc L29B1
+        jsr CRDO
+        L29B1:
+    }
+    jsr STRPRT
+    .if KBD {
+        jmp L297E
+    } .else {
+        jsr OUTSP
+        bne L297E                       ; branch always
+        .next L297E
+    }
+}
+.if !AIM65 {
+    .export .proc PRINT = PRINT1
+}
+
+.if KBD {
+    ; PATCHES
+    .export .proc LE86C {
+        pla
+        jmp CONTROL_C_TYPED
+    }
+
+    .export .proc LE870 {
+        jsr GETBYT
+        txa
+        .fallthrough LE874
+    }
+
+    .export .proc LE874 {
+        beq LE878
+        bpl OUTDO::LE8F2
+        LE878:
+        jmp IQERR
+    }
+    ; PATCHES
+} .elseif APPLE {
+    .export .proc L29B9 = CRDO          ; nothing to do but end the line
+} .else {
+    .export .proc L29B9 {
+        .if CBM2 {
+            lda #$00
+            sta INPUTBUFFER,x
+            ldx #<(INPUTBUFFER-1)
+            ldy #>(INPUTBUFFER-1)
+        } .else {
+            ldy #$00
+            sty INPUTBUFFER,x
+            ldx #LINNUM+1
+            .if MICROTAN || SYM1 {
+                bne CRDO2
+            }
+        }
+        .if CONFIG_FILE {
+            lda CURDVC
+            bne PRINTNULLS::L29DD
+        }
+        .fallthrough CRDO
+    }
+}
+
+
+.export .proc CRDO {
+    .if CONFIG_PRINTNULLS && CONFIG_FILE {
+        lda CURDVC
+        bne LC9D8
+        sta POSX
+        LC9D8:
+    }
+    lda #CRLF_1
+    .if !CONFIG_CBM_ALL {
+        sta POSX
+    }
+    jsr OUTDO
+    .fallthrough CRDO2
+}
+.export .proc CRDO2 {
+    lda #CRLF_2
+    jsr OUTDO
+    .fallthrough PRINTNULLS
+}
+
+.proc PRINTNULLS {
+    .if KBD || AIM65 {
+        lda #$00
+        sta POSX
+        eor #$FF
+    } .else {
+        .if CONFIG_NULL || CONFIG_PRINTNULLS {
+            .if CONFIG_FILE {
+                ; Although there is no statement for it,
+                ; CBM1 had NULL support and ignores
+                ; it when not targeting the screen,
+                ; CBM2 dropped it completely.
+                lda CURDVC
+                bne L29DD
+            }
+            txa
+            pha
+            ldx Z15
+            beq L29D9
+            .if SYM1 {
+                lda #$FF
+            } .else {
+                lda #$00
+            }
+            L29D3:
+            jsr OUTDO
+            dex
+            bne L29D3
+            L29D9:
+            stx POSX
+            pla
+            tax
+        } .else {
+            .if !CONFIG_2 {
+                lda #$00
+                sta POSX
+            }
+            eor #$FF
+        }
+    }
+    L29DD:
+    rts
+    L29DE:
+    lda POSX
+    .if !CONFIG_NO_CR {
+        .if KBD {
+            cmp #$1A
+        } .else {
+            cmp Z18
+        }
+        bcc L29EA
+        jsr CRDO
+        jmp L2A0D
+        L29EA:
+    }
+    sec
+    L29EB:
+    .if CONFIG_CBM_ALL || AIM65 {
+        sbc #$0A
+    } .else {
+        .if KBD {
+            sbc #$0D
+        } .else {
+            sbc #$0E
+        }
+    }
+    bcs L29EB
+    eor #$FF
+    adc #$01
+    bne L2A08
+    L29F5:
+    .if CONFIG_11A {
+        php
+    } .else {
+        pha
+    }
+    jsr GTBYTC
+    cmp #')'
+    .if CONFIG_11A {
+        .if CONFIG_2 {
+            bne SYNERR4
+        } .else {
+            beq @long_1
+            jmp SYNERR  ; upstream's `jne`, long since its target comes later
+        @long_1:
+        }
+        plp
+        bcc L2A09
+    } .else {
+        .if CONFIG_11 {
+            beq @long_2
+            jmp SYNERR  ; upstream's `jne`, long since its target comes later
+        @long_2:
+        } .else {
+            bne SYNERR4
+        }
+        pla
+        cmp #Token::TAB
+        .if CONFIG_11 {
+            bne L2A09
+        } .else {
+            bne L2A0A
+        }
+    }
+    txa
+    sbc POSX
+    bcc L2A0D
+    .if !CONFIG_11 {
+        beq L2A0D
+    }
+    L2A08:
+    tax
+    .if CONFIG_11 {
+        L2A09:
+        inx
+    }
+    L2A0A:
+    .if !CONFIG_11 {
+        jsr OUTSP
+    }
+    dex
+    .if !CONFIG_11 {
+        bne L2A0A
+    } .else {
+        bne L2A13
+    }
+    L2A0D:
+    jsr CHRGET
+    jmp PRINT1::PRINT2
+}
+.if CONFIG_11 {
+    .proc L2A13 {
+        jsr OUTSP
+        bne PRINTNULLS::L2A0A           ; always: OUTSP leaves A nonzero
+        .next PRINTNULLS::L2A0A
+    }
+}
+
+; ----------------------------------------------------------------------------
+; PRINT STRING AT (Y,A)
+; ----------------------------------------------------------------------------
+.export .proc STROUT {
+    jsr STRLIT
+    .fallthrough STRPRT
+}
+
+; ----------------------------------------------------------------------------
+; PRINT STRING AT (FACMO,FACLO)
+; ----------------------------------------------------------------------------
+.export .proc STRPRT {
+    jsr FREFAC
+    tax
+    ldy #$00
+    inx
+    L2A22:
+    dex
+    beq PRINTNULLS::L29DD
+    lda (INDEX),y
+    jsr OUTDO
+    iny
+    cmp #$0D
+    bne L2A22
+    jsr PRINTNULLS
+    jmp L2A22
+}
+; ----------------------------------------------------------------------------
+.export .proc OUTSP {
+    .if CONFIG_FILE {
+        .if !CBM1 {
+            ; on non-screen devices, print SPACE
+            ; instead of CRSR RIGHT
+            lda CURDVC
+            beq LCA40
+            lda #$20
+            .byte $2C
+            .next @past_LCA40
+            LCA40:
+        }
+        lda #$1D  ; CRSR RIGHT
+    @past_LCA40:
+    } .else {
+        lda #$20
+    }
+    .byte $2C
+    .next OUTDO                         ; skips the `lda` of OUTQUES
+}
+.export .proc OUTQUES {
+    lda #$3F
+    .fallthrough OUTDO
+}
+
+; ----------------------------------------------------------------------------
+; PRINT CHAR FROM (A)
+; ----------------------------------------------------------------------------
+.export .proc OUTDO {
+    .if !KBD {
+        bit Z14
+        bmi L2A56
+    }
+    .if CONFIG_PRINT_CR || CBM1 {
+        ; Commodore forgot to remove this in CBM1
+        pha
+    }
+    .if CBM1 {
+        cmp #$1D  ; CRSR RIGHT
+        beq LCA6A
+        cmp #$9D  ; CRSR LEFT
+        beq LCA5A
+        cmp #$14  ; DEL
+        bne LCA64
+        LCA5A:
+        lda POSX
+        beq L2A4E
+        lda CURDVC
+        bne L2A4E
+        dec POSX
+        LCA64:
+        and #$7F
+    }
+    .if !CBM2 {
+        cmp #$20
+        bcc L2A4E
+    }
+    LCA6A:
+    .if CONFIG_CBM1_PATCHES {
+        lda CURDVC
+        jsr PATCH6
+        nop
+    }
+    .if CONFIG_PRINT_CR {
+        lda POSX
+        cmp Z17
+        bne L2A4C
+        .if AIM65 {
+            lda #$00
+            sta POSX
+        } .elseif APPLE {
+            nop  ; PATCH!
+            nop  ; don't print CR
+            nop
+        } .else {
+            jsr CRDO
+        }
+        L2A4C:
+    }
+    .if !CONFIG_CBM_ALL {
+        inc POSX
+    }
+    L2A4E:
+    .if CONFIG_PRINT_CR || CBM1 {
+        ; Commodore forgot to remove this in CBM1
+        pla
+    }
+    .if CONFIG_MONCOUT_DESTROYS_Y {
+        sty DIMFLG
+    }
+    .if CONFIG_IO_MSB {
+        ora #$80
+    }
+    jsr MONCOUT
+    .if CONFIG_IO_MSB {
+        and #$7F
+    }
+    .if CONFIG_MONCOUT_DESTROYS_Y {
+        ldy DIMFLG
+    }
+    .if OSI {
+        nop
+        nop
+        nop
+        nop
+    }
+    L2A56:
+    and #$FF
+    LE8F2:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; ???
+; ----------------------------------------------------------------------------
+.if KBD {
+    .export .proc LE8F3 {
+        pha
+        lda $047F
+        clc
+        beq LE900
+        lda #$00
+        sta $047F
+        sec
+        LE900:
+        pla
+        rts
+    }
+}

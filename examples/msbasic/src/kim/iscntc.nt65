@@ -1,0 +1,19 @@
+.module kim::iscntc: placed
+
+.use defines::*
+.use flow1::*
+
+.segment CODE
+.if KIM {
+    .export .proc ISCNTC {
+        lda #$01
+        bit $1740
+        bmi RET2
+        ldx #$08
+        lda #$03
+        clc
+        cmp #$03
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}

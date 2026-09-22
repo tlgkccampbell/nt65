@@ -1,0 +1,447 @@
+; The keywords: their tokens, their names, and the routines that carry them out.
+.module token: placed
+
+.use defines::*
+.use text::*
+.use array::*
+.use eval::*
+.use extra::*
+.use float::*
+.use flow1::*
+.use flow2::*
+.use input::*
+.use kbd::extra::*
+.use kbd::loadsave::*
+.use loadsave::*
+.use misc1::*
+.use misc2::*
+.use poke::*
+.use print::*
+.use program::*
+.use rnd::*
+.use string::*
+.use trig::*
+.use var::*
+.use zeropage::*
+
+; ----------------------------------------------------------------------------
+; A token is $80 and up, in the order the names are listed in TOKEN_NAME_TABLE: the
+; statements, which TOKEN_ADDRESS_TABLE dispatches, then the words that are only part
+; of a statement, then the operators and the functions.
+; ----------------------------------------------------------------------------
+.export .enum Token {
+    END = $80
+    FOR
+    NEXT
+    DATA
+    .if CONFIG_FILE {
+        INPUTH
+    }
+    INPUT
+    DIM
+    READ
+    LET                                 ; PLT on the Apple
+    GOTO
+    RUN
+    IF
+    RESTORE
+    GOSUB
+    RETURN
+    REM                                 ; TEX on the Apple
+    STOP
+    ON
+    .if CONFIG_NULL {
+        NULL
+    }
+    .if KBD {
+        PLOD
+        PSAV
+        VLOD
+        VSAV
+    }
+    .if !CONFIG_NO_POKE {
+        WAIT
+    }
+    .if !KBD {
+        LOAD
+        SAVE
+    }
+    .if CONFIG_CBM_ALL {
+        VERIFY
+    }
+    DEF
+    .if KBD {
+        SLOD
+    }
+    .if !CONFIG_NO_POKE {
+        POKE
+    }
+    .if CONFIG_FILE {
+        PRINTH
+    }
+    PRINT
+    CONT
+    LIST
+    CLEAR                               ; CLR on Commodore machines
+    .if CONFIG_FILE {
+        CMD
+        SYS
+        OPEN
+        CLOSE
+    }
+    .if !CONFIG_SMALL {
+        GET
+    }
+    .if KBD {
+        PRT
+    }
+    NEW
+
+    TAB
+    TO
+    FN
+    SPC
+    THEN
+    NOT
+    STEP
+    PLUS
+    MINUS
+    TIMES
+    DIVIDE
+    POWER                               ; "#" on KBD
+    AND
+    OR
+    GREATER
+    EQUAL
+    LESS
+
+    SGN
+    INT
+    ABS
+    .if KBD {
+        VER
+    }
+    .if !CONFIG_NO_POKE {
+        USR
+    }
+    FRE
+    POS
+    SQR
+    RND
+    LOG
+    EXP
+    COS
+    SIN
+    TAN
+    ATN
+    .if KBD {
+        GETC
+    }
+    .if !CONFIG_NO_POKE {
+        PEEK
+    }
+    LEN
+    STRSTR
+    VAL
+    ASC
+    CHRSTR
+    LEFTSTR
+    RIGHTSTR
+    MIDSTR
+    .if CONFIG_2 {
+        GO
+    }
+}
+
+; The statements are the tokens below TAB.
+.export NUM_TOKENS = Token::TAB - $80
+
+; ----------------------------------------------------------------------------
+; Where each statement's routine starts, less one, for the RTS that jumps to it.
+; ----------------------------------------------------------------------------
+.segment VECTORS
+.export .data TOKEN_ADDRESS_TABLE: .addr[] {
+    END - 1
+    FOR - 1
+    NEXT - 1
+    DATA - 1
+    .if CONFIG_FILE {
+        INPUTH - 1
+    }
+    INPUT - 1
+    DIM - 1
+    READ - 1
+    .if APPLE {
+        PLT - 1
+    } .else {
+        LET - 1
+    }
+    GOTO - 1
+    RUN - 1
+    IF - 1
+    RESTORE - 1
+    GOSUB - 1
+    POP - 1
+    .if APPLE {
+        TEX - 1
+    } .else {
+        REM - 1
+    }
+    STOP - 1
+    ON - 1
+    .if CONFIG_NULL {
+        NULL - 1
+    }
+    .if KBD {
+        PLOD - 1
+        PSAV - 1
+        VLOD - 1
+        VSAV - 1
+    }
+    .if !CONFIG_NO_POKE {
+        WAIT - 1
+    }
+    .if !KBD {
+        LOAD - 1
+        SAVE - 1
+    }
+    .if CONFIG_CBM_ALL {
+        VERIFY - 1
+    }
+    DEF - 1
+    .if KBD {
+        SLOD - 1
+    }
+    .if !CONFIG_NO_POKE {
+        POKE - 1
+    }
+    .if CONFIG_FILE {
+        PRINTH - 1
+    }
+    PRINT - 1
+    CONT - 1
+    LIST - 1
+    CLEAR - 1
+    .if CONFIG_FILE {
+        CMD - 1
+        SYS - 1
+        OPEN - 1
+        CLOSE - 1
+    }
+    .if !CONFIG_SMALL {
+        GET - 1
+    }
+    .if KBD {
+        PRT - 1
+    }
+    NEW - 1
+}
+.assert .countof(TOKEN_ADDRESS_TABLE) == NUM_TOKENS, "a statement without a routine, or a routine without a statement"
+
+; ----------------------------------------------------------------------------
+; Where each function's routine starts. RAM versions of BASIC point the four
+; trigonometric ones elsewhere when they are asked to leave them out.
+; ----------------------------------------------------------------------------
+.export .data UNFNC {
+    .addr SGN, INT, ABS
+    .if KBD {
+        .addr VER
+    }
+    .if !CONFIG_NO_POKE {
+        .if CONFIG_RAM {
+            .addr IQERR
+        } .else {
+            .addr USR
+        }
+    }
+    .addr FRE, POS, SQR, RND, LOG, EXP
+    .if SYM1 {
+        .data cos: .addr USR1
+        .data sin: .addr USR1
+        .data tan: .addr USR1
+        .data atn: .addr USR1
+    } .else {
+        .data cos: .addr COS
+        .data sin: .addr SIN
+        .data tan: .addr TAN
+        .data atn: .addr ATN
+    }
+    .if KBD {
+        .addr GETC
+    }
+    .if !CONFIG_NO_POKE {
+        .addr PEEK
+    }
+    .addr LEN, STR, VAL, ASC, CHRSTR, LEFTSTR, RIGHTSTR, MIDSTR
+}
+
+; ----------------------------------------------------------------------------
+; The operators: each one's precedence, and where its routine starts, less one.
+; ----------------------------------------------------------------------------
+.export .data MATHTBL {
+    .byte $79
+    .word FADDT - 1
+    .byte $79
+    .word FSUBT - 1
+    .byte $7B
+    .word FMULTT - 1
+    .byte $7B
+    .word FDIVT - 1
+    .byte $7F
+    .word FPWRT - 1
+    .byte $50
+    .word TAND - 1
+    .byte $46
+    .word OR - 1
+    .byte $7D
+    .word NEGOP - 1
+    .byte $5A
+    .word EQUOP - 1
+    .byte $64
+    .word RELOPS - 1
+}
+
+; ----------------------------------------------------------------------------
+; The names, in token order.
+; ----------------------------------------------------------------------------
+.segment KEYWORDS
+.export .data TOKEN_NAME_TABLE {
+    .byte htasc("END")
+    .byte htasc("FOR")
+    .byte htasc("NEXT")
+    .byte htasc("DATA")
+    .if CONFIG_FILE {
+        .byte htasc("INPUT#")
+    }
+    .byte htasc("INPUT")
+    .byte htasc("DIM")
+    .byte htasc("READ")
+    .if APPLE {
+        .byte htasc("PLT")
+    } .else {
+        .byte htasc("LET")
+    }
+    .byte htasc("GOTO")
+    .byte htasc("RUN")
+    .byte htasc("IF")
+    .byte htasc("RESTORE")
+    .byte htasc("GOSUB")
+    .byte htasc("RETURN")
+    .if APPLE {
+        .byte htasc("TEX")
+    } .else {
+        .byte htasc("REM")
+    }
+    .byte htasc("STOP")
+    .byte htasc("ON")
+    .if CONFIG_NULL {
+        .byte htasc("NULL")
+    }
+    .if KBD {
+        .byte htasc("PLOD")
+        .byte htasc("PSAV")
+        .byte htasc("VLOD")
+        .byte htasc("VSAV")
+    }
+    .if !CONFIG_NO_POKE {
+        .byte htasc("WAIT")
+    }
+    .if !KBD {
+        .byte htasc("LOAD")
+        .byte htasc("SAVE")
+    }
+    .if CONFIG_CBM_ALL {
+        .byte htasc("VERIFY")
+    }
+    .byte htasc("DEF")
+    .if KBD {
+        .byte htasc("SLOD")
+    }
+    .if !CONFIG_NO_POKE {
+        .byte htasc("POKE")
+    }
+    .if CONFIG_FILE {
+        .byte htasc("PRINT#")
+    }
+    .byte htasc("PRINT")
+    .byte htasc("CONT")
+    .byte htasc("LIST")
+    .if CONFIG_CBM_ALL {
+        .byte htasc("CLR")
+    } .else {
+        .byte htasc("CLEAR")
+    }
+    .if CONFIG_FILE {
+        .byte htasc("CMD")
+        .byte htasc("SYS")
+        .byte htasc("OPEN")
+        .byte htasc("CLOSE")
+    }
+    .if !CONFIG_SMALL {
+        .byte htasc("GET")
+    }
+    .if KBD {
+        .byte htasc("PRT")
+    }
+    .byte htasc("NEW")
+
+    .byte htasc("TAB(")
+    .byte htasc("TO")
+    .byte htasc("FN")
+    .byte htasc("SPC(")
+    .byte htasc("THEN")
+    .byte htasc("NOT")
+    .byte htasc("STEP")
+    .byte htasc("+")
+    .byte htasc("-")
+    .byte htasc("*")
+    .byte htasc("/")
+    .if KBD {
+        .byte htasc("#")
+    } .else {
+        .byte htasc("^")
+    }
+    .byte htasc("AND")
+    .byte htasc("OR")
+    .byte htasc(">")
+    .byte htasc("=")
+    .byte htasc("<")
+
+    .byte htasc("SGN")
+    .byte htasc("INT")
+    .byte htasc("ABS")
+    .if KBD {
+        .byte htasc("VER")
+    }
+    .if !CONFIG_NO_POKE {
+        .byte htasc("USR")
+    }
+    .byte htasc("FRE")
+    .byte htasc("POS")
+    .byte htasc("SQR")
+    .byte htasc("RND")
+    .byte htasc("LOG")
+    .byte htasc("EXP")
+    .byte htasc("COS")
+    .byte htasc("SIN")
+    .byte htasc("TAN")
+    .byte htasc("ATN")
+    .if KBD {
+        .byte htasc("GETC")
+    }
+    .if !CONFIG_NO_POKE {
+        .byte htasc("PEEK")
+    }
+    .byte htasc("LEN")
+    .byte htasc("STR$")
+    .byte htasc("VAL")
+    .byte htasc("ASC")
+    .byte htasc("CHR$")
+    .byte htasc("LEFT$")
+    .byte htasc("RIGHT$")
+    .byte htasc("MID$")
+    .if CONFIG_2 {
+        .byte htasc("GO")
+    }
+    .byte 0
+}

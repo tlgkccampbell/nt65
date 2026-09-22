@@ -1,0 +1,17 @@
+.module sym1::iscntc: placed
+
+.use defines::*
+.use flow1::*
+
+.segment CODE
+.if SYM1 {
+    .export .proc ISCNTC {
+        jsr INSTAT
+        bcc RET1
+
+        lda #$03
+        cmp #$03
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}

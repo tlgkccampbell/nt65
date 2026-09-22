@@ -47,9 +47,11 @@ internal sealed record CorpusProgram(
     /// <summary>
     /// Programs that are more than this reads: the LoROM template converts its assets with
     /// Python before nt65 can measure them, links a second image with a second configuration,
-    /// and assembles its hand-written ca65 with no CPU. The gate builds it end to end.
+    /// and assembles its hand-written ca65 with no CPU; msbasic is ten programs, one per
+    /// configuration, each with a linker configuration of its own and an image to match. The
+    /// gate builds both end to end.
     /// </summary>
-    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template" };
+    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template", "msbasic" };
 
     public static CorpusProgram Load(string directory)
     {

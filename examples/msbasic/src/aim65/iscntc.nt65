@@ -1,0 +1,27 @@
+.module aim65::iscntc: placed
+
+.use defines::*
+.use flow1::*
+
+.segment CODE
+.if AIM65 {
+    .export .proc ISCNTC {
+        lda DRA2
+        pha
+        lda #$7f
+        sta DRA2
+        pha
+        pla
+        lda DRB2
+        rol a
+        pla
+        sta DRA2
+        bcs RET2
+
+        jsr GETKEY
+        lda #$03
+        cmp #$03
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}

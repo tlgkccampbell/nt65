@@ -1,0 +1,256 @@
+.module flow2: placed
+
+.use defines::*
+.use chrget::*
+.use error::*
+.use eval::*
+.use flow1::*
+.use memory::*
+.use misc1::*
+.use misc3::*
+.use program::*
+.use string::*
+.use token::*
+.use zeropage::*
+
+.segment CODE
+; ----------------------------------------------------------------------------
+; "RUN" COMMAND
+; ----------------------------------------------------------------------------
+.export .proc RUN {
+    bne L27CF
+    jmp SETPTRS
+    L27CF:
+    jsr CLEARC
+    jmp GOSUB::L27E9
+}
+
+; ----------------------------------------------------------------------------
+; "GOSUB" STATEMENT
+;
+; LEAVES 7 BYTES ON STACK:
+; 2 -- RETURN ADDRESS (NEWSTT)
+; 2 -- TXTPTR
+; 2 -- LINE #
+; 1 -- GOSUB TOKEN
+; ----------------------------------------------------------------------------
+.export .proc GOSUB {
+    lda #$03
+    jsr CHKMEM
+    lda TXTPTR+1
+    pha
+    lda TXTPTR
+    pha
+    lda CURLIN+1
+    pha
+    lda CURLIN
+    pha
+    lda #Token::GOSUB
+    pha
+    L27E9:
+    jsr CHRGOT
+    jsr GOTO
+    jmp NEWSTT
+}
+
+; ----------------------------------------------------------------------------
+; "GOTO" STATEMENT
+; ALSO USED BY "RUN" AND "GOSUB"
+; ----------------------------------------------------------------------------
+.export .proc GOTO {
+    jsr LINGET
+    jsr REMN
+    lda CURLIN+1
+    cmp LINNUM+1
+    bcs L2809
+    tya
+    sec
+    adc TXTPTR
+    ldx TXTPTR+1
+    bcc L280D
+    inx
+    bcs L280D
+    L2809:
+    lda TXTTAB
+    ldx TXTTAB+1
+    L280D:
+    .if KBD {
+        jsr LF457
+        bne POP::UNDERR
+    } .else {
+        jsr FL1
+        bcc POP::UNDERR
+    }
+    lda LOWTRX
+    sbc #$01
+    sta TXTPTR
+    lda LOWTRX+1
+    sbc #$00
+    sta TXTPTR+1
+    L281E:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; "POP" AND "RETURN" STATEMENTS
+; ----------------------------------------------------------------------------
+.export .proc POP {
+    bne GOTO::L281E
+    lda #$FF
+    .if CONFIG_2A {
+        sta FORPNT+1  ; bugfix, wrong in AppleSoft II
+    } .else {
+        sta FORPNT
+    }
+    jsr GTFORPNT
+    txs
+    cmp #Token::GOSUB
+    beq RETURN
+    ldx #ERR_NOGOSUB
+    .byte $2C
+    .next @past_UNDERR
+    UNDERR:
+    ldx #ERR_UNDEFSTAT
+@past_UNDERR:
+    jmp ERROR
+}
+; ----------------------------------------------------------------------------
+.proc SYNERR2 {
+    jmp SYNERR
+}
+; ----------------------------------------------------------------------------
+.export .proc RETURN {
+    pla
+    pla
+    sta CURLIN
+    pla
+    sta CURLIN+1
+    pla
+    sta TXTPTR
+    pla
+    sta TXTPTR+1
+    .fallthrough DATA
+}
+
+; ----------------------------------------------------------------------------
+; "DATA" STATEMENT
+; EXECUTED BY SKIPPING TO NEXT COLON OR EOL
+; ----------------------------------------------------------------------------
+.export .proc DATA {
+    jsr DATAN
+    .fallthrough ADDON
+}
+
+; ----------------------------------------------------------------------------
+; ADD (Y) TO TXTPTR
+; ----------------------------------------------------------------------------
+.export .proc ADDON {
+    tya
+    clc
+    adc TXTPTR
+    sta TXTPTR
+    bcc L2852
+    inc TXTPTR+1
+    L2852:
+    rts
+}
+
+; ----------------------------------------------------------------------------
+; SCAN AHEAD TO NEXT ":" OR EOL
+; ----------------------------------------------------------------------------
+.export .proc DATAN {
+    ldx #$3A
+    .byte $2C
+    .next REMN::REMN2
+}
+.proc REMN {
+    ldx #$00
+    REMN2:
+    stx CHARAC
+    ldy #$00
+    sty ENDCHR
+    L285E:
+    lda ENDCHR
+    ldx CHARAC
+    sta CHARAC
+    stx ENDCHR
+    L2866:
+    lda (TXTPTR),y
+    beq ADDON::L2852
+    cmp ENDCHR
+    beq ADDON::L2852
+    iny
+    cmp #$22
+    .if !CONFIG_11 {
+        beq L285E  ; old: swap & cont is faster
+        bne L2866
+        .next L2866
+    } .else {
+        bne L2866  ; new: cont is faster
+        beq L285E
+        .next L285E
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "IF" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc IF {
+    jsr FRMEVL
+    jsr CHRGOT
+    cmp #Token::GOTO
+    beq L2884
+    lda #Token::THEN
+    jsr SYNCHR
+    L2884:
+    lda FAC
+    bne REM::L288D
+    .fallthrough REM
+}
+
+; ----------------------------------------------------------------------------
+; "REM" STATEMENT, OR FALSE "IF" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc REM {
+    jsr REMN
+    beq ADDON
+    L288D:
+    jsr CHRGOT
+    bcs L2895
+    jmp GOTO
+    L2895:
+    jmp EXECUTE_STATEMENT
+}
+
+; ----------------------------------------------------------------------------
+; "ON" STATEMENT
+;
+; ON <EXP> GOTO <LIST>
+; ON <EXP> GOSUB <LIST>
+; ----------------------------------------------------------------------------
+.export .proc ON {
+    jsr GETBYT
+    pha
+    cmp #Token::GOSUB
+    beq L28A0::L28A4
+    .fallthrough L28A0
+}
+.export .proc L28A0 {
+    cmp #Token::GOTO
+    bne SYNERR2
+    L28A4:
+    dec FAC_LAST
+    bne L28AC
+    pla
+    jmp EXECUTE_STATEMENT1
+    L28AC:
+    jsr CHRGET
+    jsr LINGET
+    cmp #$2C
+    beq L28A4
+    pla
+    .fallthrough L28B7
+}
+.export .proc L28B7 {
+    rts
+}

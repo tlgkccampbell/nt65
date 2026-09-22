@@ -1,0 +1,14 @@
+.module aim65::extra: placed
+
+.use defines::*
+.use chrget::*
+.use misc1::*
+
+.segment EXTRA
+.if AIM65 {
+
+    .export .proc LCFFA {
+        jsr CHRGOT
+        jmp LB89D
+    }
+}

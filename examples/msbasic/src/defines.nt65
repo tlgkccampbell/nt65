@@ -1,0 +1,326 @@
+; What each target is: which machine it runs on, which of Microsoft's versions it was forked
+; from, which of the optional features it has, and the addresses and sizes of its machine.
+.module defines: placed
+
+; ----------------------------------------------------------------------------
+; The targets. Each configuration in nt65.json sets exactly one.
+; ----------------------------------------------------------------------------
+.export .config CBM1 = 0                ; Commodore BASIC 1, the original PET
+.export .config OSI = 0                 ; Ohio Scientific
+.export .config APPLE = 0               ; AppleSoft I
+.export .config KIM = 0                 ; KIM-1 BASIC
+.export .config CBM2 = 0                ; Commodore BASIC 2
+.export .config KBD = 0                 ; Intellivision Keyboard Component BASIC
+.export .config MICROTAN = 0            ; Microtan 65
+.export .config AIM65 = 0               ; Rockwell AIM-65
+.export .config SYM1 = 0                ; Synertek SYM-1
+.export .config W65C816SXB = 0          ; WDC's W65C816SXB board
+
+.if CBM1 + OSI + APPLE + KIM + CBM2 + KBD + MICROTAN + AIM65 + SYM1 + W65C816SXB != 1 {
+    .error "choose one target: nt65 build --config <target>, a configuration in nt65.json"
+}
+
+; ----------------------------------------------------------------------------
+; Microsoft's versions, in the order they were forked. Each has every fix of the ones
+; before it, so a target based on version 2B is also 2A, 2, 1.1A, 1.1 and 1.0A.
+; ----------------------------------------------------------------------------
+.export .config CONFIG_2C = MICROTAN || W65C816SXB
+.export .config CONFIG_2B = CONFIG_2C || KBD
+.export .config CONFIG_2A = CONFIG_2B || CBM2 || AIM65 || SYM1
+.export .config CONFIG_2 = CONFIG_2A
+.export .config CONFIG_11A = CONFIG_2 || KIM
+.export .config CONFIG_11 = CONFIG_11A || APPLE
+.export .config CONFIG_10A = CONFIG_11 || OSI
+
+; ----------------------------------------------------------------------------
+; Features. Changing one alters a target's base configuration, which is not guaranteed
+; to build or to work.
+; ----------------------------------------------------------------------------
+; jump out into CBM1's binary patches instead of doing the right thing inline
+.export .config CONFIG_CBM1_PATCHES = CBM1
+; all Commodore-specific additions except file I/O
+.export .config CONFIG_CBM_ALL = CBM1 || CBM2
+.export .config CONFIG_DATAFLG = CBM1 || OSI || CBM2
+; the CBM2 "WAIT 6502" easter egg
+.export .config CONFIG_EASTER_EGG = CBM2
+; Commodore PRINT#, INPUT#, GET#, CMD
+.export .config CONFIG_FILE = CBM1 || CBM2
+; all I/O has bit 7 set
+.export .config CONFIG_IO_MSB = APPLE
+; Y needs to be preserved when calling MONCOUT
+.export .config CONFIG_MONCOUT_DESTROYS_Y = KIM || MICROTAN
+; the terminal doesn't need explicit CRs on line ends
+.export .config CONFIG_NO_CR = CBM1 || CBM2 || W65C816SXB
+; no Microsoft-style line editing: "@", "_", BEL and so on
+.export .config CONFIG_NO_LINE_EDITING = CBM1 || CBM2
+; no PEEK, POKE or WAIT
+.export .config CONFIG_NO_POKE = KBD
+; don't do a very volatile trick that saves one byte
+.export .config CONFIG_NO_READ_Y_IS_ZERO_HACK = CBM2 || KBD
+; the NULL statement
+.export .config CONFIG_NULL = OSI || KIM || MICROTAN || AIM65 || SYM1
+; preserve LINNUM on a PEEK
+.export .config CONFIG_PEEK_SAVE_LINNUM = CBM2 || MICROTAN || AIM65 || SYM1
+; whether PRINTNULLS does anything
+.export .config CONFIG_PRINTNULLS = CBM1
+; print CR when the line end is reached
+.export .config CONFIG_PRINT_CR = OSI || APPLE || KIM || MICROTAN || AIM65 || SYM1
+; optimizations for a RAM version of BASIC; only for 1.x
+.export .config CONFIG_RAM = KIM
+; work around the ROR bug of 6502s from 1975 and 1976; not safe with CONFIG_SMALL
+.export .config CONFIG_ROR_WORKAROUND = KIM || MICROTAN
+; check both bytes of the caller's address in NAMENOTFOUND
+.export .config CONFIG_SAFE_NAMENOTFOUND = APPLE || KIM || KBD || MICROTAN || AIM65 || SYM1
+; where in the init code to call SCRTCH
+.export .config CONFIG_SCRTCH_ORDER = .select(MICROTAN || AIM65 || SYM1, 1, .select(OSI || APPLE || KBD, 3, 2))
+; 6-digit floating point instead of 9, 2-character error messages, and no GET
+.export .config CONFIG_SMALL = OSI || KBD
+; 2-character error messages
+.export .config CONFIG_SMALL_ERROR = CONFIG_SMALL || AIM65 || SYM1
+; the input buffer is outside zero page, and at $0200
+.export .config CONFIG_NO_INPUTBUFFER_ZP = APPLE || CBM2 || KBD
+.export .config CONFIG_INPUTBUFFER_0200 = APPLE || CBM2
+
+; ----------------------------------------------------------------------------
+; Sizes
+; ----------------------------------------------------------------------------
+.export BYTES_FP = .select(CONFIG_SMALL, 4, 5)
+.export BYTES_PER_ELEMENT = .select(APPLE, 6, BYTES_FP)
+.export BYTES_PER_VARIABLE = BYTES_FP + 2
+.export MANTISSA_BYTES = BYTES_FP - 1
+.export BYTES_PER_FRAME = 2 * BYTES_FP + 8
+.export FOR_STACK1 = 2 * BYTES_FP + 5
+.export FOR_STACK2 = BYTES_FP + 4
+.export MAX_EXPON = .select(CBM1, 12, 10)
+
+.export STACK = $0100
+.export STACK2 = .select(AIM65, $0200, STACK)
+
+.export CR = 13
+.export LF = 10
+
+; ----------------------------------------------------------------------------
+; Each machine
+; ----------------------------------------------------------------------------
+.if CBM1 || CBM2 {
+    .export SPACE_FOR_GOSUB = .select(CBM1, $36, $3E)
+    .export STACK_TOP = .select(CBM1, $FC, $FA)
+    .export RAMSTART2 = $0400
+    .if CBM1 {
+        .export NULL_MAX = $0A
+    } .else {
+        .export WIDTH = 40
+        .export WIDTH2 = 30
+    }
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+
+    .export CURDVC = .select(CBM1, $0003, $000E)
+    .export TISTR = .select(CBM1, $0200, $008D)
+    .export Z96 = .select(CBM1, $020C, $0096)
+    .export ENTROPY = .select(CBM1, $9044, $E844)
+
+    ; the KERNAL
+    .export .proc OPEN = $FFC0
+    .export .proc CLOSE = $FFC3
+    .export .proc CHKIN = $FFC6
+    .export .proc CHKOUT = $FFC9
+    .export .proc CLRCH = $FFCC
+    .export .proc CHRIN = $FFCF
+    .export .proc CHROUT = $FFD2
+    .export .proc VERIFY = $FFDB
+    .export .proc SYS = $FFDE
+    .export .proc GETIN = $FFE4
+    .export .proc CLALL = $FFE7
+    .export .proc LE7F3 = $E7F3         ; for CBM1
+    .export .proc MONCOUT = CHROUT
+    .export .proc MONRDKEY = GETIN
+}
+
+.if OSI {
+    .export STACK_TOP = $FC
+    .export SPACE_FOR_GOSUB = $33
+    .export NULL_MAX = $0A
+    .export WIDTH = 72
+    .export WIDTH2 = 56
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+    .export RAMSTART2 = $0300
+    .export L0200 = $0200
+
+    .export .proc MONRDKEY = $FFEB
+    .export .proc MONCOUT = $FFEE
+    .export .proc MONISCNTC = $FFF1
+}
+
+.if APPLE {
+    .export STACK_TOP = $F8
+    .export SPACE_FOR_GOSUB = $36
+    .export CRLF_1 = CR
+    .export CRLF_2 = $80
+    .export WIDTH = 40
+    .export WIDTH2 = 14
+    .export RAMSTART2 = $2A00
+
+    .export .proc MONRDKEY = $FD0C
+    .export .proc MONCOUT = $FDED
+    .export .proc LF689 = $F689: inline 37   ; SWEET16
+    .export .proc LF800 = $F800
+    .export .proc LF819 = $F819
+    .export .proc LF828 = $F828
+    .export .proc LF864 = $F864
+    .export .proc TEX = $FB2F
+    .export .proc LFB40 = $FB40
+    .export .proc LFD0C = $FD0C
+    .export .proc LFD6A = $FD6A
+    .export .proc LFECD = $FECD
+    .export .proc LFEFD = $FEFD
+}
+
+.if KIM {
+    .export STACK_TOP = $FC
+    .export SPACE_FOR_GOSUB = $36
+    ; probably different in the original version; the image this is from seems modified
+    .export NULL_MAX = $F2
+    .export WIDTH = 72
+    .export WIDTH2 = 56
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+
+    .export .proc L1800 = $1800
+    .export .proc L1873 = $1873
+    .export .proc MONRDKEY = $1E5A
+    .export .proc MONCOUT = $1EA0
+}
+
+.if KBD {
+    .export STACK_TOP = $FE
+    .export SPACE_FOR_GOSUB = $49
+    .export CRLF_1 = LF
+    .export CRLF_2 = CR
+    .export RAMSTART2 = $0300
+    .export CONST_MEMSIZ = $3FFF
+
+    .export Z96 = $0096
+    .export L06FE = $06FE
+
+    .export .proc L6874 = $6874
+    .export .proc MONCOUT = $FDFA
+    .export LC000 = $C000
+    .export LC009 = $C009
+    .export .proc LDE24 = $DE24
+    .export .proc PRIMM = $DE42: inline .strz
+    .export .proc LDE48 = $DE48
+    .export .proc LDE53 = $DE53
+    .export .proc LDE7F = $DE7F
+    .export .proc LDE8C = $DE8C
+}
+
+.if MICROTAN {
+    .export STACK_TOP = $FE
+    .export SPACE_FOR_GOSUB = $3E
+    .export NULL_MAX = $F0
+    .export WIDTH = 80
+    .export WIDTH2 = 56
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+    .export RAMSTART2 = $0400
+
+    .export .proc MONRDKEY = $E210
+    .export .proc MONRDKEY2 = $E213
+    .export .proc MONCOUT = $E216
+    .export .proc LF000 = $F000
+    .export .proc LF003 = $F003
+    .export .proc LF006 = $F006
+    .export .proc LF009 = $F009
+    .export .proc LF00C = $F00C
+    .export .proc LF00F = $F00F
+    .export .proc LF018 = $F018
+    .export .proc LF01B = $F01B
+    .export .proc LF01E = $F01E
+    .export .proc LF021 = $F021
+    .export .proc LFDFA = $FDFA
+    .export .proc LFE73 = $FE73
+    .export .proc LFE75 = $FE75
+}
+
+.if AIM65 {
+    .export STACK_TOP = $FD
+    .export SPACE_FOR_GOSUB = $44
+    .export NULL_MAX = $F2
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+    .export WIDTH = 20
+    .export WIDTH2 = 10
+    .export RAMSTART2 = $0211
+
+    .export PRIFLG = $A411
+    .export INFLG = $A412
+    .export OUTFLG = $A413
+    .export DRA2 = $A480
+    .export DRB2 = $A482
+
+    .export .proc DU13 = $E520
+    .export .proc PSLS = $E7DC
+    .export .proc WHEREO = $E871
+    .export .proc OUTPUT = $E97A
+    .export .proc INALL = $E993
+    .export .proc OUTALL = $E9BC
+    .export .proc CRCK = $EA24
+    .export .proc GETKEY = $EC40
+    .export .proc GETKY = $EC43
+    .export .proc ROONEK = $ECEF
+    .export .proc CUREAD = $FE83
+}
+
+.if SYM1 {
+    .export STACK_TOP = $FE
+    .export SPACE_FOR_GOSUB = $3E
+    .export NULL_MAX = $F0
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+    .export WIDTH = 72
+    .export WIDTH2 = 56
+    .export RAMSTART2 = $0200
+
+    .export ZD3 = $D3
+    .export ZD4 = $D4
+
+    .export .proc ASCNIB = $8275
+    .export .proc INSTAT = $8386
+    .export .proc MONRDKEY = $8A1B
+    .export .proc MONCOUT = $8A47
+    .export .proc ACCESS = $8B86
+    .export L8C78 = $8C78
+    .export DUMPT = $8E87
+
+    .export P3L = $A64A
+    .export P3H = P3L + 1
+    .export P2L = $A64C
+    .export P2H = P2L + 1
+    .export P1L = $A64E
+}
+
+.if W65C816SXB {
+    .export STACK_TOP = $FC
+    .export SPACE_FOR_GOSUB = $33
+    .export WIDTH = 72
+    .export WIDTH2 = 56
+    .export CRLF_1 = CR
+    .export CRLF_2 = LF
+    .export RAMSTART2 = $5000
+}
+
+; Where a machine's routine is BASIC's own
+.if AIM65 {
+    .export .use aim65::loadsave::{MONCOUT, MONRDKEY, MONRDKEY2}
+}
+.if KBD {
+    .export .use kbd::extra::LFDFA
+}
+.if KIM {
+    .export .use kim::extra::RAMSTART2
+}
+.if W65C816SXB {
+    .export .use w65c816sxb::extra::{MONCOUT, MONRDKEY}
+}

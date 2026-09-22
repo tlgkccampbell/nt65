@@ -1,0 +1,384 @@
+.module flow1: placed
+
+.use defines::*
+.use chrget::*
+.use array::*
+.use error::*
+.use eval::*
+.use float::*
+.use flow2::*
+.use input::*
+.use iscntc::*
+.use memory::*
+.use message::*
+.use misc1::*
+.use misc2::*
+.use program::*
+.use string::*
+.use token::*
+.use zeropage::*
+
+.segment CODE
+
+; ----------------------------------------------------------------------------
+; "FOR" STATEMENT
+;
+; FOR PUSHES 18 BYTES ON THE STACK:
+; 2 -- TXTPTR
+; 2 -- LINE NUMBER
+; 5 -- INITIAL (CURRENT)  FOR VARIABLE VALUE
+; 1 -- STEP SIGN
+; 5 -- STEP VALUE
+; 2 -- ADDRESS OF FOR VARIABLE IN VARTAB
+; 1 -- FOR TOKEN ($81)
+; ----------------------------------------------------------------------------
+.export .proc FOR {
+    lda #$80
+    sta SUBFLG
+    jsr LET
+    jsr GTFORPNT
+    bne L2619
+    txa
+    adc #FOR_STACK1
+    tax
+    txs
+    L2619:
+    pla
+    pla
+    lda #FOR_STACK2
+    jsr CHKMEM
+    jsr DATAN
+    clc
+    tya
+    adc TXTPTR
+    pha
+    lda TXTPTR+1
+    adc #$00
+    pha
+    lda CURLIN+1
+    pha
+    lda CURLIN
+    pha
+    lda #Token::TO
+    jsr SYNCHR
+    jsr CHKNUM
+    jsr FRMNUM
+    lda FACSIGN
+    ora #$7F
+    and FAC+1
+    sta FAC+1
+    lda #<STEP
+    ldy #>STEP
+    sta INDEX
+    sty INDEX+1
+    jmp FRM_STACK3
+}
+
+; ----------------------------------------------------------------------------
+; "STEP" PHRASE OF "FOR" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc STEP {
+    lda #<CON_ONE
+    ldy #>CON_ONE
+    jsr LOAD_FAC_FROM_YA
+    jsr CHRGOT
+    cmp #Token::STEP
+    bne L2665
+    jsr CHRGET
+    jsr FRMNUM
+    L2665:
+    jsr SIGN
+    jsr FRM_STACK2
+    lda FORPNT+1
+    pha
+    lda FORPNT
+    pha
+    lda #$81
+    pha
+    .fallthrough NEWSTT
+}
+
+; ----------------------------------------------------------------------------
+; PERFORM NEXT STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc NEWSTT {
+    jsr ISCNTC
+    lda TXTPTR
+    ldy TXTPTR+1
+    .if CONFIG_NO_INPUTBUFFER_ZP && CONFIG_2 {
+        cpy #>INPUTBUFFER
+        .if CBM2 {
+            nop
+        }
+        beq LC6D4
+    } .else {
+        ; BUG on AppleSoft I,
+        ; fixed differently on AppleSoft II (ldx/inx)
+        beq L2683
+    }
+    sta OLDTEXT
+    sty OLDTEXT+1
+    LC6D4:
+    ldy #$00
+    L2683:
+    lda (TXTPTR),y
+    .if !CONFIG_11 {
+        beq LA5DC  ; old: 1 cycle more on generic case
+        cmp #$3A
+        beq NEWSTT2
+        SYNERR1:
+        jmp SYNERR
+        LA5DC:
+    } .else {
+        bne LET1::COLON  ; new: 1 cycle more on ":" case
+    }
+    ldy #$02
+    lda (TXTPTR),y
+    clc
+    .if CONFIG_2 {
+        bne @long_1
+        jmp CONTROL_C_TYPED::L2701  ; upstream's `jeq`, long since its target comes later
+    @long_1:
+    } .else {
+        beq CONTROL_C_TYPED::L2701
+    }
+    iny
+    lda (TXTPTR),y
+    sta CURLIN
+    iny
+    lda (TXTPTR),y
+    sta CURLIN+1
+    tya
+    adc TXTPTR
+    sta TXTPTR
+    bcc NEWSTT2
+    inc TXTPTR+1
+    .fallthrough NEWSTT2
+}
+.export .proc NEWSTT2 {
+    jsr CHRGET
+    jsr EXECUTE_STATEMENT
+    jmp NEWSTT
+}
+
+; ----------------------------------------------------------------------------
+; EXECUTE A STATEMENT
+;
+; (A) IS FIRST CHAR OF STATEMENT
+; CARRY IS SET
+; ----------------------------------------------------------------------------
+.export .proc EXECUTE_STATEMENT {
+    .if !CONFIG_11A {
+        beq RET1
+    } .else {
+        beq RET2
+    }
+    .if !CONFIG_11 {
+        sec
+    }
+    .fallthrough EXECUTE_STATEMENT1
+}
+.export .proc EXECUTE_STATEMENT1 {
+    sbc #$80
+    .if !CONFIG_11 {
+        bcs @long_2                          ; old: 1 cycle more on instr.
+        jmp LET  ; upstream's `jcc`, long since its target comes later
+    @long_2:
+    } .else {
+        bcc LET1  ; new: 1 cycle more on assignment
+    }
+    cmp #NUM_TOKENS
+    .if CONFIG_2 {
+        bcs LC721
+    } .elseif CONFIG_11 {
+        bcs LET1::SYNERR1
+    } .else {
+        bcs NEWSTT::SYNERR1
+    }
+    asl a
+    tay
+    lda TOKEN_ADDRESS_TABLE+1,y
+    pha
+    lda TOKEN_ADDRESS_TABLE,y
+    pha
+    jmp CHRGET
+}
+
+.if CONFIG_11 {
+    .proc LET1 {
+        jmp LET
+
+        COLON:
+        cmp #$3A
+        beq NEWSTT2
+        SYNERR1:
+        jmp SYNERR
+    }
+}
+
+.if CONFIG_2 {  ; GO TO
+    .proc LC721 {
+        cmp #Token::GO-$80
+        bne LET1::SYNERR1
+        jsr CHRGET
+        lda #Token::TO
+        jsr SYNCHR
+        jmp GOTO
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "RESTORE" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc RESTORE {
+    sec
+    lda TXTTAB
+    sbc #$01
+    ldy TXTTAB+1
+    bcs SETDA
+    dey
+    .fallthrough SETDA
+}
+.export .proc SETDA {
+    sta DATPTR
+    sty DATPTR+1
+    .fallthrough RET2
+}
+.export .proc RET2 {
+    rts
+}
+
+.place iscntc
+;!!! runs into "STOP"
+; ----------------------------------------------------------------------------
+; "STOP" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc STOP {
+    bcs END::END2
+    .fallthrough END
+}
+
+; ----------------------------------------------------------------------------
+; "END" STATEMENT
+; ----------------------------------------------------------------------------
+.export .proc END {
+    clc
+    END2:
+    bne RET1
+    lda TXTPTR
+    ldy TXTPTR+1
+    .if CONFIG_NO_INPUTBUFFER_ZP && CONFIG_2 {
+        ; BUG on AppleSoft I
+        ; fix exists on AppleSoft II
+        ; TXTPTR+1 will always be > 0
+        ldx CURLIN+1
+        inx
+    }
+    beq CONTROL_C_TYPED::END4
+    sta OLDTEXT
+    sty OLDTEXT+1
+    .fallthrough CONTROL_C_TYPED
+}
+.export .proc CONTROL_C_TYPED {
+    lda CURLIN
+    ldy CURLIN+1
+    sta OLDLIN
+    sty OLDLIN+1
+    END4:
+    pla
+    pla
+    L2701:
+    lda #<QT_BREAK
+    ldy #>QT_BREAK
+    .if !KBD {
+        ldx #$00
+        stx Z14
+    }
+    bcc L270E
+    jmp PRINT_ERROR_LINNUM
+    L270E:
+    jmp RESTART
+}
+.if KBD {
+    .export .proc LE664 {
+        tay
+        jmp SNGFLT
+    }
+}
+
+; ----------------------------------------------------------------------------
+; "CONT" COMMAND
+; ----------------------------------------------------------------------------
+.export .proc CONT {
+    bne RET1
+    ldx #ERR_CANTCONT
+    ldy OLDTEXT+1
+    bne L271C
+    jmp ERROR
+    L271C:
+    lda OLDTEXT
+    sta TXTPTR
+    sty TXTPTR+1
+    lda OLDLIN
+    ldy OLDLIN+1
+    sta CURLIN
+    sty CURLIN+1
+    .fallthrough RET1
+}
+.export .proc RET1 {
+    rts
+}
+
+.if KBD {
+    .export .proc PRT {
+        jsr GETBYT
+        txa
+        ; not ROR bug safe
+        ror a
+        ror a
+        ror a
+        sta $8F
+        rts
+    }
+
+    .export .proc LE68C {
+        ldy #$12
+        LE68E:
+        lda LEA30,y
+        sta $03A2,y
+        dey
+        bpl LE68E
+        rts
+    }
+}
+
+.if AIM65 {
+    .export .proc NULL = IQERR              ; the AIM-65 has no NULL
+} .else {
+    .if CONFIG_NULL || CONFIG_PRINTNULLS {
+        ; CBM1 has the keyword removed,
+        ; but the code is still here
+        .export .proc NULL {
+            jsr GETBYT
+            bne RET1
+            inx
+            cpx #NULL_MAX
+            bcs L2739
+            dex
+            stx Z15
+            .fallthrough L2738
+        }
+        .export .proc L2738 {
+            rts
+        }
+        .export .proc L2739 {
+            jmp IQERR
+        }
+    }
+    .if !CONFIG_11A {
+        .export .proc CLEAR {
+            bne RET1
+            jmp CLEARC
+        }
+    }
+}

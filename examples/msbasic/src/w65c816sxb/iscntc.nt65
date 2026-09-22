@@ -1,0 +1,19 @@
+.module w65c816sxb::iscntc: placed
+
+.use defines::*
+.use w65c816sxb::extra::*
+
+.segment CODE
+.if W65C816SXB {
+    .export .proc ISCNTC {
+        jsr MONRDKEY_NB
+        bcc @NOTHING
+        cmp #$03
+        beq @STOPIT
+    @NOTHING:
+        rts
+    @STOPIT:
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}

@@ -1,0 +1,32 @@
+; Microsoft BASIC for the 6502. Every other module is placed here, in the order its bytes
+; go into each segment of the ROM, so the whole program is one object.
+.module msbasic
+
+.place defines                 ; the machines: their constants and ROM entry points
+.place w65c816sxb::loadsave     ; upstream kept these with the target's definitions, which come first
+.place zeropage
+.place header
+.place token
+.place error
+.place message
+.place memory
+.place program
+.place flow1
+.place loadsave
+.place flow2
+.place misc1
+.place print
+.place input
+.place eval
+.place var
+.place array
+.place misc2
+.place string
+.place misc3
+.place poke
+.place float
+.place chrget
+.place rnd
+.place trig
+.place init
+.place extra

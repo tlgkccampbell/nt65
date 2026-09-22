@@ -1,0 +1,47 @@
+; ISCNTC: see whether control-C was typed. Each machine's runs into STOP.
+.module iscntc: placed
+
+.use defines::*
+
+.segment CODE
+; ----------------------------------------------------------------------------
+; SEE IF CONTROL-C TYPED
+; ----------------------------------------------------------------------------
+; Commodore machines use the KERNAL's, below.
+.place kbd::iscntc
+.place osi::iscntc
+.place apple::iscntc
+.place kim::iscntc
+.place microtan::iscntc
+.place aim65::iscntc
+.place sym1::iscntc
+.place w65c816sxb::iscntc
+;!!! runs into "STOP"
+
+.if CONFIG_CBM_ALL {
+    .export .proc ISCNTC = $FFE1         ; the KERNAL's
+}
+.if AIM65 {
+    .export .use aim65::iscntc::ISCNTC
+}
+.if APPLE {
+    .export .use apple::iscntc::ISCNTC
+}
+.if KBD {
+    .export .use kbd::iscntc::ISCNTC
+}
+.if KIM {
+    .export .use kim::iscntc::ISCNTC
+}
+.if MICROTAN {
+    .export .use microtan::iscntc::ISCNTC
+}
+.if OSI {
+    .export .use osi::iscntc::ISCNTC
+}
+.if SYM1 {
+    .export .use sym1::iscntc::ISCNTC
+}
+.if W65C816SXB {
+    .export .use w65c816sxb::iscntc::ISCNTC
+}

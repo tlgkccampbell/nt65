@@ -1,0 +1,22 @@
+.module kbd::iscntc: placed
+
+.use defines::*
+.use flow1::*
+.use print::*
+
+.segment CODE
+.if KBD {
+    .export .proc ISCNTC {
+        jsr LE8F3
+        bcc RET1
+        .fallthrough LE633
+    }
+    .proc LE633 {
+        jsr LDE7F
+        beq STOP
+        cmp #$03
+        bne LE633
+        .fallthrough flow1::STOP
+    }
+    ;!!! runs into "STOP"
+}
