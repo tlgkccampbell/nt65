@@ -1486,6 +1486,42 @@ public static class Catalogue
         "segment \"{0}\" is already declared",
         "A segment is declared once across the whole program, so that every file reaches it the same way.");
 
+    internal static DiagnosticDescriptor CodeInADataSpace { get; } = Entry(
+        "code-in-a-data-space",
+        Severity.Error,
+        "\"{0}\" is in space `{1}`, which holds data: another processor's code is written there as data and macro calls",
+        "A space that holds data is another processor's memory, whose code nt65 does not read as instructions of "
+            + "this program's processor. Its code is data and macro calls, and a space that runs this program's "
+            + "processor says `code`.");
+
+    internal static DiagnosticDescriptor TransferToAnotherSpace { get; } = Entry(
+        "transfer-to-another-space",
+        Severity.Error,
+        "`{0}` goes to {1}, which is in \"{2}\", in {3}, and this code is in {4}: another processor runs it",
+        "A name in another address space is a value to this code, such as the address the other processor starts "
+            + "at. A jump, a branch or a call to it would go to the same number in this processor's memory.");
+
+    internal static DiagnosticDescriptor OperandInAnotherSpace { get; } = Entry(
+        "operand-in-another-space",
+        Severity.Error,
+        "{0} is in \"{1}\", in {2}, and this code is in {3}: here it is a value, for an immediate or for data",
+        "An operand that reaches memory reaches this processor's, where a name in another address space is only "
+            + "a number. Its value may be taken as an immediate or put in data, and the copy the host holds is "
+            + "reached through `.loadof`.");
+
+    internal static DiagnosticDescriptor SpaceUndeclared { get; } = Entry(
+        "space-undeclared",
+        Severity.Error,
+        "space `{0}` is not declared",
+        "A segment's `space` names an address space the project's `spaces` declares, with whether it runs this "
+            + "program's processor.");
+
+    internal static DiagnosticDescriptor SpaceNotAName { get; } = Entry(
+        "space-not-a-name",
+        Severity.Error,
+        "a segment's `space` is the name of an address space",
+        "`space = spc` puts the segment in the space `spc`; there is nothing to work out, so it is a name.");
+
     internal static DiagnosticDescriptor SegmentStandardSize { get; } = Entry(
         "segment-standard-size",
         Severity.Error,
@@ -2291,10 +2327,17 @@ public static class Catalogue
         "How wide an address in a segment is decides how every reference to what is in it is written, so every "
             + "segment says it.");
 
+    internal static DiagnosticDescriptor ProjectSpaceHoldsUnknown { get; } = Entry(
+        "project-space-holds-unknown",
+        Severity.Error,
+        "space `{0}` holds \"code\", for a space that runs this program's processor, or \"data\"",
+        "A space says whether its code is this program's processor's, which nt65 checks, or data and macro calls, "
+            + "which is what another processor's code is to nt65.");
+
     internal static DiagnosticDescriptor ProjectSegmentKeyUnknown { get; } = Entry(
         "project-segment-key-unknown",
         Severity.Error,
-        "segment \"{0}\": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`",
+        "segment \"{0}\": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank`, `mirrors` and a `space`",
         "What a segment may say is a fixed set: how wide an address in it is, and where it sits.");
 
     internal static DiagnosticDescriptor DiagnosticNameUnknown { get; } = Entry(

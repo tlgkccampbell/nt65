@@ -20,12 +20,10 @@
 .export spc_write_dsp, spc_boot_apu
 
 ; The sound driver is hand-written ca65 for the SPC700, linked into ROM7 and copied to the
-; sound CPU's RAM by spc_boot_apu.  ld65 defines where it was loaded, where it runs and how
-; big it is; the driver exports where to start it.
-.import __SPCIMAGE_LOAD__: abs
-.import __SPCIMAGE_RUN__: abs
-.import __SPCIMAGE_SIZE__: abs
-.import spc_entry: abs
+; sound CPU's RAM by spc_boot_apu.  Its segment is in the sound CPU's address space, and
+; `.loadof`, `.runof` and `.spanof` say where ld65 loaded it, where it runs and how big it
+; is; the driver exports where to start it, which is an address in that space too.
+.import spc_entry: abs in SPCIMAGE
 
 .segment CODE2
 
@@ -129,13 +127,13 @@
     jsr spc_wait_boot
 
     ; Upload the driver to SPC RAM where it runs
-    ldy #__SPCIMAGE_RUN__
+    ldy #.runof(SPCIMAGE)
     jsr spc_begin_upload
 @next_byte:
     tyx
-    lda f:__SPCIMAGE_LOAD__,x
+    lda f:.loadof(SPCIMAGE),x
     jsr spc_upload_byte
-    cpy #__SPCIMAGE_SIZE__
+    cpy #.spanof(SPCIMAGE)
     bne @next_byte
     ldy #spc_entry
     jsr spc_execute

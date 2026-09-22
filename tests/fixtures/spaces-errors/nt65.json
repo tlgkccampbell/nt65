@@ -1,0 +1,9 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "spaces": { "spc": "data", "drive": "code" },
+  "segments": {
+    "SPCIMAGE": { "size": "abs", "space": "spc" },
+    "DRIVE":    { "size": "abs", "space": "drive" }
+  }
+}

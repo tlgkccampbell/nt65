@@ -26,6 +26,9 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     /// </summary>
     public IReadOnlyList<(long First, long Last)> Mirrors { get; init; } = [];
 
+    /// <summary>The address space its <c>space = name</c> puts it in, or null for the host's.</summary>
+    public string? Space { get; init; }
+
     /// <summary>Whether its symbols are reached with the data bank at <paramref name="bank"/>: its home bank or a mirror.</summary>
     public bool IsSeenFrom(long bank) =>
         Bank == bank || Mirrors.Any(mirror => bank >= mirror.First && bank <= mirror.Last);
@@ -43,7 +46,8 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     /// <inheritdoc/>
     public bool Equals(Segment? other) =>
         other is not null && Name == other.Name && Size == other.Size && Declaration == other.Declaration
-        && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors);
+        && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors)
+        && Space == other.Space;
 
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Name, Size, Declaration, DirectPage, Bank, Mirrors.Count);

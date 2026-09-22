@@ -1182,6 +1182,16 @@ internal sealed partial class Binder
                 if (symbol.Signature.IsFar)
                     symbol.AddressSize = AddressSize.Far;
             }
+
+            // `in SEGMENT` says where the imported name is, which is what its references are
+            // checked against: its bank, its direct page and its address space.
+            if (item.Segment is { IsMissing: false } segment)
+            {
+                if (segments.Find(segment.Text) is null)
+                    Report(segment.Span, Catalogue.SegmentUndeclared.Says(segment.Text));
+                else
+                    symbol.Segment = segment.Text;
+            }
         }
         CollectUses(checkedValue);
         CollectUses(item.Element);
@@ -1460,6 +1470,24 @@ internal sealed partial class Binder
         // anything: one that is not declared is what the question is for.
         if (IsDefinedCall(node))
             return;
+
+        // `.loadof(S)` and `.runof(S)` name a segment, which is in a table of its own; so may
+        // `.spanof(S)`, where S is no symbol, which is a word here and the segment's name after.
+        if (node is CallExpressionSyntax call && SegmentFunctions.NameIn(call) is { } segmentName)
+        {
+            if (SegmentFunctions.TakesOnlyASegment(call))
+            {
+                if (segments.Find(segmentName.Text) is null)
+                    Report(segmentName.Span, Catalogue.SegmentUndeclared.Says(segmentName.Text));
+                return;
+            }
+            if (call.Function is { } spanOf && spanOf.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase)
+                && segments.Find(segmentName.Text) is not null)
+            {
+                CollectUses(call.Arguments, into, words: true, chosen);
+                return;
+            }
+        }
 
         // `.select` evaluates only the value its condition chooses, and only that one's names
         // have to mean something, which evaluation says.
@@ -2011,7 +2039,9 @@ internal sealed partial class Binder
             {
                 if (item is SegmentAttributeSyntax attribute)
                 {
-                    binder.CollectUses(attribute.Value);
+                    // A space is named in a table of its own, as a segment is.
+                    if (!attribute.Name.Text.Equals("space", StringComparison.OrdinalIgnoreCase))
+                        binder.CollectUses(attribute.Value);
                 }
                 else if (item is BankRangeSyntax range)
                 {

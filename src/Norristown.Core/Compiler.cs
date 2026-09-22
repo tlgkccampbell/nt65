@@ -195,7 +195,7 @@ public static class Compiler
         var conditions = new List<Diagnostic>();
         var configuration = Configuration.Resolve(trees, target, project.Defines, conditions);
         var segmentTable = new List<Diagnostic>();
-        var segments = SegmentTable.Build(trees, project.Segments, configuration, segmentTable);
+        var segments = SegmentTable.Build(trees, project.Segments, project.Spaces, configuration, segmentTable);
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.

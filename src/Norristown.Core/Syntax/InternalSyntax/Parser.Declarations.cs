@@ -230,10 +230,10 @@ internal sealed partial class Parser
     /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
     private GreenNode ParseSegmentAttribute()
     {
-        if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors"))
+        if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors") && !AtWord("space"))
         {
             return new SegmentAttributeSyntax(
-                Missing(SyntaxKind.Identifier, Catalogue.ExpectedSegmentAttribute.Says("`dp`, `bank` or `mirrors`")),
+                Missing(SyntaxKind.Identifier, Catalogue.ExpectedSegmentAttribute.Says("`dp`, `bank`, `mirrors` or `space`")),
                 GreenToken.Missing(SyntaxKind.Equals), null, null, null, null);
         }
         var mirrors = AtWord("mirrors");
@@ -542,7 +542,16 @@ internal sealed partial class Parser
                     Report(Catalogue.ExpectedAddressSize.Says("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
             }
         }
-        return new ImportItemSyntax(name, equals, value, colon, addressSize, signature, element);
+        // `in SEGMENT` says which segment an imported address is in, which is what its
+        // references are checked against.
+        GreenToken? inKeyword = null;
+        GreenToken? segment = null;
+        if (colon is not null && AtWord("in"))
+        {
+            inKeyword = Advance();
+            segment = ExpectName(Catalogue.ExpectedName.Says("the segment the name is in"));
+        }
+        return new ImportItemSyntax(name, equals, value, colon, addressSize, signature, element, inKeyword, segment);
     }
 
     /// <summary>

@@ -190,7 +190,7 @@ public sealed class ParserTests
     [InlineData(".segment \"X\"", "a segment name is written without quotes: `.segment X`")]
     [InlineData(".segment X: word", "expected `zp`, `abs` or `far`")]
     [InlineData(".segment {", "expected a segment name")]
-    [InlineData(".segment X: zp, page = 1", "expected `dp`, `bank` or `mirrors`")]
+    [InlineData(".segment X: zp, page = 1", "expected `dp`, `bank`, `mirrors` or `space`")]
     [InlineData(".rodata {", "`.rodata` is written `.segment RODATA`")]
     [InlineData(".tag Point", "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`")]
     [InlineData(".data {", "`.data` declares data, and needs a name: the segment is written `.segment DATA`")]

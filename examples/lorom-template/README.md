@@ -77,8 +77,10 @@ last.
 
 nt65 has no SPC700, so the sound driver stays what it was upstream: hand-written ca65,
 assembled with no CPU through blargg's macro pack, and linked into the image the way any
-hand-written ca65 links with nt65 output. `spc_boot_apu` reaches it through the symbols ld65
-defines for its segment and the entry point it exports.
+hand-written ca65 links with nt65 output. `nt65.json` puts its segment, `SPCIMAGE`, in the
+sound CPU's address space, so `spc_boot_apu` names where ld65 loaded it, where it runs and how
+big it is with `.loadof`, `.runof` and `.spanof`, and imports the entry point it exports as a
+name in that segment, which nt65 lets it pass as a value and refuses as a call target.
 
 - `spc/spcimage.s`: the sound driver.
 - `spc/musicseq.s`: the music.

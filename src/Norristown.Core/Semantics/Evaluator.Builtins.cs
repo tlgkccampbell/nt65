@@ -77,6 +77,14 @@ internal sealed partial class Evaluator
         // expressions like any label difference. Only the difference can ever be a number,
         // because nt65 never knows an absolute address, and only a caller that has laid the
         // file out can supply it.
+        // Where a segment was loaded and where it runs are the linker's to say.
+        if (name is ".loadof" or ".runof")
+        {
+            if (arguments.Count != 1)
+                Report(function, Catalogue.BuiltinArguments.Says(name, "a segment"));
+            return Value.Unknown;
+        }
+
         if (name is ".endof" or ".spanof")
         {
             if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } laid)

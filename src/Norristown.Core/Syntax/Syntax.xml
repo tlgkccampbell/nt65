@@ -1124,6 +1124,18 @@
         <summary>The element type after the <c>:</c>, <c>.byte[16]</c> or <c>.type T</c>, or null.</summary>
       </PropertyComment>
     </Field>
+    <Field Name="InKeyword" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The <c>in</c> before the segment the imported name is in, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+    </Field>
+    <Field Name="Segment" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The segment the imported name is in, after <c>in</c>, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+    </Field>
   </Node>
 
   <Node Name="ImportSignatureSyntax" Base="SyntaxNode">

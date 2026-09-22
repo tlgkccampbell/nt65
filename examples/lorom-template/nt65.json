@@ -2,7 +2,9 @@
   "cpu": "65816",
   "files": ["src/*.nt65"],
   "out": "build",
+  "spaces": { "spc": "data" },
   "segments": {
+    "SPCIMAGE":   { "size": "abs", "space": "spc" },
     "ZEROPAGE":   { "size": "zp",  "dp": 0 },
     "BSS":        { "size": "abs", "bank": 0, "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
     "BSS7E":      { "size": "abs", "bank": "$7e" },

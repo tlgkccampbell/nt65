@@ -36,6 +36,12 @@ public static class AddressSymbols
                 case SymbolKind.Label or SymbolKind.Proc or SymbolKind.Data:
                     yield return symbol;
                     break;
+
+                // An import that says which segment it is in is placed there, as far as
+                // anything that asks is concerned.
+                case SymbolKind.ImportedAddress when symbol.Segment is not null:
+                    yield return symbol;
+                    break;
                 case SymbolKind.AddressAlias when symbol.ValueExpression is { } value && followed.Add(symbol):
                     foreach (var aliased in Collect(model, value, null, followed))
                         yield return aliased;

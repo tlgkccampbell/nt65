@@ -596,7 +596,8 @@ public sealed class StateAnalysis : IProcessorStates
             return merged!;
         }
 
-        if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee })
+        if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee }
+            && !checks.InAnotherSpace(step, target))
         {
             checks.CheckMirror(step, mode);
             checks.CheckTailCall(step, mnemonic, target, callee, state.Processor, routine);
@@ -645,6 +646,10 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private ProcessorState Called(Step step, string mnemonic, Symbol? target, ProcessorState state)
     {
+        // A call into another address space has been reported where it is laid out, and what
+        // another processor's routine takes is nothing to this one's state.
+        if (checks.InAnotherSpace(step, target))
+            return state;
         if (target?.Signature is not { } callee)
         {
             checks.CheckCallTarget(step, mnemonic, target);

@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 367 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 373 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -17,12 +17,12 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Values](#values) | 49 | — |
 | [Macros](#macros) | 28 | — |
 | [Data](#data) | 30 | — |
-| [Placement](#placement) | 15 | — |
+| [Placement](#placement) | 20 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
 | [Control flow](#control-flow) | 28 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
 | [Processor state](#processor-state) | 36 | — |
 | [Output](#output) | 6 | `c-header-name-left-out` (warning), `c-header-untyped` (warning), `omitted-branch` (info) |
-| [The project file](#the-project-file) | 23 | — |
+| [The project file](#the-project-file) | 24 | — |
 | [Signatures](#signatures) | 24 | — |
 
 ## Reading a line
@@ -1333,6 +1333,12 @@ The value does not fit the bytes the declaration reserves for it. A wider type, 
 
 Segments, where a declaration sits and how wide an address is.
 
+### `code-in-a-data-space`
+
+> "{0}" is in space `{1}`, which holds data: another processor's code is written there as data and macro calls
+
+A space that holds data is another processor's memory, whose code nt65 does not read as instructions of this program's processor. Its code is data and macro calls, and a space that runs this program's processor says `code`.
+
 ### `far-needs-65816`
 
 > {0}: a `far` address needs the 65816
@@ -1350,6 +1356,12 @@ A `.data` declaration holds bytes. Code goes in a routine, where the analysis ca
 > {0} in a `.proc`: code outside one is reached by nothing nt65 can follow
 
 Flow analysis follows routines, so code that is in none is code nothing can be said about.
+
+### `operand-in-another-space`
+
+> {0} is in "{1}", in {2}, and this code is in {3}: here it is a value, for an immediate or for data
+
+An operand that reaches memory reaches this processor's, where a name in another address space is only a number. Its value may be taken as an immediate or put in data, and the copy the host holds is reached through `.loadof`.
 
 ### `outside-every-segment`
 
@@ -1422,6 +1434,24 @@ A standard segment may be declared once, to give it a direct page, a bank or mir
 > segment "{0}" is not declared
 
 Every segment is declared once, by a file or by the project, with the address size it is reached at. Nothing places bytes in an undeclared one.
+
+### `space-not-a-name`
+
+> a segment's `space` is the name of an address space
+
+`space = spc` puts the segment in the space `spc`; there is nothing to work out, so it is a name.
+
+### `space-undeclared`
+
+> space `{0}` is not declared
+
+A segment's `space` names an address space the project's `spaces` declares, with whether it runs this program's processor.
+
+### `transfer-to-another-space`
+
+> `{0}` goes to {1}, which is in "{2}", in {3}, and this code is in {4}: another processor runs it
+
+A name in another address space is a value to this code, such as the address the other processor starts at. A jump, a branch or a call to it would go to the same number in this processor's memory.
 
 ## Instructions
 
@@ -2093,7 +2123,7 @@ The project file is one object, whose keys say what the program is built from an
 
 ### `project-segment-key-unknown`
 
-> segment "{0}": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`
+> segment "{0}": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank`, `mirrors` and a `space`
 
 What a segment may say is a fixed set: how wide an address in it is, and where it sits.
 
@@ -2108,6 +2138,12 @@ A segment is an object saying how wide an address in it is, and where it sits.
 > segment "{0}" needs a `size` of "zp", "abs" or "far"
 
 How wide an address in a segment is decides how every reference to what is in it is written, so every segment says it.
+
+### `project-space-holds-unknown`
+
+> space `{0}` holds "code", for a space that runs this program's processor, or "data"
+
+A space says whether its code is this program's processor's, which nt65 checks, or data and macro calls, which is what another processor's code is to nt65.
 
 ### `project-value-not-an-object`
 

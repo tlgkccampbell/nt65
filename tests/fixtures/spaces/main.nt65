@@ -1,0 +1,50 @@
+; Another processor's memory is an address space of its own. The host uploads an image and
+; tells the other processor where to start, so what is in that space is a value here: an
+; immediate, data, and where the linker put the image, which `.loadof`, `.runof` and
+; `.spanof` name.
+.module main
+
+.cpu 65816
+
+.export boot, entries, image, drive_main
+
+; An import says which segment its name is in, so it is checked like a name declared there.
+.import spc_entry: abs in SPCIMAGE
+
+; A space that holds data takes data and macro calls: here, a few bytes of SPC700 code.
+.segment SPCIMAGE
+.data image {
+    .data main {
+        .byte $e8, $05          ; mov a, #5
+        .byte $6f               ; ret
+    }
+}
+
+; Data may hold a name from another space.
+.segment RODATA
+.data entries: .addr spc_entry, image::main
+
+.segment CODE
+.proc boot: a8, i16 {
+    ldy #.runof(SPCIMAGE)
+    ldx #0
+@next:
+    lda f:.loadof(SPCIMAGE),x
+    inx
+    cpx #.spanof(SPCIMAGE)
+    bne @next
+    ldy #spc_entry
+    ldy #image::main
+    rts
+}
+
+; A space that runs this program's processor holds routines, checked as any are.
+.segment DRIVE
+.proc drive_main: a8, i8 {
+    jsr drive_next
+    rts
+}
+
+.proc drive_next: a8, i8 {
+    rts
+}

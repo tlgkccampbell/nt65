@@ -401,6 +401,54 @@ of them, and needs a `bank`:
 
 On the other processors they are accepted and nothing reads them.
 
+**Address spaces.** A 65xx program often carries another processor's code: the SNES sound
+CPU's driver, a disk drive's half of a fast loader, a program for a second processor. Its
+bytes are linked into the host's image and copied across at run time, so its segment loads
+in the host's memory and runs in the other processor's. That other memory is an **address
+space** of its own. The project declares each space beside the segments, with whether it
+runs this program's processor, `"spaces": { "spc": "data", "drive": "code" }` (§5.3), and a
+segment says which it is in with `space = name`, in the project file or in its declaration;
+a segment that says none is in the host's space, which is every segment that does not. The
+linker configuration is untouched: the segment still loads in ROM and runs at its own
+address, which ld65 is told with `load` and `run`. An address has a space; a module does not,
+and a module of constants and macros belongs to none, which is right for a macro pack both
+sides use.
+
+- **A space that holds data holds no instructions.** The program's processor stays one, so
+  an instruction in a segment of a `data` space is an error, and what goes there is data
+  declarations and macro calls, which is how another processor's instruction set is written
+  (§11.2). A `code` space runs this program's processor, and its routines are checked as any
+  are: the 1541 half of a C64 fast loader, or the second 65816 of an SA-1 cartridge.
+- **A name in another space is a value.** A reference is checked by the space of the name's
+  segment against the space of the segment of the code that writes it. Code may take a name
+  from another space as an immediate and data may hold one, which is how the host tells the
+  other processor where to start. A jump, a branch or a call to one is an error, and so is an
+  operand that reaches memory through one: each would reach the same number in this
+  processor's memory. An import says which segment it is in with `in`,
+  `.import spc_entry: abs in SPCIMAGE`, and is checked as a name declared there (§12).
+- **A segment's addresses are the linker's, and nt65 names them.** `.loadof(S)`, `.runof(S)`
+  and `.spanof(S)` stand for the `__S_LOAD__`, `__S_RUN__` and `__S_SIZE__` that ld65 defines
+  for a segment its configuration gives `define=yes`: where the image was loaded, where it
+  runs and how many bytes it is. The output imports them, absolute as ld65 defines them, so a
+  read of the image in another bank writes `f:`. `.runof(S)` is an address in `S`'s space and
+  is checked as one; the other two are the host's. `.spanof` of a name that is a symbol
+  measures the symbol (§7.6), and of a segment's name, the segment.
+
+```nt65
+.import spc_entry: abs in SPCIMAGE
+
+.proc boot: a8, i16 {
+    ldy #.runof(SPCIMAGE)
+    ...
+    lda f:.loadof(SPCIMAGE),x
+    inx
+    cpx #.spanof(SPCIMAGE)
+    ...
+    ldy #spc_entry
+    ...
+}
+```
+
 These declarations restate facts that live in the ld65 configuration, which nt65 does
 not read or check. In particular a `zp` segment is emitted with `z:` operands, so ld65
 must place it where its symbols are direct-page offsets (`$00`–`$FF`, relative to D);
@@ -442,7 +490,9 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   "out": "build",
   "defines": { "DEBUG": 1, "VERSION": "$0102" },
   "diagnostics": { "unused-symbol": "off", "mnemonic-name": "error" },
+  "spaces": { "spc": "data" },
   "segments": {
+    "SPCIMAGE": { "size": "abs", "space": "spc" },
     "ZP2":   { "size": "zp",  "dp": "$2100" },
     "WRAM":  { "size": "abs", "bank": "$7e" },
     "LORAM": { "size": "abs", "bank": "$7e", "mirrors": ["$00-$3f", "$80-$bf"] },
@@ -481,9 +531,12 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   answers are `"off"`, `"warning"` and `"error"`. A diagnostic nt65 reports as an error is not
   a project's to turn down, and says so; a name nt65 has no entry for is an error, with the
   name it is nearly.
+- `spaces`: the address spaces other than the host's (§5.2), each `"code"` when it runs this
+  program's processor and `"data"` when it is another processor's memory. Only the project
+  declares them: a program that links another processor's image has a project.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
   be declared in a file, and a standard one keeps its size here too. Its `mirrors` are
-  written as `ranges` writes banks.
+  written as `ranges` writes banks, and its `space` names one of `spaces`.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
@@ -1974,7 +2027,7 @@ is an expression like any other.
 
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
-`.endof(x)` and `.spanof(x)` (§7.6), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
+`.endof(x)` and `.spanof(x)` (§7.6), `.loadof(S)`, `.runof(S)` and `.spanof(S)` of a segment (§5.2), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
 `.strlen(s)`, `.strat(s, i)`, `.min(a, b)`,
 `.max(a, b)`, `.sqrt(n)`, `.muldiv(a, b, c)`, `.sin(angle, turn, scale)` and
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
@@ -2788,6 +2841,10 @@ points) are declared explicitly:
 .import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
 ```
+
+An imported address may say which segment it is in, `.import spc_entry: abs in SPCIMAGE`, and
+is then checked as a name declared there: against the segment's bank, its direct page and its
+address space (§5.2, §7.5).
 
 On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
 empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
@@ -3799,6 +3856,16 @@ Recorded so the reasoning survives. None is open.
   operand is checked against each of them. It is kept to `dbr`, since nothing else the
   analysis follows has a use for one, and a set at entry is handed back unchanged because the
   routines that want one are exactly those that never touch B.
+- **An address space, not an instruction set per processor.** A 65xx sits beside many other
+  processors, and nt65 adding their instruction sets one at a time would never finish; for a
+  processor with a toolchain of its own, nt65 should not be its assembler anyway. What every
+  such program gives the 65xx side is the same: an image of bytes, the space it runs in, a
+  run address, and names in that space. That contract has nothing to do with the other
+  processor's instructions, so it is what scales. A table of opcodes in the source was
+  weighed and left out: operand shapes are syntax the analysis and the editor key off, what
+  makes the analysis worth having is a few dozen lines of code per processor rather than
+  rows, and a project's table is checked against nothing. The spaces are declared in the
+  project file only, beside the segments and the linker configuration they restate.
 - **A segment has one home bank and mirrors.** Low WRAM, hardware registers and FastROM code
   are each seen in several banks. Data is reached from any of them; code is taken to run in
   its home bank, which is what `phk` and the cross-bank checks use. `bank` stays the word for
@@ -4104,6 +4171,7 @@ error       := '.error' string
 cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816')
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
+             | 'space' '=' ident                     ; a space the project declares
 banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
 padding     := '.res' expr (',' expr)? | '.align' expr (',' expr)?
 local       := '@'ident                               ; one token
@@ -4213,7 +4281,7 @@ use         := '.use' module-path (('::' '*') | ('::' '{' use-item (',' use-item
                | ('as' ident))?                       ; at a module's top level
 use-item    := ident ('as' ident)?
 import      := '.import' import-item (',' import-item)*
-import-item := ident (':' import-type)?
+import-item := ident (':' import-type ('in' ident)?)?    ; `in` a segment
              | ident '=' expr                        ; checked import
 import-type := size | 'proc' '(' state? ('->' state)? ')'
              | size? element count?                  ; a typed import: no values
@@ -4230,6 +4298,7 @@ builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.s
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
              | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
+             | '.loadof' | '.runof'                     ; of a segment
              | '.mode' | '.byteof' | '.exprof' | '.empty' ; the last four in macro bodies
 ```
 

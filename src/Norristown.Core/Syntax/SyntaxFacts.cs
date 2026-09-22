@@ -33,7 +33,7 @@ public static class SyntaxFacts
     public static readonly IReadOnlyList<string> BuiltinFunctions =
     [
         ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
-        ".endof", ".spanof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
+        ".endof", ".spanof", ".loadof", ".runof", ".strlen", ".strat", ".min", ".max", ".addrsize", ".target",
         ".defined", ".has", ".select", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles", ".maxcycles",
     ];
 

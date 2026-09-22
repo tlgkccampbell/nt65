@@ -81,6 +81,10 @@ internal sealed class StateChecks
         return Operands.Substituted(model, written, step.On)?.Operand ?? written;
     }
 
+    /// <summary>Whether <paramref name="target"/> is in another address space than the code at <paramref name="step"/>.</summary>
+    public bool InAnotherSpace(Step step, Symbol? target) =>
+        target?.Segment is { } placed && model.Segments.SpaceOf(placed)?.Name != model.Segments.SpaceOf(step.Segment)?.Name;
+
     /// <summary>The segment a placed symbol is in, as the program's table declares it.</summary>
     public Segment? SegmentOf(Symbol symbol) => symbol.Segment is { } name ? model.Segments.Find(name) : null;
 

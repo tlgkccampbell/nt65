@@ -579,6 +579,7 @@ public sealed partial class CodeLayout
         var direct = operand is not null && ThroughDirectPage(operand) ? DirectOffset(mnemonic, operand, mode, state) : null;
         if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
             CheckDirectPageSymbols(mnemonic, operand, mode);
+        CheckSpaces(mnemonic, operand, mode);
         var timing = Cycles.Of(cpu, mnemonic.Text, mode, state);
         IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
         Laid(statement, new LineLayout(

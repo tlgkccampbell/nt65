@@ -43,6 +43,15 @@ internal sealed partial class Evaluator
 
         void Walk(SyntaxNode node)
         {
+            // What the linker says of a segment is as wide as the segment function makes it.
+            if (node is CallExpressionSyntax asked
+                && SegmentFunctions.Of(asked, segments, name => SymbolOf(name) is not null) is not null)
+            {
+                named = true;
+                widest = Widest(widest, SegmentFunctions.SizeOf());
+                return;
+            }
+
             // A span is the difference of two addresses, which is a number; an end is an
             // address, as wide as the label it follows.
             if (node is CallExpressionSyntax { Function: { } function }

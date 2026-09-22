@@ -29,6 +29,9 @@ public sealed record ProjectSettings(
     public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
         new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
 
+    /// <summary>The address spaces other than the host's, ordered by name.</summary>
+    public IReadOnlyList<AddressSpace> Spaces { get; init; } = [];
+
     /// <summary>The banks an absolute constant address in each range may be reached from, ordered by address.</summary>
     public IReadOnlyList<AccessRange> Ranges { get; init; } = [];
 

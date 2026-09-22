@@ -32,6 +32,15 @@
       "allOf": [{ "$ref": "#/definitions/diagnostics" }],
       "examples": [{ "unused-symbol": "off", "mnemonic-name": "error" }]
     },
+    "spaces": {
+      "type": "object",
+      "additionalProperties": {
+        "description": "\"code\" for a space that runs this program's processor, whose routines nt65 checks; \"data\" for another processor's memory, whose code is data and macro calls.",
+        "enum": ["code", "data"]
+      },
+      "description": "Address spaces other than the host's, such as a sound CPU's or a disk drive's memory. A name in one is a value to code in another: an immediate or data, never a jump target or an operand that reaches memory.",
+      "examples": [{ "spc": "data" }]
+    },
     "segments": {
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/segment" },
@@ -124,6 +133,7 @@
         "charmap-value-not-a-byte",
         "cheap-local-in-a-path",
         "cheap-local-outside-a-scope",
+        "code-in-a-data-space",
         "code-label-as-data",
         "code-unreachable",
         "computed-jump-unchecked",
@@ -324,6 +334,7 @@
         "operand-argument-mode",
         "operand-argument-parenthesized",
         "operand-has-no-next-byte",
+        "operand-in-another-space",
         "operand-is-text",
         "operand-missing",
         "operand-mode-unknown",
@@ -347,6 +358,7 @@
         "project-segment-key-unknown",
         "project-segment-not-an-object",
         "project-segment-size-missing",
+        "project-space-holds-unknown",
         "project-value-not-an-object",
         "pushed-return-unchecked",
         "range-bank-mismatch",
@@ -398,6 +410,8 @@
         "signature-value-not-constant",
         "signature-value-out-of-range",
         "sizeof-depends-on-alignment",
+        "space-not-a-name",
+        "space-undeclared",
         "sqrt-of-a-negative",
         "state-banks-invalid",
         "state-banks-not-dbr",
@@ -420,6 +434,7 @@
         "text-not-ascii",
         "text-unterminated",
         "transfer-prefix",
+        "transfer-to-another-space",
         "turn-or-scale-out-of-range",
         "unchanged-needs-entry",
         "unexpected-character",
@@ -476,6 +491,10 @@
         "mirrors": {
           "description": "The other banks the segment appears in, written as `ranges` writes banks. A segment with mirrors needs a bank.",
           "allOf": [{ "$ref": "#/definitions/banks" }]
+        },
+        "space": {
+          "type": "string",
+          "description": "The address space the segment is in, one `spaces` declares: another processor's memory. A segment that names none is in the host's."
         }
       }
     },

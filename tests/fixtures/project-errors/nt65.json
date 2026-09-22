@@ -13,12 +13,16 @@
     "unused-symbol": "quiet",  // ;! error[diagnostic-severity-unknown]: `unused-symbol` is reported as "off", "warning" or "error"
     "not-declared": "warning"  // ;! error[diagnostic-not-turned-down]: `not-declared` is an error, and a project may not turn an error down
   },
+  "spaces": {
+    "spc": "sound"        // ;! error[project-space-holds-unknown]: space `spc` holds "code", for a space that runs this program's processor, or "data"
+  },
   "segments": {
     "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment "VRAM" needs a `size` of "zp", "abs" or "far"
     "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
     "WIDE": { "size": "abs", "bank": 256 },    // ;! error[segment-attribute-out-of-range]: a bank is one byte
     "CODE": { "size": "far" },                 // ;! error[segment-standard-size]: "CODE" is a standard segment, which is `abs`
-    "ODD":  { "size": "abs", "base": 1 }       // ;! error[project-segment-key-unknown]: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank` and `mirrors`
+    "ODD":  { "size": "abs", "base": 1 },      // ;! error[project-segment-key-unknown]: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank`, `mirrors` and a `space`
+    "APU":  { "size": "abs", "space": "apu" }  // ;! error[space-undeclared]: space `apu` is not declared
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],

@@ -338,6 +338,15 @@ public sealed class Emitter
             }
         }
 
+        // What the linker defines for a segment this file asks about, or a macro it calls does.
+        foreach (var (name, size) in SegmentImports())
+        {
+            if (!any)
+                Blank();
+            any = true;
+            Line(Linked(".import", size, name));
+        }
+
         // The end of what this file measures in another file comes from that file, which
         // exports it beside the declaration.
         foreach (var measured in Extents.MeasuredIn(model).Where(symbol => symbol.Tree != model.Tree)
@@ -350,6 +359,24 @@ public sealed class Emitter
         }
         if (any)
             pendingBlank = true;
+    }
+
+    /// <summary>
+    /// The names ld65 defines for the segments this file's <c>.loadof</c>, <c>.runof</c> and
+    /// <c>.spanof</c> ask about, and those of every macro it may expand, with their sizes.
+    /// </summary>
+    private IEnumerable<(string Name, AddressSize Size)> SegmentImports()
+    {
+        var calls = model.Tree.Root.DescendantNodes().OfType<MacroCallSyntax>()
+            .Select(model.MacroAt).OfType<Symbol>();
+        var bodies = Macros.Reachable(calls).Select(macro => macro.Definition).OfType<SyntaxNode>();
+        return new[] { model.Tree.Root }.Concat(bodies)
+            .SelectMany(node => node.DescendantNodes().OfType<CallExpressionSyntax>())
+            .Select(call => SegmentFunctions.Of(call, model))
+            .OfType<(string Function, Segment Segment)>()
+            .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment), SegmentFunctions.SizeOf()))
+            .Distinct()
+            .OrderBy(import => import.Item1, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -2312,6 +2339,13 @@ public sealed class Emitter
         var tokens = Tokens(call);
         if (tokens.Count == 0)
             return;
+
+        // What the linker says of a segment is the name ld65 defines for it.
+        if (SegmentFunctions.Of(call, model) is { } about)
+        {
+            Replace(call, SegmentFunctions.LinkerName(about.Function, about.Segment), edits);
+            return;
+        }
 
         // `.endof(f)` and `.spanof(f)` describe layout rather than shape, so they are written
         // as the addresses they are and resolved by ca65 and ld65.

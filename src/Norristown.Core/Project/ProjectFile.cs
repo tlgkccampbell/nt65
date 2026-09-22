@@ -21,7 +21,7 @@ public static class ProjectFile
     public const string Name = "nt65.json";
 
     private static readonly string[] known =
-        ["cpu", "files", "out", "defines", "diagnostics", "segments", "ranges", "configurations"];
+        ["cpu", "files", "out", "defines", "diagnostics", "spaces", "segments", "ranges", "configurations"];
 
     /// <summary>
     /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
@@ -42,7 +42,10 @@ public static class ProjectFile
     public static IReadOnlyList<string> Levels { get; } = ["off", "warning", "error"];
 
     /// <summary>The keys one segment may hold.</summary>
-    public static IReadOnlyList<string> SegmentKeys { get; } = ["size", "dp", "bank", "mirrors"];
+    public static IReadOnlyList<string> SegmentKeys { get; } = ["size", "dp", "bank", "mirrors", "space"];
+
+    /// <summary>What a space may hold: this program's processor's code, or data and macro calls.</summary>
+    public static IReadOnlyList<string> SpaceHolds { get; } = ["code", "data"];
 
     /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
@@ -97,6 +100,7 @@ public static class ProjectFile
                 diagnostics)
             {
                 Ranges = reader.Ranges(document.RootElement),
+                Spaces = reader.Spaces(document.RootElement),
                 Severities = reader.Severities(document.RootElement),
                 Configurations = reader.Configurations(document.RootElement),
             };
@@ -314,6 +318,14 @@ public static class ProjectFile
                     }
                     if (attribute.Name == "size")
                         continue;
+                    if (attribute.Name == "space")
+                    {
+                        if (attribute.Value.ValueKind == JsonValueKind.String && attribute.Value.GetString() is { Length: > 0 } space)
+                            segment = segment with { Space = space };
+                        else
+                            Report(property.Name, Catalogue.SpaceNotAName);
+                        continue;
+                    }
                     if (attribute.Name == "mirrors")
                     {
                         segment = segment with { Mirrors = Banks(property.Name, attribute.Value) };
@@ -339,6 +351,28 @@ public static class ProjectFile
         /// in each range may be reached from. A range is written <c>first-last</c> or as one
         /// address, and two ranges may not overlap, so an address has one answer.
         /// </summary>
+        /// <summary>
+        /// <c>"spc": "data"</c>: the address spaces other than the host's, each with whether it
+        /// runs this program's processor.
+        /// </summary>
+        public IReadOnlyList<AddressSpace> Spaces(JsonElement root)
+        {
+            if (!Object(root, "spaces", out var spaces))
+                return [];
+            var read = new List<AddressSpace>();
+            foreach (var property in spaces.EnumerateObject())
+            {
+                var holds = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : null;
+                if (holds is not ("code" or "data"))
+                {
+                    Report(property.Name, Catalogue.ProjectSpaceHoldsUnknown.Says(property.Name));
+                    continue;
+                }
+                read.Add(new AddressSpace(property.Name, holds == "code", At(property.Name)));
+            }
+            return [.. read.OrderBy(space => space.Name, StringComparer.Ordinal)];
+        }
+
         public IReadOnlyList<AccessRange> Ranges(JsonElement root)
         {
             if (!Object(root, "ranges", out var ranges))

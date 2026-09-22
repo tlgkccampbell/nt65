@@ -32,6 +32,9 @@ public sealed class SegmentTable
 
     private readonly Dictionary<string, Segment> segments;
 
+    // The address spaces other than the host's, by name.
+    private readonly Dictionary<string, AddressSpace> spaces = new(StringComparer.Ordinal);
+
     // The `dp = e` and `bank = e` a file's declarations write, by segment. They are expressions,
     // worth something only once the program's constants are, which is after the table is needed.
     private readonly Dictionary<string, SeparatedSyntaxList<SegmentAttributeSyntax>> attributes = new(StringComparer.Ordinal);
@@ -44,37 +47,52 @@ public sealed class SegmentTable
     /// <summary>The segments in the table, ordered by name.</summary>
     public IEnumerable<Segment> Segments => segments.Values.OrderBy(s => s.Name, StringComparer.Ordinal);
 
+    /// <summary>The address spaces other than the host's, ordered by name.</summary>
+    public IEnumerable<AddressSpace> Spaces => spaces.Values.OrderBy(s => s.Name, StringComparer.Ordinal);
+
     /// <summary>
     /// The table for a program, with the declarations found in <paramref name="trees"/>.
     /// Declarations are read in file and line order so that a program built from the same
     /// files reports the same thing whatever order they arrive in.
     /// </summary>
     public static SegmentTable Build(IEnumerable<SyntaxTree> trees, List<Diagnostic> diagnostics) =>
-        Build(trees, [], Configuration.Everything, diagnostics);
+        Build(trees, [], [], Configuration.Everything, diagnostics);
 
     /// <summary>
     /// The table for a program whose project file declares some of its segments. Those
     /// are read first, so a file declaring one of them is the declaration that is reported.
     /// </summary>
     public static SegmentTable Build(
-        IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, Configuration configuration,
-        List<Diagnostic> diagnostics)
+        IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, IEnumerable<AddressSpace> configuredSpaces,
+        Configuration configuration, List<Diagnostic> diagnostics)
     {
         var segments = Predeclared();
         var table = new SegmentTable(segments);
-        foreach (var segment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
+        var ordered = trees.ToList();
+
+        // The spaces come first, since a segment names the one it is in. Only the project
+        // declares them: a program that links another processor's image has a project.
+        foreach (var space in configuredSpaces.OrderBy(space => space.Name, StringComparer.Ordinal))
+            table.spaces[space.Name] = space;
+        foreach (var written in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
         {
+            var segment = written;
             if (segments.TryGetValue(segment.Name, out var predeclared)
                 && !Redeclares(predeclared, segment.Size, segment.Declaration!.Value, diagnostics))
             {
                 continue;
+            }
+            if (segment.Space is { } named && !table.spaces.ContainsKey(named))
+            {
+                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Catalogue.SpaceUndeclared.Says(named)));
+                segment = segment with { Space = null };
             }
             segments[segment.Name] = segment;
         }
 
         // A declaration under an `.if` the build does not take is not a declaration, which
         // is what lets two branches declare the same segment differently.
-        var declarations = trees
+        var declarations = ordered
             .SelectMany(Declarations)
             .Where(d => configuration.Includes(d.Node))
             .OrderBy(d => d.Node.Tree.Path, StringComparer.Ordinal)
@@ -85,7 +103,7 @@ public sealed class SegmentTable
             var size = SizeOf(node);
             if (segments.TryGetValue(name, out var existing) && !Redeclares(existing, size, declared, diagnostics))
                 continue;
-            segments[name] = new Segment(name, size, declared);
+            segments[name] = new Segment(name, size, declared) { Space = table.SpaceOf(name, node, diagnostics) };
             table.attributes[name] = node.Attributes;
         }
         return table;
@@ -137,6 +155,8 @@ public sealed class SegmentTable
                 if (attribute.Name.IsMissing)
                     continue;
                 var word = attribute.Name.Text.ToLowerInvariant();
+                if (word == "space")
+                    continue;
                 var at = attribute.Tree.GetSpan(attribute.Span);
                 if (word == "mirrors")
                 {
@@ -168,8 +188,49 @@ public sealed class SegmentTable
     /// <summary>The segment <paramref name="name"/>, or null when nothing declares it.</summary>
     public Segment? Find(string name) => segments.GetValueOrDefault(name);
 
+    /// <summary>The space the segment <paramref name="name"/> is in, or null for the host's or for no segment.</summary>
+    public AddressSpace? SpaceOf(string? name) =>
+        name is not null && Find(name)?.Space is { } space ? spaces.GetValueOrDefault(space) : null;
+
+    /// <summary>The space <paramref name="name"/>, or null when nothing declares it.</summary>
+    public AddressSpace? FindSpace(string name) => spaces.GetValueOrDefault(name);
+
     /// <summary>Whether <paramref name="tree"/> declares a segment, taken or not by the build.</summary>
     internal static bool Declares(SyntaxTree tree) => Declarations(tree).Count > 0;
+
+    /// <summary>
+    /// The space a file's segment declaration puts it in with <c>space = name</c>, once and
+    /// naming a declared space; null for the host's, with what is wrong reported.
+    /// </summary>
+    private string? SpaceOf(string segment, SegmentDeclarationSyntax node, List<Diagnostic> diagnostics)
+    {
+        string? found = null;
+        var given = false;
+        foreach (var attribute in node.Attributes)
+        {
+            if (attribute.Name.IsMissing || !attribute.Name.Text.Equals("space", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var at = attribute.Tree.GetSpan(attribute.Span);
+            if (given)
+            {
+                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Says(segment, "space")));
+                continue;
+            }
+            given = true;
+            if (attribute.Value is not NameExpressionSyntax { Names.Length: 1, SimpleName: { } name })
+            {
+                diagnostics.Add(new Diagnostic(at, Catalogue.SpaceNotAName));
+                continue;
+            }
+            if (!spaces.ContainsKey(name.Text))
+            {
+                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Says(name.Text)));
+                continue;
+            }
+            found = name.Text;
+        }
+        return found;
+    }
 
     /// <summary>The banks a <c>mirrors = [$00..$3f, $80]</c> gives, each checked to be a constant bank.</summary>
     private static List<(long First, long Last)> Mirrors(
