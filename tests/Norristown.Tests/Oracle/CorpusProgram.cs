@@ -29,7 +29,7 @@ internal sealed record CorpusProgram(
 {
     /// <summary>
     /// Every corpus program and example, or those whose name contains NT65_FIXTURE
-    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>).
+    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>), but those only <c>scripts/corpus.ps1</c> can build.
     /// </summary>
     public static IReadOnlyList<CorpusProgram> All()
     {
@@ -37,11 +37,19 @@ internal sealed record CorpusProgram(
         return [.. new[] { Repo.Path("tests", "corpus"), Repo.Path("examples") }
             .SelectMany(System.IO.Directory.GetDirectories)
             .Where(dir => File.Exists(Path.Combine(dir, ProjectFile.Name)))
+            .Where(dir => !BuiltOnlyByTheirScripts.Contains(Path.GetFileName(dir)))
             .Where(dir => string.IsNullOrEmpty(filter)
                 || Path.GetFileName(dir).Contains(filter, StringComparison.OrdinalIgnoreCase))
             .Order(StringComparer.Ordinal)
             .Select(Load)];
     }
+
+    /// <summary>
+    /// Programs that are more than this reads: the LoROM template converts its assets with
+    /// Python before nt65 can measure them, links a second image with a second configuration,
+    /// and assembles its hand-written ca65 with no CPU. The gate builds it end to end.
+    /// </summary>
+    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template" };
 
     public static CorpusProgram Load(string directory)
     {
