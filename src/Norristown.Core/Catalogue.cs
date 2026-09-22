@@ -1908,8 +1908,9 @@ public static class Catalogue
         "fallthrough-not-adjacent",
         Severity.Error,
         "`.fallthrough {0}` says flow runs on into `{0}`, and it does not start where this routine ends: a routine runs into the one written directly after it",
-        "A routine runs on into the one written directly after it in the same segment. Naming any other routine "
-            + "would be saying something the bytes do not do.");
+        "A routine runs on into the one written directly after it in the same segment: the next thing the file "
+            + "writes to that segment, whatever regions of other segments stand between in the text, as ca65 lays "
+            + "the bytes out. Naming any other routine would be saying something the bytes do not do.");
 
     internal static DiagnosticDescriptor FallthroughOtherSegment { get; } = Entry(
         "fallthrough-other-segment",

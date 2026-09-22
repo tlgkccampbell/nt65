@@ -367,6 +367,19 @@ with an address outside every region and block is an error: there is no implicit
 A segment **block**, `.segment NAME { }`, places what it holds and nothing after it. It may
 appear anywhere an item may, as a one-off within a region or as a detour inside a proc.
 
+**A segment's bytes are one run.** ca65 writes each segment's bytes in the order its input
+writes them, whichever `.segment` line put them there, so nt65 lays a file out the same way:
+per segment, with that segment's regions and blocks joined in the order the text writes them.
+A routine at the end of one `CODE` region is followed by the first thing the next `CODE`
+region writes, whatever `RODATA` regions stand between in the text, and a nested segment block
+inside a proc is part of its own segment's run at its place in the text. Everything that reads
+where bytes land reads this one layout: which routine a `.fallthrough` runs into (§7.4), branch
+range and the form of a long branch (§7.6), and a distance between two data declarations (§8).
+Only an `.align`, whose length depends on an address, and a `.place`, which puts another
+module's bytes in between (§12), end a run of known distances. A translation unit of several
+modules is laid out by the same rule (§12), so whether something is valid never depends on
+whether something places its module.
+
 A segment name is an identifier. ca65 quotes its segment names because they share a
 namespace with symbols; nt65 declares segments in a table of their own, so a segment and a
 symbol may share a name. The output still quotes them for ca65.
@@ -1381,9 +1394,10 @@ The third directive is about the end of a routine rather than a statement:
   A branch the build does not take is not read, so what it names need not exist in this
   build. A `.fallthrough` stands nowhere else: not with anything after it in its branch, not
   in a branch whose chain has more of the body after it, not in a macro body, a block argument
-  or a repetition. `next_proc` has to be the routine written directly after this one, in the
-  same segment of the same translation unit, and is checked like a tail call against its
-  signature.
+  or a repetition. `next_proc` has to be the routine written directly after this one in its
+  segment's run of bytes (§5.2) — the next thing written to that segment, whatever regions of
+  other segments stand between in the text — in the same translation unit, and is checked
+  like a tail call against its signature.
 
 | quirk | how it is recognized | what is required |
 |---|---|---|
@@ -1689,9 +1703,11 @@ inside a proc never changes a constant another file uses. nt65 reports an `.asse
 time when it can evaluate it; one it cannot, such as a span that contains `.align`, is passed
 to ca65 as a link-time assertion.
 
-**Branch range.** The distance from a relative branch to its target is known when both
-sit in the same region or segment block with no `.align` between them; a nested segment block
-contributes no bytes to the stream that encloses it. nt65 reports an out-of-range
+**Branch range.** The distance from a relative branch to its target is known when both are
+in one run of their segment's bytes (§5.2): the same segment of the same file, or of one
+translation unit (§12), with no `.align` or `.place` between them, whatever regions of other
+segments stand between in the text. A nested segment block's bytes are in its own segment's
+run, so it adds nothing to the distance across it in the segment around it. nt65 reports an out-of-range
 8-bit branch (beyond −128..+127 from the following instruction) at edit time; `brl`
 and `per` have 16-bit range. When the distance is unknown, ca65's own check stands.
 
@@ -1700,7 +1716,9 @@ their short forms but reach any near target. Each is emitted as the short branch
 nt65 knows the target is in range, and otherwise as the inverted branch over a `jmp` to
 the target. Every long branch starts short, and those found out of range are lengthened
 until none changes, which terminates because branches only grow; a target at an unknown
-distance is always long. ca65's `longbranch` package can choose the short form only for
+distance is always long. The distance is read as branch range reads it, so a `jeq` to a near
+routine is short with a region of another segment between them in the text, as it is with
+none. ca65's `longbranch` package can choose the short form only for
 a target it has already seen, so its forward branches are always long; here they are not.
 For the flow analysis a long branch is a conditional branch to its target, and a long
 branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen.
@@ -2039,7 +2057,15 @@ output writes it as its value. An `.align` between the two makes the length depe
 declaration lands, and a macro call between them writes bytes only once it is expanded, so
 either leaves the difference an address expression, sized and written as one. A table whose
 entries a macro would write is written with a function that returns text instead, and its
-distances are constants (§9). Code has no such
+distances are constants (§9).
+
+Two data declarations of one file in one segment are a known distance apart in the same way,
+since a segment's bytes are one run (§5.2): their places' difference is a constant where
+everything the file writes to that segment between them is data or padding whose length nt65
+knows, whichever regions and nested segment blocks it is written in. A routine between them in
+that segment is code, whose length is layout, and a `.place` puts another module's bytes
+between, so either leaves the difference an address expression, as an `.align` or a macro call
+does. Code has no such
 distances: a routine's size is layout (§14).
 
 ```nt65
@@ -2959,6 +2985,10 @@ line after a `.place` is in the region the line before it was.
 Placement is what lets a routine run into another module's. A `.fallthrough` into another
 module's routine (§7.4) requires the two to be in one translation unit, where nt65 lays out
 every byte and checks that the target starts where the routine ends, as it does within a file.
+A unit is laid out by the rule every file is (§5.2), not by one of its own: per segment, the
+root's regions and every placed module's contributions joined in the order the unit writes
+them, so a branch, a long branch and a `.fallthrough` read the same distances whether or not
+anything places the module they are in.
 Across a `.place` it is read in the segment the placing file is in at that line, as ca65 lays
 each segment's bytes down in the order one `.s` writes them: the routine before the `.place`
 runs into the placed module's first routine in that segment, the placed module's last routine in
@@ -3152,6 +3182,12 @@ defined in the same file. An export is written as it would be anyway, since code
 nt65 may name it. The output is
 readable ca65 with a header comment and source spellings preserved where possible: it is the
 program and nothing else, with everything a debugger needs in the map.
+
+**Its segments are in the order the source writes them.** Each region and segment block is
+written as a `.segment` line where the source has it, and ca65 appends what follows to that
+segment's bytes, so each segment's bytes come out in the order the text writes them. That is
+the layout nt65 reads distances from (§5.2): a `.fallthrough` it accepted, a branch it measured
+and a long branch it made short are what ca65 assembles, across regions as within one.
 
 **It is laid out as ca65 is written, not as the source was.** Names stand at the margin and
 what they hold is indented once, which is the two levels hand-written ca65 has; the body of a
@@ -3969,6 +4005,17 @@ Recorded so the reasoning survives. None is open.
   the body is its last line. Checking only the branches a build takes follows from that, and
   is what lets a branch name a routine only its own builds declare; each configuration is
   checked when it is built.
+- **One layout, per segment, everywhere.** A file was once laid out a region at a time, each
+  region a stream of its own, while a translation unit of placed modules joined a segment's
+  regions as ca65 does. The same source was then accepted as a placed module and refused as an
+  ordinary one: a routine followed in `CODE` by the next `CODE` region's routine was not
+  adjacent to it with a `RODATA` region between them in the text, a `jeq` across one was
+  always long, and a branch across one was left to ca65. What ca65 does is the only layout
+  there is, and whether a program is valid cannot depend on whether something places its
+  module, so every file and every unit is laid out per segment, its regions and blocks joined
+  in text order, and everything that reads layout reads that. The flow analysis still treats a
+  nested segment block as a detour (§5.2), since what fall-through reaches is a question about
+  the routine's text and not about where the block's bytes land.
 - **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the
   state, so its annotations would be ceremony.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a

@@ -1,0 +1,48 @@
+; A segment's bytes are one run, in the order the file writes them, whichever region or block
+; they are in, as ca65 lays them out: a routine runs into the one written next in its segment
+; across a region of another, a long branch across one is short where the target is near, and
+; two declarations of a segment are a known distance apart across a region of code.
+.module main
+
+.cpu 6502
+
+.export first, table, second, messages, prompts, far_apart, report
+
+.segment CODE
+.proc first {
+    lda #1
+    jeq second::inside              ; two bytes into `second`, past the table in RODATA
+    .fallthrough second
+}
+
+.segment RODATA
+.data table: .byte 1, 2, 3
+
+.segment CODE
+.proc second {
+    nop
+    nop
+    inside:
+    rts
+}
+
+.segment RODATA
+.data messages: .byte "HELLO"
+
+.segment CODE
+.proc report {
+    ldx #PROMPTS_AT                 ; a distance across a region of code, and a block in a routine
+    ldy #<FAR_APART_AT
+    rts
+    .segment RODATA {
+        .data inline: .word 0
+    }
+}
+
+.segment RODATA
+.data prompts: .byte "READY"
+.align 2
+.data far_apart: .byte 0
+
+PROMPTS_AT = prompts - table        ; 3 + 5 + 2
+FAR_APART_AT = far_apart - table    ; an `.align` between: an address

@@ -12,7 +12,9 @@ namespace Norristown.Semantics;
 /// A distance is known only where every length between the two places is: an <c>.align</c>
 /// between them depends on where the declaration lands, and a macro call writes its bytes only
 /// once it is expanded, which is after every constant has its value (§3.1). Code is layout and
-/// never a place here, whatever it holds.
+/// never a place here, whatever it holds. Two declarations of one segment in one file are a
+/// known distance apart too, where everything the file writes to that segment between them is
+/// data or padding nt65 knows the length of, whichever regions and blocks it is in.
 /// </para>
 /// </summary>
 internal sealed partial class Evaluator
@@ -22,10 +24,167 @@ internal sealed partial class Evaluator
     /// its left side names, where both are in one data declaration and every length between
     /// them is known; null for anything else.
     /// </summary>
-    private long? Distance(BinaryExpressionSyntax difference) =>
-        PlaceOf(difference.Left) is { } to && PlaceOf(difference.Right) is { } from && to.Data == from.Data
-            ? to.Offset - from.Offset
-            : null;
+    private long? Distance(BinaryExpressionSyntax difference)
+    {
+        if (PlaceOf(difference.Left) is not { } to || PlaceOf(difference.Right) is not { } from)
+            return null;
+        if (to.Data == from.Data)
+            return to.Offset - from.Offset;
+        return Apart(from.Data, to.Data) is { } between ? between + to.Offset - from.Offset : null;
+    }
+
+    /// <summary>
+    /// How far the start of <paramref name="second"/> is from the start of <paramref name="first"/>,
+    /// two data declarations of one file in one segment, or null where nt65 does not know. ca65
+    /// writes a segment's bytes in the order the file writes them, whichever region or block they
+    /// are in, so two declarations of a segment are a known distance apart wherever that segment
+    /// lands when every byte the file writes to it between them has a length nt65 knows: data, and
+    /// padding other than an <c>.align</c>. Code between them is layout, which constants come
+    /// before, and a macro call is expanded after them, so either leaves the distance unknown, as
+    /// a <c>.place</c> does, since what the placed module writes is between.
+    /// </summary>
+    private long? Apart(Symbol first, Symbol second)
+    {
+        // A length asked for on the way may be the length of a declaration whose count is this
+        // very distance, which is a question that asks itself.
+        if (first.Tree != second.Tree || apart)
+            return null;
+        apart = true;
+        var writes = new List<Write>();
+        Writes(first.Tree.Root.Members, 0, null, writes);
+        apart = false;
+        var at = writes.FindIndex(write => write.Declares(first));
+        var to = writes.FindIndex(write => write.Declares(second));
+        if (at < 0 || to < 0 || writes[at].Segment is not { } segment || writes[to].Segment != segment)
+            return null;
+        var (low, high) = at < to ? (at, to) : (to, at);
+        long distance = 0;
+        for (var i = low; i < high; i++)
+        {
+            if (writes[i].Everywhere)
+                return null;
+            if (writes[i].Segment != segment)
+                continue;
+            if (writes[i].Length is not { } length)
+                return null;
+            distance += length;
+        }
+        return at < to ? distance : -distance;
+    }
+
+    /// <summary>
+    /// What <paramref name="children"/> write to each segment, in the order they write it, into
+    /// <paramref name="writes"/>: each data declaration and each piece of padding with its
+    /// length, each routine and macro call with none, and what could write to any segment as a
+    /// write everywhere. The conditionals are decided as the build decides them.
+    /// </summary>
+    private void Writes(IReadOnlyList<SyntaxNode> children, int from, string? segment, List<Write> writes)
+    {
+        var chaining = false;
+        var taken = false;
+        for (var i = from; i < children.Count; i++)
+        {
+            var child = children[i];
+            if (child is LineSyntax line)
+            {
+                chaining = false;
+                switch (line.Statement)
+                {
+                    case DataDeclarationSyntax or DataDirectiveSyntax:
+                        writes.Add(new Write(segment, line.Span, BytesOnLine(line.Statement), false));
+                        break;
+                    case MacroCallSyntax or BlockSpliceSyntax:
+                        writes.Add(new Write(segment, line.Span, null, false));
+                        break;
+                    case PlaceDirectiveSyntax:
+                        writes.Add(new Write(null, line.Span, null, true));
+                        break;
+                    default:
+                        break;
+                }
+                continue;
+            }
+            if (child is not BlockSyntax block)
+                continue;
+            var opener = block.Opener.Statement;
+            if (block.BlockKind != BlockKind.If)
+                chaining = false;
+            switch (block.BlockKind)
+            {
+                case BlockKind.If:
+                    var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
+                    var take = (!continues || chaining) && Holds(block, opener, continues && taken);
+                    chaining = true;
+                    taken = (continues && taken) || take;
+                    if (take)
+                        Writes(block.Members, 1, segment, writes);
+                    break;
+                case BlockKind.Region or BlockKind.Segment:
+                    Writes(block.Members, 1, Constructs.SegmentOf(opener) ?? segment, writes);
+                    break;
+                case BlockKind.Scope:
+                    Writes(block.Members, 1, segment, writes);
+                    break;
+                case BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer:
+                    writes.Add(new Write(segment, block.Span, NestedBytes(block), false));
+                    break;
+
+                // A routine's bytes are layout, and what it writes elsewhere is in the segment
+                // blocks it holds, which are written where they stand.
+                case BlockKind.Proc or BlockKind.MultiProc:
+                    writes.Add(new Write(segment, block.Span, null, false));
+                    Detours(block.Members, segment, writes);
+                    break;
+                case BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum
+                    or BlockKind.Charmap or BlockKind.List:
+                    break;
+                default:
+                    writes.Add(new Write(null, block.Span, null, true));
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The segment blocks inside a routine's body, which write where they stand, with the
+    /// conditionals around them decided. A repetition in a body could write any number of them.
+    /// </summary>
+    private void Detours(IReadOnlyList<SyntaxNode> members, string? segment, List<Write> writes)
+    {
+        var chaining = false;
+        var taken = false;
+        foreach (var member in members.Skip(1))
+        {
+            if (member is not BlockSyntax block)
+            {
+                chaining = false;
+                continue;
+            }
+            var opener = block.Opener.Statement;
+            switch (block.BlockKind)
+            {
+                case BlockKind.If:
+                    var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
+                    var take = (!continues || chaining) && Holds(block, opener, continues && taken);
+                    chaining = true;
+                    taken = (continues && taken) || take;
+                    if (take)
+                        Detours(block.Members, segment, writes);
+                    break;
+                case BlockKind.Segment:
+                    chaining = false;
+                    Writes(block.Members, 1, Constructs.SegmentOf(opener) ?? segment, writes);
+                    break;
+                case BlockKind.Repeat or BlockKind.Each:
+                    chaining = false;
+                    writes.Add(new Write(null, block.Span, null, true));
+                    break;
+                default:
+                    chaining = false;
+                    break;
+            }
+        }
+    }
 
     /// <summary>
     /// The data declaration an expression names a place in, outermost first, and how far into
@@ -183,5 +342,19 @@ internal sealed partial class Evaluator
             offset += known;
         }
         return false;
+    }
+
+    /// <summary>
+    /// What one item writes to a segment: where it is written, and how many bytes, or none
+    /// nt65 knows. One that could write to any segment is a write everywhere.
+    /// </summary>
+    /// <param name="Segment">The segment written to, or null for a write everywhere.</param>
+    /// <param name="Span">Where the item is written.</param>
+    /// <param name="Length">How many bytes it writes, or null when nt65 does not know.</param>
+    /// <param name="Everywhere">Whether it could write to any segment.</param>
+    private readonly record struct Write(string? Segment, TextSpan Span, long? Length, bool Everywhere)
+    {
+        /// <summary>Whether this is the item that declares <paramref name="data"/>.</summary>
+        public bool Declares(Symbol data) => !Everywhere && Span.Contains(data.NameSpan.Start);
     }
 }

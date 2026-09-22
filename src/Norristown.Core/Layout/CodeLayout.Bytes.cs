@@ -8,9 +8,12 @@ namespace Norristown.Layout;
 /// where each line's bytes and each label stand among them, and how much room a measured
 /// routine or declaration came to.
 /// <para>
-/// A distance is known only within one stream, which is what branch range reads. A long
-/// branch starts short and is lengthened where its target turns out to be out of reach,
-/// which moves everything after it, so the file is laid out again until none changes.
+/// A distance is known within one run of a segment's bytes, which is what branch range, the
+/// long branches and a fall-through read. A segment's bytes are one run across its regions and
+/// blocks, in the order the file writes them, as ca65 writes them; an <c>.align</c> or a
+/// <c>.place</c> ends it. A long branch starts short and is lengthened where its target turns
+/// out to be out of reach, which moves everything after it, so the file is laid out again until
+/// none changes.
 /// </para>
 /// </summary>
 public sealed partial class CodeLayout
@@ -18,8 +21,8 @@ public sealed partial class CodeLayout
     /// <summary>The stream the walk is writing into.</summary>
     private int Stream => streams[^1];
 
-    /// <summary>The run of the stream the walk is writing into whose distances are known.</summary>
-    private int Measured => measuredIn.GetValueOrDefault(Stream, Stream);
+    /// <summary>The run of known distances the walk is writing into: its segment's.</summary>
+    private int Measured => segment is { } named ? RunOf(named) : measuredIn.GetValueOrDefault(Stream, Stream);
 
     /// <summary>Whether a distance is one a branch can reach.</summary>
     private static bool InRange(int reach) => reach is >= -128 and <= 127;
@@ -35,8 +38,20 @@ public sealed partial class CodeLayout
     {
         if (expansion is not null || !Placements.AtFileLevel(directive))
             return;
+
+        // The placed module may write to any segment, so every segment's run ends here.
+        foreach (var named in runs.Keys.ToList())
+            runs[named] = nextStream++;
         measuredIn[Stream] = nextStream++;
         placePoints.Add(new PlacePoint(directive, steps.Count, Measured, segment));
+    }
+
+    /// <summary>The run a segment's bytes are in now, starting one for a segment nothing has written to yet.</summary>
+    private int RunOf(string named)
+    {
+        if (!runs.TryGetValue(named, out var run))
+            runs[named] = run = nextStream++;
+        return run;
     }
 
     /// <summary>Records what a line assembles to on this writing of it.</summary>
@@ -55,7 +70,9 @@ public sealed partial class CodeLayout
     {
         var offset = filled.GetValueOrDefault(Measured);
         placements[(statement.Position, expansion)] = new Placement(Measured, offset, length);
-        if (length == DataLengths.Unpredictable)
+        if (length == DataLengths.Unpredictable && segment is { } named)
+            runs[named] = nextStream++;
+        else if (length == DataLengths.Unpredictable)
             measuredIn[Stream] = nextStream++;
         else
             filled[Measured] = offset + length;
@@ -102,7 +119,7 @@ public sealed partial class CodeLayout
 
     /// <summary>
     /// How far a branch reaches: from the instruction after it to its target, or null when
-    /// the two are not in one stream or the target is no label this file placed.
+    /// the two are not in one run of a segment's bytes or the target is no label this file placed.
     /// </summary>
     private int? Distance(Branch branch)
     {

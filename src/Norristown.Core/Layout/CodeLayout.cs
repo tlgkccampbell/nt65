@@ -65,13 +65,20 @@ public sealed partial class CodeLayout
     private readonly Dictionary<Symbol, long> settled;
     private readonly Dictionary<Symbol, long> extents = [];
 
-    // The streams the walk is inside, innermost last. A nested segment block is a detour, so
-    // the stream around it resumes where it left off.
+    // The streams the walk is inside, innermost last: each region and each segment block is
+    // one, which is how the flow analysis tells a detour from the code around it. A nested
+    // segment block is a detour, so the stream around it resumes where it left off.
     private readonly List<int> streams = [0];
     private int nextStream = 1;
 
-    // The stream each stream's distances are measured in since its last `.align`. Flow runs
-    // across an `.align`, so it ends a run of known distances and not the stream.
+    // The run of known distances each segment's bytes are in, which is where a line's bytes are
+    // placed. ca65 writes a segment's bytes in the order the file writes them, whichever region
+    // or block they are in, so a segment's regions and blocks are one run of bytes: only an
+    // `.align` or a `.place` ends one. Run numbers are taken from the same count as the streams.
+    private readonly Dictionary<string, int> runs = new(StringComparer.Ordinal);
+
+    // The run a stream's distances are measured in, for bytes outside every segment, which have
+    // been reported and are placed only so that nothing else goes wrong.
     private readonly Dictionary<int, int> measuredIn = [];
 
     // The segment the walk is placing bytes in, or null before any region or block names one.
@@ -372,7 +379,7 @@ public sealed partial class CodeLayout
             routine = NameOf(opener);
 
         // What a routine or data takes is the bytes between the two ends of its block, in its
-        // own stream: a nested segment block is somewhere else and does not count.
+        // own segment's run: a nested segment block is somewhere else and does not count.
         var spanning = kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer
             && NameOf(opener) is { } named && measured.Contains(named)
             ? named

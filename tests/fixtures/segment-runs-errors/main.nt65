@@ -1,0 +1,23 @@
+; A segment's regions are one run of bytes, so a branch that reaches across one is measured
+; there, and one out of reach is an error nt65 reports rather than ca65.
+.module main
+
+.cpu 6502
+
+.export near, far
+
+.segment CODE
+.proc near {
+    beq far                         ;! error[branch-out-of-reach]: `beq` would branch 201 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
+    rts
+}
+
+.segment RODATA
+.data between: .byte[200]
+
+.segment CODE
+.data filler: .byte[200]
+
+.proc far {
+    rts
+}

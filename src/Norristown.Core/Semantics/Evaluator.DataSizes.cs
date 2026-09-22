@@ -386,8 +386,11 @@ internal sealed partial class Evaluator
         if (operand is NameExpressionSyntax bound && BoundItem(bound) is { } item)
             return BytesIn(item);
 
-        // A string constant is its text wherever it is named, as a literal would be.
-        if (operand is NameExpressionSyntax constant && SymbolOf(constant) is { Kind: SymbolKind.Constant }
+        // A string constant is its text wherever it is named, as a literal would be. One being
+        // worked out is a number whose value is a distance past this very line, and is one
+        // element whatever it comes to.
+        if (operand is NameExpressionSyntax constant && SymbolOf(constant) is { Kind: SymbolKind.Constant } declared
+            && !evaluating.Contains(declared)
             && Evaluate(constant) is { Kind: ValueKind.String, Text: { } named })
             return [.. named.Select(c => (long)c)];
 

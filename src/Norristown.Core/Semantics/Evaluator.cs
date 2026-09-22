@@ -73,6 +73,10 @@ internal sealed partial class Evaluator
     // The data declarations whose places are being worked out, so that one asked about by
     // what is written inside it answers unknown rather than asking itself again.
     private readonly HashSet<Symbol> placing = [];
+
+    // Whether the walk over what a file writes to its segments is under way, for a distance
+    // between two declarations, which a length asked for on the way may ask for again.
+    private bool apart;
     private Symbol? owner;
 
     // The symbol whose own value is being worked out, whose every step the output carries.

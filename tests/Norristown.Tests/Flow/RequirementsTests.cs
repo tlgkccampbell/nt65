@@ -74,6 +74,40 @@ public sealed class RequirementsTests
         Assert.Equal(6, only.Fix?.At?.Line);
     }
 
+    /// <summary>
+    /// A segment's regions are one run of bytes, so the routine written next in the segment is
+    /// the one the fix names, whatever region of another segment stands between; an
+    /// <c>.align</c> between ends the run, and the fix then names nothing.
+    /// </summary>
+    [Fact]
+    public void TheFixNamesTheRoutineNextInTheSegmentAcrossRegions()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .segment CODE
+            .proc first {
+                lda #1
+            }
+            .segment RODATA
+            .data table: .byte 1, 2, 3
+            .segment CODE
+            .proc second {
+                lda #2
+            }
+            .align 2
+            .proc third {
+                rts
+            }
+            """;
+
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Text));
+
+        Assert.Equal(2, analysis.Diagnostics.Count);
+        Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", analysis.Diagnostics[0].Fix?.At), analysis.Diagnostics[0].Fix);
+        Assert.Null(analysis.Diagnostics[1].Fix?.Text);
+    }
+
     /// <summary>A routine returns past its inline data whatever the processor, so the data is checked on every CPU.</summary>
     [Fact]
     public void InlineDataIsCheckedOnEveryCpu()

@@ -96,7 +96,10 @@ Most of it reads as ca65. What differs:
 - **Every file is a module** and says so first, with `.module`.
 - **`.segment CODE` has no quotes and no mode.** At file level it is a *region*: everything
   below it, up to the next one, is in `CODE`. There is no default segment, so bytes written
-  before any region are an error rather than a surprise in `CODE`.
+  before any region are an error rather than a surprise in `CODE`. As in ca65, a segment's
+  regions are one run of bytes in the order the file writes them, so a routine at the end of
+  one `CODE` region runs into the first routine of the next, and a branch or a `jeq` across a
+  `RODATA` region between them is measured as ca65 will lay it out.
 - **Data is declared with its type.** `.data ptr: .word` is a name, a size of two bytes and a
   count of one, where ca65 writes `ptr: .res 2`.
 - **Code lives in `.proc`, with braces.** Outside a proc there are no instructions and no

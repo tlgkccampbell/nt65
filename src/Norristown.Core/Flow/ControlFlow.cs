@@ -979,9 +979,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The routine written directly after <paramref name="region"/>'s, in the same run of bytes,
-    /// and the <c>}</c> that closes this one's body, which is where a <c>.fallthrough</c> naming
-    /// it goes; null where anything with bytes, or nothing at all, comes next.
+    /// The routine written directly after <paramref name="region"/>'s, in the same run of its
+    /// segment's bytes, whatever regions of other segments stand between in the text, and the
+    /// <c>}</c> that closes this one's body, which is where a <c>.fallthrough</c> naming it goes;
+    /// null where anything with bytes in that segment, or nothing at all, comes next.
     /// </summary>
     internal (Symbol Routine, Span Closer)? WrittenAfter(FlowRegion region)
     {
@@ -997,13 +998,17 @@ public sealed class ControlFlow
         }
         if (opened < 0 || steps[opened].Statement.Parent?.Parent is not BlockSyntax { Closer: { } closer })
             return null;
+        var segment = steps[opened].Segment;
+        var run = layout.Placed(region.Routine)?.Stream;
         for (var i = last + 1; i < steps.Count; i++)
         {
             var step = steps[i];
-            if (step.Stream != steps[opened].Stream)
+            if (step.Segment != segment)
                 continue;
+
+            // An `.align` or a `.place` between starts another run, which the routine is then in.
             if (step.Label is { Kind: SymbolKind.Proc, Signature: not null } next && step.Statement is ProcDeclarationSyntax)
-                return (next, closer.Tree.GetSpan(closer.Span));
+                return layout.Placed(next)?.Stream == run ? (next, closer.Tree.GetSpan(closer.Span)) : null;
             if (step.Label is not null || layout.Placed(step.Statement, step.On) is { Length: not 0 })
                 return null;
         }
