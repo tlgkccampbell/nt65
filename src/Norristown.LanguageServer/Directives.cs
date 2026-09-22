@@ -158,8 +158,8 @@ internal static class Directives
         if (!line.AtFileLevel)
             barred.Add(".place");
 
-        // A `.fallthrough` is the last line of a routine's own body, which no macro body or
-        // repetition is.
+        // A `.fallthrough` is the last line of a routine's own body, or of a branch of an `.if`
+        // chain that ends it, which no macro body or repetition is.
         if (!line.InProc || line.InMacro || line.InRepetition)
             barred.Add(".fallthrough");
 

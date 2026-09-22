@@ -1374,10 +1374,16 @@ The third directive is about the end of a routine rather than a statement:
 
 - `.fallthrough next_proc` says every path that reaches the end of the routine's body runs
   on into `next_proc`, whatever stands above it: an instruction, a call, an `.if` chain with
-  or without an `.else`, a label. It is the last line of a `.proc` body and stands nowhere
-  else: not under an `.if`, not in a macro body or a block argument. `next_proc` has to be
-  the routine written directly after this one, in the same segment of the same translation
-  unit, and is checked like a tail call against its signature.
+  or without an `.else`, a label. It is the last line of a `.proc` body **as the configuration
+  resolves it**: the last line of the body, or the last line of a branch of an `.if` chain
+  that is itself the last thing in the body, to any depth, since which branch is written is
+  settled before analysis and in each configuration at most one `.fallthrough` remains, last.
+  A branch the build does not take is not read, so what it names need not exist in this
+  build. A `.fallthrough` stands nowhere else: not with anything after it in its branch, not
+  in a branch whose chain has more of the body after it, not in a macro body, a block argument
+  or a repetition. `next_proc` has to be the routine written directly after this one, in the
+  same segment of the same translation unit, and is checked like a tail call against its
+  signature.
 
 | quirk | how it is recognized | what is required |
 |---|---|---|
@@ -1391,7 +1397,7 @@ The third directive is about the end of a routine rather than a statement:
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
-| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; a warning off the 65816, whose fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
+| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; a warning off the 65816, whose fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
@@ -1496,6 +1502,21 @@ every branch, and the `.fallthrough` after the chain says so for all of them:
 .proc draw: a8 {
     sta value
     rts
+}
+```
+
+Where what a routine runs into depends on the configuration, the `.fallthrough` goes in the
+branches instead, each naming the routine that follows in the builds that take it. A branch a
+build does not take is not read, so it may name a routine only other builds declare:
+
+```nt65
+.proc FRM_VARIABLE {
+    lda #1
+    .if !CONFIG_CBM_ALL {
+        jmp LOAD_FAC_FROM_YA
+    } .else {
+        .fallthrough LCE69              ; LCE69 exists only on Commodore machines
+    }
 }
 ```
 
@@ -3939,6 +3960,15 @@ Recorded so the reasoning survives. None is open.
   rather than inferred or folded into a general jump. A `.next` that could only repeat or
   contradict what nt65 reads is an error, so the old spelling of a fall-through is caught
   where it stands, with a fix that writes the new one.
+- **The end of a body is the end the configuration resolves.** At first a `.fallthrough` was the
+  literal last line of a body and never under an `.if`. msbasic has routines that run into
+  different routines in different configurations, or jump in one and run on in another, and
+  the literal rule left those unsayable: one `.fallthrough` after the chain names the same
+  routine for every build. Conditions are settled before analysis (§10), so the body a build
+  analyzes is the chosen branches, and in it a `.fallthrough` at the end of a branch that ends
+  the body is its last line. Checking only the branches a build takes follows from that, and
+  is what lets a branch name a routine only its own builds declare; each configuration is
+  checked when it is built.
 - **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the
   state, so its annotations would be ceremony.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a
@@ -4529,7 +4559,8 @@ width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
 annotation  := '.next' (target (',' target)* | '?')
              | '.patch' target
-fallthrough := '.fallthrough' path                    ; the last line of a proc's body
+fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
+                                                      ; a branch of an if-block ending it
 target      := path                                   ; or an ident parameter, in macros;
                                                       ; a list, or data declared as addresses,
                                                       ; stands for its labels

@@ -15,14 +15,14 @@
 
 .segment CODE
 .proc misplaced: a8 {
-    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
     rts
 }
 
 .proc under_an_if: a8 {
     lda #0
     .if 1 {
-        .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+        .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
     }
     rts
 }
@@ -54,7 +54,7 @@
 
 ; A macro body is no routine's body, whoever calls it.
 .macro runs_on() {
-    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
 }
 
 ; The spelling a fall-through had before `.fallthrough`: after an ordinary instruction and after
@@ -84,5 +84,48 @@
 }
 
 .proc wants_wide: a16 {
+    rts
+}
+
+; A branch ends the body only when its chain is the last thing in the body, and only its own
+; last line does.
+.proc chain_then_more: a8 {
+    .if 1 {
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+    } .else {
+        rts
+    }
+    .if 1 {
+        rts
+    }
+}
+
+.proc not_last_in_branch: a8 {
+    .if 1 {
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+        lda #6
+    }
+    rts
+}
+
+.proc in_a_repetition: a8 {
+    .repeat 1 {
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+    }
+    rts
+}
+
+; What a branch the build takes names is checked as any `.fallthrough` is; the one it does not
+; take is not read.
+.proc taken_not_adjacent: a8 {
+    lda #7
+    .if 1 {
+        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `.fallthrough narrows` says flow runs on into `narrows`, and it does not start where this routine ends: a routine runs into the one written directly after it
+    } .else {
+        .fallthrough no_such_routine
+    }
+}
+
+.proc after_taken: a8 {
     rts
 }

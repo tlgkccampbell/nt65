@@ -287,13 +287,21 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         var any = false;
         foreach (var (line, wanted) in byLine)
         {
-            var statement = tree.GetLine(line).Statement;
-            if (new Reattacher(wanted).Visit(statement) is not { } found
-                || ReferenceEquals(found.Green, statement.Green))
-            {
+            // What the statement could not take is the line's too, and a piece of it may be
+            // what was annotated.
+            var read = tree.GetLine(line);
+            var reattacher = new Reattacher(wanted);
+            var statement = read.Statement;
+            var found = reattacher.Visit(statement);
+            var skipped = read.SkippedTokens is { } left ? reattacher.Visit(left) : null;
+            var node = found is not null && !ReferenceEquals(found.Green, statement.Green) ? found.Green : null;
+            var rest = skipped is not null && !ReferenceEquals(skipped.Green, read.SkippedTokens!.Green)
+                ? skipped.Green
+                : null;
+            if (node is null && rest is null)
                 continue;
-            }
-            kept[line] = tree.Parsed(line) with { Node = found.Green };
+            var parsed = tree.Parsed(line);
+            kept[line] = parsed with { Node = node ?? parsed.Node, SkippedTokens = rest ?? parsed.SkippedTokens };
             any = true;
         }
         return any ? tree.WithCarried(ImmutableCollectionsMarshal.AsImmutableArray(kept)) : tree;
@@ -339,15 +347,42 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         }
     }
 
-    /// <summary>What a rewrite changes on one line: its <c>.export</c>, its statement, what was left over, its break.</summary>
+    /// <summary>
+    /// What a rewrite changes on one line: its <c>.export</c>, its statement, what was left over,
+    /// its break. A line any of them changes is read again whole, so the statement or what was
+    /// left over, where it carries an annotation and was not itself rewritten, is written again
+    /// as it stands, for its annotations to be found where it lands.
+    /// </summary>
     private void CollectLine(LineSyntax line)
     {
+        // Each piece is visited in the order it is written, which a rewrite that counts or
+        // carries something from token to token relies on, before anything is written.
         if (line.ExportKeyword is { } exported)
             Changed(exported, VisitToken(exported));
-        Changed(line.Statement, Visit(line.Statement));
-        if (line.SkippedTokens is { } left)
-            Changed(left, Visit(left));
+        var statement = Visit(line.Statement);
+        var left = line.SkippedTokens is { } skipped ? Visit(skipped) : null;
+        var moved = !ReferenceEquals(statement?.Green, line.Statement.Green)
+            || (line.SkippedTokens is { } before && !ReferenceEquals(left?.Green, before.Green));
+        Kept(line.Statement, statement, moved);
+        if (line.SkippedTokens is { } rest)
+            Kept(rest, left, moved);
         Changed(line.EndOfLineToken, VisitToken(line.EndOfLineToken));
+    }
+
+    /// <summary>
+    /// A piece of a line the rewrite gave back as <paramref name="rewritten"/>: a change where it
+    /// changed, and where it did not but <paramref name="moved"/> says the line is read again, a
+    /// change writing it as it stands when it carries an annotation.
+    /// </summary>
+    private void Kept(SyntaxNode written, SyntaxNode? rewritten, bool moved)
+    {
+        if (moved && rewritten is not null && ReferenceEquals(written.Green, rewritten.Green) && written.ContainsAnnotations)
+        {
+            Tag(written.Green, changes!.Count, 0);
+            changes.Add(new TextChange(written.FullSpan.Start, written.FullSpan.Length, written.ToFullString()));
+            return;
+        }
+        Changed(written, rewritten);
     }
 
     private void Changed(SyntaxToken written, SyntaxToken rewritten)

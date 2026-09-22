@@ -225,6 +225,26 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
+    /// What a statement could not take is part of its line, and a tag on it survives a rewrite of
+    /// that line: the tagging itself, and a name written over beside it, each read the line again.
+    /// </summary>
+    [Fact]
+    public void ATagOnWhatALineLeftOverSurvivesARewriteOfTheLine()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".module marker: sideways\n");
+        var skipped = tree.Root.DescendantNodes().First(node => node.Kind == SyntaxKind.SkippedTokens);
+        var tag = new SyntaxAnnotation("probe");
+
+        var tagged = tree.Root.ReplaceNode(skipped, skipped.WithAdditionalAnnotations(tag));
+        var name = tagged.DescendantTokens().First(token => token.Text == "marker");
+        var renamed = tagged.ReplaceToken(name, SyntaxFactory.Identifier("other").WithTriviaFrom(name));
+
+        Assert.Equal("sideways", Assert.Single(tagged.GetAnnotatedNodes(tag)).GetText().Trim());
+        Assert.Equal("sideways", Assert.Single(renamed.GetAnnotatedNodes(tag)).GetText().Trim());
+        Assert.Equal(".module other: sideways\n", renamed.ToFullString());
+    }
+
+    /// <summary>
     /// The lexer's cache shares a token between the places a file writes it, so an annotated one
     /// must never get into it: the cache is the lexer's alone, and a tag makes a token of its own.
     /// </summary>

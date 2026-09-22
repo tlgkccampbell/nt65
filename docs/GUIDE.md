@@ -385,7 +385,10 @@ routine that returns past inline data (an `inline` signature). `.next` is only e
 statement above it, and only where nt65 cannot see where that statement goes: after an ordinary
 instruction or a direct `jsr` it is an error. A proc that runs into the one written after it says
 so with `.fallthrough next_proc` as the last line of its body, whatever the body ends in, an
-`.if` chain included. Everything else is assembly as usual.
+`.if` chain included. Where the routine it runs into depends on the configuration, each branch
+of a chain that ends the body may end in a `.fallthrough` of its own; only the branch a build
+takes is checked, so it may name a routine only that build declares. Everything else is
+assembly as usual.
 
 ## The 65816
 

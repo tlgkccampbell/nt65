@@ -1,0 +1,78 @@
+; `.fallthrough` is the last line of a routine's body as the configuration resolves it, so it
+; may end a branch of an `.if` chain that ends the body, to any depth. In each configuration at
+; most one remains, and what it names is checked there: a branch this build does not take is
+; not read, and may name a routine this build does not declare. msbasic's routines run into
+; different routines on Commodore machines and elsewhere.
+.module main
+.cpu 6502
+
+.export .config CONFIG_CBM_ALL = 0
+
+.export FRM_VARIABLE, LOAD_FAC_FROM_YA, STROUT, PUTSTR, LC92B, NESTED, OUTDO
+
+.segment CODE
+; Elsewhere a jump; on Commodore machines a fall-through into a routine only they have.
+.proc FRM_VARIABLE {
+    lda #1
+    .if !CONFIG_CBM_ALL {
+        jmp LOAD_FAC_FROM_YA
+    } .else {
+        .fallthrough LCE69
+    }
+}
+
+.if CONFIG_CBM_ALL {
+    .export .proc LCE69 {
+        lda #2
+        .fallthrough LOAD_FAC_FROM_YA
+    }
+}
+
+.proc LOAD_FAC_FROM_YA {
+    rts
+}
+
+; Different routines follow in different configurations.
+.proc STROUT {
+    ldx #0
+    .if CONFIG_CBM_ALL {
+        .fallthrough PUTSTR
+    } .else {
+        .fallthrough LC92B
+    }
+}
+
+.if CONFIG_CBM_ALL {
+    .proc PUTSTR {
+        rts
+    }
+    .proc LC92B {
+        rts
+    }
+} .else {
+    .proc LC92B {
+        rts
+    }
+    .proc PUTSTR {
+        rts
+    }
+}
+
+; A chain inside a branch that ends the body ends it too, and an `.elseif` is a branch like
+; any other.
+.proc NESTED {
+    lda #3
+    .if CONFIG_CBM_ALL {
+        .if 1 {
+            .fallthrough OUTDO
+        }
+    } .elseif 1 {
+        ldy #4
+
+        .fallthrough OUTDO
+    }
+}
+
+.proc OUTDO {
+    rts
+}

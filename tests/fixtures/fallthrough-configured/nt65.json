@@ -1,0 +1,6 @@
+{
+  "cpu": "6502",
+  "configurations": {
+    "cbm": { "defines": { "main::CONFIG_CBM_ALL": 1 } }
+  }
+}

@@ -1685,9 +1685,9 @@ An exported label inside a routine is a door other modules may come through, and
 
 ### `fallthrough-misplaced`
 
-> `.fallthrough` is the last line of a routine's body, where it names the routine every path reaching the end runs into
+> `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
 
-A `.fallthrough` is about the end of a routine's body rather than about the statement above it, so it stands last in the body of a `.proc`: not under an `.if`, in a macro body or a block argument, or with anything after it.
+A `.fallthrough` is about the end of a routine's body rather than about the statement above it, so it stands last in the body of a `.proc`, or last in a branch of an `.if` chain that is itself last in the body, to any depth: conditions are settled before analysis, so in each configuration at most one remains, and it is last. It is not in a macro body, a block argument or a repetition, and nothing follows it or the chain it ends.
 
 ### `fallthrough-not-a-routine`
 
