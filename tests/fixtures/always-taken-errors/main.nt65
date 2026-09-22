@@ -1,0 +1,48 @@
+; What an always-taken branch refuses: a `.next` naming anything but the branch's own target.
+; What follows the branch is then reached only by what else names it, so a label nothing else
+; reaches is unreachable.
+.module main
+
+.cpu 6502
+
+.export wrong_target, two_targets, unreached, end_path, elsewhere
+
+.segment CODE
+.proc wrong_target {
+    lda #1
+    bne @done
+    .next elsewhere     ;! error[next-not-the-branch-target]: `.next` after `bne @done` says the branch is always taken, so it names only where the branch goes, `@done`
+@done:
+    rts
+}
+
+.proc two_targets {
+    lda #1
+    bne @done
+    .next @done, elsewhere  ;! error[next-not-the-branch-target]: `.next` after `bne @done` says the branch is always taken, so it names only where the branch goes, `@done`
+@done:
+    rts
+}
+
+.proc unreached {
+    lda #1
+    bne @done
+    .next @done
+@never:                 ;! warning[label-unreachable]: `@never` is never reached: nothing runs into it and nothing names it
+    rts
+@done:
+    rts
+}
+
+; `.next ?` still ends the path after any statement.
+.proc end_path {
+    lda #1
+    bne @done
+    .next ?
+@done:
+    rts
+}
+
+.proc elsewhere {
+    rts
+}

@@ -1849,7 +1849,8 @@ public static class Catalogue
         Severity.Error,
         "the instruction above runs into this data. `.next` on it says where flow goes instead",
         "The bytes after the instruction are data, and the processor would execute them. A `.next` says where "
-            + "flow goes instead.");
+            + "flow goes instead; after a conditional branch that is always taken, one naming the branch's target "
+            + "says so.");
 
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         "routine-runs-off-the-end",
@@ -1883,10 +1884,20 @@ public static class Catalogue
         Severity.Error,
         "`.next` names where flow goes after a statement nt65 cannot follow, and {0} {1}{2}",
         "A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, "
-            + "or data that flow runs into: statements whose successors nt65 cannot read for itself. After any "
-            + "other statement it already knows where flow goes, and a `.next` could only contradict that. A "
-            + "routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end "
-            + "a path after any statement.");
+            + "or data that flow runs into: statements whose successors nt65 cannot read for itself, and under a "
+            + "conditional branch it names the branch's own target, to say it is always taken. After any other "
+            + "statement it already knows where flow goes, and a `.next` could only contradict that. A routine that "
+            + "runs into the one written after it says so with `.fallthrough`, and `.next ?` may end a path after "
+            + "any statement.");
+
+    internal static DiagnosticDescriptor NextNotTheBranchTarget { get; } = Entry(
+        "next-not-the-branch-target",
+        Severity.Error,
+        "`.next` after {0} says the branch is always taken, so it names only where the branch goes, `{1}`",
+        "A conditional branch that is always taken, because the flags are known where it stands, says so with a "
+            + "`.next` naming its own target: the path no longer runs on past it, and the target is where it "
+            + "goes. Naming anything else would say the branch goes somewhere its operand does not. `.next ?` "
+            + "ends the path there instead.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
         "fallthrough-misplaced",

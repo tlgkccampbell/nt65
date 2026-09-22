@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 388 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 389 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -19,7 +19,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
-| [Control flow](#control-flow) | 33 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
+| [Control flow](#control-flow) | 34 | `code-unreachable` (warning), `keeps-redundant` (warning), `label-unreachable` (warning), `routine-runs-off-the-end` (warning) |
 | [Processor state](#processor-state) | 36 | — |
 | [Output](#output) | 6 | `c-header-name-left-out` (warning), `c-header-untyped` (warning), `omitted-branch` (info) |
 | [The project file](#the-project-file) | 24 | — |
@@ -1779,11 +1779,17 @@ The register is already what the routine was entered with, so saying so again sa
 
 Nothing falls into the label and nothing branches, jumps or calls to it.
 
+### `next-not-the-branch-target`
+
+> `.next` after {0} says the branch is always taken, so it names only where the branch goes, `{1}`
+
+A conditional branch that is always taken, because the flags are known where it stands, says so with a `.next` naming its own target: the path no longer runs on past it, and the target is where it goes. Naming anything else would say the branch goes somewhere its operand does not. `.next ?` ends the path there instead.
+
 ### `next-successors-known`
 
 > `.next` names where flow goes after a statement nt65 cannot follow, and {0} {1}{2}
 
-A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, or data that flow runs into: statements whose successors nt65 cannot read for itself. After any other statement it already knows where flow goes, and a `.next` could only contradict that. A routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end a path after any statement.
+A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, or data that flow runs into: statements whose successors nt65 cannot read for itself, and under a conditional branch it names the branch's own target, to say it is always taken. After any other statement it already knows where flow goes, and a `.next` could only contradict that. A routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end a path after any statement.
 
 ### `next-table-has-no-labels`
 
@@ -1825,7 +1831,7 @@ The routine ends without transferring control, so flow carries on into whatever 
 
 > the instruction above runs into this data. `.next` on it says where flow goes instead
 
-The bytes after the instruction are data, and the processor would execute them. A `.next` says where flow goes instead.
+The bytes after the instruction are data, and the processor would execute them. A `.next` says where flow goes instead; after a conditional branch that is always taken, one naming the branch's target says so.
 
 ### `self-modifying-unchecked`
 

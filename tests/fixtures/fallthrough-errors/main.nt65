@@ -71,8 +71,8 @@
 
 ; A `.next` in the middle of a body says nothing that is not already known either.
 .proc in_the_middle: a8 {
-    beq @out
-    .next @out          ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `beq @out` goes to `@out` or on into what follows it
+    jmp @out
+    .next @out          ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `jmp @out` goes to `@out`
 @out:
     rts
 }

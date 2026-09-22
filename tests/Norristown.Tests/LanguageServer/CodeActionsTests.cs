@@ -30,6 +30,11 @@ public sealed class CodeActionsTests
             ".export .proc main {\n    .if 1 {\n        nop\n    }\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
         },
         {
+            "Say the branch is always taken with `.next @over`",
+            ".export .proc main {\n    sec\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
+            ".export .proc main {\n    sec\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"
+        },
+        {
             "Write it as `.fallthrough`",
             ".export .proc main {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
             ".export .proc main {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"

@@ -1377,9 +1377,20 @@ label:
   naming data of any other type is an error that asks for the address type. `.next ?` ends
   the path with nothing checked, and may stand after any statement. A `.next` that names
   targets after a statement whose successors nt65 already knows — an ordinary instruction, a
-  direct `jsr`, `jmp` or branch to a label or routine — is an error, since it could only
-  contradict them; where it is the last line of a routine's body its message says
-  `.fallthrough` is what was meant, and its fix writes that.
+  direct `jsr` or `jmp` to a label or routine — is an error, since it could only contradict
+  them; where it is the last line of a routine's body its message says `.fallthrough` is what
+  was meant, and its fix writes that.
+- **After a conditional branch**, `.next` names the branch's own target and nothing else, and
+  says the branch is **always taken**: the flags are known where it stands, as in
+  `bne L297E ; always` after a load of a nonzero value, or `bcs over` after a routine that
+  always returns with carry set. The edge that runs on past the branch is removed and the one
+  to its target stays, carrying the state after the branch, as a taken branch's edge does. What
+  follows the branch is then reached only by what else names it, so text or a table there is
+  not run into, and a label there that nothing else reaches is unreachable as usual. The short
+  branches (`bcc`, `bcs`, `beq`, `bne`, `bmi`, `bpl`, `bvc`, `bvs`), the Rockwell `bbr` and
+  `bbs`, and the long branches `jeq` and the rest all take it. Naming anything but the branch's
+  own target, or more than it, is an error (next-not-the-branch-target); where code runs into
+  data after a conditional branch, the fix writes this `.next`.
 - `.patch @op` acknowledges that the store above it writes into the instruction at
   `@op`.
 
@@ -1409,6 +1420,7 @@ The third directive is about the end of a routine rather than a statement:
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
+| a conditional branch that is always taken: `bne L ; always`, `bcs` over inline text | the flags are known where the branch stands, which nt65 does not work out | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
 | falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; a warning off the 65816, whose fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
@@ -3996,6 +4008,15 @@ Recorded so the reasoning survives. None is open.
   rather than inferred or folded into a general jump. A `.next` that could only repeat or
   contradict what nt65 reads is an error, so the old spelling of a fall-through is caught
   where it stands, with a fix that writes the new one.
+- **An always-taken branch is a `.next` naming its own target.** 6502 code often branches on
+  flags it knows, `bne` after loading a nonzero value or `bcs` after a routine that always sets
+  carry, as a two-byte jump or to hop over text. Once `.next` stopped naming the successors of
+  statements nt65 can read, such a branch had to end in `.next ?`, which threw away the edge
+  to the target, or warned that it ran into the data after it. A `.next` naming the branch's
+  own target says exactly what is known and nothing more: the target edge was already right,
+  and the edge past it is the one the flags rule out. A new directive was not wanted for what
+  is an annotation on the statement above, and naming any other target stays an error, because
+  a branch that goes somewhere its operand does not is a jump, and should be written as one.
 - **The end of a body is the end the configuration resolves.** At first a `.fallthrough` was the
   literal last line of a body and never under an `.if`. msbasic has routines that run into
   different routines in different configurations, or jump in one and run on in another, and
@@ -4604,7 +4625,8 @@ assertion   := '.state' state                         ; not near, far, inline, a
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
 width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
-annotation  := '.next' (target (',' target)* | '?')
+annotation  := '.next' (target (',' target)* | '?')     ; after a conditional branch, its
+                                                      ; own target only: always taken
              | '.patch' target
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
                                                       ; a branch of an if-block ending it

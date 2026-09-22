@@ -1,0 +1,44 @@
+; A conditional branch that is always taken, because the flags are known where it stands, says
+; so with a `.next` naming its own target: the path no longer runs on past it, so the text after
+; it is not run into, and the target is where it goes.
+.module main
+
+.cpu 6502
+
+.export set_carry, print_ready, skip_ahead, far_ahead
+
+.segment CODE
+.proc set_carry {
+    sec
+    rts
+}
+
+; msbasic's `bcs LE260` after a routine that always returns with carry set, jumping over text.
+.proc print_ready {
+    jsr set_carry
+    bcs over
+    .next over
+    .byte "READY", 0
+    over:
+    rts
+}
+
+; `bne L297E ; always`, where the value loaded is not zero.
+.proc skip_ahead {
+    lda #1
+    bne done
+    .next done
+    .byte $2c
+    done:
+    rts
+}
+
+; A long branch that is always taken is the same, whichever form it is written as.
+.proc far_ahead {
+    ldx #1
+    jne there
+    .next there
+    .byte[200]
+    there:
+    rts
+}

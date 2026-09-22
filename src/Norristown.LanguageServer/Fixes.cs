@@ -47,6 +47,12 @@ internal static class Fixes
                         $"{Edits.IndentOf(tree, last)}    .fallthrough {routine}\n")]);
                 break;
 
+            case FixKind.AlwaysTaken when fix is { Text: { } target, At: { } branch }:
+                var after = branch.Line - 1;
+                yield return Fix(diagnostic, $"Say the branch is always taken with `.next {target}`",
+                    [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
+                break;
+
             case FixKind.Mnemonic when fix.Text is { } mnemonic && Written(tree, line, mnemonic) is { } call:
                 yield return Fix(diagnostic, $"Call with `{mnemonic}`", [call]);
                 break;

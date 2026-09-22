@@ -80,4 +80,10 @@ public enum FixKind
     /// fix's <see cref="DiagnosticFix.At"/> closes.
     /// </summary>
     Fallthrough,
+
+    /// <summary>
+    /// A <c>.next</c> naming the branch's own target after the conditional branch at the fix's
+    /// <see cref="DiagnosticFix.At"/>, which says the branch is always taken.
+    /// </summary>
+    AlwaysTaken,
 }

@@ -319,6 +319,7 @@
         "name-already-declared",
         "name-is-a-module-path",
         "nesting-too-deep",
+        "next-not-the-branch-target",
         "next-successors-known",
         "next-table-has-no-labels",
         "next-target-not-a-table",

@@ -724,6 +724,7 @@ public sealed class ControlFlow
         var severity = layout.Cpu == Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
         var fromCode = false;
         int? stream = null;
+        Unit? before = null;
         foreach (var unit in units)
         {
             if (unit.Step.Stream != stream)
@@ -745,12 +746,33 @@ public sealed class ControlFlow
             {
                 diagnostics.Add(new Diagnostic(
                     unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), severity,
-                    Catalogue.RunsIntoData));
+                    Catalogue.RunsIntoData)
+                {
+                    Fix = AlwaysTaken(before),
+                });
             }
 
             // A run of data is one run: only what code runs into is worth saying.
             fromCode = !data && RunsOn(unit);
+            before = unit;
         }
+    }
+
+    /// <summary>
+    /// The <c>.next</c> that says a conditional branch running into data is always taken, which
+    /// is what data after one nearly always means: the flags are known there, and the bytes
+    /// after it are text or a table the branch jumps over. Offered where the branch is written in
+    /// this file, and named as it is written, so the edit reads as the programmer would write it.
+    /// </summary>
+    private DiagnosticFix? AlwaysTaken(Unit? branch)
+    {
+        if (branch is not { Step: { On: null, Statement: InstructionStatementSyntax statement } } || statement.Tree != model.Tree
+            || BranchTarget(branch) is null
+            || Transfers.TargetOf(statement, layout.Of(statement, null)?.Mode) is not { } written)
+        {
+            return null;
+        }
+        return new DiagnosticFix(FixKind.AlwaysTaken, written.GetText().Trim(), statement.Tree.GetSpan(statement.Span));
     }
 
     /// <summary>
@@ -872,8 +894,9 @@ public sealed class ControlFlow
     /// A <c>.next</c> names where flow goes after a statement nt65 cannot follow: an indirect
     /// jump or call, a return, a jump to a computed address, data flow runs into, and the last
     /// statement of a nested segment block, which runs into whatever that segment holds next.
-    /// After any other statement nt65 already knows where flow goes, and the <c>.next</c> could
-    /// only contradict it. <c>.next ?</c> ends a path wherever it stands.
+    /// Under a conditional branch it names the branch's own target and nothing else, which says
+    /// the branch is always taken. After any other statement nt65 already knows where flow goes,
+    /// and the <c>.next</c> could only contradict it. <c>.next ?</c> ends a path wherever it stands.
     /// </summary>
     private void CheckNextIsNeeded(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -887,11 +910,23 @@ public sealed class ControlFlow
             .ToHashSet();
         foreach (var unit in units)
         {
-            if (unit.Next is not { QuestionToken: null } next || endsASegmentBlock.Contains(unit)
-                || Known(unit) is not { } does)
+            if (unit.Next is not { QuestionToken: null } next || endsASegmentBlock.Contains(unit))
+                continue;
+
+            // A branch that is always taken goes only to its own target.
+            if (BranchTarget(unit) is { } target)
             {
+                if (Named(next, unit.Step.On).Select(named => named.Symbol).ToList() is [var only] && only == target
+                    && next.Targets.Count == 1)
+                {
+                    continue;
+                }
+                diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
+                    Catalogue.NextNotTheBranchTarget.Says($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName)));
                 continue;
             }
+            if (Known(unit) is not { } does)
+                continue;
 
             // Where the `.next` ends a routine's body, what was meant is nearly always that the
             // routine runs into the one after it, which is what `.fallthrough` says.
@@ -906,6 +941,22 @@ public sealed class ControlFlow
                 Fix = rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null,
             });
         }
+    }
+
+    /// <summary>
+    /// The label or routine a conditional branch goes to when it is taken, short or long, or null
+    /// for any other statement and for a branch whose target nt65 cannot read, such as <c>*+3</c>.
+    /// A relative call written with <c>per</c> and a branch is a call, not a branch.
+    /// </summary>
+    private Symbol? BranchTarget(Unit unit)
+    {
+        if (unit.Step.Statement is not InstructionStatementSyntax statement || RelativeCallAt(unit.Step) is not null)
+            return null;
+        var mode = layout.Of(statement, unit.Step.On)?.Mode;
+        return Transfers.Of(statement, mode) == Transfer.Branch
+            && Targets.Of(model, Transfers.TargetOf(statement, mode), unit.Step.On) is { Symbol.IsAddress: true } target
+                ? target.Symbol
+                : null;
     }
 
     /// <summary>

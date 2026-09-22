@@ -386,7 +386,10 @@ cmd_fire:
 The same goes for a `.byte $2c` skip (`.next` after it), self-modifying code (`.patch`) and a
 routine that returns past inline data (an `inline` signature). `.next` is only ever about the
 statement above it, and only where nt65 cannot see where that statement goes: after an ordinary
-instruction or a direct `jsr` it is an error. A proc that runs into the one written after it says
+instruction or a direct `jsr` it is an error. After a conditional branch it may name the
+branch's own target, which says the branch is always taken, as `bne L297E ; always` or a `bcs`
+over inline text means: nothing then runs on past the branch into what follows it. A proc that
+runs into the one written after it says
 so with `.fallthrough next_proc` as the last line of its body, whatever the body ends in, an
 `.if` chain included. Where the routine it runs into depends on the configuration, each branch
 of a chain that ends the body may end in a `.fallthrough` of its own; only the branch a build
