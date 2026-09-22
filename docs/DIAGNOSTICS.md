@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 360 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 367 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -12,10 +12,10 @@ siblings stand for what the diagnostic names at the place it is reported.
 
 | area | names | not an error by default |
 |---|---|---|
-| [Reading a line](#reading-a-line) | 57 | — |
+| [Reading a line](#reading-a-line) | 58 | — |
 | [Names](#names) | 49 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
 | [Values](#values) | 49 | — |
-| [Macros](#macros) | 22 | — |
+| [Macros](#macros) | 28 | — |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 15 | — |
 | [Instructions](#instructions) | 21 | `config-warned` (warning) |
@@ -184,6 +184,12 @@ A `.multiproc` names the enum it walks and then the name each routine is named f
 > expected {0}
 
 A `.data` declaration says what its bytes are — a number type, an address type, a record type or an included file — and this one says nothing the language reads as one.
+
+### `expected-dot-dot`
+
+> expected {0}
+
+A range is written from its lower end to its higher, with `..` between them.
 
 ### `expected-element-index`
 
@@ -1025,11 +1031,23 @@ A `} name {` closes one block argument and opens the next, and there is no call 
 
 A block argument after the parentheses names a `block` parameter the macro declares.
 
+### `const-argument-out-of-range`
+
+> `{0}` takes a constant from {1} to {2}, and {3}
+
+A `const(low..high)` parameter says the range it takes, so a call outside it is told at the call, with the limits, rather than by an `.assert` in the body.
+
 ### `declaration-in-a-macro-body`
 
 > {0} belongs outside a macro body: {1}
 
 A macro body is written out at each call, in the module that calls it. Each of these would either declare a name in the caller or make something program-wide depend on how many times the macro is called.
+
+### `enum-argument-not-a-member`
+
+> `{0}` takes a member of `{1}`, and {2}
+
+A parameter whose kind is an enum takes one of its members, by its bare name or its path, and nothing else of the same value.
 
 ### `expansion-limit`
 
@@ -1061,11 +1079,23 @@ A macro expands in the module that calls it, so every name in its body has to be
 
 Every expansion is bounded, and a depth limit is not a bound: a macro that calls itself, however far around, has none. A `list` parameter or an `.each` does what walking an argument list did.
 
+### `operand-argument-mode`
+
+> `{0}` takes {1}, and this is `{2}`
+
+An `operand(...)` parameter lists the addressing modes it takes, as `.mode` names them, with `zp`, `zpx` and `zpy` for a direct-page address, so a call in another mode is told at the call.
+
 ### `operand-argument-parenthesized`
 
 > `{0}` takes an operand, and `{1}` reads as an expression in parentheses. Brace it to pass indirect addressing
 
 An unbraced `(ptr)` is an expression in parentheses, as it is everywhere else. Braces pass a whole operand, indirection and index included.
+
+### `operand-mode-unknown`
+
+> `{0}` is not an addressing mode an `operand` takes: {1}
+
+The modes are the words `.mode` gives, and `zp`, `zpx` and `zpy` for the direct-page addresses among `abs`, `absx` and `absy`.
 
 ### `parameter-after-block`
 
@@ -1078,6 +1108,18 @@ A block is written after the parentheses, so a `block` parameter is the last one
 > `{0}` comes after the `list` parameter `{1}`, which takes every remaining argument
 
 A `list` parameter takes every remaining argument, so nothing after it could ever be given one.
+
+### `parameter-kind-not-an-enum`
+
+> `{0}` is {1}, and a parameter's kind is one of the kind words or an enum
+
+A name after a parameter's `:` that is not one of the kinds' words names the enum whose members the parameter takes.
+
+### `parameter-range-invalid`
+
+> `{0}` is not a range: a `const` range is two constants, the lower first
+
+The range a `const(low..high)` parameter takes is worked out once, where the macro is declared.
 
 ### `parameter-unknown`
 

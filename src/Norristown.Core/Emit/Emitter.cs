@@ -2259,6 +2259,10 @@ public sealed class Emitter
             return bound.Value.Text;
         if (bound.Argument is { Parameter.Kind: ParameterKind.Operand } given)
             return given.Operand is { } operand ? Substituted(operand, comments) : null;
+
+        // A member of an enum is a constant, and constants are written as what they are worth.
+        if (bound is { Member: not null, Item: null } && bound.Value.AsNumber() is { } member)
+            return Constant(member);
         return bound.Item is { } item ? Substituted(item, comments) : null;
     }
 

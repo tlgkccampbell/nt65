@@ -42,7 +42,7 @@ public sealed class AnalysisApiTests
         .data cells: .byte[4]
 
         .segment CODE
-        .macro plot(value: expr) {
+        .macro plot(value: Colour) {
             lda #value
             sta EDGE
         }
@@ -221,7 +221,10 @@ public sealed class AnalysisApiTests
         Assert.Equal(1, model.ValueOf(model.ArgumentFor(value, on)!.Value!).AsNumber());
         Assert.Equal(on.Call, model.GivenAt(value, on)!.Value.Argument.Value!.Tree.Root.DescendantNodes()
             .OfType<MacroCallSyntax>().Single());
-        Assert.Equal("Colour::white", model.BindingsOf(on)![value].Item!.GetText());
+        Assert.Equal("white", model.BindingsOf(on)![value].Member!.Name);
+        Assert.Equal("Colour", model.EnumOf(plot.Parameters[0].Accepts)!.Name);
+        Assert.Equal("white", model.MemberFor(invocation.For(value)!, null)!.Name);
+        Assert.Equal("white", model.MemberOf(plot.Parameters[0].Accepts, invocation.For(value)!.Value, null)!.Name);
         Assert.Null(model.BindingsOf(null));
         Assert.Equal(plot, model.DeclaredBy(((BlockSyntax)plot.Definition!).Opener.Statement, null));
     }

@@ -15,7 +15,7 @@ namespace Norristown;
 public static class Catalogue
 {
     // The heading last read. An entry takes the one written above it rather than naming one,
-    // which would be a line on all 360 of them: a static initializer runs where it is written,
+    // which would be a line on all 367 of them: a static initializer runs where it is written,
     // so the headings and the entries between them are read in the order they are laid out.
     private static DiagnosticArea? opening;
 
@@ -208,6 +208,12 @@ public static class Catalogue
         "expected {0}",
         "A count, an index, a long indirect operand or a list of banks is written in brackets, and one of them is "
             + "not closed or not opened.");
+
+    internal static DiagnosticDescriptor ExpectedDotDot { get; } = Entry(
+        "expected-dot-dot",
+        Severity.Error,
+        "expected {0}",
+        "A range is written from its lower end to its higher, with `..` between them.");
 
     internal static DiagnosticDescriptor ExpectedEquals { get; } = Entry(
         "expected-equals",
@@ -1214,6 +1220,47 @@ public static class Catalogue
         Severity.Error,
         "`{0}` takes an expression, and a braced argument is a whole operand",
         "Braces pass a whole operand. A parameter that takes an expression takes it unbraced.");
+
+    internal static DiagnosticDescriptor ConstArgumentOutOfRange { get; } = Entry(
+        "const-argument-out-of-range",
+        Severity.Error,
+        "`{0}` takes a constant from {1} to {2}, and {3}",
+        "A `const(low..high)` parameter says the range it takes, so a call outside it is told at the call, with "
+            + "the limits, rather than by an `.assert` in the body.");
+
+    internal static DiagnosticDescriptor EnumArgumentNotAMember { get; } = Entry(
+        "enum-argument-not-a-member",
+        Severity.Error,
+        "`{0}` takes a member of `{1}`, and {2}",
+        "A parameter whose kind is an enum takes one of its members, by its bare name or its path, and nothing "
+            + "else of the same value.");
+
+    internal static DiagnosticDescriptor OperandArgumentMode { get; } = Entry(
+        "operand-argument-mode",
+        Severity.Error,
+        "`{0}` takes {1}, and this is `{2}`",
+        "An `operand(...)` parameter lists the addressing modes it takes, as `.mode` names them, with `zp`, `zpx` "
+            + "and `zpy` for a direct-page address, so a call in another mode is told at the call.");
+
+    internal static DiagnosticDescriptor ParameterRangeInvalid { get; } = Entry(
+        "parameter-range-invalid",
+        Severity.Error,
+        "`{0}` is not a range: a `const` range is two constants, the lower first",
+        "The range a `const(low..high)` parameter takes is worked out once, where the macro is declared.");
+
+    internal static DiagnosticDescriptor ParameterKindNotAnEnum { get; } = Entry(
+        "parameter-kind-not-an-enum",
+        Severity.Error,
+        "`{0}` is {1}, and a parameter's kind is one of the kind words or an enum",
+        "A name after a parameter's `:` that is not one of the kinds' words names the enum whose members the "
+            + "parameter takes.");
+
+    internal static DiagnosticDescriptor OperandModeUnknown { get; } = Entry(
+        "operand-mode-unknown",
+        Severity.Error,
+        "`{0}` is not an addressing mode an `operand` takes: {1}",
+        "The modes are the words `.mode` gives, and `zp`, `zpx` and `zpy` for the direct-page addresses among "
+            + "`abs`, `absx` and `absy`.");
 
     internal static DiagnosticDescriptor ExpansionLimit { get; } = Entry(
         "expansion-limit",

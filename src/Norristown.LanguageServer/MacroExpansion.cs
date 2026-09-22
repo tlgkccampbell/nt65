@@ -422,6 +422,14 @@ internal sealed class MacroExpansion
                 : null;
         }
 
+        // A member of an enum may have been given by its bare name, which only the parameter
+        // could read, so it is written as a path the caller can.
+        if (parameter.Kind == ParameterKind.Enum
+            && model.GivenAt(parameter.Symbol, at) is { } given && model.MemberFor(given.Argument, given.Caller) is { } member)
+        {
+            return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
+        }
+
         var written = (value as BracedOperandSyntax)?.Operand ?? value;
         var text = written.GetText().Trim();
         return name.Parent is ExpressionSyntax && written is BinaryExpressionSyntax or UnaryExpressionSyntax

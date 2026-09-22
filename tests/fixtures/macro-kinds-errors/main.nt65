@@ -1,0 +1,65 @@
+; What is wrong with a refined parameter kind, at the call that gives the argument or at the
+; header that declares the kind.
+.module main
+
+.cpu 6502
+
+.enum Instrument {
+    kick
+    snare
+}
+
+.macro volume(lvol: const(0..15)) {
+    .byte lvol
+}
+
+.macro play(what: Instrument) {
+    .byte what
+}
+
+.macro load(src: operand(imm, zp, abs, absx)) {
+    lda src
+}
+
+.macro direct(at: operand(zp)) {
+    lda at
+}
+
+; The header: a range is two constants, the lower first; a name is an enum; a mode is one
+; an operand can be in.
+.macro backwards(n: const(9..1)) {    ;! error[parameter-range-invalid]: `const(9..1)` is not a range: a `const` range is two constants, the lower first
+    .byte n
+}
+
+.macro typed(n: SPEED) {    ;! error[parameter-kind-not-an-enum]: `SPEED` is a constant, and a parameter's kind is one of the kind words or an enum
+    .byte n
+}
+
+.macro spc(p: operand(dp)) {    ;! error[operand-mode-unknown]: `dp` is not an addressing mode an `operand` takes: one of `imm`, `acc`, `abs`, `absx`, `absy`, `zp`, `zpx`, `zpy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long`, `longy`
+    lda p
+}
+
+SPEED = 3
+
+.segment ZEROPAGE
+.data ptr: .word
+
+.segment BSS
+.data buffer: .byte[4]
+
+.segment RODATA
+.data tune {
+    volume!(16)             ;! error[const-argument-out-of-range]: `lvol` takes a constant from 0 to 15, and this is 16
+    volume!(buffer)         ;! error[const-argument-out-of-range]: `lvol` takes a constant from 0 to 15, and this is not a constant
+    play!(1)                ;! error[enum-argument-not-a-member]: `what` takes a member of `Instrument`, and `1` is not one
+    play!(tom)              ;! error[enum-argument-not-a-member]: `what` takes a member of `Instrument`, and `tom` is not one
+    play!(SPEED)            ;! error[enum-argument-not-a-member]: `what` takes a member of `Instrument`, and `SPEED` is not one
+}
+
+.segment CODE
+.proc copy {
+    load!({(ptr),y})        ;! error[operand-argument-mode]: `src` takes one of `imm`, `zp`, `abs`, `absx`, and this is `indy`
+    direct!(buffer)         ;! error[operand-argument-mode]: `at` takes `zp`, and this is `abs`
+    direct!({ptr,x})        ;! error[operand-argument-mode]: `at` takes `zp`, and this is `zpx`
+    rts
+}

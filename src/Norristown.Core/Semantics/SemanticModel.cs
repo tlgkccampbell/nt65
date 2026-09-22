@@ -381,6 +381,10 @@ public sealed class SemanticModel
                     ParameterKind.One => new Expansion.Bound(WordFor(argument, level.Outer), null, argument),
                     ParameterKind.List or ParameterKind.Block =>
                         new Expansion.Bound(Value.Unknown, null, argument),
+
+                    // A member stands for its value.
+                    ParameterKind.Enum when MemberFor(argument, level.Outer) is { } member =>
+                        new Expansion.Bound(member.Value, null, argument, member),
                     _ => new Expansion.Bound(Value.Unknown, argument.Value, argument),
                 });
             }
@@ -420,6 +424,41 @@ public sealed class SemanticModel
             return WordFor(given, outer);
         }
         return argument.Word is { } word ? Value.Word(word) : Value.Unknown;
+    }
+
+    /// <summary>The enum an enum kind names, where the macro that declares the parameter is written; null when it names none.</summary>
+    public Symbol? EnumOf(ArgumentKind kind) =>
+        kind.Enum is { } name && SymbolOf(name) is { Kind: SymbolKind.Enum } named ? named : null;
+
+    /// <summary>
+    /// The member of its enum an argument of an enum kind names, read where the caller stands
+    /// at <paramref name="caller"/>: a bare name among the enum's members first, since that is
+    /// what the parameter takes, then a path to one, then what a parameter of the same kind
+    /// that it passes on was given. Null when it names no member of the enum.
+    /// </summary>
+    public Symbol? MemberFor(MacroArgument argument, Expansion? caller) =>
+        MemberOf(argument.Parameter.Accepts, argument.Value, caller);
+
+    /// <summary>The same, for one expression written for an enum kind: an argument, or an item of a <c>list</c> of one.</summary>
+    public Symbol? MemberOf(ArgumentKind kind, SyntaxNode? written, Expansion? caller)
+    {
+        if (EnumOf(kind) is not { Body: { } members } || written is not NameExpressionSyntax name)
+            return null;
+        if (name is { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
+            && members.FindMember(word.Text) is { Kind: SymbolKind.Constant } bare)
+        {
+            return bare;
+        }
+        var symbol = SymbolOf(name);
+        if (symbol is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.Enum } passed
+            && GivenAt(passed, caller) is { } given)
+        {
+            return MemberOf(passed.Parameter.Accepts, given.Argument.Value, given.Caller) is { } member
+                && member.Scope == members
+                    ? member
+                    : null;
+        }
+        return symbol is { Kind: SymbolKind.Constant } found && found.Scope == members ? found : null;
     }
 
     /// <summary>The macro a call names, wherever in the program the call was written.</summary>

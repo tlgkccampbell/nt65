@@ -413,6 +413,11 @@ public sealed partial class CodeLayout
         if (Exceeds(definition.Members.Length, call))
             return;
 
+        // An argument the parameter refuses is reported at the call, and a body laid out with it
+        // would only say the same thing again from inside.
+        if (!ArgumentChecks.Check(model, call, expansion, segment, (node, message) => Report(node, message)))
+            return;
+
         // A macro with a state signature is checked where its expansion starts and where it
         // ends, so both are steps of their own.
         var outer = expansion;

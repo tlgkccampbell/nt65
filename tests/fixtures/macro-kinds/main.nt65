@@ -1,0 +1,67 @@
+; A parameter's kind may say more than which kind it is: the range a constant takes, the enum
+; whose members it takes, and the modes an operand may be in. Each is checked at the call.
+.module main
+
+.cpu 6502
+
+.export tune, copy
+
+.enum Instrument {
+    kick
+    snare
+    bassguitar
+}
+
+; A range on a `const` says in the signature what an `.assert` in the body would.
+.macro volume(lvol: const(0..15), rvol: const(0..15)) {
+    .byte (lvol << 4) | rvol
+}
+
+; An enum as a kind takes its members, by the bare name or the path, and stands for the
+; member's value in the body.
+.macro play(what: Instrument, note: const(0..127)) {
+    .byte what, note
+}
+
+; A member given to a parameter of the same kind is passed on as the member.
+.macro kick(note: const(0..127)) {
+    play!(kick, note)
+}
+
+.macro again(what: Instrument) {
+    play!(what, 48)
+}
+
+; The modes an operand takes, as `.mode` names them, and `zp` for a direct-page address.
+.macro load(src: operand(imm, zp, abs, absx)) {
+    lda src
+}
+
+.macro direct(at: operand(zp)) {
+    load!(at)
+}
+
+.segment ZEROPAGE
+.data ptr: .byte
+
+.segment BSS
+.data buffer: .byte[4]
+
+.segment RODATA
+.data tune {
+    volume!(15, 8)
+    play!(bassguitar, 24)
+    play!(Instrument::snare, 36)
+    kick!(12)
+    again!(snare)
+}
+
+.segment CODE
+.proc copy {
+    load!({#1})
+    load!(ptr)
+    load!(buffer)
+    load!({buffer,x})
+    direct!(ptr)
+    rts
+}

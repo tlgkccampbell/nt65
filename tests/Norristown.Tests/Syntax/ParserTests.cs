@@ -219,7 +219,7 @@ public sealed class ParserTests
     [InlineData("gfx::init", "expected a label, a constant, an instruction or a directive")]
     [InlineData(".macro {", "expected a macro name")]
     [InlineData(".macro m {", "expected `(` and the parameters")]
-    [InlineData(".macro m(p: word) {", "expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`")]
+    [InlineData(".macro m(p: 5) {", "expected `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")]
     [InlineData(".macro m(p: one) {", "expected `(`")]
     [InlineData(".macro m(p: one(a, 3)) {", "expected a word")]
     [InlineData(".macro m(1) {", "expected a parameter name")]

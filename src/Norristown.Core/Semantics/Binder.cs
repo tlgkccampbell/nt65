@@ -849,7 +849,10 @@ internal sealed partial class Binder
         IReadOnlyList<MacroParameterSyntax> declarations =
             declaration.Parameters is { } list ? list.Parameters : [];
         foreach (var parameter in declarations)
+        {
             CollectUses(Macros.DefaultOf(parameter));
+            CollectKindUses(parameter.ParameterKind);
+        }
 
         var outer = scope;
         scope = body;
@@ -866,6 +869,21 @@ internal sealed partial class Binder
             symbol.Parameters = parameters;
         CheckParameterOrder(declarations, parameters);
         return body;
+    }
+
+    /// <summary>
+    /// The names a parameter's kind writes: the bounds of a <c>const</c> range and the enum of
+    /// an enum kind, which resolve where the macro is declared as a default does. The words of
+    /// a <c>one</c> and the modes of an <c>operand</c> are never looked up.
+    /// </summary>
+    private void CollectKindUses(ParameterKindSyntax? kind)
+    {
+        if (kind is null)
+            return;
+        CollectUses(kind.Type);
+        CollectUses(kind.Low);
+        CollectUses(kind.High);
+        CollectKindUses(kind.Element);
     }
 
     /// <summary>
@@ -1418,8 +1436,10 @@ internal sealed partial class Binder
                 // may be passed on from a `one` parameter of the macro whose body writes the
                 // call, and that is a name. So it is collected either way and stays silent
                 // when it turns out to be no name at all.
-                var words = argument.Parameter.Kind == ParameterKind.One
-                    || argument.Parameter.Accepts.Element is { Kind: ParameterKind.One };
+                // A member of an enum may be written by its bare name, which is the enum's to
+                // answer rather than the caller's, so it is a word here too.
+                var words = argument.Parameter.Kind is ParameterKind.One or ParameterKind.Enum
+                    || argument.Parameter.Accepts.Element is { Kind: ParameterKind.One or ParameterKind.Enum };
                 CollectUses(argument.Value, written, words);
                 foreach (var item in argument.Items)
                     CollectUses(item, written, words);

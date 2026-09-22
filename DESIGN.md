@@ -2379,6 +2379,9 @@ inputs changed.
 | `one(w, ...)` | one of the listed words | a word, compared with `==` and `!=` |
 | `list(kind)` | every remaining positional argument, each of that kind | a list, for `.each` and `.countof` |
 | `block` | a trailing block (§11.4) | a line naming it splices it |
+| `const(lo..hi)` | a constant from `lo` to `hi` | as `const` |
+| `operand(m, ...)` | an operand in one of the listed modes | as `operand` |
+| an enum's name | one of its members, by its bare name or its path | the member's value |
 
 - **Arguments are values, not tokens.** A parameter stands for its argument as a
   parenthesized whole, so `value * 2` with the argument `1 + 2` is 6, where ca65's textual
@@ -2420,6 +2423,38 @@ inputs changed.
   whose list contains it.
 - **Lists.** A `list` parameter follows every other parameter except blocks and takes the
   remaining positional arguments. `.countof(p)` is a constant.
+- **Refined kinds.** Three kinds may say more, and what they say is checked at the call,
+  where the error names the parameter and signature help shows the limits. `const(lo..hi)`
+  takes a constant in the range, whose ends are constants where the macro is declared; a
+  condition that is not a range stays an `.assert` in the body. `operand(m, ...)` takes an
+  operand in one of the listed modes, the words `.mode` gives with `zp`, `zpx` and `zpy`
+  for the direct-page addresses among `abs`, `absx` and `absy`: `dp: operand(zp)` says an
+  argument must be reached through the direct page. And the name of an enum as a kind takes
+  one of its members. The argument may be the member's bare name, which the enum answers
+  rather than the caller, as a `one` takes words, or its path; the body sees the member's
+  value. A value that is not a member, even one equal to a member's, is an error, and so is
+  anything a parameter of the same kind passes on that is not one. An
+  argument a refined kind refuses is reported once, at the call, and the body is not
+  expanded for it.
+
+```nt65
+.enum Instrument {
+    kick
+    snare
+    bassguitar
+}
+
+.macro play(what: Instrument, note: const(0..127)) {
+    .byte what, note
+}
+
+.macro load(src: operand(imm, zp, abs, absx)) {
+    lda src
+}
+
+    play!(bassguitar, 24)
+    play!(Instrument::snare, 36)
+```
 
 ```nt65
 .macro push(regs: list(one(a, x, y))) {
@@ -3683,6 +3718,13 @@ Recorded so the reasoning survives. None is open.
   is an ordinary module to read and keep, and no build depends on it. That is why it writes a
   comment for every line it could not convert and counts them: a converter nobody checks is a
   silent half-translation, and this one is written to be checked.
+- **Refined parameter kinds, not a type system.** A range on `const`, an enum as a kind and
+  the modes of an `operand` map onto what macros did by hand with `.assert`, `.ident` and
+  `.error` after a `.mode` test, and they matter most for a library of macros that is
+  nothing but signatures. Structs as parameter types or a general type system over
+  expressions would be a language inside the language, and are left out. A bare member name
+  is a word, never looked up in the caller, for the reason a `one` word is not: what it
+  means is the parameter's to say.
 - **Language features before macros.** Where ca65 code reaches for a macro, nt65 first
   asks whether the pattern needs analysis, and if it does, makes it a language feature
   (Appendix B). Macros keep what does not, which is what lets them stay restricted.
@@ -4116,6 +4158,9 @@ macro       := '.macro' ident '(' (param (',' param)*)? ')'
 param       := ident (':' kind)? ('=' (expr | '{' '}'))?
 kind        := 'expr' | 'const' | 'ident' | 'operand' | 'block'
              | 'one' '(' word (',' word)* ')' | 'list' '(' kind ')'
+             | 'const' '(' expr '..' expr ')'            ; the range it takes
+             | 'operand' '(' word (',' word)* ')'        ; the modes it takes
+             | path                                      ; an enum, whose members it takes
 word        := ident | register | mnemonic
 macro-call  := ident '!' '(' (arg (',' arg)*)? ')'
                ('{' NL body ('}' ident '{' NL body)* '}')?

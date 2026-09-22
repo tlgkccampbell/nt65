@@ -262,6 +262,7 @@ public sealed class MacroInvocation
 
                 case ParameterKind.Expr:
                 case ParameterKind.Const:
+                case ParameterKind.Enum:
                     if (value is BracedOperandSyntax)
                     {
                         Report(value.Span, Catalogue.ExpressionArgumentBraced.Says(parameter.Name));

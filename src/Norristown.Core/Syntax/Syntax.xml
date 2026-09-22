@@ -1697,28 +1697,53 @@
   <Node Name="ParameterKindSyntax" Base="SyntaxNode">
     <Kind Name="ParameterKind"/>
     <TypeComment>
-      <summary>What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, or a <c>list(...)</c> of one of those.</summary>
+      <summary>
+        What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, a <c>list(...)</c> of one of
+        the others, a <c>const(0..15)</c> in a range, an <c>operand(imm, zp)</c> in the listed modes, or the name of
+        an enum, whose members it takes.
+      </summary>
     </TypeComment>
-    <Field Name="Keyword" Type="SyntaxToken">
+    <Field Name="Keyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The kind's word.</summary>
+        <summary>The kind's word, or null where the kind is an enum's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
+    <Field Name="Type" Type="NameExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>The enum whose members the parameter takes, or null where the kind is a word.</summary>
+      </PropertyComment>
+    </Field>
     <Field Name="OpenParenToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>(</c> of a <c>one</c> or a <c>list</c>, or null.</summary>
+        <summary>The <c>(</c> of a <c>one</c>, a <c>list</c>, a <c>const</c> range or an <c>operand</c>'s modes, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Words" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
-        <summary>The words a <c>one(...)</c> accepts.</summary>
+        <summary>The words a <c>one(...)</c> accepts, or the modes an <c>operand(...)</c> does.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Element" Type="ParameterKindSyntax" Optional="true">
       <PropertyComment>
         <summary>What each item of a <c>list(...)</c> is, or null.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="Low" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>The least value a <c>const(...)</c> takes, or null.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>The <c>..</c> of a <c>const(...)</c> range, or null.</summary>
+      </PropertyComment>
+      <Kind Name="DotDot"/>
+    </Field>
+    <Field Name="High" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>The greatest value a <c>const(...)</c> takes, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken" Optional="true">

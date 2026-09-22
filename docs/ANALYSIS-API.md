@@ -535,6 +535,9 @@ var on = Expansion.Of(null, call, (BlockSyntax)plot.Definition!);
 
 model.ArgumentFor(parameter, on)    // what the parameter was given at this expansion
 model.GivenAt(parameter, on)        // the same, with the level it was written at
+model.EnumOf(parameter.Accepts)     // the enum a parameter's kind names, when it names one
+model.MemberFor(argument, caller)   // the member of it an argument names, bare or by its path
+model.MemberOf(kind, written, caller) // the same, for one expression written for such a kind
 model.BindingsOf(on)                // every name bound here and at the levels around it
 model.BindingsOf(null)              // null: outside an expansion nothing is bound
 ```

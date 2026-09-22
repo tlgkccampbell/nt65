@@ -61,41 +61,57 @@ internal sealed partial class Parser
 
     /// <summary>
     /// What a parameter takes: one of the fixed words, the listed words of a
-    /// <c>one(...)</c>, or a <c>list(...)</c> of one of those.
+    /// <c>one(...)</c>, a <c>list(...)</c> of one of the others, a <c>const</c> with the range
+    /// it takes, an <c>operand</c> with the modes it takes, or the name of an enum.
     /// </summary>
     private ParameterKindSyntax ParseParameterKind()
     {
-        if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsParameterKind(Current.Text))
+        // A name that is none of the kinds' words names an enum, whose members the parameter takes.
+        if (Kind == SyntaxKind.ColonColon || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsParameterKind(Current.Text)))
+            return new ParameterKindSyntax(null, ParseName(), null, null, null, null, null, null, null);
+        if (Kind != SyntaxKind.Identifier)
         {
             return new ParameterKindSyntax(
                 Missing(SyntaxKind.Identifier,
                     Catalogue.ExpectedParameterKind.Says(
-                        "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`")),
-                null, null, null, null);
+                        "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")),
+                null, null, null, null, null, null, null, null);
         }
 
         var listed = AtWord("one");
         var nested = AtWord("list");
+        var ranged = AtWord("const");
+        var moded = AtWord("operand");
         var keyword = Advance();
 
-        // Only a `one` and a `list` say what they take, in parentheses after the word.
-        if (!listed && !nested)
-            return new ParameterKindSyntax(keyword, null, null, null, null);
+        // A `one` and a `list` say what they take, in parentheses after the word; a `const` and
+        // an `operand` may.
+        if (!listed && !nested && !((ranged || moded) && Kind == SyntaxKind.OpenParen))
+            return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
         if (Kind != SyntaxKind.OpenParen)
         {
             Report(Catalogue.ExpectedParenthesis.Says("`(`"));
-            return new ParameterKindSyntax(keyword, null, null, null, null);
+            return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
         }
 
         var openParen = Advance();
+        if (ranged)
+        {
+            var low = ParseExpression();
+            var dotDot = Expect(SyntaxKind.DotDot, Catalogue.ExpectedDotDot.Says("`..` and the greatest value: `const(0..15)`"));
+            var high = ParseExpression();
+            return new ParameterKindSyntax(
+                keyword, null, openParen, null, null, low, dotDot, high,
+                Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
+        }
 
         // The words a `one` accepts are never looked up, so a register or a mnemonic
-        // among them is a word like any other.
-        var words = listed ? ParseSeparatedList(ParseListedWord) : null;
-        var element = listed ? null : ParseParameterKind();
+        // among them is a word like any other; nor are the modes an `operand` takes.
+        var words = listed || moded ? ParseSeparatedList(ParseListedWord) : null;
+        var element = nested ? ParseParameterKind() : null;
         return new ParameterKindSyntax(
-            keyword, openParen, words, element, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says(
-                "`)`")));
+            keyword, null, openParen, words, element, null, null, null,
+            Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
     }
 
     /// <summary>One of the words a <c>one(...)</c> accepts.</summary>

@@ -27,4 +27,7 @@ public enum ParameterKind
 
     /// <summary>A trailing block, which a line naming the parameter splices.</summary>
     Block,
+
+    /// <summary>A member of the enum the kind names, by its bare name or its path.</summary>
+    Enum,
 }
