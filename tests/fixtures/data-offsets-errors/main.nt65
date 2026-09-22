@@ -1,0 +1,50 @@
+; Where two places in one data declaration are no known distance apart. An `.align` between
+; them pads by however much the linker's placement needs, and a macro call writes its bytes
+; only when it is expanded, after every constant has its value: the difference is then an
+; address expression, which a one-byte immediate does not take, and the declaration has no
+; size nt65 can give.
+.module main
+
+.cpu 6502
+
+.export aligned, expanded, report
+
+.macro htasc(text) {
+    .repeat .strlen(text) - 1, i {
+        .byte .strat(text, i)
+    }
+    .byte .strat(text, .strlen(text) - 1) | $80
+}
+
+.segment RODATA
+.data aligned {
+    .data first: .byte 1, 2, 3
+    .align 4
+    .data second: .byte 4
+}
+
+.data expanded {
+    .data NOFOR {
+        htasc!("NEXT WITHOUT FOR")
+    }
+    .data SYNTAX {
+        htasc!("SYNTAX")
+    }
+}
+
+; Before the `.align`, and before the first macro call, the distance is known; past them the
+; difference is an address, as wide as the addresses it names.
+BEFORE_ALIGN = aligned::first - aligned
+AFTER_ALIGN = aligned::second - aligned
+ERR_NOFOR = expanded::NOFOR - expanded
+ERR_SYNTAX = expanded::SYNTAX - expanded
+
+.segment CODE
+.proc report {
+    ldx #BEFORE_ALIGN
+    ldx #ERR_NOFOR
+    ldx #AFTER_ALIGN                ;! error[address-does-not-fit]: `AFTER_ALIGN` is an absolute address, and an immediate is one byte: `<AFTER_ALIGN` is its low byte
+    ldx #ERR_SYNTAX                 ;! error[address-does-not-fit]: `ERR_SYNTAX` is an absolute address, and an immediate is one byte: `<ERR_SYNTAX` is its low byte
+    lda #.sizeof(expanded)          ;! error[sizeof-depends-on-expansion]: nt65 cannot say how many bytes `expanded` takes: a macro call in it writes its bytes only when it is expanded, which is after every constant has its value, and `.spanof(expanded)` measures it in the output
+    rts
+}

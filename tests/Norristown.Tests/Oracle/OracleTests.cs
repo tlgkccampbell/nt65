@@ -310,6 +310,57 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
+    /// The distance nt65 works out between two places in one data declaration is the distance
+    /// ca65 lays them out at: the same table written by hand, with ca65 subtracting its own
+    /// labels, links to the same bytes as nt65's output, which carries only the numbers.
+    /// </summary>
+    [Fact]
+    public void ADistanceInsideADeclarationIsTheOneCa65LaysOut()
+    {
+        const string Nt65 = """
+            .module main
+            .segment RODATA
+            .data messages {
+                .data first: .byte "NEXT", 'X' | $80
+                .if 1 {
+                    .data second {
+                        .byte "SYN", 'T' | $80
+                        .word[3]
+                    }
+                }
+                .data third: .word[4]
+            }
+            .data errors: .byte messages::second - messages, messages::third[2] - messages, .endof(messages) - messages
+            """;
+        const string ByHand = """
+            .setcpu "6502"
+            .segment "RODATA": absolute
+            messages:
+            first: .byte "NEXT", 'X' | $80
+            second:
+                .byte "SYN", 'T' | $80
+                .word 0, 0, 0
+            third: .word 0, 0, 0, 0
+            messages_end:
+                .byte second - messages, third + 4 - messages, messages_end - messages
+            """;
+
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
+        Assert.Empty(generated.Diagnostics);
+        var output = Assert.Single(generated.Ca65).Text;
+        Assert.Contains(".byte $05, $13, $17", output, StringComparison.Ordinal);
+
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
+        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
+
+        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
+        Assert.True(fromHand.Succeeded, fromHand.Messages);
+        Assert.Equal([5, 19, 23], fromHand.Binary[^3..]);
+        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+    }
+
+    /// <summary>
     /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and reports each
     /// way ca65 disagrees with it: any message at all, or a line whose byte count is not the
     /// one nt65 computed.

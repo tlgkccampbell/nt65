@@ -422,6 +422,7 @@
         "signature-value-not-constant",
         "signature-value-out-of-range",
         "sizeof-depends-on-alignment",
+        "sizeof-depends-on-expansion",
         "space-not-a-name",
         "space-undeclared",
         "sqrt-of-a-negative",

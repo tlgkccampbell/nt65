@@ -152,17 +152,30 @@ internal sealed partial class Evaluator
     /// conditionals decided and its repetitions unrolled. Null when an `.align` in it makes
     /// that depend on where it lands.
     /// </summary>
-    private long? RoomForMixed(BlockSyntax block) => Total(block.Members, 1, BytesOnLine, nested =>
-        nested.BlockKind switch
-        {
-            BlockKind.Data => RoomForMixed(nested),
-            BlockKind.DataBody or BlockKind.RecordInitializer => BytesOnLine(nested.Opener.Statement),
-            _ => null,
-        });
+    private long? RoomForMixed(BlockSyntax block) => Total(block.Members, 1, BytesOnLine, NestedBytes);
 
-    /// <summary>The bytes one line of mixed data takes, or null when nt65 cannot say.</summary>
+    /// <summary>Whether mixed data holds a macro call, whose bytes nothing knows before it is expanded.</summary>
+    private static bool Expands(Symbol data) =>
+        data.Definition is BlockSyntax block
+        && block.DescendantNodes().Any(node => node is MacroCallSyntax or BlockSpliceSyntax);
+
+    /// <summary>The bytes a block inside mixed data takes, or null when nt65 cannot say.</summary>
+    private long? NestedBytes(BlockSyntax nested) => nested.BlockKind switch
+    {
+        BlockKind.Data => RoomForMixed(nested),
+        BlockKind.DataBody or BlockKind.RecordInitializer => BytesOnLine(nested.Opener.Statement),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The bytes one line of mixed data takes, or null when nt65 cannot say. A macro call writes
+    /// its bytes only once it is expanded, which is after every constant and every shape has its
+    /// value, so what one takes is not known here.
+    /// </summary>
     private long? BytesOnLine(StatementSyntax statement)
     {
+        if (statement is MacroCallSyntax or BlockSpliceSyntax)
+            return null;
         var directive = statement switch
         {
             DataDirectiveSyntax data => data,

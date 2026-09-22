@@ -912,7 +912,8 @@ appears:
 1. An explicit prefix `z:`, `a:` or `f:` wins; `d:` makes a direct operand from a
    constant address (§7.5).
 2. If the expression is a constant, its value decides: below `$100` is zero page, below
-   `$10000` absolute, otherwise far.
+   `$10000` absolute, otherwise far. The difference of two places in one data declaration
+   is a constant (§8), though it names addresses.
 3. Otherwise the expression contains address symbols, and its size is the widest
    address size among them, each taken from its segment (§5.2) or `.import` (§12).
 
@@ -1999,8 +2000,37 @@ A data declaration's `.sizeof` is its bytes and its `.countof` its elements (§7
 `.byte[16]` gives 16 and 16, `.word a, b` gives 4 and 2, `.type Player[8]` gives
 `8 * .sizeof(Player)` and 8, `.type Player { ... }` gives `.sizeof(Player)` and 1, a list
 counts one element per item, and a string one element per byte. Mixed data has a size and
-no count, and one holding an `.align` has no size nt65 knows, so its `.spanof` measures it.
-`.endof` and `.spanof` work on every data declaration.
+no count. One holding an `.align` has no size nt65 knows, and neither has one holding a macro
+call, whose bytes exist only once it is expanded, after every constant has its value (§3.1):
+each is an error naming the reason, and its `.spanof` measures it. `.endof` and `.spanof` work
+on every data declaration.
+
+**Distances inside a declaration.** nt65 never knows where a declaration lands, but it lays out
+every byte of one it can size, so two places in the same declaration are a known distance apart
+wherever it lands. The places are the declaration itself, its end (`.endof`), a member declared
+in it at any depth, an `@` position in it where it can be named, an element `name[i]`, a member
+reached through a record, and any of those a constant away. The difference of two of them is a
+**constant** whenever nt65 knows every length between them: it is usable wherever a constant
+is, sizes as its value does (§7.2), so a one-byte immediate takes it, hover shows it, and the
+output writes it as its value. An `.align` between the two makes the length depend on where the
+declaration lands, and a macro call between them writes bytes only once it is expanded, so
+either leaves the difference an address expression, sized and written as one. Code has no such
+distances: a routine's size is layout (§14).
+
+```nt65
+.data messages {
+    .data NOFOR: .byte "NEXT WITHOUT FO", 'R' | $80
+    .data SYNTAX {
+        .byte "SYNTA", 'X' | $80
+    }
+}
+
+ERR_NOFOR = messages::NOFOR - messages
+ERR_SYNTAX = messages::SYNTAX - messages
+```
+
+`ldx #ERR_SYNTAX` loads 16, the offset of the message in the table, and the output writes
+`ERR_SYNTAX = $10`.
 
 **Binary files.** An `.incbin` path is relative to the `.nt65` file that names it. nt65
 reads the file for its length (offset and length must be constants), treats it as a
@@ -2175,7 +2205,9 @@ is exported and used across modules like a constant, and the output writes each 
 its parenthesized body.
 
 nt65 evaluates every expression it can (anything built only from constants) and uses
-the value for sizing and diagnostics. Expressions involving addresses are emitted
+the value for sizing and diagnostics. The difference of two places in one data declaration is
+one of them wherever every length between the two is known (§8): it names addresses, and it
+is a constant, written as its value. Other expressions involving addresses are emitted
 symbolically for ca65 and ld65 to resolve.
 
 **Arithmetic is 64-bit and signed** while nt65 computes, so that what an expression passes
@@ -3965,6 +3997,13 @@ Recorded so the reasoning survives. None is open.
   the linker. Keeping code sizes out of constants rules out sizes that depend on
   themselves and keeps proc bodies out of a file's interface. `.sizeof` of a proc is its
   span, with a span's limits, because a routine has no shape to measure instead.
+- **A distance inside one data declaration is a constant.** A message's offset in a table,
+  `ERR_NOFOR = messages::NOFOR - messages`, is an error number, and sizing it by its widest
+  address made it an absolute address a one-byte immediate refused. The two places are part of
+  one shape, so the distance is a shape too and changes with nothing the linker decides.
+  Where an `.align` or a macro call stands between them it stays an address expression: the
+  first depends on placement, and making the second a constant would have constants wait for
+  expansion, which §3.1 rules out.
 - **Segments are declared.** A misspelled segment name is an error, not a new segment.
 - **A standard segment's predeclaration is a default.** It could not be declared again, so it
   could never carry a direct page, a bank or mirrors, and a 65816 program that wanted the checks

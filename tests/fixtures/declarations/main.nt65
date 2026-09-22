@@ -74,7 +74,8 @@
 .assert .sizeof(vectors) == 9 && .spanof(vectors) == 9, "vectors"
 .assert .sizeof(vectors::native) == 4 && .countof(vectors::emulation) == 2, "vectors members"
 
-; What ld65 checks against the bytes ca65 wrote: each declaration ends where its size says.
+; Each declaration ends where its size says. The distance between two places in one declaration
+; is nt65's own constant, so these are answered as they are written, as the ones above are.
 .assert .endof(cursor) - cursor == .sizeof(cursor), "cursor"
 .assert .endof(buffer) - buffer == .sizeof(buffer), "buffer"
 .assert .endof(points) - points == .countof(points) * .sizeof(Point), "points"

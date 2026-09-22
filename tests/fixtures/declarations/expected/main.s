@@ -77,31 +77,17 @@ vectors__emulation:
     .addr main, vectors__middle
 vectors__end:
 
-.assert (cursor__end - cursor) = $02, lderror, "cursor"
-.assert (buffer__end - buffer) = $10, lderror, "buffer"
-.assert (points__end - points) = ($04 * $02), lderror, "points"
-.assert (gradient__end - gradient) = $03, lderror, "gradient"
-.assert (lut__end - lut) = $04, lderror, "lut"
-.assert (row_lo__end - row_lo) = $05, lderror, "row_lo"
-.assert (text__end - text) = $03, lderror, "text"
-.assert (handlers__end - handlers) = $04, lderror, "handlers"
-.assert (hero__end - hero) = $0b, lderror, "hero"
-.assert (sprites__end - sprites) = ($03 * $0b), lderror, "sprites"
-.assert (blank__end - blank) = $0b, lderror, "blank"
-.assert (vectors__end - vectors) = $09, lderror, "vectors"
-.assert (vectors__emulation - vectors) = ($04 + 1), lderror, "vectors::emulation"
-
 .segment "CODE": absolute
-; .proc move  main.nt65:94
+; .proc move  main.nt65:95
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:97
+; .proc fire  main.nt65:98
 actions__fire:
     rts
 ; end of fire
 
-; .proc main  main.nt65:102
+; .proc main  main.nt65:103
 main:
 
     ldx #2 * $0b

@@ -103,6 +103,28 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// The distance between two places in one data declaration is a constant, and hover says what
+    /// it is worth, as it does for any other: an error number that is a message's offset in a
+    /// table is a number, not an address.
+    /// </summary>
+    [Fact]
+    public async Task HoverGivesTheValueOfADistanceInsideADeclaration()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(
+            Uri,
+            ".module main\n.cpu 6502\n.segment RODATA\n.data messages {\n    .data first: .byte 1, 2, 3\n"
+                + "    .data second: .byte 4\n}\nERR_SECOND = messages::second - messages\n");
+        await client.NextDiagnosticsAsync(timeout);
+
+        var hover = await client.HoverAsync(Uri, new Position(7, 0), timeout);
+
+        Assert.Contains("value    3\n", hover?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("address  zp (1 byte)", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// nt65 writes a number in hexadecimal, which is what an address or a mask is read as. A
     /// number that is also a count is worth the decimal beside it, and below ten the two are
     /// the same digit, so there is nothing to put beside it.

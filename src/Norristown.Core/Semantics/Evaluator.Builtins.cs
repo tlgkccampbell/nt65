@@ -159,7 +159,9 @@ internal sealed partial class Evaluator
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
             {
-                Report(arguments[0], Catalogue.SizeofDependsOnAlignment.Says(measured.Name, measured.Name));
+                Report(arguments[0], Expands(measured)
+                    ? Catalogue.SizeofDependsOnExpansion.Says(measured.Name, measured.Name)
+                    : Catalogue.SizeofDependsOnAlignment.Says(measured.Name, measured.Name));
             }
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }

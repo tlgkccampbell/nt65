@@ -936,6 +936,15 @@ public static class Catalogue
         "`.countof` answers how many elements a counted declaration holds. Something that is bytes and not "
             + "elements is measured with `.sizeof`.");
 
+    internal static DiagnosticDescriptor SizeofDependsOnExpansion { get; } = Entry(
+        "sizeof-depends-on-expansion",
+        Severity.Error,
+        "nt65 cannot say how many bytes `{0}` takes: a macro call in it writes its bytes only when it is expanded, which is after every constant has its value, and `.spanof({1})` measures it in the output",
+        "Constants and shapes are worked out before any macro is expanded, so nothing a constant depends on "
+            + "waits for an expansion. What a macro call in a data declaration writes is known only once it is "
+            + "expanded, so the declaration's size is not a constant. `.spanof` asks the linker instead, and is a "
+            + "link-time value.");
+
     internal static DiagnosticDescriptor SizeofDependsOnAlignment { get; } = Entry(
         "sizeof-depends-on-alignment",
         Severity.Error,

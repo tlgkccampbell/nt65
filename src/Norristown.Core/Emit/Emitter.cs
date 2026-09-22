@@ -2117,6 +2117,15 @@ public sealed class Emitter
                     InPlace(value, valueWidth, valuesBigEndian, edits);
                 return;
 
+            // The distance between two places in one data declaration is a constant nt65 has
+            // worked out, and a constant is written as its value, never as text for ca65 to
+            // work out again.
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference
+                when NamesAnAddress(difference) && Worth(difference).AsNumber() is { } distance:
+                Replace(difference, nested ? $"({Constant(distance)})" : Constant(distance), edits);
+                edits.Comments.Add(difference.GetText().Trim());
+                return;
+
             case BinaryExpressionSyntax:
             case UnaryExpressionSyntax:
                 foreach (var op in node.ChildTokens)
@@ -2458,6 +2467,11 @@ public sealed class Emitter
     /// is refused rather than passed to ca65, which knows neither.
     /// </summary>
     private Value Worth(SyntaxNode node) => model.ValueOf(node, expansion, cycles: layout.CyclesOf);
+
+    /// <summary>Whether an expression names an address anywhere along any of its paths.</summary>
+    private bool NamesAnAddress(SyntaxNode node) =>
+        node.DescendantNodes().OfType<NameExpressionSyntax>()
+            .Any(name => name.Names.Any(part => model.SymbolAt(part) is { IsAddress: true }));
 
     private void Applied(CallExpressionSyntax call, Edits edits)
     {

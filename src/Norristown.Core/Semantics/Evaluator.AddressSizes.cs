@@ -25,8 +25,9 @@ internal sealed partial class Evaluator
         a is null ? b : b is null ? a : (AddressSize)Math.Max((int)a, (int)b);
 
     /// <summary>
-    /// The address size of an expression: a constant's value decides, and otherwise
-    /// the widest of the address symbols it names.
+    /// The address size of an expression: a constant's value decides, the distance between two
+    /// places in one data declaration among them, and otherwise the widest of the address
+    /// symbols it names.
     /// </summary>
     /// <param name="expression">The expression to size.</param>
     /// <param name="segment">The segment <c>*</c> stands in.</param>
@@ -39,7 +40,12 @@ internal sealed partial class Evaluator
         AddressSize? widest = null;
         var named = false;
         Walk(expression);
-        return named ? widest : (known ?? Evaluate(expression)).ImpliedAddressSize();
+        if (!named)
+            return (known ?? Evaluate(expression)).ImpliedAddressSize();
+
+        // Addresses nt65 has a value for are a distance between two places in one data
+        // declaration, which is a constant, and a constant's value decides.
+        return (known ?? Evaluate(expression)) is { IsNumber: true } value ? value.ImpliedAddressSize() : widest;
 
         void Walk(SyntaxNode node)
         {

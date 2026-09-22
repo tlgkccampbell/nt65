@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 385 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 386 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -14,7 +14,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 |---|---|---|
 | [Reading a line](#reading-a-line) | 59 | — |
 | [Names](#names) | 54 | `mnemonic-name` (warning), `unused-symbol` (warning), `unused-use-item` (warning) |
-| [Values](#values) | 49 | — |
+| [Values](#values) | 50 | — |
 | [Macros](#macros) | 29 | `comparison-never-holds` (warning) |
 | [Data](#data) | 30 | — |
 | [Placement](#placement) | 20 | — |
@@ -990,6 +990,12 @@ A shift moves a 64-bit value by a number of places it has.
 > nt65 cannot say how many bytes `{0}` takes: an `.align` in it depends on where it lands, and `.spanof({1})` measures it in the output
 
 An `.align` pads by however much it takes to reach the boundary, which the linker decides. `.spanof` asks the linker instead, and is a link-time value.
+
+### `sizeof-depends-on-expansion`
+
+> nt65 cannot say how many bytes `{0}` takes: a macro call in it writes its bytes only when it is expanded, which is after every constant has its value, and `.spanof({1})` measures it in the output
+
+Constants and shapes are worked out before any macro is expanded, so nothing a constant depends on waits for an expansion. What a macro call in a data declaration writes is known only once it is expanded, so the declaration's size is not a constant. `.spanof` asks the linker instead, and is a link-time value.
 
 ### `sqrt-of-a-negative`
 

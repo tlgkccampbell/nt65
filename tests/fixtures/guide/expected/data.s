@@ -37,7 +37,7 @@ data__boss:
     .word $28                       ; y
     .byte $63                       ; hp
 data__exe_header:
-    .word exe_header__end - data__exe_header, 0
+    .word $06, 0                    ; @end - exe_header
     .byte $4e, $54                  ; "NT"
 exe_header__end:
 

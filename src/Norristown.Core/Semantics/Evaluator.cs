@@ -69,6 +69,10 @@ internal sealed partial class Evaluator
     // The literals already told that they hold a character no encoding is settled for. A macro
     // body is evaluated once per call, and its text is one piece of text however often it is.
     private readonly HashSet<SyntaxNode> outsideAscii = [];
+
+    // The data declarations whose places are being worked out, so that one asked about by
+    // what is written inside it answers unknown rather than asking itself again.
+    private readonly HashSet<Symbol> placing = [];
     private Symbol? owner;
 
     // The symbol whose own value is being worked out, whose every step the output carries.
@@ -359,6 +363,13 @@ internal sealed partial class Evaluator
                     var same = string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
                     return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
                 }
+
+                // Two places in one data declaration are a known distance apart wherever it lands.
+                if (op.Kind == SyntaxKind.Minus && (first.Kind == ValueKind.Unknown || second.Kind == ValueKind.Unknown)
+                    && Distance(binary) is { } distance)
+                {
+                    return Value.Of(distance);
+                }
                 return Binary(op, first, second);
 
             case CallExpressionSyntax call:
@@ -500,7 +511,9 @@ internal sealed partial class Evaluator
 
         // `NAME = expr` is a constant if the expression names no address, and an address
         // alias if it does. Imports and extern procs are already classified.
-        if (symbol.Kind == SymbolKind.Constant && NamesAnAddress(expression))
+        // A distance between two places in one data declaration names addresses and is a
+        // constant all the same, because nt65 has its value.
+        if (symbol.Kind == SymbolKind.Constant && symbol.Value.AsNumber() is null && NamesAnAddress(expression))
         {
             // An enum is a set of numbers, and one that stood for an address would give every
             // member after it a value nothing can work out.

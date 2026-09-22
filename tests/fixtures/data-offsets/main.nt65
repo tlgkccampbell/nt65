@@ -1,0 +1,54 @@
+; Two places in one data declaration are a known distance apart wherever the declaration lands:
+; the declaration itself, its end, a member declared in it, an `@` position in it and an element
+; of it. That distance is a constant like any other, written to the output as its value, and a
+; one-byte immediate takes it: an error number that is a message's offset in a table.
+.module main
+
+.cpu 6502
+
+.export messages, ERR_NOFOR, ERR_SYNTAX, ERR_LAST, MESSAGES_END, TABLE_THIRD
+.export header, table, report, more
+
+.segment RODATA
+.data messages {
+    .data NOFOR: .byte "NEXT WITHOUT FO", 'R' | $80
+    .data SYNTAX {
+        .byte "SYNTA", 'X' | $80
+    }
+}
+
+ERR_NOFOR = messages::NOFOR - messages
+ERR_SYNTAX = messages::SYNTAX - messages
+MESSAGES_END = .endof(messages) - messages
+
+.assert ERR_SYNTAX == .sizeof(messages::NOFOR), "SYNTAX follows NOFOR"
+.assert MESSAGES_END == .sizeof(messages), "the end is as far in as the table is long"
+
+; A member under an `.if` the build takes is as far in as what the build writes before it.
+.data more {
+    .byte 1, 2
+    .if 1 {
+        .data LAST: .byte "OVERFLO", 'W' | $80
+    }
+}
+ERR_LAST = more::LAST - more
+
+; An element is as far in as the elements before it.
+.data table: .word[8]
+TABLE_THIRD = table[3] - table
+
+; A position in mixed data is named from inside the declaration, and is a place in it too.
+.data header {
+    .word @end - header, .endof(header) - @end
+    .byte "NT"
+@end:
+    .res 4
+}
+
+.segment CODE
+.proc report {
+    ldx #ERR_SYNTAX
+    ldy #more::LAST - more
+    lda #(messages::SYNTAX + 2) - messages
+    rts
+}
