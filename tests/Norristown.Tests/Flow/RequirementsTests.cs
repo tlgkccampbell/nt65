@@ -242,9 +242,35 @@ public sealed class RequirementsTests
             Program(Text).Problems());
     }
 
-    /// <summary>Only the state a declaration gives is checked at a jump into another routine.</summary>
+    /// <summary>
+    /// Only the state a declaration gives is checked at a jump into another routine. `p` leaves
+    /// by the jump, so it returns the way `owner` does, which is what its `-&gt;` says.
+    /// </summary>
     [Fact]
     public void AJumpIntoAnotherRoutineMeetsItsDeclaration()
+    {
+        const string Text = """
+            .proc owner: i16 {
+                rts
+            inner:
+                .state a8, i?, native
+                rts
+                .next ?
+            }
+            .proc p: a8, i8 -> i16 {
+                jmp owner::inner
+            }
+            """;
+
+        Assert.Empty(Program(Text).Problems());
+    }
+
+    /// <summary>
+    /// A jump into another routine hands its caller what that routine hands back, as a tail
+    /// call to the routine itself does, so what this one promises has to be the same.
+    /// </summary>
+    [Fact]
+    public void AJumpIntoAnotherRoutineReturnsTheWayItDoes()
     {
         const string Text = """
             .proc owner: i16 {
@@ -259,7 +285,10 @@ public sealed class RequirementsTests
             }
             """;
 
-        Assert.Empty(Program(Text).Problems());
+        Assert.Equal(
+            ["main.nt65:12: `jmp inner` leaves `p`: `p` returns with `i8`, and X and Y are 16-bit "
+                + "when `owner` returns"],
+            Program(Text).Problems());
     }
 
     private static ProgramAnalysis Program(string text) => Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));

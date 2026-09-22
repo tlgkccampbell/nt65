@@ -9,7 +9,7 @@
     jmp owner::owner::entry
 }
 
-.proc wrong: a16, i8 {
+.proc wrong: a16, i8 -> a8 {
     jmp owner::owner::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a8`, and A is 16-bit here
 }
 

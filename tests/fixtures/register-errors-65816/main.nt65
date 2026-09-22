@@ -5,6 +5,7 @@
 .cpu 65816
 
 .export saves_across, jumps_in
+.export hands_off, widens, hands_on, holds
 
 ; A routine whose widths nothing says, which is what a hardware entry point looks like.
 .proc twiddle = $8000: a? -> a?
@@ -33,4 +34,30 @@
 
 .proc jumps_in: a8, i8 {
     jmp saves_across_a_label::halfway
+}
+
+; A jump into another routine's label leaves this routine there, and what it hands back is what
+; the routine the label is in hands back: the word a jump to that routine itself is taken at,
+; since control comes back from neither.
+.proc hands_off: a8, i8, keeps a {
+    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `partway`, and `widens` does not promise to keep a: a `keeps a` on `widens` says it hands it back, and a `.next ?` here ends the path with nothing checked
+}
+
+.proc widens: a8, i8 {
+    partway:
+    .state a8, i8, native
+    lda #$12
+    rts
+}
+
+; The same jump where the routine the label is in promises to keep A.
+.proc hands_on: a8, i8, keeps a {
+    jmp holds::partway
+}
+
+.proc holds: a8, i8, keeps a {
+    partway:
+    .state a8, i8, native
+    ldx #$12
+    rts
 }

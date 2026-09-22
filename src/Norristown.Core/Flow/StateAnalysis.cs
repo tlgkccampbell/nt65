@@ -589,14 +589,21 @@ public sealed class StateAnalysis : IProcessorStates
             checks.CheckMirror(step, mode);
             checks.CheckTailCall(step, mnemonic, target, callee, state.Processor, routine);
         }
-        else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && DeclaredElsewhere(target, routine) is { } declared)
+        else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
         {
-            checks.CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
+            if (DeclaredElsewhere(target) is { } declared)
+                checks.CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
+            checks.CheckJumpInto(step, mnemonic, target, owner, state.Processor, routine);
         }
         if (next is not null)
         {
-            foreach (var named in Routines(next, step.On))
-                checks.CheckTailCall(step, ".next", named, named.Signature!, state.Processor, routine);
+            foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
+            {
+                if (named.Signature is { } signature)
+                    checks.CheckTailCall(step, ".next", named, signature, state.Processor, routine);
+                else if (Interior(named, routine) is { } inside)
+                    checks.CheckJumpInto(step, ".next", named, inside, state.Processor, routine);
+            }
         }
         return state;
     }
@@ -604,6 +611,16 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>The routines a <c>.next</c> names; the labels it names are edges of the routine's own.</summary>
     private IEnumerable<Symbol> Routines(NextDirectiveSyntax next, Expansion? on) =>
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
+
+    /// <summary>
+    /// The routine a target's label is inside, where the target is a label in another routine
+    /// and so a jump into that routine's interior; null for every other target. One instance of
+    /// a family is not another routine: its body is this one written once.
+    /// </summary>
+    private static Symbol? Interior(Symbol target, Symbol routine) =>
+        target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
+            ? owner
+            : null;
 
     /// <summary>Whether a statement calls, directly or through a pointer.</summary>
     private static bool IsCallOrIndirectCall(Step step) =>
@@ -646,17 +663,13 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// What a <c>.state</c> declares at a label inside another routine, which a jump into that
-    /// routine has to meet; null when the label is in this routine or declares nothing. Only
-    /// the parts it gives are checked. The declaration is read off the label, so the routine
-    /// may be in another file.
+    /// routine has to meet; null when the label declares nothing. Only the parts it gives are
+    /// checked. The declaration is read off the label, so the routine may be in another file.
     /// </summary>
-    private ProcessorState? DeclaredElsewhere(Symbol label, Symbol routine)
+    private ProcessorState? DeclaredElsewhere(Symbol label)
     {
-        if (label is not { Kind: SymbolKind.Label, StateDeclaration: { } declared, Routine: { } owner }
-            || owner == routine || owner.IsSiblingOf(routine))
-        {
+        if (label.StateDeclaration is not { } declared)
             return null;
-        }
         var state = ProcessorState.Unknown;
         foreach (var item in StateItem.Read(declared))
         {

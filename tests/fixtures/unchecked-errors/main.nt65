@@ -85,6 +85,13 @@
     jmp declared::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a16`, and A is 8-bit here
 }
 
+; Control never comes back from a jump into another routine: that routine returns to this
+; one's caller, so what it returns with is what this one hands back, exactly as a tail call to
+; it would. An exit of this routine's own that says something else is told so.
+.proc leaves_wrongly: a16, i8 -> a16 {
+    jmp declared::entry     ;! error[return-state-mismatch]: `jmp entry` leaves `leaves_wrongly`: `leaves_wrongly` returns with `a16`, and A is 8-bit when `declared` returns
+}
+
 ; A declared label is checked against for the parts its `.state` gives, so those are the only
 ; parts it may assume: what the routine's own path leaves is no promise to whoever jumps in.
 .proc partly: a8, i8 {
@@ -114,7 +121,8 @@
     rts
 }
 
-.proc into_saved: a16, i16 {
+; A jump in leaves this routine there, so it returns the way `saved_across` does.
+.proc into_saved: a16, i16 -> a8, i8 {
     jmp saved_across::resumed
 }
 

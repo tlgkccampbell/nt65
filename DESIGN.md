@@ -1307,7 +1307,7 @@ label:
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
 | falling off the end of a proc | last block does not end in a transfer of control | `.next next_proc`, checked like a tail call and checked to be adjacent in the same segment, or `.next ?`; a warning off the 65816 |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
@@ -1632,6 +1632,16 @@ rather than go round for ever. This is the one place the registers are easier th
 counts, which leave no total at all for a routine that can reach itself. A call nt65 cannot
 follow — through a pointer, or to a routine with no body that promises nothing — leaves the
 registers it did not save unknown, and the answer says it is not the whole one.
+
+A jump into another routine's interior (§7.4) is not a call but a way out: control lands in
+that routine and that routine returns to this one's caller. What a routine hands back across
+such a jump is therefore what the routine the label is in hands back — the same word a `jmp` to
+that routine's own entry is taken at, since control comes back from neither. A branch into one
+says the same on the path where it is taken, and a `.next` naming such a label says it for the
+statement it stands under. So a routine whose only way out is a jump into another promises no
+more than the routine it hands off to: where that one promises nothing, this one can promise
+nothing, and what is reported names the label, the routine it is inside and the `keeps` that
+belongs on that routine.
 
 **`keeps a, x` is the promise.** On a routine with a body it is checked at every `rts`, `rtl`
 and `rti`: a register the routine cannot be shown to hand back is reported there, with what to
@@ -3484,6 +3494,15 @@ Recorded so the reasoning survives. None is open.
   second entry point, which is right: the two ways in genuinely arrive on different stacks, and
   a routine whose second entry point reads what its caller pushed has `args n` to say so. The
   message on whatever then fails names the label and says both.
+- **A jump into another routine's interior is an exit, taken at that routine's word.** It looks
+  like a jump within a body and behaves like a tail call: control lands in another routine, and
+  that routine returns to this one's caller. So the jumping routine is held to what the routine
+  the label is in declares and hands back — its exit state and its `keeps` — and not to what the
+  code after the label happens to do, which is a body's business and no part of an interface.
+  Reading the label's own `.state` for this instead was weighed and refused: a declaration says
+  what the state at a point is, and there is nothing in it, nor anywhere for it, to say which
+  registers survive from there to the return. Taking the routine's word keeps one rule for both
+  spellings of a tail call and puts the promise where a caller can already read it.
 - **What a routine keeps is worked out; what it promises is declared.** The set is a fact
   about a body, as what a pass costs is, so it is computed and shown rather than written;
   `keeps` is a promise a caller may lean on, so it is declared and checked. That is the same

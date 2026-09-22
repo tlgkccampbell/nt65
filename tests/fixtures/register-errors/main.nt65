@@ -5,6 +5,7 @@
 .cpu 6502
 
 .export breaks_it, forgets_the_carry, says_nothing, jumps_in
+.export hands_off, loses_a, branches_in, loses_x, hands_on, holds_a
 
 .segment BSS
 .data slot: .byte
@@ -64,4 +65,43 @@
 
 .proc jumps_in {
     jmp saves_across::halfway
+}
+
+; A jump into another routine's label is a way out of this one: control never comes back here,
+; so what this routine hands its caller is what the routine the label is in hands back.
+.proc hands_off: keeps a {
+    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `partway`, and `loses_a` does not promise to keep a: a `keeps a` on `loses_a` says it hands it back, and a `.next ?` here ends the path with nothing checked
+}
+
+.proc loses_a {
+    partway:
+    .state ?
+    lda #0
+    rts
+}
+
+; A branch into one is the same way out, on the path where it is taken.
+.proc branches_in: keeps x {
+    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, and X is not what the routine was entered with here: control does not come back from `partway`, and `loses_x` does not promise to keep x: a `keeps x` on `loses_x` says it hands it back, and a `.next ?` here ends the path with nothing checked
+    rts
+}
+
+.proc loses_x {
+    partway:
+    .state ?
+    ldx #0
+    rts
+}
+
+; And where the routine the label is in promises to keep the register, the jump is certified:
+; whoever jumps in is handed it back with everyone else.
+.proc hands_on: keeps a {
+    jmp holds_a::partway
+}
+
+.proc holds_a: keeps a {
+    partway:
+    .state ?
+    ldy #0
+    rts
 }

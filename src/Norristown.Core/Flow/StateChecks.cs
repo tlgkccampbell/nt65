@@ -390,6 +390,36 @@ internal sealed class StateChecks
     }
 
     /// <summary>
+    /// A jump into a label inside another routine. That routine returns to this routine's
+    /// caller, so it has to return the way this one does and hand back what this one declares,
+    /// exactly as a tail call to it does. What the state has to be at the label is the label's
+    /// own declaration, which is checked apart from this.
+    /// </summary>
+    public void CheckJumpInto(
+        Step step, string mnemonic, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
+    {
+        var callee = owner.Signature ?? Signature.Default;
+        var own = routine.Signature ?? Signature.Default;
+        if (own.HasNoCaller || callee.NeverReturns)
+            return;
+        var what = mnemonic == ".next"
+            ? $"`.next {label.DisplayName}`"
+            : $"`{mnemonic} {label.DisplayName}`";
+        if (callee.IsInterrupt)
+        {
+            Report(step, Catalogue.TailCallToHandler.Says(what, owner.DisplayName));
+            return;
+        }
+        if (callee.IsFar != own.IsFar)
+        {
+            Report(step, Catalogue.TailCallDistanceMismatch.Says(
+                what, owner.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
+        }
+        CheckExit(step, $"{what} leaves `{routine.DisplayName}`:", $"when `{owner.DisplayName}` returns",
+            own.Exit, Exited(callee, state), routine.DisplayName);
+    }
+
+    /// <summary>
     /// A long transfer to a routine's address in a bank of its choosing, which has to be the bank
     /// the routine's segment lives in or one of its mirrors.
     /// </summary>

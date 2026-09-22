@@ -84,10 +84,17 @@ public static class RegisterKeeps
         // What a routine keeps: what the walk found, or, for one whose body is not here, what
         // it declares. A routine that declares more than its body shows is taken at its word,
         // so the mistake is reported where it is written and not at every call.
-        RoutineRegisters Of(Symbol routine) =>
-            found.TryGetValue(Named(routine), out var known) ? known
+        //
+        // A label stands for the routine it is inside: a jump into another routine's interior
+        // leaves this one there, and what it hands back is what that routine hands back, which
+        // is the word a jump to the routine itself is taken at.
+        RoutineRegisters Of(Symbol target)
+        {
+            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            return found.TryGetValue(Named(routine), out var known) ? known
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
                 : RoutineRegisters.Nothing;
+        }
     }
 
     /// <summary>What a routine keeps, with what it declares taken as kept too.</summary>
@@ -182,12 +189,28 @@ public static class RegisterKeeps
                         complete = false;
                 }
                 var after = Through(block, state, of, report);
-                if (!ends.Returns && !ends.Tail)
+
+                // A jump into another routine's interior is a way out of this one, checked
+                // against what the routine the label is in hands back.
+                var left = false;
+                foreach (var into in Leaves(block, region.Routine))
+                {
+                    var handed = of(into.Routine!);
+                    if (!handed.Complete)
+                        complete = false;
+                    var carried = Handed(after, handed);
+                    leaves = true;
+                    left = true;
+                    kept &= carried.Kept;
+                    if (report is not null)
+                        Check(region, block, carried, into, handed.Kept, report);
+                }
+                if (left || (!ends.Returns && !ends.Tail))
                     continue;
                 leaves = true;
                 kept &= after.Kept;
                 if (report is not null)
-                    Check(region, block, after, report);
+                    Check(region, block, after, null, Registers.None, report);
             }
 
             // A routine no path leaves hands nothing back, so there is nothing it can fail to
@@ -334,10 +357,17 @@ public static class RegisterKeeps
 
                 // A block is a way out of the scope when what runs after it is not in the
                 // scope, which a return and a jump away are too.
-                if (CarriedTo(blocks, blocks[i]).All(to => inside[to]) && !Ends(blocks[i]).Returns)
+                var left = Leaves(blocks[i], region.Routine).ToList();
+                if (left.Count == 0 && CarriedTo(blocks, blocks[i]).All(to => inside[to])
+                    && !Ends(blocks[i]).Returns)
+                {
                     continue;
+                }
                 leaves = true;
-                kept &= Through(blocks[i], state, of, null).Kept;
+                var after = Through(blocks[i], state, of, null);
+                foreach (var into in left)
+                    after = Handed(after, of(into.Routine!));
+                kept &= after.Kept;
             }
             return leaves ? new RoutineRegisters(kept, complete) : null;
         }
@@ -367,9 +397,14 @@ public static class RegisterKeeps
         private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
             !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
 
-        /// <summary>Whether a routine's promise holds where a path leaves it, and what to write when it does not.</summary>
+        /// <summary>
+        /// Whether a routine's promise holds where a path leaves it, and what to write when it
+        /// does not. <paramref name="into"/> is the label in another routine the path leaves
+        /// by, where it leaves by one, and <paramref name="kept"/> what that routine hands back.
+        /// </summary>
         private static void Check(
-            FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
+            FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
+            List<Diagnostic> report)
         {
             if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
                 return;
@@ -383,15 +418,37 @@ public static class RegisterKeeps
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
 
+            // What the routine the jump lands in promises nothing about is what this routine
+            // cannot promise either, and the promise belongs where the code that has to hold
+            // to it is.
+            var missing = into is not null ? broken & ~kept : Registers.None;
+
             // A stack nothing is known of is why a restore cannot be seen, and saying what lost
             // it is nearer the mistake than telling the routine to restore the register again.
-            var fix = state.Stack is null && state.WhyStack is { } lost
-                ? Cause.Because(lost)
-                : $": restore {(one ? "it" : "them")} before returning, or a `.state keeps {items}` "
-                    + "where the value comes back says so";
+            var fix = missing != Registers.None
+                ? Handing(into!, missing)
+                : state.Stack is null && state.WhyStack is { } lost
+                    ? Cause.Because(lost)
+                    : $": restore {(one ? "it" : "them")} before returning, or a `.state keeps {items}` "
+                        + "where the value comes back says so";
             report.Add(new Diagnostic(at,
                 Catalogue.KeepsBroken.Says(
                     region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
+        }
+
+        /// <summary>
+        /// What to write where a jump into another routine is what loses the registers: the
+        /// promise goes on the routine the label is in, since that is the code the register has
+        /// to come back through, and control never comes back here to restore anything.
+        /// </summary>
+        private static string Handing(Symbol into, Registers missing)
+        {
+            var owner = into.Routine!.DisplayName;
+            var items = RegisterEffects.Spell(missing).ToLowerInvariant();
+            var one = RegisterEffects.Each(missing).Count() == 1;
+            return $": control does not come back from `{into.DisplayName}`, and `{owner}` does not promise to "
+                + $"keep {items}: a `keeps {items}` on `{owner}` says it hands {(one ? "it" : "them")} back, "
+                + "and a `.next ?` here ends the path with nothing checked";
         }
 
         /// <summary>What one block does to the registers, from the state that reaches it.</summary>
@@ -474,6 +531,13 @@ public static class RegisterKeeps
             return state;
         }
 
+        /// <summary>
+        /// What a path that goes to a routine rather than returning hands back: what that
+        /// routine hands back, and nothing known of the rest.
+        /// </summary>
+        private static RegisterState Handed(RegisterState state, RoutineRegisters kept) =>
+            state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown);
+
         /// <summary>What the routines a block calls leave behind.</summary>
         private static RegisterState Calls(BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of)
         {
@@ -542,6 +606,44 @@ public static class RegisterKeeps
             var tail = !calls && !returns && (block.Calls.Count > 0 || block.CallsUnknown);
             return (calls, tail, returns);
         }
+
+        /// <summary>
+        /// The labels inside other routines a block leaves by: what its jump or its branch
+        /// names, or what a <c>.next</c> on it names in their place. Control never comes back
+        /// from one, because the routine the label is in returns to this routine's caller, so
+        /// the path ends there as a tail call's does.
+        /// </summary>
+        private IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
+        {
+            if (block.Steps.Count == 0 || Ends(block) is { Calls: true } or { Returns: true })
+                yield break;
+            var step = block.Steps[^1];
+            if (block.Next is { } next)
+            {
+                foreach (var (symbol, _) in flow.Named(next, step.On))
+                {
+                    if (Outside(symbol, routine))
+                        yield return symbol;
+                }
+                yield break;
+            }
+            var mode = layout.Of(step.Statement, step.On)?.Mode;
+            if (Transfers.Of(step.Statement, mode) is not (Transfer.Jump or Transfer.Branch))
+                yield break;
+            if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is { } target
+                && Outside(target, routine))
+            {
+                yield return target;
+            }
+        }
+
+        /// <summary>
+        /// Whether a target names a label inside a routine other than <paramref name="routine"/>.
+        /// One instance of a family is not another routine: its body is this one written once.
+        /// </summary>
+        private static bool Outside(Symbol target, Symbol routine) =>
+            target is { Kind: SymbolKind.Label, Routine: { } owner }
+                && owner != routine && !owner.IsSiblingOf(routine);
 
         /// <summary>The value of an immediate operand, where it is known.</summary>
         private long? Constant(Step step) =>
