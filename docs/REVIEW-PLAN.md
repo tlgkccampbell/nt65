@@ -50,10 +50,6 @@ plan as it was written, kept as the record of why; this section says what became
 
 **Left open**, none of it blocking:
 
-- `Norristown.Project` stands outside the namespace order rather than in it: the syntax layer
-  reads `CpuNames` out of it and it reads `SegmentTable` and `StateValue` back out of the
-  semantic layer, so the two point at each other. `NamespaceOrderTests` says so where it holds
-  the other six.
 - The VS Code client's views (`views.js`) are checked by `node --check` and by the server tests
   on what they are sent, and have not been driven in a running editor by a test.
 

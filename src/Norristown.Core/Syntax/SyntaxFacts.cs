@@ -40,12 +40,25 @@ public static class SyntaxFacts
     /// <summary>The three a macro body adds, which ask about the arguments it was given.</summary>
     public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".empty"];
 
+    /// <summary>
+    /// The CPU names, lower case, in the order nt65 lists them. Which processors there are is
+    /// not the lexer's business, but how one is written is: <c>.cpu</c> and <c>.target</c> take
+    /// a name here and nothing else, and two of them are tokens no other rule would make.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CpuNames = ["6502", "6502x", "65sc02", "r65c02", "65c02", "65816"];
+
+    /// <summary>The names, as a message lists them: <c>`6502`, `6502x`, … or `65816`</c>.</summary>
+    public static readonly string ListedCpuNames =
+        string.Join(", ", CpuNames.SkipLast(1).Select(name => $"`{name}`")) + $" or `{CpuNames[^1]}`";
+
     private static readonly FrozenSet<string> mnemonicSet = Mnemonics.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> registerSet = Registers.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> keptRegisterSet =
         KeptRegisters.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> cpuNameSet = CpuNames.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // Every directive that may begin a line, one row each, so that adding a directive is one
     // line here and one case in the parser. Directives are case-insensitive, like mnemonics
@@ -206,7 +219,7 @@ public static class SyntaxFacts
         || text.Equals("lderror", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether <paramref name="text"/> is one of the CPU names.</summary>
-    public static bool IsCpuName(string text) => Project.CpuNames.Parse(text) is not null;
+    public static bool IsCpuName(string text) => cpuNameSet.Contains(text);
 
     /// <summary>Whether <paramref name="text"/> is an address size: <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
     public static bool IsAddressSize(string text) =>

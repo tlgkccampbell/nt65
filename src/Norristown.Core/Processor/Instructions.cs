@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using Norristown.Project;
 using Norristown.Syntax;
 
 namespace Norristown.Processor;

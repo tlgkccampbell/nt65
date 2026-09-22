@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using Norristown.Processor;
-using Norristown.Project;
 using Norristown.Semantics;
 
 namespace Norristown.Layout;

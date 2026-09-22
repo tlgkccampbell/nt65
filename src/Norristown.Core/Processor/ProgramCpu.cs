@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Norristown.Syntax;
 
-namespace Norristown.Project;
+namespace Norristown.Processor;
 
 /// <summary>
 /// Which CPU a program is built for. One per program: it may be given on the command

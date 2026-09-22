@@ -2,7 +2,6 @@ using System.Globalization;
 using Norristown.Flow;
 using Norristown.Layout;
 using Norristown.Processor;
-using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 

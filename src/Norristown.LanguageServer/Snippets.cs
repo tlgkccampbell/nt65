@@ -1,4 +1,4 @@
-using Norristown.Project;
+using Norristown.Processor;
 using Norristown.Semantics;
 
 namespace Norristown.LanguageServer;

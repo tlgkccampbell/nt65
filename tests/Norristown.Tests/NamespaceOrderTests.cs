@@ -15,17 +15,13 @@ public sealed class NamespaceOrderTests
     /// <summary>
     /// The layers, lowest first. Syntax knows nothing of the processor, so every operand form
     /// parses everywhere; the processor's tables know nothing of what a program means; meaning
-    /// comes before the bytes it lays out; the flow analysis reads a layout; and emission is
-    /// written from all of them.
-    /// <para>
-    /// <c>Norristown.Project</c> is not in the list. It is the build's own settings, read by
-    /// every layer and reading the semantic layer back for the checks on its own file, so it
-    /// stands beside the order rather than in it.
-    /// </para>
+    /// comes before the bytes it lays out; the project file is read as meaning, since its
+    /// segments and addresses are checked the way a file's are; the flow analysis reads a
+    /// layout; and emission is written from all of them.
     /// </summary>
     private static readonly string[] Order =
     [
-        "Norristown.Syntax", "Norristown.Processor", "Norristown.Semantics",
+        "Norristown.Syntax", "Norristown.Processor", "Norristown.Semantics", "Norristown.Project",
         "Norristown.Layout", "Norristown.Flow", "Norristown.Emit",
     ];
 

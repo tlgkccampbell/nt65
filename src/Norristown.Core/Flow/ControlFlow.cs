@@ -83,7 +83,7 @@ public sealed class ControlFlow
 
         // On the 65816 the analysis consumes what flow it cannot see, so each construct that
         // hides some has to say what it hides.
-        if (layout.Cpu == Project.Cpu.Wdc65816)
+        if (layout.Cpu == Cpu.Wdc65816)
             Requirements.Check(model, layout, flow, diagnostics);
         else
             Requirements.CheckEnds(model, layout, flow, diagnostics);
@@ -698,7 +698,7 @@ public sealed class ControlFlow
     {
         // On the 65816 flow that runs into data reaches the analysis, which cannot follow it,
         // so there the annotation is required rather than suggested.
-        var severity = layout.Cpu == Project.Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
+        var severity = layout.Cpu == Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
         var fromCode = false;
         int? stream = null;
         foreach (var unit in units)

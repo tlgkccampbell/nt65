@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Norristown.Project;
+using Norristown.Processor;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;

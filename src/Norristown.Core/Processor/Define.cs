@@ -1,4 +1,4 @@
-namespace Norristown.Project;
+namespace Norristown.Processor;
 
 /// <summary>
 /// One build-configuration define: a constant visible in every file, as if declared

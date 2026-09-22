@@ -1,4 +1,4 @@
-namespace Norristown.Project;
+namespace Norristown.Processor;
 
 /// <summary>
 /// The build configuration as a file of constants. Defines are visible everywhere,

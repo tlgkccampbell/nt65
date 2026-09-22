@@ -16,7 +16,7 @@ public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyLis
 
     /// <summary>
     /// Whether nothing said which processor the program is for, neither the project nor a
-    /// <c>.cpu</c> item, so that it was built for <see cref="Project.ProgramCpu.Default"/>.
+    /// <c>.cpu</c> item, so that it was built for <see cref="Processor.ProgramCpu.Default"/>.
     /// </summary>
     public bool IsCpuAssumed { get; init; }
 }

@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using Norristown.Processor;
-using Norristown.Project;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;

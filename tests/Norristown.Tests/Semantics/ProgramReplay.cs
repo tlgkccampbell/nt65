@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Norristown.Emit;
 using Norristown.LanguageServer;
+using Norristown.Processor;
 using Norristown.Project;
 using Norristown.Syntax;
 

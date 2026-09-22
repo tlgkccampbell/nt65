@@ -1,4 +1,6 @@
-namespace Norristown.Project;
+using Norristown.Syntax;
+
+namespace Norristown.Processor;
 
 /// <summary>How a CPU is written: in nt65 source, and in the ca65 output.</summary>
 public static class CpuNames
@@ -6,9 +8,12 @@ public static class CpuNames
     /// <summary>Every CPU, in the order nt65 lists them.</summary>
     public static IReadOnlyList<Cpu> All { get; } = Enum.GetValues<Cpu>();
 
-    /// <summary>The names, as a message lists them: <c>6502</c>, <c>65sc02</c>, and so on.</summary>
-    public static string Listed { get; } =
-        string.Join(", ", All.SkipLast(1).Select(cpu => $"`{Spell(cpu)}`")) + $" or `{Spell(All[^1])}`";
+    /// <summary>
+    /// The names, as a message lists them: <c>6502</c>, <c>65sc02</c>, and so on. The lexer
+    /// decides what is a CPU name without knowing what a CPU is, so the spellings are its, and
+    /// a message about a name it would not have taken says exactly the ones it takes.
+    /// </summary>
+    public static string Listed => SyntaxFacts.ListedCpuNames;
 
     /// <summary>The CPU a name stands for, or null when it names none.</summary>
     public static Cpu? Parse(string text) => text.ToLowerInvariant() switch

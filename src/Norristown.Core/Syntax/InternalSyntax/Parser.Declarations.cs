@@ -155,7 +155,7 @@ internal sealed partial class Parser
         if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier && SyntaxFacts.IsCpuName(Current.Text))
             return new CpuDirectiveSyntax(keyword, Advance());
         return new CpuDirectiveSyntax(keyword, Missing(SyntaxKind.CpuName, Catalogue.ExpectedCpu.Says(
-            Project.CpuNames.Listed)));
+            SyntaxFacts.ListedCpuNames)));
     }
 
     /// <summary>

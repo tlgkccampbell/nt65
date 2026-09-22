@@ -1,4 +1,4 @@
-namespace Norristown.Project;
+namespace Norristown.Processor;
 
 /// <summary>The processor a program is built for. One per program.</summary>
 public enum Cpu
