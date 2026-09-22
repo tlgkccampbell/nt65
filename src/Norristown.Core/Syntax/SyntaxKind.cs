@@ -405,6 +405,9 @@ public enum SyntaxKind : byte
     /// <summary><c>inline .strz</c>: the data after each call is a zero-terminated string.</summary>
     StateInlineItem,
 
+    /// <summary><c>dbr = [$00..$3f, $80..$bf]</c>: the set of banks a register lies in.</summary>
+    StateBanksItem,
+
     /// <summary><c>keeps a, x</c>: the registers a routine leaves as it found them.</summary>
     StateKeepsItem,
 

@@ -27,7 +27,7 @@
 
 ; Loads palette and tiles related to the player sprite.  Entered with either width; leaves
 ; both 16-bit.
-.proc load_player_tiles: far, dp = 0, dbr* -> a16, i16 {
+.proc load_player_tiles: io, far, dp = 0 -> a16, i16 {
     phb
     phk
     plb
@@ -84,7 +84,7 @@ LEFT_WALL  = 32
 RIGHT_WALL = 224
 
 ; Moves the player based on controller 1.  Entered with either width; leaves both 8-bit.
-.proc move_player: far, dp = 0, dbr* -> a8, i8 {
+.proc move_player: io, far, dp = 0 -> a8, i8 {
     ; Acceleration to right: Do it only if the player is holding right on the Control Pad
     ; and has a nonnegative velocity.
     sep #$30
@@ -234,7 +234,7 @@ RIGHT_WALL = 224
 ; Draws the player's sprite to the display list using 16x16 pixel sprites.  Hardware 16x16
 ; makes it a sh'load easier to draw a character than it was on the NES where even modestly
 ; sized characters required laying out a grid of sprites.
-.proc draw_player_sprite: i16, far, dp = 0, dbr* -> a8, i16 {
+.proc draw_player_sprite: io, i16, far, dp = 0 -> a8, i16 {
     ldx oam_used
 
     ; OAM+0,x: x coordinate, top half

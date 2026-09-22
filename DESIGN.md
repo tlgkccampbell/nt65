@@ -1416,6 +1416,27 @@ A label a `.state` declares starts from D and B unknown, except that in a routin
 `dp*` or `dbr*` it starts from them unchanged, so only a routine that declares D or B needs
 its declared labels to say what they are.
 
+**A set of banks.** Most routines of a small program never set B; they need only that it be
+one of the banks that can see what they reach. `dbr` may name that set, written as `mirrors`
+writes banks:
+
+```nt65
+.proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
+    ...
+    sta $2100               ; checked against every bank of the set
+    ...
+}
+```
+
+At entry B lies in the set, and the routine hands it back as it found it unless its exit says
+otherwise, so a set at entry is `dbr*` with a bound: a label a `.state` declares starts from
+it, as it would from unchanged. After `->`, a set says only that B is one of those banks on
+the way out. A `.state dbr = [...]` asserts that B lies in the set, which is an error where
+what is known of it lies wholly outside, and narrows what is known to the banks both say.
+`phk`, `plb` and the other idioms make B one value as they always do, and two different sets
+meeting at a label merge to unknown. A set of one bank is that bank, and `dp` has no set: the
+direct page is one address.
+
 **Transfer functions.** nt65 does not track register values, so it recognizes the
 idioms that load D and B from constants and treats everything else as unknown:
 
@@ -1441,10 +1462,10 @@ values, the merged stack keeps its depth and forgets the values.
   differs;
 - an absolute operand of an instruction that reads or writes data, naming a symbol in a
   segment with a declared `bank`, is an error if B is neither that home bank nor one of its
-  `mirrors`;
+  `mirrors`, and where B is one of a set, if any bank of the set is neither;
 - the same kind of operand, when it is a constant address covered by the project's
-  `ranges` table (§5.3), is an error if B is not one of the permitted banks, which is
-  how `sta $2100` with B at `$7e` is caught;
+  `ranges` table (§5.3), is an error if B is not one of the permitted banks, or may be one
+  that is not, which is how `sta $2100` with B at `$7e` is caught;
 - operands that do not use B are exempt: long operands (`f:`), `jmp` and `jsr` (the
   program bank K), `jmp (abs)` and `jml [abs]` (a pointer in bank 0), `jmp (abs,x)` and
   `jsr (abs,x)` (K), and `pea` and `per` (no memory access);
@@ -1463,7 +1484,8 @@ values, the merged stack keeps its depth and forgets the values.
 When either side is undeclared or unknown, nothing is reported. Signatures are the
 exception, as they are for widths: a call, a tail call or a jump to a declared label is
 checked against the D and B its target declares, and a return against the ones its
-routine declares, and there an unknown value, `*` included, is an error.
+routine declares, and there an unknown value, `*` included, is an error. A set is met by
+a B known to be one of its banks, or one of a set within it.
 
 **Constant addresses through the direct page.** `d:` on a constant address reaches it
 through the direct page: with D known to be `$2100`, `lda d:$2105` is emitted as
@@ -3699,6 +3721,13 @@ Recorded so the reasoning survives. None is open.
   to invent an exit state, and a handler to spell out every unknown item and pick `near` or
   `far`, neither of which it is. Saying what they are lets the analysis check what matters
   for them — no `rts`, no call to a handler — and stop checking what does not.
+- **A set of banks for B, not a wider unknown.** A small LoROM program's routines run in any
+  bank that sees low RAM and the registers, so they said `dbr*`, and inside one every operand
+  check was silent and no caller was checked for anything. A set is the `mirrors` model turned
+  around: a segment says which banks see it, and a routine which banks it may run in, so every
+  operand is checked against each of them. It is kept to `dbr`, since nothing else the
+  analysis follows has a use for one, and a set at entry is handed back unchanged because the
+  routines that want one are exactly those that never touch B.
 - **A segment has one home bank and mirrors.** Low WRAM, hardware registers and FastROM code
   are each seen in several banks. Data is reached from any of them; code is taken to run in
   its home bank, which is what `phk` and the cross-bank checks use. `bank` stays the word for
@@ -4041,7 +4070,7 @@ keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7
 signature   := '.signature' ident '=' state
 unchanged-item := 'a*' | 'i*' | 'e*' | 'dp*' | 'dbr*'     ; unchanged
 point-item  := 'a8' | 'a16' | 'a?' | 'i8' | 'i16' | 'i?' | 'native' | 'emu' | 'e?'
-             | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr?'
+             | 'dp' '=' expr | 'dp?' | 'dbr' '=' expr | 'dbr' '=' '[' banks ']' | 'dbr?'
 enum        := '.enum' ident? '{' NL (enum-member | if-block)* '}'
 enum-member := member-name ('=' expr)? NL
 struct      := '.struct' ident? '{' NL member* '}'

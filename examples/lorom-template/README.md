@@ -57,7 +57,8 @@ last.
 
 ### The 65816 side, in nt65
 
-- `src/snes.nt65`: register definitions for the S-CPU and S-PPU, the joypad buttons as an
+- `src/snes.nt65`: register definitions for the S-CPU and S-PPU, the `io` signature set that
+  says a routine runs in any bank that sees them, the joypad buttons as an
   enum, and the `NTXY` and `RGB` functions.
 - `src/header.nt65`: the internal header as a struct, the vectors, and the interrupt stubs in
   bank $00.

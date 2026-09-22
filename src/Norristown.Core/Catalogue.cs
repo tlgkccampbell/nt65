@@ -15,7 +15,7 @@ namespace Norristown;
 public static class Catalogue
 {
     // The heading last read. An entry takes the one written above it rather than naming one,
-    // which would be a line on all 358 of them: a static initializer runs where it is written,
+    // which would be a line on all 360 of them: a static initializer runs where it is written,
     // so the headings and the entries between them are read in the order they are laid out.
     private static DiagnosticArea? opening;
 
@@ -2381,6 +2381,19 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is out of range: {1}",
         "The direct page is a sixteen-bit address and the data bank is one byte.");
+
+    internal static DiagnosticDescriptor StateBanksNotDbr { get; } = Entry(
+        "state-banks-not-dbr",
+        Severity.Error,
+        "`{0}`: a set of banks is for `dbr`, and the direct page is one address",
+        "A routine that sets no data bank of its own runs in whichever bank can see what it reaches, so B may be "
+            + "given as a set of banks. The direct page is where every direct operand lands, and is one value.");
+
+    internal static DiagnosticDescriptor StateBanksInvalid { get; } = Entry(
+        "state-banks-invalid",
+        Severity.Error,
+        "`{0}` is not a set of banks: each is a constant bank, or a range from the lower to the higher, such as `$00..$3f`",
+        "A set of banks is written as `mirrors` writes one, and names at least one bank.");
 
     internal static DiagnosticDescriptor SignatureSetNotFirst { get; } = Entry(
         "signature-set-not-first",

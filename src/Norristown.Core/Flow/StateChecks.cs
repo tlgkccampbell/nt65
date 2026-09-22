@@ -64,8 +64,8 @@ internal sealed class StateChecks
             callee.Exit.A == Width.Unchanged ? state.A : callee.Exit.A,
             callee.Exit.Index == Width.Unchanged ? state.Index : callee.Exit.Index,
             callee.Exit.E == ProcessorMode.Unchanged ? state.E : callee.Exit.E,
-            callee.Exit.D.Kind == StateValueKind.Unchanged ? state.D : callee.Exit.D,
-            callee.Exit.B.Kind == StateValueKind.Unchanged ? state.B : callee.Exit.B);
+            callee.Exit.D.IsEntered ? state.D : callee.Exit.D,
+            callee.Exit.B.IsEntered ? state.B : callee.Exit.B);
 
         // Emulation mode pins both widths at 8, as a `.state emu` does, so a routine returning
         // in it returns with them there however its `a*` and `i*` read.
@@ -166,24 +166,26 @@ internal sealed class StateChecks
         // operand names its bank, `jmp` and `jsr` use the program bank, and `pea` and `per`
         // reach no memory at all.
         if (chosen is not (AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
-            || mnemonic is "jmp" or "jsr" or "pea" or "per" || !state.B.IsKnown)
+            || mnemonic is "jmp" or "jsr" or "pea" or "per" || !state.B.IsBounded)
         {
             return;
         }
-        var bank = state.B.Value;
+
+        // Where B is one of a set of banks, the operand has to reach its memory from every one.
+        var banks = state.B.Values.ToList();
         foreach (var symbol in AddressSymbols.In(model, expression, step.On))
         {
-            if (SegmentOf(symbol) is { Bank: not null } segment && !segment.IsSeenFrom(bank))
+            if (SegmentOf(symbol) is { Bank: not null } segment && !banks.TrueForAll(segment.IsSeenFrom))
             {
                 Report(step, Catalogue.BankMismatch.Says(
-                    symbol.DisplayName, segment.Name, segment.SpellBanks(), StateValue.Hex(bank, 2)));
+                    symbol.DisplayName, segment.Name, segment.SpellBanks(), state.B.Describe(2)));
             }
         }
         if (model.ValueOf(expression, step.On).AsNumber() is { } address
-            && ranges.FirstOrDefault(range => range.Covers(address)) is { } covering && !covering.Permits(bank))
+            && ranges.FirstOrDefault(range => range.Covers(address)) is { } covering && !banks.TrueForAll(covering.Permits))
         {
             Report(step, Catalogue.RangeBankMismatch.Says(
-                StateValue.Hex(address, 4), covering.SpellBanks(), StateValue.Hex(bank, 2)));
+                StateValue.Hex(address, 4), covering.SpellBanks(), state.B.Describe(2)));
         }
     }
 
@@ -204,13 +206,13 @@ internal sealed class StateChecks
 
         void Value(string item, string register, StateValue needed, StateValue here)
         {
-            if (!needed.IsKnown || needed == here)
+            if (!needed.IsBounded || here.Meets(needed))
                 return;
             Report(step, Catalogue.CallStateMismatch.Says(
                 what,
                 needed.Spell(item),
-                here.IsKnown
-                    ? $"{register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} here"
+                here.IsBounded
+                    ? $"{register} is {here.Describe(register == "D" ? 4 : 2)} here"
                     : $"{register} is not known here"));
         }
 
@@ -256,19 +258,24 @@ internal sealed class StateChecks
 
         void Value(string item, string register, StateValue declared, StateValue here)
         {
-            if (declared.Kind == StateValueKind.Unchanged && here.Kind != StateValueKind.Unchanged)
+            if (declared.IsEntered && here != declared)
             {
                 Report(step, Catalogue.AssertedItemNotRestored.Says(
-                    lead, name, $"{item}*", register, "what it was on entry", where));
+                    lead,
+                    name,
+                    declared.Kind == StateValueKind.Unchanged ? $"{item}*" : declared.Spell(item),
+                    register,
+                    "what it was on entry",
+                    where));
             }
-            else if (declared.IsKnown && declared != here)
+            else if (declared.IsBounded && !here.Meets(declared))
             {
                 Report(step, Catalogue.ReturnStateMismatch.Says(
                     lead,
                     name,
                     $"with `{declared.Spell(item)}`",
-                    here.IsKnown
-                        ? $"{register} is {StateValue.Hex(here.Value, register == "D" ? 4 : 2)} {where}"
+                    here.IsBounded
+                        ? $"{register} is {here.Describe(register == "D" ? 4 : 2)} {where}"
                         : $"{register} is not known {where}"));
             }
         }

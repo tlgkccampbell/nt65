@@ -183,7 +183,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         var entryState = new ProcessorState(
             entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
-            ValueOf(entry.D, 0xffff) ?? defaults.D, ValueOf(entry.B, 0xff) ?? defaults.B);
+            ValueOf(entry.D, 0xffff) ?? defaults.D, Entered(ValueOf(entry.B, 0xff)) ?? defaults.B);
         CheckEmulation(entry, entryState);
         entryState = Pinned(entryState);
 
@@ -203,7 +203,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 : entryState.E);
         var exitState = new ProcessorState(
             exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exitMode,
-            ValueOf(exit.D, 0xffff) ?? entryState.D, ValueOf(exit.B, 0xff) ?? entryState.B);
+            ValueOf(exit.D, 0xffff) ?? entryState.D, Handed(ValueOf(exit.B, 0xff)) ?? entryState.B);
 
         // An exit that cannot be what it says is reported once, and read as the entry's, so
         // what uses the signature does not report the same mistake again.
@@ -215,7 +215,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exitState = exitState with { E = entryState.E };
         if (!Kept(exit.D, entryState.D.Kind == StateValueKind.Unchanged))
             exitState = exitState with { D = entryState.D };
-        if (!Kept(exit.B, entryState.B.Kind == StateValueKind.Unchanged))
+        if (!Kept(exit.B, entryState.B.IsEntered))
             exitState = exitState with { B = entryState.B };
         CheckEmulation(exit, exitState);
         return Made(entryState, Pinned(exitState));
@@ -291,6 +291,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 return null;
             if (given.IsUnchanged)
                 return StateValue.Unchanged;
+            if (given.IsBankSet)
+                return BanksOf(given, largest);
             if (given.Expression is not { } expression || valueOf is null)
                 return StateValue.Unknown;
             if (valueOf(expression) is not { } value)
@@ -310,6 +312,33 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 return StateValue.Unknown;
             }
             return StateValue.Of(value);
+        }
+
+        // A set of banks at entry is the bank the routine is entered with, one of them, and so is
+        // handed back as it was unless the exit says otherwise.
+        static StateValue? Entered(StateValue? value) =>
+            value is { Kind: StateValueKind.Among } among ? StateValue.Within(among.Banks) : value;
+
+        // `dbr*` after the arrow of a routine entered with one of a set is that bank, handed back.
+        StateValue? Handed(StateValue? value) =>
+            value is { Kind: StateValueKind.Unchanged } && entryState.B.Kind == StateValueKind.Within ? entryState.B : value;
+
+        // `dbr = [...]` is one of the banks it names; D is one direct page, and has no set.
+        StateValue BanksOf(StateItem given, long largest)
+        {
+            if (largest != 0xff)
+            {
+                if (Here(given))
+                    report(given.Node.Span, Catalogue.StateBanksNotDbr.Says(given.Text));
+                return StateValue.Unknown;
+            }
+            if (valueOf is null)
+                return StateValue.Unknown;
+            if (given.BanksOf(valueOf, out var invalid) is { } banks)
+                return StateValue.Among(banks);
+            if (Here(given))
+                report(invalid!.Span, Catalogue.StateBanksInvalid.Says(given.Text));
+            return StateValue.Unknown;
         }
 
         // The items of one list by part. A signature set comes first, and what the list writes

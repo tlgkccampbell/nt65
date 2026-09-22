@@ -392,6 +392,8 @@
         "signature-value-out-of-range",
         "sizeof-depends-on-alignment",
         "sqrt-of-a-negative",
+        "state-banks-invalid",
+        "state-banks-not-dbr",
         "state-item-not-a-point",
         "state-item-unknown",
         "state-mode-mismatch",

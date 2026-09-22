@@ -11,7 +11,7 @@
 .segment CODE5
 
 ; Loads the background palette and tiles.  Entered with either width; leaves both 16-bit.
-.proc load_bg_tiles: far, dp = 0, dbr* -> a16, i16 {
+.proc load_bg_tiles: io, far, dp = 0 -> a16, i16 {
     phb                         ; Save old program bank and push new bank
     phk
     plb
@@ -64,7 +64,7 @@
 }
 
 ; Draws the static background to the nametable at $6000.
-.proc draw_bg: far, dp = 0, dbr* -> a8, i16 {
+.proc draw_bg: io, far, dp = 0 -> a8, i16 {
     ; This demo's background tile set includes glyphs at ASCII code points $20 (space)
     ; through $5F (underscore).  Clear the map to all spaces.
     rep #$30

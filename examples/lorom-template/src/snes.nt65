@@ -17,6 +17,11 @@
 
 .cpu 65816
 
+; Every program bank of a small LoROM can reach low RAM, the PPU ports and the DMA ports, so
+; a routine that reaches only those runs with the data bank at any of them, and is checked
+; against every one.
+.export .signature io = dbr = [$00..$3f, $80..$bf]
+
 ; S-PPU configuration ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .export PPUBRIGHT = $2100

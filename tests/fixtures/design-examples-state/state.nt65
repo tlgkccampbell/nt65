@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export operands, render, main, step, copy, div16, dispatch, nmi, restore, skip, cmd
+.export operands, render, main, step, copy, div16, dispatch, nmi, restore, skip, cmd, draw_bg
 
 .segment ZP2: zp, dp = $2100
 .segment WRAM: abs, bank = $7e
@@ -144,4 +144,12 @@
 @store:
     sta value
     rts
+}
+
+; A routine that runs in any bank that sees the registers.
+.proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
+    sep #$20
+    rep #$10
+    sta $2100
+    rtl
 }

@@ -19,6 +19,7 @@
 .export state__nmi
 .export state__restore
 .export state__skip
+.export state__draw_bg
 
 .segment "ZEROPAGE": zeropage
 ptr:        .res 2
@@ -152,3 +153,11 @@ skip__store:
     sta z:value
     rts
 ; end of skip
+
+; .proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16  state.nt65:150
+state__draw_bg:
+    sep #$20
+    rep #$10
+    sta a:$2100
+    rtl
+; end of draw_bg

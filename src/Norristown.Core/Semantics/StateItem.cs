@@ -22,6 +22,9 @@ public readonly record struct StateItem(
     /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
     public ExpressionSyntax? Expression => Node is StateValueItemSyntax valued ? valued.Value : null;
 
+    /// <summary>Whether the item gives its part a set of banks, <c>dbr = [$00..$3f, $80..$bf]</c>, rather than one value.</summary>
+    public bool IsBankSet => Node is StateBanksItemSyntax;
+
     /// <summary>Whether an <c>inline</c> item says <c>inline .strz</c>.</summary>
     public bool IsStrz => Node is StateInlineItemSyntax;
 
@@ -74,6 +77,33 @@ public readonly record struct StateItem(
         return items.Count > 0 && items.TrueForAll(item => item.Part == StatePart.Keeps);
     }
 
+    /// <summary>
+    /// The banks a <c>dbr = [...]</c> item names, once <paramref name="valueOf"/> can say what
+    /// each is worth; null, with the range that is not a bank or a run of them, or the item
+    /// itself where it names none, when they are not a set.
+    /// </summary>
+    public BankSet? BanksOf(Func<ExpressionSyntax, long?> valueOf, out SyntaxNode? invalid)
+    {
+        invalid = Node;
+        if (Node is not StateBanksItemSyntax written || written.Ranges.Count == 0)
+            return null;
+        var banks = default(BankSet);
+        foreach (var range in written.Ranges)
+        {
+            var start = valueOf(range.First);
+            var end = range.Last is { } last ? valueOf(last) : start;
+            if (start is not { } first || end is not { } final || first is < 0 or > 0xff || final is < 0 or > 0xff
+                || first > final)
+            {
+                invalid = range;
+                return null;
+            }
+            banks = banks.With(first, final);
+        }
+        invalid = null;
+        return banks;
+    }
+
     /// <summary>One item, or null when its line did not parse into one.</summary>
     private static StateItem? Of(StateItemSyntax node) => node switch
     {
@@ -84,6 +114,7 @@ public readonly record struct StateItem(
         StateFlagItemSyntax flag => Worded(node, flag.Name, flag.SuffixToken?.Kind ?? SyntaxKind.None),
         StateValueItemSyntax valued =>
             Worded(node, valued.Name, valued.EqualsToken is null ? SyntaxKind.None : SyntaxKind.Equals),
+        StateBanksItemSyntax banks => Worded(node, banks.Name, SyntaxKind.Equals),
         StateInlineItemSyntax inline => Worded(node, inline.Name, SyntaxKind.None),
         StateKeepsItemSyntax keeps => Worded(node, keeps.Name, SyntaxKind.None),
         _ => null,

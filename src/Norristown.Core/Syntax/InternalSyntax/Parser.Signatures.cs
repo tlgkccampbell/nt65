@@ -48,11 +48,21 @@ internal sealed partial class Parser
         var nameIndex = index;
         var name = Advance();
 
-        // `dp = e` and `dbr = e` are the parts given a value with an `=`; the value is read
-        // before the word is checked, so that a misspelled part is the last news about the item.
+        // `dp = e` and `dbr = e` are the parts given a value with an `=`, and `dbr = [...]` a set
+        // of banks; the value is read before the word is checked, so that a misspelled part is
+        // the last news about the item. Which word takes a set is the signature's to say.
         if (Kind == SyntaxKind.Equals)
         {
             var equals = Advance();
+            if (Kind == SyntaxKind.OpenBracket)
+            {
+                var openBracket = Advance();
+                var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
+                var closeBracket = Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says("`]`"));
+                if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
+                    Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
+                return Own(new StateBanksItemSyntax(name, equals, openBracket, ranges, closeBracket));
+            }
             var given = ParseExpression();
             if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
                 Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));

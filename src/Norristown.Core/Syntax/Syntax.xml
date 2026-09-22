@@ -2178,11 +2178,47 @@
   <AbstractNode Name="StateItemSyntax" Base="SyntaxNode">
     <TypeComment>
       <summary>
-        One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
+        One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>dbr = [$00..$3f]</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
         <c>?</c> on its own, or the name of a signature set.
       </summary>
     </TypeComment>
   </AbstractNode>
+
+  <Node Name="StateBanksItemSyntax" Base="StateItemSyntax">
+    <Kind Name="StateBanksItem"/>
+    <TypeComment>
+      <summary><c>dbr = [$00..$3f, $80..$bf]</c>: a state word and the set of banks its register lies in.</summary>
+    </TypeComment>
+    <Field Name="Name" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The item's word.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+    </Field>
+    <Field Name="EqualsToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The <c>=</c>.</summary>
+      </PropertyComment>
+      <Kind Name="Equals"/>
+    </Field>
+    <Field Name="OpenBracketToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The <c>[</c>.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBracket"/>
+    </Field>
+    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
+      <PropertyComment>
+        <summary>The banks, each one or a range of them.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="CloseBracketToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>The <c>]</c>.</summary>
+      </PropertyComment>
+      <Kind Name="CloseBracket"/>
+    </Field>
+  </Node>
 
   <Node Name="StateKeepsItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateKeepsItem"/>

@@ -142,11 +142,23 @@ public sealed class StateAnalysis : IProcessorStates
         statement is InstructionStatementSyntax instruction
         && instruction.Mnemonic.Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>What a <c>dp = e</c> or <c>dbr = e</c> item says, or unknown for <c>dp?</c> and for a value nt65 cannot work out.</summary>
-    private static StateValue ValueOf(StateItem item, SemanticModel model) =>
-        item.Expression is { } expression && model.ValueOf(expression).AsNumber() is { } value
+    /// <summary>
+    /// What a <c>dp = e</c>, <c>dbr = e</c> or <c>dbr = [...]</c> item says, or unknown for
+    /// <c>dp?</c> and for a value nt65 cannot work out.
+    /// </summary>
+    private static StateValue ValueOf(StateItem item, SemanticModel model)
+    {
+        if (item.IsBankSet)
+        {
+            return item.Part == StatePart.DataBank
+                && item.BanksOf(expression => model.ValueOf(expression).AsNumber(), out _) is { } banks
+                    ? StateValue.Among(banks)
+                    : StateValue.Unknown;
+        }
+        return item.Expression is { } written && model.ValueOf(written).AsNumber() is { } value
             ? StateValue.Of(value)
             : StateValue.Unknown;
+    }
 
     /// <summary>
     /// What is known where control arrives from outside the routine's own paths: nothing,
@@ -160,8 +172,8 @@ public sealed class StateAnalysis : IProcessorStates
             entry.A == Width.Unchanged ? Width.Unchanged : Width.Unknown,
             entry.Index == Width.Unchanged ? Width.Unchanged : Width.Unknown,
             entry.E == ProcessorMode.Unchanged ? ProcessorMode.Unchanged : ProcessorMode.Unknown,
-            entry.D.Kind == StateValueKind.Unchanged ? StateValue.Unchanged : StateValue.Unknown,
-            entry.B.Kind == StateValueKind.Unchanged ? StateValue.Unchanged : StateValue.Unknown);
+            entry.D.IsEntered ? entry.D : StateValue.Unknown,
+            entry.B.IsEntered ? entry.B : StateValue.Unknown);
     }
 
     /// <summary>
@@ -797,6 +809,8 @@ public sealed class StateAnalysis : IProcessorStates
 
         StateValue SetValue(string register, StateValue here, StateItem item)
         {
+            if (item.IsBankSet)
+                return SetBanks(register, here, item);
             if (item.Expression is not { } expression)
                 return StateValue.Unknown;
             if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
@@ -811,13 +825,31 @@ public sealed class StateAnalysis : IProcessorStates
                     register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
                 return StateValue.Unknown;
             }
-            if (here.IsKnown && here.Value != value)
+            if (here.IsBounded && !here.Values.Contains(value))
             {
                 checks.ReportAt(item.Node, step,
-                    Catalogue.StateValueMismatch.Says(
-                        item.Text, register, StateValue.Hex(here.Value, register == "D" ? 4 : 2)));
+                    Catalogue.StateValueMismatch.Says(item.Text, register, here.Describe(register == "D" ? 4 : 2)));
             }
             return StateValue.Of(value);
+        }
+
+        // `.state dbr = [...]`: B is one of the banks, which it has to be already where it is known.
+        StateValue SetBanks(string register, StateValue here, StateItem item)
+        {
+            if (register == "D")
+            {
+                checks.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Says(item.Text));
+                return StateValue.Unknown;
+            }
+            if (item.BanksOf(expression => model.ValueOf(expression, step.On).AsNumber(), out var invalid) is not { } banks)
+            {
+                checks.ReportAt(invalid!, step, Catalogue.StateBanksInvalid.Says(item.Text));
+                return StateValue.Unknown;
+            }
+            if (here.Narrowed(banks) is { } narrowed)
+                return narrowed;
+            checks.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Says(item.Text, register, here.Describe(2)));
+            return StateValue.Among(banks);
         }
 
         Width Set(string register, Width here, StateItem item)

@@ -111,7 +111,7 @@
 }
 
 ; Writes high byte of X to SPC-700 DSP register in low byte of X
-.proc spc_write_dsp: i16, far, dbr* -> a8, i16 {
+.proc spc_write_dsp: io, i16, far -> a8, i16 {
     phx
     ; Just do a two-byte upload to $00F2-$00F3, so we set the DSP address, then write the
     ; byte into that.
@@ -125,7 +125,7 @@
 }
 
 ; Boots the sound CPU: uploads the sound driver to its RAM and starts it.
-.proc spc_boot_apu: i16, far, dbr* -> a8, i16 {
+.proc spc_boot_apu: io, i16, far -> a8, i16 {
     jsr spc_wait_boot
 
     ; Upload the driver to SPC RAM where it runs

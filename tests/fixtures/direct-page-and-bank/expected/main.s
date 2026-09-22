@@ -21,6 +21,8 @@
 .export main__fast
 .export main__tail
 .export main__standard
+.export main__anywhere
+.export main__from_one
 
 HUD_PAGE = $0300
 
@@ -154,3 +156,26 @@ main__standard:
     sta a:frames
     rts
 ; end of standard
+
+; .proc anywhere: a8, i8, dbr = [$00..$3f, $80..$bf]  main.nt65:149
+main__anywhere:
+    sta a:$2100
+    sta a:frames
+    rts
+; end of anywhere
+
+; .proc from_one: a8, i8, dbr = $80  main.nt65:156
+main__from_one:
+    jsr main__anywhere
+    jsr fewer
+    rts
+; end of from_one
+
+; .proc fewer: a8, i8, dbr = [$80..$bf] -> a8, i8, dbr = $80  main.nt65:162
+fewer:
+    jsr main__anywhere
+    lda #$80
+    pha
+    plb
+    rts
+; end of fewer

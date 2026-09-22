@@ -1,6 +1,6 @@
 # nt65 diagnostics
 
-Every diagnostic nt65 reports, by area: 358 names. The name is what appears in brackets after a
+Every diagnostic nt65 reports, by area: 360 names. The name is what appears in brackets after a
 message in the terminal, as `"id"` in `--json`, as the `code` in an editor, and as the key under
 `"diagnostics"` in `nt65.json`, where a warning can be set to `off`, `warning` or `error`. An error
 cannot be turned down. The names are part of what version 1 promises; the wording is not.
@@ -23,7 +23,7 @@ siblings stand for what the diagnostic names at the place it is reported.
 | [Processor state](#processor-state) | 36 | — |
 | [Output](#output) | 6 | `c-header-name-left-out` (warning), `c-header-untyped` (warning), `omitted-branch` (info) |
 | [The project file](#the-project-file) | 23 | — |
-| [Signatures](#signatures) | 22 | — |
+| [Signatures](#signatures) | 24 | — |
 
 ## Reading a line
 
@@ -2214,6 +2214,18 @@ The analysis follows the direct page and the data bank by value, and checks ever
 > `{0}` is out of range: {1}
 
 The direct page is a sixteen-bit address and the data bank is one byte.
+
+### `state-banks-invalid`
+
+> `{0}` is not a set of banks: each is a constant bank, or a range from the lower to the higher, such as `$00..$3f`
+
+A set of banks is written as `mirrors` writes one, and names at least one bank.
+
+### `state-banks-not-dbr`
+
+> `{0}`: a set of banks is for `dbr`, and the direct page is one address
+
+A routine that sets no data bank of its own runs in whichever bank can see what it reaches, so B may be given as a set of banks. The direct page is where every direct operand lands, and is one value.
 
 ### `unchanged-needs-entry`
 

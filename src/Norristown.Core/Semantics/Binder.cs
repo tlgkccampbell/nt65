@@ -1980,7 +1980,7 @@ internal sealed partial class Binder
         /// <summary>
         /// The <c>dp = e</c> and <c>bank = e</c> of a segment declaration, and the <c>dp = e</c>
         /// and <c>dbr = e</c> of a <c>.state</c>, may name constants; so may every bank of a
-        /// <c>mirrors</c>, which is a list of ranges rather than one value.
+        /// <c>mirrors</c> or a <c>dbr = [...]</c>, which is a list of ranges rather than one value.
         /// </summary>
         private void Valued(StatementSyntax statement)
         {
@@ -1989,11 +1989,11 @@ internal sealed partial class Binder
                 if (item is SegmentAttributeSyntax attribute)
                 {
                     binder.CollectUses(attribute.Value);
-                    foreach (var range in attribute.Ranges)
-                    {
-                        binder.CollectUses(range.First);
-                        binder.CollectUses(range.Last);
-                    }
+                }
+                else if (item is BankRangeSyntax range)
+                {
+                    binder.CollectUses(range.First);
+                    binder.CollectUses(range.Last);
                 }
                 else if (item is StateValueItemSyntax valued)
                 {

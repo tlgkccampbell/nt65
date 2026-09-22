@@ -58,6 +58,32 @@
     rts
 }
 
+; A set of banks is checked bank by bank: what each one reaches, and what each caller holds.
+.proc anywhere: a8, i8, dbr = [$00..$3f, $80..$bf] {
+    sta score               ;! error[bank-mismatch]: `score` is in "WRAM", which is in bank $7e, and B is one of $00-$3f, $80-$bf here
+    rts
+}
+
+.proc beside: a8, i8, dbr = [$00..$3f, $7e] -> a8, i8, dbr = [$00..$3f] {
+    sta $2100               ;! error[range-bank-mismatch]: $2100 is reached only from banks $00-$3f, $80-$bf, and B is one of $00-$3f, $7e here
+    jsr anywhere            ;! error[call-state-mismatch]: `jsr anywhere` needs `dbr = [$00..$3f, $80..$bf]`, and B is one of $00-$3f, $7e here
+    rts                     ;! error[return-state-mismatch]: `rts`: `beside` returns with `dbr = [$00..$3f]`, and B is one of $00-$3f, $7e here
+}
+
+.proc from_wram: a8, i8, dbr = $7e -> a8, i8, dbr? {
+    jsr anywhere            ;! error[call-state-mismatch]: `jsr anywhere` needs `dbr = [$00..$3f, $80..$bf]`, and B is $7e here
+    .state dbr = [$00..$3f] ;! error[state-value-mismatch]: `.state dbr = [$00..$3f]`, and B is $7e here
+    rts
+}
+
+.proc sets_d: a8, i8, dp = [0, $2100] {    ;! error[state-banks-not-dbr]: `dp = [0, $2100]`: a set of banks is for `dbr`, and the direct page is one address
+    rts
+}
+
+.proc backwards: a8, i8, dbr = [$3f..$00] {    ;! error[state-banks-invalid]: `dbr = [$3f..$00]` is not a set of banks: each is a constant bank, or a range from the lower to the higher, such as `$00..$3f`
+    rts
+}
+
 ; A symbol in a segment reached through a direct page other than 0 is only a direct operand.
 .proc absolute: a8, i8 {
     lda a:ptr               ;! error[direct-page-only]: `ptr` is in "ZP2", reached through the direct page at $2100, and is only a direct operand: as an absolute operand it would reach its offset in the data bank

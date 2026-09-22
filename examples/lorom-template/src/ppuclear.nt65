@@ -16,7 +16,7 @@
 ; vertical or forced blank.
 ; @param X starting address of nametable in VRAM (16-bit)
 ; @param Y value to write (16-bit)
-.proc ppu_clear_nt: i16, far, dp = 0, dbr* -> a8, i16 {
+.proc ppu_clear_nt: io, i16, far, dp = 0 -> a8, i16 {
     sty d:$0000                 ; the value, at $000000-$000001 for the DMA to read
     ldy #1024                   ; number of bytes to clear
 
@@ -33,7 +33,7 @@
 }
 
 ; One half of ppu_clear_nt: DMA 1024 bytes of the value at $0000 + A to VRAM at X.
-.proc doonedma: a8, i16, far, dbr* {
+.proc doonedma: io, a8, i16, far {
     stx PPUADDR
     sta DMAADDR
     ora #<PPUDATA
@@ -51,7 +51,7 @@
 ; Moves remaining entries in the CPU's local copy of OAM to (-128, 225) to get them
 ; offscreen.
 ; @param X index of first sprite in OAM (0-508)
-.proc ppu_clear_oam: far, dbr* -> a16, i16 {
+.proc ppu_clear_oam: io, far -> a16, i16 {
     rep #$30
 @lowoamloop:
     lda #(225 << 8) | (<-128)
@@ -68,7 +68,7 @@
 }
 
 ; Converts high OAM (sizes and X sign bits) to the packed format expected by the S-PPU.
-.proc ppu_pack_oamhi: far, dbr* -> a16, i16 {
+.proc ppu_pack_oamhi: io, far -> a16, i16 {
     rep #$10
     ldx #0
     txy
@@ -101,7 +101,7 @@
 }
 
 ; Copies packed OAM data to the S-PPU using DMA channel 0.
-.proc ppu_copy_oam: far, dbr* -> a16, i16 {
+.proc ppu_copy_oam: io, far -> a16, i16 {
     rep #$30
     lda #DMAMODE_OAMDATA
     ldx #OAM
@@ -116,7 +116,7 @@
 ; @param A 15-8: destination PPU register; 7-0: DMA mode
 ;        useful constants:
 ; DMAMODE_PPUDATA, DMAMODE_CGDATA, DMAMODE_OAMDATA
-.proc ppu_copy: far, dbr* {
+.proc ppu_copy: io, far {
     php
     rep #$30
     sta DMAMODE
@@ -133,7 +133,7 @@
 }
 
 ; Waits for the start of vertical blanking.  Entered and left in the caller's widths.
-.proc ppu_vsync: far, dbr* {
+.proc ppu_vsync: io, far {
     php
     sep #$20
 @loop1:
