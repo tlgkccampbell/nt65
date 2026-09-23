@@ -294,7 +294,8 @@ public sealed class StateAnalysis : IProcessorStates
         // jump to a routine's entry, the routine's own included: that is a tail call.
         IEnumerable<int> Carried(BasicBlock block)
         {
-            var calls = block.Steps.Count > 0 && IsCallOrIndirectCall(block.Steps[^1]);
+            var calls = block.Steps.Count > 0
+                && (IsCallOrIndirectCall(block.Steps[^1]) || flow.RelativeCallAt(block.Steps[^1]) is not null);
             foreach (var edge in block.Successors)
             {
                 if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))

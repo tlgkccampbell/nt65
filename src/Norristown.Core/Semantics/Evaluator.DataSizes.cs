@@ -296,21 +296,29 @@ internal sealed partial class Evaluator
             return null;
         }
 
-        long total = 0;
-        foreach (var turn in turns)
+        try
         {
-            turn();
-            if (body() is not { } part)
-                return null;
-            total += part;
+            long total = 0;
+            foreach (var turn in turns)
+            {
+                turn();
+                if (body() is not { } part)
+                    return null;
+                total += part;
+            }
+            return total;
         }
-        if (binding is not null)
+        finally
         {
-            arguments.Remove(binding);
-            items.Remove(binding);
-            members.Remove(binding);
+            // The binding is removed however the turns end, so that no value from them
+            // outlives the repetition.
+            if (binding is not null)
+            {
+                arguments.Remove(binding);
+                items.Remove(binding);
+                members.Remove(binding);
+            }
         }
-        return total;
     }
 
     /// <summary>The name a repetition binds, found where its body names it; null when nothing does.</summary>
