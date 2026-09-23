@@ -25,8 +25,8 @@ public static class Instructions
     private static readonly FrozenDictionary<string, InstructionFacts> facts = BuildFacts();
 
     /// <summary>
-    /// What <paramref name="mnemonic"/> is, beyond which modes it has: whether it calls or
-    /// returns, what it pushes or pulls, and which registers it leaves changed.
+    /// What <paramref name="mnemonic"/> is, beyond which modes it has: what it does to the
+    /// path, what it pushes or pulls, and which registers it leaves changed.
     /// </summary>
     public static InstructionFacts Facts(string mnemonic) =>
         facts.GetValueOrDefault(mnemonic.ToLowerInvariant(), InstructionFacts.None);
@@ -107,14 +107,11 @@ public static class Instructions
     /// <summary>
     /// Whether a mnemonic's operand names a place to reach rather than an address to size, so
     /// what it takes is a near or a far target: every jump, call and branch, and <c>per</c>,
-    /// which reaches its target the way <c>brl</c> does and pushes it. The answer does not
-    /// depend on which CPU the program is built for, so the modes on every CPU nt65 knows are checked.
+    /// which reaches its target the way <c>brl</c> does and pushes it.
     /// </summary>
     public static bool IsControlTransfer(string mnemonic) =>
-        CpuNames.All.Any(cpu => Modes(cpu, mnemonic).Any(mode =>
-            mode is AddressingMode.Relative or AddressingMode.DirectRelative or AddressingMode.RelativeLong))
-        || SyntaxFacts.LongBranches.Contains(mnemonic)
-        || mnemonic.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl";
+        Facts(mnemonic).Control is Control.Branches or Control.Jumps or Control.Calls
+        || mnemonic.Equals("per", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The two short branches a long branch is written with: the one it takes when the
@@ -139,7 +136,7 @@ public static class Instructions
 
     /// <summary>
     /// What each mnemonic is. The groups follow the questions later passes ask: what
-    /// writes which register, what moves one to another, what calls, returns and stores, what
+    /// writes which register, what moves one to another, what it does to the path, what stores, what
     /// the stack instructions move, and what the 65816 sizes by a width.
     /// </summary>
     private static FrozenDictionary<string, InstructionFacts> BuildFacts()
@@ -169,8 +166,16 @@ public static class Instructions
         Fact(table, "txy", f => f with { Copies = (Registers.X, Registers.Y) });
         Fact(table, "tyx", f => f with { Copies = (Registers.Y, Registers.X) });
 
-        Fact(table, "jsr jsl", f => f with { Calls = true });
-        Fact(table, "rts rtl rti", f => f with { Returns = true });
+        // A software interrupt is not among these: `brk` and `cop` come back to the instruction
+        // after them, whatever the handler did to the registers on the way.
+        Fact(table, "bcc bcs beq bmi bne bpl bvc bvs", f => f with { Control = Control.Branches });
+        Fact(table, string.Join(' ', SyntaxFacts.LongBranches), f => f with { Control = Control.Branches });
+        for (var bit = 0; bit < 8; bit++)
+            Fact(table, $"bbr{bit} bbs{bit}", f => f with { Control = Control.Branches });
+        Fact(table, "jmp jml bra brl", f => f with { Control = Control.Jumps });
+        Fact(table, "jsr jsl", f => f with { Control = Control.Calls });
+        Fact(table, "rts rtl rti", f => f with { Control = Control.Returns });
+        Fact(table, "stp jam", f => f with { Control = Control.Stops });
         Fact(table, "sta stx sty stz inc dec asl lsr rol ror tsb trb", f => f with { Stores = true });
 
         Fact(table, "pha", f => f with { Pushes = PushSize.Accumulator, Held = Registers.A });

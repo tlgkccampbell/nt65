@@ -1,7 +1,7 @@
 namespace Norristown.Processor;
 
 /// <summary>
-/// What a mnemonic is, beyond which addressing modes it has: whether it calls or returns,
+/// What a mnemonic is, beyond which addressing modes it has: what it does to the path,
 /// what it moves on and off the stack, whether it writes the memory its operand names, and
 /// which registers it leaves changed. Every pass after layout needs some of this, and having
 /// each pass test the lowercase mnemonic itself is how two passes come to disagree.
@@ -17,11 +17,8 @@ public sealed record InstructionFacts
     /// <summary>The facts for a mnemonic with none of these properties.</summary>
     public static InstructionFacts None { get; } = new();
 
-    /// <summary>Whether it calls a subroutine: <c>jsr</c> and <c>jsl</c>.</summary>
-    public bool Calls { get; init; }
-
-    /// <summary>Whether it returns from one: <c>rts</c>, <c>rtl</c> and <c>rti</c>.</summary>
-    public bool Returns { get; init; }
+    /// <summary>What it does to the path running through it: branch, jump, call, return or stop.</summary>
+    public Control Control { get; init; }
 
     /// <summary>Whether it writes the memory its operand names, read-modify-write among them.</summary>
     public bool Stores { get; init; }

@@ -505,7 +505,7 @@ public static class RegisterKeeps
 
             // A call is handled for the block as a whole, because its effect depends on which
             // routine it reaches.
-            if (facts.Calls)
+            if (facts.Control == Control.Calls)
                 return state;
 
             // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
@@ -614,15 +614,17 @@ public static class RegisterKeeps
             var statement = step.Statement;
             var mode = layout.Of(statement, step.On)?.Mode;
             var transfer = Transfers.Of(statement, mode);
-            var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() ?? "";
+            var control = statement is InstructionStatementSyntax instruction
+                ? Instructions.Facts(instruction.Mnemonic.Text).Control
+                : Control.Through;
             var calls = transfer == Transfer.Call
                 || flow.RelativeCallAt(step) is not null
-                || (transfer == Transfer.Elsewhere && Instructions.Facts(mnemonic).Calls);
+                || (transfer == Transfer.Elsewhere && control == Control.Calls);
 
             // `stp` and `jam` stop the processor, so nothing ever reads what they left; `rti`
             // goes back to whatever the interrupt broke into, which is exactly where the
             // registers matter.
-            var returns = transfer == Transfer.Return && block.Next is null && mnemonic is not ("stp" or "jam");
+            var returns = transfer == Transfer.Return && block.Next is null && control != Control.Stops;
             var tail = !calls && !returns && (block.Calls.Count > 0 || block.CallsUnknown);
             return (calls, tail, returns);
         }

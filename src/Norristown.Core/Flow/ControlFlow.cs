@@ -1118,7 +1118,7 @@ public sealed class ControlFlow
     }
 
     private static bool IsCall(SyntaxNode statement) =>
-        statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.Mnemonic.Text).Calls;
+        statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
 
     /// <summary>One statement and the annotations written under it.</summary>
     private sealed class Unit(Step step)

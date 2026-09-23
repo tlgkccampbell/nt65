@@ -217,6 +217,39 @@ public sealed class RefactorsTests
             action => action.Title == "Extract into a `.proc`");
     }
 
+    /// <summary>
+    /// A jump to a label the selection declares stays inside the new routine, whichever jump it
+    /// is, and so does a software interrupt, which comes back to the instruction after it.
+    /// </summary>
+    [Fact]
+    public void AJumpThatStaysInsideIsExtracted()
+    {
+        const string Main = ".module main\n.cpu 65c02\n.segment CODE\n.proc main {\n"
+            + "@wait:\n    brk #0\n    lda $d012\n    bne @next\n    bra @wait\n@next:\n    jmp @wait\n}\n";
+
+        var action = Single(Main, new Range(new Position(4, 0), new Position(11, 0)), "Extract into a `.proc`");
+
+        Assert.Contains("jsr wait", Editing.Apply(Main, action.Edit.Changes[Uri]), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A jump out of the selection to another routine, or through a pointer, would leave the new
+    /// routine without coming back to its caller, so the selection is not extracted.
+    /// </summary>
+    [Theory]
+    [InlineData("jmp other")]
+    [InlineData("bra other")]
+    [InlineData("jmp ($fffc)")]
+    public void AJumpThatLeavesIsNotExtracted(string jump)
+    {
+        var main = ".module main\n.cpu 65c02\n.segment CODE\n.proc main {\n    lda #0\n    " + jump + "\n}\n"
+            + ".proc other {\n    rts\n}\n";
+
+        Assert.DoesNotContain(
+            Actions(main, new Range(new Position(4, 0), new Position(6, 0))),
+            action => action.Title == "Extract into a `.proc`");
+    }
+
     /// <summary>ca65 source in the selection is rewritten as nt65, as far as a line-by-line translation can.</summary>
     [Fact]
     public void Ca65InTheSelectionIsReadAsNt65()

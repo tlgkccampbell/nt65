@@ -39,7 +39,7 @@ public sealed partial class CodeLayout
 
         var transfer = mode is AddressingMode.Relative or AddressingMode.RelativeLong or AddressingMode.DirectRelative
             || (mode is AddressingMode.Absolute or AddressingMode.Long
-                && mnemonic.Text.ToLowerInvariant() is "jmp" or "jsr" or "jml" or "jsl");
+                && Instructions.Facts(mnemonic.Text).Control is Control.Jumps or Control.Calls);
         IEnumerable<SyntaxNode> expressions = operand is AbsoluteOperandSyntax { Second: { } second }
             ? [Expression(operand)!, second]
             : Expression(operand) is { } only ? [only] : [];

@@ -134,7 +134,7 @@ internal sealed class Requirements
         var mode = layout.Of(statement, step.On)?.Mode;
         switch (Transfers.Of(statement, mode))
         {
-            case Transfer.Elsewhere when Mnemonic(statement).Calls:
+            case Transfer.Elsewhere when Mnemonic(statement).Control == Control.Calls:
                 Report(statement, Catalogue.IndirectCallUnchecked.Says(Quoted(statement)));
                 break;
 
@@ -290,7 +290,7 @@ internal sealed class Requirements
         var transfer = Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode);
         var runsOn = (transfer is Transfer.Through or Transfer.Branch or Transfer.Call
             || flow.RelativeCallAt(step) is not null
-            || transfer == Transfer.Elsewhere && Mnemonic(step.Statement).Calls)
+            || transfer == Transfer.Elsewhere && Mnemonic(step.Statement).Control == Control.Calls)
             && !flow.CallsWhatNeverReturns(step);
         if (runsOn)
         {

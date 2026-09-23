@@ -663,7 +663,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>Whether a statement calls, directly or through a pointer.</summary>
     private static bool IsCallOrIndirectCall(Step step) =>
         step.Statement is InstructionStatementSyntax instruction
-        && Instructions.Facts(instruction.Mnemonic.Text).Calls;
+        && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
 
     /// <summary>
     /// A call: the state here must be what the routine expects, and becomes what it returns

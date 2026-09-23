@@ -174,7 +174,7 @@ internal static class InlayHints
         // A call that changes the state is the surprising case: the change is made in the
         // called routine rather than on this line, and the arrow marks that it came from there.
         var calls = Instruction(statement) is { } instruction
-            && Instructions.Facts(instruction.Mnemonic.Text.ToLowerInvariant()).Calls;
+            && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
         return new Mark(
             (calls ? "→ " : "") + string.Join(" ", parts),
             $"What reaches the next line is `{now}`, and what reached this one was `{was}`.");

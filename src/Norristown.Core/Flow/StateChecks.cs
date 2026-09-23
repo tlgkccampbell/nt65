@@ -163,7 +163,7 @@ internal sealed class StateChecks
         // A near transfer stays in the program bank, so a target in a segment in another bank
         // is out of its reach.
         if (mnemonic != "per" && (chosen is AddressingMode.Relative or AddressingMode.RelativeLong
-            || (chosen == AddressingMode.Absolute && mnemonic is "jmp" or "jsr")))
+            || (chosen == AddressingMode.Absolute && Instructions.Facts(mnemonic).Control is Control.Jumps or Control.Calls)))
         {
             CheckNearBank(step, mnemonic, chosen);
             return;
@@ -173,7 +173,8 @@ internal sealed class StateChecks
         // operand names its bank, `jmp` and `jsr` use the program bank, and `pea` and `per`
         // access no memory at all.
         if (chosen is not (AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
-            || mnemonic is "jmp" or "jsr" or "pea" or "per" || !state.B.IsBounded)
+            || Instructions.Facts(mnemonic).Control is Control.Jumps or Control.Calls
+            || mnemonic is "pea" or "per" || !state.B.IsBounded)
         {
             return;
         }

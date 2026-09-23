@@ -13,12 +13,25 @@ namespace Norristown.Tests.Layout;
 /// </summary>
 public sealed class InstructionFactsTests
 {
-    /// <summary>Only <c>jsr</c> and <c>jsl</c> call, and only the three returns return.</summary>
+    /// <summary>
+    /// What each mnemonic does to the path. A software interrupt is not a stop: the handler's
+    /// <c>rti</c> comes back to the instruction after <c>brk</c> or <c>cop</c>.
+    /// </summary>
     [Fact]
-    public void OnlyACallCallsAndOnlyAReturnReturns()
+    public void EachTransferIsWhatItDoesToThePath()
     {
-        Assert.Equal(["jsl", "jsr"], Where(facts => facts.Calls));
-        Assert.Equal(["rti", "rtl", "rts"], Where(facts => facts.Returns));
+        Assert.Equal(
+            [
+                "bbr0", "bbr1", "bbr2", "bbr3", "bbr4", "bbr5", "bbr6", "bbr7",
+                "bbs0", "bbs1", "bbs2", "bbs3", "bbs4", "bbs5", "bbs6", "bbs7",
+                "bcc", "bcs", "beq", "bmi", "bne", "bpl", "bvc", "bvs",
+                "jcc", "jcs", "jeq", "jmi", "jne", "jpl", "jvc", "jvs",
+            ],
+            Where(facts => facts.Control == Control.Branches));
+        Assert.Equal(["bra", "brl", "jml", "jmp"], Where(facts => facts.Control == Control.Jumps));
+        Assert.Equal(["jsl", "jsr"], Where(facts => facts.Control == Control.Calls));
+        Assert.Equal(["rti", "rtl", "rts"], Where(facts => facts.Control == Control.Returns));
+        Assert.Equal(["jam", "stp"], Where(facts => facts.Control == Control.Stops));
     }
 
     /// <summary>A store is an instruction that writes the memory its operand names.</summary>

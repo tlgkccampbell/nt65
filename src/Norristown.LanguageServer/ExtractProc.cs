@@ -22,10 +22,6 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class ExtractProc
 {
-    /// <summary>The instructions that end a path out of the routine, which a call cannot replace.</summary>
-    private static readonly HashSet<string> leaves =
-        new(StringComparer.OrdinalIgnoreCase) { "rts", "rtl", "rti", "jmp", "jml", "brk" };
-
     /// <summary>The change that extracts the lines <paramref name="range"/> covers into a routine, where that is possible.</summary>
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
@@ -40,7 +36,7 @@ internal static class ExtractProc
             yield break;
         if (Around(tree, first, last) is not { } block || DeclaredOn(model, block.LineIndex) is not { Kind: SymbolKind.Proc } routine)
             yield break;
-        if (!IsSelfContained(model, tree, lines, first, last))
+        if (!IsSelfContained(model, tree, first, last))
             yield break;
 
         var name = Edits.UnusedName(model, Called(tree, first) ?? "extracted");
@@ -77,8 +73,8 @@ internal static class ExtractProc
 
     /// <summary>
     /// The lines of the selection, provided each is code a call can replace: an instruction, a
-    /// label, or a blank line. Null for a selection holding anything else, one containing an
-    /// instruction that leaves the routine, or one with no instruction at all.
+    /// label, or a blank line. Null for a selection holding anything else, one containing a
+    /// return, which would return from the new routine instead, or one with no instruction at all.
     /// </summary>
     private static IReadOnlyList<int>? Selected(SyntaxTree tree, int first, int last)
     {
@@ -96,7 +92,7 @@ internal static class ExtractProc
             }
             if (Instruction(statement) is { } instruction)
             {
-                if (leaves.Contains(instruction.Mnemonic.Text))
+                if (Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Returns)
                     return null;
                 code = true;
             }
@@ -116,23 +112,42 @@ internal static class ExtractProc
 
     /// <summary>
     /// Whether the selection is self-contained: nothing in it names a label the enclosing
-    /// routine declares outside it, and nothing outside it names a label declared in it.
+    /// routine declares outside it, nothing outside it names a label declared in it, and every
+    /// jump in it lands on a label declared in it. A jump anywhere else — to another routine, or
+    /// through a pointer — would leave the new routine without coming back to its caller.
     /// </summary>
-    private static bool IsSelfContained(
-        SemanticModel model, SyntaxTree tree, IReadOnlyList<int> lines, int first, int last)
+    private static bool IsSelfContained(SemanticModel model, SyntaxTree tree, int first, int last)
     {
         var from = tree.LineStarts[first];
         var to = last + 1 < tree.LineStarts.Length ? tree.LineStarts[last + 1] : tree.Text.Length;
+        bool Within(int start, int end) => start >= from && end <= to;
+
+        for (var line = first; line <= last; line++)
+        {
+            if (Instruction(StatementOn(tree, line)) is not { } jump
+                || Instructions.Facts(jump.Mnemonic.Text).Control != Control.Jumps)
+            {
+                continue;
+            }
+            var operand = jump.Operand?.Span;
+            var lands = operand is { } span && model.References.Any(reference =>
+                reference.Span.Start >= span.Start && reference.Span.End <= span.End
+                && reference.Symbol is { Kind: SymbolKind.Label } label
+                && Within(label.NameSpan.Start, label.NameSpan.End));
+            if (!lands)
+                return false;
+        }
+
         foreach (var reference in model.References)
         {
-            var inside = reference.Span.Start >= from && reference.Span.End <= to;
+            var inside = Within(reference.Span.Start, reference.Span.End);
             if (reference.Symbol is not { Kind: SymbolKind.Label } label)
                 continue;
 
             // A label declared in the selection moves with it, and one declared outside stays
             // behind; a reference on the other side of that boundary from its label means the
             // lines cannot be extracted on their own.
-            var declared = label.NameSpan.Start >= from && label.NameSpan.End <= to;
+            var declared = Within(label.NameSpan.Start, label.NameSpan.End);
             if (inside != declared && label.Routine is not null)
                 return false;
         }
