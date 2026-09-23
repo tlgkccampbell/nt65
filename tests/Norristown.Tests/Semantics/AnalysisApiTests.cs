@@ -7,10 +7,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// The samples on the semantic half of <c>docs/ANALYSIS-API.md</c>, one test per section of it,
-/// so that the guide cannot say something the API does not do. Each one is written the way a
-/// reader would write it: nothing here reaches for a test helper, and nothing reaches inside
-/// the semantic layer.
+/// The semantic half of the analysis API, used as an analyzer or an editor feature would use
+/// it. Each test is written the way a caller outside nt65 would write it: nothing here reaches
+/// for a test helper, and nothing reaches inside the semantic layer.
 /// </summary>
 public sealed class AnalysisApiTests
 {
@@ -288,14 +287,13 @@ public sealed class AnalysisApiTests
     }
 
     /// <summary>
-    /// Every public member of the two types the page is about is named on it and called here.
-    /// The page is the API's description, so a member it does not mention is either missing
-    /// from it or should not be public.
+    /// Every public member of <see cref="SemanticModel"/> and <see cref="ProgramModel"/> is called
+    /// here, so a member these tests do not show being used is either untested or should not be
+    /// public.
     /// </summary>
     [Fact]
-    public void ThePageAndTheseTestsNameEveryPublicMember()
+    public void TheseTestsCallEveryPublicMember()
     {
-        var page = Repo.ReadText(Repo.Path("docs", "ANALYSIS-API.md"));
         var tests = Repo.ReadText(Repo.Path("tests", "Norristown.Tests", "Semantics", "AnalysisApiTests.cs"));
         var missing = new List<string>();
         foreach (var type in new[] { typeof(SemanticModel), typeof(ProgramModel) })
@@ -303,8 +301,6 @@ public sealed class AnalysisApiTests
             foreach (var name in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static
                 | BindingFlags.DeclaredOnly).Select(Named).OfType<string>().Distinct().Order(StringComparer.Ordinal))
             {
-                if (!page.Contains(name, StringComparison.Ordinal))
-                    missing.Add($"docs/ANALYSIS-API.md does not name {type.Name}.{name}");
                 if (!tests.Contains(name, StringComparison.Ordinal))
                     missing.Add($"AnalysisApiTests does not call {type.Name}.{name}");
             }

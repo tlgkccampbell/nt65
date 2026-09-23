@@ -56,7 +56,7 @@ public sealed record CommandLine(
 
         `explain` says what a diagnostic is about, which its one line has no room for; the name
         is the one in brackets after the message. Named nothing, it lists them; given
-        `--markdown`, it writes them all as the page docs/DIAGNOSTICS.md is.
+        `--markdown`, it writes them all as one Markdown page.
 
         `lsp` serves the language server on standard input and output, for an editor that speaks
         LSP; it takes nothing else, and what it says about itself goes to standard error.

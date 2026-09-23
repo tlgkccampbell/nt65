@@ -1,0 +1,33 @@
+.module text
+
+.cpu 6502
+
+.export greeting, keywords, TOKEN_FOR, sine
+
+.charmap screen {
+    'A'..'Z' = $01                  ; a range maps to consecutive values
+    '@'      = $00
+    ' '      = $20
+}
+
+.segment RODATA
+.data greeting: .byte screen("HELLO WORLD")
+
+; A text with bit 7 set on its last byte.
+.func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)
+
+.data keywords {
+    .data END: .byte htasc("END")
+    .data FOR: .byte htasc("FOR")
+}
+TOKEN_FOR = keywords::FOR - keywords        ; 3
+
+TURN  = 256
+SCALE = 127
+
+.segment RODATA
+.data sine: .byte[TURN] {
+    .repeat TURN, i {
+        128 + .sin(i, TURN, SCALE)
+    }
+}

@@ -1,0 +1,61 @@
+.module repeat
+
+.cpu 6502
+
+.export row_lo, dispatch, Channel, level, play
+
+SCREEN = $0400
+
+.segment RODATA
+.data row_lo: .byte[] {
+    .repeat 25, r {
+        <(SCREEN + r * 40)
+    }
+}
+
+.enum Cmd {
+    move
+    fire
+}
+
+.segment CODE
+.scope actions {
+    .proc move {
+        rts
+    }
+    .proc fire {
+        rts
+    }
+}
+
+.segment RODATA
+.data dispatch: .addr[] {
+    .each Cmd, c {
+        actions::c - 1              ; an RTS dispatch table
+    }
+}
+
+.enum Channel {
+    pulse1
+    pulse2
+    noise
+}
+
+.segment BSS
+.scope level {
+    .each Channel, ch {
+        .data ch: .byte             ; level::pulse1, level::pulse2, level::noise
+    }
+}
+
+.segment CODE
+.scope play {
+    .multiproc Channel, ch {        ; play::pulse1, play::pulse2, play::noise
+        lda level::ch
+        .if ch == Channel::noise {
+            ora #$80
+        }
+        sta level::ch
+        rts
+    }
+}

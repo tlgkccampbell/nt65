@@ -1,0 +1,4 @@
+.module header: placed
+
+.segment RODATA
+.data banner: .strz "BASIC"

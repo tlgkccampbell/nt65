@@ -1,0 +1,6 @@
+.module snd
+
+.segment CODE
+.export .proc init {
+    rts
+}

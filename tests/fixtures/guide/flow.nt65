@@ -1,0 +1,77 @@
+.module flow
+
+.cpu 6502
+
+.export dispatch, set_value, always_taken, clear_screen, greet
+
+.segment ZEROPAGE
+.data command: .byte
+.data value:   .byte
+.data flag:    .byte
+
+.segment CODE
+.proc dispatch {
+    lda command
+    asl a
+    tax
+    lda handlers+1,x
+    pha
+    lda handlers,x
+    pha
+    rts
+    .next cmd_move, cmd_fire        ; the rts is a jump to one of these
+
+    .data handlers: .addr cmd_move - 1, cmd_fire - 1
+
+    cmd_move:
+    rts
+    cmd_fire:
+    rts
+}
+
+.proc set_value {
+    lda flag
+    beq @two
+    lda #1
+    .byte $2c                       ; bit abs: swallows the lda #2
+    .next @store
+@two:
+    lda #2
+@store:
+    sta value
+    rts
+}
+
+.proc always_taken {
+    lda #1
+    bne @over                       ; A is not zero, so this is always taken
+    .next @over
+    .byte "INLINE TEXT", 0
+@over:
+    rts
+}
+
+.proc clear_screen {
+    lda #' '
+    .fallthrough fill_screen
+}
+
+.proc fill_screen {
+    ldx #0
+@loop:
+    sta $0400,x
+    inx
+    bne @loop
+    rts
+}
+
+.proc print: inline .strz {
+    ; pull the return address, print up to the zero, push the address past it
+    rts
+}
+
+.proc greet {
+    jsr print
+    .strz "HELLO"
+    rts
+}

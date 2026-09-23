@@ -1,0 +1,19 @@
+.module interop
+
+.cpu 6502
+
+.use data::Actor
+
+.import _printf: proc()             ; a routine, with its signature
+.import sp: zp                      ; an address in zero page
+.import actors: .type Actor[8]      ; storage, with its type
+.import VIC_BORDER = $D020          ; a value nt65 needs, checked by ld65 at link time
+
+.segment CODE
+.export .proc report {
+    lda sp
+    lda actors[2]::hp
+    ldx #.sizeof(actors)
+    sta VIC_BORDER
+    jmp _printf
+}

@@ -10,7 +10,10 @@
 
 .exportzp config__LINES
 .exportzp config__TRACE_LEVEL
+.exportzp config__COLUMNS
 
 config__LINES = 25
 
 config__TRACE_LEVEL = 2
+
+config__COLUMNS = $28

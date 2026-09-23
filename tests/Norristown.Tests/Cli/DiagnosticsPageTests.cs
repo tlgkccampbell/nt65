@@ -3,16 +3,14 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>docs/DIAGNOSTICS.md</c> against the catalogue it is written from. The page is a file
-/// nothing compiles, so nothing else would notice it drifting from what the code says.
+/// The page <c>nt65 explain --markdown</c> writes from the catalogue, and the areas the catalogue
+/// is written under.
 /// </summary>
 public sealed class DiagnosticsPageTests
 {
-    /// <summary>Where the page is kept.</summary>
-    private static readonly string Path = Repo.Path("docs", "DIAGNOSTICS.md");
-
+    /// <summary>The page has a heading for every area and an entry for every diagnostic.</summary>
     [Fact]
-    public void ThePageIsWhatTheCatalogueWouldWrite()
+    public void ThePageHasEveryAreaAndEveryEntry()
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
@@ -23,14 +21,10 @@ public sealed class DiagnosticsPageTests
         Assert.Equal(0, code);
         Assert.Empty(error.ToString());
         var written = output.ToString();
-        if (Fixtures.FixtureRunner.UpdateMode)
-        {
-            Repo.WriteText(Path, written);
-            return;
-        }
-        Assert.True(
-            File.Exists(Path) && Repo.ReadText(Path).ReplaceLineEndings("\n") == written,
-            "docs/DIAGNOSTICS.md is out of date; run scripts/test.ps1 -Update");
+        foreach (var area in Catalogue.Areas)
+            Assert.Contains($"## {area.Name}\n", written, StringComparison.Ordinal);
+        foreach (var entry in Catalogue.All)
+            Assert.Contains($"`{entry.Id}`", written, StringComparison.Ordinal);
     }
 
     /// <summary>

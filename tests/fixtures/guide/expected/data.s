@@ -14,11 +14,27 @@
 .exportzp data__Actor__hp
 .export data__buffer
 .export data__player
+.export data__actors
 .export data__sines
 .export data__title
 .export data__boss
 .export data__exe_header
-.export data__hp
+.export data__messages
+.export data__messages__NOFOR
+.export data__messages__SYNTAX
+.exportzp data__ERR_SYNTAX
+.exportzp data__Color__red
+.exportzp data__Color__green
+.exportzp data__Color__blue
+.exportzp data__Value__sizeof
+.exportzp data__Value__b
+.exportzp data__Value__w
+.export data__lo
+.export data__hi
+.export data__read_hp
+.export data__cmd_move
+.export data__cmd_fire
+.export data__cmd_quit
 
 data__Actor__x = $00
 data__Actor__y = $02
@@ -28,6 +44,7 @@ data__Actor__sizeof = $05
 .segment "BSS": absolute
 data__buffer: .res 64
 data__player: .res 5                ; Actor
+data__actors: .res 40               ; Actor
 
 .segment "RODATA": absolute
 data__sines: .byte 0, 49, 90, 117
@@ -41,9 +58,47 @@ data__exe_header:
     .byte $4e, $54                  ; "NT"
 exe_header__end:
 
+data__messages:
+data__messages__NOFOR:  .byte $4e, $45, $58, $54, $20, $57, $49, $54, $48, $4f, $55, $54, $20, $46, $4f, $52 | $80  ; "NEXT WITHOUT FO", 'R'
+data__messages__SYNTAX: .byte $53, $59, $4e, $54, $41, $58 | $80  ; "SYNTA", 'X'
+
+data__ERR_SYNTAX = $10              ; messages::SYNTAX - messages
+
+data__Color__red = $00
+data__Color__green = $05
+data__Color__blue = $06
+
+data__Value__b = $00
+data__Value__w = $00
+data__Value__sizeof = $02
+
+data__lo: .lobytes data__cmd_move, data__cmd_fire, data__cmd_quit  ; handlers
+data__hi: .hibytes data__cmd_move, data__cmd_fire, data__cmd_quit  ; handlers
+
 .segment "CODE": absolute
-; .proc hp  data.nt65:28
-data__hp:
+; .proc read_hp  data.nt65:60
+data__read_hp:
     lda a:data__player+4            ; player::hp
+    lda a:data__actors+4,x          ; actors::hp
+    lda a:data__actors+14           ; actors[2]::hp
+    ldx #$28
+    ldx #$08
+    ldx #$05
+    ldx #data__ERR_SYNTAX
     rts
-; end of hp
+; end of read_hp
+
+; .proc cmd_move  data.nt65:71
+data__cmd_move:
+    rts
+; end of cmd_move
+
+; .proc cmd_fire  data.nt65:75
+data__cmd_fire:
+    rts
+; end of cmd_fire
+
+; .proc cmd_quit  data.nt65:79
+data__cmd_quit:
+    rts
+; end of cmd_quit

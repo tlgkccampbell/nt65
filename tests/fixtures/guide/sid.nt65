@@ -1,0 +1,3 @@
+.module hw::sid
+
+.export VOLUME = $D418

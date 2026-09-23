@@ -3,9 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The samples in <c>docs/ANALYSIS-API.md</c>, one test per section of it, so that the guide
-/// cannot say something the API does not do. Each one is written the way a reader would write it:
-/// nothing here reaches for a test helper, and nothing reaches inside the syntax layer.
+/// The syntax half of the analysis API, used as an analyzer or an editor feature would use it.
+/// Each test is written the way a caller outside nt65 would write it: nothing here reaches for a
+/// test helper, and nothing reaches inside the syntax layer.
 /// </summary>
 public sealed class AnalysisApiTests
 {

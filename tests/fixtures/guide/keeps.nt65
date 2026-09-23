@@ -1,0 +1,14 @@
+.module keeps
+
+.cpu 6502
+
+.export print_digit
+
+.proc CHROUT = $FFD2: keeps x, y    ; a fact about the KERNAL, trusted
+
+.segment CODE
+.proc print_digit: keeps x, y {
+    clc
+    adc #'0'
+    jmp CHROUT
+}

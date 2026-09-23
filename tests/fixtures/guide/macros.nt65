@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export copy_twice
+.export copy_twice, save_all, compare
 
 .segment ZEROPAGE
 .data ptr:   .word
@@ -28,6 +28,49 @@
     mov16!(ptr, {#$0400})
     times_x!(2) {
         mov16!(ptr, other)
+    }
+    rts
+}
+
+.macro push(regs: list(one(a, x, y))) {
+    .each regs, r {
+        .if r == a {
+            pha
+        } .elseif r == x {
+            txa
+            pha
+        } .else {
+            tya
+            pha
+        }
+    }
+}
+
+.proc save_all {
+    push!(a, x, y)
+    pla
+    pla
+    pla
+    rts
+}
+
+.macro if_eq(then: block, else: block = {}) {
+    bne @skip
+    then
+    .if !.empty(else) {
+        jmp @done
+    }
+@skip:
+    else
+@done:
+}
+
+.proc compare {
+    cmp #10
+    if_eq!() {
+        lda #0
+    } else {
+        inx
     }
     rts
 }

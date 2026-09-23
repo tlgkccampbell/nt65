@@ -1,0 +1,4 @@
+.module tokens: placed
+
+.segment RODATA
+.data table: .byte $80, $81, $82

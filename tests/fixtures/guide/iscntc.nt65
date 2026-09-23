@@ -1,0 +1,7 @@
+.module iscntc: placed
+
+.segment CODE
+.export .proc ISCNTC {
+    lda $c6
+    .fallthrough interpreter::stop
+}

@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export LINES, rgb15, VOICES, TRACE_LEVEL
+.export LINES, rgb15, VOICES, TRACE_LEVEL, COLUMNS
 
 LINES = 25                          ; a constant
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
@@ -13,3 +13,5 @@ LINES = 25                          ; a constant
 } .else {
     TRACE_LEVEL = 0
 }
+
+COLUMNS = .select(WIDE, 80, 40)

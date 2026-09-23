@@ -9,6 +9,8 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export macros__copy_twice
+.export macros__save_all
+.export macros__compare
 
 .segment "ZEROPAGE": zeropage
 ptr:   .res 2
@@ -37,3 +39,32 @@ times_x__loop:
     ; end of times_x!
     rts
 ; end of copy_twice
+
+; .proc save_all  macros.nt65:49
+macros__save_all:
+    ; push!(a, x, y)  macros.nt65:50
+    pha
+    txa
+    pha
+    tya
+    pha
+    ; end of push!
+    pla
+    pla
+    pla
+    rts
+; end of save_all
+
+; .proc compare  macros.nt65:68
+macros__compare:
+    cmp #10
+    ; if_eq!()  macros.nt65:70
+    bne if_eq__skip
+    lda #0
+    jmp if_eq__done
+if_eq__skip:
+    inx
+if_eq__done:
+    ; end of if_eq!
+    rts
+; end of compare

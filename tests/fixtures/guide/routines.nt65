@@ -1,0 +1,29 @@
+.module routines
+
+.cpu 6502
+
+.export init, CHROUT, palette
+
+.segment BSS
+.data palette: .byte[32]
+
+.segment CODE
+.proc init {
+    .scope {                        ; clear RAM
+        ldx #0
+    @loop:
+        sta $0200,x
+        inx
+        bne @loop
+    }
+    .scope {                        ; clear the palette
+        ldx #31
+    @loop:
+        sta palette,x
+        dex
+        bpl @loop
+    }
+    rts
+}
+
+.proc CHROUT = $FFD2                ; the C64 KERNAL's character output

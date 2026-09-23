@@ -1,0 +1,34 @@
+.module banks
+
+.export hud_x, buffer, shadow, draw_hud
+
+.segment HUD_DP: zp, dp = $2100
+.segment WRAM: abs, bank = $7e
+.segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
+
+.segment HUD_DP
+.data hud_x: .byte
+
+.segment WRAM
+.data buffer: .byte[256]
+
+.segment LORAM
+.data shadow: .byte
+
+.segment CODE
+.proc draw_hud: a8, i8 {
+    phd
+    phb
+    pea $2100
+    pld
+    lda hud_x
+    lda d:$2105
+    lda #$7e
+    pha
+    plb
+    sta buffer
+    sta shadow
+    plb
+    pld
+    rts
+}

@@ -1,3 +1,11 @@
 {
-  "cpu": "65816"
+  "cpu": "65816",
+  "spaces": { "spc": "data" },
+  "segments": {
+    "SPCIMAGE": { "size": "abs", "space": "spc" }
+  },
+  "ranges": {
+    "$2100-$21ff": ["$00-$3f", "$80-$bf"],
+    "$4200-$43ff": ["$00-$3f", "$80-$bf"]
+  }
 }

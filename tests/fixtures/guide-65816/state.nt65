@@ -1,10 +1,15 @@
 .module state
 
-.cpu 65816
-
-.export clear_line, long_work
+.export render, clear_line, long_work, restore_flags, copy, putc, calls
 
 .segment CODE
+.proc render: a16, i8 -> a8, i8 {
+    lda #$1234                      ; A is 16-bit: a 3-byte instruction
+    sep #$20                        ; A is now 8-bit
+    lda #$12
+    rts                             ; checked: A must be 8-bit here
+}
+
 .signature std = a8, i16, dbr = $80
 
 .proc clear_line: std {
@@ -26,4 +31,51 @@
     lda #$1234
     .ensure a8
     rtl
+}
+
+.proc COP_HANDLER = $00ff00: ?, far
+.import _memset: proc(a16, i16)
+
+.export COP_HANDLER
+
+.proc calls: a16, i16 {
+    jsr _memset
+    rts
+}
+
+.segment BSS
+.data saved_p: .byte
+
+.segment CODE
+.proc restore_flags: a8, i8 -> a16, i8 {
+    lda saved_p
+    pha
+    plp
+    .state a16, i8                  ; nt65 cannot know what was in saved_p
+    rts
+}
+
+.struct Locals {
+    count: .word
+    src:   .addr
+}
+
+.proc copy: a16, i16 {
+    pea 0                           ; src
+    pea 0                           ; count
+    .frame locals: Locals
+    lda #8
+    sta locals::count,s             ; 1,s
+    pha
+    lda locals::src,s               ; 5,s: the pha is counted
+    pla
+    pla
+    pla
+    rts
+}
+
+.proc putc: ?, near {
+    .ensure a8, i8                  ; sep #$30 on the 65816, nothing on the 6502
+    sta $d000
+    rts
 }

@@ -1,0 +1,18 @@
+.module cycles
+
+.cpu 6502
+
+.export raster
+
+.segment CODE
+.proc raster {
+    top:
+    lda #1
+    sta $d020
+    nop
+    bottom:
+    rts
+}
+
+.assert .mincycles(raster::top, raster::bottom) == 8, "the raster line moved"
+.assert .maxcycles(raster::top, raster::bottom) == 8, "the raster line moved"

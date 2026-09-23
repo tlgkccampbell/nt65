@@ -1,0 +1,17 @@
+.module interpreter: placed
+
+.cpu 6502
+
+.export restore
+
+.segment CODE
+.proc restore {
+    lda #0
+    rts
+}
+
+.place iscntc                       ; this platform's check for control-C, which runs into stop
+
+.export .proc stop {
+    rts
+}

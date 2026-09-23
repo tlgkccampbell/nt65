@@ -2,7 +2,8 @@
 
 .cpu 6502
 
-.export Actor, buffer, player, sines, title, boss, exe_header, hp
+.export Actor, buffer, player, actors, sines, title, boss, exe_header, read_hp
+.export messages, ERR_SYNTAX, Color, Value, lo, hi, cmd_move, cmd_fire, cmd_quit
 
 .struct Actor {
     x:  .word
@@ -10,9 +11,12 @@
     hp: .byte
 }
 
+.assert .sizeof(Actor) <= 8, "Actor must fit an 8-byte slot"
+
 .segment BSS
 .data buffer: .byte[64]             ; 64 bytes, no values
 .data player: .type Actor           ; one record
+.data actors: .type Actor[8]        ; eight records
 
 .segment RODATA
 .data sines: .byte 0, 49, 90, 117   ; four bytes, with values
@@ -24,8 +28,54 @@
 @end:
 }
 
+.data messages {
+    .data NOFOR:  .byte "NEXT WITHOUT FO", 'R' | $80
+    .data SYNTAX: .byte "SYNTA", 'X' | $80
+}
+
+ERR_SYNTAX = messages::SYNTAX - messages    ; 16
+
+.enum Color {
+    red                             ; 0
+    green = 5
+    blue                            ; 6
+}
+
+.union Value {
+    b: .byte
+    w: .word
+}
+
+.list handlers {
+    cmd_move
+    cmd_fire
+    cmd_quit
+}
+
+.segment RODATA
+.data lo: .lobytes handlers
+.data hi: .hibytes handlers
+
 .segment CODE
-.proc hp {
+.proc read_hp {
     lda player::hp
+    lda actors::hp,x
+    lda actors[2]::hp
+    ldx #.sizeof(actors)
+    ldx #.countof(actors)
+    ldx #.sizeof(Actor)
+    ldx #ERR_SYNTAX
+    rts
+}
+
+.proc cmd_move {
+    rts
+}
+
+.proc cmd_fire {
+    rts
+}
+
+.proc cmd_quit {
     rts
 }

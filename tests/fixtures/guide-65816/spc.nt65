@@ -1,0 +1,18 @@
+.module spc
+
+.export upload_spc
+
+.import spc_entry: abs in SPCIMAGE
+
+.segment CODE
+.proc upload_spc: a8, i16 {
+    ldx #0
+@loop:
+    lda f:.loadof(SPCIMAGE),x
+    sta $2140
+    inx
+    cpx #.spanof(SPCIMAGE)
+    bne @loop
+    ldy #spc_entry
+    rts
+}

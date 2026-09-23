@@ -4,9 +4,8 @@ namespace Norristown.Cli;
 
 /// <summary>
 /// The whole diagnostic catalogue as one Markdown page, which <c>nt65 explain --markdown</c>
-/// prints and which is checked in as <c>docs/DIAGNOSTICS.md</c>. None of the page is written by
-/// hand, so an entry added to the catalogue appears on it, and a reworded entry reads the same in
-/// the catalogue and on the page.
+/// prints. None of the page is written by hand, so an entry added to the catalogue appears on it,
+/// and a reworded entry reads the same in the catalogue and on the page.
 /// </summary>
 internal static class DiagnosticsPage
 {

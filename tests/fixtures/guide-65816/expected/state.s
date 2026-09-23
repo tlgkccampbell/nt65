@@ -8,11 +8,29 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
+.export state__render
 .export state__clear_line
 .export state__long_work
+.export state__COP_HANDLER
+.export state__calls
+.export state__restore_flags
+.export state__copy
+.export state__putc
+
+.import _memset: abs
 
 .segment "CODE": absolute
-; .proc clear_line: std  state.nt65:10
+; .proc render: a16, i8 -> a8, i8  state.nt65:6
+state__render:
+    .a16
+    lda #$1234
+    sep #$20
+    .a8
+    lda #$12
+    rts
+; end of render
+
+; .proc clear_line: std  state.nt65:15
 state__clear_line:
     rep #$20
     .a16
@@ -29,10 +47,51 @@ clear_line__loop:
     rts
 ; end of clear_line
 
-; .proc long_work: std, far  state.nt65:24
+; .proc long_work: std, far  state.nt65:29
 state__long_work:
     rep #$20
     lda #$1234
     sep #$20
     rtl
 ; end of long_work
+
+state__COP_HANDLER = $00ff00
+
+; .proc calls: a16, i16  state.nt65:41
+state__calls:
+    jsr _memset
+    rts
+; end of calls
+
+.segment "BSS": absolute
+saved_p: .res 1
+
+.segment "CODE": absolute
+; .proc restore_flags: a8, i8 -> a16, i8  state.nt65:50
+state__restore_flags:
+    lda a:saved_p
+    pha
+    plp
+    rts
+; end of restore_flags
+
+; .proc copy: a16, i16  state.nt65:63
+state__copy:
+    pea 0
+    pea 0
+    lda #8
+    sta 1,s                         ; locals::count
+    pha
+    lda 5,s                         ; locals::src
+    pla
+    pla
+    pla
+    rts
+; end of copy
+
+; .proc putc: ?, near  state.nt65:77
+state__putc:
+    sep #$30
+    sta a:$d000
+    rts
+; end of putc

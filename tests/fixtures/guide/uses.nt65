@@ -1,0 +1,20 @@
+; Every form of `.use` the guide shows.
+.module uses
+
+.use hw::init                       ; one name
+.use hw::{BORDER, set_border}       ; several names
+.use hw::sid::*                     ; everything hw::sid exports
+.use snd::init as snd_init          ; a name of your choosing
+.use very::long::path as p          ; a module, then written p::thing
+
+.segment CODE
+.export .proc setup {
+    jsr init
+    jsr snd_init
+    lda #p::thing
+    sta BORDER
+    jsr set_border
+    lda #15
+    sta VOLUME
+    rts
+}

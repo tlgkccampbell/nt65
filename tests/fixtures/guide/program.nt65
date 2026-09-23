@@ -1,0 +1,7 @@
+.module program
+
+.cpu 6502
+
+.place header                       ; each is declared `.module header: placed`
+.place tokens
+.place interpreter

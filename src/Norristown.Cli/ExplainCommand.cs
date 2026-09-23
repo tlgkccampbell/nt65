@@ -6,7 +6,7 @@ namespace Norristown.Cli;
 /// <c>nt65 explain &lt;name&gt;</c>: prints the full explanation of a diagnostic, which its
 /// one-line message has no room for. Given no name, it lists every diagnostic; given a name nt65
 /// does not know, it suggests the closest one. Given <c>--markdown</c>, it writes the whole
-/// catalogue as the page checked in as <c>docs/DIAGNOSTICS.md</c>.
+/// catalogue as one Markdown page.
 /// </summary>
 internal static class ExplainCommand
 {

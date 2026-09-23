@@ -1,4 +1,4 @@
 {
   "cpu": "6502",
-  "defines": { "DEBUG": 1 }
+  "defines": { "DEBUG": 1, "WIDE": 0 }
 }
