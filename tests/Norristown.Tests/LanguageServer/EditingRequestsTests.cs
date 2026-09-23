@@ -270,7 +270,7 @@ public sealed class EditingRequestsTests
     public async Task AnOperandOffersTheFormsTheCpuHas(string line, string[] offered, string[] notOffered)
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Caret("""
+        var (text, position) = Caret.In("""
             .module main
             .cpu 65816
             .segment CODE
@@ -278,9 +278,7 @@ public sealed class EditingRequestsTests
             @line
             }
             """.Replace("@line", line, StringComparison.Ordinal));
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, text);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, text));
 
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
             new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
@@ -375,9 +373,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -484,9 +480,7 @@ public sealed class EditingRequestsTests
             }
             .data vector: .addr leaf
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -549,9 +543,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -591,9 +583,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -622,9 +612,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -658,9 +646,7 @@ public sealed class EditingRequestsTests
                 }
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -702,9 +688,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -798,9 +782,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -880,9 +862,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
@@ -917,9 +897,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var routine = await client.HoverAsync(MainUri, new Position(2, 7), timeout);
         var scope = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
@@ -949,9 +927,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var entry = await client.HoverAsync(MainUri, new Position(3, 4), timeout);
         var after = await client.HoverAsync(MainUri, new Position(5, 4), timeout);
@@ -990,9 +966,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
 
@@ -1022,9 +996,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(6, 4), timeout);
 
@@ -1052,9 +1024,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(4, 4), timeout);
 
@@ -1084,9 +1054,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(10, 4), timeout);
 
@@ -1117,9 +1085,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(11, 4), timeout);
 
@@ -1147,9 +1113,7 @@ public sealed class EditingRequestsTests
                 rts
             }
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
 
@@ -1167,51 +1131,33 @@ public sealed class EditingRequestsTests
         lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal));
 
     /// <summary>
-    /// The main file with <paramref name="line"/> at the place marked <paramref name="where"/>,
-    /// the other marked places left empty, and the caret position given by the line's own
-    /// <c>|</c>. A place the file does not mark puts the line at top level, after everything else.
+    /// Returns the main file with <paramref name="line"/> at the place marked
+    /// <paramref name="where"/>, the other marked places left empty, and the caret position
+    /// given by the line's own <c>|</c>. The place <c>top</c> puts the line at top level, after
+    /// everything else. Any other name the file does not mark is a mistake in the test and
+    /// throws, so that a misspelled place cannot quietly test top level instead.
     /// </summary>
     private static (string Text, Position Position) Place(string where, string line)
     {
         var text = Main.ReplaceLineEndings("\n");
         var lines = text.Split('\n').ToList();
-        var at = lines.FindIndex(l => l.Trim() == "|" + where);
+        var at = where == "top" ? lines.Count : lines.FindIndex(l => l.Trim() == "|" + where);
+        if (at < 0)
+            throw new ArgumentException($"the main file marks no place named \"{where}\"", nameof(where));
         for (var i = 0; i < lines.Count; i++)
         {
             if (lines[i].TrimStart().StartsWith('|'))
                 lines[i] = "";
         }
-        if (at < 0)
-        {
-            at = lines.Count;
+        if (at == lines.Count)
             lines.Add(line);
-        }
         else
-        {
             lines[at] = line;
-        }
         var column = lines[at].IndexOf('|', StringComparison.Ordinal);
         lines[at] = lines[at].Replace("|", "", StringComparison.Ordinal);
         return (string.Join('\n', lines), new Position(at, Math.Max(0, column)));
     }
 
-    /// <summary>A source with its <c>|</c> taken out, and where that was.</summary>
-    private static (string Text, Position Position) Caret(string source)
-    {
-        var lines = source.ReplaceLineEndings("\n").Split('\n').ToList();
-        var at = lines.FindIndex(l => l.Contains('|', StringComparison.Ordinal));
-        var column = lines[at].IndexOf('|', StringComparison.Ordinal);
-        lines[at] = lines[at].Replace("|", "", StringComparison.Ordinal);
-        return (string.Join('\n', lines), new Position(at, column));
-    }
-
-    private static async Task<TestClient> OpenAsync(string main, CancellationToken timeout)
-    {
-        var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(GfxUri, Gfx.ReplaceLineEndings("\n"));
-        await client.OpenAsync(VicUri, Vic);
-        await client.OpenAsync(MainUri, main);
-        await client.NextDiagnosticsAsync(MainUri, timeout);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(string main, CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (GfxUri, Gfx.ReplaceLineEndings("\n")), (VicUri, Vic), (MainUri, main));
 }

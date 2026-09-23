@@ -46,13 +46,8 @@ public sealed class MacroRequestsTests
         ptr = $10
         """;
 
-    private static async Task<TestClient> OpenAsync(CancellationToken timeout)
-    {
-        var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        await client.NextDiagnosticsAsync(timeout);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (Uri, Source));
 
     /// <summary>A body is ordinary nt65, so it has nothing wrong with it to report.</summary>
     [Fact]
@@ -185,9 +180,7 @@ public sealed class MacroRequestsTests
     public async Task HoverSaysWhatAParameterTakes()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Typed);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Typed));
         var header = Typed.ReplaceLineEndings("\n").Split('\n')[5];
 
         async Task<string> HoverAt(string word) =>
@@ -217,9 +210,7 @@ public sealed class MacroRequestsTests
     public async Task HoverOnAComparedWordSaysWhatItIs()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Typed);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Typed));
 
         var imm = (await client.HoverAsync(Uri, new Position(6, 23), timeout))?.Contents.Value ?? "";
         Assert.Contains("mode imm", imm, StringComparison.Ordinal);

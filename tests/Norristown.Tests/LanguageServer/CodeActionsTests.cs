@@ -71,9 +71,7 @@ public sealed class CodeActionsTests
     public async Task AFixWritesWhatTheDiagnosticNames(string title, string body, string fixedBody)
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(MainUri, Header + body);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Header + body));
 
         var action = await ActionAsync(client, MainUri, title, timeout);
 
@@ -93,10 +91,7 @@ public sealed class CodeActionsTests
         var timeout = TestTimeout.Token();
         const string Gfx = ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Main = ".module main\n.use gfx::fill as paint\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    jsr fill\n    rts\n}\n";
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(GfxUri, Gfx);
-        await client.OpenAsync(MainUri, Main);
-        await client.NextDiagnosticsAsync(MainUri, timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx), (MainUri, Main));
 
         var export = await ActionAsync(client, MainUri, "Export `clear` from `gfx`", timeout);
         Assert.Equal([GfxUri], export.Edit.Changes.Keys);

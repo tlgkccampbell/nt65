@@ -122,11 +122,6 @@ public sealed class CompletionStructureTests
         client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
             new { textDocument = new { uri = Uri }, position }, cancellation);
 
-    private static async Task<TestClient> OpenAsync(CancellationToken cancellation)
-    {
-        var client = await TestClient.StartAsync(TestClient.Capable(), cancellation);
-        await client.OpenAsync(Uri, Source);
-        await client.NextDiagnosticsAsync(Uri, cancellation);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(CancellationToken cancellation) =>
+        TestClient.OpenedAsync(cancellation, (Uri, Source));
 }

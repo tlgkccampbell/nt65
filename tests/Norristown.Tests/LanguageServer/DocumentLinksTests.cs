@@ -55,11 +55,6 @@ public sealed class DocumentLinksTests
         client.RequestAsync<IReadOnlyList<DocumentLink>>("textDocument/documentLink",
             new { textDocument = new { uri = Uri } }, timeout);
 
-    private static async Task<TestClient> OpenAsync(string text, CancellationToken timeout)
-    {
-        var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, text.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(Uri, timeout);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(string text, CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (Uri, text.ReplaceLineEndings("\n")));
 }

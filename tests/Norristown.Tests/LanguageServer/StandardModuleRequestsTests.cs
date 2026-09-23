@@ -22,9 +22,7 @@ public sealed class StandardModuleRequestsTests
     public async Task ADefinitionLeadsToTheModulesOwnText()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source));
 
         var definition = await client.DefinitionAsync(Uri, new Position(4, 19), timeout);
         Assert.NotNull(definition);
@@ -44,9 +42,7 @@ public sealed class StandardModuleRequestsTests
     public async Task ItsNamesAreNotTheProgramsToRename()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source));
 
         Assert.Null(await client.PrepareRenameAsync(Uri, new Position(4, 19), timeout));
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(

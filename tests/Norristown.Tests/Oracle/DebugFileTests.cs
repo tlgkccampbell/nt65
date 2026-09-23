@@ -21,7 +21,9 @@ public sealed class DebugFileTests
     [Fact]
     public void RemappingNamesTheSourceOfEveryMappedLineThatMadeBytes()
     {
-        var failures = Repo.CollectFailures(Linkable(), Check);
+        var linkable = Linkable();
+        Repo.RequireAny(linkable);
+        var failures = Repo.CollectFailures(linkable, Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
 
         static IEnumerable<string> Check(FixtureCase fixture)
@@ -80,11 +82,8 @@ public sealed class DebugFileTests
     [Fact]
     public void RemappingWhatIsAlreadyRemappedChangesNothing()
     {
-        if (Linkable().FirstOrDefault(f => f.Name == "modules") is not { } fixture)
-        {
-            Assert.NotNull(Repo.Selection);
-            return;
-        }
+        Repo.SkipUnlessSelected("modules");
+        var fixture = Linkable().Single(f => f.Name == "modules");
         var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
         var maps = compilation.Outputs
             .Where(output => output.Kind == OutputKind.LineMap)
@@ -112,11 +111,8 @@ public sealed class DebugFileTests
     [Fact]
     public void APlacedModulesLinesNameItsOwnSource()
     {
-        if (Linkable().FirstOrDefault(f => f.Name == "placement") is not { } fixture)
-        {
-            Assert.NotNull(Repo.Selection);
-            return;
-        }
+        Repo.SkipUnlessSelected("placement");
+        var fixture = Linkable().Single(f => f.Name == "placement");
         var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
         var maps = compilation.Outputs
             .Where(output => output.Kind == OutputKind.LineMap)

@@ -52,8 +52,7 @@ public sealed class HostileOptionTests
     public void EveryProgramLinksToTheSameBytesUnderEveryOptionSet()
     {
         var programs = CorpusProgram.All();
-        if (Repo.Selection is null)
-            Assert.NotEmpty(programs);
+        Repo.RequireAny(programs);
 
         // The baseline is the same link the corpus test makes, with nothing added but the
         // warning level every set carries.

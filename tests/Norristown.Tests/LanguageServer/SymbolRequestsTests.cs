@@ -180,9 +180,7 @@ public sealed class SymbolRequestsTests
     public async Task HoverPutsTheDecimalBesideAHexadecimalValue()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\nWIDE = $0400\nSMALL = 4\n");
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, ".module main\nWIDE = $0400\nSMALL = 4\n"));
 
         var wide = await client.HoverAsync(Uri, new Position(1, 0), timeout);
         var small = await client.HoverAsync(Uri, new Position(2, 0), timeout);
@@ -491,9 +489,7 @@ public sealed class SymbolRequestsTests
             }
             .export table
             """;
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Indexed.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Indexed.ReplaceLineEndings("\n")));
 
         var read = await client.HoverAsync(Uri, new Position(6, 4), timeout);
         var branch = await client.HoverAsync(Uri, new Position(8, 4), timeout);
@@ -509,9 +505,7 @@ public sealed class SymbolRequestsTests
 
         // On the 65816 a direct-page operand costs one more cycle when the low byte of D is not
         // zero, and a routine that declares nothing about D leaves that unknown.
-        await using var wide = await TestClient.StartAsync(timeout);
-        await wide.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, i8 {\n    lda $10\n    rts\n}\n");
-        await wide.NextDiagnosticsAsync(timeout);
+        await using var wide = await TestClient.OpenedAsync(timeout, (Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, i8 {\n    lda $10\n    rts\n}\n"));
 
         var direct = await wide.HoverAsync(Uri, new Position(4, 4), timeout);
 
@@ -716,11 +710,6 @@ public sealed class SymbolRequestsTests
         Assert.Null(await client.RenameAsync(Uri, new Position(1, 0), "x", timeout));
     }
 
-    private static async Task<TestClient> OpenAsync(CancellationToken cancellation)
-    {
-        var client = await TestClient.StartAsync(cancellation);
-        await client.OpenAsync(Uri, Source);
-        Assert.Empty((await client.NextDiagnosticsAsync(cancellation)).Diagnostics);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(CancellationToken cancellation) =>
+        TestClient.OpenedCleanlyAsync(cancellation, (Uri, Source));
 }

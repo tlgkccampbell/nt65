@@ -270,11 +270,6 @@ public sealed class ViewRequestsTests
         client.RequestAsync<OutputResult?>("nt65/output",
             new OutputParams(new TextDocumentIdentifier(Uri)), cancellation);
 
-    private static async Task<TestClient> OpenAsync(CancellationToken cancellation)
-    {
-        var client = await TestClient.StartAsync(cancellation);
-        await client.OpenAsync(Uri, Source);
-        Assert.Empty((await client.NextDiagnosticsAsync(Uri, cancellation)).Diagnostics);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(CancellationToken cancellation) =>
+        TestClient.OpenedCleanlyAsync(cancellation, (Uri, Source));
 }

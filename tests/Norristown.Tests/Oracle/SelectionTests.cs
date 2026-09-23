@@ -4,9 +4,9 @@ namespace Norristown.Tests.Oracle;
 
 /// <summary>
 /// Checks that <c>scripts/test.ps1 -Ca65 -Fixture &lt;text&gt;</c> ran something. Every oracle
-/// test restricts itself to the fixtures and programs the selection matches, and does nothing
-/// when it matches none, so a misspelled selection would otherwise pass with nothing checked —
-/// the worst outcome, since it looks exactly like the success the run was asking for.
+/// test restricts itself to the fixtures and programs the selection matches, and is skipped
+/// when it matches none. Without this check, a misspelled selection would skip every test,
+/// and a run with nothing but skips exits as successfully as one that checked everything.
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class SelectionTests
@@ -14,8 +14,8 @@ public sealed class SelectionTests
     [Fact]
     public void AFilterThatMatchesNothingFails()
     {
-        if (Repo.Selection is not { } filter)
-            return;
+        Assert.SkipWhen(Repo.Selection is null, "NT65_FIXTURE is not set, so there is no selection to check");
+        var filter = Repo.Selection;
         var fixtures = FixtureCase.All().Count;
         var programs = CorpusProgram.All().Count;
         Assert.True(fixtures + programs > 0,

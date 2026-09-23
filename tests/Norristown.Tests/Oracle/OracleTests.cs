@@ -15,9 +15,8 @@ public sealed partial class OracleTests
     [Fact]
     public void HandWrittenFilesAssembleCleanly()
     {
+        Assert.SkipWhen(Repo.Selection is not null, "NT65_FIXTURE selects fixtures and programs, and these files are neither");
         var files = Directory.GetFiles(Repo.Path("tests", "oracle"), "*.s").Order(StringComparer.Ordinal).ToList();
-        if (Repo.Selection is not null)
-            return;
         Assert.NotEmpty(files);
         var failures = Repo.CollectFailures(files, Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
@@ -59,8 +58,8 @@ public sealed partial class OracleTests
             .SelectMany(fixture => Compiler.Compile(fixture.Sources, fixture.Project, fixture.BinaryLength)
                 .Ca65.Select(o => (Fixture: fixture, Output: o)))
             .ToList();
-        if (Repo.Selection is null)
-            Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
+        Repo.RequireAny(outputs);
+        Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
 
         // Every fixture with no errors of its own must reach the assembler; one that quietly
         // produced nothing would be checked by nobody. A fixture that expects no output, as one
@@ -89,8 +88,7 @@ public sealed partial class OracleTests
     public void GeneratedOutputLinksWithHandWrittenCa65()
     {
         var linkable = FixtureCase.All().Where(fixture => LinkFiles(fixture) is not null).ToList();
-        if (Repo.Selection is null)
-            Assert.NotEmpty(linkable);
+        Repo.RequireAny(linkable);
 
         var failures = Repo.CollectFailures(linkable, Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));
@@ -116,11 +114,8 @@ public sealed partial class OracleTests
     [Fact]
     public void ACheckedImportWithTheWrongValueFailsTheLink()
     {
-        if (FixtureCase.All().SingleOrDefault(f => f.Name == "modules") is not { } fixture)
-        {
-            Assert.NotNull(Repo.Selection);
-            return;
-        }
+        Repo.SkipUnlessSelected("modules");
+        var fixture = FixtureCase.All().Single(f => f.Name == "modules");
         var (config, handWritten) = LinkFiles(fixture)!.Value;
         var wrong = handWritten
             .Select(file => (file.Name, Source: file.Source.Replace("HOST_VERSION = $0102", "HOST_VERSION = $0103")))
@@ -181,17 +176,10 @@ public sealed partial class OracleTests
                 .byte $00, $00, $00, $00
             """;
 
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)]);
         Assert.Empty(generated.Diagnostics);
 
-        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Ca65).Text)]);
-        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
-
-        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
-        Assert.True(fromHand.Succeeded, fromHand.Messages);
-        Assert.NotEmpty(fromHand.Binary);
-        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+        LinksLikeByHand(Assert.Single(generated.Ca65).Text, ByHand);
     }
 
     /// <summary>
@@ -248,18 +236,12 @@ public sealed partial class OracleTests
                 .byte $03
             """;
 
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile(
             [new SourceFile("main.nt65", Main), new SourceFile("part.nt65", Part)], Processor.Cpu.Mos6502);
         Assert.DoesNotContain(generated.Diagnostics, d => d.Severity == Severity.Error);
 
-        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", Assert.Single(generated.Ca65).Text)]);
-        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
-
-        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
-        Assert.True(fromHand.Succeeded, fromHand.Messages);
-        Assert.Equal([0xa9, 0xaa, 0x60, 0xa9, 0xcc, 0x60, 0xa9, 0xbb, 0x60, 0x01, 0x02, 0x03], fromHand.Binary);
-        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+        var linked = LinksLikeByHand(Assert.Single(generated.Ca65).Text, ByHand);
+        Assert.Equal([0xa9, 0xaa, 0x60, 0xa9, 0xcc, 0x60, 0xa9, 0xbb, 0x60, 0x01, 0x02, 0x03], linked);
     }
 
     /// <summary>
@@ -348,19 +330,13 @@ public sealed partial class OracleTests
                 .byte second - messages, third + 4 - messages, messages_end - messages
             """;
 
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
         Assert.Empty(generated.Diagnostics);
         var output = Assert.Single(generated.Ca65).Text;
         Assert.Contains(".byte $05, $13, $17", output, StringComparison.Ordinal);
 
-        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
-        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
-
-        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
-        Assert.True(fromHand.Succeeded, fromHand.Messages);
-        Assert.Equal([5, 19, 23], fromHand.Binary[^3..]);
-        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+        var linked = LinksLikeByHand(output, ByHand);
+        Assert.Equal([5, 19, 23], linked[^3..]);
     }
 
     /// <summary>
@@ -402,18 +378,12 @@ public sealed partial class OracleTests
                 rts
             """;
 
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
         Assert.Empty(generated.Diagnostics);
         var output = Assert.Single(generated.Ca65).Text;
         Assert.Contains("ERR_SYNTAX = $10", output, StringComparison.Ordinal);
 
-        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
-        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", ByHand)]);
-
-        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
-        Assert.True(fromHand.Succeeded, fromHand.Messages);
-        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+        LinksLikeByHand(output, ByHand);
     }
 
     /// <summary>
@@ -463,6 +433,24 @@ public sealed partial class OracleTests
         return (Repo.ReadText(config), [.. Directory.GetFiles(directory, "*.s")
             .Order(StringComparer.Ordinal)
             .Select(path => (Path.GetFileName(path), Repo.ReadText(path)))]);
+    }
+
+    /// <summary>
+    /// Links nt65's <paramref name="output"/> and the same program written <paramref name="byHand"/>
+    /// against the modules fixture's linker configuration. Checks that both link and that they
+    /// produce the same bytes, and returns those bytes for the caller to check further.
+    /// </summary>
+    private static byte[] LinksLikeByHand(string output, string byHand)
+    {
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
+        var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", byHand)]);
+
+        Assert.True(fromNt65.Succeeded, fromNt65.Messages);
+        Assert.True(fromHand.Succeeded, fromHand.Messages);
+        Assert.NotEmpty(fromHand.Binary);
+        Assert.Equal(fromHand.Binary, fromNt65.Binary);
+        return fromHand.Binary;
     }
 
     [Fact]

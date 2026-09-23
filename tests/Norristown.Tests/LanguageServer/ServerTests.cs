@@ -96,9 +96,7 @@ public sealed class ServerTests
     public async Task OutlineAndFoldingComeFromTheOpenDocument()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n");
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n"));
 
         var scope = Assert.Single(await client.SymbolsAsync(Uri, timeout));
         Assert.Equal("gfx", scope.Name);

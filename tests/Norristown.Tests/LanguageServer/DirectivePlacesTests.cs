@@ -229,7 +229,8 @@ public sealed class DirectivePlacesTests
             "a routine" => (".export .proc host {\n", "rts\n}\n"),
             "a macro body" => (".macro host() {\n", "}\n"),
             "a repetition" => (".repeat 2 {\n", "}\n"),
-            _ => ("", ""),
+            "file level" => ("", ""),
+            _ => throw new ArgumentOutOfRangeException(nameof(place), place, "no such place to write a snippet in"),
         };
         var head = Preamble.ReplaceLineEndings("\n") + before;
         return (head + written + (written.Length > 0 ? "\n" : "") + after, head.Split('\n').Length - 1);

@@ -54,6 +54,35 @@ internal sealed class TestClient : IAsyncDisposable
         StartAsync(null, null, cancellation, name);
 
     /// <summary>
+    /// Connects, opens each of <paramref name="files"/> in order, and waits for the diagnostics
+    /// published for the last of them. This is the setup most server tests share.
+    /// </summary>
+    public static async Task<TestClient> OpenedAsync(
+        CancellationToken cancellation, params (string Uri, string Text)[] files)
+    {
+        var client = await StartAsync(cancellation);
+        foreach (var (uri, text) in files)
+            await client.OpenAsync(uri, text);
+        await client.NextDiagnosticsAsync(files[^1].Uri, cancellation);
+        return client;
+    }
+
+    /// <summary>
+    /// Does what <see cref="OpenedAsync"/> does, and also checks that the last file has no
+    /// diagnostics. A test class uses it for the shared source its tests query, so that a
+    /// mistake in that source fails here and not as a puzzling answer later.
+    /// </summary>
+    public static async Task<TestClient> OpenedCleanlyAsync(
+        CancellationToken cancellation, params (string Uri, string Text)[] files)
+    {
+        var client = await StartAsync(cancellation);
+        foreach (var (uri, text) in files)
+            await client.OpenAsync(uri, text);
+        Assert.Empty((await client.NextDiagnosticsAsync(files[^1].Uri, cancellation)).Diagnostics);
+        return client;
+    }
+
+    /// <summary>
     /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
     /// <paramref name="configuration"/> as the configuration its settings choose.
     /// <paramref name="refreshesTokens"/> says the client can be asked to fetch semantic tokens again.

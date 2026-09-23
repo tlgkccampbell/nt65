@@ -110,11 +110,6 @@ public sealed class FormattingTests
             new { textDocument = new { uri = "file:///c:/work/src/nothing.nt65" } }, timeout));
     }
 
-    private static async Task<TestClient> OpenAsync(string text, CancellationToken timeout)
-    {
-        var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, text.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(Uri, timeout);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(string text, CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (Uri, text.ReplaceLineEndings("\n")));
 }

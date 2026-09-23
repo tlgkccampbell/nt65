@@ -113,9 +113,7 @@ public sealed class WorkspaceRequestsTests
     public async Task ARenameKeepsAnAliasApartFromTheNameItStandsFor()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(GfxUri, Gfx);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx));
         await client.OpenAsync(MainUri, ".module main\n.use gfx::clear as wipe\n.segment CODE\n.proc main {\n    jsr wipe\n    rts\n}\n");
         await NextForAsync(client, MainUri, timeout);
 
@@ -136,9 +134,7 @@ public sealed class WorkspaceRequestsTests
     public async Task NamingSomethingUnexportedIsReported()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(GfxUri, Gfx);
-        await client.NextDiagnosticsAsync(timeout);
+        await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx));
         await client.OpenAsync(MainUri, ".module main\nn = gfx::rows\n");
 
         var published = await NextForAsync(client, MainUri, timeout);

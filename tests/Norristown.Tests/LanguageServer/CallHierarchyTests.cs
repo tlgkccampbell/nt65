@@ -124,12 +124,6 @@ public sealed class CallHierarchyTests
         client.RequestAsync<IReadOnlyList<CallHierarchyItem>>("textDocument/prepareCallHierarchy",
             new { textDocument = new { uri }, position }, timeout);
 
-    private static async Task<TestClient> OpenAsync(CancellationToken timeout)
-    {
-        var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(GfxUri, Gfx.ReplaceLineEndings("\n"));
-        await client.OpenAsync(MainUri, Main.ReplaceLineEndings("\n"));
-        await client.NextDiagnosticsAsync(MainUri, timeout);
-        return client;
-    }
+    private static Task<TestClient> OpenAsync(CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (GfxUri, Gfx.ReplaceLineEndings("\n")), (MainUri, Main.ReplaceLineEndings("\n")));
 }

@@ -8,10 +8,31 @@ internal static class Repo
     /// <summary>
     /// The text NT65_FIXTURE gives (<c>scripts/test.ps1 -Fixture</c>), or null. Fixtures and
     /// corpus programs whose name contains it are the only ones run, and a test that needs
-    /// one particular case does nothing when it is not selected.
+    /// one particular case is skipped when it is not selected.
     /// </summary>
     public static string? Selection =>
         Environment.GetEnvironmentVariable("NT65_FIXTURE") is { Length: > 0 } text ? text : null;
+
+    /// <summary>
+    /// Skips the test when <see cref="Selection"/> is set and does not select
+    /// <paramref name="name"/>, for a test that checks one fixture or program by name. The test
+    /// is reported as skipped, so a selected run does not look as if it checked more than it did.
+    /// </summary>
+    public static void SkipUnlessSelected(string name) =>
+        Assert.SkipWhen(
+            Selection is { } filter && !name.Contains(filter, StringComparison.OrdinalIgnoreCase),
+            $"NT65_FIXTURE=\"{Selection}\" does not select {name}");
+
+    /// <summary>
+    /// Checks that a test has something to check. When <see cref="Selection"/> is set and
+    /// selects none of <paramref name="items"/>, the test is skipped; otherwise an empty list
+    /// fails it.
+    /// </summary>
+    public static void RequireAny<T>(IReadOnlyCollection<T> items)
+    {
+        Assert.SkipWhen(items.Count == 0 && Selection is not null, $"NT65_FIXTURE=\"{Selection}\" selects nothing this test checks");
+        Assert.NotEmpty(items);
+    }
 
     public static string Path(params string[] parts) => System.IO.Path.Combine([Root, .. parts]);
 

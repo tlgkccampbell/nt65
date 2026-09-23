@@ -14,8 +14,7 @@ public sealed class CorpusTests
     public void EveryProgramBuildsAssemblesToTheComputedLengthsAndLinks()
     {
         var programs = CorpusProgram.All();
-        if (Repo.Selection is null)
-            Assert.NotEmpty(programs);
+        Repo.RequireAny(programs);
         var failures = Repo.CollectFailures(programs, program => Check(program, program.Compile()));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
@@ -29,8 +28,7 @@ public sealed class CorpusTests
     public void WritingOutEveryCallLeavesTheProgramsTheSame()
     {
         var programs = CorpusProgram.All();
-        if (Repo.Selection is null)
-            Assert.NotEmpty(programs);
+        Repo.RequireAny(programs);
         var failures = Repo.CollectFailures(programs, program =>
         {
             long? Length(string path)

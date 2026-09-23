@@ -26,6 +26,10 @@ internal sealed partial class Ca65Oracle
     // not what the build produced, so a cached result is keyed on the binary that produced it: a
     // rebuilt ca65 that behaves differently must not be trusted with an old cache entry.
     private readonly string binary;
+
+    // A hash of the linker binary, for the same reason: a cached link is keyed on the ld65 that
+    // made it as well as on the ca65 that assembled its objects.
+    private readonly string linker;
     private readonly string? cacheDirectory;
 
     public Ca65Oracle(string ca65Path, string pinnedCommit, string? cacheDirectory)
@@ -39,6 +43,7 @@ internal sealed partial class Ca65Oracle
         cc65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "cc65.exe" : "cc65");
         commit = pinnedCommit;
         binary = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ca65Path)));
+        linker = File.Exists(ld65) ? Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ld65))) : "";
         this.cacheDirectory = cacheDirectory;
     }
 
@@ -151,51 +156,44 @@ internal sealed partial class Ca65Oracle
     /// checks that nt65's output assembles to an object file like any other: it links with
     /// modules written by hand, and a failing linker assertion in it is a link error. Paths are
     /// relative to one working tree, as for <see cref="Assemble"/>, and each file's own
-    /// directory is searched for what it includes.
+    /// directory is searched for what it includes. <paramref name="options"/> gives the extra
+    /// ca65 options for each file. Clean results are cached by content, as for
+    /// <see cref="Assemble"/>.
     /// </summary>
     public LinkResult Link(
         string config, IReadOnlyList<(string Name, string Source)> files,
         IReadOnlyList<(string Name, byte[] Content)>? alongside = null, bool debugFile = false,
         Func<string, IReadOnlyList<string>>? options = null)
     {
-        var work = Directory.CreateTempSubdirectory("nt65-ld65-");
-        try
+        var seed = new StringBuilder(commit).Append('\0').Append(binary).Append('\0').Append(linker)
+            .Append('\0').Append(debugFile).Append('\0').Append(config);
+        foreach (var (name, source) in files)
         {
-            File.WriteAllText(Path.Combine(work.FullName, "oracle-link.cfg"), config);
-            foreach (var (name, content) in alongside ?? [])
-                WriteBytes(work.FullName, name, content);
-            var objects = new List<string>();
-            foreach (var (name, source) in files)
-            {
-                WriteText(work.FullName, name, source);
-                var target = Path.ChangeExtension(name, ".o");
-                var include = Path.GetDirectoryName(name) is { Length: > 0 } directory ? directory : ".";
-                var (code, assembled) = Execute(ca65,
-                    ["-g", .. options?.Invoke(name) ?? [], "-I", include, "-o", target, name], work.FullName);
-                var said = Said(assembled);
-                if (code != 0 || said.Length > 0)
-                    return new LinkResult(false, $"ca65 on {name}:\n{said}", []);
-                objects.Add(target);
-            }
-
-            string[] dbg = debugFile ? ["--dbgfile", "linked.dbg"] : [];
-            var (exitCode, output) = Execute(ld65,
-                ["-C", "oracle-link.cfg", "-o", "linked.bin", .. dbg, .. objects.Order(StringComparer.Ordinal)],
-                work.FullName);
-            if (exitCode != 0 || output.Trim().Length > 0)
-                return new LinkResult(false, output.Trim(), []);
-
-            var binary = Path.Combine(work.FullName, "linked.bin");
-            var debug = Path.Combine(work.FullName, "linked.dbg");
-            return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : [])
-            {
-                DebugFile = File.Exists(debug) ? File.ReadAllText(debug) : "",
-            };
+            seed.Append('\0').Append(name).Append('\0').Append(source)
+                .Append('\0').AppendJoin(' ', options?.Invoke(name) ?? []);
         }
-        finally
+        foreach (var (name, content) in alongside ?? [])
+            seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
+        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
+        var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, key + ".link");
+
+        // An entry is the linked image in base64 on its first line, then the debug file.
+        if (cached is not null && File.Exists(cached))
         {
-            work.Delete(recursive: true);
+            var entry = File.ReadAllText(cached);
+            var split = entry.IndexOf('\n', StringComparison.Ordinal);
+            return new LinkResult(true, "", Convert.FromBase64String(entry[..split])) { DebugFile = entry[(split + 1)..] };
         }
+
+        var result = LinkUncached(config, files, alongside, debugFile, options);
+        if (result.Succeeded && cached is not null)
+        {
+            Directory.CreateDirectory(cacheDirectory!);
+            var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temp, Convert.ToBase64String(result.Binary) + "\n" + result.DebugFile);
+            File.Move(temp, cached, overwrite: true);
+        }
+        return result;
     }
 
     /// <summary>
@@ -271,4 +269,50 @@ internal sealed partial class Ca65Oracle
 
     [GeneratedRegex(@"^[0-9A-F]{6}[r ] (?<level>\d+)(?:[+ ] (?<bytes>.{0,13})(?<text>.*))?$")]
     private static partial Regex ListingRow();
+
+    /// <summary>Assembles and links the files for <see cref="Link"/>, which has found no cached result.</summary>
+    private LinkResult LinkUncached(
+        string config, IReadOnlyList<(string Name, string Source)> files,
+        IReadOnlyList<(string Name, byte[] Content)>? alongside, bool debugFile,
+        Func<string, IReadOnlyList<string>>? options)
+    {
+        var work = Directory.CreateTempSubdirectory("nt65-ld65-");
+        try
+        {
+            File.WriteAllText(Path.Combine(work.FullName, "oracle-link.cfg"), config);
+            foreach (var (name, content) in alongside ?? [])
+                WriteBytes(work.FullName, name, content);
+            var objects = new List<string>();
+            foreach (var (name, source) in files)
+            {
+                WriteText(work.FullName, name, source);
+                var target = Path.ChangeExtension(name, ".o");
+                var include = Path.GetDirectoryName(name) is { Length: > 0 } directory ? directory : ".";
+                var (code, assembled) = Execute(ca65,
+                    ["-g", .. options?.Invoke(name) ?? [], "-I", include, "-o", target, name], work.FullName);
+                var said = Said(assembled);
+                if (code != 0 || said.Length > 0)
+                    return new LinkResult(false, $"ca65 on {name}:\n{said}", []);
+                objects.Add(target);
+            }
+
+            string[] dbg = debugFile ? ["--dbgfile", "linked.dbg"] : [];
+            var (exitCode, output) = Execute(ld65,
+                ["-C", "oracle-link.cfg", "-o", "linked.bin", .. dbg, .. objects.Order(StringComparer.Ordinal)],
+                work.FullName);
+            if (exitCode != 0 || output.Trim().Length > 0)
+                return new LinkResult(false, output.Trim(), []);
+
+            var binary = Path.Combine(work.FullName, "linked.bin");
+            var debug = Path.Combine(work.FullName, "linked.dbg");
+            return new LinkResult(true, "", File.Exists(binary) ? File.ReadAllBytes(binary) : [])
+            {
+                DebugFile = File.Exists(debug) ? File.ReadAllText(debug) : "",
+            };
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
 }
