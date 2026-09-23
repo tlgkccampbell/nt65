@@ -2,65 +2,23 @@
   "version": "0.2.0",
   "configurations": [
     {
-      // Opens this repository in an Extension Development Host with the nt65 client
-      // loaded. The client starts the Debug build of the server, which the pre-launch
-      // task has just rebuilt.
+      // Starts an Extension Development Host with the nt65 client loaded, and no folder:
+      // open the repository or any example in it from there. The client starts the Debug
+      // build of the server, which the pre-launch task has just rebuilt.
       //
-      // --new-window is required, not a preference. This repository is already open in
-      // the window you press F5 in, and asking VS Code to open a folder it already has
-      // open makes it hand the request to that window and kill the one it just started
-      // ("Sent env to running instance. Terminating..."), so the development host closes
-      // the moment it appears.
+      // It opens no folder because the folder worth opening is usually this repository,
+      // which the window you press F5 in already has open, and VS Code hands a request to
+      // open a folder it already has to the window that has it.
       "name": "nt65 extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--new-window",
-        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
-        "${workspaceFolder}"
-      ],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/editors/vscode"],
       "preLaunchTask": "build",
       // The client is plain JavaScript beside its package.json. Without these, the debugger
       // looks for scripts and source maps across the whole repository, which holds the
       // extension's node_modules, the published server and the packages.
       "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
-      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
-      // The client starts the language server, which is a .NET process and not something
-      // the JavaScript debugger should follow into.
-      "autoAttachChildProcesses": false
-    },
-    {
-      // The same, opening the SNES example rather than the repository. Opening another folder
-      // from inside a development host restarts its extension host under the debugger, so
-      // this starts in the folder instead.
-      "name": "nt65 extension: SNES example",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": [
-        "--new-window",
-        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
-        "${workspaceFolder}/examples/lorom-template"
-      ],
-      "preLaunchTask": "build",
-      "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
-      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
-      "autoAttachChildProcesses": false
-    },
-    {
-      // The same, opening the monitor example. Its folder holds no project of its own: the
-      // server finds each platform's nt65.json beneath it, and the library with them.
-      "name": "nt65 extension: monitor example",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": [
-        "--new-window",
-        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
-        "${workspaceFolder}/examples/monitor"
-      ],
-      "preLaunchTask": "build",
-      "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
-      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
-      "autoAttachChildProcesses": false
+      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"]
     },
     {
       // The server runs as a child of the Extension Development Host, so it is attached
