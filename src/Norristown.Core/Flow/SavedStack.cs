@@ -53,12 +53,19 @@ public sealed class SavedStack : IEquatable<SavedStack>
             : RegisterValue.Unknown;
 
     /// <summary>
-    /// The stack with its top push taken off, or null when it holds none or the pull does not
-    /// match it, which leaves the stack somewhere nothing is known of.
+    /// The stack with its top push taken off, or null when the pull does not match it, which
+    /// leaves the stack somewhere nothing is known of.
+    /// <para>
+    /// A pull from an empty stack takes bytes the caller put there, such as the return address
+    /// a routine pulls to read what follows its call. What it gets is unknown, but the stack
+    /// stays empty rather than unknown, so what the routine pushes and pulls after it is still
+    /// followed. Two paths that meet having pulled different amounts both hold nothing known,
+    /// and every pull past what they push again gets back nothing known either.
+    /// </para>
     /// </summary>
     public SavedStack? Pull(PushSize size, Semantics.Width width) =>
-        pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
-            ? new SavedStack(pushes[..^1])
+        pushes.Length == 0 ? this
+            : pushes[^1].Size == size && pushes[^1].Width == width ? new SavedStack(pushes[..^1])
             : null;
 
     /// <summary>

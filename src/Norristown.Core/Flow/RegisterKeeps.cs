@@ -89,9 +89,14 @@ public static class RegisterKeeps
         // A label is treated as the routine it is inside: a jump into another routine's
         // interior leaves this routine for that one, so what it hands back is whatever that
         // routine hands back, the same answer a jump to the routine's entry gets.
+        //
+        // A routine that never returns hands nothing back to anyone, so it keeps everything:
+        // a path that calls it or jumps into it ends there, with no caller left to disappoint.
         RoutineRegisters Of(Symbol target)
         {
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            if (routine.Signature is { NeverReturns: true })
+                return RoutineRegisters.Everything;
             return found.TryGetValue(Named(routine), out var known) ? known
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
                 : RoutineRegisters.Nothing;

@@ -13,6 +13,8 @@
 .export main__keeps_the_carry
 .export main__handler
 .export main__draw_row
+.export main__expect_zero
+.export main__print
 
 CHROUT = $ffd2
 
@@ -77,3 +79,57 @@ draw_row__next:
     bne draw_row__next
     rts
 ; end of draw_row
+
+; .proc fail: noreturn  main.nt65:88
+fail:
+    ldy #0
+    jmp restart
+; end of fail
+
+; .proc restart: noreturn  main.nt65:93
+restart:
+    lda #$3f                        ; '?'
+    jsr CHROUT
+    jmp fail
+; end of restart
+
+; .proc expect_zero: keeps y  main.nt65:99
+main__expect_zero:
+    lda a:main__save_slot
+    bne expect_zero__wrong
+    rts
+expect_zero__wrong:
+    jmp fail
+; end of expect_zero
+
+.segment "ZEROPAGE": zeropage
+text: .res 2
+
+.segment "CODE": absolute
+; .proc print: inline .strz, keeps y  main.nt65:113
+main__print:
+    pla
+    sta z:text
+    pla
+    sta z:text+1
+    tya
+    pha
+    ldy #0
+print__next:
+    inc z:text
+    bne print__read
+    inc z:text+1
+print__read:
+    lda (text),y
+    beq print__done
+    jsr CHROUT
+    jmp print__next
+print__done:
+    pla
+    tay
+    lda z:text+1
+    pha
+    lda z:text
+    pha
+    rts
+; end of print

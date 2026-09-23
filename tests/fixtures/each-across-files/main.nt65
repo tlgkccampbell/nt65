@@ -1,0 +1,13 @@
+; A table built by walking an enum another file declares, whose file sorts after this one.
+.module main
+
+.cpu 6502
+
+.use modes::{Mode, width}
+
+.segment RODATA
+.export .data widths: .byte[] {
+    .each Mode, m {
+        width(m)
+    }
+}

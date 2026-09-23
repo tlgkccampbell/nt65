@@ -1820,7 +1820,10 @@ written. On the 65816 a push is as wide as the register, so a pull gets the valu
 where the width is the same at both — which a routine that changes neither width is, whatever
 those widths are. A save does not span a label anyone may jump into: the stack there is the one
 entering the routine leaves (§7.3), so a pull below such a label finds no push made above it,
-and a save and its restore belong on one side of it.
+and a save and its restore belong on one side of it. A pull of more than the routine has pushed
+takes bytes its caller put there, as a routine that returns past data after its call pulls its
+return address to read the data. What that pull gets is unknown, but the stack is not: what the
+routine pushes and pulls after it cancels as it would anywhere else.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
@@ -1840,7 +1843,10 @@ a jump through a pointer says where control goes, and a `.fallthrough` says it f
 routine that runs on into the next one. So a routine whose only way out hands control to another
 promises no more than the routine it hands off to: where that one promises nothing, this one can
 promise nothing, and what is reported names where control went, the routine it went to and the
-`keeps` that belongs there.
+`keeps` that belongs there. A `noreturn` routine is the exception, because it hands nothing back
+to anyone: it keeps everything, so a path that calls it or hands control to it ends there with
+nothing to check, which is what lets a routine that promises `keeps y` jump to an error handler
+that never comes back.
 
 **`keeps a, x` is the promise.** On a routine with a body it is checked at every `rts`, `rtl`
 and `rti`: a register the routine cannot be shown to hand back is reported there, with what to

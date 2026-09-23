@@ -1,0 +1,14 @@
+; An enum, and a function that chooses by which member it is given.
+.module modes
+
+.cpu 6502
+
+.export Mode, width
+
+.enum Mode {
+    none
+    byte
+    word
+}
+
+.func width(m) = .select(m == Mode::none, 0, .select(m == Mode::byte, 1, 2))

@@ -81,3 +81,58 @@
     bne @next
     rts
 }
+
+; A routine that never returns hands nothing back to anyone, so a way out through one has
+; nothing to keep: `expect_zero` keeps Y although `fail` does not, and `fail` and `restart`,
+; which hand control to each other for ever, change it.
+.proc fail: noreturn {
+    ldy #0
+    jmp restart
+}
+
+.proc restart: noreturn {
+    lda #'?'
+    jsr CHROUT
+    jmp fail
+}
+
+.export .proc expect_zero: keeps y {
+    lda save_slot
+    bne @wrong
+    rts
+@wrong:
+    jmp fail
+}
+
+; A routine that returns past the text after its call pulls its return address first. What that
+; pull gets is its caller's, but Y's save and restore after it still cancel.
+.segment ZEROPAGE
+.data text: .addr
+
+.segment CODE
+.export .proc print: inline .strz, keeps y {
+    pla
+    sta text
+    pla
+    sta text+1
+    tya
+    pha
+    ldy #0
+@next:
+    inc text
+    bne @read
+    inc text+1
+@read:
+    lda (text),y
+    beq @done
+    jsr CHROUT
+    jmp @next
+@done:
+    pla
+    tay
+    lda text+1
+    pha
+    lda text
+    pha
+    rts
+}

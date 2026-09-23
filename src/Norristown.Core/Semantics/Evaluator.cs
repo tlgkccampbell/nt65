@@ -588,6 +588,11 @@ internal sealed partial class Evaluator
                 Report(alone, Catalogue.NotDeclared.Says(alone.Text, ""));
             return Value.Unknown;
         }
+        // A binding that walks an enum stands for the member itself, which is asked for its
+        // value now: the value copied when the binding was made is unknown whenever the enum's
+        // file has not been evaluated yet, and which files have been depends on their order.
+        if (members.TryGetValue(symbol, out var member))
+            return Indexed(name, ValueOfSymbol(member));
         if (arguments.TryGetValue(symbol, out var argument))
             return Indexed(name, argument);
         return Indexed(name, symbol.Kind == SymbolKind.Member ? OffsetAlong(name) : ValueOfSymbol(symbol));
