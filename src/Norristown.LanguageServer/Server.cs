@@ -12,7 +12,7 @@ namespace Norristown.LanguageServer;
 // The Protocol folder holds hand-written LSP types, only for the messages the server
 // handles. Property names are camel-cased by the formatter.
 
-internal sealed class Server
+internal sealed class Server : IDisposable
 {
     /// <summary>How long after the last edit before the rest of the program's diagnostics are published.</summary>
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
@@ -36,6 +36,10 @@ internal sealed class Server
     // for a keystroke and publishing after the debounce can run at once, so both are concurrent.
     private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
+
+    // Held while every file is published, so that one publish of the whole program finishes
+    // before the next starts.
+    private readonly SemaphoreSlim publishing = new(1, 1);
     private JsonRpc? rpc;
 
     // What the client supports, and the last step every answer passes through on its way out.
@@ -106,7 +110,7 @@ internal sealed class Server
     public static async Task<int> RunAsync(Stream input, Stream output, ServerLog log, Delay? delay = null)
     {
         using var framing = new Framing(input, output, CreateFormatter());
-        var server = new Server(log, framing, delay ?? Task.Delay);
+        using var server = new Server(log, framing, delay ?? Task.Delay);
         using var rpc = new JsonRpc(framing);
         server.rpc = rpc;
         rpc.AddLocalRpcTarget(server, new JsonRpcTargetOptions { UseSingleObjectParameterDeserialization = true });
@@ -135,10 +139,17 @@ internal sealed class Server
             await server.ShowAsync(MessageType.Error, $"nt65: internal error: {e.Message}").ConfigureAwait(false);
             return 70;
         }
-        finally
-        {
-            server.parent?.Dispose();
-        }
+    }
+
+    /// <summary>
+    /// Cancels any publish still waiting for typing to stop, and releases the editor process
+    /// handle and the publishing lock.
+    /// </summary>
+    public void Dispose()
+    {
+        settling.Dispose();
+        publishing.Dispose();
+        parent?.Dispose();
     }
 
     [JsonRpcMethod("initialize")]
@@ -752,11 +763,15 @@ internal sealed class Server
     /// sent again.
     /// </summary>
     private void PublishTheRestSoon(string changed) =>
-        settling.After(async () =>
+        settling.After(async cancellation =>
         {
             try
             {
-                await PublishEverythingAsync(changed, CancellationToken.None).ConfigureAwait(false);
+                await PublishEverythingAsync(changed, cancellation).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                // A later edit replaced this publish, and that edit's publish sends every file.
             }
             catch (Exception e) when (e is ConnectionLostException or ObjectDisposedException)
             {
@@ -780,6 +795,24 @@ internal sealed class Server
     /// </param>
     private async Task PublishEverythingAsync(
         string? changed, CancellationToken cancellation, bool refresh = true)
+    {
+        // One publish runs at a time. Two at once would interleave their notifications, and
+        // both could register the watch on the binaries.
+        await publishing.WaitAsync(cancellation).ConfigureAwait(false);
+        try
+        {
+            await PublishEverythingInTurnAsync(changed, refresh, cancellation).ConfigureAwait(false);
+        }
+        finally
+        {
+            publishing.Release();
+        }
+    }
+
+    /// <summary>
+    /// Does the work of <see cref="PublishEverythingAsync"/> while it holds the publishing lock.
+    /// </summary>
+    private async Task PublishEverythingInTurnAsync(string? changed, bool refresh, CancellationToken cancellation)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
         foreach (var file in workspace.ToPublish())
