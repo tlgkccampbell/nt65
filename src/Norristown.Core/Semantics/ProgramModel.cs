@@ -529,9 +529,7 @@ public sealed class ProgramModel
             DiagnosticMessage? said = declared.IsFar != actual.IsFar
                 ? Catalogue.AliasDistanceMismatch.Says(
                     alias.Name, declared.Distance, routine.DisplayName, actual.Distance)
-                : declared.Entry != actual.Entry || declared.Exit != actual.Exit || declared.Inline != actual.Inline
-                    || declared.IsInterrupt != actual.IsInterrupt || declared.NeverReturns != actual.NeverReturns
-                    || declared.Arguments != actual.Arguments
+                : declared != actual
                     ? Catalogue.AliasSignatureMismatch.Says(alias.Name, declared, routine.DisplayName, actual)
                     : (DiagnosticMessage?)null;
             if (said is { } problem)

@@ -87,6 +87,22 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     }
 
     /// <summary>
+    /// Returns whether two signatures declare the same thing. The syntax each was read from is
+    /// not compared, so a routine and another name for it can be checked against each other.
+    /// An <c>inline</c> item is compared by its text, because its count is evaluated where the
+    /// routine is called.
+    /// </summary>
+    public bool Equals(Signature? other) =>
+        other is not null
+        && Entry == other.Entry && Exit == other.Exit && IsFar == other.IsFar
+        && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
+        && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps;
+
+    /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
+    public override int GetHashCode() =>
+        HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps);
+
+    /// <summary>
     /// What a proc, an extern proc or an import writes, as far as it can be read from its
     /// syntax alone: the signature sets it names are ignored, and the values of its items are
     /// unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is

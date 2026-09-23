@@ -131,5 +131,5 @@ internal static class FileInterface
 
     // A signature is compared by what it declares, not by the syntax it was read from.
     private static string Spell(Signature signature) =>
-        $"{signature.Entry} -> {signature.Exit} {signature.Distance} {signature.Inline?.Text} {signature.Arguments} {signature.NeverReturns}";
+        $"{signature.Entry} -> {signature.Exit} {signature.Distance} {signature.Inline?.Text} {signature.Arguments} {signature.NeverReturns} {signature.Keeps}";
 }

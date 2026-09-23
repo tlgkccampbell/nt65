@@ -164,6 +164,23 @@ public sealed class ConstantTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("CHROUT").AddressSize);
     }
 
+    /// <summary>
+    /// An extern proc that names another routine must declare that routine's signature. The
+    /// check compares what each signature declares, not the syntax it was written with, so a
+    /// matching <c>inline</c> item is accepted and a differing <c>keeps</c> is reported.
+    /// </summary>
+    [Theory]
+    [InlineData("inline .strz", "inline .strz", false)]
+    [InlineData("keeps x", "keeps x", false)]
+    [InlineData("keeps x", "keeps a", true)]
+    public void AnotherNameForARoutineDeclaresTheSameSignature(string routine, string alias, bool reported)
+    {
+        var problems = Analysis.Program(
+            ("main.nt65", $".module main\n.export .proc print = $ffd2: {routine}\n.export .proc say = print: {alias}\n")).Problems();
+
+        Assert.Equal(reported, problems.Any(problem => problem.Contains("must declare the same signature", StringComparison.Ordinal)));
+    }
+
     /// <summary>An import may give its value, which nt65 then uses everywhere, or its address size; one that gives neither is absolute.</summary>
     [Fact]
     public void ImportsCarryTheirValueOrTheirSize()

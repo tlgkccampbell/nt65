@@ -108,6 +108,30 @@ public sealed class IncrementalAnalysisTests
             Compiler.Analyze([native], project, Nothing, first).WholeProgram);
     }
 
+    /// <summary>
+    /// Changing only which registers a routine keeps is a change to its signature, so a file
+    /// that calls the routine is analyzed again. Here the caller promises to keep X and relies
+    /// on the routine it calls to keep it too.
+    /// </summary>
+    [Fact]
+    public void ChangingOnlyWhatARoutineKeepsReachesItsCallers()
+    {
+        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.export .proc helper = $fff0: keeps x\n");
+        var main = SyntaxTree.Parse("main.nt65",
+            ".module main\n.use lib::helper\n.segment CODE\n.export .proc main: keeps x {\n    jsr helper\n    rts\n}\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([lib, main], project, Nothing);
+        Assert.Empty(first.Diagnostics);
+
+        var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("keeps x", StringComparison.Ordinal), 7, "keeps a"));
+        var incremental = Compiler.Analyze([edited, main], project, Nothing, first);
+        var scratch = Compiler.Analyze([edited, main], project, Nothing);
+
+        Assert.NotEmpty(scratch.Diagnostics);
+        Assert.Equal(scratch.Problems(), incremental.Problems());
+    }
+
     /// <summary>No file of these programs has an <c>.incbin</c> in it.</summary>
     private static long? Nothing(string path) => null;
 
