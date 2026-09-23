@@ -14,14 +14,15 @@ public sealed class NamespaceOrderTests
 {
     /// <summary>
     /// The layers, lowest first. Syntax knows nothing of the processor, so every operand form
-    /// parses under every CPU; the processor's tables know nothing of what a program means;
+    /// parses under every CPU; the modules that come with nt65 are only source it has parsed; the
+    /// processor's tables know nothing of what a program means;
     /// semantics comes before layout, which assigns the bytes; the project layer sits above
     /// semantics, because the project file's segments and addresses are checked the same way a
     /// source file's are; the flow analysis reads a layout; and emission draws on all of them.
     /// </summary>
     private static readonly string[] Order =
     [
-        "Norristown.Syntax", "Norristown.Processor", "Norristown.Semantics", "Norristown.Project",
+        "Norristown.Syntax", "Norristown.Standard", "Norristown.Processor", "Norristown.Semantics", "Norristown.Project",
         "Norristown.Layout", "Norristown.Flow", "Norristown.Emit",
     ];
 

@@ -628,6 +628,13 @@ public static class Catalogue
         "A module name is the path everything in it is reached by, and the name its output file is named after, so "
             + "two files may not share one.");
 
+    internal static DiagnosticDescriptor ModuleNameReserved { get; } = Entry(
+        "module-name-reserved",
+        Severity.Error,
+        "module `{0}` is under `nt65`, which is reserved for the modules that come with nt65",
+        "The modules under `nt65`, such as `nt65::cbm`, come with nt65 and join any program that names them. "
+            + "A module of the program's own under that root could collide with one, now or in a later version.");
+
     internal static DiagnosticDescriptor ModuleNamesDifferInCase { get; } = Entry(
         "module-names-differ-in-case",
         Severity.Error,

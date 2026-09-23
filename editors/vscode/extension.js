@@ -171,7 +171,9 @@ async function activate(context) {
   client = new LanguageClient('nt65', 'nt65',
     serverOptions(context),
     {
-      documentSelector: [{ language: 'nt65' }],
+      // Only files are the program's. A module that comes with nt65 is shown under an `nt65:`
+      // URI, read-only, and is not a document the server is told about.
+      documentSelector: [{ scheme: 'file', language: 'nt65' }, { scheme: 'untitled', language: 'nt65' }],
       middleware: views.middleware,
       initializationOptions: {
         configuration: vscode.workspace.getConfiguration('nt65').get('configuration'),
@@ -191,6 +193,12 @@ async function activate(context) {
     vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
     vscode.commands.registerCommand('nt65.rename', renameAt),
     vscode.commands.registerCommand('nt65.restartServer', () => client.restart()),
+    // A definition or reference that leads into a module that comes with nt65 opens its source,
+    // which no file holds, so the server supplies the text.
+    vscode.workspace.registerTextDocumentContentProvider('nt65', {
+      provideTextDocumentContent: uri =>
+        client.sendRequest('nt65/standardModule', { textDocument: { uri: uri.toString() } }),
+    }),
     vscode.tasks.registerTaskProvider('nt65', {
       provideTasks: () => buildTasks(context),
 

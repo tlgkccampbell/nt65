@@ -1,0 +1,59 @@
+; Text for Commodore's 8-bit machines, from the VIC-20 on.
+;
+; The machine shows one of two character sets. The uppercase and graphics set, which it starts
+; in, has no lower case; the lowercase and uppercase set has both. The same byte shows a
+; different character in each, so each set has its charmaps, and a character the set lacks is
+; an error rather than the graphic that shares its code.
+;
+; PETSCII is what the KERNAL's CHROUT and BASIC's PRINT take. Screen codes are what screen
+; memory holds, one glyph each; bit 7 shows the glyph in reverse.
+.module nt65::cbm
+
+.export petscii, petscii_lower, screen, screen_lower
+
+; PETSCII, with the uppercase and graphics set showing.
+.charmap petscii {
+    ' '..'Z' = $20
+    '['      = $5B
+    '£'      = $5C
+    ']'      = $5D
+    '↑'      = $5E
+    '←'      = $5F
+}
+
+; PETSCII, with the lowercase and uppercase set showing.
+.charmap petscii_lower {
+    ' '..'@' = $20
+    'a'..'z' = $41
+    '['      = $5B
+    '£'      = $5C
+    ']'      = $5D
+    '↑'      = $5E
+    '←'      = $5F
+    'A'..'Z' = $C1
+}
+
+; Screen codes, with the uppercase and graphics set showing.
+.charmap screen {
+    '@'      = $00
+    'A'..'Z' = $01
+    '['      = $1B
+    '£'      = $1C
+    ']'      = $1D
+    '↑'      = $1E
+    '←'      = $1F
+    ' '..'?' = $20
+}
+
+; Screen codes, with the lowercase and uppercase set showing.
+.charmap screen_lower {
+    '@'      = $00
+    'a'..'z' = $01
+    '['      = $1B
+    '£'      = $1C
+    ']'      = $1D
+    '↑'      = $1E
+    '←'      = $1F
+    ' '..'?' = $20
+    'A'..'Z' = $41
+}

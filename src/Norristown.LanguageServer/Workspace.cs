@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Project;
+using Norristown.Standard;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
@@ -43,6 +44,8 @@ internal sealed class Workspace
     /// </summary>
     public static string PathOf(string uri)
     {
+        if (Lsp.StandardPath(uri) is { } standard)
+            return standard;
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile)
             return uri;
         // VS Code escapes a drive's colon, `file:///c%3A/src`, which .NET does not take for a
@@ -386,14 +389,14 @@ internal sealed class Workspace
                 found[project.File] = (analysis, null);
                 foreach (var file in analysis.Program.Files)
                 {
-                    if (Owner(file.Tree.Path) == project)
+                    if (Owner(file.Tree.Path) == project && !StandardModules.IsStandard(file.Tree.Path))
                         found[file.Tree.Path] = (analysis, file.Tree);
                 }
             }
             if (open.Values.Any(document => Owner(document.Tree.Path) is null))
             {
                 var analysis = Loose();
-                foreach (var file in analysis.Program.Files)
+                foreach (var file in analysis.Program.Files.Where(file => !StandardModules.IsStandard(file.Tree.Path)))
                     found[file.Tree.Path] = (analysis, file.Tree);
             }
             return [.. found

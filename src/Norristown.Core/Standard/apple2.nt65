@@ -1,0 +1,31 @@
+; Text for the Apple II family.
+;
+; The screen shows each byte as a character in normal, inverse or flashing video, by its top
+; two bits. Normal video has bit 7 set, as COUT and the monitor take it. Only the IIe and later
+; show lower case, so it has a charmap of its own; on an earlier machine those codes show
+; capitals and signs again.
+.module nt65::apple2
+
+.export normal, normal_lower, inverse, flash
+
+; Normal video, as every Apple II shows it.
+.charmap normal {
+    ' '..'_' = $A0
+}
+
+; Normal video with lower case, as the IIe and later show it.
+.charmap normal_lower {
+    ' '..'~' = $A0
+}
+
+; Inverse video.
+.charmap inverse {
+    '@'..'_' = $00
+    ' '..'?' = $20
+}
+
+; Flashing video, in the primary character set.
+.charmap flash {
+    '@'..'_' = $40
+    ' '..'?' = $60
+}

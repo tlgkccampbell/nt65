@@ -20,4 +20,8 @@
   <ItemGroup>
     <Compile Remove="Generated\**" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The modules that come with nt65, read by StandardModules under their file names. -->
+    <EmbeddedResource Include="Standard\*.nt65" LogicalName="Norristown.Standard.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

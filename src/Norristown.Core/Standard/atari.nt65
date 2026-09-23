@@ -1,0 +1,31 @@
+; Text for Atari's 8-bit computers.
+;
+; ATASCII is what CIO and BASIC's PRINT take. It agrees with ASCII from space to `_` and on the
+; lower case, and puts graphics where ASCII has a few other characters; the card suits are
+; among them. The screen holds internal codes instead, which are ATASCII in another order; bit
+; 7 shows a character in inverse video.
+.module nt65::atari
+
+.export atascii, screen
+
+; ATASCII.
+.charmap atascii {
+    '♥'      = $00
+    '♣'      = $10
+    ' '..'_' = $20
+    '♦'      = $60
+    'a'..'z' = $61
+    '♠'      = $7B
+    '|'      = $7C
+}
+
+; Internal codes, as screen memory holds them.
+.charmap screen {
+    ' '..'_' = $00
+    '♥'      = $40
+    '♣'      = $50
+    '♦'      = $60
+    'a'..'z' = $61
+    '♠'      = $7B
+    '|'      = $7C
+}

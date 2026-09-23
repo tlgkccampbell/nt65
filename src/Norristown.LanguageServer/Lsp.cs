@@ -3,6 +3,7 @@ using Norristown.Flow;
 using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
+using Norristown.Standard;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
@@ -871,7 +872,16 @@ internal static class Lsp
 
     /// <summary>The name at <paramref name="position"/>, which is what a rename would replace.</summary>
     public static Protocol.Range? ToRenameRange(SemanticModel model, int position) =>
-        model.ReferenceAt(position) is { } reference ? ToRange(model.Tree, reference.Span) : null;
+        model.ReferenceAt(position) is { } reference && !IsStandard(reference)
+            ? ToRange(model.Tree, reference.Span)
+            : null;
+
+    /// <summary>
+    /// Whether a reference names what a module that comes with nt65 declares, which no edit can
+    /// rename. An alias written with <c>as</c> is the program's own, and can be.
+    /// </summary>
+    private static bool IsStandard(SymbolReference reference) =>
+        !reference.IsAlias && StandardModules.IsStandard(reference.Symbol.Tree.Path);
 
     /// <summary>
     /// Renaming every occurrence of the name at <paramref name="position"/>, or the reason
@@ -882,6 +892,8 @@ internal static class Lsp
     {
         if (model.ReferenceAt(position) is not { } reference)
             return (null, "there is no name here to rename");
+        if (IsStandard(reference))
+            return (null, $"`{reference.Symbol.Name}` comes with nt65 and cannot be renamed; bring it in under a name of your own with `.use ... as`");
         if (CheckNewName(program.Current(reference.Symbol), newName, reference.IsAlias ? model.FileScope : null) is { } problem)
             return (null, problem);
 
@@ -1039,13 +1051,24 @@ internal static class Lsp
     };
 
     /// <summary>
+    /// What the URI of a module that comes with nt65 starts with. No file holds one, so the
+    /// client asks the server for its text (<c>nt65/standardModule</c>) and shows it read-only.
+    /// </summary>
+    internal const string StandardScheme = "nt65:/";
+
+    /// <summary>The logical path of the module that comes with nt65 at <paramref name="uri"/>, or null for any other URI.</summary>
+    internal static string? StandardPath(string uri) =>
+        uri.StartsWith(StandardScheme, StringComparison.Ordinal) ? StandardModules.PathOf(uri[StandardScheme.Length..]) : null;
+
+    /// <summary>
     /// A logical path converted back to a URI, as for a diagnostic that points into another
     /// file. A Windows path parses as an absolute URI, drive letter and all, wherever nt65 is
     /// running; a rooted Unix path does not parse as a URI on any host, so a file URI is built
     /// for it. A relative path is one the editor supplied and is returned unchanged.
     /// </summary>
     internal static string ToUri(string path) =>
-        Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri
+        StandardModules.IsStandard(path) ? StandardScheme + StandardModules.FileOf(path)
+        : Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.AbsoluteUri
             : path.StartsWith('/')
                 ? new UriBuilder(Uri.UriSchemeFile, string.Empty) { Path = path }.Uri.AbsoluteUri
                 : path;

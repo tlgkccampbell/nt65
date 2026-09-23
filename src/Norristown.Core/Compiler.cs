@@ -4,6 +4,7 @@ using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Project;
 using Norristown.Semantics;
+using Norristown.Standard;
 using Norristown.Syntax;
 
 namespace Norristown;
@@ -57,10 +58,11 @@ public static class Compiler
         {
             var model = analysis.Program.Files[i];
 
-            // The defines are not a file anyone wrote, and nothing is written for them. A module
-            // that another module places has no output of its own: it is written into the output
-            // of its translation unit.
-            if (model.Tree == analysis.Defines || analysis.Placements.PlacerOf(model.Tree) is not null)
+            // The defines and the modules that come with nt65 are not files anyone wrote, and
+            // nothing is written for them. A module that another module places has no output of
+            // its own: it is written into the output of its translation unit.
+            if (model.Tree == analysis.Defines || StandardModules.IsStandard(model.Tree.Path)
+                || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
             var written = Written(analysis, project, i, measured, diagnostics);
@@ -110,7 +112,8 @@ public static class Compiler
     /// <param name="path">The logical path of the source to write.</param>
     public static OutputFile? EmitFile(ProgramAnalysis analysis, ProjectSettings project, string path)
     {
-        if (analysis.ModelFor(path) is not { } model || model.Tree == analysis.Defines)
+        if (analysis.ModelFor(path) is not { } model || model.Tree == analysis.Defines
+            || StandardModules.IsStandard(path))
             return null;
         var root = analysis.Placements.UnitOf(model.Tree)?.Root.Path ?? path;
         var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
@@ -215,7 +218,12 @@ public static class Compiler
     private static ProgramAnalysis AnalyzeAll(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength)
     {
-        var trees = files.OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
+        // The modules that come with nt65 join a program that could name them. A caller that
+        // passes back the files of an earlier analysis passes them too, and they are not its own.
+        var trees = files.Where(tree => !StandardModules.IsStandard(tree.Path))
+            .OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
+        if (StandardModules.Wanted(trees))
+            trees.AddRange(StandardModules.Trees);
 
         // How long each `.incbin` file was taken to be is kept, so that a later edit can tell
         // whether one changed on disk since.
@@ -299,9 +307,15 @@ public static class Compiler
         if (previous.Reused is not { } reuse || reuse.Project != project)
             return null;
         reason = WholeProgramReason.FilesAddedOrRemoved;
-        var sources = files.ToDictionary(tree => tree.Path, StringComparer.Ordinal);
-        var written = reuse.Trees.Where(tree => tree != previous.Defines).ToList();
+        var sources = files.Where(tree => !StandardModules.IsStandard(tree.Path))
+            .ToDictionary(tree => tree.Path, StringComparer.Ordinal);
+        var written = reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path)).ToList();
         if (sources.Count != written.Count || written.Any(tree => !sources.ContainsKey(tree.Path)))
+            return null;
+
+        // An edit that first mentions nt65's own modules, or takes away the last mention, adds
+        // them to the program or takes them out.
+        if (StandardModules.Wanted(sources.Values) != reuse.Trees.Any(tree => StandardModules.IsStandard(tree.Path)))
             return null;
 
         // An `.incbin` file that changed on disk changes every file that includes it, whether or
@@ -522,6 +536,7 @@ public static class Compiler
                 found.Add(file.Tree.Path);
         }
         found.Remove(Defines.Path);
+        found.RemoveWhere(StandardModules.IsStandard);
         return [.. found];
 
         // The other sources a file names, and the binaries it includes.

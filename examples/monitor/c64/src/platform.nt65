@@ -9,7 +9,7 @@
 .use monitor::parse::line
 
 .export LINE_LENGTH, NEWLINE, putc, read_line, exit, start
-.export .use cbm::petscii as text   ; the KERNAL reads and writes PETSCII
+.export .use nt65::cbm::petscii as text  ; the KERNAL reads and writes PETSCII
 
 LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
 NEWLINE = $0D                       ; RETURN

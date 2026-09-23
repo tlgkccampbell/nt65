@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Semantics;
+using Norristown.Standard;
 using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
@@ -333,6 +334,18 @@ internal sealed class Server
     /// squiggles do.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The source of a module that comes with nt65, which no file on disk holds. A definition or
+    /// reference that leads into one gives an <c>nt65:</c> URI, and the client asks for the text
+    /// to show under it, read-only.
+    /// </summary>
+    [JsonRpcMethod("nt65/standardModule")]
+    public string? StandardModule(StandardModuleParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        return StandardModules.Text(Workspace.PathOf(request.TextDocument.Uri));
+    }
+
     [JsonRpcMethod("nt65/output")]
     public OutputResult? Output(OutputParams request, CancellationToken cancellation)
     {

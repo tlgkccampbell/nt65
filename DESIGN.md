@@ -2127,6 +2127,23 @@ A mapping may name any character, ASCII or not, and a character with no mapping 
 error when the mapping is applied. A mapping is an ordinary declaration,
 exported and used across modules like a constant.
 
+**Charmaps that come with nt65.** The machines whose text has no standard of its own have
+charmaps in modules that come with nt65, under the root `nt65`:
+
+| module | charmaps |
+|---|---|
+| `nt65::cbm` | `petscii` and `screen`, with the uppercase and graphics set showing; `petscii_lower` and `screen_lower`, with the lowercase and uppercase set |
+| `nt65::atari` | `atascii`, and `screen` for the internal codes screen memory holds |
+| `nt65::apple2` | `normal`, `inverse` and `flash`, and `normal_lower` for the IIe and later |
+
+Each set has its own charmaps, so a character the set lacks is an error rather than the graphic
+that shares its code: `nt65::cbm::petscii("Hi")` is refused, because the set the C64 starts in
+has no lower case. The modules are written in nt65 and built into it. They join a program with
+a file that names `nt65`, are reached and brought in like any module (`.use nt65::cbm::screen`),
+and write no output, since a charmap crosses modules by value. A library that runs on several
+machines takes its charmap from the program, as a name a module of each program re-exports:
+`.export .use nt65::cbm::petscii as text` (§12).
+
 **Text.** A text is a string of bytes. A string literal writes one, ASCII outside a charmap and
 `\xHH` for any byte. Text is usable in data, in a `.strz`, as what a charmap is applied to, in
 `.strlen` and `.strat`, as a `.type` member's value and as a macro argument, and wherever one is
@@ -2931,7 +2948,8 @@ Every file is a module, and says which first:
 .module gfx::sprite
 ```
 
-A file without one is an error, a single-file build included, and two files may not be the
+A file without one is an error, a single-file build included, and no module of a program's
+may be `nt65` or under it, which is reserved for the modules that come with nt65 (§8). Two files may not be the
 same module. A module's name may be a path, and a path is only a name: `gfx::sprite` needs no
 module `gfx`, and has no special view into it or into `gfx::tile`. **A module is one file**,
 and unless something places it (below) it is one ca65 translation unit. That buys what no
@@ -4750,7 +4768,7 @@ has been seen so far, or on `.set`), **layout** (depends on addresses or distanc
 | setting D and B, such as libSFX's `dpage` and `dbank` | flow | recognized idioms (§7.5); a macro is fine |
 | an offset from the current direct page, such as libSFX's `dpo()` | order | `d:` (§7.5) |
 | stack frames with `tsc` and `tcs` and `.struct` offsets on `,s` | flow | `.frame` (§7.3) |
-| screen codes, `scrcode` (cbm, apple2, atari), recursing over nine parameters | text | `.charmap` (§8) |
+| screen codes, `scrcode` (cbm, apple2, atari), recursing over nine parameters | text | the charmaps of `nt65::cbm`, `nt65::apple2` and `nt65::atari` (§8) |
 | records: metasprites, actors, level objects | none, but the label has no fields | initialized `.type T { }` data (§6.3), or a macro when computed |
 | terminated lists, computed tables, register-init pairs | none | macros, `.repeat`, `.each` and `.func` |
 | file and cartridge headers: iNES, the C64 BASIC stub, Atari XEX | layout | `.endof` and `.spanof` (§7.6) with macros |

@@ -107,9 +107,8 @@ editor a library file shows as part of the first platform's program.
   which is why a line already on the screen can be entered again, and the KERNAL writes each
   character; `putc` is the KERNAL's `CHROUT` itself, declared with the registers it keeps. A
   `BRK` comes in through the KERNAL's BRK vector, below the registers the KERNAL pushed. It
-  re-exports `cbm::petscii` as `text`, and switches the machine to the uppercase and graphics
-  characters that charmap is written for.
-- `c64/src/cbm.nt65`: PETSCII as a charmap, with the uppercase and graphics characters showing.
+  re-exports `nt65::cbm::petscii`, which comes with nt65, as `text`, and switches the machine to
+  the uppercase and graphics characters that charmap is written for.
 - `c64/src/stub.nt65`: the load address and the BASIC line `10 SYS2061`, whose digits are
   worked out from the address it names.
 - `c64/c64.cfg`: the linker configuration, which puts the monitor where BASIC programs load

@@ -509,6 +509,24 @@ the text is written:
 
 A character the map does not name is an error where the map is applied.
 
+The Commodore, Atari and Apple II machines' own characters come with nt65, as charmaps in the
+modules `nt65::cbm`, `nt65::atari` and `nt65::apple2`:
+
+```nt65
+.use nt65::cbm::{petscii, screen}
+
+.data prompt: .byte petscii("READY."), $0D     ; for CHROUT
+.data banner: .byte screen("SCORE")             ; for screen memory
+```
+
+Each character set has charmaps of its own, since the same byte shows a different character in
+each: `petscii` and `screen` are for the uppercase and graphics set the C64 starts in, which has
+no lower case, and `petscii_lower` and `screen_lower` for the other. Writing `petscii("Hi")` is
+an error rather than a graphic on the screen. Atari's are `atascii` and `screen`, and the Apple
+II's are `normal`, `inverse`, `flash`, and `normal_lower` for the IIe and later. Code shared
+between machines names none of them itself; see the monitor example, whose `platform` module
+re-exports its machine's charmap as `text`.
+
 **Text is a value.** A constant may hold text, `TITLE = "NT65"`, and a `.func` may return it.
 `.strlen(s)` is its length, `.strat(s, i)` the byte at `i`, `.strsub(s, start, count)` a part
 of it and `.strcat(...)` joins texts and bytes. That covers what ca65 code uses `.sprintf`,
@@ -1554,7 +1572,7 @@ CPUs that have it.
 | unnamed labels `:`, `:+`, `:-` | `@name` |
 | `.ident`, `.concat` to build names | a scope, or `.each` over an enum |
 | `.sprintf`, `.concat` and `.left` on text | `.strcat`, `.strsub` and `.strat`, in a `.func` |
-| `.feature`, `.macpack` | nothing: one grammar, and long branches are built in |
+| `.feature`, `.macpack` | nothing: one grammar, long branches are built in, and `scrcode` is a charmap of `nt65::cbm`, `nt65::atari` or `nt65::apple2` |
 | `.constructor`, `.destructor`, `.interruptor` | a ca65 stub that calls the nt65 routine |
 
 ### Macros

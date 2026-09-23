@@ -1,0 +1,10 @@
+; A machine's own characters, from the modules that come with nt65.
+.module machines
+
+.use nt65::cbm::{petscii, screen}
+
+.export prompt, banner
+
+.segment RODATA
+.data prompt: .byte petscii("READY."), $0D     ; for CHROUT
+.data banner: .byte screen("SCORE")             ; for screen memory

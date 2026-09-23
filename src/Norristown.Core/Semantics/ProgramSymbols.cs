@@ -1,3 +1,4 @@
+using Norristown.Standard;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -51,6 +52,11 @@ public sealed class ProgramSymbols
         {
             if (module.Name is not { } name)
                 continue;
+            if (StandardModules.IsReserved(name) && !StandardModules.IsStandard(module.Tree.Path))
+            {
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Catalogue.ModuleNameReserved.Says(name)));
+                continue;
+            }
             if (byName.TryGetValue(name, out var other))
             {
                 diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
