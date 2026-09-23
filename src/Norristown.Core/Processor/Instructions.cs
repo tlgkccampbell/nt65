@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using Norristown.Syntax;
+using static Norristown.Syntax.MnemonicKind;
 
 namespace Norristown.Processor;
 
@@ -10,39 +11,39 @@ namespace Norristown.Processor;
 /// </summary>
 public static class Instructions
 {
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> mos6502 = Build6502();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> mos6502 = Build6502();
 
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> mos6502X = Build6502X();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> mos6502X = Build6502X();
 
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> cmos65SC02 = Build65SC02();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> cmos65SC02 = Build65SC02();
 
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> rockwell65C02 = BuildRockwell();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> rockwell65C02 = BuildRockwell();
 
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65C02 = Build65C02();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> wdc65C02 = Build65C02();
 
-    private static readonly FrozenDictionary<string, FrozenSet<AddressingMode>> wdc65816 = Build65816();
+    private static readonly FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> wdc65816 = Build65816();
 
-    private static readonly FrozenDictionary<string, InstructionFacts> facts = BuildFacts();
+    private static readonly FrozenDictionary<MnemonicKind, InstructionFacts> facts = BuildFacts();
 
     /// <summary>
     /// What <paramref name="mnemonic"/> is, beyond which modes it has: what it does to the
     /// path, what it pushes or pulls, and which registers it leaves changed.
     /// </summary>
-    public static InstructionFacts Facts(string mnemonic) =>
-        facts.GetValueOrDefault(mnemonic.ToLowerInvariant(), InstructionFacts.None);
+    public static InstructionFacts Facts(MnemonicKind mnemonic) =>
+        facts.GetValueOrDefault(mnemonic, InstructionFacts.None);
 
     /// <summary>Whether <paramref name="cpu"/> has <paramref name="mnemonic"/> at all.</summary>
-    public static bool Has(Cpu cpu, string mnemonic) => Modes(cpu, mnemonic).Count > 0;
+    public static bool Has(Cpu cpu, MnemonicKind mnemonic) => Modes(cpu, mnemonic).Count > 0;
 
     /// <summary>
     /// Whether a program built for <paramref name="cpu"/> may write <paramref name="mnemonic"/>:
     /// the CPU's own instructions, and the long branches, which nt65 writes on every CPU.
     /// </summary>
-    public static bool Writable(Cpu cpu, string mnemonic) =>
-        Has(cpu, mnemonic) || SyntaxFacts.LongBranches.Contains(mnemonic);
+    public static bool Writable(Cpu cpu, MnemonicKind mnemonic) =>
+        Has(cpu, mnemonic) || SyntaxFacts.IsLongBranch(mnemonic);
 
     /// <summary>The modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, empty if it has none.</summary>
-    public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, string mnemonic)
+    public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, MnemonicKind mnemonic)
     {
         var table = cpu switch
         {
@@ -53,7 +54,7 @@ public static class Instructions
             Cpu.Wdc65C02 => wdc65C02,
             _ => wdc65816,
         };
-        return table.GetValueOrDefault(mnemonic.ToLowerInvariant(), FrozenSet<AddressingMode>.Empty);
+        return table.GetValueOrDefault(mnemonic, FrozenSet<AddressingMode>.Empty);
     }
 
     /// <summary>
@@ -76,7 +77,7 @@ public static class Instructions
     /// The register whose width sizes <paramref name="mnemonic"/>'s immediate on the 65816,
     /// or null when its immediate is always one byte.
     /// </summary>
-    public static WidthRegister? SizedBy(string mnemonic) => Facts(mnemonic).SizedBy;
+    public static WidthRegister? SizedBy(MnemonicKind mnemonic) => Facts(mnemonic).SizedBy;
 
     /// <summary>
     /// How wide the address in an operand of this mode is, or null where the mode carries no
@@ -109,147 +110,160 @@ public static class Instructions
     /// what it takes is a near or a far target: every jump, call and branch, and <c>per</c>,
     /// which reaches its target the way <c>brl</c> does and pushes it.
     /// </summary>
-    public static bool IsControlTransfer(string mnemonic) =>
-        Facts(mnemonic).Control is Control.Branches or Control.Jumps or Control.Calls
-        || mnemonic.Equals("per", StringComparison.OrdinalIgnoreCase);
+    public static bool IsControlTransfer(MnemonicKind mnemonic) =>
+        Facts(mnemonic).Control is Control.Branches or Control.Jumps or Control.Calls || mnemonic == Per;
 
     /// <summary>
     /// The two short branches a long branch is written with: the one it takes when the
     /// target is in reach, and its opposite, which skips the <c>jmp</c> when it is not.
     /// </summary>
-    public static (string Taken, string Skipped) FormsOf(string mnemonic)
+    public static (MnemonicKind Taken, MnemonicKind Skipped) FormsOf(MnemonicKind mnemonic) => mnemonic switch
     {
-        var condition = mnemonic.ToLowerInvariant()[1..];
-        var opposite = condition switch
-        {
-            "eq" => "ne",
-            "ne" => "eq",
-            "cs" => "cc",
-            "cc" => "cs",
-            "mi" => "pl",
-            "pl" => "mi",
-            "vs" => "vc",
-            _ => "vs",
-        };
-        return ("b" + condition, "b" + opposite);
-    }
+        Jeq => (Beq, Bne),
+        Jne => (Bne, Beq),
+        Jcs => (Bcs, Bcc),
+        Jcc => (Bcc, Bcs),
+        Jmi => (Bmi, Bpl),
+        Jpl => (Bpl, Bmi),
+        Jvs => (Bvs, Bvc),
+        Jvc => (Bvc, Bvs),
+        _ => throw new ArgumentOutOfRangeException(nameof(mnemonic), mnemonic, "not a long branch"),
+    };
+
+    /// <summary>
+    /// The long branch that takes the place of <paramref name="mnemonic"/> where its target is
+    /// out of reach, or null for anything that is not one of the eight conditional branches.
+    /// </summary>
+    public static MnemonicKind? LongFormOf(MnemonicKind mnemonic) => mnemonic switch
+    {
+        Beq => Jeq,
+        Bne => Jne,
+        Bcs => Jcs,
+        Bcc => Jcc,
+        Bmi => Jmi,
+        Bpl => Jpl,
+        Bvs => Jvs,
+        Bvc => Jvc,
+        _ => null,
+    };
 
     /// <summary>
     /// What each mnemonic is. The groups follow the questions later passes ask: what
     /// writes which register, what moves one to another, what it does to the path, what stores, what
     /// the stack instructions move, and what the 65816 sizes by a width.
     /// </summary>
-    private static FrozenDictionary<string, InstructionFacts> BuildFacts()
+    private static FrozenDictionary<MnemonicKind, InstructionFacts> BuildFacts()
     {
-        var table = new Dictionary<string, InstructionFacts>(StringComparer.Ordinal);
+        var table = new Dictionary<MnemonicKind, InstructionFacts>();
 
         // A shift or an increment through the accumulator writes it and one through memory
         // does not, and which flags a `rep` or a `sep` names is in its operand; this is the
         // widest each of them can write, and the mode and the operand narrow it.
-        Fact(table, "lda pla txa tya tdc tsc xba and ora eor", f => f with { Writes = Registers.A });
-        Fact(table, "adc sbc asl lsr rol ror", f => f with { Writes = Registers.A | Registers.C });
-        Fact(table, "inc dec", f => f with { Writes = Registers.A });
-        Fact(table, "ldx plx tax tsx tyx inx dex", f => f with { Writes = Registers.X });
-        Fact(table, "ldy ply tay txy iny dey", f => f with { Writes = Registers.Y });
-        Fact(table, "cmp cpx cpy clc sec plp rti rep sep", f => f with { Writes = Registers.C });
+        Fact(table, [Lda, Pla, Txa, Tya, Tdc, Tsc, Xba, And, Ora, Eor], f => f with { Writes = Registers.A });
+        Fact(table, [Adc, Sbc, Asl, Lsr, Rol, Ror], f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, [Inc, Dec], f => f with { Writes = Registers.A });
+        Fact(table, [Ldx, Plx, Tax, Tsx, Tyx, Inx, Dex], f => f with { Writes = Registers.X });
+        Fact(table, [Ldy, Ply, Tay, Txy, Iny, Dey], f => f with { Writes = Registers.Y });
+        Fact(table, [Cmp, Cpx, Cpy, Clc, Sec, Plp, Rti, Rep, Sep], f => f with { Writes = Registers.C });
 
         // A block move counts down in A and walks X and Y along the two banks. Swapping the
         // carry with the emulation flag truncates the index registers and hides half the
         // accumulator, and a software interrupt runs a handler this program may not even contain.
-        Fact(table, "mvn mvp", f => f with { Writes = Registers.A | Registers.X | Registers.Y });
-        Fact(table, "xce brk cop", f => f with { Writes = Registers.All });
+        Fact(table, [Mvn, Mvp], f => f with { Writes = Registers.A | Registers.X | Registers.Y });
+        Fact(table, [Xce, Brk, Cop], f => f with { Writes = Registers.All });
 
-        Fact(table, "tax", f => f with { Copies = (Registers.A, Registers.X) });
-        Fact(table, "tay", f => f with { Copies = (Registers.A, Registers.Y) });
-        Fact(table, "txa", f => f with { Copies = (Registers.X, Registers.A) });
-        Fact(table, "tya", f => f with { Copies = (Registers.Y, Registers.A) });
-        Fact(table, "txy", f => f with { Copies = (Registers.X, Registers.Y) });
-        Fact(table, "tyx", f => f with { Copies = (Registers.Y, Registers.X) });
+        Fact(table, [Tax], f => f with { Copies = (Registers.A, Registers.X) });
+        Fact(table, [Tay], f => f with { Copies = (Registers.A, Registers.Y) });
+        Fact(table, [Txa], f => f with { Copies = (Registers.X, Registers.A) });
+        Fact(table, [Tya], f => f with { Copies = (Registers.Y, Registers.A) });
+        Fact(table, [Txy], f => f with { Copies = (Registers.X, Registers.Y) });
+        Fact(table, [Tyx], f => f with { Copies = (Registers.Y, Registers.X) });
 
         // A software interrupt is not among these: `brk` and `cop` come back to the instruction
         // after them, whatever the handler did to the registers on the way.
-        Fact(table, "bcc bcs beq bmi bne bpl bvc bvs", f => f with { Control = Control.Branches });
-        Fact(table, string.Join(' ', SyntaxFacts.LongBranches), f => f with { Control = Control.Branches });
+        Fact(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], f => f with { Control = Control.Branches });
+        Fact(table, [Jeq, Jne, Jcs, Jcc, Jmi, Jpl, Jvs, Jvc], f => f with { Control = Control.Branches });
         for (var bit = 0; bit < 8; bit++)
-            Fact(table, $"bbr{bit} bbs{bit}", f => f with { Control = Control.Branches });
-        Fact(table, "jmp jml bra brl", f => f with { Control = Control.Jumps });
-        Fact(table, "jsr jsl", f => f with { Control = Control.Calls });
-        Fact(table, "rts rtl rti", f => f with { Control = Control.Returns });
-        Fact(table, "stp jam", f => f with { Control = Control.Stops });
-        Fact(table, "sta stx sty stz inc dec asl lsr rol ror tsb trb", f => f with { Stores = true });
+            Fact(table, [Bbr0 + bit, Bbs0 + bit], f => f with { Control = Control.Branches });
+        Fact(table, [Jmp, Jml, Bra, Brl], f => f with { Control = Control.Jumps });
+        Fact(table, [Jsr, Jsl], f => f with { Control = Control.Calls });
+        Fact(table, [Rts, Rtl, Rti], f => f with { Control = Control.Returns });
+        Fact(table, [Stp, Jam], f => f with { Control = Control.Stops });
+        Fact(table, [Sta, Stx, Sty, Stz, Inc, Dec, Asl, Lsr, Rol, Ror, Tsb, Trb], f => f with { Stores = true });
 
-        Fact(table, "pha", f => f with { Pushes = PushSize.Accumulator, Held = Registers.A });
-        Fact(table, "phx", f => f with { Pushes = PushSize.Index, Held = Registers.X });
-        Fact(table, "phy", f => f with { Pushes = PushSize.Index, Held = Registers.Y });
-        Fact(table, "php", f => f with { Pushes = PushSize.OneByte, Held = Registers.C });
-        Fact(table, "phb phk", f => f with { Pushes = PushSize.OneByte });
-        Fact(table, "phd pea pei per", f => f with { Pushes = PushSize.TwoBytes });
-        Fact(table, "pla", f => f with { Pulls = PushSize.Accumulator, Held = Registers.A });
-        Fact(table, "plx", f => f with { Pulls = PushSize.Index, Held = Registers.X });
-        Fact(table, "ply", f => f with { Pulls = PushSize.Index, Held = Registers.Y });
-        Fact(table, "plp", f => f with { Pulls = PushSize.OneByte, Held = Registers.C });
-        Fact(table, "plb", f => f with { Pulls = PushSize.OneByte });
-        Fact(table, "pld", f => f with { Pulls = PushSize.TwoBytes });
+        Fact(table, [Pha], f => f with { Pushes = PushSize.Accumulator, Held = Registers.A });
+        Fact(table, [Phx], f => f with { Pushes = PushSize.Index, Held = Registers.X });
+        Fact(table, [Phy], f => f with { Pushes = PushSize.Index, Held = Registers.Y });
+        Fact(table, [Php], f => f with { Pushes = PushSize.OneByte, Held = Registers.C });
+        Fact(table, [Phb, Phk], f => f with { Pushes = PushSize.OneByte });
+        Fact(table, [Phd, Pea, Pei, Per], f => f with { Pushes = PushSize.TwoBytes });
+        Fact(table, [Pla], f => f with { Pulls = PushSize.Accumulator, Held = Registers.A });
+        Fact(table, [Plx], f => f with { Pulls = PushSize.Index, Held = Registers.X });
+        Fact(table, [Ply], f => f with { Pulls = PushSize.Index, Held = Registers.Y });
+        Fact(table, [Plp], f => f with { Pulls = PushSize.OneByte, Held = Registers.C });
+        Fact(table, [Plb], f => f with { Pulls = PushSize.OneByte });
+        Fact(table, [Pld], f => f with { Pulls = PushSize.TwoBytes });
 
-        Fact(table, "lda adc and bit cmp eor ora sbc", f => f with { SizedBy = WidthRegister.A });
-        Fact(table, "ldx ldy cpx cpy", f => f with { SizedBy = WidthRegister.Index });
+        Fact(table, [Lda, Adc, And, Bit, Cmp, Eor, Ora, Sbc], f => f with { SizedBy = WidthRegister.A });
+        Fact(table, [Ldx, Ldy, Cpx, Cpy], f => f with { SizedBy = WidthRegister.Index });
 
         // The undocumented opcodes of the NMOS 6502, which only the 6502x has. Each is two of
         // the documented instructions happening at once, so what it writes is what both write.
-        Fact(table, "slo rla sre alr anc arr", f => f with { Writes = Registers.A | Registers.C });
-        Fact(table, "rra isc", f => f with { Writes = Registers.A | Registers.C });
-        Fact(table, "dcp", f => f with { Writes = Registers.C });
-        Fact(table, "axs", f => f with { Writes = Registers.X | Registers.C });
-        Fact(table, "lax las", f => f with { Writes = Registers.A | Registers.X });
-        Fact(table, "ane", f => f with { Writes = Registers.A });
-        Fact(table, "slo rla sre rra dcp isc sax sha shx shy tas", f => f with { Stores = true });
+        Fact(table, [Slo, Rla, Sre, Alr, Anc, Arr], f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, [Rra, Isc], f => f with { Writes = Registers.A | Registers.C });
+        Fact(table, [Dcp], f => f with { Writes = Registers.C });
+        Fact(table, [Axs], f => f with { Writes = Registers.X | Registers.C });
+        Fact(table, [Lax, Las], f => f with { Writes = Registers.A | Registers.X });
+        Fact(table, [Ane], f => f with { Writes = Registers.A });
+        Fact(table, [Slo, Rla, Sre, Rra, Dcp, Isc, Sax, Sha, Shx, Shy, Tas], f => f with { Stores = true });
 
         // Nothing runs after `jam`, so what it leaves in the registers never matters; it is
         // simply marked as writing all of them.
-        Fact(table, "jam", f => f with { Writes = Registers.All });
-        return table.ToFrozenDictionary(StringComparer.Ordinal);
+        Fact(table, [Jam], f => f with { Writes = Registers.All });
+        return table.ToFrozenDictionary();
     }
 
     private static void Fact(
-        Dictionary<string, InstructionFacts> table, string mnemonics, Func<InstructionFacts, InstructionFacts> with)
+        Dictionary<MnemonicKind, InstructionFacts> table, ReadOnlySpan<MnemonicKind> mnemonics,
+        Func<InstructionFacts, InstructionFacts> with)
     {
-        foreach (var mnemonic in mnemonics.Split(' '))
+        foreach (var mnemonic in mnemonics)
             table[mnemonic] = with(table.GetValueOrDefault(mnemonic, InstructionFacts.None));
     }
 
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build6502()
     {
-        var table = new Dictionary<string, HashSet<AddressingMode>>(StringComparer.Ordinal);
-        Add(table, "adc and cmp eor lda ora sbc",
+        var table = new Dictionary<MnemonicKind, HashSet<AddressingMode>>();
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
             AddressingMode.AbsoluteX, AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX,
             AddressingMode.DirectIndirectY);
-        Add(table, "sta",
+        Add(table, [Sta],
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
             AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, "asl lsr rol ror",
+        Add(table, [Asl, Lsr, Rol, Ror],
             AddressingMode.Accumulator, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
             AddressingMode.AbsoluteX);
-        Add(table, "inc dec",
+        Add(table, [Inc, Dec],
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX);
-        Add(table, "ldx",
+        Add(table, [Ldx],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute,
             AddressingMode.AbsoluteY);
-        Add(table, "ldy",
+        Add(table, [Ldy],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
             AddressingMode.AbsoluteX);
-        Add(table, "stx", AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute);
-        Add(table, "sty", AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute);
-        Add(table, "cpx cpy", AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.Absolute);
-        Add(table, "bit", AddressingMode.Direct, AddressingMode.Absolute);
-        Add(table, "jmp", AddressingMode.Absolute, AddressingMode.AbsoluteIndirect);
-        Add(table, "jsr", AddressingMode.Absolute);
-        Add(table, "bcc bcs beq bmi bne bpl bvc bvs", AddressingMode.Relative);
+        Add(table, [Stx], AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute);
+        Add(table, [Sty], AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute);
+        Add(table, [Cpx, Cpy], AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.Absolute);
+        Add(table, [Bit], AddressingMode.Direct, AddressingMode.Absolute);
+        Add(table, [Jmp], AddressingMode.Absolute, AddressingMode.AbsoluteIndirect);
+        Add(table, [Jsr], AddressingMode.Absolute);
+        Add(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], AddressingMode.Relative);
 
         // `brk` takes a signature byte on every CPU, and is two bytes wide.
-        Add(table, "brk", AddressingMode.Immediate);
+        Add(table, [Brk], AddressingMode.Immediate);
         Add(table,
-            "clc cld cli clv dex dey inx iny nop pha php pla plp rti rts sec sed sei tax tay tsx txa txs tya",
+            [Clc, Cld, Cli, Clv, Dex, Dey, Inx, Iny, Nop, Pha, Php, Pla, Plp, Rti, Rts, Sec, Sed, Sei, Tax, Tay, Tsx, Txa, Txs, Tya],
             AddressingMode.Implied);
         return Freeze(table);
     }
@@ -266,104 +280,104 @@ public static class Instructions
     /// on no other CPU.
     /// </para>
     /// </summary>
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502X()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build6502X()
     {
         var table = Copy(mos6502);
 
         // The read-modify-write pairs, each an official instruction folded into another: they
         // take every mode the store they are built on takes.
-        Add(table, "slo rla sre rra dcp isc",
+        Add(table, [Slo, Rla, Sre, Rra, Dcp, Isc],
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
             AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, "lax",
+        Add(table, [Lax],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute,
             AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, "sax",
+        Add(table, [Sax],
             AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute, AddressingMode.DirectIndirectX);
 
         // The immediate-only ones, which pass A through an operation and the carry or the flags.
-        Add(table, "alr anc ane arr axs", AddressingMode.Immediate);
+        Add(table, [Alr, Anc, Ane, Arr, Axs], AddressingMode.Immediate);
 
         // The unstable stores, which mix the high byte of their own address into what they write.
-        Add(table, "sha", AddressingMode.AbsoluteY, AddressingMode.DirectIndirectY);
-        Add(table, "shx tas las", AddressingMode.AbsoluteY);
-        Add(table, "shy", AddressingMode.AbsoluteX);
+        Add(table, [Sha], AddressingMode.AbsoluteY, AddressingMode.DirectIndirectY);
+        Add(table, [Shx, Tas, Las], AddressingMode.AbsoluteY);
+        Add(table, [Shy], AddressingMode.AbsoluteX);
 
         // The several opcodes that stop the processor share one mnemonic, `jam`, as ca65 spells it.
-        Add(table, "jam", AddressingMode.Implied);
-        Add(table, "nop",
+        Add(table, [Jam], AddressingMode.Implied);
+        Add(table, [Nop],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
             AddressingMode.AbsoluteX);
         return Freeze(table);
     }
 
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65SC02()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65SC02()
     {
         var table = Copy(mos6502);
-        Add(table, "adc and cmp eor lda ora sbc sta", AddressingMode.DirectIndirect);
-        Add(table, "bit", AddressingMode.Immediate, AddressingMode.DirectX, AddressingMode.AbsoluteX);
-        Add(table, "inc dec", AddressingMode.Accumulator);
-        Add(table, "jmp", AddressingMode.AbsoluteIndirectX);
-        Add(table, "bra", AddressingMode.Relative);
-        Add(table, "phx phy plx ply", AddressingMode.Implied);
-        Add(table, "stz",
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta], AddressingMode.DirectIndirect);
+        Add(table, [Bit], AddressingMode.Immediate, AddressingMode.DirectX, AddressingMode.AbsoluteX);
+        Add(table, [Inc, Dec], AddressingMode.Accumulator);
+        Add(table, [Jmp], AddressingMode.AbsoluteIndirectX);
+        Add(table, [Bra], AddressingMode.Relative);
+        Add(table, [Phx, Phy, Plx, Ply], AddressingMode.Implied);
+        Add(table, [Stz],
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX);
-        Add(table, "trb tsb", AddressingMode.Direct, AddressingMode.Absolute);
+        Add(table, [Trb, Tsb], AddressingMode.Direct, AddressingMode.Absolute);
         return Freeze(table);
     }
 
     /// <summary>The Rockwell bit instructions, which the 65SC02 and the 65816 do not have.</summary>
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> BuildRockwell()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> BuildRockwell()
     {
         var table = Copy(cmos65SC02);
         for (var bit = 0; bit < 8; bit++)
         {
-            Add(table, $"rmb{bit} smb{bit}", AddressingMode.Direct);
-            Add(table, $"bbr{bit} bbs{bit}", AddressingMode.DirectRelative);
+            Add(table, [Rmb0 + bit, Smb0 + bit], AddressingMode.Direct);
+            Add(table, [Bbr0 + bit, Bbs0 + bit], AddressingMode.DirectRelative);
         }
         return Freeze(table);
     }
 
     /// <summary>WDC's 65C02 adds <c>wai</c> and <c>stp</c> to Rockwell's.</summary>
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65C02()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65C02()
     {
         // WDC's own 65C02 also has `jsr (abs,x)` at $fc, and ca65 does not take it before the
         // 65816, so neither does nt65: what nt65 writes has to be what ca65 assembles.
         var table = Copy(rockwell65C02);
-        Add(table, "stp wai", AddressingMode.Implied);
+        Add(table, [Stp, Wai], AddressingMode.Implied);
         return Freeze(table);
     }
 
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build65816()
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65816()
     {
         // The Rockwell bit instructions are the one part of the 65C02 the 65816 left out.
         var table = Copy(wdc65C02
-            .Where(pair => !(pair.Key.Length == 4 && pair.Key[..3] is "bbr" or "bbs" or "rmb" or "smb")));
-        Add(table, "adc and cmp eor lda ora sbc sta",
+            .Where(pair => SyntaxFacts.BitOf(pair.Key) is null));
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta],
             AddressingMode.Long, AddressingMode.LongX, AddressingMode.DirectIndirectLong,
             AddressingMode.DirectIndirectLongY, AddressingMode.StackRelative, AddressingMode.StackRelativeIndirectY);
-        Add(table, "jsr", AddressingMode.AbsoluteIndirectX);
-        Add(table, "jml", AddressingMode.Long, AddressingMode.AbsoluteIndirectLong);
-        Add(table, "jsl", AddressingMode.Long);
-        Add(table, "brl per", AddressingMode.RelativeLong);
-        Add(table, "mvn mvp", AddressingMode.BlockMove);
-        Add(table, "pea", AddressingMode.Absolute);
-        Add(table, "pei", AddressingMode.DirectIndirect);
+        Add(table, [Jsr], AddressingMode.AbsoluteIndirectX);
+        Add(table, [Jml], AddressingMode.Long, AddressingMode.AbsoluteIndirectLong);
+        Add(table, [Jsl], AddressingMode.Long);
+        Add(table, [Brl, Per], AddressingMode.RelativeLong);
+        Add(table, [Mvn, Mvp], AddressingMode.BlockMove);
+        Add(table, [Pea], AddressingMode.Absolute);
+        Add(table, [Pei], AddressingMode.DirectIndirect);
 
         // `cop` takes a signature byte as `brk` does, and `wdm` the byte an emulator hooks on.
-        Add(table, "rep sep cop wdm", AddressingMode.Immediate);
-        Add(table, "phb phd phk plb pld rtl tcd tcs tdc tsc txy tyx xba xce", AddressingMode.Implied);
+        Add(table, [Rep, Sep, Cop, Wdm], AddressingMode.Immediate);
+        Add(table, [Phb, Phd, Phk, Plb, Pld, Rtl, Tcd, Tcs, Tdc, Tsc, Txy, Tyx, Xba, Xce], AddressingMode.Implied);
         return Freeze(table);
     }
 
-    private static Dictionary<string, HashSet<AddressingMode>> Copy(
-        IEnumerable<KeyValuePair<string, FrozenSet<AddressingMode>>> table) =>
-        table.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value), StringComparer.Ordinal);
+    private static Dictionary<MnemonicKind, HashSet<AddressingMode>> Copy(
+        IEnumerable<KeyValuePair<MnemonicKind, FrozenSet<AddressingMode>>> table) =>
+        table.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value));
 
-    private static void Add(Dictionary<string, HashSet<AddressingMode>> table, string mnemonics,
+    private static void Add(Dictionary<MnemonicKind, HashSet<AddressingMode>> table, ReadOnlySpan<MnemonicKind> mnemonics,
         params ReadOnlySpan<AddressingMode> modes)
     {
-        foreach (var mnemonic in mnemonics.Split(' '))
+        foreach (var mnemonic in mnemonics)
         {
             if (!table.TryGetValue(mnemonic, out var set))
                 table[mnemonic] = set = [];
@@ -372,7 +386,7 @@ public static class Instructions
         }
     }
 
-    private static FrozenDictionary<string, FrozenSet<AddressingMode>> Freeze(
-        Dictionary<string, HashSet<AddressingMode>> table) =>
-        table.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.ToFrozenSet(), StringComparer.Ordinal);
+    private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Freeze(
+        Dictionary<MnemonicKind, HashSet<AddressingMode>> table) =>
+        table.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.ToFrozenSet());
 }

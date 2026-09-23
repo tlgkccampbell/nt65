@@ -1,3 +1,5 @@
+using Norristown.Syntax;
+
 namespace Norristown.Processor;
 
 /// <summary>
@@ -17,16 +19,16 @@ public static class RegisterEffects
     /// value of an immediate operand where it is known, which is what says whether a
     /// <c>rep</c> or a <c>sep</c> touches the carry.
     /// </summary>
-    public static Registers Written(string mnemonic, AddressingMode? mode, long? constant) => mnemonic switch
+    public static Registers Written(MnemonicKind mnemonic, AddressingMode? mode, long? constant) => mnemonic switch
     {
         // A shift through the accumulator writes it; one through memory writes only the carry.
-        "asl" or "lsr" or "rol" or "ror" =>
+        MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror =>
             mode == AddressingMode.Accumulator ? Registers.A | Registers.C : Registers.C,
-        "inc" or "dec" => mode == AddressingMode.Accumulator ? Registers.A : Registers.None,
+        MnemonicKind.Inc or MnemonicKind.Dec => mode == AddressingMode.Accumulator ? Registers.A : Registers.None,
 
         // `rep` and `sep` write the flags their operand names, and bit 0 is the carry. An
         // operand whose value nt65 cannot work out may name the carry, so it is assumed to.
-        "rep" or "sep" => constant is { } flags && (flags & 1) == 0 ? Registers.None : Registers.C,
+        MnemonicKind.Rep or MnemonicKind.Sep => constant is { } flags && (flags & 1) == 0 ? Registers.None : Registers.C,
 
         _ => Instructions.Facts(mnemonic).Writes,
     };
@@ -35,7 +37,7 @@ public static class RegisterEffects
     /// The register a transfer copies, and the one it copies to, for the transfers between the
     /// three registers a value is held in; null for every other instruction.
     /// </summary>
-    public static (Registers From, Registers To)? Moved(string mnemonic) => Instructions.Facts(mnemonic).Copies;
+    public static (Registers From, Registers To)? Moved(MnemonicKind mnemonic) => Instructions.Facts(mnemonic).Copies;
 
     /// <summary>
     /// The registers as a message or a code lens names them, separated by commas: <c>A</c>,

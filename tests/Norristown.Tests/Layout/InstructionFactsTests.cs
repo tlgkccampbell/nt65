@@ -55,17 +55,17 @@ public sealed class InstructionFactsTests
             Where(f => f.Pushes is not null));
         Assert.Equal(["pla", "plb", "pld", "plp", "plx", "ply"], Where(f => f.Pulls is not null));
 
-        Assert.Equal(PushSize.Accumulator, Instructions.Facts("pha").Pushes);
-        Assert.Equal(PushSize.Index, Instructions.Facts("phy").Pushes);
-        Assert.Equal(PushSize.OneByte, Instructions.Facts("php").Pushes);
-        Assert.Equal(PushSize.TwoBytes, Instructions.Facts("pei").Pushes);
+        Assert.Equal(PushSize.Accumulator, Instructions.Facts(MnemonicKind.Pha).Pushes);
+        Assert.Equal(PushSize.Index, Instructions.Facts(MnemonicKind.Phy).Pushes);
+        Assert.Equal(PushSize.OneByte, Instructions.Facts(MnemonicKind.Php).Pushes);
+        Assert.Equal(PushSize.TwoBytes, Instructions.Facts(MnemonicKind.Pei).Pushes);
 
         // `Held` names a register only for those `Registers` tracks: A, X, Y and, through the
         // status byte, the carry. The data bank, the direct page and the program bank are not
         // among them.
         Assert.Equal(["pha", "php", "phx", "phy", "pla", "plp", "plx", "ply"], Where(f => f.Held != Registers.None));
-        Assert.Equal(Registers.A, Instructions.Facts("pla").Held);
-        Assert.Equal(Registers.C, Instructions.Facts("php").Held);
+        Assert.Equal(Registers.A, Instructions.Facts(MnemonicKind.Pla).Held);
+        Assert.Equal(Registers.C, Instructions.Facts(MnemonicKind.Php).Held);
     }
 
     /// <summary>
@@ -85,5 +85,6 @@ public sealed class InstructionFactsTests
     private static IReadOnlyList<string> Where(Func<InstructionFacts, bool> holds) =>
         [.. SyntaxFacts.Mnemonics
             .Where(mnemonic => holds(Instructions.Facts(mnemonic)))
+            .Select(SyntaxFacts.TextOf)
             .Order(StringComparer.Ordinal)];
 }

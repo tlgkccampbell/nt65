@@ -174,7 +174,7 @@ internal static class InlayHints
         // A call that changes the state is the surprising case: the change is made in the
         // called routine rather than on this line, and the arrow marks that it came from there.
         var calls = Instruction(statement) is { } instruction
-            && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
+            && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
         return new Mark(
             (calls ? "→ " : "") + string.Join(" ", parts),
             $"What reaches the next line is `{now}`, and what reached this one was `{was}`.");
@@ -186,10 +186,10 @@ internal static class InlayHints
     /// </summary>
     private static Mark? Lengthened(InstructionStatementSyntax branch, LineLayout laid)
     {
-        var mnemonic = branch.Mnemonic.Text.ToLowerInvariant();
-        if (!SyntaxFacts.LongBranches.Contains(mnemonic))
+        if (!SyntaxFacts.IsLongBranch(branch.MnemonicKind))
             return null;
-        var over = Instructions.FormsOf(mnemonic).Skipped;
+        var mnemonic = SyntaxFacts.TextOf(branch.MnemonicKind);
+        var over = SyntaxFacts.TextOf(Instructions.FormsOf(branch.MnemonicKind).Skipped);
         var cost = laid.Cycles is { } cycles ? $" and {Lsp.Spell(cycles)}" : "";
         return new Mark(
             "long",

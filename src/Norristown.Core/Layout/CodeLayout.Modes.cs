@@ -129,7 +129,7 @@ public sealed partial class CodeLayout
             // separately, where its direct-page offset is worked out.
             if (Operands.WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
                 && Instructions.Width(candidates[0]) is { } width && width != written
-                && !Instructions.IsControlTransfer(mnemonic.Text))
+                && !Instructions.IsControlTransfer(mnemonic.MnemonicKind))
             {
                 Report(operand, Catalogue.AddressingModeMissing.Says(
                     mnemonic.Text, Spell(written), CpuNames.Spell(cpu)));
@@ -140,7 +140,7 @@ public sealed partial class CodeLayout
             // the linker, if it noticed at all. A control transfer's target is checked for
             // distance instead.
             else if (Operands.WrittenPrefix(operand) is null
-                && !(Instructions.IsControlTransfer(mnemonic.Text) && candidates[0] is AddressingMode.Absolute
+                && !(Instructions.IsControlTransfer(mnemonic.MnemonicKind) && candidates[0] is AddressingMode.Absolute
                     or AddressingMode.Long or AddressingMode.Relative or AddressingMode.RelativeLong
                     or AddressingMode.DirectRelative)
                 && Instructions.Width(candidates[0]) is { } reach
@@ -193,7 +193,7 @@ public sealed partial class CodeLayout
         if (mode is AddressingMode.Relative or AddressingMode.RelativeLong or AddressingMode.Absolute
                 or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX or AddressingMode.Long
                 or AddressingMode.AbsoluteIndirectLong
-            && Instructions.IsControlTransfer(mnemonic.Text))
+            && Instructions.IsControlTransfer(mnemonic.MnemonicKind))
         {
             if (Operands.WrittenPrefix(operand) is not null)
             {
@@ -252,7 +252,7 @@ public sealed partial class CodeLayout
         // bank 0, which is what a long jump to a small number is for.
         if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not null)
             return;
-        var near = mnemonic.Text.Equals("jsl", StringComparison.OrdinalIgnoreCase) ? "jsr" : "jmp";
+        var near = SyntaxFacts.TextOf(mnemonic.MnemonicKind == MnemonicKind.Jsl ? MnemonicKind.Jsr : MnemonicKind.Jmp);
         Report(expression, Catalogue.TargetTooNear.Says(mnemonic.Text, Spell(size.Value), near));
     }
 
@@ -295,7 +295,7 @@ public sealed partial class CodeLayout
     private void CheckDirectPageSymbols(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode)
     {
         if (Instructions.Width(mode) is not (AddressSize.Absolute or AddressSize.Far)
-            || mnemonic.Text.ToLowerInvariant() is "pea" or "per" || Expression(operand) is not { } expression)
+            || mnemonic.MnemonicKind is MnemonicKind.Pea or MnemonicKind.Per || Expression(operand) is not { } expression)
         {
             return;
         }

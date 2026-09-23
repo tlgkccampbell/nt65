@@ -1,5 +1,6 @@
 using Norristown.Layout;
 using Norristown.Processor;
+using Norristown.Syntax;
 using Norristown.Semantics;
 using Norristown.Tests.Semantics;
 
@@ -18,93 +19,93 @@ public sealed class CycleTests
 {
     [Theory]
     // The 6502, by addressing mode.
-    [InlineData("lda", AddressingMode.Immediate, "2")]
-    [InlineData("lda", AddressingMode.Direct, "3")]
-    [InlineData("lda", AddressingMode.DirectX, "4")]
-    [InlineData("lda", AddressingMode.Absolute, "4")]
-    [InlineData("ldx", AddressingMode.DirectY, "4")]
-    [InlineData("lda", AddressingMode.DirectIndirectX, "6")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Immediate, "2")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Direct, "3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectX, "4")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Absolute, "4")]
+    [InlineData(MnemonicKind.Ldx, AddressingMode.DirectY, "4")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectX, "6")]
 
     // An indexed read pays for a page crossing only when it crosses one; a store always
     // pays, because it cannot begin until the address is settled.
-    [InlineData("lda", AddressingMode.AbsoluteX, "4-5")]
-    [InlineData("lda", AddressingMode.AbsoluteY, "4-5")]
-    [InlineData("lda", AddressingMode.DirectIndirectY, "5-6")]
-    [InlineData("sta", AddressingMode.AbsoluteX, "5")]
-    [InlineData("sta", AddressingMode.AbsoluteY, "5")]
-    [InlineData("sta", AddressingMode.DirectIndirectY, "6")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "4-5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteY, "4-5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectY, "5-6")]
+    [InlineData(MnemonicKind.Sta, AddressingMode.AbsoluteX, "5")]
+    [InlineData(MnemonicKind.Sta, AddressingMode.AbsoluteY, "5")]
+    [InlineData(MnemonicKind.Sta, AddressingMode.DirectIndirectY, "6")]
 
     // Read, modify and write back: a fixed count, and the indexed form always pays the cycle
     // a read pays only on a page crossing.
-    [InlineData("asl", AddressingMode.Accumulator, "2")]
-    [InlineData("asl", AddressingMode.Direct, "5")]
-    [InlineData("asl", AddressingMode.DirectX, "6")]
-    [InlineData("asl", AddressingMode.Absolute, "6")]
-    [InlineData("asl", AddressingMode.AbsoluteX, "7")]
-    [InlineData("inc", AddressingMode.Absolute, "6")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Accumulator, "2")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Direct, "5")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.DirectX, "6")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Absolute, "6")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.AbsoluteX, "7")]
+    [InlineData(MnemonicKind.Inc, AddressingMode.Absolute, "6")]
 
-    [InlineData("inx", AddressingMode.Implied, "2")]
-    [InlineData("pha", AddressingMode.Implied, "3")]
-    [InlineData("php", AddressingMode.Implied, "3")]
-    [InlineData("pla", AddressingMode.Implied, "4")]
-    [InlineData("plp", AddressingMode.Implied, "4")]
-    [InlineData("rts", AddressingMode.Implied, "6")]
-    [InlineData("rti", AddressingMode.Implied, "6")]
-    [InlineData("brk", AddressingMode.Immediate, "7")]
-    [InlineData("jmp", AddressingMode.Absolute, "3")]
-    [InlineData("jsr", AddressingMode.Absolute, "6")]
+    [InlineData(MnemonicKind.Inx, AddressingMode.Implied, "2")]
+    [InlineData(MnemonicKind.Pha, AddressingMode.Implied, "3")]
+    [InlineData(MnemonicKind.Php, AddressingMode.Implied, "3")]
+    [InlineData(MnemonicKind.Pla, AddressingMode.Implied, "4")]
+    [InlineData(MnemonicKind.Plp, AddressingMode.Implied, "4")]
+    [InlineData(MnemonicKind.Rts, AddressingMode.Implied, "6")]
+    [InlineData(MnemonicKind.Rti, AddressingMode.Implied, "6")]
+    [InlineData(MnemonicKind.Brk, AddressingMode.Immediate, "7")]
+    [InlineData(MnemonicKind.Jmp, AddressingMode.Absolute, "3")]
+    [InlineData(MnemonicKind.Jsr, AddressingMode.Absolute, "6")]
 
     // The 6502's indirect jump reads its pointer without carrying into the high byte.
-    [InlineData("jmp", AddressingMode.AbsoluteIndirect, "5")]
+    [InlineData(MnemonicKind.Jmp, AddressingMode.AbsoluteIndirect, "5")]
 
     // Two not taken, three taken, and one more when a taken branch crosses a page.
-    [InlineData("beq", AddressingMode.Relative, "2-4")]
-    [InlineData("bcc", AddressingMode.Relative, "2-4")]
-    public void The6502TakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
+    [InlineData(MnemonicKind.Beq, AddressingMode.Relative, "2-4")]
+    [InlineData(MnemonicKind.Bcc, AddressingMode.Relative, "2-4")]
+    public void The6502TakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502, mnemonic, mode)?.Count.ToString());
     }
 
     [Theory]
     // The 6502's own counts, unchanged.
-    [InlineData("lda", AddressingMode.AbsoluteX, "4-5")]
-    [InlineData("jmp", AddressingMode.AbsoluteIndirect, "5")]
-    [InlineData("nop", AddressingMode.Implied, "2")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "4-5")]
+    [InlineData(MnemonicKind.Jmp, AddressingMode.AbsoluteIndirect, "5")]
+    [InlineData(MnemonicKind.Nop, AddressingMode.Implied, "2")]
 
     // An undocumented read-modify-write combined with an arithmetic operation costs what the
     // read-modify-write alone costs, and its indexed forms always pay the index cycle.
-    [InlineData("slo", AddressingMode.Direct, "5")]
-    [InlineData("slo", AddressingMode.DirectX, "6")]
-    [InlineData("rla", AddressingMode.Absolute, "6")]
-    [InlineData("sre", AddressingMode.AbsoluteX, "7")]
-    [InlineData("rra", AddressingMode.AbsoluteY, "7")]
-    [InlineData("dcp", AddressingMode.DirectIndirectX, "8")]
-    [InlineData("isc", AddressingMode.DirectIndirectY, "8")]
+    [InlineData(MnemonicKind.Slo, AddressingMode.Direct, "5")]
+    [InlineData(MnemonicKind.Slo, AddressingMode.DirectX, "6")]
+    [InlineData(MnemonicKind.Rla, AddressingMode.Absolute, "6")]
+    [InlineData(MnemonicKind.Sre, AddressingMode.AbsoluteX, "7")]
+    [InlineData(MnemonicKind.Rra, AddressingMode.AbsoluteY, "7")]
+    [InlineData(MnemonicKind.Dcp, AddressingMode.DirectIndirectX, "8")]
+    [InlineData(MnemonicKind.Isc, AddressingMode.DirectIndirectY, "8")]
 
     // A load pays for a page crossing only when it crosses one, as the documented loads do.
-    [InlineData("lax", AddressingMode.Immediate, "2")]
-    [InlineData("lax", AddressingMode.Direct, "3")]
-    [InlineData("lax", AddressingMode.DirectY, "4")]
-    [InlineData("lax", AddressingMode.AbsoluteY, "4-5")]
-    [InlineData("lax", AddressingMode.DirectIndirectY, "5-6")]
-    [InlineData("las", AddressingMode.AbsoluteY, "4-5")]
-    [InlineData("sax", AddressingMode.Absolute, "4")]
-    [InlineData("sax", AddressingMode.DirectIndirectX, "6")]
+    [InlineData(MnemonicKind.Lax, AddressingMode.Immediate, "2")]
+    [InlineData(MnemonicKind.Lax, AddressingMode.Direct, "3")]
+    [InlineData(MnemonicKind.Lax, AddressingMode.DirectY, "4")]
+    [InlineData(MnemonicKind.Lax, AddressingMode.AbsoluteY, "4-5")]
+    [InlineData(MnemonicKind.Lax, AddressingMode.DirectIndirectY, "5-6")]
+    [InlineData(MnemonicKind.Las, AddressingMode.AbsoluteY, "4-5")]
+    [InlineData(MnemonicKind.Sax, AddressingMode.Absolute, "4")]
+    [InlineData(MnemonicKind.Sax, AddressingMode.DirectIndirectX, "6")]
 
     // The immediate-only opcodes, and the indexed stores, which always pay the page-crossing
     // cycle because they settle the address before writing.
-    [InlineData("alr", AddressingMode.Immediate, "2")]
-    [InlineData("axs", AddressingMode.Immediate, "2")]
-    [InlineData("sha", AddressingMode.AbsoluteY, "5")]
-    [InlineData("sha", AddressingMode.DirectIndirectY, "6")]
-    [InlineData("shx", AddressingMode.AbsoluteY, "5")]
-    [InlineData("tas", AddressingMode.AbsoluteY, "5")]
+    [InlineData(MnemonicKind.Alr, AddressingMode.Immediate, "2")]
+    [InlineData(MnemonicKind.Axs, AddressingMode.Immediate, "2")]
+    [InlineData(MnemonicKind.Sha, AddressingMode.AbsoluteY, "5")]
+    [InlineData(MnemonicKind.Sha, AddressingMode.DirectIndirectY, "6")]
+    [InlineData(MnemonicKind.Shx, AddressingMode.AbsoluteY, "5")]
+    [InlineData(MnemonicKind.Tas, AddressingMode.AbsoluteY, "5")]
 
     // The undocumented `nop` forms read an operand, and the indexed form pays for a page
     // crossing only when it crosses one, like any other read.
-    [InlineData("nop", AddressingMode.Direct, "3")]
-    [InlineData("nop", AddressingMode.AbsoluteX, "4-5")]
-    public void The6502xTakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
+    [InlineData(MnemonicKind.Nop, AddressingMode.Direct, "3")]
+    [InlineData(MnemonicKind.Nop, AddressingMode.AbsoluteX, "4-5")]
+    public void The6502xTakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502X, mnemonic, mode)?.Count.ToString());
     }
@@ -114,44 +115,44 @@ public sealed class CycleTests
     /// reports why it has no count rather than quietly leaving the instruction out.
     /// </summary>
     [Fact]
-    public void JamHasNoCount() => Assert.Null(Cycles.Of(Cpu.Mos6502X, "jam", AddressingMode.Implied));
+    public void JamHasNoCount() => Assert.Null(Cycles.Of(Cpu.Mos6502X, MnemonicKind.Jam, AddressingMode.Implied));
 
     [Theory]
     // What the 65C02 keeps.
-    [InlineData("lda", AddressingMode.Direct, "3")]
-    [InlineData("lda", AddressingMode.AbsoluteX, "4-5")]
-    [InlineData("asl", AddressingMode.Direct, "5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Direct, "3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "4-5")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Direct, "5")]
 
     // What it adds.
-    [InlineData("lda", AddressingMode.DirectIndirect, "5")]
-    [InlineData("sta", AddressingMode.DirectIndirect, "5")]
-    [InlineData("bra", AddressingMode.Relative, "3-4")]
-    [InlineData("phx", AddressingMode.Implied, "3")]
-    [InlineData("ply", AddressingMode.Implied, "4")]
-    [InlineData("stz", AddressingMode.Direct, "3")]
-    [InlineData("stz", AddressingMode.AbsoluteX, "5")]
-    [InlineData("trb", AddressingMode.Direct, "5")]
-    [InlineData("tsb", AddressingMode.Absolute, "6")]
-    [InlineData("inc", AddressingMode.Accumulator, "2")]
-    [InlineData("bit", AddressingMode.Immediate, "2")]
-    [InlineData("rmb3", AddressingMode.Direct, "5")]
-    [InlineData("bbr0", AddressingMode.DirectRelative, "5-7")]
-    [InlineData("stp", AddressingMode.Implied, "3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirect, "5")]
+    [InlineData(MnemonicKind.Sta, AddressingMode.DirectIndirect, "5")]
+    [InlineData(MnemonicKind.Bra, AddressingMode.Relative, "3-4")]
+    [InlineData(MnemonicKind.Phx, AddressingMode.Implied, "3")]
+    [InlineData(MnemonicKind.Ply, AddressingMode.Implied, "4")]
+    [InlineData(MnemonicKind.Stz, AddressingMode.Direct, "3")]
+    [InlineData(MnemonicKind.Stz, AddressingMode.AbsoluteX, "5")]
+    [InlineData(MnemonicKind.Trb, AddressingMode.Direct, "5")]
+    [InlineData(MnemonicKind.Tsb, AddressingMode.Absolute, "6")]
+    [InlineData(MnemonicKind.Inc, AddressingMode.Accumulator, "2")]
+    [InlineData(MnemonicKind.Bit, AddressingMode.Immediate, "2")]
+    [InlineData(MnemonicKind.Rmb3, AddressingMode.Direct, "5")]
+    [InlineData(MnemonicKind.Bbr0, AddressingMode.DirectRelative, "5-7")]
+    [InlineData(MnemonicKind.Stp, AddressingMode.Implied, "3")]
 
     // What it fixes: the indirect jump costs a cycle and reads the pointer properly, and a
     // shift indexed absolutely pays for a page crossing only when it crosses one.
-    [InlineData("jmp", AddressingMode.AbsoluteIndirect, "6")]
-    [InlineData("jmp", AddressingMode.AbsoluteIndirectX, "6")]
-    [InlineData("asl", AddressingMode.AbsoluteX, "6-7")]
-    [InlineData("inc", AddressingMode.AbsoluteX, "7")]
+    [InlineData(MnemonicKind.Jmp, AddressingMode.AbsoluteIndirect, "6")]
+    [InlineData(MnemonicKind.Jmp, AddressingMode.AbsoluteIndirectX, "6")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.AbsoluteX, "6-7")]
+    [InlineData(MnemonicKind.Inc, AddressingMode.AbsoluteX, "7")]
 
     // Decimal arithmetic costs one more, and nothing in the program says whether the
     // decimal flag is set where the instruction runs.
-    [InlineData("adc", AddressingMode.Immediate, "2-3")]
-    [InlineData("sbc", AddressingMode.Absolute, "4-5")]
-    [InlineData("adc", AddressingMode.AbsoluteX, "4-6")]
-    [InlineData("and", AddressingMode.Immediate, "2")]
-    public void The65C02TakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
+    [InlineData(MnemonicKind.Adc, AddressingMode.Immediate, "2-3")]
+    [InlineData(MnemonicKind.Sbc, AddressingMode.Absolute, "4-5")]
+    [InlineData(MnemonicKind.Adc, AddressingMode.AbsoluteX, "4-6")]
+    [InlineData(MnemonicKind.And, AddressingMode.Immediate, "2")]
+    public void The65C02TakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65C02, mnemonic, mode)?.Count.ToString());
     }
@@ -159,60 +160,60 @@ public sealed class CycleTests
     [Theory]
     // The 8-bit forms, in native mode, match the 65C02's apart from decimal arithmetic,
     // which costs nothing more on the 65816.
-    [InlineData("lda", AddressingMode.Immediate, "a8, i8, native", "2")]
-    [InlineData("adc", AddressingMode.Immediate, "a8, i8, native", "2")]
-    [InlineData("lda", AddressingMode.Absolute, "a8, i8, native", "4")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Immediate, "a8, i8, native", "2")]
+    [InlineData(MnemonicKind.Adc, AddressingMode.Immediate, "a8, i8, native", "2")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Absolute, "a8, i8, native", "4")]
 
     // A 16-bit register reads and writes a byte more, and a read-modify-write two.
-    [InlineData("lda", AddressingMode.Immediate, "a16, i8, native", "3")]
-    [InlineData("lda", AddressingMode.Absolute, "a16, i8, native", "5")]
-    [InlineData("sta", AddressingMode.Absolute, "a16, i8, native", "5")]
-    [InlineData("asl", AddressingMode.Absolute, "a16, i8, native", "8")]
-    [InlineData("asl", AddressingMode.Accumulator, "a16, i8, native", "2")]
-    [InlineData("ldx", AddressingMode.Immediate, "a16, i8, native", "2")]
-    [InlineData("ldx", AddressingMode.Immediate, "a8, i16, native", "3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Immediate, "a16, i8, native", "3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Absolute, "a16, i8, native", "5")]
+    [InlineData(MnemonicKind.Sta, AddressingMode.Absolute, "a16, i8, native", "5")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Absolute, "a16, i8, native", "8")]
+    [InlineData(MnemonicKind.Asl, AddressingMode.Accumulator, "a16, i8, native", "2")]
+    [InlineData(MnemonicKind.Ldx, AddressingMode.Immediate, "a16, i8, native", "2")]
+    [InlineData(MnemonicKind.Ldx, AddressingMode.Immediate, "a8, i16, native", "3")]
 
     // An unknown width gives an interval covering both widths.
-    [InlineData("lda", AddressingMode.Immediate, "a?, i8, native", "2-3")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Immediate, "a?, i8, native", "2-3")]
 
     // An indexed read pays for crossing a page only sometimes, unless the index is 16 bits,
     // when it always does.
-    [InlineData("lda", AddressingMode.AbsoluteX, "a8, i8, native", "4-5")]
-    [InlineData("lda", AddressingMode.AbsoluteX, "a8, i16, native", "5")]
-    [InlineData("lda", AddressingMode.DirectIndirectY, "a8, i16, native", "6-7")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "a8, i8, native", "4-5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "a8, i16, native", "5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectY, "a8, i16, native", "6-7")]
 
     // A direct operand costs one more when D's low byte is not zero, which is not known.
-    [InlineData("lda", AddressingMode.Direct, "a8, i8, native", "3-4")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Direct, "a8, i8, native", "3-4")]
 
     // What only the 65816 has.
-    [InlineData("lda", AddressingMode.Long, "a8, i8, native", "5")]
-    [InlineData("lda", AddressingMode.LongX, "a16, i8, native", "6")]
-    [InlineData("lda", AddressingMode.StackRelative, "a8, i8, native", "4")]
-    [InlineData("lda", AddressingMode.StackRelativeIndirectY, "a8, i8, native", "7")]
-    [InlineData("lda", AddressingMode.DirectIndirectLong, "a8, i8, native", "6-7")]
-    [InlineData("jsl", AddressingMode.Long, "a8, i8, native", "8")]
-    [InlineData("jml", AddressingMode.AbsoluteIndirectLong, "a8, i8, native", "6")]
-    [InlineData("jsr", AddressingMode.AbsoluteIndirectX, "a8, i8, native", "8")]
-    [InlineData("rtl", AddressingMode.Implied, "a8, i8, native", "6")]
-    [InlineData("brl", AddressingMode.RelativeLong, "a8, i8, native", "4")]
-    [InlineData("per", AddressingMode.RelativeLong, "a8, i8, native", "6")]
-    [InlineData("pea", AddressingMode.Absolute, "a8, i8, native", "5")]
-    [InlineData("rep", AddressingMode.Immediate, "a8, i8, native", "3")]
-    [InlineData("xba", AddressingMode.Implied, "a8, i8, native", "3")]
-    [InlineData("pha", AddressingMode.Implied, "a16, i8, native", "4")]
-    [InlineData("phd", AddressingMode.Implied, "a8, i8, native", "4")]
-    [InlineData("pld", AddressingMode.Implied, "a8, i8, native", "5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.Long, "a8, i8, native", "5")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.LongX, "a16, i8, native", "6")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.StackRelative, "a8, i8, native", "4")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.StackRelativeIndirectY, "a8, i8, native", "7")]
+    [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectLong, "a8, i8, native", "6-7")]
+    [InlineData(MnemonicKind.Jsl, AddressingMode.Long, "a8, i8, native", "8")]
+    [InlineData(MnemonicKind.Jml, AddressingMode.AbsoluteIndirectLong, "a8, i8, native", "6")]
+    [InlineData(MnemonicKind.Jsr, AddressingMode.AbsoluteIndirectX, "a8, i8, native", "8")]
+    [InlineData(MnemonicKind.Rtl, AddressingMode.Implied, "a8, i8, native", "6")]
+    [InlineData(MnemonicKind.Brl, AddressingMode.RelativeLong, "a8, i8, native", "4")]
+    [InlineData(MnemonicKind.Per, AddressingMode.RelativeLong, "a8, i8, native", "6")]
+    [InlineData(MnemonicKind.Pea, AddressingMode.Absolute, "a8, i8, native", "5")]
+    [InlineData(MnemonicKind.Rep, AddressingMode.Immediate, "a8, i8, native", "3")]
+    [InlineData(MnemonicKind.Xba, AddressingMode.Implied, "a8, i8, native", "3")]
+    [InlineData(MnemonicKind.Pha, AddressingMode.Implied, "a16, i8, native", "4")]
+    [InlineData(MnemonicKind.Phd, AddressingMode.Implied, "a8, i8, native", "4")]
+    [InlineData(MnemonicKind.Pld, AddressingMode.Implied, "a8, i8, native", "5")]
 
     // Native mode pushes and pulls the program bank as well.
-    [InlineData("brk", AddressingMode.Immediate, "a8, i8, native", "8")]
-    [InlineData("brk", AddressingMode.Immediate, "a8, i8, emu", "7")]
-    [InlineData("rti", AddressingMode.Implied, "a8, i8, native", "7")]
+    [InlineData(MnemonicKind.Brk, AddressingMode.Immediate, "a8, i8, native", "8")]
+    [InlineData(MnemonicKind.Brk, AddressingMode.Immediate, "a8, i8, emu", "7")]
+    [InlineData(MnemonicKind.Rti, AddressingMode.Implied, "a8, i8, native", "7")]
 
     // Only in emulation mode does a taken branch pay for crossing a page.
-    [InlineData("bne", AddressingMode.Relative, "a8, i8, native", "2-3")]
-    [InlineData("bne", AddressingMode.Relative, "a8, i8, emu", "2-4")]
-    [InlineData("bra", AddressingMode.Relative, "a8, i8, native", "3")]
-    public void The65816TakesAsLongAsItsWidthsSay(string mnemonic, AddressingMode mode, string state, string cycles)
+    [InlineData(MnemonicKind.Bne, AddressingMode.Relative, "a8, i8, native", "2-3")]
+    [InlineData(MnemonicKind.Bne, AddressingMode.Relative, "a8, i8, emu", "2-4")]
+    [InlineData(MnemonicKind.Bra, AddressingMode.Relative, "a8, i8, native", "3")]
+    public void The65816TakesAsLongAsItsWidthsSay(MnemonicKind mnemonic, AddressingMode mode, string state, string cycles)
     {
         var parts = state.Split(", ");
         var processor = new ProcessorState(Width(parts[0]), Width(parts[1]), parts[2] switch
@@ -249,7 +250,7 @@ public sealed class CycleTests
         // default, which leaves them unchanged (`a*`) and so not a single known width.
         var processor = ProcessorState.Default with { A = Width.Eight, Index = Width.Eight, D = d };
 
-        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.Count.ToString());
+        Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, MnemonicKind.Lda, AddressingMode.Direct, processor)?.Count.ToString());
     }
 
     /// <summary>
@@ -259,7 +260,7 @@ public sealed class CycleTests
     [Fact]
     public void ABlockMoveHasNoCount()
     {
-        Assert.Null(Cycles.Of(Cpu.Wdc65816, "mvn", AddressingMode.BlockMove, ProcessorState.Default));
+        Assert.Null(Cycles.Of(Cpu.Wdc65816, MnemonicKind.Mvn, AddressingMode.BlockMove, ProcessorState.Default));
     }
 
     /// <summary>

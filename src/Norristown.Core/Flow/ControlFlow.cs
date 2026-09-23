@@ -323,8 +323,8 @@ public sealed class ControlFlow
             var branch = units[i].Step;
             var push = units[i - 1];
             if (push.Step.Stream != branch.Stream || units[i + 1].Step.Stream != branch.Stream
-                || !(IsInstruction(branch.Statement, "brl") || IsInstruction(branch.Statement, "bra"))
-                || !IsInstruction(push.Step.Statement, "per") || push.Next is not null || units[i].Next is not null
+                || !IsInstruction(branch.Statement, MnemonicKind.Brl, MnemonicKind.Bra)
+                || !IsInstruction(push.Step.Statement, MnemonicKind.Per) || push.Next is not null || units[i].Next is not null
                 || units[i + 1].Step.Label is not { } after
                 || Targets.Of(model, Transfers.TargetOf(branch.Statement, AddressingMode.Relative), branch.On)
                     is not { Symbol.Signature: not null } routine
@@ -333,7 +333,7 @@ public sealed class ControlFlow
                 continue;
             }
             var far = i >= 2 && units[i - 2].Step.Stream == branch.Stream
-                && IsInstruction(units[i - 2].Step.Statement, "phk");
+                && IsInstruction(units[i - 2].Step.Statement, MnemonicKind.Phk);
             relativeCalls[(branch.Statement.Position, branch.On)] = new RelativeCall(routine.Symbol, far);
             returnAddresses.Add((push.Step.Statement.Position, push.Step.On));
         }
@@ -351,9 +351,8 @@ public sealed class ControlFlow
             && model.ValueOf(difference.Right, push.On).AsNumber() == 1;
     }
 
-    private static bool IsInstruction(SyntaxNode statement, string mnemonic) =>
-        statement is InstructionStatementSyntax instruction
-        && instruction.Mnemonic.Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
+    private static bool IsInstruction(SyntaxNode statement, params ReadOnlySpan<MnemonicKind> mnemonics) =>
+        statement is InstructionStatementSyntax instruction && mnemonics.Contains(instruction.MnemonicKind);
 
     /// <summary>
     /// The blocks of one region. A label starts a block, and a statement that transfers
@@ -521,10 +520,10 @@ public sealed class ControlFlow
     /// could not lay out, which has already been reported where it is written.
     /// </summary>
     private static string? Uncounted(Step step) =>
-        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant() switch
+        (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
         {
-            "mvn" or "mvp" => "a block move takes 7 cycles a byte, and how many is in A",
-            "jam" => "`jam` stops the processor, and nothing after it runs until a reset",
+            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles a byte, and how many is in A",
+            MnemonicKind.Jam => "`jam` stops the processor, and nothing after it runs until a reset",
             _ => null,
         };
 
@@ -871,9 +870,9 @@ public sealed class ControlFlow
             var statement = unit.Step.Statement;
             if (unit.Next is null && routine.Signature is { HasNoCaller: true } own
                 && statement is InstructionStatementSyntax instruction
-                && (IsInstruction(instruction, "rts") || IsInstruction(instruction, "rtl")))
+                && IsInstruction(instruction, MnemonicKind.Rts, MnemonicKind.Rtl))
             {
-                var returned = instruction.Mnemonic.Text.ToLowerInvariant();
+                var returned = SyntaxFacts.TextOf(instruction.MnemonicKind);
                 Report(statement, own.IsInterrupt
                     ? Catalogue.HandlerReturnsNotRti.Says(routine.DisplayName, returned)
                     : Catalogue.NoreturnReturns.Says(routine.DisplayName, returned),
@@ -1118,7 +1117,7 @@ public sealed class ControlFlow
     }
 
     private static bool IsCall(SyntaxNode statement) =>
-        statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
+        statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
 
     /// <summary>One statement and the annotations written under it.</summary>
     private sealed class Unit(Step step)

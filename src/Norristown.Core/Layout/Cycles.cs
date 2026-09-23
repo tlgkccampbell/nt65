@@ -1,6 +1,8 @@
 using System.Collections.Frozen;
 using Norristown.Processor;
 using Norristown.Semantics;
+using Norristown.Syntax;
+using static Norristown.Syntax.MnemonicKind;
 
 namespace Norristown.Layout;
 
@@ -18,18 +20,6 @@ namespace Norristown.Layout;
 /// </summary>
 public static class Cycles
 {
-    /// <summary>
-    /// The instructions that only read, so an indexed form takes the extra page-crossing cycle
-    /// only when the address actually crosses a page.
-    /// </summary>
-    private const string Reads = "adc and bit cmp cpx cpy eor lda ldx ldy ora sbc";
-
-    /// <summary>The instructions that write, so an indexed form always takes the page-crossing cycle.</summary>
-    private const string Writes = "sta stx sty stz";
-
-    /// <summary>The instructions that read, change and write back, which always take the page-crossing cycle.</summary>
-    private const string Modifies = "asl dec inc lsr rol ror";
-
     /// <summary>An indexed or indirect-indexed operand whose address carries into the high byte.</summary>
     private const string Crossing = "+1 when the read crosses a page";
 
@@ -57,31 +47,43 @@ public static class Cycles
     /// </summary>
     private const string NativeMode = "+1 in native mode";
 
+    /// <summary>
+    /// The instructions that only read, so an indexed form takes the extra page-crossing cycle
+    /// only when the address actually crosses a page.
+    /// </summary>
+    private static readonly MnemonicKind[] Reads = [Adc, And, Bit, Cmp, Cpx, Cpy, Eor, Lda, Ldx, Ldy, Ora, Sbc];
+
+    /// <summary>The instructions that write, so an indexed form always takes the page-crossing cycle.</summary>
+    private static readonly MnemonicKind[] Writes = [Sta, Stx, Sty, Stz];
+
+    /// <summary>The instructions that read, change and write back, which always take the page-crossing cycle.</summary>
+    private static readonly MnemonicKind[] Modifies = [Asl, Dec, Inc, Lsr, Rol, Ror];
+
     /// <summary>The undocumented opcodes that read, change and write back, which always pay the index cycle.</summary>
-    private const string Combines = "slo rla sre rra dcp isc";
+    private static readonly MnemonicKind[] Combines = [Slo, Rla, Sre, Rra, Dcp, Isc];
 
-    private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> mos6502 = Build6502();
+    private static readonly FrozenDictionary<(MnemonicKind Mnemonic, AddressingMode Mode), Timing> mos6502 = Build6502();
 
-    private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> mos6502X = Build6502X();
+    private static readonly FrozenDictionary<(MnemonicKind Mnemonic, AddressingMode Mode), Timing> mos6502X = Build6502X();
 
-    private static readonly FrozenDictionary<(string Mnemonic, AddressingMode Mode), Timing> wdc65C02 = Build65C02();
+    private static readonly FrozenDictionary<(MnemonicKind Mnemonic, AddressingMode Mode), Timing> wdc65C02 = Build65C02();
 
     /// <summary>
     /// How long <paramref name="mnemonic"/> takes in <paramref name="mode"/>, or null when
     /// nt65 has no count for it. A branch is counted both taken and not taken, so its
     /// interval covers everything it can cost.
     /// </summary>
-    public static Timing? Of(Cpu cpu, string mnemonic, AddressingMode mode, ProcessorState? state = null)
+    public static Timing? Of(Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, ProcessorState? state = null)
     {
         if (cpu == Cpu.Wdc65816)
-            return Of65816(mnemonic.ToLowerInvariant(), mode, state ?? ProcessorState.Unknown);
+            return Of65816(mnemonic, mode, state ?? ProcessorState.Unknown);
         var table = cpu switch
         {
             Cpu.Mos6502 => mos6502,
             Cpu.Mos6502X => mos6502X,
             _ => wdc65C02,
         };
-        return table.TryGetValue((mnemonic.ToLowerInvariant(), mode), out var cycles) ? cycles : null;
+        return table.TryGetValue((mnemonic, mode), out var cycles) ? cycles : null;
     }
 
     /// <summary>
@@ -101,7 +103,7 @@ public static class Cycles
     /// costs one more when the low byte of D is not zero, which is known wherever the analysis
     /// knows D.
     /// </summary>
-    private static Timing? Of65816(string mnemonic, AddressingMode mode, ProcessorState state)
+    private static Timing? Of65816(MnemonicKind mnemonic, AddressingMode mode, ProcessorState state)
     {
         var a = state.A;
         var index = state.Index;
@@ -110,13 +112,13 @@ public static class Cycles
             : (state.D.Value & 0xff) != 0 ? new Timing(1)
             : new Timing(0);
 
-        if (Reads.Split(' ').Contains(mnemonic) || Writes.Split(' ').Contains(mnemonic)
-            || mnemonic is "tsb" or "trb" || Modifies.Split(' ').Contains(mnemonic))
+        if (Reads.Contains(mnemonic) || Writes.Contains(mnemonic)
+            || mnemonic is Tsb or Trb || Modifies.Contains(mnemonic))
         {
-            var indexed = mnemonic is "ldx" or "ldy" or "cpx" or "cpy" or "stx" or "sty";
+            var indexed = mnemonic is Ldx or Ldy or Cpx or Cpy or Stx or Sty;
             var sized = indexed ? index : a;
-            var reads = Reads.Split(' ').Contains(mnemonic);
-            var modifies = mnemonic is "tsb" or "trb" || Modifies.Split(' ').Contains(mnemonic);
+            var reads = Reads.Contains(mnemonic);
+            var modifies = mnemonic is Tsb or Trb || Modifies.Contains(mnemonic);
             if (modifies && mode == AddressingMode.Accumulator)
                 return new Timing(2);
             int? cost = mode switch
@@ -161,39 +163,39 @@ public static class Cycles
             : new Timing(new CycleCount(0, 1), Crosses);
         return (mnemonic, mode) switch
         {
-            (_, AddressingMode.Relative) when mnemonic == "bra" => new Timing(3) + always,
+            (_, AddressingMode.Relative) when mnemonic == Bra => new Timing(3) + always,
             (_, AddressingMode.Relative) => new Timing(new CycleCount(2, 3), Taken) + crossing,
-            ("brl", _) => new Timing(4),
-            ("per", _) => new Timing(6),
-            ("pea", _) => new Timing(5),
-            ("pei", _) => new Timing(6) + direct,
-            ("jmp", AddressingMode.Absolute) => new Timing(3),
-            ("jmp", AddressingMode.AbsoluteIndirect) => new Timing(5),
-            ("jmp", AddressingMode.AbsoluteIndirectX) => new Timing(6),
-            ("jml", AddressingMode.Long) => new Timing(4),
-            ("jml", AddressingMode.AbsoluteIndirectLong) => new Timing(6),
-            ("jsr", AddressingMode.Absolute) => new Timing(6),
-            ("jsr", AddressingMode.AbsoluteIndirectX) => new Timing(8),
-            ("jsl", _) => new Timing(8),
-            ("rts" or "rtl", _) => new Timing(6),
+            (Brl, _) => new Timing(4),
+            (Per, _) => new Timing(6),
+            (Pea, _) => new Timing(5),
+            (Pei, _) => new Timing(6) + direct,
+            (Jmp, AddressingMode.Absolute) => new Timing(3),
+            (Jmp, AddressingMode.AbsoluteIndirect) => new Timing(5),
+            (Jmp, AddressingMode.AbsoluteIndirectX) => new Timing(6),
+            (Jml, AddressingMode.Long) => new Timing(4),
+            (Jml, AddressingMode.AbsoluteIndirectLong) => new Timing(6),
+            (Jsr, AddressingMode.Absolute) => new Timing(6),
+            (Jsr, AddressingMode.AbsoluteIndirectX) => new Timing(8),
+            (Jsl, _) => new Timing(8),
+            (Rts or Rtl, _) => new Timing(6),
 
             // The native forms push and pull the program bank as well.
-            ("rti", _) => new Timing(6) + Native(state.E),
-            ("brk" or "cop", _) => new Timing(7) + Native(state.E),
-            ("pha", _) => new Timing(3) + Wider(a, 1, "A"),
-            ("phx" or "phy", _) => new Timing(3) + Wider(index, 1, "X and Y"),
-            ("pla", _) => new Timing(4) + Wider(a, 1, "A"),
-            ("plx" or "ply", _) => new Timing(4) + Wider(index, 1, "X and Y"),
-            ("php" or "phb" or "phk", _) => new Timing(3),
-            ("phd", _) => new Timing(4),
-            ("plp" or "plb", _) => new Timing(4),
-            ("pld", _) => new Timing(5),
-            ("rep" or "sep" or "stp" or "wai" or "xba", _) => new Timing(3),
-            ("wdm", _) => new Timing(2),
+            (Rti, _) => new Timing(6) + Native(state.E),
+            (Brk or Cop, _) => new Timing(7) + Native(state.E),
+            (Pha, _) => new Timing(3) + Wider(a, 1, "A"),
+            (Phx or Phy, _) => new Timing(3) + Wider(index, 1, "X and Y"),
+            (Pla, _) => new Timing(4) + Wider(a, 1, "A"),
+            (Plx or Ply, _) => new Timing(4) + Wider(index, 1, "X and Y"),
+            (Php or Phb or Phk, _) => new Timing(3),
+            (Phd, _) => new Timing(4),
+            (Plp or Plb, _) => new Timing(4),
+            (Pld, _) => new Timing(5),
+            (Rep or Sep or Stp or Wai or Xba, _) => new Timing(3),
+            (Wdm, _) => new Timing(2),
 
             // A block move takes seven cycles for every byte it moves, and how many that is
             // is in A when it runs.
-            ("mvn" or "mvp", _) => null,
+            (Mvn or Mvp, _) => null,
             (_, AddressingMode.Implied) => new Timing(2),
             _ => null,
         };
@@ -219,17 +221,17 @@ public static class Cycles
         _ => new Timing(new CycleCount(0, 1), NativeMode),
     };
 
-    private static Dictionary<(string, AddressingMode), Timing> Build()
+    private static Dictionary<(MnemonicKind, AddressingMode), Timing> Build()
     {
-        var table = new Dictionary<(string, AddressingMode), Timing>();
+        var table = new Dictionary<(MnemonicKind, AddressingMode), Timing>();
 
         // The addressing modes that cost the same whatever instruction uses them.
-        Add(table, Reads + " " + Writes, AddressingMode.Direct, 3);
-        Add(table, Reads + " " + Writes, AddressingMode.DirectX, 4);
-        Add(table, Reads + " " + Writes, AddressingMode.DirectY, 4);
-        Add(table, Reads + " " + Writes, AddressingMode.Absolute, 4);
+        Add(table, [.. Reads, .. Writes], AddressingMode.Direct, 3);
+        Add(table, [.. Reads, .. Writes], AddressingMode.DirectX, 4);
+        Add(table, [.. Reads, .. Writes], AddressingMode.DirectY, 4);
+        Add(table, [.. Reads, .. Writes], AddressingMode.Absolute, 4);
         Add(table, Reads, AddressingMode.Immediate, 2);
-        Add(table, Reads + " " + Writes, AddressingMode.DirectIndirectX, 6);
+        Add(table, [.. Reads, .. Writes], AddressingMode.DirectIndirectX, 6);
 
         // An indexed read pays one more only when it crosses a page; a write always does,
         // because it cannot begin until the address is settled.
@@ -246,31 +248,31 @@ public static class Cycles
         Add(table, Modifies, AddressingMode.Absolute, 6);
         Add(table, Modifies, AddressingMode.AbsoluteX, 7);
 
-        Add(table, "clc cld cli clv dex dey inx iny nop sec sed sei tax tay tsx txa txs tya",
+        Add(table, [Clc, Cld, Cli, Clv, Dex, Dey, Inx, Iny, Nop, Sec, Sed, Sei, Tax, Tay, Tsx, Txa, Txs, Tya],
             AddressingMode.Implied, 2);
-        Add(table, "pha php", AddressingMode.Implied, 3);
-        Add(table, "pla plp", AddressingMode.Implied, 4);
-        Add(table, "rts rti", AddressingMode.Implied, 6);
-        Add(table, "brk", AddressingMode.Immediate, 7);
-        Add(table, "jmp", AddressingMode.Absolute, 3);
-        Add(table, "jsr", AddressingMode.Absolute, 6);
+        Add(table, [Pha, Php], AddressingMode.Implied, 3);
+        Add(table, [Pla, Plp], AddressingMode.Implied, 4);
+        Add(table, [Rts, Rti], AddressingMode.Implied, 6);
+        Add(table, [Brk], AddressingMode.Immediate, 7);
+        Add(table, [Jmp], AddressingMode.Absolute, 3);
+        Add(table, [Jsr], AddressingMode.Absolute, 6);
 
         // A branch costs 2 not taken and 3 taken, and one more when a taken branch crosses a
         // page. Which it does is a run-time question, so the interval covers all three.
-        Add(table, "bcc bcs beq bmi bne bpl bvc bvs", AddressingMode.Relative,
+        Add(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], AddressingMode.Relative,
             new Timing(new CycleCount(2, 4), [Taken, TakenCrossing]));
         return table;
     }
 
-    private static FrozenDictionary<(string, AddressingMode), Timing> Build6502() => Nmos6502().ToFrozenDictionary();
+    private static FrozenDictionary<(MnemonicKind, AddressingMode), Timing> Build6502() => Nmos6502().ToFrozenDictionary();
 
-    private static Dictionary<(string, AddressingMode), Timing> Nmos6502()
+    private static Dictionary<(MnemonicKind, AddressingMode), Timing> Nmos6502()
     {
         var table = Build();
 
         // The 6502's indirect jump reads its pointer without carrying into the high byte,
         // which is the bug the 65C02 fixes by spending a cycle.
-        Add(table, "jmp", AddressingMode.AbsoluteIndirect, 5);
+        Add(table, [Jmp], AddressingMode.AbsoluteIndirect, 5);
         return table;
     }
 
@@ -286,7 +288,7 @@ public static class Cycles
     /// it stops the processor, and there is no next cycle to reach.
     /// </para>
     /// </summary>
-    private static FrozenDictionary<(string, AddressingMode), Timing> Build6502X()
+    private static FrozenDictionary<(MnemonicKind, AddressingMode), Timing> Build6502X()
     {
         var table = Nmos6502();
         Add(table, Combines, AddressingMode.Direct, 5);
@@ -297,72 +299,74 @@ public static class Cycles
         Add(table, Combines, AddressingMode.DirectIndirectX, 8);
         Add(table, Combines, AddressingMode.DirectIndirectY, 8);
 
-        Add(table, "lax", AddressingMode.Immediate, 2);
-        Add(table, "lax sax", AddressingMode.Direct, 3);
-        Add(table, "lax sax", AddressingMode.DirectY, 4);
-        Add(table, "lax sax", AddressingMode.Absolute, 4);
-        Add(table, "lax sax", AddressingMode.DirectIndirectX, 6);
-        Add(table, "lax las", AddressingMode.AbsoluteY, new Timing(new CycleCount(4, 5), Crossing));
-        Add(table, "lax", AddressingMode.DirectIndirectY, new Timing(new CycleCount(5, 6), Crossing));
+        Add(table, [Lax], AddressingMode.Immediate, 2);
+        Add(table, [Lax, Sax], AddressingMode.Direct, 3);
+        Add(table, [Lax, Sax], AddressingMode.DirectY, 4);
+        Add(table, [Lax, Sax], AddressingMode.Absolute, 4);
+        Add(table, [Lax, Sax], AddressingMode.DirectIndirectX, 6);
+        Add(table, [Lax, Las], AddressingMode.AbsoluteY, new Timing(new CycleCount(4, 5), Crossing));
+        Add(table, [Lax], AddressingMode.DirectIndirectY, new Timing(new CycleCount(5, 6), Crossing));
 
-        Add(table, "alr anc ane arr axs", AddressingMode.Immediate, 2);
+        Add(table, [Alr, Anc, Ane, Arr, Axs], AddressingMode.Immediate, 2);
 
         // The stores that mix the high byte of their own address into what they write settle
         // the address before they write, as every indexed store does, so each is exact.
-        Add(table, "sha shx tas", AddressingMode.AbsoluteY, 5);
-        Add(table, "shy", AddressingMode.AbsoluteX, 5);
-        Add(table, "sha", AddressingMode.DirectIndirectY, 6);
+        Add(table, [Sha, Shx, Tas], AddressingMode.AbsoluteY, 5);
+        Add(table, [Shy], AddressingMode.AbsoluteX, 5);
+        Add(table, [Sha], AddressingMode.DirectIndirectY, 6);
 
-        Add(table, "nop", AddressingMode.Immediate, 2);
-        Add(table, "nop", AddressingMode.Direct, 3);
-        Add(table, "nop", AddressingMode.DirectX, 4);
-        Add(table, "nop", AddressingMode.Absolute, 4);
-        Add(table, "nop", AddressingMode.AbsoluteX, new Timing(new CycleCount(4, 5), Crossing));
+        Add(table, [Nop], AddressingMode.Immediate, 2);
+        Add(table, [Nop], AddressingMode.Direct, 3);
+        Add(table, [Nop], AddressingMode.DirectX, 4);
+        Add(table, [Nop], AddressingMode.Absolute, 4);
+        Add(table, [Nop], AddressingMode.AbsoluteX, new Timing(new CycleCount(4, 5), Crossing));
         return table.ToFrozenDictionary();
     }
 
-    private static FrozenDictionary<(string, AddressingMode), Timing> Build65C02()
+    private static FrozenDictionary<(MnemonicKind, AddressingMode), Timing> Build65C02()
     {
         var table = Build();
-        Add(table, "jmp", AddressingMode.AbsoluteIndirect, 6);
-        Add(table, "jmp", AddressingMode.AbsoluteIndirectX, 6);
-        Add(table, Reads + " " + Writes, AddressingMode.DirectIndirect, 5);
-        Add(table, "bit", AddressingMode.Immediate, 2);
-        Add(table, "bra", AddressingMode.Relative, new Timing(new CycleCount(3, 4), Crosses));
-        Add(table, "phx phy", AddressingMode.Implied, 3);
-        Add(table, "plx ply", AddressingMode.Implied, 4);
-        Add(table, "stp wai", AddressingMode.Implied, 3);
-        Add(table, "trb tsb", AddressingMode.Direct, 5);
-        Add(table, "trb tsb", AddressingMode.Absolute, 6);
+        Add(table, [Jmp], AddressingMode.AbsoluteIndirect, 6);
+        Add(table, [Jmp], AddressingMode.AbsoluteIndirectX, 6);
+        Add(table, [.. Reads, .. Writes], AddressingMode.DirectIndirect, 5);
+        Add(table, [Bit], AddressingMode.Immediate, 2);
+        Add(table, [Bra], AddressingMode.Relative, new Timing(new CycleCount(3, 4), Crosses));
+        Add(table, [Phx, Phy], AddressingMode.Implied, 3);
+        Add(table, [Plx, Ply], AddressingMode.Implied, 4);
+        Add(table, [Stp, Wai], AddressingMode.Implied, 3);
+        Add(table, [Trb, Tsb], AddressingMode.Direct, 5);
+        Add(table, [Trb, Tsb], AddressingMode.Absolute, 6);
 
         // On the 65C02 an absolute-indexed shift takes the page-crossing cycle only when it
         // crosses a page; increment and decrement always take it.
-        Add(table, "asl lsr rol ror", AddressingMode.AbsoluteX, new Timing(new CycleCount(6, 7), Crossing));
-        Add(table, "inc dec", AddressingMode.AbsoluteX, 7);
-        Add(table, "inc dec", AddressingMode.Accumulator, 2);
+        Add(table, [Asl, Lsr, Rol, Ror], AddressingMode.AbsoluteX, new Timing(new CycleCount(6, 7), Crossing));
+        Add(table, [Inc, Dec], AddressingMode.AbsoluteX, 7);
+        Add(table, [Inc, Dec], AddressingMode.Accumulator, 2);
 
         for (var bit = 0; bit < 8; bit++)
         {
-            Add(table, $"rmb{bit} smb{bit}", AddressingMode.Direct, 5);
-            Add(table, $"bbr{bit} bbs{bit}", AddressingMode.DirectRelative,
+            Add(table, [Rmb0 + bit, Smb0 + bit], AddressingMode.Direct, 5);
+            Add(table, [Bbr0 + bit, Bbs0 + bit], AddressingMode.DirectRelative,
                 new Timing(new CycleCount(5, 7), [Taken, TakenCrossing]));
         }
 
         // Decimal arithmetic costs one more on the 65C02, and nothing in the program says
         // whether the decimal flag is set where the instruction runs.
-        foreach (var mode in table.Keys.Where(key => key.Item1 is "adc" or "sbc").ToList())
+        foreach (var mode in table.Keys.Where(key => key.Item1 is Adc or Sbc).ToList())
             table[mode] = table[mode].Maybe(1, Decimal);
         return table.ToFrozenDictionary();
     }
 
     private static void Add(
-        Dictionary<(string, AddressingMode), Timing> table, string mnemonics, AddressingMode mode, int cycles) =>
+        Dictionary<(MnemonicKind, AddressingMode), Timing> table, ReadOnlySpan<MnemonicKind> mnemonics,
+        AddressingMode mode, int cycles) =>
         Add(table, mnemonics, mode, new Timing(cycles));
 
     private static void Add(
-        Dictionary<(string, AddressingMode), Timing> table, string mnemonics, AddressingMode mode, Timing cycles)
+        Dictionary<(MnemonicKind, AddressingMode), Timing> table, ReadOnlySpan<MnemonicKind> mnemonics,
+        AddressingMode mode, Timing cycles)
     {
-        foreach (var mnemonic in mnemonics.Split(' '))
+        foreach (var mnemonic in mnemonics)
             table[(mnemonic, mode)] = cycles;
     }
 }

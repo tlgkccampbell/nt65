@@ -1,3 +1,4 @@
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -187,15 +188,14 @@ public sealed partial class CodeLayout
             if (branch.Long || Distance(branch) is not { } reach || InRange(reach))
                 continue;
             var mnemonic = branch.Statement.Mnemonic.Text;
-            var longer = "j" + mnemonic[1..];
-            var reaches = SyntaxFacts.LongBranches.Contains(longer);
-            var fix = reaches ? $": use `{longer}`, which reaches any near target" : "";
+            var longer = Instructions.LongFormOf(branch.Statement.MnemonicKind) is { } form ? SyntaxFacts.TextOf(form) : null;
+            var fix = longer is not null ? $": use `{longer}`, which reaches any near target" : "";
             ReportOnLine(branch.Target, branch.On,
                 Catalogue.BranchOutOfReach.Says(mnemonic, reach, fix),
 
                 // The change is to the branch, so it is offered only where the branch is
                 // written: an expansion's is the macro body's line, which is not this file's.
-                reaches && branch.On is null && branch.Statement.Tree == model.Tree
+                longer is not null && branch.On is null && branch.Statement.Tree == model.Tree
                     ? new DiagnosticFix(FixKind.Branch, longer)
                     : null);
         }

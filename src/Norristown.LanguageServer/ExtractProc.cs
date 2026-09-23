@@ -92,7 +92,7 @@ internal static class ExtractProc
             }
             if (Instruction(statement) is { } instruction)
             {
-                if (Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Returns)
+                if (Instructions.Facts(instruction.MnemonicKind).Control == Control.Returns)
                     return null;
                 code = true;
             }
@@ -113,8 +113,8 @@ internal static class ExtractProc
     /// <summary>
     /// Whether the selection is self-contained: nothing in it names a label the enclosing
     /// routine declares outside it, nothing outside it names a label declared in it, and every
-    /// jump in it lands on a label declared in it. A jump anywhere else — to another routine, or
-    /// through a pointer — would leave the new routine without coming back to its caller.
+    /// jump in it lands on a label declared in it. A jump anywhere else â€” to another routine, or
+    /// through a pointer â€” would leave the new routine without coming back to its caller.
     /// </summary>
     private static bool IsSelfContained(SemanticModel model, SyntaxTree tree, int first, int last)
     {
@@ -125,7 +125,7 @@ internal static class ExtractProc
         for (var line = first; line <= last; line++)
         {
             if (Instruction(StatementOn(tree, line)) is not { } jump
-                || Instructions.Facts(jump.Mnemonic.Text).Control != Control.Jumps)
+                || Instructions.Facts(jump.MnemonicKind).Control != Control.Jumps)
             {
                 continue;
             }

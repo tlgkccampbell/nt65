@@ -21,7 +21,7 @@ public static class Transfers
 
         // An indirect or computed target is one the operand does not name, whichever
         // instruction reaches it. A stop ends the path as a return does.
-        return Instructions.Facts(instruction.Mnemonic.Text).Control switch
+        return Instructions.Facts(instruction.MnemonicKind).Control switch
         {
             Control.Returns or Control.Stops => Transfer.Return,
             Control.Branches => Transfer.Branch,

@@ -139,10 +139,6 @@ public sealed class StateAnalysis : IProcessorStates
         _ => null,
     };
 
-    private static bool Is(SyntaxNode statement, string mnemonic) =>
-        statement is InstructionStatementSyntax instruction
-        && instruction.Mnemonic.Text.Equals(mnemonic, StringComparison.OrdinalIgnoreCase);
-
     /// <summary>
     /// What a <c>dp = e</c>, <c>dbr = e</c> or <c>dbr = [...]</c> item says, or unknown for
     /// <c>dp?</c> and for a value nt65 cannot work out.
@@ -390,19 +386,19 @@ public sealed class StateAnalysis : IProcessorStates
             return null;
         var mode = state.Processor.E;
         var written = $"`{statement.GetText().Trim()}`";
-        return statement.Mnemonic.Text.ToLowerInvariant() switch
+        return statement.MnemonicKind switch
         {
             // A `plp` that finds no saved P because the stack itself is not known says what
             // lost the stack, which is nearer the mistake than the `php` above it.
-            "plp" when state.Stack is null && state.WhyStack is { } lost => lost,
-            "plp" => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
-            "xce" => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
-            "rep" when mode != ProcessorMode.Native && Constant(step) is not null
+            MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
+            MnemonicKind.Plp => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            MnemonicKind.Xce => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
+            MnemonicKind.Rep when mode != ProcessorMode.Native && Constant(step) is not null
                 => new($"{written} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
-            "rep" or "sep" => new($"{written} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
-            "jsr" or "jsl" when next is not null && statement.Operand is not AbsoluteOperandSyntax
+            MnemonicKind.Rep or MnemonicKind.Sep => new($"{written} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
+            MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
                 => new($"{written} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
-            "jsr" or "jsl" => new($"{written} returns with it unknown", "an `.ensure` after it sets it"),
+            MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{written} returns with it unknown", "an `.ensure` after it sets it"),
             _ => new($"{written} makes it unknown", "a `.state` after it says what it is"),
         };
     }
@@ -423,7 +419,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (step.Statement is FallthroughDirectiveSyntax { Target: { } into }
             && Targets.Of(model, into, step.On)?.Symbol is { Kind: SymbolKind.Proc, Signature: { } signature } runsInto)
         {
-            checks.CheckTailCall(step, ".fallthrough", runsInto, signature, state.Processor, routine);
+            checks.CheckTailCall(step, ".fallthrough", MnemonicKind.None, runsInto, signature, state.Processor, routine);
             return state;
         }
 
@@ -436,7 +432,7 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
 
-        var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
+        var mnemonic = statement.MnemonicKind;
         var mode = layout.Of(statement, step.On)?.Mode;
         var processor = state.Processor;
         var stack = state.Stack;
@@ -450,15 +446,15 @@ public sealed class StateAnalysis : IProcessorStates
 
         switch (mnemonic)
         {
-            case "rep":
-            case "sep":
-                return state with { Processor = Flags(step, mnemonic == "rep", processor) };
+            case MnemonicKind.Rep:
+            case MnemonicKind.Sep:
+                return state with { Processor = Flags(step, mnemonic == MnemonicKind.Rep, processor) };
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
             // other `xce` swaps in an unknown carry, so the mode becomes unknown.
             // D and B are unaffected.
-            case "xce":
-                if (previous is { } clc && Is(clc.Statement, "clc"))
+            case MnemonicKind.Xce:
+                if (previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc } })
                 {
                     return state with
                     {
@@ -472,14 +468,14 @@ public sealed class StateAnalysis : IProcessorStates
                 }
                 return state with
                 {
-                    Processor = previous is { } sec && Is(sec.Statement, "sec")
+                    Processor = previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Sec } }
                         ? processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Emulation }
                         : processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Unknown },
                 };
 
             // The direct page is loaded from a constant by `lda #c` then `tcd` with A 16 bits;
             // any other `tcd` leaves D unknown.
-            case "tcd":
+            case MnemonicKind.Tcd:
                 return state with
                 {
                     Processor = processor with
@@ -491,53 +487,53 @@ public sealed class StateAnalysis : IProcessorStates
                 };
 
             // A block move leaves the data bank at its destination.
-            case "mvn":
-            case "mvp":
+            case MnemonicKind.Mvn:
+            case MnemonicKind.Mvp:
                 return state with { Processor = processor with { B = MovedTo(step) } };
 
-            case "php":
+            case MnemonicKind.Php:
                 return state with { Stack = stack?.Push(new StackEntry(true, processor.A, processor.Index)) };
             // A constant loaded into A just before it is pushed is a value a pull can get back:
             // `lda #c`, `pha`, `plb` loads the data bank.
-            case "pha":
+            case MnemonicKind.Pha:
                 return state with
                 {
                     Stack = Bytes(processor.A) is { } bytes && previous is { } loader && Loaded(loader) is { } loaded
                         ? stack?.PushValue(StateValue.Of(loaded & (bytes == 1 ? 0xff : 0xffff)), bytes)
                         : Push(stack, Bytes(processor.A)),
                 };
-            case "phx":
-            case "phy":
+            case MnemonicKind.Phx:
+            case MnemonicKind.Phy:
                 return state with { Stack = Push(stack, Bytes(processor.Index)) };
-            case "phb":
+            case MnemonicKind.Phb:
                 return state with { Stack = stack?.PushValue(processor.B, 1) };
-            case "phk":
+            case MnemonicKind.Phk:
                 return state with { Stack = stack?.PushValue(checks.BankOf(step.Segment), 1) };
-            case "phd":
+            case MnemonicKind.Phd:
                 return state with { Stack = stack?.PushValue(processor.D, 2) };
-            case "pea":
+            case MnemonicKind.Pea:
                 return state with
                 {
                     Stack = stack?.PushValue(Constant(step) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
                 };
-            case "pei":
-            case "per":
+            case MnemonicKind.Pei:
+            case MnemonicKind.Per:
                 return state with { Stack = Push(stack, 2) };
-            case "pla":
+            case MnemonicKind.Pla:
                 return state with { Stack = Pull(stack, Bytes(processor.A)) };
-            case "plx":
-            case "ply":
+            case MnemonicKind.Plx:
+            case MnemonicKind.Ply:
                 return state with { Stack = Pull(stack, Bytes(processor.Index)) };
             // A pull that finds a value the routine pushed gets it back: a saved D or B, a
             // constant, or the program bank. Any other pull leaves the register unknown.
-            case "plb":
+            case MnemonicKind.Plb:
                 return new FlowState(processor with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, Pull(stack, 1));
-            case "pld":
+            case MnemonicKind.Pld:
                 return new FlowState(processor with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it; any other leaves them unknown. The emulation flag is not in it.
-            case "plp":
+            case MnemonicKind.Plp:
                 var restored = stack?.Top is { IsStatus: true } saved
                     ? processor.E == ProcessorMode.Emulation
                         ? processor with { A = Width.Eight, Index = Width.Eight }
@@ -547,20 +543,20 @@ public sealed class StateAnalysis : IProcessorStates
 
             // The stack pointer now points somewhere unknown, and what is pushed from here on
             // is tracked on top of that unknown base.
-            case "txs":
-            case "tcs":
+            case MnemonicKind.Txs:
+            case MnemonicKind.Tcs:
                 return state with { Stack = AnalysisStack.Unanchored };
 
             // A return with a `.next` is a jump to the address the routine pushed, and pulls
             // it. Where the `.next` names routines it is a tail call to each of them, checked
             // as a `jmp` to one would be.
-            case "rts":
-            case "rtl":
+            case MnemonicKind.Rts:
+            case MnemonicKind.Rtl:
                 if (next is not null)
                 {
                     foreach (var named in Routines(next, step.On))
-                        checks.CheckTailCall(step, ".next", named, named.Signature!, processor, routine);
-                    return state with { Stack = Pull(stack, mnemonic == "rts" ? 2 : 3) };
+                        checks.CheckTailCall(step, ".next", MnemonicKind.None, named, named.Signature!, processor, routine);
+                    return state with { Stack = Pull(stack, mnemonic == MnemonicKind.Rts ? 2 : 3) };
                 }
                 if (routine.Signature is not { HasNoCaller: true })
                     checks.CheckReturn(step, mnemonic, processor, routine);
@@ -573,11 +569,11 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>What a call or a jump does: a call becomes its routine's exit, and a jump to a routine is checked as a tail call.</summary>
     private FlowState Transferred(
-        Step step, string mnemonic, AddressingMode? mode, NextDirectiveSyntax? next, FlowState state, Symbol routine)
+        Step step, MnemonicKind mnemonic, AddressingMode? mode, NextDirectiveSyntax? next, FlowState state, Symbol routine)
     {
         var statement = step.Statement;
         var transfer = Transfers.Of(statement, mode);
-        var calls = mnemonic is "jsr" or "jsl";
+        var calls = Instructions.Facts(mnemonic).Control == Control.Calls;
         var target = Targets.Of(model, Transfers.TargetOf(statement, mode), step.On)?.Symbol;
 
         if (transfer == Transfer.Call)
@@ -617,13 +613,13 @@ public sealed class StateAnalysis : IProcessorStates
             && !checks.InAnotherSpace(step, target))
         {
             checks.CheckMirror(step, mode);
-            checks.CheckTailCall(step, mnemonic, target, callee, state.Processor, routine);
+            checks.CheckTailCall(step, SyntaxFacts.TextOf(mnemonic), mnemonic, target, callee, state.Processor, routine);
         }
         else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
         {
             if (DeclaredElsewhere(target) is { } declared)
-                checks.CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
-            checks.CheckJumpInto(step, mnemonic, target, owner, state.Processor, routine);
+                checks.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
+            checks.CheckJumpInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine);
         }
         if (next is not null)
             CheckNamed(step, next, state, routine);
@@ -639,7 +635,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
         {
             if (named.Signature is { } signature)
-                checks.CheckTailCall(step, ".next", named, signature, state.Processor, routine);
+                checks.CheckTailCall(step, ".next", MnemonicKind.None, named, signature, state.Processor, routine);
             else if (Interior(named, routine) is { } inside)
                 checks.CheckJumpInto(step, ".next", named, inside, state.Processor, routine);
         }
@@ -663,13 +659,13 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>Whether a statement calls, directly or through a pointer.</summary>
     private static bool IsCallOrIndirectCall(Step step) =>
         step.Statement is InstructionStatementSyntax instruction
-        && Instructions.Facts(instruction.Mnemonic.Text).Control == Control.Calls;
+        && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
 
     /// <summary>
     /// A call: the state here must be what the routine expects, and becomes what it returns
     /// with, except for the parts it declares unchanged, which keep what they were.
     /// </summary>
-    private ProcessorState Called(Step step, string mnemonic, Symbol? target, ProcessorState state)
+    private ProcessorState Called(Step step, MnemonicKind mnemonic, Symbol? target, ProcessorState state)
     {
         // A call into another address space has been reported where it is laid out, and what
         // another processor's routine expects has no bearing on this processor's state.
@@ -694,7 +690,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// A call written as <c>per</c> and a branch, checked as <c>jsr</c> or, with a <c>phk</c>
     /// before it, as <c>jsl</c>.
     /// </summary>
-    private ProcessorState RelativelyCalled(Step step, string mnemonic, RelativeCall call, ProcessorState state)
+    private ProcessorState RelativelyCalled(Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state)
     {
         var callee = call.Routine.Signature!;
         if (callee.IsInterrupt)
@@ -761,7 +757,8 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>The constant <paramref name="step"/> loads into A, for an <c>lda #c</c>; null for anything else.</summary>
     private long? Loaded(Step step) =>
-        Is(step.Statement, "lda") && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
+        step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Lda }
+        && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
             ? Constant(step)
             : null;
 

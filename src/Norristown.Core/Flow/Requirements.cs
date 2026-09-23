@@ -68,10 +68,6 @@ internal sealed class Requirements
         diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
     }
 
-    private static bool Is(SyntaxNode statement, params string[] mnemonics) =>
-        statement is InstructionStatementSyntax instruction
-        && mnemonics.Any(m => instruction.Mnemonic.Text.Equals(m, StringComparison.OrdinalIgnoreCase));
-
     /// <summary>The statement as it is written, for a message that quotes it.</summary>
     private static string Quoted(SyntaxNode statement) => $"`{statement.GetText().Trim()}`";
 
@@ -142,8 +138,8 @@ internal sealed class Requirements
                 Report(statement, Catalogue.IndirectJumpUnchecked.Says(Quoted(statement)), EndPath(step));
                 break;
 
-            case Transfer.Return when Is(statement, "rts", "rtl") && PushesCode(block):
-                Report(statement, Catalogue.PushedReturnUnchecked.Says(statement.Mnemonic.Text.ToLowerInvariant()));
+            case Transfer.Return when statement.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl && PushesCode(block):
+                Report(statement, Catalogue.PushedReturnUnchecked.Says(SyntaxFacts.TextOf(statement.MnemonicKind)));
                 break;
 
             case Transfer.Jump or Transfer.Branch when flow.RelativeCallAt(step) is null:
@@ -225,7 +221,8 @@ internal sealed class Requirements
         {
             if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
-            if (Is(statement, "pha", "phx", "phy", "pea", "pei", "per"))
+            if (statement.MnemonicKind is MnemonicKind.Pha or MnemonicKind.Phx or MnemonicKind.Phy
+                or MnemonicKind.Pea or MnemonicKind.Pei or MnemonicKind.Per)
                 pushes = true;
             if (statement.Operand is not { } operand)
                 continue;
@@ -388,7 +385,7 @@ internal sealed class Requirements
     /// </summary>
     private static InstructionFacts Mnemonic(SyntaxNode statement) =>
         statement is InstructionStatementSyntax instruction
-            ? Instructions.Facts(instruction.Mnemonic.Text)
+            ? Instructions.Facts(instruction.MnemonicKind)
             : InstructionFacts.None;
 
     /// <summary>

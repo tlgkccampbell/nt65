@@ -32,14 +32,14 @@ public sealed partial class CodeLayout
         // An immediate is a value, a block move's banks are values, and `pea` and `per` push
         // their operand as a value rather than accessing memory at it.
         if (operand is null || mode is AddressingMode.Immediate or AddressingMode.BlockMove
-            || mnemonic.Text.ToLowerInvariant() is "pea" or "per")
+            || mnemonic.MnemonicKind is MnemonicKind.Pea or MnemonicKind.Per)
         {
             return;
         }
 
         var transfer = mode is AddressingMode.Relative or AddressingMode.RelativeLong or AddressingMode.DirectRelative
             || (mode is AddressingMode.Absolute or AddressingMode.Long
-                && Instructions.Facts(mnemonic.Text).Control is Control.Jumps or Control.Calls);
+                && Instructions.Facts(mnemonic.MnemonicKind).Control is Control.Jumps or Control.Calls);
         IEnumerable<SyntaxNode> expressions = operand is AbsoluteOperandSyntax { Second: { } second }
             ? [Expression(operand)!, second]
             : Expression(operand) is { } only ? [only] : [];

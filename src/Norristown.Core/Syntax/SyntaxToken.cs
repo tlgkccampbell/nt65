@@ -38,6 +38,12 @@ public readonly record struct SyntaxToken
     public string Text => Green.Text;
 
     /// <summary>
+    /// The instruction a <see cref="SyntaxKind.Mnemonic"/> token names, whatever case it is
+    /// written in, and <see cref="Syntax.MnemonicKind.None"/> for every other token.
+    /// </summary>
+    public MnemonicKind MnemonicKind => Green.MnemonicKind;
+
+    /// <summary>
     /// Whether the token fills a place the syntax requires but the source does not write. Its
     /// text is empty and its span is the empty span where it would have been written.
     /// </summary>

@@ -1295,7 +1295,7 @@
     </Field>
   </Node>
 
-  <Node Name="InstructionStatementSyntax" Base="StatementSyntax">
+  <Node Name="InstructionStatementSyntax" Base="StatementSyntax" Partial="true">
     <Kind Name="InstructionStatement"/>
     <TypeComment>
       <summary>A mnemonic and its operand, if it takes one.</summary>

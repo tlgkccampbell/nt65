@@ -54,10 +54,13 @@ internal static class CountedLoops
         var steps = Written(blocks[loop.Latch]);
         if (steps.Count < 2)
             return null;
-        if (Mnemonic(steps[^1]) is not ("bne" or "bpl") || Mnemonic(steps[^2]) is not ("dex" or "dey"))
+        if (Mnemonic(steps[^1]) is not (MnemonicKind.Bne or MnemonicKind.Bpl)
+            || Mnemonic(steps[^2]) is not (MnemonicKind.Dex or MnemonicKind.Dey))
+        {
             return null;
-        var counter = Mnemonic(steps[^2])!;
-        var register = counter == "dex" ? Registers.X : Registers.Y;
+        }
+        var counter = Mnemonic(steps[^2]);
+        var register = counter == MnemonicKind.Dex ? Registers.X : Registers.Y;
 
         // The count may come down by more than one per iteration, as it does when the loop
         // walks an array of words: every decrement in the unbroken run just before the branch
@@ -91,7 +94,7 @@ internal static class CountedLoops
             {
                 if (i == loop.Latch && counting.Contains(step.Statement.Position))
                     continue;
-                if (Mnemonic(step) is { } other && Writes(other, register))
+                if (Writes(Mnemonic(step), register))
                     return null;
             }
         }
@@ -103,7 +106,7 @@ internal static class CountedLoops
             if (!loop.Inside[i] && blocks[i].Successors.Any(edge => edge.Kind != EdgeKind.Call && edge.To == loop.Header))
                 from.Add(i);
         }
-        if (from.Count != 1 || Started(model, blocks[from[0]], counter == "dex" ? "ldx" : "ldy", register) is not { } start)
+        if (from.Count != 1 || Started(model, blocks[from[0]], counter == MnemonicKind.Dex ? MnemonicKind.Ldx : MnemonicKind.Ldy, register) is not { } start)
             return null;
 
         // `bne` runs the count down to zero, so the stride has to divide it or the count skips
@@ -113,7 +116,7 @@ internal static class CountedLoops
         if (start <= 0)
             return null;
         long turns;
-        if (Mnemonic(steps[^1]) == "bne")
+        if (Mnemonic(steps[^1]) == MnemonicKind.Bne)
         {
             if (start % stride != 0)
                 return null;
@@ -132,12 +135,13 @@ internal static class CountedLoops
     /// The immediate the block before the loop leaves in the register, or null when what it
     /// leaves there is anything else. The last thing it writes is what the loop starts from.
     /// </summary>
-    private static long? Started(SemanticModel model, BasicBlock before, string load, Registers register)
+    private static long? Started(SemanticModel model, BasicBlock before, MnemonicKind load, Registers register)
     {
         long? started = null;
         foreach (var step in Written(before))
         {
-            if (Mnemonic(step) is not { } mnemonic || !Writes(mnemonic, register))
+            var mnemonic = Mnemonic(step);
+            if (!Writes(mnemonic, register))
                 continue;
             started = mnemonic == load ? Immediate(model, step) : null;
         }
@@ -199,16 +203,16 @@ internal static class CountedLoops
     }
 
     /// <summary>Whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
-    private static bool Writes(string mnemonic, Registers register) =>
+    private static bool Writes(MnemonicKind mnemonic, Registers register) =>
         Instructions.Facts(mnemonic).Writes.HasFlag(register);
 
     /// <summary>The instructions written in a block, the markers and the directives aside.</summary>
     private static List<Step> Written(BasicBlock block) =>
         [.. block.Steps.Where(step => !step.IsMarker && step.Statement is InstructionStatementSyntax)];
 
-    /// <summary>The mnemonic a step's statement is written with, lower case, or null.</summary>
-    private static string? Mnemonic(Step step) =>
-        (step.Statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant();
+    /// <summary>The mnemonic a step's statement is written with, or <see cref="MnemonicKind.None"/>.</summary>
+    private static MnemonicKind Mnemonic(Step step) =>
+        (step.Statement as InstructionStatementSyntax)?.MnemonicKind ?? MnemonicKind.None;
 
     /// <summary>The value of the immediate a step is written with, or null when it has none nt65 knows.</summary>
     private static long? Immediate(SemanticModel model, Step step) =>

@@ -8,16 +8,13 @@ public static class SyntaxFacts
     // Static field initializers run in text order, so each field here is declared after the
     // fields its initializer reads.
 
-    // The Rockwell bit instructions, each of which is spelled with a bit number after it.
-    private static readonly string[] BitOps = ["bbr", "bbs", "rmb", "smb"];
+    // How each mnemonic kind is written, indexed by the kind; None is written as nothing.
+    private static readonly string[] mnemonicTexts =
+        [.. Enum.GetValues<MnemonicKind>().Select(kind => kind == MnemonicKind.None ? "" : kind.ToString().ToLowerInvariant())];
 
-    /// <summary>The long branches, which reach any near target.</summary>
-    public static readonly FrozenSet<string> LongBranches =
-        new[] { "jeq", "jne", "jcs", "jcc", "jmi", "jpl", "jvs", "jvc" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Every reserved mnemonic, lower case, in a fixed order.</summary>
-    public static readonly IReadOnlyList<string> Mnemonics =
-        [.. CpuMnemonics().Concat(LongBranches.Order(StringComparer.Ordinal)).Distinct()];
+    /// <summary>Every mnemonic, in the order <see cref="MnemonicKind"/> declares them.</summary>
+    public static readonly IReadOnlyList<MnemonicKind> Mnemonics =
+        [.. Enum.GetValues<MnemonicKind>().Where(kind => kind != MnemonicKind.None)];
 
     /// <summary>The register names, lower case.</summary>
     public static readonly IReadOnlyList<string> Registers = ["a", "x", "y", "s"];
@@ -55,7 +52,8 @@ public static class SyntaxFacts
     public static readonly string ListedCpuNames =
         string.Join(", ", CpuNames.SkipLast(1).Select(name => $"`{name}`")) + $" or `{CpuNames[^1]}`";
 
-    private static readonly FrozenSet<string> mnemonicSet = Mnemonics.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, MnemonicKind> mnemonicKinds =
+        Mnemonics.ToFrozenDictionary(TextOf, StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> registerSet = Registers.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -163,7 +161,29 @@ public static class SyntaxFacts
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether <paramref name="text"/> is a mnemonic, whatever its case.</summary>
-    public static bool IsMnemonic(ReadOnlySpan<char> text) => mnemonicSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
+    public static bool IsMnemonic(ReadOnlySpan<char> text) => MnemonicKindOf(text) != MnemonicKind.None;
+
+    /// <summary>The mnemonic <paramref name="text"/> names, whatever its case, or <see cref="MnemonicKind.None"/>.</summary>
+    public static MnemonicKind MnemonicKindOf(ReadOnlySpan<char> text) =>
+        mnemonicKinds.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(text, out var kind) ? kind : MnemonicKind.None;
+
+    /// <summary>How <paramref name="kind"/> is written, lower case; empty for <see cref="MnemonicKind.None"/>.</summary>
+    public static string TextOf(MnemonicKind kind) => mnemonicTexts[(int)kind];
+
+    /// <summary>Whether <paramref name="kind"/> is one of the long branches, which reach any near target.</summary>
+    public static bool IsLongBranch(MnemonicKind kind) => kind is >= MnemonicKind.Jeq and <= MnemonicKind.Jvc;
+
+    /// <summary>
+    /// The family and bit number of a Rockwell bit instruction: <c>bbr3</c> is
+    /// <see cref="MnemonicKind.Bbr0"/> and 3. Null for every other mnemonic.
+    /// </summary>
+    public static (MnemonicKind Family, int Bit)? BitOf(MnemonicKind kind)
+    {
+        if (kind is < MnemonicKind.Bbr0 or > MnemonicKind.Smb7)
+            return null;
+        var offset = kind - MnemonicKind.Bbr0;
+        return (MnemonicKind.Bbr0 + (offset / 8 * 8), offset % 8);
+    }
 
     /// <summary>Whether <paramref name="text"/> is a register name, whatever its case.</summary>
     public static bool IsRegister(ReadOnlySpan<char> text) => registerSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
@@ -342,48 +362,6 @@ public static class SyntaxFacts
         SyntaxKind.Question => "?",
         _ => null,
     };
-
-    /// <summary>
-    /// The canonical WDC mnemonics of the CPUs, and the undocumented opcodes of the NMOS 6502
-    /// in ca65's spellings, since those have no canonical name of their own. ca65's alternative
-    /// 65816 spellings (<c>tad</c>, <c>swa</c> and the rest) are ordinary identifiers here. The
-    /// exception is <c>tas</c>: here it is the NMOS undocumented opcode listed below, not ca65's
-    /// alternative spelling.
-    /// </summary>
-    private static IEnumerable<string> CpuMnemonics()
-    {
-        string[] mos6502 =
-        [
-            "adc", "and", "asl", "bcc", "bcs", "beq", "bit", "bmi", "bne", "bpl", "brk", "bvc", "bvs",
-            "clc", "cld", "cli", "clv", "cmp", "cpx", "cpy", "dec", "dex", "dey", "eor", "inc", "inx",
-            "iny", "jmp", "jsr", "lda", "ldx", "ldy", "lsr", "nop", "ora", "pha", "php", "pla", "plp",
-            "rol", "ror", "rti", "rts", "sbc", "sec", "sed", "sei", "sta", "stx", "sty", "tax", "tay",
-            "tsx", "txa", "txs", "tya",
-        ];
-
-        string[] mos6502X =
-        [
-            "alr", "anc", "ane", "arr", "axs", "dcp", "isc", "jam", "las", "lax", "rla", "rra",
-            "sax", "sha", "shx", "shy", "slo", "sre", "tas",
-        ];
-
-        // bbr0..bbr7 and friends are spelled with the bit number, as in ca65.
-        string[] wdc65C02 =
-        [
-            "bra", "phx", "phy", "plx", "ply", "stz", "trb", "tsb", "stp", "wai",
-            .. from bit in Enumerable.Range(0, 8)
-               from op in BitOps
-               select op + bit,
-        ];
-
-        string[] wdc65816 =
-        [
-            "brl", "cop", "jml", "jsl", "mvn", "mvp", "pea", "pei", "per", "phb", "phd", "phk", "plb",
-            "pld", "rep", "rtl", "sep", "tcd", "tcs", "tdc", "tsc", "txy", "tyx", "wdm", "xba", "xce",
-        ];
-
-        return mos6502.Concat(mos6502X).Concat(wdc65C02).Concat(wdc65816);
-    }
 
     /// <summary>
     /// What a directive at the start of a line is: the node it parses to, the block it opens

@@ -385,7 +385,7 @@ internal static class TextMateGrammar
 
             // After `::` a word is a member, however it is spelled.
             Rule.Scoped($@"::({Word})", Identifier),
-            new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics)})\b", Name: Mnemonic),
+            new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics.Select(SyntaxFacts.TextOf))})\b", Name: Mnemonic),
             new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b", Name: Register),
 
             // A macro call, after mnemonics and registers, which keep their scope even before a

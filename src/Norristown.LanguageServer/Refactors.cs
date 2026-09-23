@@ -205,7 +205,7 @@ internal static class Refactors
             .SelectMany(block => block.Steps))
         {
             if (step.On is not null || step.Statement is not InstructionStatementSyntax instruction
-                || instruction.Mnemonic.Text.ToLowerInvariant() is not ("rts" or "rtl"))
+                || instruction.MnemonicKind is not (MnemonicKind.Rts or MnemonicKind.Rtl))
             {
                 continue;
             }
@@ -243,13 +243,13 @@ internal static class Refactors
         // different instruction, and rewriting it as the `.ensure` its value happens to match
         // would change what it does.
         if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax immediate } instruction
-            && instruction.Mnemonic.Text.ToLowerInvariant() is ("rep" or "sep") and var written
+            && instruction.MnemonicKind is (MnemonicKind.Rep or MnemonicKind.Sep) and var written
             && model.ValueOf(immediate.Value) is { Kind: ValueKind.Number } value)
         {
             var flags = value.Number;
             if (flags != 0 && (flags & ~0x30) == 0)
             {
-                var width = written == "rep" ? 16 : 8;
+                var width = written == MnemonicKind.Rep ? 16 : 8;
                 var items = string.Join(", ", new[]
                 {
                     (flags & 0x20) != 0 ? $"a{width}" : null,

@@ -20,6 +20,8 @@ internal sealed class GreenToken : GreenNode
         Text = text;
         LeadingTrivia = leading;
         TrailingTrivia = trailing;
+        if (kind == SyntaxKind.Mnemonic)
+            MnemonicKind = SyntaxFacts.MnemonicKindOf(text);
 
         // A lexical error covers the token's text and is given to the constructor rather than
         // reported afterwards. That is safe because the cache never shares a token that has an
@@ -41,6 +43,9 @@ internal sealed class GreenToken : GreenNode
 
     /// <summary>The token's text, exactly as in the source.</summary>
     public string Text { get; }
+
+    /// <summary>The instruction a mnemonic token names, and <see cref="MnemonicKind.None"/> for every other token.</summary>
+    public MnemonicKind MnemonicKind { get; }
 
     /// <summary>Whitespace before the token; only the first token on a line has any.</summary>
     public ImmutableArray<GreenTrivia> LeadingTrivia { get; }

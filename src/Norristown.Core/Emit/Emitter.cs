@@ -1064,21 +1064,21 @@ public sealed class Emitter
     private void Branch(LineSyntax line, InstructionStatementSyntax statement, LineLayout laid)
     {
         var mnemonic = statement.Mnemonic;
-        var (taken, skipped) = Instructions.FormsOf(mnemonic.Text);
+        var (taken, skipped) = Instructions.FormsOf(statement.MnemonicKind);
         var edits = new Edits();
         Substitute(statement, edits, nested: false);
 
         if (!laid.Inverted)
         {
-            edits.Replace[mnemonic.Position] = taken;
+            edits.Replace[mnemonic.Position] = SyntaxFacts.TextOf(taken);
             Code(line, Render(statement, edits, Body), laid.Length);
             return;
         }
 
         var over = names.Generated((routine is null ? "" : Named(routine) + "__") + "over");
-        edits.Replace[mnemonic.Position] = "jmp";
+        edits.Replace[mnemonic.Position] = SyntaxFacts.TextOf(MnemonicKind.Jmp);
         var jump = Render(statement, edits, Body);
-        Code(line, $"{Body}{skipped} {over}", Instructions.Length(AddressingMode.Relative));
+        Code(line, $"{Body}{SyntaxFacts.TextOf(skipped)} {over}", Instructions.Length(AddressingMode.Relative));
         Write(new EmittedLine(jump, Instructions.Length(AddressingMode.Absolute)));
         Line($"{over}:");
     }
@@ -1856,7 +1856,7 @@ public sealed class Emitter
     {
         if (layout.Of(statement, expansion) is not { Bits: { } bits }
             || statement is not InstructionStatementSyntax instruction
-            || Instructions.SizedBy(instruction.Mnemonic.Text) is not { } register)
+            || Instructions.SizedBy(instruction.MnemonicKind) is not { } register)
         {
             return;
         }
@@ -2096,7 +2096,7 @@ public sealed class Emitter
             // `wdm #n` is written as its bytes, which is what it is to every processor but the
             // emulator that hooks it.
             case InstructionStatementSyntax { Operand: ImmediateOperandSyntax hook } instruction
-                when instruction.Mnemonic.Text.Equals("wdm", StringComparison.OrdinalIgnoreCase):
+                when instruction.MnemonicKind == MnemonicKind.Wdm:
                 edits.Replace[instruction.Mnemonic.Position] = ".byte";
                 edits.Replace[hook.HashToken.Position] = "$42, ";
                 break;
@@ -2794,7 +2794,7 @@ public sealed class Emitter
         /// <inheritdoc/>
         public override void VisitInstructionStatement(InstructionStatementSyntax node)
         {
-            if (SyntaxFacts.LongBranches.Contains(node.Mnemonic.Text)
+            if (SyntaxFacts.IsLongBranch(node.MnemonicKind)
                 && emitter.layout.Of(node, emitter.expansion) is { } laid)
             {
                 emitter.Branch(Line, node, laid);

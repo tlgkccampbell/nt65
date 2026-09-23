@@ -495,12 +495,12 @@ public static class RegisterKeeps
             if (step.Statement is not InstructionStatementSyntax statement)
                 return state;
 
-            var mnemonic = statement.Mnemonic.Text.ToLowerInvariant();
+            var mnemonic = statement.MnemonicKind;
             var mode = layout.Of(statement, step.On)?.Mode;
             var facts = Instructions.Facts(mnemonic);
 
             // A software interrupt runs a handler that may not even be in this program.
-            if (mnemonic is "brk" or "cop")
+            if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
                 return state.WithEach(Registers.All, RegisterValue.Unknown);
 
             // A call is handled for the block as a whole, because its effect depends on which
@@ -511,7 +511,7 @@ public static class RegisterKeeps
             // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
             // back, so a handler that has left the stack where it found it hands the carry back
             // however it used it on the way.
-            if (mnemonic == "rti")
+            if (mnemonic == MnemonicKind.Rti)
                 return state.With(Registers.C, state.Stack is { Depth: 0 } ? RegisterValue.Of(Registers.C) : RegisterValue.Unknown);
 
             if (facts.Pushes is { } push)
@@ -520,7 +520,7 @@ public static class RegisterKeeps
                 return Restored(step, state, facts, pull);
 
             // Moving the stack pointer leaves nothing known about the saves on the stack.
-            if (mnemonic is "txs" or "tcs")
+            if (mnemonic is MnemonicKind.Txs or MnemonicKind.Tcs)
                 state = state with { Stack = null };
 
             if (RegisterEffects.Moved(mnemonic) is { } moved)
@@ -615,7 +615,7 @@ public static class RegisterKeeps
             var mode = layout.Of(statement, step.On)?.Mode;
             var transfer = Transfers.Of(statement, mode);
             var control = statement is InstructionStatementSyntax instruction
-                ? Instructions.Facts(instruction.Mnemonic.Text).Control
+                ? Instructions.Facts(instruction.MnemonicKind).Control
                 : Control.Through;
             var calls = transfer == Transfer.Call
                 || flow.RelativeCallAt(step) is not null

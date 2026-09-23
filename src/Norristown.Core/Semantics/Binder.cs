@@ -1650,9 +1650,9 @@ internal sealed partial class Binder
     {
         if (name.Kind != SyntaxKind.Mnemonic)
             return;
-        var named = Instructions.Writable(cpu, name.Text)
+        var named = Instructions.Writable(cpu, name.MnemonicKind)
             ? cpu
-            : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.Text));
+            : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.MnemonicKind));
         if (named is not { } having)
             return;
         Warn(name.Span, Catalogue.MnemonicName.Says(name.Text, CpuNames.Spell(having)));

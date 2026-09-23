@@ -397,8 +397,9 @@ internal static class Completion
                     if (!Instructions.Writable(cpu, mnemonic))
                         continue;
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
-                    items.TryAdd(mnemonic, new Suggestion(
-                        Protocol.CompletionItemKind.Text, "instruction", takes ? mnemonic + " " : mnemonic,
+                    var written = SyntaxFacts.TextOf(mnemonic);
+                    items.TryAdd(written, new Suggestion(
+                        Protocol.CompletionItemKind.Text, "instruction", takes ? written + " " : written,
                         Band: Suggestion.Instruction));
                 }
                 AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro
@@ -452,7 +453,7 @@ internal static class Completion
         ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
         Dictionary<string, Suggestion> items)
     {
-        var mnemonic = line.Before[line.Start].Text;
+        var mnemonic = SyntaxFacts.MnemonicKindOf(line.Before[line.Start].Text);
         var modes = ModesOf(cpu, mnemonic);
         if (modes.Count == 0)
             return;
@@ -504,7 +505,7 @@ internal static class Completion
 
     /// <summary>The operand forms an instruction has, each offered as the character or prefix that begins it.</summary>
     private static void Forms(
-        IReadOnlySet<AddressingMode> modes, Cpu cpu, string mnemonic,
+        IReadOnlySet<AddressingMode> modes, Cpu cpu, MnemonicKind mnemonic,
         Dictionary<string, Suggestion> items)
     {
         if (modes.Contains(AddressingMode.Immediate))
@@ -583,8 +584,8 @@ internal static class Completion
     /// The addressing modes an instruction has on this CPU, or, for the long branches, which
     /// nt65 accepts on every CPU, a single relative-long target.
     /// </summary>
-    private static IReadOnlySet<AddressingMode> ModesOf(Cpu cpu, string mnemonic) =>
-        SyntaxFacts.LongBranches.Contains(mnemonic)
+    private static IReadOnlySet<AddressingMode> ModesOf(Cpu cpu, MnemonicKind mnemonic) =>
+        SyntaxFacts.IsLongBranch(mnemonic)
             ? new HashSet<AddressingMode> { AddressingMode.RelativeLong }
             : Instructions.Modes(cpu, mnemonic);
 

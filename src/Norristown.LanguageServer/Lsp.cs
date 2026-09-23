@@ -550,7 +550,7 @@ internal static class Lsp
 
         // Show the instruction's full datasheet name as a trailing comment, since a reader who
         // already knows what `xba` stands for is not the one hovering it.
-        var mnemonic = (statement as InstructionStatementSyntax)?.Mnemonic.Text.ToLowerInvariant();
+        var mnemonic = (statement as InstructionStatementSyntax)?.MnemonicKind;
         var line = Written(model.Tree.Text[statement.Span.Start..statement.Span.End]);
         var card = new Card(
             mnemonic is { } named && Mnemonics.Name(named) is { } called ? $"{line}  ; {called}" : line,

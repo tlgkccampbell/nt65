@@ -26,7 +26,7 @@ public sealed class RegisterEffectsTests
     public void EveryMnemonicIsInTheTable()
     {
         Assert.Equal(
-            SyntaxFacts.Mnemonics.Order(StringComparer.Ordinal),
+            SyntaxFacts.Mnemonics.Select(SyntaxFacts.TextOf).Order(StringComparer.Ordinal),
             Writes.Keys.Order(StringComparer.Ordinal));
     }
 
@@ -35,16 +35,20 @@ public sealed class RegisterEffectsTests
     public void EachMnemonicWritesWhatTheTableSays()
     {
         foreach (var (mnemonic, written) in Writes)
-            Assert.Equal((mnemonic, written), (mnemonic, RegisterEffects.Written(mnemonic, AddressingMode.Implied, null)));
+        {
+            Assert.Equal(
+                (mnemonic, written),
+                (mnemonic, RegisterEffects.Written(SyntaxFacts.MnemonicKindOf(mnemonic), AddressingMode.Implied, null)));
+        }
     }
 
     /// <summary>A shift through the accumulator writes it; one through memory writes only the carry.</summary>
     [Theory]
-    [InlineData("asl")]
-    [InlineData("lsr")]
-    [InlineData("rol")]
-    [InlineData("ror")]
-    public void AShiftWritesTheAccumulatorOnlyWhenItGoesThroughIt(string mnemonic)
+    [InlineData(MnemonicKind.Asl)]
+    [InlineData(MnemonicKind.Lsr)]
+    [InlineData(MnemonicKind.Rol)]
+    [InlineData(MnemonicKind.Ror)]
+    public void AShiftWritesTheAccumulatorOnlyWhenItGoesThroughIt(MnemonicKind mnemonic)
     {
         Assert.Equal(Registers.A | Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Accumulator, null));
         Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Absolute, null));
@@ -52,9 +56,9 @@ public sealed class RegisterEffectsTests
 
     /// <summary>The CMOS `inc a` and `dec a` write the accumulator; through memory they write nothing.</summary>
     [Theory]
-    [InlineData("inc")]
-    [InlineData("dec")]
-    public void AnIncrementWritesTheAccumulatorOnlyWhenItGoesThroughIt(string mnemonic)
+    [InlineData(MnemonicKind.Inc)]
+    [InlineData(MnemonicKind.Dec)]
+    public void AnIncrementWritesTheAccumulatorOnlyWhenItGoesThroughIt(MnemonicKind mnemonic)
     {
         Assert.Equal(Registers.A, RegisterEffects.Written(mnemonic, AddressingMode.Accumulator, null));
         Assert.Equal(Registers.None, RegisterEffects.Written(mnemonic, AddressingMode.Direct, null));
@@ -66,9 +70,9 @@ public sealed class RegisterEffectsTests
     /// writing the carry.
     /// </summary>
     [Theory]
-    [InlineData("rep")]
-    [InlineData("sep")]
-    public void RepAndSepWriteTheCarryOnlyWhenTheyNameIt(string mnemonic)
+    [InlineData(MnemonicKind.Rep)]
+    [InlineData(MnemonicKind.Sep)]
+    public void RepAndSepWriteTheCarryOnlyWhenTheyNameIt(MnemonicKind mnemonic)
     {
         Assert.Equal(Registers.None, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, 0x30));
         Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, 0x31));
@@ -79,16 +83,16 @@ public sealed class RegisterEffectsTests
     [Fact]
     public void TheTransfersBetweenTheValueRegistersAreMoves()
     {
-        Assert.Equal((Registers.A, Registers.X), RegisterEffects.Moved("tax"));
-        Assert.Equal((Registers.Y, Registers.A), RegisterEffects.Moved("tya"));
-        Assert.Equal((Registers.X, Registers.Y), RegisterEffects.Moved("txy"));
+        Assert.Equal((Registers.A, Registers.X), RegisterEffects.Moved(MnemonicKind.Tax));
+        Assert.Equal((Registers.Y, Registers.A), RegisterEffects.Moved(MnemonicKind.Tya));
+        Assert.Equal((Registers.X, Registers.Y), RegisterEffects.Moved(MnemonicKind.Txy));
 
         // The stack pointer and the 65816's D are not tracked, so a transfer to or from one is
         // not a move: the destination just gets a new value. Nor is `xba`, which swaps A's bytes.
-        Assert.Null(RegisterEffects.Moved("tsx"));
-        Assert.Null(RegisterEffects.Moved("txs"));
-        Assert.Null(RegisterEffects.Moved("tdc"));
-        Assert.Null(RegisterEffects.Moved("xba"));
+        Assert.Null(RegisterEffects.Moved(MnemonicKind.Tsx));
+        Assert.Null(RegisterEffects.Moved(MnemonicKind.Txs));
+        Assert.Null(RegisterEffects.Moved(MnemonicKind.Tdc));
+        Assert.Null(RegisterEffects.Moved(MnemonicKind.Xba));
     }
 
     /// <summary>What every mnemonic writes, with an implied or absolute operand.</summary>

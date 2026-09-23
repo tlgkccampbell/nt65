@@ -199,8 +199,8 @@ public sealed partial class CodeLayout
                 continue;
             if (step.Statement is not InstructionStatementSyntax instruction)
                 continue;
-            var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
-            if (Instructions.Facts(mnemonic).Control == Control.Calls)
+            var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
+            if (Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls)
                 return new CycleSpan(null, $"the span contains a call, `{mnemonic}`, whose time depends on the routine it calls");
             if (Backwards(instruction, step, start, i) is { } loop)
                 return new CycleSpan(null, loop);
@@ -223,7 +223,7 @@ public sealed partial class CodeLayout
         var transfer = Transfers.Of(instruction, mode);
         if (transfer is Transfer.Through or Transfer.Return)
             return null;
-        var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
+        var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
         if (transfer == Transfer.Elsewhere)
             return $"the span contains `{mnemonic}`, whose target nt65 cannot follow";
         if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is not { } target)
@@ -517,7 +517,7 @@ public sealed partial class CodeLayout
 
         // A long branch is not one of the CPU's instructions but a choice between two of
         // them, so it is laid out before the CPU's instruction table is consulted.
-        if (SyntaxFacts.LongBranches.Contains(mnemonic.Text))
+        if (SyntaxFacts.IsLongBranch(statement.MnemonicKind))
         {
             LongBranch(statement, mnemonic);
             return;
@@ -532,10 +532,10 @@ public sealed partial class CodeLayout
             return;
         }
 
-        var available = Instructions.Modes(cpu, mnemonic.Text);
+        var available = Instructions.Modes(cpu, statement.MnemonicKind);
         if (available.Count == 0)
         {
-            var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.Text)).ToList();
+            var having = CpuNames.All.Where(other => Instructions.Has(other, statement.MnemonicKind)).ToList();
             var spelled = having.Select(CpuNames.Spell).ToList();
 
             // The only CPU with it is the 6502 and its undocumented opcodes, so what the reader
@@ -585,13 +585,13 @@ public sealed partial class CodeLayout
         // analysis found reaching it. Where it found no width it has already reported that,
         // and the immediate is laid out a byte wide so the rest of the file can be laid out.
         var state = states?.Before(statement, expansion);
-        int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } register
+        int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } register
             ? state?.Of(register) == Width.Sixteen ? 16 : 8
             : null;
 
         // An unknown width has already been reported, so a value too large for a byte is not
         // reported as a second error: nobody knows the immediate really is one byte.
-        var sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(mnemonic.Text) is { } sized
+        var sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } sized
             && state?.Of(sized) is not (Width.Eight or Width.Sixteen);
 
         var mode = Choose(mnemonic, operand, candidates, substituted, bits, sizeUnknown);
@@ -603,7 +603,7 @@ public sealed partial class CodeLayout
         if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
             CheckDirectPageSymbols(mnemonic, operand, mode);
         CheckSpaces(mnemonic, operand, mode);
-        var timing = Cycles.Of(cpu, mnemonic.Text, mode, state);
+        var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state);
         IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
         Laid(statement, new LineLayout(
             length, mode, prefix, false, timing?.Count, bits,
@@ -695,7 +695,7 @@ public sealed partial class CodeLayout
         var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
         var cycles = new CycleCount(0);
         foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
-            cycles += Cycles.Of(cpu, "rep", AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);
+            cycles += Cycles.Of(cpu, MnemonicKind.Rep, AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);
         Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
         Place(directive, ensured.Length);
         steps.Add(new Step(directive, expansion, routine, Stream, segment, null));

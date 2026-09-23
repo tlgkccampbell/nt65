@@ -100,14 +100,15 @@ internal sealed class StateChecks
     /// told, and it is this analysis that tells it, so the width has to be known here.
     /// </summary>
     public void CheckImmediate(
-        Step step, string mnemonic, WidthRegister register, ProcessorState state, Cause? why, Symbol routine)
+        Step step, MnemonicKind mnemonic, WidthRegister register, ProcessorState state, Cause? why, Symbol routine)
     {
         var width = state.Of(register);
+        var written = SyntaxFacts.TextOf(mnemonic);
         var item = register == WidthRegister.A ? "a" : "i";
         if (width == Width.Unchanged)
         {
             Report(step, Catalogue.WidthUnknown.Says(
-                mnemonic,
+                written,
                 Spell(register),
                 $"`{Owner(step, routine)}` says `{item}*`, which assumes nothing about it"), Declares(step, item, routine));
         }
@@ -116,14 +117,14 @@ internal sealed class StateChecks
             Report(
                 step,
                 Catalogue.WidthUnknown.Says(
-                    mnemonic,
+                    written,
                     Spell(register),
                     "it is not known here" + (why is null ? ": a `.state` says what it is" : Cause.Because(why))),
                 Ensure(step, item));
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
         {
-            Report(step, Catalogue.ImmediateInEmulation.Says(mnemonic));
+            Report(step, Catalogue.ImmediateInEmulation.Says(written));
         }
     }
 
@@ -132,7 +133,7 @@ internal sealed class StateChecks
     /// against what the segments and the project's <c>ranges</c> declare. Where either side is
     /// not declared or not known, nothing is reported: the checks are opt-in by declaration.
     /// </summary>
-    public void CheckMemory(Step step, string mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
+    public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
         if (mode is not { } chosen || OperandOf(step) is not { } operand
             || CodeLayout.Expression(operand) is not { } expression)
@@ -162,7 +163,7 @@ internal sealed class StateChecks
 
         // A near transfer stays in the program bank, so a target in a segment in another bank
         // is out of its reach.
-        if (mnemonic != "per" && (chosen is AddressingMode.Relative or AddressingMode.RelativeLong
+        if (mnemonic != MnemonicKind.Per && (chosen is AddressingMode.Relative or AddressingMode.RelativeLong
             || (chosen == AddressingMode.Absolute && Instructions.Facts(mnemonic).Control is Control.Jumps or Control.Calls)))
         {
             CheckNearBank(step, mnemonic, chosen);
@@ -174,7 +175,7 @@ internal sealed class StateChecks
         // access no memory at all.
         if (chosen is not (AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
             || Instructions.Facts(mnemonic).Control is Control.Jumps or Control.Calls
-            || mnemonic is "pea" or "per" || !state.B.IsBounded)
+            || mnemonic is MnemonicKind.Pea or MnemonicKind.Per || !state.B.IsBounded)
         {
             return;
         }
@@ -314,42 +315,42 @@ internal sealed class StateChecks
     }
 
     /// <summary>A return: it has to leave the way the routine is called, in the state it declares.</summary>
-    public void CheckReturn(Step step, string mnemonic, ProcessorState state, Symbol routine)
+    public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine)
     {
         var signature = routine.Signature ?? Signature.Default;
-        if (mnemonic == "rts" && signature.IsFar)
+        if (mnemonic == MnemonicKind.Rts && signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Says(routine.DisplayName, "far", "rtl"));
-        else if (mnemonic == "rtl" && !signature.IsFar)
+        else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Says(routine.DisplayName, "near", "rts"));
-        CheckExit(step, $"`{mnemonic}`:", "here", signature.Exit, state, routine.DisplayName);
+        CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName);
     }
 
     /// <summary>
     /// Reports a call whose target is not a routine with a signature, which is what would say
     /// what state it takes and what it hands back.
     /// </summary>
-    public void CheckCallTarget(Step step, string mnemonic, Symbol? target) =>
+    public void CheckCallTarget(Step step, MnemonicKind mnemonic, Symbol? target) =>
         Report(step, target is null
-            ? Catalogue.CallTargetUnknown.Says(mnemonic)
+            ? Catalogue.CallTargetUnknown.Says(SyntaxFacts.TextOf(mnemonic))
             : Catalogue.CallTargetNotARoutine.Says(target.DisplayName));
 
     /// <summary>A call: it is made the way the routine is reached, in the state the routine expects.</summary>
-    public void CheckCall(Step step, string mnemonic, Symbol target, Signature callee, ProcessorState state)
+    public void CheckCall(Step step, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state)
     {
-        if (mnemonic == "jsr" && callee.IsFar)
+        if (mnemonic == MnemonicKind.Jsr && callee.IsFar)
             Report(step, Catalogue.CallDistanceMismatch.Says(
                 target.DisplayName, "far", "jsl"), Mnemonic(step, "jsl"));
-        else if (mnemonic == "jsl" && !callee.IsFar)
+        else if (mnemonic == MnemonicKind.Jsl && !callee.IsFar)
             Report(step, Catalogue.CallDistanceMismatch.Says(
                 target.DisplayName, "near", "jsr"), Mnemonic(step, "jsr"));
-        CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", callee, state);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state);
     }
 
     /// <summary>
     /// A call written as <c>per</c> and a branch, checked as <c>jsr</c> or, with a <c>phk</c>
     /// before it, as <c>jsl</c>.
     /// </summary>
-    public void CheckRelativeCall(Step step, string mnemonic, RelativeCall call, ProcessorState state)
+    public void CheckRelativeCall(Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state)
     {
         var target = call.Routine;
         var callee = target.Signature!;
@@ -357,7 +358,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.RelativeCallNeedsPhk.Says(target.DisplayName));
         else if (!callee.IsFar && call.IsFar)
             Report(step, Catalogue.RelativeCallExtraPhk.Says(target.DisplayName));
-        CheckEntry(step, $"`{mnemonic} {target.DisplayName}`", callee, state);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state);
     }
 
     /// <summary>
@@ -365,17 +366,20 @@ internal sealed class StateChecks
     /// take the state here, return the way this routine returns, and hand back what this
     /// routine promises. Where nothing returns — this routine never does, or leaves by
     /// <c>rti</c>, or the target never returns — only the target's entry is checked.
+    /// <paramref name="via"/> is what the source wrote to make the jump: the mnemonic, or the
+    /// <c>.next</c> or <c>.fallthrough</c> that says where the path goes, for which
+    /// <paramref name="mnemonic"/> is <see cref="MnemonicKind.None"/>.
     /// </summary>
     public void CheckTailCall(
-        Step step, string mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
+        Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
     {
         var own = routine.Signature ?? Signature.Default;
-        var what = $"`{mnemonic} {target.DisplayName}`";
+        var what = $"`{via} {target.DisplayName}`";
         var returns = !own.HasNoCaller && !callee.NeverReturns;
 
         // A long jump to a near routine is how code enters another bank, and the routine's own
         // `rts` then returns within that bank, so it is only valid when nothing returns.
-        if (mnemonic == "jml" && !callee.IsFar && !callee.IsInterrupt)
+        if (mnemonic == MnemonicKind.Jml && !callee.IsFar && !callee.IsInterrupt)
         {
             if (!EntersAnotherBank(step, target))
                 Report(step, Catalogue.JumpDistanceMismatch.Says(
@@ -385,7 +389,7 @@ internal sealed class StateChecks
                 Report(step, Catalogue.JumpAcrossBanks.Says(target.DisplayName, routine.DisplayName));
             }
         }
-        else if (mnemonic is not ("jml" or ".next" or ".fallthrough") && callee.IsFar)
+        else if (mnemonic is not (MnemonicKind.Jml or MnemonicKind.None) && callee.IsFar)
         {
             Report(step, Catalogue.JumpDistanceMismatch.Says(target.DisplayName, "far", "jml", target.DisplayName));
         }
@@ -414,13 +418,13 @@ internal sealed class StateChecks
     /// label's own declaration, which is checked separately.
     /// </summary>
     public void CheckJumpInto(
-        Step step, string mnemonic, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
+        Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
     {
         var callee = owner.Signature ?? Signature.Default;
         var own = routine.Signature ?? Signature.Default;
         if (own.HasNoCaller || callee.NeverReturns)
             return;
-        var what = $"`{mnemonic} {label.DisplayName}`";
+        var what = $"`{via} {label.DisplayName}`";
         if (callee.IsInterrupt)
         {
             Report(step, Catalogue.TailCallToHandler.Says(what, owner.DisplayName));
@@ -513,12 +517,12 @@ internal sealed class StateChecks
                 continue;
             }
             if (layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
-                || Instructions.SizedBy(statement.Mnemonic.Text) is not { } register)
+                || Instructions.SizedBy(statement.MnemonicKind) is not { } register)
             {
                 continue;
             }
             Report(step, Catalogue.WidthUnknown.Says(
-                statement.Mnemonic.Text.ToLowerInvariant(),
+                SyntaxFacts.TextOf(statement.MnemonicKind),
                 Spell(register),
                 $"no path from `{region.Routine.DisplayName}`'s entry reaches it. A `.state` after its label declares what the state is there"));
         }
@@ -575,7 +579,7 @@ internal sealed class StateChecks
     /// <c>jsr</c>, <c>jmp</c> or a branch to a label or a routine whose segment declares a bank
     /// other than the one the code around it declares. Both sides have to declare a bank.
     /// </summary>
-    private void CheckNearBank(Step step, string mnemonic, AddressingMode mode)
+    private void CheckNearBank(Step step, MnemonicKind mnemonic, AddressingMode mode)
     {
         if (BankOf(step.Segment) is not { IsKnown: true } here
             || Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target
@@ -587,12 +591,12 @@ internal sealed class StateChecks
         // is a `jml` the opposite branch skips.
         var reaches = mnemonic switch
         {
-            "jsr" => "use `jsl`",
-            "jmp" or "bra" or "brl" => "use `jml`",
+            MnemonicKind.Jsr => "use `jsl`",
+            MnemonicKind.Jmp or MnemonicKind.Bra or MnemonicKind.Brl => "use `jml`",
             _ => "a branch cannot leave its bank, so branch the other way around a `jml` to it",
         };
         Report(step, Catalogue.JumpLeavesBank.Says(
-            mnemonic,
+            SyntaxFacts.TextOf(mnemonic),
             StateValue.Hex(here.Value, 2),
             target.DisplayName,
             segment.Name,
