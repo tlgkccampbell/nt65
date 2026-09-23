@@ -55,7 +55,8 @@ public sealed class DesignCorpusTests
 
     /// <summary>
     /// Every ca65 example is what nt65 writes: its lines, one after another, in a fixture's
-    /// expected output. The design leaves out blank lines.
+    /// expected output. Blank lines are ignored on both sides, because the documents leave
+    /// them out.
     /// </summary>
     [Fact]
     public void EveryCa65CodeBlockIsFixtureOutput()

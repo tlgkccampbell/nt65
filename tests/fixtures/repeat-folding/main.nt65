@@ -1,10 +1,10 @@
-; A repetition is unrolled, and then written back out as one ca65 `.repeat` where every
-; turn came out the same. nt65 makes every per-turn decision itself, so the question is
-; asked of the lines the turns were written as and never of the source: what the turns
-; came out as is what says whether ca65 can repeat them rather than be handed them one
-; at a time. Where the turns differ only in what the binding was worth, the body is said
-; once with a counter of ca65's in its place, but only after putting every turn's number
-; back has given the line that turn was written as.
+; nt65 unrolls a repetition, then writes it back out as one ca65 `.repeat` where every
+; iteration came out the same. nt65 makes every per-iteration decision itself, so the test is
+; made on the lines each iteration produced and never on the source: what the iterations
+; produced decides whether ca65 can repeat them rather than be given them one at a time.
+; Where iterations differ only in the binding's value, the body is written once with a ca65
+; counter in its place, but only after checking that putting each iteration's number back
+; gives exactly the line that iteration produced.
 .module main
 
 .cpu 65816
@@ -44,8 +44,8 @@
     rts
 }
 
-; A blank the source asked for is written where the repetition starts rather than inside
-; it, so the body is the turn and nothing else.
+; A blank line in the source is written before the repetition rather than inside it, so the
+; body holds only the iteration.
 .proc spaced: a16, i16 {
     lda count
 
@@ -68,8 +68,8 @@
     rts
 }
 
-; The width changes only on the first turn, because the turns after it find A already
-; written 16 bits wide, so the turns differ and every one of them is written out.
+; Only the first iteration writes the `.a16` directive, because later ones find it already
+; written, so the iterations differ and every one of them is written out.
 .proc widths_differ: a8, i16 {
     rep #$20
     .repeat 3 {
@@ -145,8 +145,8 @@
     }
 }
 
-; The showcase: two hundred and fifty-six turns, each a line of its own, and three lines of
-; output. ca65 counts from zero where the binding did.
+; The showcase: 256 iterations, each its own line when unrolled, become three lines of
+; output. ca65's counter starts at zero, as the binding did.
 .data ramp: .byte[] {
     .repeat 256, i {
         i

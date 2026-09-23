@@ -5,14 +5,15 @@ namespace Norristown.Tests.Syntax;
 public sealed class ParserTests
 {
     [Theory]
-    // C's order, so a tighter operator ends up deeper.
+    // C's precedence order, so a tighter-binding operator ends up deeper in the tree.
     [InlineData("1 + 2 * 3", "(1 + (2 * 3))")]
     [InlineData("1 * 2 + 3", "((1 * 2) + 3)")]
     [InlineData("1 - 2 - 3", "((1 - 2) - 3)")]
     [InlineData("7 .mod 2 + 1", "((7 .mod 2) + 1)")]
     [InlineData("p == q || r != t", "((p == q) || (r != t))")]
     [InlineData("p < q && r > t", "((p < q) && (r > t))")]
-    // Parentheses in the source stay visible, and are what makes the traps below legal.
+    // Parentheses in the source stay visible, and are what makes the easily misread forms
+    // rejected below legal.
     [InlineData("(flags & $0f) == 0", "([(flags & $0f)] == 0)")]
     [InlineData("1 << (i + 1)", "(1 << [(i + 1)])")]
     [InlineData("(<label) + 1", "([(<label)] + 1)")]
@@ -50,8 +51,8 @@ public sealed class ParserTests
         Assert.Equal([message], Errors(".word " + expression));
 
     [Theory]
-    // The same operator repeated needs nothing, and neither does a tighter operator that is
-    // not one of the two sets the language names.
+    // The same operator repeated needs no parentheses, and neither does a mix of operators that
+    // is not one of the combinations rejected above.
     [InlineData("p | q | r")]
     [InlineData("1 << 2 << 3")]
     [InlineData("p && q | r")]
@@ -317,9 +318,10 @@ public sealed class ParserTests
     }
 
     /// <summary>
-    /// Nesting past what the parser reads is one line's problem, said once: a stack that runs
-    /// out takes the process with it, and no editor survives that. The line's text still reads
-    /// back whole, because what was not read is the line's skipped tokens.
+    /// Nesting deeper than the parser reads is reported once, as that line's problem, rather
+    /// than recursing until the stack overflows, which would take the whole process, and the
+    /// editor with it, down. The line's text still reads back whole, because what was not read
+    /// becomes the line's skipped tokens.
     /// </summary>
     [Theory]
     [InlineData(600, true)]
@@ -336,7 +338,7 @@ public sealed class ParserTests
         Assert.Equal(line, tree.Root.ToFullString());
     }
 
-    /// <summary>Nesting the parser does read is read, and says nothing.</summary>
+    /// <summary>Nesting within the parser's limit is read as written, with no diagnostic.</summary>
     [Fact]
     public void ANestWithinReachIsReadAsWritten()
     {

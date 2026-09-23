@@ -40,7 +40,7 @@ public sealed class ModuleTests
         Assert.Equal(SymbolKind.Proc, symbol.Kind);
     }
 
-    /// <summary>Nothing from another module is visible without its path or a <c>.use</c>, and what does export it is named.</summary>
+    /// <summary>Nothing from another module is visible without its path or a <c>.use</c>, and the error names the module that exports it.</summary>
     [Fact]
     public void AnotherModulesNameIsNotVisibleUnqualified()
     {
@@ -64,8 +64,8 @@ public sealed class ModuleTests
     [InlineData(".use gfx as g", "g::clear", "")]
     public void AUseBringsNamesIn(string use, string written, string alsoNamed)
     {
-        // Everything a `.use` brings in is named, because a name brought in and never written
-        // is reported as an item that may go.
+        // Everything a `.use` brings in is used, because a name brought in and never used is
+        // reported as an item that may be removed.
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
             ("main.nt65", $".module main\n{use}\n.segment CODE\n.export .proc main {{\n{alsoNamed}    jsr {written}\n    rts\n}}\n"));
@@ -91,7 +91,7 @@ public sealed class ModuleTests
         Assert.Equal(1, program.File("main.nt65").Symbol("N").Value.Number);
     }
 
-    /// <summary>A private name exists; saying so is a better answer than saying it does not.</summary>
+    /// <summary>A private name does exist, so it is reported as not exported rather than as undeclared.</summary>
     [Fact]
     public void APrivateNameIsReportedAsUnexportedRatherThanUndeclared()
     {
@@ -105,7 +105,7 @@ public sealed class ModuleTests
     /// <summary>
     /// An interior label is exported from inside the routine it belongs to and named through the
     /// routine from elsewhere; the routine itself need not be exported for that. Its linker name
-    /// has its module's in front.
+    /// is prefixed with its module's name.
     /// </summary>
     [Fact]
     public void AnInteriorLabelIsNamedThroughTheRoutineItIsIn()
@@ -124,7 +124,7 @@ public sealed class ModuleTests
     /// <summary>
     /// An address becomes an import under its linker name, sized from its declaration; a
     /// constant is written out by value, because ca65 cannot use an imported symbol where it
-    /// needs one.
+    /// needs a constant.
     /// </summary>
     [Fact]
     public void AnAddressIsImportedAndAConstantIsWrittenOut()
@@ -140,7 +140,7 @@ public sealed class ModuleTests
         Assert.DoesNotContain(".import gfx__SCREEN", main);
         Assert.Contains(".export gfx__clear\n", outputs["gfx.s"]);
 
-        // Sized from the segment it is declared in, a module away.
+        // `ptr` is sized from the segment it is declared in, even though that is in another module.
         Assert.Contains("lda z:gfx__ptr", main);
     }
 
@@ -189,8 +189,8 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// A checked import is the value nt65 uses and an assertion that what it is linked
-    /// against agrees.
+    /// A checked import gives the value nt65 uses in place of the name, and an assertion that
+    /// the symbol it is linked against has that value.
     /// </summary>
     [Fact]
     public void ACheckedImportIsUsedByValueAndAsserted()
@@ -223,9 +223,10 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// Only what a file uses is imported, since an import pulls its module out of a library: a
-    /// path uses what it leads to and not the routine it walks through, a macro body is used
-    /// where it is called, and an import nothing uses is not written at all.
+    /// Only what a file uses is imported, since an import pulls the module that defines it out of
+    /// a library: a path uses the symbol it ends at and not the routine it passes through, a macro
+    /// body's names are used only where the macro is called, and an import nothing uses is not
+    /// written at all.
     /// </summary>
     [Fact]
     public void OnlyWhatAFileUsesIsImported()
@@ -243,7 +244,7 @@ public sealed class ModuleTests
         Assert.DoesNotContain("later", outputs["main.s"]);
     }
 
-    /// <summary>Two modules may each export a name; the linker sees each under its own module's.</summary>
+    /// <summary>Two modules may each export the same name; the linker sees each prefixed with its own module's name.</summary>
     [Fact]
     public void TwoModulesMayExportTheSameName()
     {
@@ -269,8 +270,9 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// Evaluation is the program's, not the file's, so a constant may be built from one in
-    /// another module, and a ring that runs through two modules is still reported once.
+    /// Constants are evaluated across the whole program, not file by file, so a constant may be
+    /// built from one in another module, and a cycle that runs through two modules is still
+    /// reported once.
     /// </summary>
     [Fact]
     public void ConstantsAndTheirCyclesCrossModules()
@@ -323,10 +325,10 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// A mnemonic names a symbol on every CPU, and warns on every CPU: the word reads as an
-    /// instruction whoever reads it next, so the warning says the same thing in a 6502
-    /// program as in a 65816 one. It names the program's own CPU where the word is an
-    /// instruction there, and the first CPU that has it otherwise.
+    /// A mnemonic may be a name on every CPU, and draws a warning on every CPU: the word reads as
+    /// an instruction to whoever reads it next, so the warning is the same in a 6502 program as
+    /// in a 65816 one. It names the program's own CPU where the word is an instruction there,
+    /// and otherwise the first CPU that has it.
     /// </summary>
     [Fact]
     public void AMnemonicIsANameWithTheSameWarningOnEveryCpu()
@@ -346,10 +348,10 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// A name another module writes without this one exporting it is reported where it is
-    /// written and nowhere else. Something does name the declaration, wrongly, so saying here
-    /// that nothing does would be one mistake said twice, with each fix undoing the other.
-    /// Nothing naming it is what the warning is for, and taking the use away brings it back.
+    /// A name another module uses without this module exporting it is reported where it is used
+    /// and nowhere else. Something does name the declaration, wrongly, so also warning that
+    /// nothing names it would report one mistake twice, with fixes that undo each other. The
+    /// unused warning is for a declaration nothing names, and removing the use brings it back.
     /// </summary>
     [Fact]
     public void ANameAnotherModuleWritesWithoutTheExportIsNotAlsoReportedUnused()

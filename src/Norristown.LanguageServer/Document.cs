@@ -3,9 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// One document the client has open, at the revision the client last sent. What it means is
-/// the <see cref="Workspace"/>'s to say, because a name it uses may be one another file
-/// exports.
+/// One document the client has open, at the revision the client last sent. Its meaning is
+/// worked out by the <see cref="Workspace"/> rather than here, because a name it uses may be
+/// exported by another file.
 /// </summary>
 internal sealed class Document(string uri, int version, SyntaxTree tree)
 {

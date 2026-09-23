@@ -9,11 +9,11 @@ namespace Norristown.Processor;
 /// </summary>
 public static class ProgramCpu
 {
-    /// <summary>What a program with nothing to say about it is built for.</summary>
+    /// <summary>The CPU a program is built for when nothing says which.</summary>
     public const Cpu Default = Cpu.Mos6502;
 
-    // A file's `.cpu` items, read once per tree: every analysis of the program asks every file,
-    // and after an edit only one of them is a tree it has not seen.
+    // A file's `.cpu` items, read once per tree and cached: every analysis of the program reads
+    // every file, and after an edit only one of them is a tree that has not been seen before.
     private static readonly ConditionalWeakTable<SyntaxTree, List<(Cpu Cpu, TextSpan Span)>> written = new();
 
     /// <summary>

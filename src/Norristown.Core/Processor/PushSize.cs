@@ -1,9 +1,9 @@
 namespace Norristown.Processor;
 
 /// <summary>
-/// How much of the stack one push takes. The 65816 pushes a register as wide as the register
-/// is, so a save and its restore match only when the width is the same at both, which is what
-/// keeps this apart from a count of bytes.
+/// How much of the stack one push takes. The 65816 pushes a register at the register's current
+/// width, so a push and its matching pull agree only when the width is the same at both, which
+/// is why this names the register's width rather than giving a count of bytes.
 /// </summary>
 public enum PushSize
 {

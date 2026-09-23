@@ -5,7 +5,8 @@ namespace Norristown.Tests.Layout;
 /// <summary>
 /// How far a branch reaches, and what a long branch is written as. The distance is known
 /// when the branch and its target sit in one stream of bytes with no <c>.align</c> between
-/// them; where it is not, ca65's own check stands and a long branch takes its long form.
+/// them. Where it is not known, nt65 reports nothing and leaves the range check to ca65, and
+/// a long branch is always written in its long form.
 /// </summary>
 public sealed class BranchTests
 {
@@ -31,8 +32,8 @@ public sealed class BranchTests
 
     /// <summary>
     /// Lengthening a branch moves everything after it, which can put a branch before it out
-    /// of reach. That is why the file is laid out again until nothing changes, and it
-    /// terminates because a branch only ever grows.
+    /// of reach. That is why the file is laid out again until nothing changes; the repetition
+    /// terminates because a branch only ever grows, never shrinks.
     /// </summary>
     [Fact]
     public void LengtheningOneBranchCanPutAnotherOutOfReach()
@@ -56,8 +57,9 @@ public sealed class BranchTests
     }
 
     /// <summary>
-    /// Backwards, to a target already written. This is the one case ca65's own package can
-    /// also shorten, because by then it knows where the target landed.
+    /// A backward branch, to a target already written. This is the one case ca65's own
+    /// long-branch macros can also shorten, because by the time ca65 reaches the branch it
+    /// knows where the target landed.
     /// </summary>
     [Fact]
     public void ABackwardLongBranchWithinRangeIsTheShortBranch()
@@ -92,8 +94,9 @@ public sealed class BranchTests
     }
 
     /// <summary>
-    /// A nested segment block is a detour from the stream around it, so the branch and its
-    /// target stay a known distance apart and the bytes in the detour are not between them.
+    /// The bytes of a nested segment block go to another segment, not into the stream around
+    /// it, so the branch and its target stay a known distance apart and the block's bytes are
+    /// not counted between them.
     /// </summary>
     [Fact]
     public void ANestedSegmentBlockIsNotBetweenABranchAndItsTarget()
@@ -103,7 +106,7 @@ public sealed class BranchTests
         Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", text)).Problems());
     }
 
-    /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
+    /// <summary>The ca65 source written for <paramref name="text"/>, placed in the code segment.</summary>
     private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static int Occurrences(string text, string find)

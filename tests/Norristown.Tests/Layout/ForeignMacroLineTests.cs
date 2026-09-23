@@ -4,9 +4,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// The lines of a macro body declared in another file, written out in this one. A position
-/// means something only in the file it was written in, so what this file says about such a
-/// line is never read off whichever of its own lines sits at the same position.
+/// The lines of a macro body declared in another file and expanded in this one. A position
+/// means something only in the file it was written in, so facts about such a line must never
+/// be looked up by position among this file's own lines, where an unrelated line may sit at
+/// the same offset.
 /// </summary>
 public sealed class ForeignMacroLineTests
 {
@@ -42,8 +43,8 @@ public sealed class ForeignMacroLineTests
     }
 
     /// <summary>
-    /// An instruction is timed as itself, not as the line of another file's macro body that
-    /// was laid out first at the same position.
+    /// An instruction's hover gives its own cycle count, not that of a line in another file's
+    /// macro body that sits at the same offset and was laid out first.
     /// </summary>
     [Fact]
     public void AnInstructionIsTimedAsItselfNotAsAnotherFilesLineAtTheSamePosition()

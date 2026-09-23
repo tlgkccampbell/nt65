@@ -3,8 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The one layout: what a block holds indented once, cheap locals at their routine's margin,
-/// a run of named data lines on one column, and nothing after the last token of a line.
+/// The formatter's single layout: what a block holds indented once, cheap locals at their
+/// routine's margin, a run of named data lines on one column, and nothing after the last token
+/// of a line.
 /// </summary>
 public sealed class FormatterTests
 {
@@ -128,8 +129,8 @@ public sealed class FormatterTests
     }
 
     /// <summary>
-    /// What is said about the next declaration stands inside the run it is written in; an empty
-    /// line, or anything that is not a named data line, ends one.
+    /// A comment line does not end a run, so a comment about the next declaration can sit inside
+    /// the run; an empty line, or any other line that is not a named data line, ends it.
     /// </summary>
     [Fact]
     public void ACommentCarriesARunThroughAndAnEmptyLineEndsIt()
@@ -154,8 +155,9 @@ public sealed class FormatterTests
     }
 
     /// <summary>
-    /// A <c>:</c> that is not a declaration's is an address-size prefix or the start of a
-    /// signature, and no run lines those up: what follows one is never a directive.
+    /// Only a declaration's <c>:</c> is lined up. Any other <c>:</c> is an address-size prefix
+    /// or the start of a signature, and what follows it is never a directive, so no run lines it
+    /// up.
     /// </summary>
     [Fact]
     public void OnlyADeclarationsColonLinesUp()
@@ -207,8 +209,9 @@ public sealed class FormatterTests
     }
 
     /// <summary>
-    /// Formatting a range moves the lines in it and nothing else, and the column a run sits on
-    /// is still the whole run's, so formatting one of its lines lines it up with the others.
+    /// Formatting a range moves the lines in it and nothing else, but the column a run lines up
+    /// on is still worked out from the whole run, so formatting one of its lines lines it up with
+    /// the others.
     /// </summary>
     [Fact]
     public void ARangeMovesOnlyItsOwnLines()
@@ -228,7 +231,7 @@ public sealed class FormatterTests
         Assert.Equal(tree.LineStarts[4], change.Start);
     }
 
-    /// <summary>Formatting what is formatted changes nothing, and says so by changing nothing.</summary>
+    /// <summary>Formatting text that is already formatted produces no changes.</summary>
     [Fact]
     public void FormattingWhatIsFormattedChangesNothing()
     {

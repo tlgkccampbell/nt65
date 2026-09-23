@@ -3,18 +3,18 @@ namespace Norristown.Processor;
 /// <summary>
 /// What a mnemonic is, beyond which addressing modes it has: whether it calls or returns,
 /// what it moves on and off the stack, whether it writes the memory its operand names, and
-/// which registers it leaves changed. Every pass above layout asks some of this, and asking it
-/// of a lowercase string in each of them is how two of them come to disagree.
+/// which registers it leaves changed. Every pass after layout needs some of this, and having
+/// each pass test the lowercase mnemonic itself is how two passes come to disagree.
 /// <para>
 /// It is the same table on every CPU: an instruction one CPU lacks is never asked about, and
 /// no CPU here spells one instruction two ways. What depends on the operand or the mode — a
-/// shift through the accumulator, the flags a <c>rep</c> names — stays with whoever knows
-/// those, and reads the widest answer from here.
+/// shift through the accumulator, the flags a <c>rep</c> names — is left to the code that
+/// knows the operand or mode, which takes the widest answer from here.
 /// </para>
 /// </summary>
 public sealed record InstructionFacts
 {
-    /// <summary>What nt65 knows of a mnemonic it has nothing in particular to say about.</summary>
+    /// <summary>The facts for a mnemonic with none of these properties.</summary>
     public static InstructionFacts None { get; } = new();
 
     /// <summary>Whether it calls a subroutine: <c>jsr</c> and <c>jsl</c>.</summary>

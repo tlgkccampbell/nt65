@@ -12,8 +12,9 @@ namespace Norristown.Tests.Layout;
 public sealed class RegisterEffectsTests
 {
     /// <summary>
-    /// What each mnemonic writes, where that does not depend on the operand. The four whose
-    /// answer does — the shifts, `inc`, `dec`, `rep` and `sep` — are asked about below.
+    /// What each mnemonic writes, where that does not depend on the operand. The mnemonics
+    /// whose answer does — the four shifts, `inc`, `dec`, `rep` and `sep` — are tested
+    /// separately below.
     /// </summary>
     private static readonly Dictionary<string, Registers> Writes = Table();
 
@@ -60,8 +61,9 @@ public sealed class RegisterEffectsTests
     }
 
     /// <summary>
-    /// Bit 0 of a `rep` or `sep` is the carry, so one that does not name it leaves it alone. An
-    /// operand nt65 cannot work out may name it.
+    /// Bit 0 of a `rep` or `sep` operand is the carry, so one whose operand clears that bit
+    /// leaves the carry alone. An operand nt65 cannot evaluate might set it, so it counts as
+    /// writing the carry.
     /// </summary>
     [Theory]
     [InlineData("rep")]
@@ -73,7 +75,7 @@ public sealed class RegisterEffectsTests
         Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, null));
     }
 
-    /// <summary>The transfers between the three registers a value is held in carry the value over.</summary>
+    /// <summary>A transfer between two of A, X and Y moves the value from one to the other.</summary>
     [Fact]
     public void TheTransfersBetweenTheValueRegistersAreMoves()
     {
@@ -81,8 +83,8 @@ public sealed class RegisterEffectsTests
         Assert.Equal((Registers.Y, Registers.A), RegisterEffects.Moved("tya"));
         Assert.Equal((Registers.X, Registers.Y), RegisterEffects.Moved("txy"));
 
-        // The stack pointer and the 65816's D are not registers this follows, so what comes
-        // out of them is a value like any other.
+        // The stack pointer and the 65816's D are not tracked, so a transfer to or from one is
+        // not a move: the destination just gets a new value. Nor is `xba`, which swaps A's bytes.
         Assert.Null(RegisterEffects.Moved("tsx"));
         Assert.Null(RegisterEffects.Moved("txs"));
         Assert.Null(RegisterEffects.Moved("tdc"));
@@ -101,8 +103,8 @@ public sealed class RegisterEffectsTests
         Add(Registers.A | Registers.X | Registers.Y, "mvn", "mvp");
         Add(Registers.All, "xce", "brk", "cop");
 
-        // The undocumented opcodes write what the pair of instructions each is writes; `jam`
-        // stops the processor, so nothing it leaves is ever read.
+        // Each undocumented opcode writes what the pair of documented instructions it combines
+        // would write. `jam` halts the processor, so nothing it leaves behind is ever read.
         Add(Registers.A, "ane");
         Add(Registers.A | Registers.C, "slo", "rla", "sre", "rra", "isc", "alr", "anc", "arr");
         Add(Registers.A | Registers.X, "lax", "las");
@@ -110,8 +112,9 @@ public sealed class RegisterEffectsTests
         Add(Registers.C, "dcp");
         Add(Registers.All, "jam");
 
-        // Everything else leaves all four alone: the stores, the pushes, the branches, the
-        // jumps and returns, the flags that are not the carry, and the bit instructions.
+        // Everything else leaves A, X, Y and the carry alone: the stores, the pushes, the
+        // branches, the jumps and returns, the flags that are not the carry, and the bit
+        // instructions.
         Add(
             Registers.None,
             "sta", "stx", "sty", "stz", "bit", "tsb", "trb", "inc", "dec", "nop", "wdm", "wai", "stp",

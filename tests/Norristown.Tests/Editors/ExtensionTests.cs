@@ -43,15 +43,16 @@ public sealed class ExtensionTests : IDisposable
             ProjectFile.SegmentKeys.Order(StringComparer.Ordinal),
             Keys(Definition("segment")).Order(StringComparer.Ordinal));
 
-        // Anything else is a key nt65 reports, so the editor says so before the build does.
+        // nt65 reports any other key, so the schema forbids them and the editor flags one before
+        // a build does.
         foreach (var element in (ReadOnlySpan<JsonElement>)[Schema.RootElement, Definition("configuration"), Definition("segment")])
             Assert.False(element.GetProperty("additionalProperties").GetBoolean());
     }
 
     /// <summary>
-    /// The names the schema offers under <c>diagnostics</c> are the catalogue, and the answers
-    /// it offers for one are the ones the reader knows. An editor completes them, so a name
-    /// added to the catalogue and not to the schema would be offered nowhere.
+    /// The names the schema offers under <c>diagnostics</c> are exactly the catalogue's, and the
+    /// values it offers for each are the levels the reader accepts. An editor completes them, so
+    /// a name added to the catalogue and not to the schema would be offered nowhere.
     /// </summary>
     [Fact]
     public void TheSchemaOffersEveryDiagnosticByName()
@@ -106,8 +107,8 @@ public sealed class ExtensionTests : IDisposable
         }
         Assert.Contains(matched, match => match.Groups[5].Value.Contains("`nowhere` is not declared", StringComparison.Ordinal));
 
-        // What the command says about itself has no position, so the Problems panel is left
-        // holding only what is wrong with the program.
+        // nt65's messages about itself have no position and do not match, so the Problems panel
+        // holds only what is wrong with the program.
         Assert.DoesNotMatch(matcher, "nt65: no input files, and no nt65.json");
         Assert.DoesNotMatch(matcher, "nt65: deleted build/gone.s, which the program no longer writes");
     }
@@ -125,8 +126,8 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// A double-click takes a name whole: a cheap local with its <c>@</c>, a path with its
-    /// <c>::</c>, a directive with its <c>.</c> and a number with its <c>$</c>.
+    /// Double-clicking selects a whole name: a cheap local label with its <c>@</c>, a qualified
+    /// name with its <c>::</c>, a directive with its <c>.</c> and a number with its <c>$</c>.
     /// </summary>
     [Fact]
     public void TheWordPatternTakesANameWhole()
@@ -167,8 +168,8 @@ public sealed class ExtensionTests : IDisposable
 
     /// <summary>
     /// Every command the client registers is one the palette offers, and every command the
-    /// palette offers is one the client registers. The one exception is the rename the server
-    /// runs, which is nobody's to type.
+    /// palette offers is one the client registers. The one exception is <c>nt65.rename</c>, which
+    /// only the server invokes and nobody types.
     /// </summary>
     [Fact]
     public void TheCommandsOfferedAreTheCommandsRegistered()
@@ -197,10 +198,10 @@ public sealed class ExtensionTests : IDisposable
             .Select(match => match.Groups["name"].Value);
 
     /// <summary>
-    /// The grammar that colours a hover's grid, against the lines the server writes into one.
-    /// Markdown cannot reach inside a fenced block, so the grid is fenced as a language of its
-    /// own and this is the whole of what tells one row from another; nothing compiles either
-    /// of them, so nothing else would notice them drifting apart.
+    /// The grammar that colours the grid in a hover, checked against the lines the server writes
+    /// into it. Markdown formatting does not apply inside a fenced block, so the grid is fenced as
+    /// a language of its own and this grammar is all that tells its parts apart; nothing compiles
+    /// the grammar or the server's text, so nothing else would notice them drifting apart.
     /// </summary>
     [Fact]
     public void TheHoverGrammarColoursTheGridTheServerWrites()
@@ -216,9 +217,9 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("./syntaxes/nt65-hover.tmLanguage.json", grammar.GetProperty("path").GetString());
         Assert.Equal("source.nt65-hover", Hover.RootElement.GetProperty("scopeName").GetString());
 
-        // The key of every row, whether it is one word, two, or a register; the block and the
-        // reason on a cycles row, which are about more than the line; and everything the
-        // analysis could not work out. Everything else is left plain.
+        // Coloured: the key of every row, whether it is one word, two, or a register; the block
+        // total and the reason on a cycles row, which are about more than the line; and anything
+        // the analysis could not work out. Everything else is left plain.
         foreach (var (line, text, scope) in (ReadOnlySpan<(string, string, string?)>)[
             ("cycles  4-5       block 8-11    +1 when taken", "cycles", "entity.name.tag.nt65-hover"),
             ("cycles  4-5       block 8-11    +1 when taken", "4-5", "constant.numeric.nt65-hover"),
@@ -247,8 +248,8 @@ public sealed class ExtensionTests : IDisposable
 
     /// <summary>
     /// What the grammar scopes the character at <paramref name="at"/> as, or null where it
-    /// leaves it plain. TextMate takes the leftmost match, and the first rule written where
-    /// two of them would start in the same place, which is what this follows.
+    /// leaves it plain. Like TextMate, it takes the leftmost match, and where two rules would match
+    /// at the same place, the one written first.
     /// </summary>
     private static string? Scoped(string line, int at)
     {

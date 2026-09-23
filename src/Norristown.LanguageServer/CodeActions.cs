@@ -57,14 +57,14 @@ internal static class CodeActions
     }
 
     /// <summary>
-    /// The command that starts a rename on the name a change had to write, or null for a change
-    /// that wrote none. The position is in the file as the change leaves it, which is the file
-    /// the client is looking at by the time it runs the command.
+    /// The command that starts a rename on the placeholder name a change wrote, or null for a
+    /// change that wrote none. The position is in the file as it is after the change, which is
+    /// what the client has by the time it runs the command.
     /// </summary>
     private static Protocol.Command? Renaming(Change change)
     {
-        // A change whose whole work is to ask for another name writes nothing: the name is
-        // already there, and the caret goes on it as it stands.
+        // A change that only prompts a rename makes no edits: the name already exists, so the
+        // rename starts on it where it is.
         if (change.Renames is { } written)
         {
             return new Protocol.Command(
@@ -76,8 +76,9 @@ internal static class CodeActions
         var tree = placeholder.In.Tree;
         var edits = change.Edits.Where(edit => edit.Tree == tree).ToList();
 
-        // Where the name lands: where its own edit writes, moved by what the edits before it
-        // add or take away, and then along to the name itself.
+        // Where the name ends up: the start of the edit that writes it, shifted by the net
+        // length change of every earlier edit in the file, plus the name's offset in that
+        // edit's text.
         var at = placeholder.In.Span.Start + placeholder.At;
         foreach (var edit in edits.Where(edit => edit.Span.Start < placeholder.In.Span.Start))
             at += edit.Text.Length - edit.Span.Length;

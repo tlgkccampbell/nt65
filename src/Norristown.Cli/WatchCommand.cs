@@ -6,11 +6,11 @@ namespace Norristown.Cli;
 /// <c>nt65 build --watch</c>: builds, then builds again whenever the program changes, until it
 /// is interrupted.
 /// <para>
-/// What it waits for is what the last build read — the project file, the sources, and the
-/// binaries an <c>.incbin</c> measured, which is the set the dependency file names — and, on
-/// top of that, any <c>.nt65</c> under the project root, because a file that did not exist when
-/// the globs were matched is not in a set that was worked out before it was written. Nothing
-/// nt65 writes is either, so a build does not set off the next one.
+/// It rebuilds when a file the last build read changes — the project file, the sources, and the
+/// binaries an <c>.incbin</c> read, which are the files the dependency file lists — and also when
+/// any <c>.nt65</c> file under the project root changes, because a source created after the
+/// globs were matched is not in that list. nt65 writes no file of either kind, so a build does
+/// not trigger the next one.
 /// </para>
 /// </summary>
 internal static class WatchCommand
@@ -19,8 +19,8 @@ internal static class WatchCommand
     private const int Settle = 120;
 
     /// <summary>
-    /// Builds until <paramref name="cancellation"/> stops it, and returns 0; a command line that
-    /// is wrong is not something a file changing fixes, so that comes straight back.
+    /// Builds until <paramref name="cancellation"/> is cancelled, and returns 0. A command-line
+    /// error (exit code 2) is returned at once, since no change to a file can fix it.
     /// </summary>
     public static int Run(
         CommandLine command, string directory, TextWriter output, TextWriter error, bool colour,
@@ -31,7 +31,7 @@ internal static class WatchCommand
             : directory;
 
         // The watcher is started before the first build, so a file saved while that build is
-        // running is a change it hears about rather than one it slept through.
+        // running still triggers a rebuild rather than being missed.
         var watched = new HashSet<string>(FilePaths.Comparer);
         using var changed = new SemaphoreSlim(0, 1);
         using var watcher = new FileSystemWatcher(root)
@@ -49,7 +49,7 @@ internal static class WatchCommand
             }
             catch (SemaphoreFullException)
             {
-                // A change is already waiting, and one build answers however many there were.
+                // A change is already pending, and one build covers any number of changes.
             }
         }
         watcher.Changed += Touched;
@@ -79,8 +79,8 @@ internal static class WatchCommand
                 return 0;
             }
 
-            // An editor writes a file in more than one step, and a save across a folder is
-            // several files; one build answers all of it.
+            // An editor may write a file in several steps, and saving many files at once raises
+            // many events, so wait for them to settle, then clear the signal and build once.
             if (cancellation.WaitHandle.WaitOne(Settle))
                 return 0;
             changed.Wait(0, CancellationToken.None);
@@ -88,8 +88,8 @@ internal static class WatchCommand
     }
 
     /// <summary>
-    /// Whether a path that changed is one to build for: what the last build read, any nt65
-    /// source, or the project file. Nothing nt65 writes is any of those.
+    /// Whether a change to <paramref name="path"/> should trigger a build: it is a file the last
+    /// build read, any nt65 source, or a project file. nt65 writes none of those.
     /// </summary>
     private static bool Matters(string path, HashSet<string> watched)
     {

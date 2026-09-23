@@ -4,8 +4,8 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// What a caret grows to take in as the selection is widened: the operand, the instruction, the
-/// block and the routine. A reader widening a selection is walking the shape of the program,
-/// and the shape of the program is what the tree already is.
+/// block and the routine. Each step is a node of the syntax tree: widening a selection walks the
+/// structure of the program, which is what the tree already records.
 /// </summary>
 public sealed class SelectionRangesTests
 {
@@ -34,7 +34,7 @@ public sealed class SelectionRangesTests
         Assert.True(client.Initialized.Capabilities.SelectionRangeProvider);
 
         // The caret on `origin`, in `lda origin,x`: the name, the operand it is part of, the
-        // instruction, and the routine the block makes.
+        // instruction, and the whole routine declaration.
         var chain = Assert.Single(await client.SelectionRangesAsync(Uri, new Position(5, 10), timeout));
         Assert.Equal(
             [

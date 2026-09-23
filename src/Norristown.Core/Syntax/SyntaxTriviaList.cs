@@ -43,7 +43,7 @@ public readonly struct SyntaxTriviaList : IEnumerable<SyntaxTrivia>
         }
     }
 
-    /// <summary>The <paramref name="length"/> pieces from <paramref name="start"/>, which is what a slice pattern reads.</summary>
+    /// <summary>The <paramref name="length"/> pieces from <paramref name="start"/>; C# slice patterns call this.</summary>
     /// <param name="start">The first piece to take.</param>
     /// <param name="length">How many to take.</param>
     public ImmutableArray<SyntaxTrivia> Slice(int start, int length)

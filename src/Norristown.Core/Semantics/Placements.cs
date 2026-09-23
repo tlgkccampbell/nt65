@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 /// <summary>
 /// Which modules place which, and so which translation units the program is written as.
 /// <para>
-/// Everything here is read from the files alone: a <c>.place</c> stands at file level and never
+/// Everything here is read from the files alone: a <c>.place</c> must be at file level and never
 /// under an <c>.if</c>, and whether a module may be placed is said in its declaration, so the
 /// units follow from the text and from nothing a build decides. That also makes them cheap
 /// enough to work out again after every edit, whichever file it was in.
@@ -40,7 +40,7 @@ public sealed class Placements
 
     /// <summary>
     /// Works out the placements of <paramref name="trees"/>, leaving out
-    /// <paramref name="defines"/>, which is no module anyone wrote.
+    /// <paramref name="defines"/>, which is not a module anyone wrote.
     /// </summary>
     public static Placements Of(IEnumerable<SyntaxTree> trees, SyntaxTree? defines)
     {
@@ -54,7 +54,8 @@ public sealed class Placements
             if (Declaration(tree) is not { } module || PathOf(module.Name) is not { } name)
                 continue;
 
-            // Two files that are one module are reported where modules are; the first stands.
+            // Two files declaring one module are reported where modules are checked; here the
+            // first one is kept.
             modules.TryAdd(name, tree);
             declarations[tree.Path] = module;
             declared[tree.Path] = MarkerOf(module);
@@ -72,7 +73,8 @@ public sealed class Placements
                     continue;
                 if (!AtFileLevel(place))
                 {
-                    // It names the module all the same, which is not then placed nowhere as well.
+                    // It still names the module, so the module is not also reported as placed
+                    // nowhere.
                     diagnostics.Add(new Diagnostic(tree.GetSpan(place.Keyword.Span), Catalogue.PlaceMisplaced));
                     if (modules.TryGetValue(path, out var meant))
                         named.Add(meant.Path);

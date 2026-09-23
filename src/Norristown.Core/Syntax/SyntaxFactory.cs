@@ -4,26 +4,26 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// Builds a tree rather than reading one: a method per kind of node, written from the same rows
-/// as the classes, and the tokens, trivia and lists a node is put together out of. It is where a
-/// fix or a refactoring gets the piece it wants to put into a file.
+/// Builds syntax rather than parsing it: one method per kind of node, generated from the same
+/// Syntax.xml rows as the node classes, plus the tokens, trivia and lists that nodes are built
+/// from. Code fixes and refactorings use it to make the pieces they insert into a file.
 /// <para>
-/// What is built here belongs to no file. It has a tree of its own holding nothing but itself, so
-/// its spans and its text read the way a node of a file's do, and a rewrite — <c>Update</c>, a
+/// What is built here belongs to no file. Each result sits alone in a tree of its own, so its
+/// spans and its text behave like those of a node in a file; a rewrite — <c>Update</c>, a
 /// <see cref="SyntaxRewriter"/>, <see cref="SyntaxNode.ReplaceNode"/> — is what puts it into one.
 /// </para>
 /// <para>
-/// A token is born with the trivia it is given and no other. Nothing here invents a space: the
-/// spacing of a rewritten piece is either kept from what it replaces, with
-/// <see cref="SyntaxToken.WithTriviaFrom"/>, or put on afterwards by
+/// A token gets exactly the trivia it is given. Nothing here invents a space: the spacing of a
+/// rewritten piece is either kept from what it replaces, with
+/// <see cref="SyntaxToken.WithTriviaFrom"/>, or added afterwards by
 /// <see cref="SyntaxNode.NormalizeWhitespace"/>. The one exception is
-/// <see cref="SeparatedList{T}(IEnumerable{T})"/>, whose commas are written <c>, </c> because a
-/// list has nowhere else to say it.
+/// <see cref="SeparatedList{T}(IEnumerable{T})"/>, whose commas are written <c>, </c> because
+/// there is nothing else in a list to take the spacing from.
 /// </para>
 /// </summary>
 public static partial class SyntaxFactory
 {
-    /// <summary>One space, which is what stands between two tokens that would otherwise read as one.</summary>
+    /// <summary>One space, to separate two tokens that would otherwise run together.</summary>
     public static SyntaxTrivia Space => Whitespace(" ");
 
     /// <summary>Spaces or tabs, which mean nothing to the language and everything to a reader.</summary>
@@ -39,9 +39,9 @@ public static partial class SyntaxFactory
         new(default, new GreenTrivia(SyntaxKind.CommentTrivia, text), 0);
 
     /// <summary>
-    /// A token of <paramref name="kind"/>, spelled the one way it can be: the punctuation and the
-    /// operators. A token whose text is its own — a name, a number, a mnemonic — is built by the
-    /// overload that takes one.
+    /// A token of a <paramref name="kind"/> that has only one spelling: punctuation and
+    /// operators. A token whose text varies — a name, a number, a mnemonic — is built by the
+    /// overload that takes the text.
     /// </summary>
     /// <param name="kind">What the token is.</param>
     /// <returns>The token, with no trivia.</returns>
@@ -66,8 +66,8 @@ public static partial class SyntaxFactory
         Detached(new GreenToken(kind, text, Green(leading), Green(trailing), null));
 
     /// <summary>
-    /// The token that stands where one of <paramref name="kind"/> belongs and is not written: no
-    /// text, no trivia and no width.
+    /// A missing token of <paramref name="kind"/>: one the syntax requires but the source does
+    /// not write, with no text, no trivia and no width.
     /// </summary>
     /// <param name="kind">What the token would have been.</param>
     /// <returns>The token.</returns>
@@ -110,8 +110,8 @@ public static partial class SyntaxFactory
 
     /// <summary>
     /// The items of a list written with a separator between them, with a <c>,</c> and a space
-    /// between each two. A list's commas are the one place the factory writes a space of its own:
-    /// there is nothing else to take one from, and a list written without them reads as one item.
+    /// between each two. A list's commas are the one place the factory adds a space of its own:
+    /// there is no other trivia to take one from, and a list written without them runs together.
     /// </summary>
     /// <typeparam name="T">What the items are.</typeparam>
     /// <param name="items">The items, in source order.</param>
@@ -126,7 +126,7 @@ public static partial class SyntaxFactory
     /// <summary>The items of a separated list and the separators written between them.</summary>
     /// <typeparam name="T">What the items are.</typeparam>
     /// <param name="items">The items, in source order.</param>
-    /// <param name="separators">One fewer than the items, or as many to end the list with one.</param>
+    /// <param name="separators">One fewer than the items, or as many to end the list with a separator.</param>
     /// <returns>The list, which is the empty one when there are no items.</returns>
     public static SeparatedSyntaxList<T> SeparatedList<T>(IEnumerable<T> items, IEnumerable<SyntaxToken> separators)
         where T : SyntaxNode
@@ -151,7 +151,7 @@ public static partial class SyntaxFactory
         return new SeparatedSyntaxList<T>(SyntaxTree.Detached(new GreenSeparatedList(children.ToImmutable())));
     }
 
-    /// <summary>The tokens of a slot that holds a run of them.</summary>
+    /// <summary>A token list, for a slot that holds a sequence of tokens.</summary>
     /// <param name="tokens">The tokens, in source order.</param>
     /// <returns>The list, which is the empty one when there are no tokens.</returns>
     public static SyntaxTokenList TokenList(params IEnumerable<SyntaxToken> tokens)
@@ -164,7 +164,7 @@ public static partial class SyntaxFactory
     /// <param name="built">The green node the factory just made.</param>
     private static SyntaxNode Detached(GreenNode built) => SyntaxTree.Detached(built);
 
-    /// <summary>The token <paramref name="built"/> is, held by a list of one so that it has a parent.</summary>
+    /// <summary>A red token for <paramref name="built"/>, placed in a one-item list so that it has a parent.</summary>
     /// <param name="built">The green token the factory just made.</param>
     internal static SyntaxToken Detached(GreenToken built) =>
         SyntaxTree.Detached(new GreenList([built])).SlotToken(0);

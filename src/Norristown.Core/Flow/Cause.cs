@@ -1,9 +1,9 @@
 namespace Norristown.Flow;
 
 /// <summary>
-/// Why something the analysis follows is not known, as a message about the line that needs it
-/// says it: what made it unknown and what fixes that. A cause the analysis cannot name is none
-/// at all, and the message falls back to what it says with no reason to give.
+/// Why something the analysis tracks is not known, worded for the diagnostic on the line that
+/// needs it: what made it unknown, and what fixes that. Where the analysis cannot name a cause
+/// there is no <see cref="Cause"/> at all, and the diagnostic is given without a reason.
 /// </summary>
 /// <param name="Reason">What made it unknown, as a clause.</param>
 /// <param name="Fix">What to write, as a clause.</param>

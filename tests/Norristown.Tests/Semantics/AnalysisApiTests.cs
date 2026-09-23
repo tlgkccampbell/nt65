@@ -59,7 +59,7 @@ public sealed class AnalysisApiTests
 
         """;
 
-    /// <summary>Analyzing a program, and what one file's model is of.</summary>
+    /// <summary>Analyzing a program, and what one file's model contains.</summary>
     [Fact]
     public void TheModelOfAFile()
     {
@@ -83,7 +83,8 @@ public sealed class AnalysisApiTests
         Assert.Equal("BORDER", model.Brought["EDGE"].Symbol!.Name);
         Assert.Empty(model.Globs);
 
-        // One file on its own sees no other, which is what a scratch buffer is analyzed as.
+        // A model made for one file on its own sees no other file, which is how a scratch buffer
+        // is analyzed.
         var alone = SemanticModel.Create(SyntaxTree.Parse("alone.nt65", ".module alone\nK = 1\n"), SegmentTable.Standard);
         Assert.Equal(["K"], alone.Symbols.Select(symbol => symbol.Name));
     }
@@ -95,7 +96,7 @@ public sealed class AnalysisApiTests
         var model = Compile().ModelFor("main.nt65")!;
         var caret = model.Tree.Text.IndexOf("lda cells,x", StringComparison.Ordinal) + 4;
 
-        // A name already written: the reference at a position, and the symbol it stands for.
+        // A name already written: the reference at a position, and the symbol it refers to.
         var reference = model.ReferenceAt(caret)!;
         Assert.Equal("cells", reference.Symbol.Name);
         Assert.False(reference.IsDeclaration);
@@ -119,7 +120,7 @@ public sealed class AnalysisApiTests
         Assert.Equal("BORDER", Assert.Single(model.LookupSymbols(caret, "EDGE")).Name);
     }
 
-    /// <summary>What one declaration is: its kind, where it is, what it is worth and what it holds.</summary>
+    /// <summary>What one declaration is: its kind, where it is, its value and what it holds.</summary>
     [Fact]
     public void WhatADeclarationIs()
     {
@@ -174,7 +175,7 @@ public sealed class AnalysisApiTests
         Assert.Contains(body.Symbols, symbol => symbol == loop);
     }
 
-    /// <summary>What an expression is worth, and how much room a declaration takes.</summary>
+    /// <summary>What an expression's value is, and how much room a declaration takes.</summary>
     [Fact]
     public void WhatAnExpressionIsWorth()
     {
@@ -215,8 +216,9 @@ public sealed class AnalysisApiTests
         var value = plot.Parameters[0].Symbol;
         Assert.Equal("Colour::white", invocation.For(value)!.Value!.GetText());
 
-        // The turn a line is written on is the expansion, and it answers what a name is worth
-        // there. The declaration a header makes is the one that turn writes out.
+        // A line of a body is read under one expansion of the macro, and that expansion answers
+        // what a name's value is there. The declaration a header makes is the one that expansion
+        // writes out.
         var on = Expansion.Of(null, call, (BlockSyntax)plot.Definition!);
         Assert.Equal(1, model.ValueOf(model.ArgumentFor(value, on)!.Value!).AsNumber());
         Assert.Equal(on.Call, model.GivenAt(value, on)!.Value.Argument.Value!.Tree.Root.DescendantNodes()
@@ -229,7 +231,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(plot, model.DeclaredBy(((BlockSyntax)plot.Definition!).Opener.Statement, null));
     }
 
-    /// <summary>What <c>.exprof(p)</c> in a macro body stands for at one expansion of it.</summary>
+    /// <summary>What <c>.exprof(p)</c> in a macro body evaluates to at one expansion of the body.</summary>
     [Fact]
     public void WhatAnOperandsExpressionIs()
     {
@@ -310,7 +312,7 @@ public sealed class AnalysisApiTests
         Assert.Equal([], missing);
     }
 
-    /// <summary>The name a member is asked for by, or null for one that is not asked for by name.</summary>
+    /// <summary>The name a member is looked for under, or null for one that is never called by name, such as a constructor or an accessor.</summary>
     private static string? Named(MemberInfo member) => member switch
     {
         MethodInfo { IsSpecialName: true } => null,

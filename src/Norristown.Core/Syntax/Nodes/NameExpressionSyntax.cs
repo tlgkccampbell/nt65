@@ -2,17 +2,17 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax;
 
-// The half of the node the table cannot say: the questions asked of a path often enough that
-// asking them over the parts would be the same few lines in twenty places. The rest of the class,
-// and its summary, are generated.
+// Hand-written members that Syntax.xml cannot describe: questions asked of a path often enough
+// that answering them from its parts each time would repeat the same few lines in many places.
+// The rest of the class, and its summary, are generated.
 public sealed partial class NameExpressionSyntax
 {
     private ImmutableArray<SyntaxToken> names;
 
     /// <summary>
-    /// The names between the <c>::</c>, outermost first: the name of each of <see cref="Parts"/>
-    /// the source wrote, leaving out a part that is only the place one belongs. Empty when not even
-    /// the first name was written.
+    /// The names between the <c>::</c>, outermost first: the name of each of <see cref="Parts"/>,
+    /// skipping any part whose name is missing from the source. Empty when not even the first name
+    /// was written.
     /// </summary>
     public ImmutableArray<SyntaxToken> Names
     {
@@ -25,18 +25,18 @@ public sealed partial class NameExpressionSyntax
     }
 
     /// <summary>
-    /// The one name a path of a single component is: nothing before it and nothing after it. An
-    /// <c>[i]</c> is a place in what the name stands for rather than part of the name, so
-    /// <c>table[2]</c> is one name as much as <c>table</c> is. Null for a path, and for a name the
-    /// source did not write.
+    /// The name, when the path is a single name with no <c>::</c> before or after it. An
+    /// <c>[i]</c> indexes into what the name refers to rather than being part of the name, so
+    /// <c>table[2]</c> is a single name as much as <c>table</c> is. Null for a path of more than
+    /// one part, and for a name the source did not write.
     /// </summary>
     public SyntaxToken? SimpleName =>
         GlobalToken is null && Parts is [{ Name: { IsMissing: false } only }] ? only : null;
 
     /// <summary>
-    /// The innermost part of the path, which is what the whole of it stands for, or null where the
-    /// source wrote none: a name that ends in a <c>::</c>, or one that is only the place a name
-    /// belongs.
+    /// The innermost part of the path, which names what the whole path refers to, or null when
+    /// the source wrote no name there: a path that ends in <c>::</c>, or one whose last name is
+    /// missing.
     /// </summary>
     public IdentifierNameSyntax? LastPart => Parts is [.., { Name.IsMissing: false } last] ? last : null;
 

@@ -46,15 +46,21 @@ public sealed record ProgramAnalysis(
     /// <summary>Why every file was analyzed, or null when only the file that changed was.</summary>
     public WholeProgramReason? WholeProgram { get; internal init; }
 
-    /// <summary>Which modules place which, and so which translation units the program is written as.</summary>
+    /// <summary>
+    /// Which modules place which other modules, and so which translation units the program is
+    /// emitted as.
+    /// </summary>
     public Placements Placements { get; internal init; } = Placements.None;
 
-    /// <summary>What a later analysis of the same program, one edit on, needs to keep the rest of this one.</summary>
+    /// <summary>
+    /// What a later analysis of the same program, after one edit, needs in order to reuse the
+    /// parts of this one that the edit did not affect.
+    /// </summary>
     internal Reuse? Reused { get; init; }
 
     /// <summary>
-    /// The files an <c>.incbin</c> was measured from, as logical paths: an editor that sees one
-    /// change on disk analyzes the program again.
+    /// The files whose lengths <c>.incbin</c> items were measured from, as logical paths: an
+    /// editor that sees one of them change on disk analyzes the program again.
     /// </summary>
     public IEnumerable<string> Binaries => Reused?.Lengths.Keys ?? [];
 
@@ -91,11 +97,11 @@ public sealed record ProgramAnalysis(
     }
 
     /// <summary>What an analysis keeps so that the next one can start from it.</summary>
-    /// <param name="Project">The project it analyzed, which the next one has to be of too.</param>
-    /// <param name="Trees">Every file analyzed, the defines among them.</param>
-    /// <param name="Conditions">What answering each file's conditions found, by file.</param>
-    /// <param name="Analyzed">What laying out each file and following its control found, by file.</param>
-    /// <param name="SegmentTable">What building the segment table found.</param>
+    /// <param name="Project">The project it analyzed; the next analysis can reuse this one only for the same project.</param>
+    /// <param name="Trees">Every file analyzed, including the defines file.</param>
+    /// <param name="Conditions">The diagnostics from evaluating each file's conditions, by file.</param>
+    /// <param name="Analyzed">The diagnostics from laying out each file and following its control flow, by file.</param>
+    /// <param name="SegmentTable">The diagnostics from building the segment table.</param>
     /// <param name="Lengths">How long each <c>.incbin</c> file was taken to be.</param>
     internal sealed record Reuse(
         ProjectSettings Project,

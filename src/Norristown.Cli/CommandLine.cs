@@ -81,8 +81,8 @@ public sealed record CommandLine(
         """;
 
     /// <summary>
-    /// What follows a message about a command or an option nt65 does not have. The whole usage
-    /// text after one line of news buries it; this points at where the text is.
+    /// The line printed after an error about the command line. Printing the whole usage text
+    /// after a one-line error would bury the error, so this points at <c>--help</c> instead.
     /// </summary>
     public const string SeeHelp = "see `nt65 --help`";
 
@@ -126,7 +126,7 @@ public sealed record CommandLine(
                     defines.Add(value!);
                     break;
 
-                // A flag takes no value, so it does not step over the argument after it.
+                // A flag takes no value, so `continue` skips the `i++` below that steps over a value.
                 case "--check":
                     check = true;
                     continue;

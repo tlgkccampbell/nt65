@@ -13,6 +13,6 @@ internal readonly record struct Place(Symbol? Symbol, string? Module = null, boo
     /// <summary>Whether this is <see cref="Reported"/>.</summary>
     public bool IsReported => Symbol is null && Module is null;
 
-    /// <summary>The same as an answer to a consumer, which is told the symbol and the module and no more.</summary>
+    /// <summary>The same, as the answer given to a consumer, which carries only the symbol and the module.</summary>
     public SymbolInfo Means => new(Symbol, Module);
 }

@@ -15,9 +15,9 @@ public readonly record struct ProcessorState(
 {
     /// <summary>
     /// What a signature that says nothing declares: <c>a*, i*, native, dp*, dbr*</c>. The widths
-    /// are unchanged rather than 8 because a known width answers a question the author never
-    /// asked: a body that depends on one must say which, and one that does not is callable
-    /// whatever the caller's widths are.
+    /// are unchanged rather than 8 because assuming a width would claim something the author
+    /// never said: a body that depends on one must say which, and one that does not can be
+    /// called whatever the caller's widths are.
     /// </summary>
     public static ProcessorState Default => new(Width.Unchanged, Width.Unchanged, ProcessorMode.Native);
 

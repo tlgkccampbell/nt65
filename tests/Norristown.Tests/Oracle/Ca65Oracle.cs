@@ -22,9 +22,9 @@ internal sealed partial class Ca65Oracle
     private readonly string cc65;
     private readonly string commit;
 
-    // The bytes of the assembler itself. The commit says which source it was built from and
-    // not what came out of the build, so a cached result is keyed on the binary that produced
-    // it: a rebuilt ca65 that answers differently must not be believed on an old entry.
+    // A hash of the assembler binary itself. The commit says which source ca65 was built from,
+    // not what the build produced, so a cached result is keyed on the binary that produced it: a
+    // rebuilt ca65 that behaves differently must not be trusted with an old cache entry.
     private readonly string binary;
     private readonly string? cacheDirectory;
 
@@ -88,8 +88,9 @@ internal sealed partial class Ca65Oracle
     /// <summary>
     /// Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached
     /// by content. <paramref name="alongside"/> are files the source needs, such as the binary
-    /// an <c>.incbin</c> names. Both paths are relative to one working tree and may name
-    /// directories, so a relative path in the source finds what it would in a real build.
+    /// an <c>.incbin</c> names. <paramref name="fileName"/> and those files' names are relative to
+    /// one temporary working directory and may include subdirectories, so a relative path in the
+    /// source finds what it would in a real build.
     /// </summary>
     public AssemblyResult Assemble(
         string fileName, string source, IReadOnlyList<(string Name, byte[] Content)>? alongside = null)
@@ -131,7 +132,8 @@ internal sealed partial class Ca65Oracle
             if (cached is not null)
             {
                 Directory.CreateDirectory(cacheDirectory!);
-                // Two outputs of one text are one entry, and two threads may write it at once.
+                // Identical sources share one cache entry, and two threads may write it at once, so
+                // each writes a temporary file and moves it into place.
                 var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 File.WriteAllText(temp, string.Join(",", bytes));
                 File.Move(temp, cached, overwrite: true);
@@ -146,8 +148,8 @@ internal sealed partial class Ca65Oracle
 
     /// <summary>
     /// Assembles each file and links them with ld65 against <paramref name="config"/>. This
-    /// is the check that nt65 output is an object file like any other: it links against a
-    /// module written by hand, and a linker assertion in it is a link error. Paths are
+    /// checks that nt65's output assembles to an object file like any other: it links with
+    /// modules written by hand, and a failing linker assertion in it is a link error. Paths are
     /// relative to one working tree, as for <see cref="Assemble"/>, and each file's own
     /// directory is searched for what it includes.
     /// </summary>
@@ -197,8 +199,9 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
-    /// Compiles the C file <paramref name="source"/> with cc65 for no particular target, finding
-    /// <paramref name="headers"/> beside it and cc65's own headers where the build put them.
+    /// Compiles the C file <paramref name="source"/> with cc65 for no particular target, with
+    /// <paramref name="headers"/> written beside it and cc65's own headers where
+    /// <c>scripts/build-cc65.ps1</c> put them.
     /// </summary>
     /// <returns>What cc65 said, which is empty when it compiled cleanly.</returns>
     public string CompileC(string source, IReadOnlyList<(string Name, string Text)> headers)
@@ -219,13 +222,13 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
-    /// What ca65 said about the file it was given. A defined symbol nothing in the module
-    /// refers to is left out: that is the whole of what <c>-W2</c> adds beyond the default
-    /// level, and it is said about ca65's own predefined <c>CPU_65816</c> and the rest for
-    /// every file there is, about any symbol a <c>-D</c> defined, and about a label nt65 wrote
-    /// for a linker configuration to place, which nothing in the module can refer to by
-    /// design. The other half of the level — a symbol imported and never used — stays, because
-    /// nt65 imports only what a file uses and one that turned up would be an nt65 bug.
+    /// What ca65 printed about the file it was given, without its warnings that a symbol is
+    /// defined but never used. That warning is one of the two that <c>-W2</c> adds beyond the
+    /// default level, and ca65 gives it for its own predefined symbols such as
+    /// <c>CPU_65816</c> in every file, for any symbol a <c>-D</c> defined, and for a label nt65
+    /// wrote for a linker configuration to place, which nothing in the module refers to by
+    /// design. The other — a symbol imported and never used — is kept, because nt65 imports only
+    /// what a file uses, so that warning would mean an nt65 bug.
     /// </summary>
     private static string Said(string output) =>
         string.Join('\n', output.ReplaceLineEndings("\n").Split('\n')

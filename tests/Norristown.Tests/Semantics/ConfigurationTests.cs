@@ -5,11 +5,11 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// Conditional assembly: what a condition may test, which branch the build takes, and what
-/// the declarations under one mean.
+/// the declarations inside a branch mean.
 /// </summary>
 public sealed class ConfigurationTests
 {
-    /// <summary>The example: one name declared under each of two conditions, and one is real.</summary>
+    /// <summary>One name declared under each of two conditions: only the branch the build takes declares it.</summary>
     [Fact]
     public void TheSameNameMayBeDeclaredUnderSeveralConditions()
     {
@@ -41,7 +41,7 @@ public sealed class ConfigurationTests
         Assert.Equal(["main.nt65:5: `LINES` is not declared"], program.Problems());
     }
 
-    /// <summary>A chain takes its first holding branch, whatever the later ones say.</summary>
+    /// <summary>An <c>.if</c> chain takes the first branch whose condition holds, whatever the later ones say.</summary>
     [Theory]
     [InlineData(1, 0, "one")]
     [InlineData(0, 3, "two")]
@@ -76,7 +76,7 @@ public sealed class ConfigurationTests
         Assert.Empty(program.File("main.nt65").Symbols);
     }
 
-    /// <summary><c>.defined</c> asks about a name without using it, so an unknown one is its answer.</summary>
+    /// <summary><c>.defined</c> asks whether a name is a define without using it, so an unknown name is a false answer, not an error.</summary>
     [Theory]
     [InlineData(".if .defined(DEBUG) {", true)]
     [InlineData(".if .defined(NOWHERE) {", false)]
@@ -165,7 +165,7 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// A branch the build leaves out is not read at all, so what it declares does not exist
-    /// and what it names is nobody's problem.
+    /// and a name it uses that does not exist is not reported.
     /// </summary>
     [Fact]
     public void ABranchThatIsNotTakenIsNotRead()
@@ -199,7 +199,7 @@ public sealed class ConfigurationTests
         Assert.Equal("main", program.File("main.nt65").Symbol("@loop").Scope.Name);
     }
 
-    /// <summary>The processor cannot be settled by something that tests the processor.</summary>
+    /// <summary><c>.cpu</c> cannot be written under a condition, because a condition may itself test the processor.</summary>
     [Fact]
     public void CpuMayNotBeWrittenUnderACondition()
     {

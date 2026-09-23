@@ -67,7 +67,7 @@ public sealed class SemanticTokensTests
     /// <summary>
     /// Every name is classified by what it refers to, a member spelled like a register included,
     /// with its declarations marked and its constants read-only. Registers, mnemonics and
-    /// directives are no names, and are left to the grammar.
+    /// directives are not names, and are left to the grammar to colour.
     /// </summary>
     [Fact]
     public async Task EachNameIsClassifiedByWhatItRefersTo()
@@ -117,8 +117,8 @@ public sealed class SemanticTokensTests
     }
 
     /// <summary>
-    /// A change in one file can change what a name in another refers to, so a client that can be
-    /// asked is told to fetch every document's tokens again.
+    /// A change in one file can change what a name in another refers to, so a client that
+    /// supports refresh requests is asked to refetch every document's tokens.
     /// </summary>
     [Fact]
     public async Task AChangeAsksTheClientToFetchTokensAgain()
@@ -130,9 +130,8 @@ public sealed class SemanticTokensTests
     }
 
     /// <summary>
-    /// A long file is read a screenful at a time, so the lines the editor is showing can be
-    /// asked about on their own, and what changed since the last answer can be asked for
-    /// instead of every number again.
+    /// For a long file, the client can ask for the tokens of just the lines it is showing, and
+    /// can ask for only what changed since its last full answer instead of every number again.
     /// </summary>
     [Fact]
     public async Task ALongFileIsAskedAboutAScreenfulAndAChangeAtATime()
@@ -150,16 +149,16 @@ public sealed class SemanticTokensTests
             Decode(legend, Source, part));
         Assert.Null(part.ResultId);
 
-        // A whole file is answered under a name of its own, and what changed since it is one
-        // run of numbers rather than all of them.
+        // A full answer carries a result id, and the delta against it is one edit to the numbers
+        // rather than all of them again.
         var whole = await client.SemanticTokensAsync(Uri, timeout);
         Assert.NotNull(whole.ResultId);
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
             new Range(new Position(24, 0), new Position(24, 0)), "\n"));
         await client.NextDiagnosticsAsync(timeout);
 
-        // A line added above the routine moves one number: how far the first of its names is
-        // from the one before it. The other hundred and forty are sent no second time.
+        // A line added above the routine changes one number: how many lines the routine's first
+        // name is below the name before it. The other hundred and forty-nine are not sent again.
         var changed = await client.SemanticTokensDeltaAsync(Uri, whole.ResultId!, timeout);
         var edit = Assert.Single(changed.Edits);
         Assert.Equal(1, edit.DeleteCount);

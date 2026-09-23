@@ -4,8 +4,8 @@ namespace Norristown.SyntaxGenerator;
 
 /// <summary>
 /// The table as a hierarchy: what derives from what, and the fixed slot layout of every
-/// concrete node, which is the slots the classes above it write and then its own. A node whose
-/// slots are not written in that order says the order itself, with <c>layout</c>.
+/// concrete node, which by default is the slots declared by the classes above it followed by
+/// its own. A node that needs another order gives it explicitly, with a <c>Layout</c> attribute.
 /// </summary>
 public sealed class NodeTree
 {
@@ -24,9 +24,9 @@ public sealed class NodeTree
         byName = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         derivedFrom = [.. nodes.Select(node => node.Base)];
 
-        // A Base is another row or the root the red classes hang from. One that is neither
-        // would be a C# error in a generated file nobody wrote, and one that is the row itself
-        // would be a walk up the hierarchy that never ends.
+        // A Base must be another row or the root class all red nodes derive from. Anything else
+        // would surface as a C# error in a generated file nobody wrote, and a row that is its own
+        // base would make the walk up the hierarchy loop forever.
         foreach (var node in nodes)
         {
             if (node.Base != Root && (node.Base == node.Name || !byName.ContainsKey(node.Base)))
@@ -36,8 +36,8 @@ public sealed class NodeTree
             }
         }
 
-        // Every layout is worked out here, so reading one later is a lookup and several readers
-        // at once are no trouble.
+        // Every layout is computed here, up front, so reading one later is a lookup and
+        // concurrent readers are safe.
         foreach (var node in nodes)
             layouts[node.Name] = Laid(node);
     }
@@ -53,7 +53,10 @@ public sealed class NodeTree
     /// <param name="node">The node.</param>
     public ImmutableArray<LaidOutSlot> Layout(NodeRow node) => layouts[node.Name];
 
-    /// <summary>The green class <paramref name="node"/>'s green class derives from.</summary>
+    /// <summary>
+    /// The base class of <paramref name="node"/>'s green class: its base row's green class, or
+    /// <c>GreenNode</c> when the base is the root or a hand-written class.
+    /// </summary>
     /// <param name="node">The node.</param>
     public string GreenBase(NodeRow node) =>
         byName.TryGetValue(node.Base, out var row) && !row.IsHandWritten ? node.Base : "GreenNode";

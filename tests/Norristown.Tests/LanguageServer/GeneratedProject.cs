@@ -4,10 +4,11 @@ using System.Text;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// A 65816 program of many modules, each shaped like a module of a real one: constants and data
-/// it exports, a macro, and routines that call the module before it and use its constants and
-/// macro, which it brings in with `.use`. Every module also uses the first module's `M000_LIMIT`,
-/// as a real program uses its shared definitions. It exists to measure what an edit costs, and to replay edits against.
+/// A 65816 program of many modules, each shaped like a module of a real program: constants and
+/// data it exports, a macro, and routines that call the module before it and use that module's
+/// constants and macro, which it brings in with `.use`. Every module also uses the first module's
+/// `M000_LIMIT`, as a real program uses its shared definitions. It is used to measure what an
+/// edit costs, and as a program to replay edits against.
 /// </summary>
 internal static class GeneratedProject
 {

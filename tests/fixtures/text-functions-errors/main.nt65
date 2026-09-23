@@ -1,5 +1,5 @@
-; What building text refuses: a part of a text that reaches outside it, a number joined that is
-; no byte, a zero inside what `.strz` ends with one, and the wrong kinds of argument.
+; What text-building refuses: a substring that reaches outside its text, a joined number that is
+; not a byte, a zero inside text that `.strz` ends with one, and arguments of the wrong kind.
 .module main
 .cpu 6502
 

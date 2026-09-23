@@ -6,9 +6,10 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets through an instance of a routine family, in both the folded form and
-/// the long one: where it is declared, what renaming it touches, and what is offered after the
-/// scope it is in. None of it expands anything: it is all what the binder knows of the family.
+/// What an editor gets through an instance of a routine family, written both in the compact
+/// <c>.multiproc</c> form and in the long <c>.each</c> form: where an instance is declared, what
+/// renaming it changes, and what completion offers after the scope it is in. None of this
+/// expands the family; it all comes from what the binder records about it.
 /// </summary>
 public sealed class FamilyRequestsTests
 {

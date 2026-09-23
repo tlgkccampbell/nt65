@@ -20,7 +20,7 @@ public enum Transfer
 
     /// <summary>
     /// Goes somewhere the operand does not say: an indirect jump or call, or a computed
-    /// target. This is what <c>.next</c> exists to answer.
+    /// target. A <c>.next</c> is how the source says where such a statement goes.
     /// </summary>
     Elsewhere,
 }

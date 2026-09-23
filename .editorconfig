@@ -27,15 +27,18 @@ dotnet_diagnostic.IDE0055.severity = warning
 # The CA rules run (AnalysisLevel in Directory.Build.props). These four are wrong here, and
 # each is off with its reason rather than suppressed one site at a time.
 
-# A boundary says what it gives, not what it happens to be built from: the parser returns the
-# green node a dispatch switches on, and a collection crosses one as a read-only view.
+# Return types are abstract on purpose: an API boundary states what it gives, not the concrete
+# type behind it. The parser returns the green node base type a dispatch switches on, and a
+# collection crosses a boundary as a read-only view.
 dotnet_diagnostic.CA1859.severity = none
 
-# A type named for a stack is a stack: `AnalysisStack` and `SavedStack` are what the analysis
-# follows, not collections a consumer pushes to.
+# The `Stack` suffix is deliberate: `AnalysisStack` and `SavedStack` model the processor's
+# stack as the analysis follows it; they are not collections a consumer pushes to.
 dotnet_diagnostic.CA1711.severity = none
 
-# `Step` is what nt65 calls one writing of one statement, and is not renamed for Visual Basic.
+# `Step` is nt65's name for one occurrence of a statement in the laid-out code (a statement in
+# a macro body or a repetition has one per expansion or iteration), and is not renamed to
+# avoid a Visual Basic keyword.
 dotnet_diagnostic.CA1716.severity = none
 
 # `Long` is the 65816's addressing mode, named as its datasheet names it.

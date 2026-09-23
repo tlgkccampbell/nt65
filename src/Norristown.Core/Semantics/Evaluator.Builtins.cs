@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a call is worth: the built-in functions, a charmap applied to text, and a function
+/// The value of a call: the built-in functions, a charmap applied to text, and a function
 /// the program declared, whose body is read with the arguments in place of its parameters.
 /// <para>
 /// A built-in is the one place an expression asks about the program rather than about
@@ -28,8 +28,8 @@ internal sealed partial class Evaluator
         or ".sqrt" or ".muldiv" or ".sin" or ".cos";
 
     /// <summary>
-    /// Whether a symbol has bytes of its own in the output, which is what an end and a span
-    /// are the end and the span of.
+    /// Whether a symbol has bytes of its own in the output, which is what <c>.endof</c> and
+    /// <c>.spanof</c> measure.
     /// </summary>
     private static bool HasBytesOfItsOwn(Symbol symbol) => symbol.Kind is SymbolKind.Proc or SymbolKind.Data;
 
@@ -62,8 +62,8 @@ internal sealed partial class Evaluator
         if (name == ".select")
             return Select(function, arguments);
 
-        // What a macro body adds asks about an argument rather than about a value, so each
-        // reads the binding rather than evaluating what is written.
+        // `.mode` and `.empty`, which only a macro body uses, ask about an argument rather than
+        // a value, so each reads what the parameter was given rather than evaluating it.
         if (name is ".mode" or ".empty")
         {
             if (arguments.Count != 1 || Argument(arguments[0]) is not { } about)
@@ -77,7 +77,7 @@ internal sealed partial class Evaluator
         // expressions like any label difference. Only the difference can ever be a number,
         // because nt65 never knows an absolute address, and only a caller that has laid the
         // file out can supply it.
-        // Where a segment was loaded and where it runs are the linker's to say.
+        // Where a segment is loaded and where it runs are known only to the linker.
         if (name is ".loadof" or ".runof")
         {
             if (arguments.Count != 1)
@@ -173,7 +173,8 @@ internal sealed partial class Evaluator
             if (ExprOf(call) is { } inner)
                 return Evaluate(inner);
 
-            // Outside an expansion the parameter stands for nothing yet, which is no mistake.
+            // Outside an expansion the parameter has been given no operand yet, which is not an
+            // error.
             if (arguments.Count != 1 || Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
                 Report(function, Catalogue.BuiltinArguments.Says(".exprof", "an `operand` parameter"));
             return Value.Unknown;
@@ -195,8 +196,9 @@ internal sealed partial class Evaluator
             return answer;
         }
 
-        // `.target`, `.has`, `.defined` and the three a macro body adds are answered before
-        // this point, each by the pass that knows what they ask about.
+        // `.target`, `.has`, `.defined` and the three built-ins only a macro body uses
+        // (`.mode`, `.empty`, `.exprof`) are answered before this point, each by the pass that
+        // knows what they ask about.
         return Plain(name, function, arguments);
     }
 
@@ -231,10 +233,10 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// The built-ins that build text: <c>.strsub(s, start, count)</c>, part of a text, and
-    /// <c>.strcat(part, ...)</c>, texts and bytes joined. Text is bytes, so a number joined is the
-    /// one byte it is, and a part that reaches outside the text is refused rather than cut to fit.
-    /// A part nt65 has no value for leaves the text unknown, which is how a function's body reads
-    /// before anything is given to it.
+    /// <c>.strcat(part, ...)</c>, texts and bytes joined. Text is a string of bytes, so a number
+    /// joined in must fit in one byte and is appended as that byte, and a part that reaches
+    /// outside the text is refused rather than cut to fit. An argument with no known value leaves
+    /// the result unknown, as happens when a function's body is read before it is given anything.
     /// </summary>
     private Value Built(string name, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments, Value[] values)
     {
@@ -297,8 +299,8 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// The built-ins that work a number out: a square root, a scaled product, and the sine and
-    /// the cosine a table is built with. Each takes whole numbers and answers a whole number,
-    /// and each says where what it was given has no answer rather than leaving it without one.
+    /// the cosine a table is built with. Each takes whole numbers and returns a whole number,
+    /// and each reports arguments it has no answer for rather than silently giving no value.
     /// </summary>
     private Value Worked(string name, SyntaxToken function, Value[] values)
     {
@@ -361,8 +363,8 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// A call in a build's condition. Only the built-ins the configuration alone can answer
-    /// have one: what a function the program declares is worth, and what a built-in that
-    /// measures the program finds, are not known until there is a program.
+    /// have a value there: the value of a function the program declares, and what a built-in
+    /// that measures the program finds, are not known until there is a program.
     /// </summary>
     private Value InCondition(CallExpressionSyntax call, IReadOnlyList<SyntaxNode> given, Conditions asked)
     {
@@ -426,8 +428,8 @@ internal sealed partial class Evaluator
         var condition = Evaluate(arguments[0]);
         if (condition.AsNumber() is not { } holds)
         {
-            // A function's body is read once with nothing given, when its parameters decide
-            // nothing yet; both values are read then, for the cycles either might close.
+            // A function's body is read once with no arguments, when its parameters have no
+            // values yet; both values are evaluated then, so that a cycle through either is found.
             if (readingBody)
             {
                 Evaluate(arguments[1]);
@@ -460,8 +462,10 @@ internal sealed partial class Evaluator
             : null;
 
     /// <summary>
-    /// A label and a scope are the two names that look as if they had an extent and have none:
-    /// a label is only a position, and a scope only a namespace. Says so, and whether it did.
+    /// Reports a symbol that <paramref name="function"/> cannot measure, and returns whether it
+    /// did. A label and a scope look as if they had an extent but have none: a label is only a
+    /// position, and a scope only a namespace. An indexed path, and an import that does not say
+    /// what its bytes are, cannot be measured either.
     /// </summary>
     private bool NotAnExtent(Symbol symbol, string function, SyntaxNode at)
     {
@@ -519,9 +523,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What a name's macro parameter was given, or null when it names no parameter. A
-    /// parameter given another macro's parameter stands for what that one was given; one given
-    /// anything else stands for that, even a plain name, which is not followed any further.
+    /// What a name's macro parameter was given, or null when it names no parameter. When the
+    /// argument is another macro's parameter, it is followed to what that one was given; any
+    /// other argument, even a plain name, is returned as it is and not followed any further.
     /// </summary>
     private MacroArgument? Argument(SyntaxNode name)
     {
@@ -538,7 +542,7 @@ internal sealed partial class Evaluator
         return argument;
     }
 
-    /// <summary>The symbol a one-part name was resolved to where it is written, not what a binding stands it for.</summary>
+    /// <summary>The symbol a one-part name was resolved to where it is written, without substituting what a binding gave it.</summary>
     private Symbol? Parameter(SyntaxNode name) =>
         name is NameExpressionSyntax { Names.Length: 1, SimpleName: { } only } written
         && resolved.TryGetValue((written.Tree, only.Span.Start), out var symbol)
@@ -548,7 +552,8 @@ internal sealed partial class Evaluator
     /// <summary>
     /// A charmap or a function called by name. A charmap maps one character to its byte; a
     /// function evaluates its body with each parameter bound to the argument it was given,
-    /// and a function that ends up needing itself is the same cycle any constant would be.
+    /// and a function whose evaluation needs its own value is reported as a cycle, as a
+    /// constant's would be.
     /// </summary>
     private Value Applied(NameExpressionSyntax callee, IReadOnlyList<SyntaxNode> given)
     {
@@ -601,9 +606,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// A charmap read into the mapping it describes. Each entry gives one character or a
-    /// range of them consecutive values; a character no entry names has no byte, and using
-    /// the mapping on it is an error where it is used.
+    /// A charmap read into the mapping it describes. Each entry maps one character to a value,
+    /// or a range of characters to consecutive values; a character no entry names has no byte,
+    /// and applying the mapping to it is an error where that happens.
     /// </summary>
     private Dictionary<int, long> Map(Symbol charmap)
     {

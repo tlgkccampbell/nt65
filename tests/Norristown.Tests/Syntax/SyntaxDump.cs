@@ -145,7 +145,8 @@ internal static class SyntaxDump
                 builder.Append($" [{string.Concat(t.LeadingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
                 builder.Append($"{t.Kind}{Escape(t.Text)}{string.Concat(t.TrailingTrivia.Select(x => x.Kind + Escape(x.Text)))}");
 
-                // Nearly every token says nothing, and asking one that does not costs a list.
+                // Nearly every token has no diagnostics, and asking one that has none would
+                // allocate a list.
                 if (t.ContainsDiagnostics)
                 {
                     builder.Append(string.Concat(t.GetDiagnostics().Select(

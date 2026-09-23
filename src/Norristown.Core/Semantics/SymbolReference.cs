@@ -16,15 +16,15 @@ namespace Norristown.Semantics;
 /// </param>
 /// <param name="InUse">
 /// Whether it is written in a <c>.use</c>, which brings the name in rather than using it: a
-/// module that only re-exports a name writes nothing for it.
+/// module that only re-exports a name does not use it.
 /// </param>
 /// <param name="IsStep">
 /// Whether it is a step on a path to another name, as <c>gfx</c> is in <c>gfx::init</c>: the
-/// path uses what it leads to, and walks through this.
+/// path uses what it leads to, and only walks through this.
 /// </param>
 /// <param name="InMacro">
-/// Whether it is written in a macro body, which is used wherever the macro is called rather
-/// than where the body is written.
+/// Whether it is written in a macro body, whose names are used wherever the macro is called
+/// rather than where the body is written.
 /// </param>
 public sealed record SymbolReference(
     Symbol Symbol, TextSpan Span, bool IsDeclaration, bool IsAlias = false, bool InUse = false,

@@ -4,17 +4,18 @@ using Norristown.Syntax;
 namespace Norristown.Tests;
 
 /// <summary>
-/// The boundary around the green tree, read off the compiled assembly rather than off the source.
-/// Everything in <c>Norristown.Syntax.InternalSyntax</c> is the syntax layer's own, and an
-/// analyzer or an editor feature is written against the red tree; the compiler catches most ways
-/// of leaking one of those types, but not a type that is public again, so this is what says so.
+/// The boundary around the green tree (the internal syntax nodes), checked on the compiled
+/// assembly rather than on the source. Everything in <c>Norristown.Syntax.InternalSyntax</c>
+/// belongs to the syntax layer alone, and analyzers and editor features are written against the
+/// red tree (the public syntax API); the compiler catches most ways of leaking an internal type,
+/// but not one that has been made public again, so this test does.
 /// </summary>
 public sealed class ApiSurfaceTests
 {
     /// <summary>The namespace whose types belong to the syntax layer and to nobody else.</summary>
     private const string Internal = "Norristown.Syntax.InternalSyntax";
 
-    /// <summary>Nothing of the green tree is a type a consumer of the assembly can name.</summary>
+    /// <summary>No green-tree type is one a consumer of the assembly can name.</summary>
     [Fact]
     public void TheGreenTreeIsNotPartOfTheAssemblysTypes()
     {
@@ -49,8 +50,8 @@ public sealed class ApiSurfaceTests
     /// <summary>
     /// The compiler, the language server and the CLI read the red tree. The syntax layer owns the
     /// green one, and everything above it — binding, layout, flow, emission — is written against
-    /// the API a consumer has, so this reads the source of everything in <c>Norristown.Core</c>
-    /// outside <c>Syntax/</c> and fails if one of them reaches past it.
+    /// the API a consumer has, so this reads the source of every file in <c>Norristown.Core</c>
+    /// outside <c>Syntax/</c> and <c>Generated/</c>, and fails if one of them uses the green tree.
     /// </summary>
     [Fact]
     public void NothingAboveTheSyntaxLayerReadsTheGreenTree()
@@ -88,8 +89,8 @@ public sealed class ApiSurfaceTests
         Assert.Equal(proc.ChildTokens[0].GetHashCode(), proc.ChildTokens[0].GetHashCode());
         Assert.NotEqual(proc.ChildTokens[0], proc.ChildTokens[1]);
 
-        // Which node a token was read through is part of which value it is, which is what lets two
-        // pieces the source left out at the same place be told apart.
+        // The node a token was reached through is part of its value, which is what lets two missing
+        // tokens at the same position be told apart.
         var nop = tree.GetLine(1).Tokens[0];
         Assert.Equal(nop, tree.GetLine(1).Tokens[0]);
         var read = tree.Root.FindToken(nop.Span.Start);
@@ -105,9 +106,9 @@ public sealed class ApiSurfaceTests
         | BindingFlags.DeclaredOnly;
 
     /// <summary>
-    /// Whether <paramref name="member"/> is worth saying anything about on its own: the accessor
-    /// methods of a property or an event say what the property does, so only the property is
-    /// reported, while an operator and a conversion are members with nothing else to speak for them.
+    /// Whether <paramref name="member"/> should be checked on its own: the accessor methods of a
+    /// property or an event are covered by checking the property or event, so only that is
+    /// reported, whereas an operator or a conversion has no other member that covers it.
     /// </summary>
     private static bool Own(MemberInfo member) => member is not MethodInfo { IsSpecialName: true } method
         || !(method.Name.StartsWith("get_", StringComparison.Ordinal)
@@ -139,7 +140,7 @@ public sealed class ApiSurfaceTests
         _ => [],
     };
 
-    /// <summary>Says so for each of <paramref name="types"/> that a consumer cannot name.</summary>
+    /// <summary>Records a problem for each of <paramref name="types"/>, or type they are built from, that a consumer cannot name.</summary>
     private static void Check(string where, List<string> problems, IEnumerable<Type> types)
     {
         foreach (var type in types.SelectMany(Unwrapped).Distinct())

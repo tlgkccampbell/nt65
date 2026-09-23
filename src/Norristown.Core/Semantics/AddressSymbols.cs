@@ -3,14 +3,17 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The symbols with a place in a segment that an expression is built on: labels, routines and
-/// data declarations, followed through address aliases and through the operands a macro call gave.
-/// What memory an operand reaches through the direct page or the data bank follows from the
-/// segments these are in.
+/// The symbols placed in a segment (labels, routines and data declarations) that an expression
+/// refers to, found by following address aliases and the operands a macro call passed. Which
+/// memory an operand reaches through the direct page or the data bank depends on the segments
+/// these symbols are in.
 /// </summary>
 public static class AddressSymbols
 {
-    /// <summary>The placed symbols <paramref name="expression"/> names on the writing <paramref name="on"/>.</summary>
+    /// <summary>
+    /// The placed symbols <paramref name="expression"/> refers to, with macro parameters resolved
+    /// in the expansion <paramref name="on"/>.
+    /// </summary>
     public static IEnumerable<Symbol> In(SemanticModel model, SyntaxNode expression, Expansion? on) =>
         Collect(model, expression, on, []).Distinct();
 
@@ -37,8 +40,8 @@ public static class AddressSymbols
                     yield return symbol;
                     break;
 
-                // An import that says which segment it is in is placed there, as far as
-                // anything that asks is concerned.
+                // An import that declares which segment it is in is treated as placed in that
+                // segment.
                 case SymbolKind.ImportedAddress when symbol.Segment is not null:
                     yield return symbol;
                     break;

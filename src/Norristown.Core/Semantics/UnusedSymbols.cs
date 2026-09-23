@@ -10,7 +10,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// A name written in a branch this build leaves out counts as used: the other build uses it,
 /// and a warning that comes and goes with a define is noise. A file with errors gets none
-/// of these, because a name its broken lines were meant to use is not news.
+/// of these, because a name may look unused only because the broken lines that were meant to
+/// use it did not parse or resolve.
 /// </para>
 /// </summary>
 public static class UnusedSymbols
@@ -80,9 +81,9 @@ public static class UnusedSymbols
 
     /// <summary>
     /// The <c>.use</c> items that bring in a name the file never writes. A <c>.export .use</c>
-    /// re-exports rather than uses, and what it is for is another module's business; a
-    /// <c>.use module::*</c> brings in whatever that module exports, and what of it this file
-    /// wanted is not a question about this file.
+    /// re-exports rather than uses, and whether anything uses the name is up to other modules;
+    /// a <c>.use module::*</c> brings in whatever that module exports, and which of those names
+    /// this file wanted cannot be told from the file.
     /// <para>
     /// A name written in a branch this build leaves out counts as used, as a declaration's does,
     /// because the lines of that branch are in the file and are what the other build writes.
@@ -114,8 +115,8 @@ public static class UnusedSymbols
 
     /// <summary>
     /// Every name the file writes outside the <c>.use</c> items themselves, and on its own
-    /// rather than as a step on a path, which is what a name brought in is written as. One pass
-    /// answers for all of them, because a file with items to check has them all to check.
+    /// rather than as a step on a path, which is how a name brought in is written. One pass
+    /// over the file serves every item, since all of a file's items are checked together.
     /// <para>
     /// It reads each line's own tokens rather than the nodes they parse to, and it is lexical on
     /// purpose. Binding cannot answer this: it returns at a branch the build leaves out without
@@ -135,8 +136,8 @@ public static class UnusedSymbols
             if (line.Statement.Kind == SyntaxKind.UseDirective)
                 continue;
 
-            // A name is the file's own where nothing but a `::` before it makes it a step on
-            // somebody else's path.
+            // A token counts as a name written on its own unless the token before it is `::`,
+            // which makes it a later part of a path.
             var reached = false;
             foreach (var token in line.Tokens)
             {
@@ -158,15 +159,16 @@ public static class UnusedSymbols
     }
 
     /// <summary>
-    /// Whether an unused one is worth saying so. A member of a named enum is one of a set.
-    /// Data that holds values may be there for where it lands — a header, the vectors, a load
-    /// address — so only storage that holds nothing is reported.
+    /// Whether an unused symbol of this kind is worth reporting. A member of a named enum is one
+    /// of a set, so it is not. Data that holds values may be there for where it lands — a header,
+    /// the vectors, a load address — so only storage that holds nothing is reported.
     /// <para>
-    /// A routine is reported like anything else it declares: an unexported <c>.proc</c> nothing
-    /// calls, jumps to, names in data or names in a <c>.next</c> or a <c>.fallthrough</c> is a routine the program
-    /// has left behind, which is what someone finishing a port most wants to find. A handler is
-    /// the exception the language already knows about: the processor reaches it through a vector
-    /// this program may not even hold, so an <c>interrupt</c> signature is what names it.
+    /// A routine is reported like anything else a file declares: an unexported <c>.proc</c>
+    /// nothing calls, jumps to, names in data or names in a <c>.next</c> or a
+    /// <c>.fallthrough</c> is a routine the program has left behind, which is what someone
+    /// finishing a port most wants to find. A handler is the exception the language already
+    /// knows about: the processor reaches it through a vector this program may not even hold,
+    /// so an <c>interrupt</c> signature counts as naming it.
     /// </para>
     /// </summary>
     private static bool IsChecked(Symbol symbol) => !symbol.IsDefine && symbol.Kind switch

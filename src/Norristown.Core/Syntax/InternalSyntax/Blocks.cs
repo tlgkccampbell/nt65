@@ -3,19 +3,20 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>
-/// The block layer: a pass over the lines' brace values that never looks inside a line.
-/// When the braces balance, the tree is what the prefix sum over those values gives. When
-/// they do not, two recovery rules keep the damage local:
+/// The block layer: a pass over the lines' brace values (+1, −1 or 0) that never looks inside a
+/// line. When the braces balance, the nesting follows directly from the running total of those
+/// values. When they do not, two recovery rules keep the damage local:
 /// <list type="bullet">
 /// <item>a <c>}</c> with no open block is reported and treated as an ordinary line;</item>
-/// <item>a <c>.proc</c> or <c>.macro</c> opener inside a proc or a macro closes the blocks
-/// back to outside it, since neither may appear there, and a <c>.segment NAME</c> region line
-/// closes every block, since it may appear only at file level.</item>
+/// <item>a <c>.proc</c>, <c>.multiproc</c> or <c>.macro</c> opener inside one of those closes
+/// every block back to outside the enclosing one, since none of them may be nested, and a
+/// <c>.segment NAME</c> region line closes every block, since it may appear only at file
+/// level.</item>
 /// </list>
 /// <para>
 /// A region line at file level opens a block with no brace, which holds every line up to the
 /// next region line or the end of the file. A region line anywhere else is an ordinary line,
-/// and binding says it is misplaced.
+/// and the binder reports it as misplaced.
 /// </para>
 /// </summary>
 internal static class Blocks

@@ -5,8 +5,9 @@ namespace Norristown.Semantics;
 /// <summary>
 /// Which branch of an <c>.if</c> chain is written out, as a walk over a container's
 /// children meets them. A chain is a run of sibling blocks — the <c>.if</c> that starts it,
-/// then whichever <c>.elseif</c>s and <c>.else</c> continue it — so whoever walks the
-/// siblings has to carry the little state that says which of them is still open.
+/// then whichever <c>.elseif</c>s and <c>.else</c> continue it — so code that walks the
+/// siblings has to keep a little state: whether a chain is open, and whether one of its
+/// branches has already been taken.
 /// <para>
 /// Most conditions were answered once for the build, before any declaration was looked up.
 /// The ones inside a macro body, a <c>.repeat</c> or an <c>.each</c> could not be: they may

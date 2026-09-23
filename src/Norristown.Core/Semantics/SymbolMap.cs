@@ -11,8 +11,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// A file whose analysis was kept across an edit to another file still names what that file
 /// declared when it was analyzed, which is no longer the symbol the program holds; the
-/// interface did not change, so it means the same, and <see cref="ProgramModel.Current"/> answers the
-/// symbol it stands for now.
+/// interface did not change, so it means the same thing, and
+/// <see cref="ProgramModel.Current"/> gives the symbol it corresponds to now.
 /// </para>
 /// </summary>
 internal sealed class SymbolMap : IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol>
@@ -35,7 +35,7 @@ internal sealed class SymbolMap : IReadOnlyDictionary<(SyntaxTree Tree, int Posi
     public Symbol this[(SyntaxTree Tree, int Position) key] =>
         TryGetValue(key, out var symbol) ? symbol : throw new KeyNotFoundException();
 
-    /// <summary>What <paramref name="symbol"/>, which a symbol may hold on to rather than name, stands for now.</summary>
+    /// <summary>The current version of <paramref name="symbol"/>, for a symbol that another holds on to rather than names.</summary>
     public Symbol Current(Symbol symbol) => current(symbol);
 
     /// <summary>The same map with each file's names replaced by those of the version of it that was read again.</summary>

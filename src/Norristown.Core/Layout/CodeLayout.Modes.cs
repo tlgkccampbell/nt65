@@ -5,12 +5,12 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// Which addressing mode each instruction is laid out in, and what that makes wrong with the
-/// operand it was written with.
+/// Which addressing mode each instruction is laid out in, and the problems that choice shows
+/// up in the operand it was written with.
 /// <para>
-/// The shape of the operand says which modes it could possibly be, the CPU's table says which
-/// of those the mnemonic has, and how wide an address the operand reaches says which of those
-/// to take: the narrowest that reaches. A prefix written in the source wins over all of it.
+/// The shape of the operand gives the modes it could possibly be, the CPU's table narrows those
+/// to the ones the mnemonic has, and the operand's address size picks among them: the narrowest
+/// mode wide enough for it. A size prefix written in the source overrides all of this.
 /// </para>
 /// </summary>
 public sealed partial class CodeLayout
@@ -28,8 +28,8 @@ public sealed partial class CodeLayout
 
     /// <summary>
     /// The expression an operand addresses, which is what an address size is worked out from.
-    /// An <c>operand</c> argument written without braces is an expression, and so is the whole
-    /// of what it addresses.
+    /// An <c>operand</c> argument written without braces is itself an expression, and the
+    /// whole of it is the address.
     /// </summary>
     public static ExpressionSyntax? Expression(SyntaxNode operand) => operand switch
     {
@@ -42,8 +42,8 @@ public sealed partial class CodeLayout
     };
 
     /// <summary>
-    /// The modes an operand's shape could possibly be, before the mnemonic and the CPU have
-    /// their say. A shape that nothing on this CPU has, such as a long operand, yields none.
+    /// The modes an operand's shape could possibly be, before checking which of them the
+    /// mnemonic has on the target CPU. A shape that matches no addressing mode yields none.
     /// </summary>
     private static AddressingMode[] Plausible(SyntaxNode? operand)
     {
@@ -84,8 +84,8 @@ public sealed partial class CodeLayout
                 // `bbr0 flags, @skip`.
                 return absolute.Second is not null ? [AddressingMode.DirectRelative] : Unindexed;
 
-            // An `operand` argument written without braces is an expression, and a plain
-            // address operand by being one.
+            // An `operand` argument written without braces is an expression, and is treated
+            // as a plain address operand.
             default:
                 return Unindexed;
         }
@@ -123,9 +123,10 @@ public sealed partial class CodeLayout
             return widths[0];
         if (candidates.Length == 1)
         {
-            // A prefix wins, so one the only form cannot honour is an error rather than a
-            // prefix quietly dropped: `lda z:($10),y` has no direct form, and ca65 would read
-            // the text as `(dp),y`. `d:` says what is wrong with it where its offset is worked out.
+            // A written prefix is binding, so a prefix that the only available form cannot
+            // honour is an error rather than being quietly dropped: `lda z:($10),y` has no
+            // direct form, and ca65 would read the text as `(dp),y`. A `d:` prefix is checked
+            // separately, where its direct-page offset is worked out.
             if (Operands.WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
                 && Instructions.Width(candidates[0]) is { } width && width != written
                 && !Instructions.IsControlTransfer(mnemonic.Text))
@@ -134,7 +135,7 @@ public sealed partial class CodeLayout
                     mnemonic.Text, Spell(written), CpuNames.Spell(cpu)));
             }
 
-            // The one form there is reaches an address of its width and no wider: `(ptr),y`
+            // The only available form reaches an address of its own width and no wider: `(ptr),y`
             // takes a zero-page pointer, and an absolute one would be cut to its low byte by
             // the linker, if it noticed at all. A control transfer's target is checked for
             // distance instead.
@@ -157,8 +158,8 @@ public sealed partial class CodeLayout
             ? model.AddressSizeOf(expression, segment, expansion)
             : null);
 
-        // Where nothing says how wide it is, the reason has already been reported; the widest
-        // form always reaches, so take that rather than say so twice.
+        // Where the operand's width is unknown, the reason has already been reported; the
+        // widest form always reaches, so take that rather than report the problem twice.
         var chosen = required is null
             ? widths[^1]
             : widths.FirstOrDefault(mode => Instructions.Width(mode) >= required, widths[^1]);
@@ -200,8 +201,8 @@ public sealed partial class CodeLayout
                     Catalogue.TransferPrefix.Says(mnemonic.Text));
             }
 
-            // On the 65816 whether a routine is called near or far is its signature's to say,
-            // and the processor-state analysis checks it where it checks the rest of the call.
+            // On the 65816 whether a routine is called near or far is decided by its signature,
+            // and the processor-state analysis checks that along with the rest of the call.
             else if (!(cpu == Cpu.Wdc65816 && NamesRoutine(expression)))
             {
                 CheckDistance(mnemonic, expression, mode);
@@ -234,8 +235,8 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// That a control transfer reaches as far as its target is: <c>jsr</c>, <c>jmp</c> and
-    /// the branches a near one, <c>jsl</c> and <c>jml</c> a far one.
+    /// Checks that a control transfer's reach matches its target: <c>jsr</c>, <c>jmp</c> and
+    /// the branches need a near target, and <c>jsl</c> and <c>jml</c> a far one.
     /// </summary>
     private void CheckDistance(SyntaxToken mnemonic, ExpressionSyntax expression, AddressingMode mode)
     {
@@ -256,9 +257,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// <c>d:</c> on a constant address: the offset into the direct page it is written as, once
-    /// the analysis knows D here. What is wrong with D is the analysis's to report; what is
-    /// wrong with the operand itself is reported here.
+    /// <c>d:</c> on a constant address: the offset into the direct page that the instruction
+    /// encodes, when the analysis knows D at this point. Problems with D itself are reported by
+    /// the analysis; problems with the operand are reported here.
     /// </summary>
     private long? DirectOffset(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode, ProcessorState? state)
     {
@@ -285,10 +286,11 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// On the 65816 a symbol in a segment reached through a direct page other than 0 means
-    /// something only as a direct operand, D plus its offset. As an absolute or long operand it
-    /// reaches the offset in bank B instead, whatever made the operand that wide. <c>pea</c> and
-    /// <c>per</c> reach no memory, so the offset is all they push.
+    /// On the 65816, a symbol in a segment addressed through a nonzero direct page is only
+    /// meaningful as a direct operand, where it means D plus its offset. As an absolute or long
+    /// operand it would address the offset in bank B instead, whatever made the operand that
+    /// wide, so that is reported. <c>pea</c> and <c>per</c> access no memory and just push the
+    /// offset, so they are exempt.
     /// </summary>
     private void CheckDirectPageSymbols(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode mode)
     {
@@ -314,7 +316,7 @@ public sealed partial class CodeLayout
         Targets.Of(model, expression, expansion) is { Symbol.Signature: not null };
 
     /// <summary>
-    /// Whether the argument's mode has the next byte the body asked for. An immediate, the
+    /// Checks that the argument's mode has the next byte the body asked for. An immediate, the
     /// accumulator, an indirect operand and a stack-relative one have no second byte to
     /// name, and <c>.byteof</c> shifts an immediate rather than adding to it.
     /// </summary>

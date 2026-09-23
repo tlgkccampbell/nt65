@@ -5,22 +5,24 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What moving a file asks the program to change. A module's name is written in its
-/// <c>.module</c> line and its output is named after that wherever the source is, so a source
-/// that moves changes less than it looks: nothing in any other file names it.
+/// The edits that moving or renaming a file requires. A module's name comes from its
+/// <c>.module</c> line, and its output is named after the module wherever the source file is,
+/// so moving a source file needs fewer edits than one might expect: no other source file
+/// refers to it by path.
 /// <para>
-/// Two things do. A <c>files</c> entry that names the file literally has to name it where it
-/// now is; one that is a glob either still matches, in which case there is nothing to do, or
-/// stops matching, which is not something to rewrite on the programmer's behalf — which glob
-/// they meant to widen is theirs to say — and is said instead. And an <c>.incbin</c> path is
-/// resolved beside the file that writes it, so it moves when either end does.
+/// Two things do refer to paths. A <c>files</c> entry in <c>nt65.json</c> that names the file
+/// literally is rewritten to its new path. A glob entry either still matches the new path, and
+/// needs nothing, or stops matching; that case is reported rather than rewritten, because only
+/// the programmer knows which glob they meant to widen. And an <c>.incbin</c> path is resolved
+/// relative to the file that writes it, so it changes when either that file or the binary it
+/// names moves.
 /// </para>
 /// </summary>
 internal static class MovedFiles
 {
     /// <summary>
-    /// The edits <paramref name="renames"/> call for, and what the programmer is to be told
-    /// about the ones nothing can be written for.
+    /// The edits <paramref name="renames"/> require, and the messages to show the programmer
+    /// about changes that cannot be made automatically.
     /// </summary>
     /// <param name="workspace">What the editor is working on.</param>
     /// <param name="renames">Each file, where it is now and where it is going, as logical paths.</param>
@@ -77,8 +79,9 @@ internal static class MovedFiles
     }
 
     /// <summary>
-    /// The <c>.incbin</c> paths a move changes: the ones written in a file that moved to another
-    /// folder, which are resolved beside it, and the ones naming a binary that moved.
+    /// The <c>.incbin</c> paths a move changes: those written in a file that moved to another
+    /// folder, since they are resolved relative to that file, and those naming a binary that
+    /// moved.
     /// </summary>
     private static void Included(
         Workspace workspace, string from, string to, Dictionary<string, List<Protocol.TextEdit>> edits)
@@ -89,8 +92,8 @@ internal static class MovedFiles
         {
             foreach (var model in analysis.Program.Files)
             {
-                // A path is rewritten where the file writing it moved, so that it is resolved
-                // from the new folder, and where it names the file that moved.
+                // A path is rewritten when the file containing it moved, so that it resolves
+                // from the new folder, and when it names the file that moved.
                 var inThisFile = model.Tree.Path == from;
                 if (!inThisFile && !moved && !renamedInPlace)
                     continue;
@@ -135,7 +138,7 @@ internal static class MovedFiles
         found.Add(new Protocol.TextEdit(Range(text, at), written));
     }
 
-    /// <summary>A span of a file as the protocol names it: a line and a count of UTF-16 units into it.</summary>
+    /// <summary>A span of a file as a protocol range: a line, and UTF-16 code-unit offsets within it.</summary>
     private static Protocol.Range Range(string text, TextSpan at)
     {
         var line = 0;
@@ -152,10 +155,10 @@ internal static class MovedFiles
             new Protocol.Position(line, at.End - start));
     }
 
-    /// <summary>A file as it is reached from a directory, with <c>/</c> separators.</summary>
+    /// <summary>The path of a file relative to a directory, with <c>/</c> separators.</summary>
     private static string Relative(string directory, string path) =>
         Paths.Normalized(Path.GetRelativePath(directory, path));
 
-    /// <summary>A file as a message names it: its own name, without the folders above it.</summary>
+    /// <summary>A file's name without its folders, as a message shows it.</summary>
     private static string Shown(string path) => path[(path.LastIndexOf('/') + 1)..];
 }

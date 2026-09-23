@@ -1,9 +1,9 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// <c>.next</c> and <c>.patch</c>: what they may stand after, and what their names mean.
-/// On the 6502 and the 65C02 nothing consumes processor state, so an annotation is
-/// accepted and its names are checked, and none is required.
+/// <c>.next</c> and <c>.patch</c>: what statement they may follow, and what the names they give
+/// refer to. On the 6502 and the 65C02 nothing depends on processor state, so an annotation is
+/// accepted and its names are checked, but none is ever required.
 /// </summary>
 public sealed class AnnotationTests
 {

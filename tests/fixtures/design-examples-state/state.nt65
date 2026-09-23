@@ -27,14 +27,14 @@
     inx                 ; implied
     asl a               ; accumulator (bare "asl" also accepted)
     lda #$10            ; immediate
-    lda ptr             ; zero page / direct, or absolute — see 7.2
-    lda d:$2105         ; a constant address through the direct page — see 7.5
+    lda ptr             ; zero page / direct, or absolute, by where ptr is declared
+    lda d:$2105         ; a constant address through the direct page
     lda buf,x           ; indexed
     lda (ptr),y         ; indirect indexed
     lda (ptr,x)         ; indexed indirect
     bne @loop           ; relative
-    jeq @far            ; long branch — see 7.6
-    brk #0              ; signature byte required, see below
+    jeq @far            ; long branch
+    brk #0              ; signature byte required
     jmp (vector)        ; indirect
     .next ?
 @far:

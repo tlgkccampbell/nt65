@@ -4,20 +4,20 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What a file's <c>.use</c> items bring in, read off the lines that write them: which names
-/// each brings, whether anything writes them, and how the set of them reads once what nothing
-/// names is gone and the rest are in order.
+/// What a file's <c>.use</c> lines bring in, read from the lines themselves: which names each
+/// brings in, whether the file uses them, and how the lines read once unused items are removed
+/// and the rest sorted.
 /// <para>
 /// A <c>.use module::*</c> is left alone, because what it brings in depends on what that module
-/// exports rather than on anything written here, and so is a re-export, which is an interface
-/// rather than something this file uses.
+/// exports rather than on anything written here; it is treated like a re-export, as part of
+/// an interface rather than something this file uses.
 /// </para>
 /// </summary>
 internal static class UseItems
 {
     /// <summary>
-    /// The file's <c>.use</c> lines, with what nothing names taken out and the rest in order,
-    /// offered where the caret is on one of them and there is something to change.
+    /// The change that rewrites the file's <c>.use</c> lines with unused items removed and the
+    /// rest sorted, offered where the caret is on one of them and there is something to change.
     /// </summary>
     public static IEnumerable<Change> Organized(SemanticModel model, int caretLine)
     {
@@ -26,8 +26,8 @@ internal static class UseItems
         if (!lines.Any(line => line.Index == caretLine))
             yield break;
 
-        // A file with something wrong with it may not name what it brought in yet, and an item
-        // taken away on that evidence is one the programmer has to write again.
+        // A file with errors may not yet use what it brings in, and an item removed on that
+        // evidence is one the programmer would have to write again.
         if (model.Tree.Diagnostics.Any(diagnostic => diagnostic.Severity == Severity.Error)
             || model.Diagnostics.Any(diagnostic => diagnostic.Severity == Severity.Error))
         {
@@ -54,8 +54,8 @@ internal static class UseItems
     }
 
     /// <summary>
-    /// The edits that stop <paramref name="name"/> being brought in: the line that brings it
-    /// only, or the one item of a braced line that does.
+    /// The edits that stop <paramref name="name"/> being brought in: removing the whole line
+    /// where it is the line's only item, or just that item from a braced list.
     /// </summary>
     public static IReadOnlyList<Edit> Without(SemanticModel model, string name)
     {
@@ -71,8 +71,8 @@ internal static class UseItems
     }
 
     /// <summary>
-    /// The line as it reads once the items nothing names are gone, or null where nothing names
-    /// any of them and the line itself goes.
+    /// The line with its unused items removed, or null where none of its items is used and the
+    /// whole line goes.
     /// </summary>
     private static string? Tidied(SemanticModel model, Line line)
     {
@@ -99,7 +99,7 @@ internal static class UseItems
         return false;
     }
 
-    /// <summary>The line's code with <paramref name="items"/> in its braces.</summary>
+    /// <summary>The line's code bringing in just <paramref name="items"/>, in braces when there is more than one.</summary>
     private static string Code(Line line, IReadOnlyList<Item> items) =>
         items.Count == 1
             ? $".use {line.Path}::{items[0].Written}"
@@ -130,8 +130,8 @@ internal static class UseItems
 
     /// <summary>
     /// What one <c>.use</c> line says, read off the directive it parsed to: the path it names,
-    /// whether it is a <c>::*</c>, and the names it brings in. How the line is written — its
-    /// indent, its code and whatever comment follows — is text, and is read as text.
+    /// whether it is a <c>::*</c>, and the names it brings in. The line's layout — its indent,
+    /// its code and any comment after it — is taken from the raw text.
     /// </summary>
     private static Line? Read(SyntaxTree tree, int index, UseDirectiveSyntax use)
     {

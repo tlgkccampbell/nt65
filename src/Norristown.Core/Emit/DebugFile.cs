@@ -4,21 +4,23 @@ using System.Text;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Puts what a line map says into ld65's debug file, after the link: <c>nt65 remap-dbg</c>.
+/// Copies what the line maps say into ld65's debug file after the link; this is what
+/// <c>nt65 remap-dbg</c> does.
 /// <para>
 /// <c>ca65 -g</c> records the lines of the <c>.s</c> it assembles, and ld65 copies them into the
-/// file <c>--dbgfile</c> names. nt65 writes no <c>.dbg</c> directives, so what arrives here
-/// refers to generated ca65; this adds what the <c>.s.lines</c> files beside those <c>.s</c>
-/// files say, so that it also refers to the <c>.nt65</c> the person wrote (§13).
+/// file <c>--dbgfile</c> names. nt65 writes no <c>.dbg</c> directives, so the debug file that
+/// arrives here refers only to the generated ca65; this adds what the <c>.s.lines</c> files
+/// beside those <c>.s</c> files say, so that it also refers to the <c>.nt65</c> the person wrote.
 /// </para>
 /// <para>
-/// What it adds is added: a <c>file</c> record for each source, a <c>line</c> record for each of
-/// its lines, and the new line on each <c>sym</c> that was defined or used at a mapped one. The
-/// records that were there stay, so a debugger that was showing the generated ca65 still can.
-/// Only a module's <c>file</c> changes, to the source it was written from, because it names one
-/// file and the one worth naming is the source. A <c>.s</c> with no map beside it — anything
-/// hand-written that the same program links — is left alone, which is also what makes running
-/// this twice do nothing the second time.
+/// Almost everything is added rather than changed: a <c>file</c> record for each source, a
+/// <c>line</c> record for each of its lines, and the new line id on each <c>sym</c> that was
+/// defined or used at a mapped line. The existing records stay, so a debugger that was showing
+/// the generated ca65 still can. The one change is a <c>mod</c> record's <c>file</c>, which is
+/// set to the source the module was written from, because a module names only one file and the
+/// source is the one worth naming. A <c>.s</c> with no map beside it — anything hand-written
+/// that the same program links — is left alone, which is also why running this a second time
+/// changes nothing.
 /// </para>
 /// </summary>
 public static class DebugFile
@@ -29,8 +31,8 @@ public static class DebugFile
     /// <summary>
     /// <paramref name="text"/> with every mapped <c>.s</c> line also named as the source line it
     /// came from, or null with <paramref name="problem"/> saying what is wrong.
-    /// <paramref name="map"/> answers with the line map beside the <c>.s</c> whose path it is
-    /// given, or null where there is none.
+    /// <paramref name="map"/> returns the text of the line map beside the <c>.s</c> at the path it
+    /// is given, or null when there is none.
     /// </summary>
     public static string? Remap(string text, Func<string, string?> map, out string? problem)
     {
@@ -45,12 +47,14 @@ public static class DebugFile
         var files = records.Where(record => record.Keyword == "file").ToList();
         var named = files.Select(record => record["name"] ?? "").ToHashSet(StringComparer.Ordinal);
 
-        // ld65 numbers each kind from zero and says how many there are, and the two agree; an id
-        // is handed out past both, so that one that did not would still not be given out twice.
+        // ld65 numbers each kind of record from zero and gives the count in its `info` record,
+        // and the two agree. New ids start past both the count and the highest id in use, so
+        // that even a file where they disagreed would not have an id given out twice.
         var nextFile = Next(records, "file", files);
         var nextLine = Next(records, "line", records.Where(record => record.Keyword == "line"));
 
-        // Which file each mapped `.s` record stands for, and where each of its lines came from.
+        // For each `.s` file record that has a line map: the map, and the new ids given to the
+        // sources it names.
         var sources = new Dictionary<int, (SourceLines Map, int[] Ids)>();
         var added = new List<string>();
         foreach (var record in files)
@@ -108,8 +112,8 @@ public static class DebugFile
                 + Spanned(entry.Value.Spans))
             .ToList();
 
-        // ld65 writes the file in text mode, so on Windows it arrives with CRLF; what goes back
-        // is ended the same way, however little the readers of it care.
+        // ld65 writes the file in text mode, so on Windows it arrives with CRLF; the result is
+        // written with the same line endings, even though the tools that read it hardly care.
         var written = Written(records, sources, replaced, added, lineRecords);
         return text.Contains("\r\n", StringComparison.Ordinal)
             ? written.Replace("\n", "\r\n", StringComparison.Ordinal) : written;
@@ -143,7 +147,7 @@ public static class DebugFile
         return text.ToString().TrimEnd('\n') + "\n";
     }
 
-    /// <summary>One record as it is written out, which for most of them is as it arrived.</summary>
+    /// <summary>One record as it is written back; most records are written back unchanged.</summary>
     private static string Rewritten(
         Record record, IReadOnlyDictionary<int, (SourceLines Map, int[] Ids)> sources,
         IReadOnlyDictionary<int, int> replaced, int files, int lines)
@@ -183,14 +187,17 @@ public static class DebugFile
     private static string Spanned(IReadOnlyList<string> spans) =>
         spans.Count == 0 ? "" : ",span=" + string.Join('+', spans.Distinct(StringComparer.Ordinal));
 
-    /// <summary>The first id of <paramref name="keyword"/> that <paramref name="records"/> has not used.</summary>
+    /// <summary>
+    /// The first unused id for <paramref name="keyword"/> records: past every id in
+    /// <paramref name="of"/>, and no lower than the count the <c>info</c> record gives.
+    /// </summary>
     private static int Next(IReadOnlyList<Record> records, string keyword, IEnumerable<Record> of)
     {
         var counted = Number(records.FirstOrDefault(record => record.Keyword == "info")?[keyword]) ?? 0;
         return of.Aggregate(counted, (next, record) => Math.Max(next, (Number(record["id"]) ?? -1) + 1));
     }
 
-    /// <summary>Where the last <paramref name="keyword"/> record is, or the last record of all.</summary>
+    /// <summary>The index of the last <paramref name="keyword"/> record, or of the last record when there is none.</summary>
     private static int Last(IReadOnlyList<Record> records, string keyword)
     {
         for (var i = records.Count - 1; i >= 0; i--)
@@ -207,8 +214,8 @@ public static class DebugFile
             ? value : null;
 
     /// <summary>
-    /// One line of a debug file: a keyword, then <c>name=value</c> fields separated by commas,
-    /// of which a name may be quoted and so may hold a comma itself.
+    /// One line of a debug file: a keyword and a tab, then <c>name=value</c> fields separated by
+    /// commas, where a value may be quoted and so may itself hold a comma.
     /// </summary>
     private sealed class Record
     {

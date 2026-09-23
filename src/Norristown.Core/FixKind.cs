@@ -24,13 +24,16 @@ public enum FixKind
     /// <summary>The branch reported, written as the long branch that reaches any near target.</summary>
     Branch,
 
-    /// <summary>The return reported, written as the one its routine is left by.</summary>
+    /// <summary>
+    /// The return reported, rewritten as the instruction its routine must return with, such as
+    /// <c>rti</c> in an interrupt handler.
+    /// </summary>
     Return,
 
-    /// <summary>What ca65 spelled it, written the way nt65 spells it.</summary>
+    /// <summary>A construct written the way ca65 spells it, rewritten the way nt65 spells it.</summary>
     Spelling,
 
-    /// <summary>The name reported, written as the declared name it is nearly.</summary>
+    /// <summary>The name reported, replaced with the declared name it most nearly matches.</summary>
     NearestName,
 
     /// <summary>
@@ -63,12 +66,12 @@ public enum FixKind
     /// <summary>The declaration nothing names, removed, or exported so that another module may name it.</summary>
     Unused,
 
-    /// <summary>The <c>.use</c> item that brings in a name nothing writes, removed.</summary>
+    /// <summary>The <c>.use</c> item that imports a name nothing refers to, removed.</summary>
     UseItem,
 
     /// <summary>
-    /// The bracket the line does not have, written where the tree holds the place for it: the
-    /// <c>{</c> a block needs, or the <c>)</c>, <c>]</c> or <c>}</c> that closes what is open.
+    /// The bracket missing from the line, inserted where the syntax tree has a missing token for
+    /// it: the <c>{</c> a block needs, or the <c>)</c>, <c>]</c> or <c>}</c> that closes an open one.
     /// </summary>
     MissingPiece,
 

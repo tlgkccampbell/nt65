@@ -21,7 +21,7 @@
 .import screen: .byte[1024]
 .import vectors: .addr[4]
 
-; An import with no element type is an address and nothing else, as it always was.
+; An import with no element type is an address and nothing else.
 .import printf: proc()
 .import plain
 

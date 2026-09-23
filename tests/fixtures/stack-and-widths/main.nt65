@@ -87,9 +87,9 @@
     rts
 }
 
-; A second entry point, where the stack is the one entering the routine leaves. `args 2` says
-; the caller pushes a word, so a frame over it reaches the argument at the declared label just
-; as it does at the routine's own entry, whichever way control arrived.
+; A second entry point, reached with only the caller's pushes on the stack. `args 2` says the
+; caller pushes a word, so a frame over it reaches the argument at the declared label just as
+; it does at the routine's own entry, whichever way control arrived.
 .struct Call {
     ret:   .res 2
     value: .word

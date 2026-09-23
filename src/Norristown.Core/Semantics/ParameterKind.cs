@@ -1,7 +1,7 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a macro parameter takes, and so what it stands for in the body. The kind is
+/// What a macro parameter takes, and so what it can be used as in the body. The kind is
 /// checked where the argument is written, at the call; it never changes how the argument
 /// is read.
 /// </summary>

@@ -4,7 +4,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// The editor's <c>Format Document</c> and <c>Format Selection</c>: the same layout the command
-/// line writes, as edits the client applies, and no analysis behind it.
+/// line produces, returned as edits for the client to apply, and needing no analysis.
 /// </summary>
 public sealed class FormattingTests
 {
@@ -50,13 +50,13 @@ public sealed class FormattingTests
         Assert.All(edits, edit => Assert.Equal(edit.Range.Start.Line, edit.Range.End.Line));
         Assert.All(edits, edit => Assert.Equal(0, edit.Range.Start.Character));
 
-        // What the client would lay out with is not what nt65 lays out with: there is one layout.
+        // The client's formatting options (tabs, here) are ignored: nt65 has one layout.
         Assert.DoesNotContain(edits, edit => edit.NewText.Contains('\t'));
     }
 
     /// <summary>
     /// Formatting a selection moves the lines in it and leaves the rest where they are, and the
-    /// column a run of data lines sits on is still the whole run's.
+    /// column a run of data lines is aligned to is still worked out from the whole run.
     /// </summary>
     [Fact]
     public async Task FormattingASelectionMovesOnlyWhatIsSelected()
@@ -77,8 +77,8 @@ public sealed class FormattingTests
     }
 
     /// <summary>
-    /// A file with a mistake in it formats all the same: what a line is written at is what its
-    /// own braces say, and nothing here waits on an analysis.
+    /// A file with an error in it still formats: a line's indentation comes from the braces
+    /// around it, and formatting does not wait for an analysis.
     /// </summary>
     [Fact]
     public async Task AFileThatDoesNotCompileStillFormats()
@@ -99,7 +99,7 @@ public sealed class FormattingTests
         Assert.Equal(["    lda nowhere", "    rts"], edits.Select(edit => edit.NewText));
     }
 
-    /// <summary>A file the server does not have is no edits, rather than an error.</summary>
+    /// <summary>Formatting a file the server does not have returns no edits, rather than an error.</summary>
     [Fact]
     public async Task AFileTheServerDoesNotHaveIsNoEdits()
     {

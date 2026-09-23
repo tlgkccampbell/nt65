@@ -4,7 +4,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What one parameter was given at one call. An argument is a value, not the tokens it was
-/// written as: the body stands it in as a parenthesized whole, so <c>value * 2</c> with the
+/// written as: the body substitutes it as a parenthesized whole, so <c>value * 2</c> with the
 /// argument <c>1 + 2</c> is 6.
 /// </summary>
 /// <param name="Parameter">The parameter it was given to.</param>
@@ -26,7 +26,7 @@ public sealed record MacroArgument(
             : null;
 
     /// <summary>
-    /// The operand an <c>operand</c> parameter stands for, unwrapped from its braces. A plain
+    /// The operand an <c>operand</c> parameter was given, unwrapped from its braces. A plain
     /// address is written without them, and is an operand all the same.
     /// </summary>
     public SyntaxNode? Operand =>

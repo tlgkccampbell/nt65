@@ -7,7 +7,7 @@ namespace Norristown.Emit;
 /// <param name="Sources">The sources, by the number the map gives each one.</param>
 /// <param name="Lines">
 /// For each mapped line of the <c>.s</c>, counting from 1, the source it came from and the line
-/// of it. A line of the <c>.s</c> that is not here came from nowhere a debugger should name.
+/// in it. A line of the <c>.s</c> that is missing here has no source line a debugger should show.
 /// </param>
 public sealed record SourceLines(
     IReadOnlyList<(string Path, int Size)> Sources,

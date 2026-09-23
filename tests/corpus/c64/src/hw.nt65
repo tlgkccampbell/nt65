@@ -67,7 +67,7 @@
 }
 
 ; The eight sprites. Their position registers are two bytes apart and their high X bits are
-; one register of flags, so a routine that writes one differs from the next by a number.
+; one register of flags, so the routine for one sprite differs from the next only by a number.
 .export .enum Sprite {
     s0
     s1

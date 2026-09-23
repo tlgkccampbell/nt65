@@ -4,12 +4,14 @@ namespace Norristown;
 public static class Diagnostics
 {
     /// <summary>
-    /// The same diagnostics, reported as <paramref name="severities"/> says by name: one turned
-    /// up to an error, one turned down to a warning, and one turned off gone.
+    /// The same diagnostics, with each severity replaced by the one <paramref name="severities"/>
+    /// gives its name: raised to an error, lowered to a warning, or removed when the setting
+    /// turns it off.
     /// <para>
-    /// An error is left alone. A project is told where it asks for one to be turned down, and
-    /// a construct that is an error on the 65816 and a warning elsewhere is not switched off
-    /// where it matters by a line that meant the other processor.
+    /// A diagnostic already reported as an error is never changed. A project file that asks for
+    /// an error to be lowered gets an error of its own there, and this way a construct that is
+    /// an error on the 65816 and a warning on other processors cannot be switched off on the
+    /// 65816 by a setting written with the other processors in mind.
     /// </para>
     /// </summary>
     /// <param name="diagnostics">What the analysis found.</param>

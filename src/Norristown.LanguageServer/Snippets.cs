@@ -4,11 +4,11 @@ using Norristown.Semantics;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What a completion writes for the directives that open a block, for a client that takes
-/// stops. They are the only completions written as snippets: a block is a shape with a brace to
-/// close, and writing the shape is worth more than writing the word. The name is the first stop
-/// and the body is the last, so that choosing one leaves the caret where the name goes and
-/// tabbing to the end leaves it inside.
+/// The snippet a completion inserts for each directive that opens a block, for a client that
+/// accepts snippets. These are the only snippet completions: a block has a fixed shape with a
+/// brace to close, and inserting the whole shape is worth more than inserting the directive.
+/// The name is the first tab stop and the body is the last, so that choosing one leaves the
+/// caret where the name goes and tabbing to the end leaves it inside the body.
 /// <para>
 /// Instructions are deliberately not among them. <c>lda ${1:operand}</c> fights the typing of
 /// someone who knows what they are writing, which in assembly is everyone.
@@ -17,14 +17,14 @@ namespace Norristown.LanguageServer;
 internal static class Snippets
 {
     /// <summary>
-    /// What each block opener writes, by the directive that begins it. <c>.proc</c> is not here
-    /// because on the 65816 it depends on how the program's other routines are declared.
+    /// The snippet for each block opener, keyed by its directive. <c>.proc</c> is not here
+    /// because on the 65816 its snippet depends on how the program's other routines are declared.
     /// </summary>
     private static readonly Dictionary<string, string> Written = new(StringComparer.Ordinal)
     {
         [".macro"] = ".macro ${1:name}(${2:parameters}) {\n    $0\n}",
-        // A `.func` is one line rather than a block, and is here because its shape — a name, a
-        // parameter list and what it works out to — is the same thing worth writing.
+        // A `.func` is one line rather than a block, but is here because its shape — a name, a
+        // parameter list and the expression it evaluates — is just as worth inserting whole.
         [".func"] = ".func ${1:name}(${2:parameters}) = $0",
         [".struct"] = ".struct ${1:Name} {\n    $0\n}",
         [".union"] = ".union ${1:Name} {\n    $0\n}",
@@ -40,20 +40,21 @@ internal static class Snippets
     };
 
     /// <summary>
-    /// What <paramref name="directive"/> writes as a snippet, or null for one that opens no
-    /// block and so is written as the word it is.
+    /// The snippet <paramref name="directive"/> inserts, or null for one that opens no block and
+    /// is inserted as plain text.
     /// </summary>
     /// <param name="directive">The directive, as the completion lists it.</param>
     /// <param name="program">The program, for what its routines' signatures mostly start with.</param>
-    /// <param name="cpu">The processor, since only the 65816 has a signature worth a stop.</param>
+    /// <param name="cpu">The processor, since only on the 65816 does the signature get a tab stop.</param>
     public static string? Of(string directive, ProgramModel program, Cpu cpu)
     {
         if (directive != ".proc")
             return Written.GetValueOrDefault(directive);
 
-        // A routine on the 65816 is declared with the state it assumes, and a program declares
-        // most of its the same way; the one it uses most is the one a new routine most likely
-        // wants, and is a stop rather than a decision made for the programmer.
+        // On the 65816 a routine is declared with the processor state it assumes, and most of a
+        // program's routines declare the same one. The most common is the likeliest for a new
+        // routine, so it is offered pre-filled in a tab stop rather than decided for the
+        // programmer.
         var usual = cpu == Cpu.Wdc65816 ? Usual(program) : null;
         return usual is null
             ? ".proc ${1:name} {\n    $0\n}"

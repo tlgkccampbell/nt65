@@ -12,10 +12,10 @@ namespace Norristown.LanguageServer;
 /// not touch keep the green nodes they already had.
 /// <para>
 /// A file is not analyzed on its own, because a name it uses may be one another file exports.
-/// A document belongs to the project whose <c>files</c> name it; one no project names is part of
-/// a program of every such document. A program is analyzed the first time anything asks, and
-/// again after a change, starting from the analysis before it: an edit that leaves what other
-/// files see of a file alone analyzes only that file.
+/// A document belongs to the project whose <c>files</c> name it; the open documents no project
+/// names together form one more program. A program is analyzed the first time anything asks,
+/// and again after a change, starting from the previous analysis: an edit that does not change
+/// what other files can see of a file re-analyzes only that file.
 /// </para>
 /// </summary>
 internal sealed class Workspace
@@ -25,14 +25,15 @@ internal sealed class Workspace
 
     // How the client spells the URI of each file it has named, by logical path. VS Code
     // escapes a drive's colon and nt65 does not, so a file the client has opened keeps the
-    // client's spelling for the rest of the session: two spellings of one file would leave
-    // what is wrong with it in the problem list twice.
+    // client's spelling for the rest of the session: two spellings of one file would list its
+    // diagnostics in the Problems panel twice.
     private readonly Dictionary<string, string> named = new(StringComparer.Ordinal);
     private readonly List<WorkspaceProject> projects = [];
     private IReadOnlyList<string> roots = [];
     private string? configuration;
 
-    // The program of the open documents no project names, and the analysis before it.
+    // The analysis of the program formed by the open documents no project names, and the
+    // previous one, which the next analysis starts from.
     private ProgramAnalysis? loose;
     private ProgramAnalysis? loosePrevious;
 
@@ -66,10 +67,10 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Finds the projects in the folders the client opened, the folders themselves and every
-    /// folder beneath them, built as the named <paramref name="active"/> configuration where a
-    /// project has one, as the editor's setting chooses. Their files are read from disk when
-    /// first needed; open documents replace them as the client sends them.
+    /// Finds the projects in the folders the client opened and every folder beneath them, and
+    /// builds each as the named <paramref name="active"/> configuration, which the editor's
+    /// setting chooses, where the project has it. Their files are read from disk when first
+    /// needed; open documents take their place as the client sends them.
     /// </summary>
     public void Load(IReadOnlyList<string> rootUris, string? active = null)
     {
@@ -89,8 +90,8 @@ internal sealed class Workspace
     public void Load(string? rootUri, string? active = null) => Load(rootUri is null ? [] : [rootUri], active);
 
     /// <summary>
-    /// The folders the client opened, with <paramref name="added"/> among them and
-    /// <paramref name="removed"/> no longer. The projects are looked for again in what is left,
+    /// Updates the folders the client has open, adding <paramref name="added"/> and dropping
+    /// <paramref name="removed"/>. Projects are searched for again across the resulting folders,
     /// because a folder that joined brings whatever projects are in it.
     /// </summary>
     /// <returns>The folders the workspace now has, as logical paths.</returns>
@@ -157,7 +158,7 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>Forgets a document. From here on the file on disk is what it is.</summary>
+    /// <summary>Forgets a document; from now on the file's contents are taken from disk.</summary>
     public void Close(string uri)
     {
         lock (gate)
@@ -183,9 +184,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Files that changed on disk: a project file, a source, or a file an <c>.incbin</c> measured.
-    /// Whether any of them is one the workspace reads, and so whether what is wrong may have
-    /// changed.
+    /// Handles files that changed on disk: a project file, a source, or a binary an
+    /// <c>.incbin</c> includes. Returns whether any of them is a file the workspace reads, and so
+    /// whether diagnostics may have changed.
     /// </summary>
     public bool ChangedOnDisk(IEnumerable<string> uris)
     {
@@ -231,8 +232,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// What the program <paramref name="path"/> belongs to means, built once and kept until
-    /// something changes. Files the client has open stand in for whatever is on disk.
+    /// The analysis of the program <paramref name="path"/> belongs to, built once and kept until
+    /// something changes. Documents the client has open take the place of the files on disk.
     /// </summary>
     public ProgramAnalysis AnalysisFor(string path)
     {
@@ -243,9 +244,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The files an <c>.incbin</c> was measured from, across every program, as logical paths.
-    /// They are what the editor has to be asked to watch beyond the sources and the project
-    /// files: which of them a program includes is the program's to say.
+    /// The binaries <c>.incbin</c> directives include, across every program, as logical paths.
+    /// The editor has to be asked to watch these in addition to the sources and project files,
+    /// because only the program says which files it includes.
     /// </summary>
     public IReadOnlyList<string> Binaries()
     {
@@ -270,7 +271,8 @@ internal sealed class Workspace
 
     /// <summary>
     /// Every program the workspace holds: one per project, and the one of the open documents no
-    /// project names. Each is built once and kept, so asking is what publishing already did.
+    /// project names. Each is built once and kept, so this normally reuses the analyses that
+    /// publishing already built.
     /// </summary>
     public IReadOnlyList<ProgramAnalysis> Programs()
     {
@@ -285,8 +287,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The project a file is built as, or the settings a file no project names is built as,
-    /// which is what says where its output would go.
+    /// The settings a file is built with: its project's, or the default settings for a file no
+    /// project names. They determine where its output would go.
     /// </summary>
     public ProjectSettings SettingsFor(string path)
     {
@@ -297,9 +299,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The program of the open documents no project names. An open document stands in for
-    /// whatever is on disk, and brings its own tree, which an edit re-parsed only in the lines
-    /// it touched.
+    /// The analysis of the open documents no project names. Each open document supplies its own
+    /// tree in place of the file on disk, and an edit re-parsed only the lines it touched.
     /// </summary>
     private ProgramAnalysis Loose()
     {
@@ -314,9 +315,9 @@ internal sealed class Workspace
         open.Values.FirstOrDefault(document => document.Tree.Path == path);
 
     /// <summary>
-    /// How the client names a file: its own spelling where it has given one. Every URI the
-    /// server sends goes through this, so that one file is one file to the editor however the
-    /// two of them would have written its path.
+    /// The URI the client uses for a file: the client's own spelling where it has given one.
+    /// Every URI the server sends goes through this, so that the editor sees one URI per file
+    /// however differently the client and the server would spell its path.
     /// </summary>
     public string UriOf(string path)
     {
@@ -336,9 +337,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// What is wrong with one open document, for the file the client has just asked about. It
-    /// is the answer of the program's analysis, so a mistake another file makes about this one
-    /// is in it; what is wrong with the other files is their own to publish.
+    /// The diagnostics of one open document, the file the client has just opened or edited. They
+    /// come from the whole program's analysis, so they include problems another file causes in
+    /// this one; the other files' diagnostics are published separately.
     /// </summary>
     public Published? ToPublish(string uri)
     {
@@ -355,9 +356,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Whether the last analysis of the program <paramref name="path"/> belongs to had to read
-    /// more than that one file, which is exactly when what another file's names refer to, and
-    /// so its colours and its lenses, can have moved.
+    /// Whether the last analysis of the program <paramref name="path"/> belongs to had to
+    /// re-analyze more than that one file, which is exactly when what names in other files refer
+    /// to, and so those files' semantic colouring and lenses, can have changed.
     /// </summary>
     public bool ReachedOtherFiles(string path)
     {
@@ -366,10 +367,10 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Every file the editor is told about, with what is wrong with it: each file of each
-    /// project, each project file, and each open document that belongs to no project. A file
-    /// two projects share is reported by the one nearest it, which is the project every other
-    /// answer about it comes from.
+    /// Every file whose diagnostics are published, with those diagnostics: each file of each
+    /// project, each project file, and each open document that belongs to no project. A file two
+    /// projects share is reported by the nearer project, which is the one every other answer
+    /// about the file comes from.
     /// </summary>
     public IReadOnlyList<Published> ToPublish()
     {
@@ -380,8 +381,8 @@ internal sealed class Workspace
             {
                 var analysis = project.Analysis(open.Values);
 
-                // The project file is not a program's file, and what is wrong with it is what
-                // stops the program being read at all, so it is worth the same squiggle.
+                // The project file is not one of the program's sources, but its errors can stop
+                // the program being read at all, so they are published like any other file's.
                 found[project.File] = (analysis, null);
                 foreach (var file in analysis.Program.Files)
                 {
@@ -425,14 +426,15 @@ internal sealed class Workspace
 
     /// <summary>
     /// The project a file belongs to, or null for none. A library two projects share is part of
-    /// both, and belongs, for what the editor shows of it, to the one nearest it.
+    /// both, but for what the editor shows about it, it belongs to the project whose root is
+    /// nearest.
     /// </summary>
     private WorkspaceProject? Owner(string path) =>
         projects.Where(project => project.Owns(path))
             .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
             .FirstOrDefault();
 
-    /// <summary>A file changed, so every program that names it is analyzed again.</summary>
+    /// <summary>A file changed, so every program that names it is marked to be analyzed again.</summary>
     private void Invalidate(string path)
     {
         var owned = false;
@@ -446,8 +448,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Builds each project as the active configuration. A project without it builds its own
-    /// settings, unless no project has it, when it is a mistake each project reports.
+    /// Builds each project as the active configuration. A project that lacks it builds with its
+    /// own settings, unless no project has it at all, in which case every project reports the
+    /// unknown name.
     /// </summary>
     private void ConfigureAll()
     {
@@ -467,8 +470,8 @@ internal sealed class Workspace
 
     /// <summary>
     /// Every project file in <paramref name="root"/> and the folders beneath it, as logical paths.
-    /// A folder whose name starts with <c>.</c>, and <c>node_modules</c>, hold no projects of the
-    /// programmer's.
+    /// Folders whose names start with <c>.</c>, and <c>node_modules</c> folders, are skipped,
+    /// since they hold no projects of the programmer's.
     /// </summary>
     private static IEnumerable<string> ProjectFiles(string root)
     {
@@ -508,9 +511,9 @@ internal sealed class Workspace
 
     /// <summary>
     /// <paramref name="tree"/> with the edits of one notification applied in order. They are
-    /// turned into text changes together and the tree is rebuilt once, because each of them
-    /// names a place in what the one before it left and the lines between the first and the
-    /// last are the only ones any of them can have touched.
+    /// converted to text changes together and the tree is rebuilt once: each edit's range refers
+    /// to the text as the previous edit left it, and only the lines between the first and the
+    /// last edit can have been touched.
     /// </summary>
     private static SyntaxTree Applied(SyntaxTree tree, IReadOnlyList<TextDocumentContentChangeEvent> changes)
     {

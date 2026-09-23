@@ -1,9 +1,9 @@
 namespace Norristown.Cli;
 
 /// <summary>
-/// The program the command is in the middle of building, for the handler of last resort to
-/// name. nt65 builds on the thread it was asked on, so this is that thread's and two builds at
-/// once cannot read each other's.
+/// The program the command is currently building, so that the top-level exception handler can
+/// name it in its report. nt65 builds on the calling thread, so the value is kept per thread,
+/// and two builds running at once do not see each other's.
 /// </summary>
 internal static class Building
 {
@@ -13,10 +13,10 @@ internal static class Building
     /// <summary>The program being built, as the person running nt65 would name it, or null.</summary>
     public static string? Program => building;
 
-    /// <summary>Says what is being built, until <see cref="Nothing"/> says it is done.</summary>
+    /// <summary>Records what is being built, until <see cref="Nothing"/> clears it.</summary>
     /// <param name="program">The program, as the person running nt65 would name it.</param>
     public static void Started(string program) => building = program;
 
-    /// <summary>Says that nothing is being built.</summary>
+    /// <summary>Clears the record: nothing is being built.</summary>
     public static void Nothing() => building = null;
 }

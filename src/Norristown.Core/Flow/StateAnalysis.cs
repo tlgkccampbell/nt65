@@ -31,7 +31,8 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly Dictionary<(int Position, Expansion? On), int> slots = [];
 
     // The state at the start of each expansion of a macro with a signature, and of each block
-    // spliced into one, which is what the end of it is checked against and hands back.
+    // spliced into one: a spliced block's end is checked against it, and a macro's exit state
+    // takes its unchanged parts from it.
     private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
 
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
@@ -98,9 +99,9 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// The state reaching a statement, whichever writing of it is asked about. An editor asks
-    /// about a line, and is shown the state that reaches its first writing. A writing's line is
-    /// in the file of the block it writes out, which is another file's for a macro declared
-    /// there, so the same position in two files is two lines.
+    /// about a line, and is shown the state that reaches its first writing. A writing's line
+    /// belongs to the file that contains the body it writes out, which for a macro declared in
+    /// another file is that other file, so the same position in two files is two lines.
     /// </summary>
     public FlowState? AnyBefore(SyntaxNode statement) =>
         reaching.Where(pair => pair.Key.Position == statement.Position
@@ -162,8 +163,9 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// What is known where control arrives from outside the routine's own paths: nothing,
-    /// except that a part the routine promises to hand back unchanged is taken to be left alone
-    /// on the way there too, so only a routine that declares a part needs its labels to.
+    /// except that a part the routine's signature leaves unchanged is assumed to be unchanged
+    /// on the way there too. So a label needs to declare a part only where the routine's
+    /// signature gives that part a specific value.
     /// </summary>
     private static ProcessorState Outside(Signature signature)
     {
@@ -177,9 +179,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Which parts of the state a declared label's <c>.state</c> gives, which are the parts a
-    /// jump into it is checked for and so the only parts it may assume. <c>?</c> gives them all,
-    /// as unknown.
+    /// Which parts of the state a declared label's <c>.state</c> gives. These are the parts a
+    /// jump into the label is checked against, and so the only parts the code after the label
+    /// may rely on. <c>?</c> gives them all, as unknown.
     /// </summary>
     private static HashSet<StatePart> Given(BasicBlock block)
     {
@@ -231,12 +233,12 @@ public sealed class StateAnalysis : IProcessorStates
         }
         Settle();
 
-        // A label a `.state` declares is an entry point in its own right. One nothing reaches
-        // starts from what the directive says, over a state otherwise unknown, and over the
-        // stack a call to the routine leaves, since a jump in arrives as a call would. One some
-        // path already reaches is checked against that path, and, where the label can also be
-        // entered from outside the routine, keeps only the parts the declaration gives: what
-        // the paths inside leave is no promise to whoever jumps in.
+        // A label a `.state` declares is an entry point in its own right. If no path reaches
+        // it, it starts from what the directive says, over an otherwise unknown state and the
+        // stack a call to the routine leaves, since a jump in arrives as a call would. If some
+        // path already reaches it, the directive is checked against that path, and where the
+        // label can also be entered from outside the routine, only the parts the declaration
+        // gives are kept: what the paths inside leave is no promise to code that jumps in.
         foreach (var block in blocks)
         {
             if (!block.IsDeclared)
@@ -291,7 +293,7 @@ public sealed class StateAnalysis : IProcessorStates
             }
         }
 
-        // The edges the state after a block travels along. A call's edge is to the routine it
+        // The edges the state after a block flows along. A call's edge is to the routine it
         // calls, which is checked against its signature rather than walked into, and so is a
         // jump to a routine's entry, the routine's own included: that is a tail call.
         IEnumerable<int> Carried(BasicBlock block)
@@ -313,9 +315,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// its <c>.state</c> gives keep what reaches the label, which the directive itself then
     /// checks, and every part it leaves out becomes unknown, because a jump from outside is
     /// checked for the parts the declaration gives and for nothing else. The stack is what a
-    /// call to the routine leaves, since that is what a jump in arrives with, and nothing where
+    /// call to the routine leaves, since that is what a jump in arrives with, or unknown where
     /// the path above the label has pushed something else: a declaration cannot say what is on
-    /// the stack, so there is nothing to meet the two in the middle.
+    /// the stack, so nothing can reconcile the two.
     /// </summary>
     private static FlowState Entered(
         BasicBlock block, FlowState reached, Signature signature, Symbol routine)
@@ -425,7 +427,8 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
 
-        // Data flow runs into goes where its `.next` says, which is a jump to each place named.
+        // Flow that runs into data goes where the data's `.next` says, which is treated as a
+        // jump to each place named.
         if (step.Statement is not InstructionStatementSyntax statement)
         {
             if (next is not null && step.Statement is DataDirectiveSyntax or DataValuesSyntax)
@@ -452,8 +455,8 @@ public sealed class StateAnalysis : IProcessorStates
                 return state with { Processor = Flags(step, mnemonic == "rep", processor) };
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
-            // other `xce` swaps in a carry nobody knows.
-            // D and B are left alone.
+            // other `xce` swaps in an unknown carry, so the mode becomes unknown.
+            // D and B are unaffected.
             case "xce":
                 if (previous is { } clc && Is(clc.Statement, "clc"))
                 {
@@ -475,7 +478,7 @@ public sealed class StateAnalysis : IProcessorStates
                 };
 
             // The direct page is loaded from a constant by `lda #c` then `tcd` with A 16 bits;
-            // any other `tcd` loads what nobody knows.
+            // any other `tcd` leaves D unknown.
             case "tcd":
                 return state with
                 {
@@ -526,7 +529,7 @@ public sealed class StateAnalysis : IProcessorStates
             case "ply":
                 return state with { Stack = Pull(stack, Bytes(processor.Index)) };
             // A pull that finds a value the routine pushed gets it back: a saved D or B, a
-            // constant, or the program bank. Any other loads what nobody knows.
+            // constant, or the program bank. Any other pull leaves the register unknown.
             case "plb":
                 return new FlowState(processor with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, Pull(stack, 1));
             case "pld":
@@ -542,8 +545,8 @@ public sealed class StateAnalysis : IProcessorStates
                     : processor with { A = Width.Unknown, Index = Width.Unknown };
                 return new FlowState(restored, Pull(stack, 1));
 
-            // The stack pointer is somewhere nothing is known of, and what is pushed from
-            // here on is tracked on top of it.
+            // The stack pointer now points somewhere unknown, and what is pushed from here on
+            // is tracked on top of that unknown base.
             case "txs":
             case "tcs":
                 return state with { Stack = AnalysisStack.Unanchored };
@@ -642,14 +645,15 @@ public sealed class StateAnalysis : IProcessorStates
         }
     }
 
-    /// <summary>The routines a <c>.next</c> names; the labels it names are edges of the routine's own.</summary>
+    /// <summary>The routines a <c>.next</c> names, leaving out the labels, which are handled as edges.</summary>
     private IEnumerable<Symbol> Routines(NextDirectiveSyntax next, Expansion? on) =>
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
 
     /// <summary>
     /// The routine a target's label is inside, where the target is a label in another routine
-    /// and so a jump into that routine's interior; null for every other target. One instance of
-    /// a family is not another routine: its body is this one written once.
+    /// and so a jump into that routine's interior; null for every other target. Another
+    /// instance of the same family does not count as another routine: all the instances share
+    /// one written body.
     /// </summary>
     private static Symbol? Interior(Symbol target, Symbol routine) =>
         target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
@@ -668,7 +672,7 @@ public sealed class StateAnalysis : IProcessorStates
     private ProcessorState Called(Step step, string mnemonic, Symbol? target, ProcessorState state)
     {
         // A call into another address space has been reported where it is laid out, and what
-        // another processor's routine takes is nothing to this one's state.
+        // another processor's routine expects has no bearing on this processor's state.
         if (checks.InAnotherSpace(step, target))
             return state;
         if (target?.Signature is not { } callee)
@@ -778,8 +782,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// A <c>.state</c>: each item asserts and sets. Where that part is known and differs it is
-    /// an error; where it is not known the item makes it so; an item with <c>?</c> forgets.
+    /// A <c>.state</c>: each item both asserts and sets a part of the state. Where the part is
+    /// known and differs, that is an error; where it is unknown, the item sets it; an item with
+    /// <c>?</c> makes it unknown.
     /// </summary>
     private FlowState Asserted(Step step, FlowState state)
     {
@@ -824,7 +829,8 @@ public sealed class StateAnalysis : IProcessorStates
             }
         }
 
-        // Emulation mode pins both widths at 8 bits, so saying so says that too.
+        // Emulation mode pins both widths at 8 bits, so declaring emulation mode declares 8-bit
+        // widths too.
         if (processor.E == ProcessorMode.Emulation)
         {
             if (processor.A == Width.Sixteen || processor.Index == Width.Sixteen)
@@ -891,7 +897,7 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// <c>.ensure a16, i8</c>: the widths it names hold after it, whatever it writes to make
-    /// them. A 16-bit width needs native mode, and only native mode known here says it is.
+    /// them. A 16-bit width needs native mode, and is reported unless native mode is known here.
     /// </summary>
     private FlowState Ensured(Step step, FlowState state)
     {

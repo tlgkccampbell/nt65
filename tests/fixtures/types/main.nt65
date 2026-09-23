@@ -11,7 +11,7 @@
     blue                ; 6
 }
 
-; A member of a named enum is only ever named through it, so it may be called after a register.
+; A member of a named enum is only ever named through it, so it may be named after a register.
 .enum Reg {
     a
     x

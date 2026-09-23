@@ -13,8 +13,8 @@ public enum BlockKind
     Proc,
 
     /// <summary>
-    /// <c>.multiproc</c>: a repetition over an enum whose body is one routine's, written out
-    /// once per member.
+    /// <c>.multiproc</c>: one routine body repeated over an enum, written out once for each
+    /// member of the enum.
     /// </summary>
     MultiProc,
 
@@ -51,7 +51,7 @@ public enum BlockKind
     /// <summary><c>.data name {</c>: mixed data, with members and positions of its own.</summary>
     Data,
 
-    /// <summary><c>.data name: .byte[] {</c>: the values of an array, one line of them at a time.</summary>
+    /// <summary><c>.data name: .byte[] {</c>: an array's values, spread over the block's lines.</summary>
     DataBody,
 
     /// <summary><c>.if</c>, <c>.elseif</c> or <c>.else</c>.</summary>
@@ -66,6 +66,6 @@ public enum BlockKind
     /// <summary>A multi-line <c>.type T {</c> initializer, one <c>member = value</c> per line.</summary>
     RecordInitializer,
 
-    /// <summary>A block argument of a macro call, first or continuation.</summary>
+    /// <summary>A block passed as an argument to a macro call, whether the first one or a continuation.</summary>
     MacroBlock,
 }

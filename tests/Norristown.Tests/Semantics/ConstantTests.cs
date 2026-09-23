@@ -73,7 +73,7 @@ public sealed class ConstantTests
         Assert.False(model.Symbol("SELF").Value.IsKnown);
     }
 
-    /// <summary>A ring of names is one error, at the declaration that closes it.</summary>
+    /// <summary>A cycle of names is one error, at the declaration that closes it, naming the others it runs through.</summary>
     [Fact]
     public void ACycleIsReportedOnceAndNamesTheRest()
     {
@@ -94,9 +94,10 @@ public sealed class ConstantTests
     }
 
     /// <summary>
-    /// The one division the processor traps on: the least number nt65 counts in over −1. Its
-    /// quotient is one past the greatest, which is an overflow like any other and has no
-    /// value; its remainder is zero, as a remainder by −1 always is. Neither ends the process.
+    /// The one division the host processor traps on: the most negative 64-bit number divided by
+    /// −1. Its quotient is one more than the largest 64-bit number, which is an overflow like any
+    /// other and has no value; its remainder is zero, as a remainder by −1 always is. Neither
+    /// crashes the assembler.
     /// </summary>
     [Fact]
     public void TheDivisionWithNoAnswerDoesNotEndTheProcess()
@@ -163,7 +164,7 @@ public sealed class ConstantTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("CHROUT").AddressSize);
     }
 
-    /// <summary>A checked import gives nt65 the value it uses everywhere.</summary>
+    /// <summary>An import may give its value, which nt65 then uses everywhere, or its address size; one that gives neither is absolute.</summary>
     [Fact]
     public void ImportsCarryTheirValueOrTheirSize()
     {

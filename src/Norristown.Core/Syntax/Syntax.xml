@@ -5,7 +5,8 @@
   src/Norristown.SyntaxGenerator over it, which writes the red node classes, the green classes and
   the visitors into src/Norristown.Core/Generated, where they are git-ignored and there to be read.
 
-  A block per node, in the order the files list, so two people adding kinds touch two places.
+  One block per node, in alphabetical order of class name, so two people adding kinds edit two
+  different places.
   Where a concept is one Roslyn's own Syntax.xml has, the names are the ones Roslyn uses:
 
     <Node Name="X" Base="Y">          the class and what it derives from
@@ -22,9 +23,9 @@
 
     ... Internal="true"               the class is internal: it gets an Accept, but no visitor method
     ... HandWritten="true"            the class is written by hand; only its Accept is generated
-    ... Partial="true"                a hand-written half holds members the table cannot say
-    ... Missing="true"                a node of this kind stands where one belongs that the source lacks
-    ... Layout="A B C"                the field order, when it is not the base's fields and then this
+    ... Partial="true"                a hand-written partial class adds members the table cannot describe
+    ... Missing="true"                a node of this kind fills a required place the source wrote nothing in
+    ... Layout="A B C"                the field order, when it is not the base's fields followed by this
                                       node's own
       <Member Name="N" Type="T">      a property that is not a piece of the node
         <Read><![CDATA[expr]]>        what that property returns
@@ -33,9 +34,10 @@
   slot; Layout says the order where a node interleaves its own fields with the ones a class above
   it writes. Optional means the piece belongs to a part of the line that may be absent altogether:
   a piece the line always has a place for is required, and stands in its slot as a missing token or
-  an error node when the source leaves it out. A piece inside an optional group stays optional, and
-  is missing rather than absent when the group is there and it is not. A list field is never
-  optional: the property is always a list, and a list with no items is a slot holding nothing.
+  an error node when the source leaves it out. A piece inside an optional group is optional too: it
+  is null when the group is absent, and missing when the group is written but the piece is not. A
+  list field is never optional: the property is always a list, and a list with no items is stored as
+  an empty slot.
 -->
 <Tree>
 
@@ -154,7 +156,7 @@
     </Field>
     <Field Name="Level" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>ca65's level, which nt65 reports, or null.</summary>
+        <summary>A ca65 assertion level, which nt65 reports as an error, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -435,7 +437,7 @@
   <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ConfigDeclaration"/>
     <TypeComment>
-      <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
+      <summary><c>.config NAME = value</c>: a setting, whose value the build may override.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
@@ -513,7 +515,7 @@
   <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="CpuNameExpression"/>
     <TypeComment>
-      <summary>A CPU's name, where an expression is read.</summary>
+      <summary>A CPU name written where an expression is read.</summary>
     </TypeComment>
   </Node>
 
@@ -667,7 +669,7 @@
   <Node Name="ElementIndexSyntax" Base="SyntaxNode">
     <Kind Name="ElementIndex"/>
     <TypeComment>
-      <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
+      <summary><c>[i]</c> after a name: which element of a counted declaration the name refers to.</summary>
     </TypeComment>
     <Field Name="OpenBracketToken" Type="SyntaxToken">
       <PropertyComment>
@@ -748,7 +750,7 @@
   <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="EnsureDirective"/>
     <TypeComment>
-      <summary><c>.ensure a16, i8</c>: the widths to make hold.</summary>
+      <summary><c>.ensure a16, i8</c>: the widths to establish at this point.</summary>
     </TypeComment>
   </Node>
 
@@ -811,7 +813,7 @@
     </TypeComment>
     <Field Name="Token" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The directive that was read as far as it went, or null.</summary>
+        <summary>The directive that could not be read as a call of a built-in function, or null.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
@@ -939,7 +941,7 @@
     </Field>
     <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The routine flow runs into, or null when no name was written.</summary>
+        <summary>The routine execution runs into, or null when no name was written.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -951,7 +953,7 @@
   <Node Name="FrameDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="FrameDirective"/>
     <TypeComment>
-      <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
+      <summary><c>.frame locals: Locals</c>: a name, and the struct that gives the layout of the top of the stack.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
@@ -973,7 +975,7 @@
     </Field>
     <Field Name="Type" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The struct the frame is laid out as, or null when not even the <c>:</c> was written.</summary>
+        <summary>The struct that gives the frame's layout, or null when not even the <c>:</c> was written.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1379,7 +1381,7 @@
     </TypeComment>
     <Field Name="Token" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The token the expression is.</summary>
+        <summary>The expression's one token.</summary>
       </PropertyComment>
       <Kind Name="NumberLiteral"/>
       <Kind Name="CharacterLiteral"/>
@@ -1431,7 +1433,7 @@
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The macro's name, which may be spelled as an instruction is.</summary>
+        <summary>The macro's name, which may be an instruction's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Mnemonic"/>
@@ -1592,7 +1594,7 @@
     </Field>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The module's name, which is a path from the root of the modules.</summary>
+        <summary>The module's name, which is a path from the root of the module hierarchy.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
@@ -1719,7 +1721,7 @@
     </Field>
     <Field Name="Targets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
       <PropertyComment>
-        <summary>The labels flow continues at.</summary>
+        <summary>The labels execution continues at.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1863,7 +1865,7 @@
   <Node Name="PatchDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="PatchDirective"/>
     <TypeComment>
-      <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
+      <summary><c>.patch @op</c>: the instruction whose bytes the store above overwrites.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
@@ -1873,7 +1875,7 @@
     </Field>
     <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The label of the instruction written to, or null when no name was written.</summary>
+        <summary>The label of the instruction overwritten, or null when no name was written.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1891,7 +1893,7 @@
     </Field>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The module placed, as a path from the root of the modules.</summary>
+        <summary>The module placed, as a path from the root of the module hierarchy.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2055,11 +2057,11 @@
   <Node Name="SegmentAttributeSyntax" Base="SyntaxNode">
     <Kind Name="SegmentAttribute"/>
     <TypeComment>
-      <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
+      <summary><c>dp = expr</c>, <c>bank = expr</c>, <c>space = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>dp</c>, <c>bank</c> or <c>mirrors</c>.</summary>
+        <summary>The <c>dp</c>, <c>bank</c>, <c>space</c> or <c>mirrors</c>.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
@@ -2071,7 +2073,7 @@
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The value of a <c>dp</c> or a <c>bank</c>, or null.</summary>
+        <summary>The value of a <c>dp</c>, a <c>bank</c> or a <c>space</c>, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBracketToken" Type="SyntaxToken" Optional="true">
@@ -2173,7 +2175,7 @@
   <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="SignatureDeclaration"/>
     <TypeComment>
-      <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
+      <summary><c>.signature std = a8, i16, dp = 0</c>: a name for a set of items signatures can use.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
@@ -2205,11 +2207,11 @@
   <Node Name="SkippedTokensSyntax" Base="SyntaxNode">
     <Kind Name="SkippedTokens"/>
     <TypeComment>
-      <summary>What was left on a line after its statement: tokens the parser walked past.</summary>
+      <summary>What was left on a line after its statement: tokens the parser skipped.</summary>
     </TypeComment>
     <Field Name="Tokens" Type="SyntaxTokenList">
       <PropertyComment>
-        <summary>The tokens the parser walked past.</summary>
+        <summary>The tokens the parser skipped.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2217,7 +2219,7 @@
   <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="StateDirective"/>
     <TypeComment>
-      <summary><c>.state a16, i8</c>: the items of a signature, asserted and set at one point.</summary>
+      <summary><c>.state a16, i8</c>: signature items, asserted and set at one point in the code.</summary>
     </TypeComment>
   </Node>
 
@@ -2392,7 +2394,7 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>=</c> before the value, or null where the word takes one without.</summary>
+        <summary>The <c>=</c> before the value, or null for a word that takes its value without one.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>

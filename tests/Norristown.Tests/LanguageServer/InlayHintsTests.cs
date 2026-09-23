@@ -5,9 +5,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The few words drawn in a line that the line does not say. There are five kinds, each with a
-/// switch of its own, and what is not hinted matters as much as what is: a note on every line
-/// is a dashboard rather than a listing.
+/// Inlay hints: the few words drawn into a line to say what the line itself does not. There are
+/// five kinds, each with a setting of its own, and which lines get no hint matters as much as
+/// which do: a note on every line would make the source a dashboard rather than a listing.
 /// </summary>
 public sealed class InlayHintsTests
 {
@@ -15,9 +15,9 @@ public sealed class InlayHintsTests
 
     /// <summary>
     /// A 65816 file with something of every kind in it: widths that change and widths that do
-    /// not, an <c>.ensure</c> and a <c>.state</c> that say their own, values a declaration
-    /// leaves out, a branch that cannot reach, and calls whose arguments are and are not worth
-    /// naming the parameter of.
+    /// not, an <c>.ensure</c> and a <c>.state</c> that already state the widths themselves,
+    /// values a declaration leaves implied, a branch that cannot reach its target, and calls
+    /// whose arguments are and are not worth labelling with the parameter's name.
     /// </summary>
     private const string Source = """
         .module main
@@ -77,8 +77,8 @@ public sealed class InlayHintsTests
         """;
 
     /// <summary>
-    /// Every switch is read from where the editor's settings put it, and one the editor does
-    /// not mention keeps its default: the counts off, everything else on.
+    /// Each kind's setting is read from where the editor's settings put it, and one the settings
+    /// do not mention keeps its default: cycle counts off, everything else on.
     /// </summary>
     [Fact]
     public void EveryKindHasASwitchOfItsOwn()
@@ -100,19 +100,19 @@ public sealed class InlayHintsTests
                 }
                 """));
 
-        // One switch thrown leaves the rest where they were.
+        // Turning one setting off leaves the rest at their defaults.
         Assert.Equal(
             HintSettings.Default with { ImpliedValues = false },
             Settings("""{ "inlayHints": { "impliedValues": false } }"""));
     }
 
     /// <summary>
-    /// What an editor that has said nothing about hints is shown, written into the line it is
-    /// drawn in. Everything not listed here is a line that gets none, which is the half of the
-    /// design that is easiest to lose: no hint on the <c>.ensure</c> or the <c>.state</c> that
-    /// say their own, none on a line whose state did not change, none for an argument that
-    /// names the parameter it is for, none for a call that takes one argument, and none at all
-    /// for a call written with named arguments.
+    /// The hints shown to an editor with no hint settings, each written into its line. Every line
+    /// not listed here gets no hint, which is the half of the design that is easiest to lose: no
+    /// hint on the <c>.ensure</c> or the <c>.state</c>, which already state the widths; none on a
+    /// line whose state did not change; none for an argument spelled the same as its parameter;
+    /// none for a call that takes one argument; and none at all for a call written with named
+    /// arguments.
     /// </summary>
     [Fact]
     public async Task WhatTheDefaultsShow()
@@ -136,16 +136,16 @@ public sealed class InlayHintsTests
             ],
             await ShownAsync(client, timeout));
 
-        // Twelve characters is as long as a hint gets: past that it stops reading as a note in
-        // the margin and starts pushing the line it is about off the screen.
+        // No hint is longer than twelve characters: past that it stops reading as a note and
+        // starts pushing the rest of its line off the screen. Every hint also has a tooltip.
         var hints = await client.InlayHintsAsync(Uri, 0, 200, timeout);
         Assert.All(hints, hint => Assert.True(hint.Label.Length <= 12, hint.Label));
         Assert.All(hints, hint => Assert.NotNull(hint.Tooltip));
     }
 
     /// <summary>
-    /// What a hint means is in a sentence under it, with the declaration that decided it where
-    /// there is one, because four characters cannot say it.
+    /// Each hint's tooltip explains it in a sentence, naming the declaration that decided it where
+    /// there is one, because a hint a few characters long cannot say that itself.
     /// </summary>
     [Fact]
     public async Task AHintSaysWhatItMeansWhenItIsPointedAt()
@@ -168,9 +168,9 @@ public sealed class InlayHintsTests
     }
 
     /// <summary>
-    /// The counts are off until they are asked for, because every instruction has one and a
-    /// column of numbers down a listing is the thing this feature is most able to become. The
-    /// command turns them on for the session, and the editor is asked to fetch what it holds.
+    /// Cycle-count hints are off until asked for, because every instruction has a count, and a
+    /// column of numbers down the listing is what this feature most risks becoming. The command
+    /// toggles them for the session, and the server asks the editor to refresh its hints.
     /// </summary>
     [Fact]
     public async Task ACountIsOffUntilItIsAskedFor()
@@ -188,12 +188,12 @@ public sealed class InlayHintsTests
         var counted = await ShownAsync(client, timeout);
         Assert.Contains("34: sei 2", counted);
 
-        // A label carries the count of the block it opens, which is the run of lines under it
-        // that always run together.
+        // A label carries the cycle count of the block it starts: the run of lines under it
+        // that always execute together.
         Assert.Contains("50: done: block 3", counted);
 
-        // Where two hints would land on one line the state change wins, and what it stood in
-        // front of is under its sentence.
+        // Where two hints would land on one line the state change is shown, and the cycle count
+        // it displaced is given in its tooltip.
         Assert.Contains("37: rep #$30 a16 i16", counted);
         var hints = await client.InlayHintsAsync(Uri, 37, 37, timeout);
         Assert.Contains("**3** — This line takes 3 cycles.", hints.Single().Tooltip!.Value, StringComparison.Ordinal);
@@ -202,7 +202,7 @@ public sealed class InlayHintsTests
         Assert.DoesNotContain(await ShownAsync(client, timeout), line => line.StartsWith("34:", StringComparison.Ordinal));
     }
 
-    /// <summary>A file whose every switch is off is the file, which is what the default is for.</summary>
+    /// <summary>With every kind's setting off, no hints are drawn at all.</summary>
     [Fact]
     public async Task EverythingOffIsNothingDrawn()
     {
@@ -221,7 +221,7 @@ public sealed class InlayHintsTests
         Assert.Empty(await client.InlayHintsAsync(Uri, 0, 200, timeout));
     }
 
-    /// <summary>Only the lines the editor is showing are worked out, and not the file.</summary>
+    /// <summary>Hints are worked out only for the lines the editor asks about, not for the whole file.</summary>
     [Fact]
     public async Task OnlyTheLinesAskedAboutAreWorkedOut()
     {
@@ -233,9 +233,9 @@ public sealed class InlayHintsTests
     }
 
     /// <summary>
-    /// The example program hinted as an editor that has said nothing shows it, which is the
-    /// one reading that says whether the defaults are right: a file opened for the first time
-    /// should look like the file.
+    /// The example program as an editor with no hint settings shows it. This is the real check
+    /// that the defaults are right: a file opened for the first time should still look like the
+    /// file, not be buried under hints.
     /// </summary>
     [Fact]
     public async Task TheExampleWithTheDefaultsStillLooksLikeTheFile()
@@ -250,12 +250,12 @@ public sealed class InlayHintsTests
         await client.OpenAsync(uri, text);
         await client.NextDiagnosticsAsync(uri, timeout);
 
-        // Seventeen hints in a hundred and seventy-four lines: the lines that move the
-        // processor state and say so nowhere else, the calls that leave a width other than
-        // the one they were given, the one constant worked out from the settings, and the
-        // store before the loop head, where the widths of the first pass and the loop's own
-        // meet and A's is forgotten. Nothing else in the file earns one: its data is declared
-        // and not laid out, and every branch reaches.
+        // Seventeen hints in a hundred and seventy-four lines: the lines that change the
+        // processor state where nothing else in the source says so, the calls that return a
+        // width other than the one they were called with, the one constant worked out from the
+        // settings, and the store before the loop head, where the widths from the first pass and
+        // from the loop's own back edge meet and A's width becomes unknown. Nothing else in the
+        // file gets a hint: its data is declared and not laid out, and every branch reaches.
         Assert.Equal(
             [
                 "23: PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0) = 0",
@@ -282,12 +282,12 @@ public sealed class InlayHintsTests
     private static HintSettings Settings(string json) =>
         HintSettings.Of(JsonDocument.Parse(json).RootElement);
 
-    /// <summary>Hints for the lines the editor is showing, as <c>line: the line with them in it</c>.</summary>
+    /// <summary>The hints for the test source up to line <paramref name="last"/>, each as <c>line: the line with its hints drawn in</c>.</summary>
     private static async Task<IReadOnlyList<string>> ShownAsync(
         TestClient client, CancellationToken cancellation, int last = 200) =>
         Shown(Source, await client.InlayHintsAsync(Uri, 0, last, cancellation));
 
-    /// <summary>The same, for text the test holds rather than asks the client for.</summary>
+    /// <summary>The same, for any <paramref name="text"/> and the <paramref name="hints"/> already fetched for it.</summary>
     private static IReadOnlyList<string> Shown(string text, IReadOnlyList<InlayHint> hints)
     {
         var lines = text.ReplaceLineEndings("\n").Split('\n');

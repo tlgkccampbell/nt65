@@ -10,8 +10,8 @@ namespace Norristown.Flow;
 /// instance of the same family is part of the same routine as far as the analysis goes, so a
 /// path from one is not from outside.
 /// <para>
-/// The labels this file names are worked out the first time one is asked about and kept for
-/// the rest of them: the answer is the same question of every routine in the file.
+/// The labels this file names from other routines are worked out the first time any label is
+/// asked about, and kept: the set is the same whichever routine in the file is asking.
 /// </para>
 /// </summary>
 public sealed class OutsideEntries
@@ -20,7 +20,7 @@ public sealed class OutsideEntries
     private readonly CodeLayout layout;
 
     // The labels this file names from a routine other than the one they are in, worked out the
-    // first time a label asks and kept for the rest of them.
+    // first time any label is asked about and kept for later questions.
     private HashSet<Symbol>? named;
 
     /// <summary>Reads the file <paramref name="layout"/> laid out, as <paramref name="model"/> bound it.</summary>
@@ -31,9 +31,9 @@ public sealed class OutsideEntries
     }
 
     /// <summary>
-    /// Why the stack at such a label is not known: the path above it has pushed what a jump in
-    /// has not. A <c>.state</c> says what the processor state there is and has no way to say
-    /// what is on the stack, so there is nothing to meet the two sides in the middle.
+    /// Why the stack at such a label is not known: the path from above it has pushed bytes that
+    /// a jump in from outside has not. A <c>.state</c> can declare the processor state there
+    /// but has no way to declare what is on the stack, so nothing reconciles the two paths.
     /// </summary>
     public static Cause Carried(Symbol label, Symbol routine) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and a jump in has not "
@@ -53,8 +53,8 @@ public sealed class OutsideEntries
     }
 
     /// <summary>
-    /// Every label this file names from a routine other than the one the label is in: a jump
-    /// into another routine, and a path naming one as data.
+    /// Every label this file names from a routine other than the one the label is in, whether
+    /// as the target of a jump into that routine or anywhere else in an operand.
     /// </summary>
     private HashSet<Symbol> Named()
     {

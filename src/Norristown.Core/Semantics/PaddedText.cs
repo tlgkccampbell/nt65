@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 /// <summary>
 /// A counted <c>.byte</c> array whose only value is one text, <c>.data title: .byte[21] { "NT65" }</c>,
 /// which is filled out with zero to its count, as <c>char title[21] = "..."</c> is in C. A
-/// short list of values is still the error it always was: a count is there to catch a short
+/// list with fewer values than the count is still an error: a count is there to catch a short
 /// table, and a text is not a table. A pad other than zero is what a structure's
 /// <c>.res n, pad</c> member is for.
 /// </summary>
@@ -13,8 +13,8 @@ public static class PaddedText
 {
     /// <summary>
     /// How many zero bytes the directive pads with and how many elements it declares, or null
-    /// when it is not one text in a counted <c>.byte</c> array — a text as long as its count,
-    /// or longer, among them.
+    /// when it is not one text in a counted <c>.byte</c> array, and also when the text is as
+    /// long as its count or longer.
     /// </summary>
     public static (long Zeros, long Count)? Padding(DataDirectiveSyntax directive, SemanticModel model, Expansion? on = null)
     {
@@ -43,8 +43,8 @@ public static class PaddedText
         SyntaxNode? only = null;
         foreach (var line in body.Members.Skip(1))
         {
-            // A conditional or a repetition in the body writes values of its own, however few
-            // its lines look like, so a body holding one is never the one-text case.
+            // A conditional or a repetition in the body may write any number of values, however
+            // few lines it has, so a body holding one is never the one-text case.
             if (line is BlockSyntax)
                 return null;
             if (line is not LineSyntax { Statement: DataValuesSyntax values })
@@ -58,7 +58,7 @@ public static class PaddedText
 
     /// <summary>
     /// Whether a value is text: a string, a text constant, or a character mapping applied to
-    /// one. A character is a number, and a number is a table of one.
+    /// one. A character literal is a number, and a single number is a table of one, not text.
     /// </summary>
     private static bool IsText(SyntaxNode value, SemanticModel model, Expansion? on)
     {

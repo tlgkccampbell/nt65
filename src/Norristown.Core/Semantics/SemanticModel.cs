@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What one file means: its scopes and declarations, what every name in it refers to,
-/// and what its expressions are worth.
+/// and the values of its expressions.
 /// <para>
 /// A model is built once and is then read-only, so an editor may ask it anything from any
 /// thread. A file is part of a program: a name it does not declare may be one another
@@ -59,8 +59,8 @@ public sealed class SemanticModel
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
-        // A struct member is written out as the number it is, so it is no symbol to the
-        // linker either, any more than a define is.
+        // A struct member is written out as its number, so, like a define, it is not a symbol
+        // to the linker and is left out of the external symbols below.
         // A macro this file calls is expanded into it, so what its body uses is named in this
         // file's output and has to be brought in here, exactly as if the file had written it.
         Used = [.. References
@@ -112,31 +112,32 @@ public sealed class SemanticModel
     /// <summary>
     /// Every symbol this file's output uses, in the order it first names them: what its code and
     /// data name, and what the bodies of the macros it calls name. A path uses what it leads to
-    /// and not the steps on the way, and a macro body is used where it is called.
+    /// and not the steps on the way, and what a macro body names is used by the file that
+    /// calls it.
     /// </summary>
     public IReadOnlyList<Symbol> Used { get; }
 
     /// <summary>
-    /// The names the file's <c>.use</c> items bring in, as it writes them: each stands for a
-    /// symbol, or for a module path it may write <c>::</c> after.
+    /// The names the file's <c>.use</c> items bring in, as it writes them: each refers to a
+    /// symbol, or to a module path the file may write <c>::</c> after.
     /// </summary>
     public IReadOnlyDictionary<string, BroughtName> Brought { get; }
 
-    /// <summary>The modules everything of whose exports a <c>.use module::*</c> brings in.</summary>
+    /// <summary>The modules whose exports a <c>.use module::*</c> brings in, all of them.</summary>
     public IReadOnlyList<ProgramSymbols.Module> Globs { get; }
 
     /// <summary>
     /// The families the file declares: each is one declaration per member of the enum it
-    /// walks, written once and standing for all of them.
+    /// walks, written once to cover all of them.
     /// </summary>
     public IReadOnlyList<Family> Families { get; }
 
-    /// <summary>The family <paramref name="declaration"/> stands for, or null when it stands for one name.</summary>
+    /// <summary>The family <paramref name="declaration"/> declares, or null when it declares a single name.</summary>
     public Family? FamilyAt(StatementSyntax declaration) => byFamily.GetValueOrDefault(declaration);
 
     /// <summary>
-    /// The declaration <paramref name="header"/> makes at <paramref name="on"/>: the one
-    /// instance of a family the turn writes out, or the one name it declares anywhere else.
+    /// The symbol <paramref name="header"/> declares in the expansion <paramref name="on"/>: for
+    /// a family, the instance the current turn writes out; anywhere else, the one name it declares.
     /// </summary>
     public Symbol? DeclaredBy(SyntaxNode header, Expansion? on)
     {
@@ -221,8 +222,8 @@ public sealed class SemanticModel
     /// <c>.use module::*</c> brings in. Where two share a name the first is what the name
     /// means, which is the rule the binder resolves the file by.
     /// <para>
-    /// A module is not one of them: it is the start of a path rather than a name that stands
-    /// for something. <see cref="GetSymbolInfo(int, IReadOnlyList{string}, bool)"/> answers a
+    /// A module is not one of them: it is the start of a path rather than a name that refers
+    /// to something. <see cref="GetSymbolInfo(int, IReadOnlyList{string}, bool)"/> answers a
     /// path, module or not.
     /// </para>
     /// </summary>
@@ -231,7 +232,7 @@ public sealed class SemanticModel
             .Select(found => (found.Name, found.Means.Means));
 
     /// <summary>
-    /// The symbols a name written alone at <paramref name="position"/> could stand for, the
+    /// The symbols a name written alone at <paramref name="position"/> could refer to, the
     /// one the binder would choose first. With no <paramref name="name"/>, every symbol in
     /// scope there, in the same order; a cheap local answers to its <c>@</c> name, as it is
     /// written.
@@ -286,7 +287,7 @@ public sealed class SemanticModel
     public IReadOnlyList<SymbolReference> ReferencesTo(Symbol symbol) => [.. bySymbol[symbol]];
 
     /// <summary>
-    /// What an expression is worth, for an editor to show. <paramref name="on"/> is the turn
+    /// The value of an expression, for an editor to show. <paramref name="on"/> is the turn
     /// of the repetition it was written in, whose bindings it may name.
     /// <para>
     /// <paramref name="spans"/> answers how many bytes a routine or a data declaration takes,
@@ -302,7 +303,7 @@ public sealed class SemanticModel
         Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles);
 
     /// <summary>
-    /// The symbol a written name stands for, or null when it names none. <paramref name="on"/>
+    /// The symbol a written name refers to, or null when it names none. <paramref name="on"/>
     /// is the turn it is written on, for a path that ends in a repetition's name.
     /// </summary>
     public Symbol? SymbolOf(SyntaxNode name, Expansion? on = null) =>
@@ -324,8 +325,8 @@ public sealed class SemanticModel
 
     /// <summary>
     /// Evaluates an expression and reports what is wrong with it into
-    /// <paramref name="diagnostics"/>. Used for the operands of a data directive, which no
-    /// symbol holds and which nothing else would ever evaluate with anything to say.
+    /// <paramref name="diagnostics"/>. Used for the operands of a data directive, which are
+    /// no symbol's value and so would otherwise never be evaluated with their problems reported.
     /// </summary>
     public void Check(
         SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
@@ -337,7 +338,7 @@ public sealed class SemanticModel
     public IReadOnlyList<long>? BytesOf(SyntaxNode operand, Expansion? on = null) =>
         Evaluator.BytesOf(operand, Segments, resolved, BindingsOf(on));
 
-    /// <summary>The items an operand stands for when it names a list, or null when it does not.</summary>
+    /// <summary>The items of the list an operand names, or null when it does not name a list.</summary>
     public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) => Evaluator.ItemsOf(operand, resolved);
 
     /// <summary>
@@ -348,9 +349,9 @@ public sealed class SemanticModel
         Evaluator.AddressSizeOf(expression, segment, Segments, resolved, BindingsOf(on));
 
     /// <summary>
-    /// What every name bound at <paramref name="on"/> and at the levels around it stands
-    /// for: a repetition's name on this turn, and a macro's parameters at this expansion.
-    /// The innermost level wins where two share a name, which two never do.
+    /// What every name bound at <paramref name="on"/> and at the levels around it is bound
+    /// to: a repetition's name on this turn, and a macro's parameters at this expansion.
+    /// Where two levels bind the same name the innermost wins, though two never do.
     /// <para>
     /// This is worked out each time rather than kept, because an expansion is identified by
     /// the call it expands and nothing derived from it, so that two walkers that reach the
@@ -373,16 +374,16 @@ public sealed class SemanticModel
                 continue;
             foreach (var argument in invocation.Arguments)
             {
-                // A `one` stands for the word it was given, which only a comparison reads. A
-                // `list` and a `block` stand for no value at all, and the built-ins that ask
-                // about them read the argument itself.
+                // A `one` is bound to the word it was given, which only a comparison reads. A
+                // `list` and a `block` have no value at all, and the built-ins that ask about
+                // them read the argument itself.
                 bound.TryAdd(argument.Parameter.Symbol, argument.Parameter.Kind switch
                 {
                     ParameterKind.One => new Expansion.Bound(WordFor(argument, level.Outer), null, argument),
                     ParameterKind.List or ParameterKind.Block =>
                         new Expansion.Bound(Value.Unknown, null, argument),
 
-                    // A member stands for its value.
+                    // An enum parameter is bound to its member's value.
                     ParameterKind.Enum when MemberFor(argument, level.Outer) is { } member =>
                         new Expansion.Bound(member.Value, null, argument, member),
                     _ => new Expansion.Bound(Value.Unknown, argument.Value, argument),
@@ -411,7 +412,7 @@ public sealed class SemanticModel
     }
 
     /// <summary>
-    /// The word a <c>one</c> parameter stands for. An argument that names another
+    /// The word a <c>one</c> parameter was given. An argument that names another
     /// <c>one</c> parameter passes that one's word on, which is how a macro hands a word it
     /// was given to the macro it calls.
     /// </summary>
@@ -437,8 +438,8 @@ public sealed class SemanticModel
     /// <summary>
     /// The references the binder recorded, with each member of an enum that a call names by its
     /// bare name, as an argument of an enum kind, referring to that member. The binder reads such
-    /// a name as a word, since the enum of the macro's parameter answers it rather than the
-    /// caller, and so records nothing for it, or records whatever the caller's scope has by that
+    /// a name as a word, since it is resolved in the parameter's enum rather than in the caller's
+    /// scope, and so records nothing for it, or records whatever the caller's scope has by that
     /// name; the member is what the argument means, and what an editor shows and renames.
     /// </summary>
     private IReadOnlyList<SymbolReference> WithMembersNamedBare(IReadOnlyList<SymbolReference> references)
@@ -483,10 +484,10 @@ public sealed class SemanticModel
         kind.Enum is { } name && SymbolOf(name) is { Kind: SymbolKind.Enum } named ? named : null;
 
     /// <summary>
-    /// The member of its enum an argument of an enum kind names, read where the caller stands
-    /// at <paramref name="caller"/>: a bare name among the enum's members first, since that is
-    /// what the parameter takes, then a path to one, then what a parameter of the same kind
-    /// that it passes on was given. Null when it names no member of the enum.
+    /// The member of its enum an argument of an enum kind names, resolved in the caller's
+    /// expansion <paramref name="caller"/>: a bare name among the enum's members first, since
+    /// that is what the parameter takes, then a path to one, then, when the argument is itself
+    /// an enum parameter, what that parameter was given. Null when it names no member of the enum.
     /// </summary>
     public Symbol? MemberFor(MacroArgument argument, Expansion? caller) =>
         MemberOf(argument.Parameter.Accepts, argument.Value, caller);
@@ -523,7 +524,7 @@ public sealed class SemanticModel
 
     /// <summary>
     /// What one call gives each parameter. Nothing is reported from here: binding has
-    /// already said everything there is to say about this call's arguments.
+    /// already reported everything wrong with this call's arguments.
     /// </summary>
     public MacroInvocation? InvocationAt(MacroCallSyntax call) =>
         MacroAt(call) is { } macro ? MacroInvocation.Of(call, macro, call.Tree, null) : null;
@@ -546,7 +547,7 @@ public sealed class SemanticModel
     /// <summary>
     /// The same, with the level the argument was written at. What a call gave is the
     /// caller's own expression, so anything read from it — the label it names, how wide an
-    /// address it is — is read where the caller stands rather than inside the body.
+    /// address it is — is read at the caller's level rather than inside the body.
     /// </summary>
     public (MacroArgument Argument, Expansion? Caller)? GivenAt(Symbol parameter, Expansion? on)
     {

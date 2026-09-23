@@ -4,10 +4,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// Where control goes inside a routine: its blocks, the edges between them, and what nt65
-/// says about a label nothing reaches and about data an instruction runs into. On the 6502
-/// and the 65C02 nothing consumes processor state, so no annotation is required and both
-/// are warnings rather than errors.
+/// Where control goes inside a routine: its blocks, the edges between them, and the
+/// diagnostics for a label that nothing reaches and for data that an instruction runs into.
+/// On the 6502 and the 65C02 no instruction depends on the processor state, so no annotation
+/// is required, and both diagnostics are warnings rather than errors.
 /// </summary>
 public sealed class FlowTests
 {
@@ -38,7 +38,10 @@ public sealed class FlowTests
         Assert.All(region.Blocks, block => Assert.True(block.IsReached));
     }
 
-    /// <summary>A jump leaves, so what follows it is reached only by being named.</summary>
+    /// <summary>
+    /// Flow does not fall through a <c>jmp</c>, so the statement after it is reached only if
+    /// something names its label.
+    /// </summary>
     [Fact]
     public void AJumpDoesNotRunIntoWhatFollowsIt()
     {
@@ -50,8 +53,8 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// An indirect jump goes where the operand does not say. A <c>.next</c> answers that,
-    /// and each named target gets an edge.
+    /// The operand of an indirect jump does not say where the jump goes. A <c>.next</c> lists
+    /// the targets, and each target it names gets an edge.
     /// </summary>
     [Fact]
     public void ANextGivesAnIndirectJumpItsEdges()
@@ -80,8 +83,8 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// Every item of the table is a code label, so <c>.next table</c> says what listing
-    /// them one by one says.
+    /// Every item of the table is a code label, so <c>.next table</c> means the same as a
+    /// <c>.next</c> that lists those labels one by one.
     /// </summary>
     [Fact]
     public void ATableOfLabelsStandsForEveryOneOfThem()
@@ -102,7 +105,10 @@ public sealed class FlowTests
         Assert.True(IsDeclared(region, "@fire"));
     }
 
-    /// <summary>A list stands for its items here as it does anywhere else.</summary>
+    /// <summary>
+    /// A <c>.next</c> that names a <c>.list</c> names every label in it, as naming a list does
+    /// anywhere else.
+    /// </summary>
     [Fact]
     public void AListStandsForEveryLabelInIt()
     {
@@ -150,8 +156,9 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// An annotation under a macro call is about the last statement of its expansion, which
-    /// falls out of reading the path in the order the bytes were written.
+    /// An annotation after a macro call applies to the last statement the macro expands to.
+    /// No special case is needed: the path is read in the order the bytes were emitted, so
+    /// that statement is the one just before the annotation.
     /// </summary>
     [Fact]
     public void ANextUnderACallIsAboutTheLastStatementItExpandsTo()
@@ -185,8 +192,9 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// A label nothing runs into and nothing names is dead. The check is complete for what
-    /// is written, which is what pushes the programmer to write the label down.
+    /// A label that nothing runs into and nothing names is reported as never reached. The
+    /// check trusts only what the source says, so a programmer who knows of a path nt65
+    /// cannot see has to write it down, for example with a <c>.next</c> that names the label.
     /// </summary>
     [Fact]
     public void ALabelNothingReachesIsReported()
@@ -199,8 +207,8 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// Anything that names the label answers the question, whether or not flow can be seen
-    /// to get there: a branch, an annotation, an address taken.
+    /// Anything that names the label counts as reaching it, whether or not flow can be seen
+    /// to get there: a branch, a <c>.next</c>, or taking its address in data.
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    beq @here\n    rts\n@here:\n    rts\n}\n")]
@@ -211,7 +219,10 @@ public sealed class FlowTests
         Assert.Empty(Problems(text));
     }
 
-    /// <summary>An annotation names somewhere code is, so a constant is no target for one.</summary>
+    /// <summary>
+    /// <c>.next</c> and <c>.patch</c> name places in code, so naming a constant with either
+    /// is reported.
+    /// </summary>
     [Theory]
     [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\nN = 5\n\n.data ptr: .addr 0\n", ".next")]
     [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\nN = 5\n", ".patch")]
@@ -255,13 +266,15 @@ public sealed class FlowTests
             .data value: .byte 0
             """);
 
-        // The `.next` is what redirects the path: `@store` follows the data, and nothing
-        // runs into the instruction between them.
+        // The `.next` sends the path from the data straight to `@store`, so nothing runs into
+        // `@set_two`, the instruction whose bytes `bit` swallows.
         Assert.True(IsDeclared(region, "@store"));
         Assert.False(Block(region, "@set_two").IsFallenInto);
     }
 
-    /// <summary>With its <c>.next</c> the skip trick is accepted, and without it is not.</summary>
+    /// <summary>
+    /// Without its <c>.next</c>, the skip trick is reported as an instruction running into data.
+    /// </summary>
     [Fact]
     public void TheBitSkipTrickWithoutItsNextIsReported()
     {
@@ -305,8 +318,8 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// On the 6502, as on the 65816, an interrupt handler leaves by <c>rti</c> and is never
-    /// called, and a routine that never returns does not return.
+    /// On the 6502, as on the 65816, an interrupt handler must leave by <c>rti</c> and must
+    /// not be called, and a <c>noreturn</c> routine must not return.
     /// </summary>
     [Fact]
     public void OnThe6502InterruptHandlersAndRoutinesThatNeverReturnAreChecked()
@@ -323,7 +336,10 @@ public sealed class FlowTests
             problems);
     }
 
-    /// <summary>What is wrong with <paramref name="text"/>, placed in the code segment on a line before it.</summary>
+    /// <summary>
+    /// The problems reported for <paramref name="text"/>, compiled after two lines that declare
+    /// the module and select the code segment.
+    /// </summary>
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
 
@@ -338,7 +354,10 @@ public sealed class FlowTests
     private static BasicBlock Block(FlowRegion region, string label) =>
         region.Blocks.Single(block => block.Label?.DisplayName == label);
 
-    /// <summary>Whether a <c>.next</c> is what gives the block at <paramref name="label"/> an edge.</summary>
+    /// <summary>
+    /// Whether some block has a declared edge, one that comes from a <c>.next</c>, to the block
+    /// at <paramref name="label"/>.
+    /// </summary>
     private static bool IsDeclared(FlowRegion region, string label) =>
         region.Blocks.SelectMany(block => block.Successors)
             .Any(edge => edge.To == Block(region, label).Index && edge.Kind == EdgeKind.Declared);

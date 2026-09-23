@@ -16,8 +16,8 @@ internal sealed partial class SyntaxListNode : SyntaxNode
     }
 
     /// <summary>
-    /// The node holding the list. Its items and separators hang from that node rather than from
-    /// this one, so a list never shows up as anyone's parent.
+    /// The node holding the list. Its items and separators take that node as their parent
+    /// rather than this one, so a list node never appears as the parent of anything.
     /// </summary>
     internal override SyntaxNode ChildParent => Parent ?? this;
 }

@@ -42,6 +42,6 @@ public enum StatePart
     /// </summary>
     AllUnknown,
 
-    /// <summary>A signature set, which stands for the items it was declared with: <c>std</c>.</summary>
+    /// <summary>A signature set, which expands to the items it was declared with: <c>std</c>.</summary>
     Set,
 }

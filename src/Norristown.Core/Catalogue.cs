@@ -7,16 +7,17 @@ namespace Norristown;
 /// pass found it, is kebab-case, and is stable once released: it is what a project file
 /// switches, what the editor shows beside the message, and what CI matches on.
 /// <para>
-/// A reporting site names one of these and hands it the pieces of its sentence. The
-/// explanation is not the message: it is what the one line has no room for, and is what
-/// <c>nt65 explain</c> prints.
+/// A reporting site names one of these and supplies the arguments for its message. The
+/// explanation is separate from the message: it holds what a one-line message has no room
+/// for, and is what <c>nt65 explain</c> prints.
 /// </para>
 /// </summary>
 public static class Catalogue
 {
-    // The heading last read. An entry takes the one written above it rather than naming one,
-    // which would be a line on all 367 of them: a static initializer runs where it is written,
-    // so the headings and the entries between them are read in the order they are laid out.
+    // The area most recently opened. Each entry takes the area whose heading is written above
+    // it, rather than naming its area, which would add a line to every entry. This works
+    // because static initializers run in the order they appear in the file, so each heading is
+    // set before the entries below it are created.
     private static DiagnosticArea? opening;
 
     /// <summary>Every area, in the order they are written here and printed.</summary>
@@ -2343,8 +2344,8 @@ public static class Catalogue
             + "under one name. `as` gives one of them a name of its own.");
 
     /// <summary>
-    /// The one entry nothing in the compiler reports: an editor marks the lines the build
-    /// leaves out, and nobody else has anything to say about them.
+    /// The one entry the compiler itself never reports: an editor uses it to mark the lines the
+    /// build configuration leaves out, and nothing else reports on those lines.
     /// </summary>
     public static DiagnosticDescriptor OmittedBranch { get; } = Entry(
         "omitted-branch",
@@ -2679,9 +2680,10 @@ public static class Catalogue
         "What a routine is and how it is called are true of it from entry to exit, so they are written once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
-    // Read off the class rather than listed again, so that an entry added above is in it. It
-    // is worked out on first use rather than with the entries: reflecting on a type while its
-    // own initializer is still running is a way to deadlock two threads that both ask at once.
+    // Found by reflecting over the class rather than listed by hand, so that a new entry above is
+    // included automatically. It is built on first use rather than alongside the entries:
+    // reflecting on a type while its own static initializer is still running can deadlock two
+    // threads that ask for it at the same time.
     private static readonly Lazy<IReadOnlyList<DiagnosticDescriptor>> all = new(() =>
         [.. typeof(Catalogue).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Where(property => property.PropertyType == typeof(DiagnosticDescriptor))
@@ -2691,11 +2693,11 @@ public static class Catalogue
     /// <summary>Every descriptor, in name order.</summary>
     public static IReadOnlyList<DiagnosticDescriptor> All => all.Value;
 
-    /// <summary>The descriptor named <paramref name="id"/>, or null for a name nt65 has none for.</summary>
+    /// <summary>The descriptor named <paramref name="id"/>, or null when no diagnostic has that name.</summary>
     public static DiagnosticDescriptor? Find(string id) =>
         All.FirstOrDefault(descriptor => descriptor.Id == id);
 
-    /// <summary>Opens an area: the entries written below it, down to the next heading, are its.</summary>
+    /// <summary>Opens an area: the entries written below it, down to the next heading, belong to it.</summary>
     private static DiagnosticArea Opens(string name, string about) => opening = new(name, about);
 
     /// <summary>One entry, under the heading above it.</summary>

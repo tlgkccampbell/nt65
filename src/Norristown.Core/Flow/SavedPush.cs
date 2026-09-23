@@ -7,8 +7,9 @@ namespace Norristown.Flow;
 /// <param name="Value">What was pushed.</param>
 /// <param name="Size">How much of the stack it took.</param>
 /// <param name="Width">
-/// How wide the register was where <paramref name="Size"/> is a register's: a pull gets the
-/// value back only where it is as wide again. Every CPU but the 65816 has one width, and a
-/// routine that changes neither keeps <see cref="Width.Unchanged"/> at both ends.
+/// How wide the register was, where <paramref name="Size"/> is a register's size: a pull
+/// restores the value only when the register is that wide again. Every CPU but the 65816 has
+/// only one width, and a routine that changes neither A's nor the index registers' width has
+/// <see cref="Width.Unchanged"/> at both the push and the pull.
 /// </param>
 public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Width Width);

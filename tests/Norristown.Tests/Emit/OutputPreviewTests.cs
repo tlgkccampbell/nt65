@@ -5,17 +5,17 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// What the editor shows beside a source, and what <c>nt65 build --stdout</c> writes, against
-/// what a build writes: they are one text, or the view is showing something that is not the
-/// program.
+/// The output preview — what the editor shows beside a source, and what
+/// <c>nt65 build --stdout</c> writes — against what a build writes: they must be the same text,
+/// or the preview is showing something other than the program.
 /// </summary>
 public sealed class OutputPreviewTests
 {
     /// <summary>
-    /// What the view says each source line became is what the map beside the output records:
-    /// two readings of one thing, and an editor and a debugger have to agree about a line.
-    /// Every fixture's output is checked against the view by the fixture runner itself, which
-    /// has the program already read.
+    /// The source line the preview gives for each output line is the one the line map beside the
+    /// output records: both describe the same mapping, and an editor and a debugger have to agree
+    /// about where a line came from. The fixture runner checks every fixture's output against the
+    /// preview itself, since it has already analysed the program.
     /// </summary>
     [Fact]
     public void TheLinesShownAreTheLinesTheMapRecords()
@@ -43,7 +43,8 @@ public sealed class OutputPreviewTests
 
     /// <summary>
     /// A file with errors shows what could be written, under a first line saying that it is
-    /// incomplete and why: the answer, then where the first of it is, then how many there are.
+    /// incomplete and why: how many errors the program has, then the first error's line and
+    /// message.
     /// </summary>
     [Fact]
     public void AFileWithErrorsIsShownUnderANoteSayingWhy()
@@ -58,14 +59,14 @@ public sealed class OutputPreviewTests
             preview.Note);
         Assert.StartsWith($"; {preview.Note}\n", preview.Text, StringComparison.Ordinal);
 
-        // The note is a line of the output that no line of the source wrote, so everything
-        // after it still points at the line it came from.
+        // The note is an output line that no source line produced, so it maps to no source line,
+        // and every line after it still maps to the line it came from.
         Assert.Equal(0, preview.SourceLines[0]);
         Assert.Contains(4, preview.SourceLines);
         Assert.Equal(preview.Text.Split('\n').Length - 1, preview.SourceLines.Count);
     }
 
-    /// <summary>A file the program does not hold has no output to show.</summary>
+    /// <summary>A file that is not part of the program has no output to show.</summary>
     [Fact]
     public void AFileTheProgramDoesNotHoldHasNoOutput()
     {

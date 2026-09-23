@@ -4,16 +4,16 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// How much room a declaration takes, and how many elements that is: what <c>.sizeof</c> and
-/// <c>.countof</c> answer, and what a structure gives its members.
+/// <c>.countof</c> answer, and the offsets and sizes a structure gives its members.
 /// <para>
 /// This is nt65's own arithmetic rather than anything the output carries, so it is worked out
 /// with the conditionals decided and the repetitions unrolled, and it is null wherever nt65
-/// cannot say — an <c>.align</c>, whose size depends on where it lands.
+/// cannot say, such as for an <c>.align</c>, whose size depends on where it lands.
 /// </para>
 /// </summary>
 internal sealed partial class Evaluator
 {
-    /// <summary>How much room a data directive takes, for a caller that has already reported.</summary>
+    /// <summary>How much room a data directive takes, reporting nothing, for a caller that has already reported its problems.</summary>
     public static DataSize? DataSizeOf(
         StatementSyntax directive,
         SegmentTable segments,
@@ -53,7 +53,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private DataSize? RoomFor(StatementSyntax written)
     {
-        // A line of a body is its values, each one element of the type the body is of.
+        // A line in a data body holds values, each one element of the body's element type.
         if (written is DataValuesSyntax values)
         {
             return DataSyntax.DirectiveOfValues(values) is { } of && ElementWidth(of) is { } each
@@ -252,8 +252,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The sum of <paramref name="body"/> over every turn of a repetition, with the name it
-    /// binds standing for that turn's index, item or member. Null when the turns are unknown.
+    /// The sum of <paramref name="body"/> over every turn of a repetition, with its binding set
+    /// to that turn's index, item or member. Null when the turns are unknown.
     /// </summary>
     private long? Turns(BlockSyntax block, RepetitionDirectiveSyntax opener, Func<long?> body)
     {
@@ -334,8 +334,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// One element per operand, except that text is one element per byte and a list stands
-    /// for its own items.
+    /// One element per operand, except that text is one element per byte and a named list is
+    /// one element per item.
     /// </summary>
     private DataSize Spread(SeparatedSyntaxList<SyntaxNode> operands, long width)
     {
@@ -386,9 +386,9 @@ internal sealed partial class Evaluator
         if (operand is NameExpressionSyntax bound && BoundItem(bound) is { } item)
             return BytesIn(item);
 
-        // A string constant is its text wherever it is named, as a literal would be. One being
-        // worked out is a number whose value is a distance past this very line, and is one
-        // element whatever it comes to.
+        // A string constant is its text wherever it is named, as a literal would be. A constant
+        // still being evaluated is skipped: it can only be a number whose value depends on the
+        // size of this very line, and it is one element whatever that value turns out to be.
         if (operand is NameExpressionSyntax constant && SymbolOf(constant) is { Kind: SymbolKind.Constant } declared
             && !evaluating.Contains(declared)
             && Evaluate(constant) is { Kind: ValueKind.String, Text: { } named })
@@ -439,11 +439,10 @@ internal sealed partial class Evaluator
     /// <summary>
     /// The bytes of text an expression builds rather than writes: a function whose body is text,
     /// <c>.strcat</c> and <c>.strsub</c>, a <c>.select</c> that chooses text, and a parameter or a
-    /// binding that stands for any of them. Null for anything that is not text, and for text
-    /// holding a character above <c>$ff</c>, which only a charmap turns into a byte and which is
-    /// said to be wrong where it is written. Nothing else is evaluated here, because a
-    /// declaration's size is asked for while it is being sized, and a value that measures the
-    /// declaration it is written in would ask itself.
+    /// binding given any of them. Null for anything that is not text, and for text holding a
+    /// character above <c>$ff</c>, which only a charmap turns into a byte and which is reported
+    /// where it is written. Nothing else is evaluated here: this runs while a declaration is
+    /// being sized, and evaluating a value that measures that same declaration would recurse.
     /// </summary>
     private IReadOnlyList<long>? BuiltText(SyntaxNode operand)
     {
@@ -483,8 +482,8 @@ internal sealed partial class Evaluator
             // nothing else would have resolved it unless a path happened to reach through.
             member.Type ??= (member.Data as DataDirectiveSyntax)?.Type is { } named ? SymbolOf(named) : null;
 
-            // A member reserves room and holds no value, so an operand would be silently
-            // ignored, and `colors: .word 16` read as sixteen words would be two bytes.
+            // A member reserves room and holds no value, so an operand is reported rather than
+            // silently ignored: `colors: .word 16`, meant as sixteen words, would reserve two bytes.
             var room = member.Data is DataDirectiveSyntax data
                 && (DataSyntax.IsElementType(data) || DataSyntax.NameOf(data) == ".res")
                 ? RoomFor(data)

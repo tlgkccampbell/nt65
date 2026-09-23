@@ -58,7 +58,7 @@ public sealed class SymbolRequestsTests
         Assert.True(capabilities.RenameProvider?.PrepareProvider);
     }
 
-    /// <summary>Hover says what a symbol is, what it is worth and how wide an address it is.</summary>
+    /// <summary>Hover says what a symbol is, what its value is, and how wide an address it makes.</summary>
     [Fact]
     public async Task HoverDescribesALabelAndAConstant()
     {
@@ -74,16 +74,16 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(constant);
         Assert.Contains("```nt65\nSCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
 
-        // What a constant is worth is what it is pointed at for, and stands above the rule; how
-        // wide an address it would make is the working under it.
+        // A constant's value is what a reader hovers it for, so it comes above the rule; how
+        // wide an address it would make is supporting detail below it.
         Assert.Contains("value    $0400 (1024)\n```\n---\n", constant.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("address  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The one name the output does not spell as the source does is one ca65 would read as an
-    /// instruction, which the emitter writes with its module in front. Hover says so there and
-    /// nowhere else: every other name keeps its spelling, and saying so would say nothing.
+    /// The only names the output spells differently from the source are those ca65 would read as
+    /// an instruction, which the emitter prefixes with the module's name. Hover mentions the output
+    /// name for those and no others: every other name keeps its spelling, so it would add nothing.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhatTheOutputCallsANameCa65WouldMisread()
@@ -103,8 +103,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// The distance between two places in one data declaration is a constant, and hover says what
-    /// it is worth, as it does for any other: an error number that is a message's offset in a
+    /// The distance between two places in one data declaration is a constant, and hover gives its
+    /// value, as it does for any other constant: an error number that is a message's offset in a
     /// table is a number, not an address.
     /// </summary>
     [Fact]
@@ -125,9 +125,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// A function whose body is text is worth that text where it is called, and hover on the call
-    /// says what it is, with a byte that is no printable character written as a literal writes it.
-    /// A text constant defined by a call is text as well.
+    /// A function whose body produces text evaluates to that text where it is called, and hover on
+    /// the call shows it, with any byte that is not a printable character escaped as a string
+    /// literal would write it. A text constant defined by such a call is shown as text as well.
     /// </summary>
     [Fact]
     public async Task HoverGivesTheTextACallIsWorth()
@@ -149,9 +149,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// nt65 writes a number in hexadecimal, which is what an address or a mask is read as. A
-    /// number that is also a count is worth the decimal beside it, and below ten the two are
-    /// the same digit, so there is nothing to put beside it.
+    /// Hover writes a value in hexadecimal, which is how an address or a mask is read. A value may
+    /// also be a count, so its decimal is put beside it, except below ten, where the two are the
+    /// same digit and there is nothing to add.
     /// </summary>
     [Fact]
     public async Task HoverPutsTheDecimalBesideAHexadecimalValue()
@@ -168,7 +168,7 @@ public sealed class SymbolRequestsTests
         Assert.Contains("value    4\n", small?.Contents.Value, StringComparison.Ordinal);
     }
 
-    /// <summary>A name inside a scope hovers under the path another file would write.</summary>
+    /// <summary>Hover shows a name inside a scope under the qualified path another file would write.</summary>
     [Fact]
     public async Task HoverQualifiesAScopedName()
     {
@@ -182,9 +182,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// What a routine costs and what it hands back are shown wherever its name is written:
-    /// what a call costs is the question asked at the call, not at the declaration, and the
-    /// lens that says it above the declaration is nowhere near the call.
+    /// What a routine costs and which registers it preserves are shown wherever its name is
+    /// written: a reader asks what a call costs at the call, not at the declaration, and the lens
+    /// that says it above the declaration may be far from the call.
     /// </summary>
     [Fact]
     public async Task HoverOnACallSaysWhatTheRoutineCostsAndKeeps()
@@ -201,7 +201,7 @@ public sealed class SymbolRequestsTests
 
     /// <summary>
     /// Hover over a type and its members says what an editor needs of a layout: the offset a
-    /// member sits at, how much room it takes, and the type it stands for.
+    /// member sits at, how much room it takes, and its type.
     /// </summary>
     [Fact]
     public async Task HoverOnALayoutShowsOffsetsAndSizes()
@@ -234,7 +234,7 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(nested);
         Assert.Contains("type    Point\nsize    4 bytes", nested.Contents.Value, StringComparison.Ordinal);
 
-        // How much room it takes and how many of them there are read as one fact.
+        // An array's element size and its count are shown together, as one fact.
         var array = await client.HoverAsync(Uri, new Position(11, 6), timeout);
         Assert.NotNull(array);
         Assert.Contains("```nt65\n.data here:   .type Player[4]\n```", array.Contents.Value, StringComparison.Ordinal);
@@ -255,9 +255,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Every hover is read from the top down: the line that declares the thing, the comment its
-    /// author left above it, the one or two facts that kind of thing is asked about most, a
-    /// rule, and everything else under it. Nothing is left out for being far down.
+    /// Every hover is laid out to be read from the top down: the line that declares the thing, the
+    /// comment its author left above it, the one or two facts most often wanted about that kind
+    /// of name, a rule, and everything else under it. Nothing is left out for being far down.
     /// </summary>
     [Fact]
     public async Task HoverLeadsWithWhatThatKindOfNameIsAskedAbout()
@@ -294,7 +294,7 @@ public sealed class SymbolRequestsTests
             ```
             """.ReplaceLineEndings("\n"), constant!.Contents.Value);
 
-        // A routine is pointed at to find out what a call to it costs and what it hands back.
+        // A routine is hovered to find out what a call to it costs and which registers it preserves.
         var routine = await client.HoverAsync(Uri, new Position(6, 6), timeout);
         Assert.Equal("""
             ```nt65
@@ -322,9 +322,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Away from a name, an instruction is shown how long it takes and how long the block
-    /// around it takes. The count is an interval wherever it depends on something the
-    /// program does not say.
+    /// Hover on an instruction, away from any name in it, shows how many cycles it takes and how
+    /// many the block around it takes. The count is a range wherever it depends on something the
+    /// program does not determine.
     /// </summary>
     [Fact]
     public async Task HoverOnAnInstructionShowsWhatItCosts()
@@ -354,8 +354,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// On the 65816 an instruction is also shown the processor state that reaches it, which
-    /// is what its immediate was sized by.
+    /// On the 65816, hover on an instruction also shows the processor state that reaches it,
+    /// which is what decided the size of its immediate.
     /// </summary>
     [Fact]
     public async Task HoverOnA65816InstructionShowsTheStateReachingIt()
@@ -372,9 +372,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// An instruction is read under the name its datasheet gives it, written where the
-    /// language writes a comment. A reader who already knows what `pea` stands for is not the
-    /// one asking.
+    /// Hover shows an instruction with the name its datasheet gives it, written as a trailing
+    /// comment. A reader who already knows what `pea` stands for would not be hovering over it.
     /// </summary>
     [Fact]
     public async Task HoverNamesTheInstructionOnTheHeadline()
@@ -414,8 +413,8 @@ public sealed class SymbolRequestsTests
         var add = await client.HoverAsync(Uri, new Position(4, 4), timeout);
         var store = await client.HoverAsync(Uri, new Position(5, 4), timeout);
 
-        // What the line costs is what an instruction is pointed at for, so it stands above the
-        // rule; the flags it writes and what the registers hold are the working under it. The
+        // The line's cost is what a reader hovers an instruction for, so it comes above the rule;
+        // the flags it writes and what the registers hold are supporting detail below it. The
         // grid is fenced as a language of its own so that an editor can tell one row from another.
         Assert.Contains("```nt65-hover\ncycles  2         block 13\n```\n---\n", load?.Contents.Value,
             StringComparison.Ordinal);
@@ -423,14 +422,14 @@ public sealed class SymbolRequestsTests
             load?.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("flags   N V Z C\n", add?.Contents.Value, StringComparison.Ordinal);
 
-        // A store writes no flag at all, and a row saying none would say nothing.
+        // A store writes no flag at all, so the flags row is left out rather than saying none.
         Assert.DoesNotContain("flags", store?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// A count that is an interval says what its top would be paid for. The reason is always
-    /// something the processor decides as it runs and the program does not say, and a reader
-    /// left to work out which of them it is has been told half an answer.
+    /// A cycle count that is a range says what the extra cycles at its top are for. The reason is
+    /// always something decided as the processor runs that the program does not state, and a
+    /// reader left to work out which it is has been given only half an answer.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhyACountIsAnInterval()
@@ -466,8 +465,8 @@ public sealed class SymbolRequestsTests
             branch?.Contents.Value,
             StringComparison.Ordinal);
 
-        // On the 65816 a direct operand costs one more where the low byte of D is not zero,
-        // and a routine that says nothing about D does not say whether it is.
+        // On the 65816 a direct-page operand costs one more cycle when the low byte of D is not
+        // zero, and a routine that declares nothing about D leaves that unknown.
         await using var wide = await TestClient.StartAsync(timeout);
         await wide.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, i8 {\n    lda $10\n    rts\n}\n");
         await wide.NextDiagnosticsAsync(timeout);
@@ -480,7 +479,7 @@ public sealed class SymbolRequestsTests
             StringComparison.Ordinal);
     }
 
-    /// <summary>An <c>.ensure</c> shows what the analysis found it has to write.</summary>
+    /// <summary>Hover on an <c>.ensure</c> shows the instructions the analysis found it must emit.</summary>
     [Fact]
     public async Task HoverOnAnEnsureShowsWhatItWrites()
     {
@@ -575,7 +574,7 @@ public sealed class SymbolRequestsTests
         Assert.All(edits, e => Assert.Equal("pointer", e.NewText));
     }
 
-    /// <summary>Renaming a cheap local touches its proc and keeps it a cheap local.</summary>
+    /// <summary>Renaming a cheap local changes only its proc, and the new name must keep the <c>@</c>.</summary>
     [Fact]
     public async Task ACheapLocalIsRenamedWithItsAt()
     {

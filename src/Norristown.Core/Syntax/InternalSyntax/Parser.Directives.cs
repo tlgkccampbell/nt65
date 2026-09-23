@@ -1,14 +1,14 @@
 namespace Norristown.Syntax.InternalSyntax;
 
-// The directives that say something about the lines around them rather than declaring a
-// name, and the one switch that reads a directive line.
+// The directives that describe or control the lines around them rather than declaring a
+// name, and the one switch that dispatches every directive line.
 internal sealed partial class Parser
 {
     /// <summary>
-    /// A line that starts with a directive, read as whatever the directive's row says it is.
-    /// The two <c>.if</c> continuations are the only directives with a place of their own —
-    /// after a <c>}</c> — and are refused here; anything else the table does not hold is a
-    /// directive nt65 does not have.
+    /// A line that starts with a directive, parsed according to the kind
+    /// <see cref="SyntaxFacts.LineDirectiveKind"/> gives it. The two <c>.if</c> continuations,
+    /// <c>.elseif</c> and <c>.else</c>, may only follow a <c>}</c>, so they are rejected here;
+    /// any other directive with no kind is one nt65 does not have.
     /// </summary>
     private GreenNode ParseDirectiveLine()
     {
@@ -22,9 +22,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The statement a directive of <paramref name="kind"/> is written as, or null where the
-    /// kind is not one a line starts with. This is the one place a directive's kind chooses how
-    /// it is read, so a directive exported and the same directive on its own read alike.
+    /// The statement a directive of <paramref name="kind"/> parses to, or null when the kind is
+    /// not one a line can start with. This is the only place a directive's kind selects its
+    /// parser, so an exported directive parses exactly like the same directive on its own.
     /// </summary>
     private GreenNode? ParseDirective(SyntaxKind kind) => kind switch
     {
@@ -64,9 +64,10 @@ internal sealed partial class Parser
     };
 
     /// <summary>
-    /// Writing a ca65 spelling the nt65 way, where one word is all it takes. A <c>}</c> replaces
-    /// a whole line and nothing else, and <c>.tag T, n</c> is <c>.type T[n]</c>, which moves the
-    /// count as well as the word, so only the plain form is offered as a change to make.
+    /// The fix that rewrites a ca65 directive in nt65's spelling, when replacing one word is the
+    /// whole fix. A <c>}</c> can only replace a whole line, so it is offered only when the
+    /// directive is the whole line; and <c>.tag T, n</c> becomes <c>.type T[n]</c>, which moves
+    /// the count as well as the word, so the fix is offered only for the plain form with no comma.
     /// </summary>
     private DiagnosticFix? Spelling((DiagnosticMessage Message, string? Write) instead, bool wholeLine) =>
         instead.Write is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
@@ -85,8 +86,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// How a directive nt65 no longer has is written now, and the word to write in its place
-    /// where one word is all it takes; null for a directive it never had.
+    /// For a ca65 directive that nt65 writes differently, the message saying how to write it now
+    /// and, when one word is enough, the word to write in its place; null for any other directive.
     /// </summary>
     private static (DiagnosticMessage Message, string? Write)? Replaced(string directive) => directive.ToLowerInvariant() switch
     {
@@ -160,7 +161,7 @@ internal sealed partial class Parser
             return new AssertDirectiveSyntax(keyword, condition, null, null, null, null);
         var comma = Advance();
 
-        // ca65's level is reported, and the message after it still read.
+        // A ca65 assertion level is reported as an error, and the message after it is still read.
         GreenToken? level = null;
         GreenToken? levelComma = null;
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
@@ -182,8 +183,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>.error "message"</c>, a configuration this file refuses to be built in, or
-    /// <c>.warning "message"</c>, one it builds in and has something to say about.
+    /// <c>.error "message"</c>, which refuses to build the file in the current configuration,
+    /// or <c>.warning "message"</c>, which builds it but reports the message.
     /// </summary>
     private GreenNode ParseError()
     {
@@ -193,8 +194,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>.next @a, gfx::init</c>, the labels flow reaches after the statement above, or
-    /// <c>.next ?</c>, which ends the path and checks nothing beyond it.
+    /// <c>.next @a, gfx::init</c>, the labels execution can continue at after the statement
+    /// above, or <c>.next ?</c>, which ends the path so that nothing beyond it is checked.
     /// </summary>
     private GreenNode ParseNext()
     {
@@ -206,7 +207,7 @@ internal sealed partial class Parser
                 "a label flow continues at, or `?`"))));
     }
 
-    /// <summary><c>.fallthrough next</c>: the routine flow runs into past the end of this one.</summary>
+    /// <summary><c>.fallthrough next</c>: the routine execution runs into past the end of this one.</summary>
     private GreenNode ParseFallthrough()
     {
         var keyword = Advance();
@@ -215,8 +216,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>.state a16, i8</c>: the items of a signature, asserted and set at one point. Which
-    /// items describe a routine rather than a point is the analysis's to say.
+    /// <c>.state a16, i8</c>: signature items, asserted and set at one point in the code. Which
+    /// items only make sense for a whole routine rather than a point is for the analysis to check.
     /// </summary>
     private GreenNode ParseState()
     {
@@ -225,8 +226,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>.ensure a16, i8</c>: the widths to make hold. It takes the items of a signature, and
-    /// which of them it accepts is the analysis's to say.
+    /// <c>.ensure a16, i8</c>: the widths to establish at this point. It takes signature items,
+    /// and the analysis, not the parser, decides which of them it accepts.
     /// </summary>
     private GreenNode ParseEnsure()
     {
@@ -234,7 +235,7 @@ internal sealed partial class Parser
         return new EnsureDirectiveSyntax(keyword, ParseStateList());
     }
 
-    /// <summary><c>.frame locals: Locals</c>: a name, and the struct the top of the stack is laid out as.</summary>
+    /// <summary><c>.frame locals: Locals</c>: a name, and the struct that gives the layout of the top of the stack.</summary>
     private GreenNode ParseFrame()
     {
         var keyword = Advance();
@@ -242,11 +243,11 @@ internal sealed partial class Parser
         var colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Says(
             "`:` and the struct the frame is laid out as"));
 
-        // The struct is written after the `:`, so a line without one says nothing about it.
+        // The struct comes after the `:`, so a line without the colon has no struct to read.
         return new FrameDirectiveSyntax(keyword, name, colon, colon.IsMissing ? null : ParseExpression());
     }
 
-    /// <summary><c>.patch @op</c>: the one instruction the store above writes into.</summary>
+    /// <summary><c>.patch @op</c>: the instruction whose bytes the store above overwrites.</summary>
     private GreenNode ParsePatch()
     {
         var keyword = Advance();
@@ -254,7 +255,10 @@ internal sealed partial class Parser
             keyword, ParseTarget(Catalogue.ExpectedLabel.Says("the label of the instruction being written to")));
     }
 
-    /// <summary>A label named by an annotation: a cheap local, a name, or a scoped path.</summary>
+    /// <summary>
+    /// A label named by a flow directive such as <c>.next</c>, <c>.fallthrough</c> or
+    /// <c>.patch</c>: a cheap local, a name, or a scoped path.
+    /// </summary>
     private NameExpressionSyntax? ParseTarget(DiagnosticMessage expected)
     {
         if (AtName || Kind is SyntaxKind.CheapLocal or SyntaxKind.ColonColon)

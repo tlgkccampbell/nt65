@@ -18,7 +18,7 @@
     rts
 }
 
-; `*` assumes nothing, so a width it keeps is not a width anyone knows.
+; `i*` assumes nothing, so the width it keeps is not known inside the routine.
 .proc kept: i* {
     ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `kept` says `i*`, which assumes nothing about it
     rts
@@ -65,7 +65,7 @@
     rts
 }
 
-; A tail call returns for the routine that makes it.
+; A tail call's return is this routine's return, so it must reach this routine's exit state.
 .proc tail: a16, i8 -> a8 {
     jmp wrong_entry         ;! error[return-state-mismatch]: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
 }

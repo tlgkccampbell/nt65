@@ -16,7 +16,7 @@ public enum ValueKind
     String,
 
     /// <summary>
-    /// A bare word: what a <c>one</c> parameter stands for, and what an <c>.each</c> over a
+    /// A bare word: what a <c>one</c> parameter is given, and what an <c>.each</c> over a
     /// list of them binds. A word is never looked up and is only ever compared with another.
     /// </summary>
     Word,

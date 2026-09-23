@@ -19,8 +19,9 @@ public sealed class WatchCommandTests : IDisposable
     public void Dispose() => root.Delete(recursive: true);
 
     /// <summary>
-    /// A source changing is built again, whether it fixed the program or broke it, and a file
-    /// that was not there when the globs were matched is part of the program once it is written.
+    /// A change to a source triggers another build, whether it fixes the program or breaks it,
+    /// and a file that did not exist when the globs were matched is part of the program once it
+    /// is written.
     /// </summary>
     [Fact]
     public async Task ItBuildsAgainWheneverTheProgramChanges()
@@ -55,8 +56,8 @@ public sealed class WatchCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A command line that is wrong is not something a file changing fixes, so a watch that is
-    /// asked for one comes straight back rather than waiting for a change that cannot help.
+    /// No change to a file can fix a wrong command line, so a watch given one returns at once
+    /// rather than waiting for a change that cannot help.
     /// </summary>
     [Fact]
     public async Task AWrongCommandLineComesStraightBack()

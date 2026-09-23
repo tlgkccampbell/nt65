@@ -1,10 +1,10 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A <see cref="SyntaxVisitor"/> that goes on down the tree: a node whose method is not
-/// overridden has its children visited in source order, so an override of one kind still sees
-/// everything below it. An override that wants the same keeps it by calling
-/// <c>base.VisitXxx(node)</c>.
+/// A <see cref="SyntaxVisitor"/> that descends the whole tree: a node whose method is not
+/// overridden has its children visited in source order, so an override for one kind is still
+/// reached below nodes of other kinds. An override that should also visit its own node's
+/// children does so by calling <c>base.VisitXxx(node)</c>.
 /// </summary>
 public abstract class SyntaxWalker : SyntaxVisitor
 {

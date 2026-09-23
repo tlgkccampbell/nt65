@@ -7,9 +7,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The rewrites offered at a selection, which nothing reported: each is asked for where a
-/// programmer would ask for it, applied, and the file it leaves is compared with what they
-/// would have written.
+/// The refactorings offered at a selection, as opposed to fixes for reported diagnostics: each
+/// is requested where a programmer would request it, applied, and the resulting file is compared
+/// with what they would have written.
 /// </summary>
 public sealed class RefactorsTests
 {
@@ -20,7 +20,7 @@ public sealed class RefactorsTests
     private const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n"
         + ".export .proc fill {\n    rts\n}\n";
 
-    /// <summary>A path written out in full is brought in, and every writing of it in the file is shortened.</summary>
+    /// <summary>A path written out in full is brought in with a <c>.use</c>, and every occurrence of it in the file is shortened.</summary>
     [Fact]
     public void APathIsBroughtInWithAUse()
     {
@@ -34,7 +34,7 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>A name a <c>.use</c> brought in is written out in full, and the item that brought it goes.</summary>
+    /// <summary>A name a <c>.use</c> brought in is written out in full, and the <c>.use</c> item that brought it in is removed.</summary>
     [Fact]
     public void ABroughtNameIsWrittenOutInFull()
     {
@@ -47,7 +47,7 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>The <c>.use</c> items are put in order, and one nothing names is not among them.</summary>
+    /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
     [Fact]
     public void TheUseItemsAreOrderedAndWhatNothingNamesGoes()
     {
@@ -61,7 +61,7 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>A declaration is exported where the caret is on it, and stops being exported the same way.</summary>
+    /// <summary>With the caret on a declaration it can be exported, and with the caret on an exported one it can stop being exported.</summary>
     [Fact]
     public void ADeclarationIsExportedAndUnexported()
     {
@@ -206,7 +206,7 @@ public sealed class RefactorsTests
         Assert.Equal("wait {", written.Split('\n')[line][character..]);
     }
 
-    /// <summary>A selection that leaves its routine part way through is no routine of its own.</summary>
+    /// <summary>A selection that returns from its routine part way through cannot be extracted into a routine.</summary>
     [Fact]
     public void ASelectionThatReturnsIsNotExtracted()
     {
@@ -217,7 +217,7 @@ public sealed class RefactorsTests
             action => action.Title == "Extract into a `.proc`");
     }
 
-    /// <summary>ca65 in the selection is read as nt65, as far as one line at a time can say.</summary>
+    /// <summary>ca65 source in the selection is rewritten as nt65, as far as a line-by-line translation can.</summary>
     [Fact]
     public void Ca65InTheSelectionIsReadAsNt65()
     {
@@ -233,9 +233,10 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
-    /// The rest of what one line at a time can say: a macro's parameters, a define as the
-    /// constant or the function it stood for, a condition on a define, and ca65's operator
-    /// words. What needs a decision is left as it was.
+    /// The rest of what a line-by-line translation can rewrite: a macro's parameters, a define
+    /// as the constant or the function it stood for, a condition on a define, and ca65's word
+    /// operators such as <c>.bitor</c>. What needs a decision, such as an unnamed label, is left
+    /// as it was.
     /// </summary>
     [Fact]
     public void Ca65ThatIsOnlySpellingIsRewritten()

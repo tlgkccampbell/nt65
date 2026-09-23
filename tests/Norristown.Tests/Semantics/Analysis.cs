@@ -17,9 +17,10 @@ internal static class Analysis
     }
 
     /// <summary>
-    /// Settings for a test that writes a fragment rather than a program: an unexported routine
-    /// nothing calls is exactly what such a fragment is, and the tests that use this are about
-    /// something else. A test about the warning itself writes a program that could have it.
+    /// Settings for a test that writes a fragment rather than a whole program. Such a fragment is
+    /// typically an unexported routine that nothing calls, which would draw the unused-symbol
+    /// warning, and the tests that use these settings are about something else, so the warning is
+    /// turned off. A test about the warning itself writes a whole program.
     /// </summary>
     public static ProjectSettings Fragment { get; } =
         ProjectSettings.None with

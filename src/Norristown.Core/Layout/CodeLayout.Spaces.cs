@@ -4,19 +4,21 @@ using Norristown.Syntax;
 
 namespace Norristown.Layout;
 
-// Address spaces: which code may stand in a segment, and what code may do with a name that
-// is in another space than its own.
+// Address spaces: whether a segment may hold code, and what code may do with a name whose
+// segment is in a different address space from the code's own.
 public sealed partial class CodeLayout
 {
-    // The routines already told that a segment they place code in holds data, so that a
-    // routine of many instructions hears it once.
+    // The (routine, segment) pairs already reported for putting code in a data-only segment,
+    // so that a routine with many instructions there gets the diagnostic once, not once per
+    // instruction.
     private readonly HashSet<(Symbol Routine, string Segment)> codeInData = [];
 
     /// <summary>
-    /// An instruction checked against the address spaces. A segment in a space that holds data
-    /// holds no instructions. A name in another space than the code's is a value there: an
-    /// immediate may take it and data may hold it, but a jump, a branch or a call to it goes
-    /// where another processor's memory is not, and so does an operand that reaches it.
+    /// Checks an instruction against the address spaces. A segment whose space holds data may
+    /// not hold instructions. A name in a different space from the code's is only usable as a
+    /// value: an immediate may take it and data may hold it, but a jump, branch or call to it,
+    /// or any other operand that addresses memory through it, is reported, because that
+    /// address belongs to another processor's memory and not to the memory this code runs in.
     /// </summary>
     private void CheckSpaces(SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode mode)
     {
@@ -28,7 +30,7 @@ public sealed partial class CodeLayout
         }
 
         // An immediate is a value, a block move's banks are values, and `pea` and `per` push
-        // one rather than reaching anything.
+        // their operand as a value rather than accessing memory at it.
         if (operand is null || mode is AddressingMode.Immediate or AddressingMode.BlockMove
             || mnemonic.Text.ToLowerInvariant() is "pea" or "per")
         {
@@ -58,8 +60,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// The addresses an expression names, each with the segment it is in: the symbols it
-    /// names, and the run address a <c>.runof(SEGMENT)</c> stands for, which is in that segment.
+    /// The addresses an expression refers to, each with the segment it is in: every placed
+    /// symbol the expression names, and every <c>.runof(SEGMENT)</c> call, whose run address
+    /// is in SEGMENT.
     /// </summary>
     private IEnumerable<(string Name, string Segment)> Named(SyntaxNode expression)
     {

@@ -10,7 +10,7 @@
     hp: .byte
 }
 
-.import _printf: proc(a8, i16)      ; a routine, with its signature (§7.3)
+.import _printf: proc(a8, i16)      ; a routine, with its signature
 .import zp_scratch: zp
 .import far_table: far
 .import sp: zp .byte[2]             ; storage, with what its bytes are

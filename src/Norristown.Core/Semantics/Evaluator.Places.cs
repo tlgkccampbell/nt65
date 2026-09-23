@@ -3,7 +3,7 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Where an address stands inside the data declaration it is part of. nt65 never knows where a
+/// Where an address falls inside the data declaration it is part of. nt65 never knows where a
 /// declaration lands, but it lays out every byte of one it can size, so two places in the same
 /// declaration — the declaration itself, its end, a member declared in it, an <c>@</c> position
 /// and an element <c>name[i]</c> — are a known distance apart wherever it lands, and that
@@ -11,10 +11,11 @@ namespace Norristown.Semantics;
 /// <para>
 /// A distance is known only where every length between the two places is: an <c>.align</c>
 /// between them depends on where the declaration lands, and a macro call writes its bytes only
-/// once it is expanded, which is after every constant has its value (§3.1). Code is layout and
-/// never a place here, whatever it holds. Two declarations of one segment in one file are a
-/// known distance apart too, where everything the file writes to that segment between them is
-/// data or padding nt65 knows the length of, whichever regions and blocks it is in.
+/// once it is expanded, which is after every constant has its value. Code is sized only by
+/// layout, which also comes after constants, so nothing in code is a place here. Two
+/// declarations of one segment in one file are a known distance apart too, where everything
+/// the file writes to that segment between them is data or padding nt65 knows the length of,
+/// whichever regions and blocks it is in.
 /// </para>
 /// </summary>
 internal sealed partial class Evaluator
@@ -39,14 +40,15 @@ internal sealed partial class Evaluator
     /// writes a segment's bytes in the order the file writes them, whichever region or block they
     /// are in, so two declarations of a segment are a known distance apart wherever that segment
     /// lands when every byte the file writes to it between them has a length nt65 knows: data, and
-    /// padding other than an <c>.align</c>. Code between them is layout, which constants come
-    /// before, and a macro call is expanded after them, so either leaves the distance unknown, as
-    /// a <c>.place</c> does, since what the placed module writes is between.
+    /// padding other than an <c>.align</c>. Code between them is sized only at layout, which
+    /// comes after constants, and a macro call is expanded after constants too, so either leaves
+    /// the distance unknown; so does a <c>.place</c>, because what the placed module writes lands
+    /// between them.
     /// </summary>
     private long? Apart(Symbol first, Symbol second)
     {
-        // A length asked for on the way may be the length of a declaration whose count is this
-        // very distance, which is a question that asks itself.
+        // A length computed on the way may be that of a declaration whose count is this very
+        // distance, which would recurse; the `apart` flag cuts that off.
         if (first.Tree != second.Tree || apart)
             return null;
         apart = true;
@@ -129,8 +131,8 @@ internal sealed partial class Evaluator
                     writes.Add(new Write(segment, block.Span, NestedBytes(block), false));
                     break;
 
-                // A routine's bytes are layout, and what it writes elsewhere is in the segment
-                // blocks it holds, which are written where they stand.
+                // A routine's own length is known only at layout. What it writes to other
+                // segments is in the segment blocks inside it, which write at their position.
                 case BlockKind.Proc or BlockKind.MultiProc:
                     writes.Add(new Write(segment, block.Span, null, false));
                     Detours(block.Members, segment, writes);
@@ -146,7 +148,7 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The segment blocks inside a routine's body, which write where they stand, with the
+    /// The segment blocks inside a routine's body, which write at their position, with the
     /// conditionals around them decided. A repetition in a body could write any number of them.
     /// </summary>
     private void Detours(IReadOnlyList<SyntaxNode> members, string? segment, List<Write> writes)
@@ -223,9 +225,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The place a name stands for: a declaration or a position, with the elements its indexes
-    /// step over, or a member reached through a record, the offsets along the path added to the
-    /// place the record stands at.
+    /// The place a name refers to: a declaration or a position, plus the elements its indexes
+    /// step over, or a member reached through a record, with the member offsets along the path
+    /// added to the record's own place.
     /// </summary>
     private (Symbol Data, long Offset)? PlaceOfName(NameExpressionSyntax name)
     {
@@ -275,7 +277,7 @@ internal sealed partial class Evaluator
             return symbol.Kind == SymbolKind.Data ? (symbol, 0) : null;
 
         // A declaration whose size is being worked out may be asked about by what is written
-        // in it, and the distance is then unknown rather than a question that asks itself.
+        // in it; the distance is then unknown, rather than the question recursing.
         if (outermost.Definition is not BlockSyntax body || !placing.Add(outermost))
             return null;
         long offset = 0;

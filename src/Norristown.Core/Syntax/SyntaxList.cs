@@ -36,7 +36,7 @@ public readonly struct SyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
     /// <summary>The green list the items hang from, or null for a list with nothing in it.</summary>
     internal GreenList? Green => list?.Green as GreenList;
 
-    /// <summary>The <paramref name="length"/> items from <paramref name="start"/>, which is what a slice pattern reads.</summary>
+    /// <summary>The <paramref name="length"/> items from <paramref name="start"/>; C# slice patterns call this.</summary>
     /// <param name="start">The first item to take.</param>
     /// <param name="length">How many to take.</param>
     public ImmutableArray<T> Slice(int start, int length)

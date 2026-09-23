@@ -28,8 +28,8 @@ public readonly record struct SyntaxTrivia
     public TextSpan Span => new(Position, Green.Text.Length);
 
     /// <summary>
-    /// The trivia's range, which is the same as <see cref="Span"/>: trivia is all text and has
-    /// nothing around it.
+    /// The trivia's range, which is the same as <see cref="Span"/>: trivia has no trivia of its
+    /// own around it.
     /// </summary>
     public TextSpan FullSpan => Span;
 

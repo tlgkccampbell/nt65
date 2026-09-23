@@ -37,8 +37,8 @@ public enum SyntaxKind : byte
     StringLiteral,
 
     /// <summary>
-    /// The CPU names <c>65c02</c> and <c>65sc02</c>, which are not numbers. <c>6502</c> and
-    /// <c>65816</c> are, and <c>r65c02</c> is an identifier.
+    /// A CPU name that starts with a digit but is not a number: <c>6502x</c>, <c>65sc02</c> or
+    /// <c>65c02</c>. <c>6502</c> and <c>65816</c> are numbers, and <c>r65c02</c> is an identifier.
     /// </summary>
     CpuName,
 
@@ -253,7 +253,10 @@ public enum SyntaxKind : byte
     /// <summary><c>.segment NAME: size</c>, with its attributes.</summary>
     SegmentDeclaration,
 
-    /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [...]</c> in a segment declaration.</summary>
+    /// <summary>
+    /// <c>dp = expr</c>, <c>bank = expr</c>, <c>space = expr</c> or <c>mirrors = [...]</c> in a
+    /// segment declaration.
+    /// </summary>
     SegmentAttribute,
 
     /// <summary>One bank, <c>$80</c>, or a range of them, <c>$00..$3f</c>, in a segment's <c>mirrors</c>.</summary>
@@ -268,7 +271,7 @@ public enum SyntaxKind : byte
     /// <summary>The line opening a <c>.proc</c>.</summary>
     ProcDeclaration,
 
-    /// <summary><c>.proc name = expr</c>: a routine with a signature and no body.</summary>
+    /// <summary><c>.proc name = expr</c>: a routine at a given address, with an optional signature and no body.</summary>
     ExternProcDeclaration,
 
     /// <summary>The line opening a <c>.multiproc</c>: one routine per member of an enum.</summary>
@@ -391,7 +394,7 @@ public enum SyntaxKind : byte
     /// <summary>A line the parser could not read at all.</summary>
     ErrorLine,
 
-    /// <summary>Tokens left over at the end of a line, which the statement does not explain.</summary>
+    /// <summary>Tokens left over at the end of a line, which the statement could not take.</summary>
     SkippedTokens,
 
     // Processor-state signatures.
@@ -462,8 +465,8 @@ public enum SyntaxKind : byte
     ArgumentList,
 
     /// <summary>
-    /// An expression the parser could not read, which holds nothing: it stands where an expression
-    /// belongs, as a missing token stands where a token does.
+    /// An expression the parser could not read. It fills the place where an expression belongs,
+    /// as a missing token fills a token's place, and holds at most the one token it could not use.
     /// </summary>
     ErrorExpression,
 

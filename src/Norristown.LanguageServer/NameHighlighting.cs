@@ -30,8 +30,8 @@ internal static class NameHighlighting
         var data = new List<int>();
         var (line, character, end) = (0, 0, -1);
 
-        // A word a condition compares with a parameter is one of a set the parameter names, as
-        // a member is one of its enum's, and is coloured as one.
+        // A bare word a condition compares a parameter with is one of a fixed set of words the
+        // parameter accepts, much as a member is one of its enum's, so it is coloured as one.
         var words = ComparedWords.In(model)
             .Select(word => (Span: word.Word.Span, Type: IndexOf("enumMember"), Modifiers: ReadOnly));
         var names = model.References.Select(reference =>
@@ -40,15 +40,15 @@ internal static class NameHighlighting
             return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
         });
 
-        // A module is no symbol, and the path a `.place` names one by is coloured as the path
-        // of one all the same.
+        // A module is not a symbol, but the module path a `.place` writes is still coloured as
+        // a namespace.
         var modules = tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()
             .SelectMany(place => place.Name.Names)
             .Where(part => !part.IsMissing)
             .Select(part => (part.Span, Type: IndexOf("namespace"), Modifiers: 0));
         foreach (var (span, type, modifiers) in names.Concat(words).Concat(modules).OrderBy(token => token.Span.Start))
         {
-            // A macro body's names are recorded for each of its uses; each is written once.
+            // A name in a macro body is recorded once per expansion; emit its token only once.
             if (span.Start < end || span.Length == 0)
                 continue;
             var at = Lsp.ToPosition(tree, span.Start);
@@ -66,12 +66,12 @@ internal static class NameHighlighting
     }
 
     /// <summary>
-    /// What changed between the answer the client is holding and the one it would be given
-    /// now: the one run of numbers that moved, found from the ends inwards. An edit in one
-    /// place moves a handful of numbers in a file of thousands, and sending the thousands
-    /// again is what the change form exists to stop.
+    /// The difference between the tokens the client holds and the current ones, as the single
+    /// run of numbers that changed, found by trimming the common prefix and suffix. An edit in
+    /// one place changes a handful of numbers in a file of thousands, and not resending the
+    /// thousands is the point of the delta form.
     /// </summary>
-    /// <param name="id">What to call the new answer when asking for the next change to it.</param>
+    /// <param name="id">The result id of the new answer, which the client quotes when asking for the next delta.</param>
     /// <param name="before">The numbers the client holds.</param>
     /// <param name="after">The numbers it would be given now.</param>
     public static Protocol.SemanticTokensDelta Changed(
@@ -97,7 +97,8 @@ internal static class NameHighlighting
 
     private static (int Type, int Modifiers) Classify(Symbol symbol)
     {
-        // A function's parameters are constants in its scope, which each call gives a value.
+        // A function's parameters are constants in its scope, given a value by each call; they
+        // are coloured as parameters.
         var (type, modifiers) = symbol.IsEnumMember ? ("enumMember", ReadOnly)
             : symbol.Scope.Owner is { Kind: SymbolKind.Func } ? ("parameter", 0)
             : symbol.Kind switch

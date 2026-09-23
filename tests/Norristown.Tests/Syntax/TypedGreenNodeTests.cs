@@ -8,14 +8,17 @@ using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// Green nodes with a slot per piece, built by hand: the shape the parser is being moved onto.
-/// A red class reads its slots whenever its green node is one of these, so everything an
-/// analyzer asks of a node — its pieces, its spans, its children, its text, its visitor — is
-/// answered here from the slots alone.
+/// Typed green nodes, with a slot per piece, built by hand rather than by the parser. A red
+/// class reads its pieces from its green node's slots, so everything an analyzer asks of a
+/// node — its pieces, its spans, its children, its text, its visitor — is answered here from
+/// the slots alone.
 /// </summary>
 public sealed class TypedGreenNodeTests
 {
-    /// <summary>A required token nobody wrote stands in its slot, empty, where it belongs.</summary>
+    /// <summary>
+    /// A required token that was not written is a missing token in its slot: empty, and at the
+    /// position where it belongs.
+    /// </summary>
     [Fact]
     public void ARequiredTokenNotWrittenIsMissingInItsSlot()
     {
@@ -40,7 +43,7 @@ public sealed class TypedGreenNodeTests
         Assert.Equal(text, proc.ToFullString());
         Assert.Equal(new TextSpan(0, 7), proc.Span);
 
-        // A slot holding nothing shows no child; the missing token is a child like any other.
+        // An empty slot contributes no child; the missing token is a child like any other.
         Assert.Equal([SyntaxKind.Directive, SyntaxKind.Identifier, SyntaxKind.OpenBrace],
             proc.ChildNodesAndTokens().Select(child => child.Kind));
         Assert.Empty(proc.ChildNodes);
@@ -143,7 +146,10 @@ public sealed class TypedGreenNodeTests
         Assert.Equal(".export", export.ToFullString());
     }
 
-    /// <summary>A node standing where a required one belongs says so, as a missing token does.</summary>
+    /// <summary>
+    /// An error expression, which stands where a required expression was not written, reports
+    /// itself as missing, as a missing token does.
+    /// </summary>
     [Fact]
     public void AnErrorExpressionIsMissing()
     {

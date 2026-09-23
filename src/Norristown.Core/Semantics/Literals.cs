@@ -5,9 +5,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What a literal token means. The lexer has already said whether a literal is
-/// well formed, so these read a token the lexer accepted and give up quietly on one it
-/// did not: a literal nobody could read has no value rather than a value nobody meant,
-/// and what is wrong with it was said where it is written.
+/// well formed, so these read a token the lexer accepted and quietly return null for one it
+/// did not: an unreadable literal has no value rather than a value nobody meant, and what is
+/// wrong with it has already been reported where it is written.
 /// </summary>
 public static class Literals
 {
@@ -80,7 +80,7 @@ public static class Literals
         foreach (var c in digits)
         {
             // `_` between digits is a separator and counts for nothing; the lexer has already
-            // said whether it stands where one may.
+            // checked that it is somewhere a separator is allowed.
             if (c == '_')
                 continue;
             var digit = char.IsAsciiDigit(c) ? c - '0'
@@ -89,8 +89,8 @@ public static class Literals
             if (digit < 0 || digit >= radix)
                 return null;
 
-            // A literal too large for the value type says nothing useful; the stage that
-            // writes it out is where a range matters.
+            // A literal too large for a 64-bit value has no useful value, so it gets none; the
+            // stage that writes values out is where their range is checked.
             try
             {
                 value = checked(value * radix + digit);

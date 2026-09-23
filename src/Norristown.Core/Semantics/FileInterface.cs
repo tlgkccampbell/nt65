@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What the other files of a program can see of one file, symbol by symbol, written out so that
-/// two versions of it can be compared. A symbol whose entry changed is news only to the files
+/// two versions of it can be compared. A change to a symbol's entry matters only to the files
 /// that looked its name up.
 /// <para>
 /// Every name a path can reach is in it, exported or not, because another file resolving a
@@ -14,7 +14,7 @@ namespace Norristown.Semantics;
 /// a position: a line added above a declaration moves it without changing what it is. The one
 /// exception is where a macro's body is: an expansion names each call it writes out by file
 /// and line, and a problem with a body line is reported at the call with the line beside it,
-/// so where the body is is part of what every caller writes and says.
+/// so the body's location is part of every caller's output and diagnostics.
 /// </para>
 /// <para>
 /// A body is read where it is used rather than where it is written: a macro expands, and a

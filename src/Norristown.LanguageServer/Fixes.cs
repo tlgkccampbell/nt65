@@ -4,12 +4,13 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The fixes the diagnostics in a range name, as edits. Each writes what its message already
-/// says: the long branch that reaches, the return an interrupt handler leaves by, the nt65
-/// spelling of a ca65 directive, the declared name a misspelling is nearly, the storage a
-/// <c>.res</c> reserves, an export wide enough for what it exports, and the declaration nothing
-/// names, taken out or exported. Where a line has two readings, both are offered and neither is
-/// preferred: which was meant is the programmer's to say.
+/// The quick fixes the diagnostics in a range carry, turned into edits. Each applies what its
+/// message already suggests: the long branch that reaches the target, the return instruction an
+/// interrupt handler must end with, the nt65 spelling of a ca65 directive, the declared name
+/// closest to a misspelling, the storage a <c>.res</c> reserves, an export wide enough for what
+/// it exports, and removing or exporting a declaration nothing refers to. Where a line has two
+/// plausible readings, both are offered and neither is preferred, since only the programmer
+/// knows which was meant.
 /// </summary>
 internal static class Fixes
 {
@@ -101,8 +102,8 @@ internal static class Fixes
                 break;
 
             case FixKind.Rename:
-                // Nothing is written: what the name should be is the programmer's to say, so
-                // the editor puts the caret on it and starts a rename.
+                // No edit is made: only the programmer can choose the new name, so the editor
+                // puts the caret on the name and starts a rename.
                 var named = Edits.SpanOf(tree, diagnostic.Span);
                 yield return new Change(
                     $"Rename `{tree.Text[named.Start..named.End]}`…",
@@ -182,8 +183,8 @@ internal static class Fixes
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
 
     /// <summary>
-    /// The line's mnemonic written as <paramref name="mnemonic"/>, in the case the line wrote it
-    /// in; null for a line that has none.
+    /// The line's mnemonic replaced by <paramref name="mnemonic"/>, in upper case where the line
+    /// wrote it in upper case; null for a line that has no mnemonic.
     /// </summary>
     private static Edit? Written(SyntaxTree tree, int line, string mnemonic)
     {
@@ -197,11 +198,12 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// <paramref name="piece"/> written where the line holds the place for it. The place is the
-    /// tree's answer and not the text's: the token standing in the slot says the piece is missing,
-    /// and what it reports says where the piece belongs, which is the end of the last token the
-    /// line does have rather than wherever the token itself sits behind a trailing comment. Null
-    /// where no missing token on the line owns the diagnostic, which means it is not about one.
+    /// <paramref name="piece"/> inserted where the line is missing it. The position comes from the
+    /// syntax tree rather than the text: a missing token in the slot marks the piece as absent,
+    /// and its diagnostic's span says where the piece belongs, which is the end of the last token
+    /// the line does have, not wherever the missing token sits after a trailing comment. Null
+    /// when no missing token on the line owns the diagnostic, meaning it is not about a missing
+    /// piece.
     /// </summary>
     private static Edit? Piece(SyntaxTree tree, Diagnostic diagnostic, string piece)
     {
@@ -211,7 +213,8 @@ internal static class Fixes
             if (!token.IsMissing || !token.GetDiagnostics().Contains(diagnostic))
                 continue;
 
-            // A `{` opens a block and reads as its own word; a closer follows what it closes.
+            // A `{` opens a block and is set off by a space as a word of its own; a closing piece
+            // is written directly after what it closes.
             var at = Edits.SpanOf(tree, diagnostic.Span).Start;
             var space = piece == "{" && at > 0 && tree.Text[at - 1] is not (' ' or '\t' or '\n' or '\r') ? " " : "";
             return new Edit(tree, new TextSpan(at, 0), space + piece);
@@ -233,8 +236,8 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// A <c>.state</c> after a label, saying what the analysis finds reaching the line under it,
-    /// or what its routine is entered with where it finds nothing.
+    /// A <c>.state</c> after a label, giving the processor state the analysis finds on entry to
+    /// the line below it, or the routine's entry state where the analysis found nothing.
     /// </summary>
     private static (string Title, IReadOnlyList<Edit> Edits)? StateAfter(
         ProgramAnalysis analysis, SemanticModel model, Span label)
@@ -270,8 +273,9 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// A label outside every routine and the data under it, as one <c>.data</c> declaration: one
-    /// directive on the declaration's own line, and several in its block.
+    /// A label outside every routine, together with the data lines under it, rewritten as one
+    /// <c>.data</c> declaration: a single directive goes on the declaration's own line, and
+    /// several go in a block.
     /// </summary>
     private static (string Title, IReadOnlyList<Edit> Edits)? DataDeclaration(SyntaxTree tree, int line)
     {
@@ -324,8 +328,8 @@ internal static class Fixes
         var before = level > 0 && tokens[level - 1].Kind == SyntaxKind.Comma ? tokens[level - 1] : default;
         if (level + 1 < tokens.Count && tokens[level + 1].Kind == SyntaxKind.Comma)
         {
-            // The message keeps the comma before it, so what goes is the level and the comma
-            // after it, taken from where the comma before it ended.
+            // Keep the comma before the level: remove from just after that comma through the
+            // comma after the level.
             var start = before.Text is null ? span.Start : before.Start + 1;
             return new Edit(tree, new TextSpan(start, tokens[level + 1].Start + 1 - start), "");
         }
@@ -343,7 +347,7 @@ internal static class Fixes
         return count.Length == 0 ? null : new Edit(tree, span, $".byte[{count}]");
     }
 
-    /// <summary>A label written in mixed data, as a member of it or as a position in it.</summary>
+    /// <summary>The fixes for a label in mixed data: make it a member of the data, or a position (<c>@name</c>) in it.</summary>
     private static IEnumerable<Change> DataMember(ProgramModel program, SemanticModel model, Diagnostic diagnostic)
     {
         var tree = model.Tree;
@@ -352,8 +356,8 @@ internal static class Fixes
         var tokens = LineContext.TokensOf(tree, diagnostic.Span.Line - 1);
         var colon = tokens.FindIndex(token => token.Start == span.Start) + 1;
 
-        // A member is a name and what it holds, so the line has to say what it holds: a name on
-        // its own is a position and only a position.
+        // A member is a name plus what it holds, so it is offered only when a directive follows
+        // the label on the line; a bare name can only be a position.
         if (colon > 0 && colon + 1 < tokens.Count && tokens[colon + 1].Kind == SyntaxKind.Directive)
         {
             yield return Fix(diagnostic, $"Make `{name}` a member of the data",
@@ -379,9 +383,9 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// The two readings of an expression that needs parentheses: the one the language would
-    /// take if it took either, and the other. Each is two brackets written into the expression
-    /// as it stands, so nothing else about the line moves.
+    /// The two readings of an expression that needs parentheses: the one the language's
+    /// precedence would give, and the other. Each fix only inserts an opening and a closing
+    /// parenthesis, so nothing else on the line changes.
     /// </summary>
     private static IEnumerable<Change> Parenthesized(SyntaxTree tree, Diagnostic diagnostic)
     {
@@ -425,8 +429,8 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// A declaration nothing names: taken out with what it holds, or exported, which is what
-    /// makes it something another module may name.
+    /// The fixes for a declaration nothing refers to: remove it along with its body, or export
+    /// it so that another module may refer to it.
     /// </summary>
     private static IEnumerable<Change> Unused(SemanticModel model, Diagnostic diagnostic, string name)
     {
@@ -434,8 +438,8 @@ internal static class Fixes
         var line = diagnostic.Span.Line - 1;
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
 
-        // The declaration is taken out whole, which only holds where the line is the declaration
-        // and nothing else: a label with an instruction after it shares its line with code.
+        // Removal deletes whole lines, which is only safe where the line starts with the
+        // declaration; a label with an instruction after it shares its line with code.
         var tokens = LineContext.TokensOf(tree, line);
         if (tokens.Count > 0 && tokens[0].Start == tree.LineStarts[line] + Edits.IndentOf(tree, line).Length)
             yield return Fix(diagnostic, $"Remove `{name}`", [Edits.RemoveLines(tree, line, Edits.BlockEnd(tree, line))], preferred: false);

@@ -7,8 +7,8 @@ namespace Norristown.Cli;
 /// as the <c>.s</c> files that were assembled, from the line maps nt65 wrote beside those.
 /// <para>
 /// It runs after the link, and needs nothing but the debug file: that file names every <c>.s</c>
-/// the program was built from, and the map for one lies beside it. A <c>.s</c> with no map is
-/// something else's, and is left alone.
+/// the program was built from, and each <c>.s</c> nt65 wrote has its line map beside it. A
+/// <c>.s</c> with no line map was not written by nt65, and is left alone.
 /// </para>
 /// </summary>
 public static class RemapCommand
@@ -55,8 +55,8 @@ public static class RemapCommand
             return 1;
         }
 
-        // A `.s` is named as ca65 recorded it, which is from the directory the build ran in;
-        // that is normally this one, and failing that the debug file's own directory.
+        // ca65 records a `.s` path relative to the directory the build ran in. That is normally
+        // this directory, so the map is looked for here first and then beside the debug file.
         var beside = Path.GetDirectoryName(path) ?? directory;
         var remapped = DebugFile.Remap(File.ReadAllText(path), source => Map(source, directory, beside), out var problem);
         if (remapped is null)
@@ -68,7 +68,10 @@ public static class RemapCommand
         return 0;
     }
 
-    /// <summary>The line map beside <paramref name="source"/>, or null where there is none.</summary>
+    /// <summary>
+    /// The line map beside <paramref name="source"/>, resolving it against each of
+    /// <paramref name="directories"/> in turn, or null when none has one.
+    /// </summary>
     private static string? Map(string source, params string[] directories)
     {
         foreach (var directory in directories)

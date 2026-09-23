@@ -19,8 +19,8 @@ public static class Compiler
         Compile(files, ProjectSettings.None);
 
     /// <summary>
-    /// Compiles <paramref name="files"/> for <paramref name="cpu"/>, which is what the
-    /// command line says if it says anything; a <c>.cpu</c> item must agree with it.
+    /// Compiles <paramref name="files"/> for <paramref name="cpu"/>, the processor the command
+    /// line names, if it names one; a <c>.cpu</c> item in the source must agree with it.
     /// </summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files, Cpu? cpu) =>
         Compile(files, ProjectSettings.None with { Cpu = cpu });
@@ -30,8 +30,8 @@ public static class Compiler
         Compile(files, project, BinaryLengthOnDisk);
 
     /// <summary>
-    /// The same, with <paramref name="binaryLength"/> answering how long the file an
-    /// <c>.incbin</c> names is, for a caller whose files are not where the paths say, and a C
+    /// The same, with <paramref name="binaryLength"/> giving the length of each file an
+    /// <c>.incbin</c> names, for a caller whose files are not at the paths written, and with a C
     /// header of what the program exports when <paramref name="cHeader"/> names one.
     /// </summary>
     public static Compilation Compile(
@@ -49,16 +49,17 @@ public static class Compiler
         var outputs = new List<OutputFile>();
         var direct = new Dictionary<SyntaxTree, HashSet<string>>();
 
-        // Every file is written even when the program is already wrong, because what emission
-        // finds — a construct no stage has reached, two names that meet in the output — is
-        // worth reporting alongside the rest rather than only once the rest is fixed.
+        // Every file is written even when the program already has errors, because what emission
+        // finds — a construct no earlier stage checked, two names that collide in the output —
+        // is worth reporting alongside the rest rather than only once the rest is fixed.
         var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
         for (var i = 0; i < analysis.Layouts.Count; i++)
         {
             var model = analysis.Program.Files[i];
 
             // The defines are not a file anyone wrote, and nothing is written for them. A module
-            // another places has no output of its own: it is written into its unit's.
+            // that another module places has no output of its own: it is written into the output
+            // of its translation unit.
             if (model.Tree == analysis.Defines || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
@@ -71,16 +72,17 @@ public static class Compiler
             };
             outputs.Add(output);
 
-            // Where its lines came from goes beside it rather than into it, so that the ca65 is
-            // only the program; `nt65 remap-dbg` puts it into ld65's debug file after the link.
+            // The map of which source line each output line came from goes in a file beside the
+            // output rather than into it, so that the ca65 holds only the program; `nt65
+            // remap-dbg` puts the map into ld65's debug file after the link.
             if (LineMap.For(output) is { } map)
                 outputs.Add(map);
         }
         var header = cHeader is null ? null : CHeader.Write(analysis.Program, cHeader, diagnostics);
 
-        // A program that is wrong produces no output: what would be written for it is not a
-        // translation of anything. What counts as wrong is the project's to say by name, so
-        // what it says about each is applied before anything reads the severities.
+        // A program with errors produces no output: what would be written for it is not a
+        // translation of anything. The project can change the severity of each diagnostic by
+        // name, so its settings are applied before the severities are checked for errors.
         var ordered = Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
         var wrong = ordered.Any(d => d.Severity == Severity.Error);
         return new Compilation(wrong ? [] : outputs, ordered)
@@ -91,11 +93,11 @@ public static class Compiler
     }
 
     /// <summary>
-    /// The ca65 for one file of <paramref name="analysis"/>, whatever is wrong with the rest of
-    /// the program, or null when the program has no such file. A build writes nothing for a
-    /// program that is wrong; the editor shows what would have been written anyway, so that
+    /// The ca65 for one file of <paramref name="analysis"/>, whatever errors the rest of the
+    /// program has, or null when the program has no such file. A build writes nothing for a
+    /// program with errors; the editor shows what would have been written anyway, so that
     /// seeing what a line became does not wait for the rest of the file to be right. For a
-    /// module another places, it is the output of the translation unit it is written in.
+    /// module that another module places, it is the output of the translation unit it is written in.
     /// </summary>
     /// <param name="analysis">The program the file belongs to.</param>
     /// <param name="project">The project it is built as, whose <c>out</c> names where the file goes.</param>
@@ -158,9 +160,9 @@ public static class Compiler
     }
 
     /// <summary>
-    /// One file of the program written out. <paramref name="measured"/> is what each file of the
-    /// program measures with <c>.endof</c> and <c>.spanof</c>, in the order the files are in:
-    /// what the other files measure of this one is what it has to label.
+    /// One file of the program written out. <paramref name="measured"/> holds, for each file of
+    /// the program in order, the symbols it measures with <c>.endof</c> and <c>.spanof</c>: the
+    /// symbols of this file that other files measure are the ones its output has to label.
     /// </summary>
     private static OutputFile Written(
         ProgramAnalysis analysis, ProjectSettings project, int i,
@@ -177,8 +179,8 @@ public static class Compiler
                 project.Out, Elsewhere(i));
         }
 
-        // The modules of a translation unit share one output, and so one table of names, which
-        // the root claims from first.
+        // The modules of a translation unit share one output, and so one table of names; the
+        // root module claims its names in that table first.
         var members = new List<(SemanticModel, CodeLayout, FlatNames, IReadOnlySet<Symbol>)>();
         FlatNames? names = null;
         foreach (var tree in unit.Members)
@@ -253,14 +255,15 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
-        // What a routine costs with its calls, and which registers it hands back, are questions
-        // about the program rather than about one file, so they are worked out once every
-        // file's own answers are in.
+        // What a routine costs including its calls, and which registers it preserves for its
+        // caller, are questions about the program rather than about one file, so they are
+        // worked out once every file has been analyzed on its own.
         Flow.CallCosts.Compose(flows);
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
 
-        // Which modules place which follows from the files alone, and what a routine runs
-        // into across a `.place` from the layouts of every file in its translation unit.
+        // Which modules place which follows from the files alone; which routine a routine falls
+        // through into across a `.place` follows from the layouts of every file in its
+        // translation unit.
         var placements = Placements.Of(trees, defines);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
@@ -278,9 +281,9 @@ public static class Compiler
 
     /// <summary>
     /// The program <paramref name="previous"/> analyzed, with some files changed, analyzing only
-    /// those files and the files the changes reach; or null, with the <paramref name="reason"/>,
-    /// when the whole program has to be analyzed again. Anything decided for the program as a
-    /// whole changing — the files in it, the project, the CPU, the segments — is such a change.
+    /// those files and the files the changes affect; or null, with the <paramref name="reason"/>,
+    /// when the whole program has to be analyzed again. That happens when anything decided for
+    /// the program as a whole changes: the files in it, the project, the CPU, the segments.
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
@@ -329,8 +332,8 @@ public static class Compiler
         }
         var moved = EditMap.Composed([.. changed.Select(before => new EditMap(before, sources[before.Path]))]);
 
-        // The files to read again start as the ones that changed, and grow by every file the
-        // reading finds a change reaches, until reading them all reaches no further.
+        // The set of files to analyze again starts as the ones that changed, and grows by every
+        // file that analysis finds a change affects, until a pass adds no more files.
         var current = trees.ToDictionary(tree => tree.Path, StringComparer.Ordinal);
         var dirty = changed.Select(tree => tree.Path).ToHashSet(StringComparer.Ordinal);
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
@@ -345,7 +348,8 @@ public static class Compiler
                 return null;
             }
 
-            // What laying out every other file found stands, carried to where an edit moved it.
+            // The diagnostics from laying out every other file still hold, moved to follow the
+            // edit; a file whose diagnostics cannot be moved is analyzed again.
             analyzed.Clear();
             foreach (var (path, found) in reuse.Analyzed.Where(pair => !dirty.Contains(pair.Key)))
             {
@@ -385,14 +389,14 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
-        // A file kept from before the edit keeps its own costs, and what it costs with its
-        // calls, and what it keeps, may still have moved, because a routine it calls is in the
-        // file that changed.
+        // A file kept from before the edit keeps its own costs, but its routines' costs
+        // including their calls, and the registers they preserve, may still have changed,
+        // because a routine they call may be in a file that changed.
         Flow.CallCosts.Compose(flows);
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
 
-        // An edit to any module of a translation unit can move what the others run into, so
-        // the units are laid out again whichever file changed.
+        // An edit to any module of a translation unit can change which routine the others fall
+        // through into, so the placements are worked out again whichever file changed.
         var placements = Placements.Of(trees, previous.Defines);
         var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
@@ -435,7 +439,7 @@ public static class Compiler
         found.AddRange(flow.Diagnostics);
 
         // A family's body is written out once per instance, so a mistake in it is found once
-        // for each: what every instance says is one thing to say.
+        // per instance; a diagnostic that every instance reports is collapsed into one.
         var collapsed = new List<Diagnostic>(Family.Collapsed(model.Families, found));
         var entries = flow.Regions.SelectMany(region => region.Blocks)
             .Where(block => block.IsDeclared)
@@ -446,8 +450,8 @@ public static class Compiler
 
     /// <summary>
     /// Everything wrong with the program, from what each part of the analysis found.
-    /// <paramref name="composed"/> is what was found once every file's own analysis was in:
-    /// what routines keep across calls, and what the translation units say.
+    /// <paramref name="composed"/> is what was found after every file had been analyzed on its
+    /// own: which registers routines preserve across calls, and the translation-unit checks.
     /// </summary>
     private static IReadOnlyList<Diagnostic> Collected(
         ProjectSettings project, Cpu target, IReadOnlyList<Diagnostic> cpu, ProgramModel program,
@@ -485,8 +489,8 @@ public static class Compiler
     /// The files a file's output depends on, by logical path: its own source; the sources of the
     /// modules whose interfaces it uses, and of the ones those use in turn; the files that
     /// declare segments or settings, which any file's meaning may follow from; and the files an
-    /// <c>.incbin</c> in any of them names, whose lengths are what their addresses follow from.
-    /// <paramref name="direct"/> keeps what each file names itself, for the next file to ask.
+    /// <c>.incbin</c> in any of them names, whose lengths determine the addresses that follow.
+    /// <paramref name="direct"/> caches the files each file names directly, for later calls to reuse.
     /// </summary>
     private static IReadOnlyList<string> Dependencies(
         ProgramModel program, SemanticModel model, Dictionary<SyntaxTree, HashSet<string>> direct)
@@ -553,8 +557,8 @@ public static class Compiler
 
     /// <summary>
     /// A far address is a bank and an offset, which only the 65816 has: ca65 refuses
-    /// <c>far</c> on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug
-    ///. A segment or an import declared far on a 6502 or a CMOS variant is therefore reported
+    /// <c>far</c> on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug.
+    /// A segment or an import declared far on a 6502 or a CMOS variant is therefore reported
     /// where it is written, rather than written out for ca65 to reject.
     /// </summary>
     private static IEnumerable<Diagnostic> FarNeedsA65816(SegmentTable segments, ProgramModel program)

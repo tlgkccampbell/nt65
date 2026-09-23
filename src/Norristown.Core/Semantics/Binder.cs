@@ -11,7 +11,7 @@ namespace Norristown.Semantics;
 /// the line that declares it.
 /// </para>
 /// <para>
-/// A macro body is read once, wherever many times it is expanded. It sees the scope the
+/// A macro body is read once, however many times it is expanded. It sees the scope the
 /// macro is declared in, and what it declares belongs to a scope of its own that nothing
 /// outside can reach, so an expansion never declares a name in its caller. The block
 /// argument of a call is the other way round: it is the caller's own code, and its names
@@ -25,9 +25,9 @@ namespace Norristown.Semantics;
 /// module adding an export can never change what a name in another module already means.
 /// </para>
 /// <para>
-/// An <c>.if</c> is neither: its conditions were answered before any of this ran, so a
-/// branch the build takes is read as if the <c>.if</c> were not written and one it leaves
-/// out is not read at all. That is what lets the same name be declared under two of them.
+/// An <c>.if</c> opens no scope: its conditions were answered before any of this ran, so a
+/// branch the build takes is read as if the <c>.if</c> were not written, and a branch it
+/// leaves out is not read at all. That is what lets the same name be declared under two of them.
 /// </para>
 /// <para>
 /// A <c>.repeat</c> or an <c>.each</c> body is read once, however many times it is written
@@ -50,7 +50,8 @@ internal sealed partial class Binder
     private readonly bool isDefines;
     private readonly List<Diagnostic> diagnostics = [];
 
-    // What a lookup that may report reports through; one asked quietly is given none.
+    // The callback a lookup reports its diagnostics through; a lookup that must not report is
+    // passed null instead.
     private readonly Action<TextSpan, DiagnosticMessage> report;
     private readonly List<Symbol> symbols = [];
     private readonly List<SymbolReference> references = [];
@@ -72,15 +73,15 @@ internal sealed partial class Binder
     private readonly List<(ExportItemSyntax Item, Scope Scope)> exportItems = [];
     private readonly List<Symbol> exported = [];
 
-    // The records `.type T` data gives values in, with the `T` each is of: the member names they
-    // write are references to `T`'s members once `T` is resolved.
+    // The record initializers of `.type T` data declarations, with the `T` each belongs to: the
+    // member names they write become references to `T`'s members once `T` is resolved.
     private readonly List<(NameExpressionSyntax Type, IReadOnlyList<SyntaxNode> Values)> records = [];
 
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<UseDirectiveSyntax> useDirectives = [];
     private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
 
-    // Where each `.use` writes the name it brings in, so that an item nothing names can be
+    // Where each `.use` writes the name it brings in, so that an item nothing uses can be
     // reported on the item rather than on the whole line.
     private readonly Dictionary<string, (TextSpan At, bool Exported)> broughtAt = new(StringComparer.Ordinal);
     private readonly List<ProgramSymbols.Module> globs = [];
@@ -115,8 +116,9 @@ internal sealed partial class Binder
     private readonly List<PendingFamily> pendingFamilies = [];
     private readonly List<Family> families = [];
 
-    // The repetition whose body the walk is directly in, where a declaration named by the name
-    // it binds is a family; null everywhere else, including inside a block of the body.
+    // The repetition whose body the walk is directly in, where a declaration named after the
+    // repetition's binding is a family (one declaration per member); null everywhere else,
+    // including inside a nested block of the body.
     private Repeated? repeated;
 
     private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
@@ -140,15 +142,16 @@ internal sealed partial class Binder
 
     /// <summary>
     /// What resolving this file looked for in other modules, whether it found it or not: each
-    /// name in a module, with that module's name, and each name no one declared, with none,
-    /// which another module exporting would change what is said about.
+    /// name looked for in a module, with that module's name, and each name no module declared,
+    /// with a null module, because another module starting to export it would change what this
+    /// file reports about it.
     /// </summary>
     public IReadOnlySet<LookedUpName> LookedUp => lookedUp;
 
     /// <summary>
-    /// What resolving this file reached in another module that the module does not export,
-    /// which is what <c>not-exported</c> was said about. The file that declares one of these is
-    /// named all the same, so it is not also told that nothing uses it.
+    /// The symbols this file named in another module that the module does not export, each of
+    /// which has been reported as <c>not-exported</c>. They still count as used, so the file
+    /// that declares one is not also told that nothing uses it.
     /// </summary>
     public IReadOnlySet<Symbol> Unexported => unexported;
 
@@ -159,7 +162,7 @@ internal sealed partial class Binder
     /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
     /// resolved once every file of the program has been read. What the file exports is known
     /// from here on, because a file exports only what it declares. <paramref name="isDefines"/>
-    /// says the file is the build configuration's defines, which is no module.
+    /// says the file is the build configuration's defines, which is not a module.
     /// </summary>
     public static Binder Collect(
         SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines = false)
@@ -230,7 +233,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// The macros this file calls outright, rather than from inside another macro's body.
-    /// What their bodies use is what the file's own output has to bring in.
+    /// Their bodies are expanded into this file, so the names they use are ones this file has
+    /// to bring in.
     /// </summary>
     public IReadOnlyList<Symbol> CalledMacros() => called;
 
@@ -300,8 +304,8 @@ internal sealed partial class Binder
         var outerScope = scope;
         var outerSegment = segment;
 
-        // A family stands directly in the body of a repetition; a block inside the body is
-        // another place, and what it declares is private to the turn as it always was.
+        // A family is declared directly in a repetition's body; what a nested block inside the
+        // body declares stays private to each iteration, as usual.
         repeated = null;
 
         switch (kind)
@@ -422,8 +426,8 @@ internal sealed partial class Binder
     /// <summary>
     /// What a repetition's body may declare by the name it binds: the block, the enum or list
     /// it walks and the scope the instances would go in, or null for a repetition that binds
-    /// no name. The reason it carries is what is wrong with the place, for a declaration
-    /// written there anyway.
+    /// no name. The reason it carries, when not null, says why no family may be declared there,
+    /// and is reported against any family written there anyway.
     /// </summary>
     private Repeated? RepeatedIn(BlockSyntax block, StatementSyntax opener, Scope around, BlockKind kind)
     {
@@ -445,7 +449,7 @@ internal sealed partial class Binder
         return new Repeated(block, (opener as RepetitionDirectiveSyntax)?.Expression, binding, around, segment, why);
     }
 
-    /// <summary>What a place is called where a message says a declaration may not stand in it.</summary>
+    /// <summary>How a message names a place where a declaration is not allowed.</summary>
     private static string Article(ScopeKind kind) => kind switch
     {
         ScopeKind.Proc => "a routine",
@@ -481,7 +485,7 @@ internal sealed partial class Binder
     /// <summary>
     /// <c>.multiproc E, b: signature { }</c>: an <c>.each</c> over <c>E</c> whose body is one
     /// routine's, folded into one line. It opens the repetition's scope and the routine's
-    /// inside it, exactly as the two blocks it stands for would.
+    /// inside it, exactly as the two blocks it abbreviates would.
     /// </summary>
     private Scope OpenMultiProc(BlockSyntax block, StatementSyntax opener)
     {
@@ -491,8 +495,8 @@ internal sealed partial class Binder
             return new Scope(ScopeKind.Proc, null, scope, null);
         }
 
-        // A macro body, a block argument and a repetition have already been told that a
-        // routine may not stand in them, by the rules that say so for `.proc` as well.
+        // A routine in a macro body, a block argument or a repetition has already been
+        // reported, by the same rules that apply to `.proc`.
         var around = scope;
         var placement = Placement;
         var why = placement is ScopeKind.Proc or ScopeKind.Data or ScopeKind.Type
@@ -501,8 +505,8 @@ internal sealed partial class Binder
         if (why is { } misplaced)
             Report(multiProc.Keyword.Span, misplaced);
 
-        // One inside a macro body, a block argument or a repetition has been told so by the
-        // rule that holds `.proc` there; either way it declares nothing.
+        // A `.multiproc` inside a macro body, a block argument or a repetition has been reported
+        // by the rule that forbids `.proc` there. A misplaced one declares nothing.
         var declares = why is null && placement is ScopeKind.File && around.Kind != ScopeKind.Repetition;
 
         CheckWidthsExist(multiProc);
@@ -525,9 +529,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// A <c>.scope</c> or a <c>.data</c> block named after a repetition's binding. What such a
-    /// block holds is reached through it, which is one declaration per member of everything
-    /// inside; a family declares routines and data, so this says what to write instead.
+    /// A <c>.scope</c> or a <c>.data</c> block named after a repetition's binding, which is
+    /// refused. Everything inside such a block would be declared once per member, reached
+    /// through each instance; a family is for routines and data, so this reports the block and
+    /// says what to write instead.
     /// </summary>
     private Scope RefuseScopeFamily(Repeated each, StatementSyntax opener, ScopeKind kind)
     {
@@ -535,8 +540,8 @@ internal sealed partial class Binder
         Report(NameToken(opener)?.Span ?? opener.Span,
             Catalogue.FamilyDeclaresTooMuch.Says(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
 
-        // The block still opens a scope of its own, so what it holds has somewhere to go and
-        // one refusal stays one.
+        // The block still opens a scope of its own, so its contents have somewhere to be
+        // declared and the one error does not lead to others.
         return new Scope(kind, null, scope, null);
     }
 
@@ -556,7 +561,7 @@ internal sealed partial class Binder
 
 
     /// <summary>
-    /// Declares what each family in the file stands for: one declaration per member of the
+    /// Declares the instances of each family in the file: one declaration per member of the
     /// enum it walks, named after the member, in the scope around the repetition. It runs
     /// once every file has been collected, because the enum may be another module's, and
     /// before the modules' exports are read, because the instances are among them.
@@ -613,10 +618,10 @@ internal sealed partial class Binder
         scope = outerScope;
         segment = outerSegment;
 
-        // The family's line writes the name the repetition binds, and that is the name
-        // declared there; the instances are found by their own names, and their declaration is
-        // that line, which go to definition lands on. References do not overlap, so nothing of
-        // theirs is written at it.
+        // The family's line writes the repetition's binding, and that is the name declared
+        // there. Each instance is looked up by its own member name, but its declaration span is
+        // that line, which is where go-to-definition lands. References may not overlap, so no
+        // reference to an instance is recorded at that line.
         if (instances.Count > 0)
             pending.Body.Owner = instances[0].Instance;
         families.Add(new Family(pending.Declaration, pending.Each.Block, pending.Each.Binding, found, instances));
@@ -648,7 +653,7 @@ internal sealed partial class Binder
         return instance;
     }
 
-    /// <summary>What a symbol is called where a message says it is not what was wanted.</summary>
+    /// <summary>How a message describes a symbol that is not the kind that was wanted.</summary>
     private static string Named(Symbol symbol) =>
         symbol.Kind == SymbolKind.Enum ? "an anonymous enum, whose members are ordinary names" : $"a {symbol.KindText}";
 
@@ -685,7 +690,7 @@ internal sealed partial class Binder
     /// <summary>
     /// The scope a <c>.proc</c> or <c>.scope</c> opens. A block whose opener is broken — a
     /// missing name, or a <c>.proc</c> written after a label — still opens a scope, so the
-    /// cheap locals inside it have an owner and one bad line stays one bad line.
+    /// cheap locals inside it have an owner and one bad line produces one error, not many.
     /// </summary>
     private Scope OpenScope(ScopeKind kind, StatementSyntax opener, SymbolKind symbolKind)
     {
@@ -721,9 +726,9 @@ internal sealed partial class Binder
     /// <summary>
     /// A 16-bit width cannot hold on a CPU whose registers are eight bits, so <c>a16</c> and
     /// <c>i16</c> are refused there wherever they are written: a signature, a set, a macro's
-    /// signature, a <c>.state</c> or an <c>.ensure</c>. The other items are about registers the
-    /// CPU does not have rather than false of the ones it does, so they are simply inert (§7.3),
-    /// which is what lets one module serve a 6502 program and a 65816 one.
+    /// signature, a <c>.state</c> or an <c>.ensure</c>. The other items describe registers the
+    /// CPU does not have, rather than contradicting the ones it does, so they are ignored there,
+    /// which is what lets one module serve both a 6502 program and a 65816 one.
     /// </summary>
     private void CheckWidthsExist(SyntaxNode statement)
     {
@@ -760,9 +765,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The scope mixed data opens: its named members, reached as <c>name::member</c>, and the
-    /// <c>@</c> positions private to it. A block whose opener is broken still opens one, so
-    /// what is inside it has an owner.
+    /// The scope a mixed-data <c>.data</c> block opens: its named members, reached as
+    /// <c>name::member</c>, and the <c>@</c> positions private to it. A block whose opener is
+    /// broken still opens one, so what is inside it has an owner.
     /// </summary>
     private Scope OpenData(StatementSyntax opener, BlockSyntax block)
     {
@@ -796,8 +801,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// The scope a <c>.repeat</c> or an <c>.each</c> opens, which holds the one name it binds
-    /// and nothing else. The body is read in it once: what the name is worth differs from
-    /// turn to turn, but what it refers to does not, so one reading answers for every turn.
+    /// and nothing else. The body is read in it once: the binding's value differs on each
+    /// iteration, but the symbol each name refers to does not, so one reading serves them all.
     /// </summary>
     private Scope OpenRepetition(StatementSyntax opener)
     {
@@ -936,9 +941,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// <c>} name {</c>, which continues the block argument above it. Which parameter it
-    /// names is the call's business; all that is left here is a continuation with no call
-    /// above it at all, which the call never sees.
+    /// <c>} name {</c>, which continues the block argument above it. Which parameter it names
+    /// is checked with the call; the only check here is for a continuation with no block
+    /// argument above it, which no call would ever see.
     /// </summary>
     private void CheckContinuation(BlockSyntax block, BlockContinuationSyntax opener)
     {
@@ -968,8 +973,8 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// An annotation stands between the statement it is about and whatever follows, so one
-    /// with nothing above it is about nothing and is reported where it is written.
+    /// An annotation goes between the statement it applies to and whatever follows, so one
+    /// with no statement above it is reported on its keyword.
     /// </summary>
     private void CheckAnnotation(LineSyntax line, StatementSyntax statement)
     {
@@ -1147,8 +1152,8 @@ internal sealed partial class Binder
         if (!inCodeRun && statement is not BlankLineSyntax)
             EndCodeRun();
 
-        // Recorded on the label rather than found in the flow, so a jump from another file
-        // can be checked against it too.
+        // A `.state` after a bare label is recorded on the label rather than found by flow
+        // analysis, so a jump from another file can be checked against it too.
         if (statement is StateDirectiveSyntax state && label is not null)
             label.StateDeclaration = state;
     }
@@ -1161,8 +1166,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// <c>name</c>, <c>name: size</c>, <c>name: proc(...)</c>, <c>name: .word[8]</c> or a
-    /// checked <c>name = expr</c>. An element type is declared and trusted as a routine's
-    /// signature is: nt65 sizes the import and reaches its members from what the import says.
+    /// checked <c>name = expr</c>. An element type is taken on trust, as a routine's signature
+    /// is: nt65 sizes the import and finds its members from what the import declares.
     /// </summary>
     private void BindImportItem(ImportItemSyntax item)
     {
@@ -1269,7 +1274,7 @@ internal sealed partial class Binder
     /// <summary>
     /// An instruction belongs in a routine: outside one, nothing calls it or runs into it.
     /// A run of them is one mistake, so it is counted here and reported once, on its first
-    /// line, when the run ends: a routine's worth of ca65 pasted in says so once.
+    /// line, when the run ends: a whole routine of ca65 code pasted in gets one diagnostic.
     /// </summary>
     private void CheckCodePlacement(InstructionStatementSyntax instruction)
     {
@@ -1301,7 +1306,7 @@ internal sealed partial class Binder
     /// </summary>
     private void CheckLabelPlacement(SyntaxToken name)
     {
-        // A cheap local at file level is reported for having no owner, which says it already.
+        // A cheap local at file level is already reported for having no owner, which covers this.
         var placement = Placement;
         if (placement is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument
             || (name.Kind == SyntaxKind.CheapLocal && scope.Kind == ScopeKind.File))
@@ -1359,7 +1364,7 @@ internal sealed partial class Binder
     /// <summary>
     /// A function and the parameters its body names. The parameters live in a scope of their
     /// own, which nothing outside the body can reach, so the body reads as ordinary code and
-    /// a call is the body with each parameter standing for its argument.
+    /// a call is the body with each parameter replaced by its argument.
     /// </summary>
     private void BindFunc(FuncDeclarationSyntax statement)
     {
@@ -1386,7 +1391,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// A name on its own, which splices the block argument bound to it. Only a macro body
-    /// can hold one: everywhere else a name alone is the line the parser could not read.
+    /// can hold one: anywhere else, a name alone on a line is a statement the parser could not
+    /// read.
     /// </summary>
     private void BindSplice(BlockSpliceSyntax statement)
     {
@@ -1446,10 +1452,10 @@ internal sealed partial class Binder
 
                 // A `one` argument is a word, which is never looked up — except that a word
                 // may be passed on from a `one` parameter of the macro whose body writes the
-                // call, and that is a name. So it is collected either way and stays silent
-                // when it turns out to be no name at all.
-                // A member of an enum may be written by its bare name, which is the enum's to
-                // answer rather than the caller's, so it is a word here too.
+                // call, and that is a name. So it is collected either way, and is not reported
+                // when it turns out not to be a name.
+                // A member of an enum may be written by its bare name, which is resolved in the
+                // enum rather than in the caller's scope, so it is a word here too.
                 var words = argument.Parameter.Kind is ParameterKind.One or ParameterKind.Enum
                     || argument.Parameter.Accepts.Element is { Kind: ParameterKind.One or ParameterKind.Enum };
                 CollectUses(argument.Value, written, words);
@@ -1473,8 +1479,9 @@ internal sealed partial class Binder
         if (IsDefinedCall(node))
             return;
 
-        // `.loadof(S)` and `.runof(S)` name a segment, which is in a table of its own; so may
-        // `.spanof(S)`, where S is no symbol, which is a word here and the segment's name after.
+        // `.loadof(S)` and `.runof(S)` name a segment, which is in a table of its own. So may
+        // `.spanof(S)` when S is a declared segment: S is then collected as a word, so it is not
+        // reported when no symbol has that name, and is read as the segment's name later.
         if (node is CallExpressionSyntax call && SegmentFunctions.NameIn(call) is { } segmentName)
         {
             if (SegmentFunctions.TakesOnlyASegment(call))
@@ -1491,8 +1498,8 @@ internal sealed partial class Binder
             }
         }
 
-        // `.select` evaluates only the value its condition chooses, and only that one's names
-        // have to mean something, which evaluation says.
+        // `.select` evaluates only the value its condition chooses, so only that value's names
+        // have to resolve, and evaluation is what reports them.
         if (Evaluator.SelectArguments(node) is { Count: > 0 } selected)
         {
             CollectUses(selected[0], into, words, chosen);
@@ -1502,8 +1509,8 @@ internal sealed partial class Binder
         }
         if (node is NameExpressionSyntax name)
         {
-            // A leading `::` starts the path at file scope, which the first name sees by
-            // already being part of a path.
+            // A leading `::` starts the path at the root of the modules: the first name is marked
+            // as already part of a path, so it is looked up there rather than in the scopes around it.
             var path = name.GlobalToken is not null;
             var first = true;
             foreach (var token in name.Names)
@@ -1541,18 +1548,19 @@ internal sealed partial class Binder
         IReadOnlyList<CharmapEntrySyntax>? entries = null,
         bool follows = false)
     {
-        // A name the source does not have declares nothing. The parser stands a missing token
-        // in the slot so that the declaration keeps its shape, and that token has no text: a
-        // symbol made from one would be called "", shadow the last such symbol and answer to
-        // nothing anyone wrote. Every declaration in the file comes through here, so this is
-        // the one place that has to say so.
+        // A name missing from the source declares nothing. The parser puts a missing token in
+        // the slot so that the declaration keeps its shape, and that token has no text: a
+        // symbol made from one would be called "", shadow the last such symbol and match no
+        // name anyone wrote. Every declaration in the file comes through here, so this is the
+        // one place that has to check for it.
         if (name.IsMissing)
             return null;
 
         // A member of a named type may be called after a register or a mnemonic: it is only
         // ever named through its type, as `Reg::x`, so there is nothing for it to shadow. A
-        // register elsewhere is reported, and declared all the same, so that what uses it and
-        // what counts it are not wrong a second time; a mnemonic is only warned about.
+        // register elsewhere is reported, and declared all the same, so that its uses and
+        // anything that counts them do not produce further errors; a mnemonic is only warned
+        // about.
         // A macro is only ever called as `name!(...)`, which no reader takes for an
         // instruction, so one spelled like an instruction is not warned about either.
         if (kind != SymbolKind.Member && scope.Kind != ScopeKind.Type)
@@ -1583,8 +1591,8 @@ internal sealed partial class Binder
 
         if (owner.Declare(symbol) is { } existing)
         {
-            // A body that declared the name an `ident` parameter stands for would be
-            // declaring a name in its caller, which is what says it plainly here.
+            // A body that declares the name of an `ident` parameter would be declaring the
+            // caller's name in the caller, so that case gets its own, plainer message.
             Report(name.Span,
                 existing.Parameter is { Kind: ParameterKind.Ident }
                     ? Catalogue.IdentParameterDeclared.Says(symbol.DisplayName)
@@ -1619,8 +1627,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// The reserved words: a symbol may not be named after a register. Nothing else is
-    /// reserved — a mnemonic names a symbol wherever one may stand, and what a reader loses
-    /// by it is <see cref="WarnAboutMnemonic"/>'s business rather than an error's. Members of
+    /// reserved — a mnemonic may name a symbol anywhere, and the cost to readability is only
+    /// warned about, by <see cref="WarnAboutMnemonic"/>, not reported as an error. Members of
     /// a named struct, union or enum are exempt from both, being reached only through <c>::</c>.
     /// </summary>
     private bool CheckReservedWord(SyntaxToken name)
@@ -1679,7 +1687,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// A <c>.use</c>, which is resolved once the program is known. What an exported one
-    /// re-exports is part of the module from here on, as the path it was written with.
+    /// re-exports is recorded as part of the module's exports straight away, as the path it was
+    /// written with.
     /// </summary>
     private void BindUse(UseDirectiveSyntax statement)
     {
@@ -1705,8 +1714,9 @@ internal sealed partial class Binder
 
     /// <summary>
     /// Works out what the file exports, once it has been read: each declaration written after
-    /// <c>.export</c> and each name an <c>.export</c> list gives, and what exporting those
-    /// spreads to. Only what the file declares is looked for, so this needs no other module.
+    /// <c>.export</c> and each name an <c>.export</c> list gives, and the members that exporting
+    /// those exports in turn. Only what the file declares is looked for, so this needs no other
+    /// module.
     /// <para>
     /// It runs after the families are declared, because their instances are declarations of the
     /// file like any others and an <c>.export</c> before one exports every instance.
@@ -1809,7 +1819,7 @@ internal sealed partial class Binder
         public IReadOnlyDictionary<string, BroughtName> Brought { get; init; } =
             new Dictionary<string, BroughtName>();
 
-        /// <summary>The same as the places those names reach, which is what a lookup here answers with.</summary>
+        /// <summary>The same names mapped to the places they resolve to, which is what a lookup in this file returns.</summary>
         internal IReadOnlyDictionary<string, Place> Used { get; init; } =
             new Dictionary<string, Place>(StringComparer.Ordinal);
 
@@ -1825,9 +1835,9 @@ internal sealed partial class Binder
     /// <param name="Scope">The scope it was written in.</param>
     /// <param name="Path">Whether a <c>::</c> comes before it, so it names a member of a scope.</param>
     /// <param name="First">Whether it is the first part of the name it belongs to.</param>
-    /// <param name="Last">Whether it is the last part, and so the symbol the whole name stands for.</param>
-    /// <param name="Splice">Whether the name stands alone on a line, and so splices a block.</param>
-    /// <param name="Word">Whether it is written where a bare word may stand, and so may be one.</param>
+    /// <param name="Last">Whether it is the last part, and so the symbol the whole name refers to.</param>
+    /// <param name="Splice">Whether the name is alone on a line, and so splices a block.</param>
+    /// <param name="Word">Whether it is written where a bare word is allowed, so it may be a word rather than a name.</param>
     /// <param name="Chosen">
     /// Whether it is in a value a <c>.select</c> chooses between, so that what is wrong with it
     /// matters only if the value is chosen.
@@ -1844,12 +1854,12 @@ internal sealed partial class Binder
     /// binds needs to know: what it walks, where the declarations would go, and what is wrong
     /// with the place when something is.
     /// </summary>
-    /// <param name="Block">The block the turns are written out from.</param>
+    /// <param name="Block">The repetition's block, which each iteration expands.</param>
     /// <param name="Walked">The enum or list the repetition walks.</param>
     /// <param name="Binding">The name it binds, which the declarations are named from.</param>
     /// <param name="Around">The scope the declarations go in, which is the one around the repetition.</param>
     /// <param name="Segment">The segment that scope is placing things in.</param>
-    /// <param name="Why">Why a declaration named after the binding may not stand here, or null when it may.</param>
+    /// <param name="Why">Why a declaration named after the binding is not allowed here, or null when it is.</param>
     private sealed record Repeated(
         BlockSyntax Block, ExpressionSyntax? Walked, Symbol Binding, Scope Around, string? Segment,
         DiagnosticMessage? Why);
@@ -1884,8 +1894,8 @@ internal sealed partial class Binder
         public override void VisitFuncDeclaration(FuncDeclarationSyntax node) => binder.BindFunc(node);
 
         /// <summary>
-        /// A signature set names its items, whose values and sets are read once the program's
-        /// names and constants are.
+        /// A signature set declares its name here; the values and sets in its items are read
+        /// once the program's names have been resolved and its constants evaluated.
         /// </summary>
         /// <param name="node">The declaration.</param>
         public override void VisitSignatureDeclaration(SignatureDeclarationSyntax node)
@@ -1996,8 +2006,9 @@ internal sealed partial class Binder
         }
 
         /// <summary>
-        /// A region line reached as a line is inside a block: one at file level opens the region
-        /// it names, and is walked as that block's opener.
+        /// A region line reached here, as an ordinary line, is inside a block, where it is not
+        /// allowed. One at file level opens the region it names, and is walked as that block's
+        /// opener instead.
         /// </summary>
         /// <param name="node">The region line.</param>
         public override void VisitSegmentRegion(SegmentRegionSyntax node) =>
@@ -2008,7 +2019,7 @@ internal sealed partial class Binder
 
         /// <summary>
         /// An annotation names labels and nothing else, so its names resolve as any other use
-        /// does; that they name labels rather than constants is the flow analysis's business.
+        /// does; that they name labels rather than constants is checked by the flow analysis.
         /// </summary>
         /// <param name="node">The annotation.</param>
         public override void VisitNextDirective(NextDirectiveSyntax node) => binder.CollectUses(node);

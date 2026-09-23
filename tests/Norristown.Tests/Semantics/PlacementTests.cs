@@ -6,8 +6,9 @@ namespace Norristown.Tests.Semantics;
 /// <summary>
 /// Placement: which modules share a translation unit, and what a routine may run into there.
 /// Within a unit nt65 lays out every byte, so a <c>.fallthrough</c> into the routine after a
-/// <c>.place</c>, or into another module's, is checked against that layout; the fixtures hold
-/// the programs, and these the cases that turn on what a build or an edit leaves in between.
+/// <c>.place</c>, or into another module's, is checked against that layout. The fixtures hold
+/// whole programs; these tests hold the cases that depend on what a build or an edit leaves
+/// in between.
 /// </summary>
 public sealed class PlacementTests
 {
@@ -31,8 +32,8 @@ public sealed class PlacementTests
 
     /// <summary>
     /// A placed module whose items are all under an <c>.if</c> the build leaves out places
-    /// nothing, so the routine before its <c>.place</c> runs into the one after it; one the
-    /// build takes stands between them, and the same <c>.fallthrough</c> is then wrong.
+    /// nothing, so the routine before its <c>.place</c> runs into the one after it; a placed
+    /// routine the build keeps stands between them, and the same <c>.fallthrough</c> is then wrong.
     /// </summary>
     [Theory]
     [InlineData(0, false)]
@@ -46,9 +47,9 @@ public sealed class PlacementTests
     }
 
     /// <summary>
-    /// What a routine runs into across a <c>.place</c> is the translation unit's to say, so an
-    /// edit to the placed module alone is enough to change it, and the answer after the edit is
-    /// the one analyzing the program from nothing gives.
+    /// What a routine runs into across a <c>.place</c> depends on the whole translation unit, so
+    /// an edit to the placed module alone is enough to change it, and the answer after the edit
+    /// is the one analyzing the program from scratch gives.
     /// </summary>
     [Fact]
     public void AnEditToAPlacedModuleChecksWhatRunsPastItAgain()
@@ -69,9 +70,9 @@ public sealed class PlacementTests
     }
 
     /// <summary>
-    /// A module another places has no output of its own, and its private names are written with
-    /// its module in front, so that one output can hold two modules' names that are spelled
-    /// alike in their sources.
+    /// A module that another module places has no output of its own, and its private names are
+    /// prefixed with its module's name, so that one output can hold two modules' names that are
+    /// spelled alike in their sources.
     /// </summary>
     [Fact]
     public void APlacedModulesNamesAreItsOwnInTheOutputItShares()
@@ -89,11 +90,12 @@ public sealed class PlacementTests
     }
 
     /// <summary>
-    /// Across a <c>.place</c> what a routine runs into is read in the segment the placing file is
-    /// in at the line: the routine before it runs into the placed module's first routine there,
-    /// and the placed module's last routine there runs into what the placing file writes next in
-    /// it. What the placed module writes to other segments in between does not stand between
-    /// them, as it does not in the one <c>.s</c> ca65 lays each segment down from in order.
+    /// Across a <c>.place</c>, what a routine runs into is decided within the segment the placing
+    /// file is in at that line: the routine before it runs into the placed module's first routine
+    /// in that segment, and the placed module's last routine there runs into what the placing
+    /// file writes next in it. What the placed module writes to other segments does not come
+    /// between them, just as it does not in the single <c>.s</c> file from which ca65 lays out
+    /// each segment in order.
     /// </summary>
     [Fact]
     public void AFallthroughAcrossAPlaceIsReadInThePlacingFilesSegment()
@@ -168,7 +170,7 @@ public sealed class PlacementTests
     }
 
     /// <summary>
-    /// Across translation units the order of the bytes is the link's, so a <c>.fallthrough</c>
+    /// Across translation units the linker decides the order of the bytes, so a <c>.fallthrough</c>
     /// into a module nothing places with this one is an error naming placement, while the same
     /// routine placed is accepted.
     /// </summary>

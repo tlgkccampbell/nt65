@@ -19,8 +19,8 @@ internal sealed class GreenLine : GreenNode
             : Lines.IsRegion(tokens) ? BlockKind.Region
             : BlockKind.None;
 
-        // A line holds its tokens and nothing else, so what it contains is the lexical errors on
-        // them; what the line parses to carries its own, on the statement the parse hands back.
+        // A green line holds only its tokens, so its flags cover just the lexer's errors on them;
+        // diagnostics from parsing are carried by the statement the parser returns.
         RollUp(tokens);
     }
 
@@ -65,11 +65,10 @@ internal sealed class GreenLine : GreenNode
         new LineSyntax(tree, parent, this, position);
 
     /// <summary>
-    /// The line parsed as it stands inside a block of <paramref name="context"/>. The last
-    /// result is kept, which is what lets an edit elsewhere in the file leave this line's
-    /// statement alone: a line almost always keeps its enclosing block kind. The cache only
-    /// saves work — a caller that asks for another context gets a correct answer and evicts
-    /// what was there.
+    /// The line parsed as it stands inside a block of <paramref name="context"/>. The most
+    /// recent result is cached, so an edit elsewhere in the file does not re-parse this line:
+    /// a line's enclosing block kind almost never changes. The cache only saves work — a caller
+    /// that asks for another context gets a correct result, which replaces the cached one.
     /// </summary>
     internal Parser.Result Parse(BlockKind context)
     {

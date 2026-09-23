@@ -5,15 +5,15 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// Reads an operand written in a macro body for the <c>operand</c> parameter it names. An
-/// operand parameter stands as a whole operand, so the addressing mode, the address size
+/// operand parameter is substituted as a whole operand, so the addressing mode, the address size
 /// and the text all come from the argument rather than from the body, and layout
 /// and emission have to agree about which operand a line really has.
 /// </summary>
 public static class Operands
 {
     /// <summary>
-    /// What <paramref name="operand"/> stands for at <paramref name="on"/>, or null when it
-    /// names no <c>operand</c> parameter and is simply itself.
+    /// What <paramref name="operand"/> becomes in the expansion <paramref name="on"/>, or null
+    /// when it names no <c>operand</c> parameter and stays as written.
     /// </summary>
     public static OperandSubstitution? Substituted(SemanticModel model, SyntaxNode? operand, Expansion? on)
     {
@@ -48,7 +48,8 @@ public static class Operands
                 return new OperandSubstitution(
                     shifted.Parameter, shifted.Operand, sign * by, false, expression);
 
-            // `.byteof(p, n)` stands where the operand may, and is byte n of its value.
+            // `.byteof(p, n)` may be written where the operand would be, and is byte n of its
+            // value.
             case CallExpressionSyntax call when IsByteOf(call):
                 var arguments = call.Arguments.Arguments;
                 if (arguments.Count < 1 || Bound(model, arguments[0], on) is not { } whole)
@@ -78,7 +79,8 @@ public static class Operands
     };
 
     /// <summary>
-    /// The address-size prefix written in the operand, which wins over everything. <c>d:</c>
+    /// The address-size prefix written in the operand, which overrides any other way of
+    /// deciding the size. <c>d:</c>
     /// makes a direct operand of a constant address, reached through the direct page.
     /// </summary>
     public static AddressSize? WrittenPrefix(SyntaxNode operand)
@@ -101,7 +103,7 @@ public static class Operands
 
     /// <summary>
     /// The mode an operand is in, as <c>.mode(p)</c> spells it. An argument written
-    /// without braces is an expression, and a plain address operand by being one.
+    /// without braces is an expression, and so counts as a plain address operand.
     /// </summary>
     public static string ModeOf(SyntaxNode operand) => operand switch
     {
@@ -125,8 +127,8 @@ public static class Operands
         && function.Text.Equals(".byteof", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The operand parameter a name stands for at this expansion, and the operand it was
-    /// given. A parameter with no argument, or one of any other kind, is not one of these.
+    /// The operand parameter a name refers to, and the operand it was given in the expansion
+    /// <paramref name="on"/>. A parameter with no argument, or of any other kind, gives null.
     /// </summary>
     private static (MacroParameter Parameter, SyntaxNode Operand)? Bound(
         SemanticModel model, SyntaxNode name, Expansion? on)

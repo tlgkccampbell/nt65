@@ -6,8 +6,8 @@ namespace Norristown.Flow;
 /// What a routine does to the registers, worked out across the program.
 /// </summary>
 /// <param name="Kept">
-/// The registers it hands back as it was entered with them, on every path out of it. It is a
-/// floor and never a guess: a routine may hand back more than this, and never less.
+/// The registers it returns holding the values it was entered with, on every path out of it.
+/// It is a lower bound and never a guess: a routine may preserve more than this, never fewer.
 /// </param>
 /// <param name="Complete">
 /// Whether every call it makes was one nt65 could follow. Where it is false the routine may

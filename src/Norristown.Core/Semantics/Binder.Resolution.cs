@@ -4,9 +4,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What every name a file writes refers to. This half of the binder runs once the whole
-/// program has been read: the walk has finished, so nothing here reads where it had got to,
-/// and a name is answered from the scopes around it, what the file's <c>.use</c> items brought
-/// in, the defines and the other modules.
+/// program has been read: the walk over the file has finished, so nothing here depends on how
+/// far it had got, and a name is resolved from the scopes around it, what the file's
+/// <c>.use</c> items brought in, the defines and the other modules.
 /// </summary>
 internal sealed partial class Binder
 {
@@ -26,12 +26,13 @@ internal sealed partial class Binder
             }
             else if (broken)
             {
-                // The part before this one did not resolve, and has been reported. What the
-                // rest of the path would mean is unanswerable, not wrong.
+                // The part before this one did not resolve, and has been reported. The rest
+                // of the path cannot be resolved either, and is not reported as wrong.
                 continue;
             }
 
-            // A name in a value `.select` may leave out means something only if it is chosen.
+            // A name in one of a `.select`'s values only has to resolve if the condition
+            // chooses that value, so its diagnostics are dropped here and evaluation reports it.
             var reported = diagnostics.Count;
             previous = Resolve(use, previous);
             if (use.Chosen)
@@ -55,8 +56,8 @@ internal sealed partial class Binder
                 steps.Add((references.Count, at, symbol, token));
             references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias, IsStep: !last, InMacro: inMacro));
 
-            // A path to a member is an offset into what it walks through, which it therefore uses:
-            // `oam::x` is the address of `oam` plus the offset of `x`.
+            // A path to a member is an offset into the symbols it walks through, so those count
+            // as used too: `oam::x` is the address of `oam` plus the offset of `x`.
             if (last && symbol.Kind == SymbolKind.Member)
             {
                 foreach (var step in steps)
@@ -73,9 +74,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// A name a macro body uses that it neither declared nor was given. An expansion needs it
-    /// wherever it lands, so the macro remembers it: the file that calls the macro brings it
-    /// in, and an exported macro may only use what is exported too.
+    /// Records a name a macro body uses that it neither declared nor was given as a parameter.
+    /// Every expansion needs that name, whichever file the macro is called from, so the macro
+    /// keeps a list of them: the calling file brings them in, and an exported macro may only
+    /// use names that are exported too.
     /// </summary>
     /// <returns>Whether the name is written in a macro body.</returns>
     private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
@@ -84,8 +86,8 @@ internal sealed partial class Binder
         if (body?.Owner is not { } macro)
             return false;
 
-        // What the body declares, and the parameters it was given, travel with it. A step on a
-        // path is walked through, and only what the path leads to is used.
+        // Names the body declares, and its parameters, are part of the macro and need no record.
+        // Only the last part of a path is recorded; the steps before it are only walked through.
         for (var owner = used.Scope; owner is not null; owner = owner.Parent)
         {
             if (owner == body)
@@ -159,9 +161,9 @@ internal sealed partial class Binder
         var member = container.FindMember(token.Text);
         if (member is null)
         {
-            // A repetition's name at the end of a path means the member of that scope with
-            // the same spelling, which is a different member on every turn: each turn works
-            // out which.
+            // A repetition's binding at the end of a path refers to the member of that scope
+            // named by the binding's current value, which is a different member on each
+            // iteration, so each iteration resolves it.
             if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
                 return new Place(binding);
             var near = Spelling.Nearest(token.Text, Lookup.Members(container));
@@ -181,9 +183,10 @@ internal sealed partial class Binder
         Lookup.Outside(token.Text, last, program, used, globs, Touch, At(token, report));
 
     /// <summary>
-    /// A name no scope, <c>.use</c> or define gives any meaning, and the modules that export one
-    /// like it. One that starts a path, <paramref name="last"/> being false, is most likely a
-    /// module the build does not have, such as one left off the command line.
+    /// Reports a name that no scope, <c>.use</c> or define declares, naming the modules that
+    /// export a name spelt the same. A name that starts a path (<paramref name="last"/> is
+    /// false) is most likely a module the build does not have, such as one left off the
+    /// command line.
     /// </summary>
     private void ReportUndeclared(SyntaxToken token, bool last, Scope at)
     {
@@ -203,8 +206,8 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The declared name a written one is nearly: one in scope, or one a <c>.use</c> brought in,
-    /// that differs from it by a letter or two.
+    /// The declared name that <paramref name="written"/> is most likely a misspelling of: one in
+    /// scope, or one a <c>.use</c> brought in, that differs from it by a letter or two.
     /// </summary>
     private string? NearestName(Scope at, string written, bool cheap) =>
         Spelling.Nearest(written, Candidates(at, cheap));
@@ -228,8 +231,8 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// What a lookup that reports says it on: the name it was asked about, with the fix the
-    /// message names where it names one.
+    /// The callback a reporting lookup reports through: it puts each message on the token that
+    /// was looked up, and records the fix the message suggests, if any.
     /// </summary>
     private Action<DiagnosticMessage, DiagnosticFix?>? At(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
         report is null ? null : (message, fix) =>
@@ -273,10 +276,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// What a name may reach into, while the file is being bound: the scope a routine or a
-    /// scope opens, or the one belonging to the type a member or a data declaration names,
-    /// which is what makes the fields of <c>.type T</c> data reachable through it. The type is
-    /// resolved here rather than in order, because nothing has evaluated anything yet.
+    /// The scope a path can look into after <paramref name="symbol"/>, while the file is being
+    /// bound: the scope a routine or a scope opens, or the one belonging to the type a member or
+    /// a data declaration names, which is what makes the fields of <c>.type T</c> data reachable
+    /// through it. The type is resolved here, on demand, because nothing has been evaluated yet.
     /// </summary>
     private Scope? BodyOf(Symbol symbol)
     {

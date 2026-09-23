@@ -6,13 +6,17 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// What each construct the analysis cannot follow needs written beside it, and what the
-/// annotated forms do to the state. The fixtures hold one of each; these are the cases a
-/// fixture cannot show, such as the same program on another CPU, or the stack after a call.
+/// Which annotation each construct the analysis cannot follow needs written beside it, and
+/// what the annotated forms do to the state. The fixtures hold one example of each; these
+/// tests cover what a fixture cannot show, such as the same program on another CPU, or the
+/// stack after a call.
 /// </summary>
 public sealed class RequirementsTests
 {
-    /// <summary>On the 65C02 nothing consumes processor state, so none of the annotations is required.</summary>
+    /// <summary>
+    /// On the 65C02 no instruction depends on the processor state, so none of the annotations
+    /// is required.
+    /// </summary>
     [Fact]
     public void NothingIsRequiredOnThe65C02()
     {
@@ -40,9 +44,10 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// Off the 65816 a routine that runs off its end is likely a mistake rather than something
-    /// the analysis cannot follow, so it is a warning, and <c>.fallthrough</c> says it was meant.
-    /// The fix names the routine written next.
+    /// On CPUs other than the 65816 a routine that runs off its end is likely a mistake rather
+    /// than something the analysis cannot follow, so it is a warning, and <c>.fallthrough</c>
+    /// says it was meant. The suggested fix is a <c>.fallthrough</c> naming the routine written
+    /// next.
     /// </summary>
     [Fact]
     public void RunningOffTheEndWarnsOnThe6502()
@@ -75,9 +80,10 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// A segment's regions are one run of bytes, so the routine written next in the segment is
-    /// the one the fix names, whatever region of another segment stands between; an
-    /// <c>.align</c> between ends the run, and the fix then names nothing.
+    /// All the regions of a segment are laid out as one run of bytes, so the fix names the next
+    /// routine written in the same segment, even when a region of another segment is written in
+    /// between. An <c>.align</c> between the two routines breaks the run, and the fix then names
+    /// no routine.
     /// </summary>
     [Fact]
     public void TheFixNamesTheRoutineNextInTheSegmentAcrossRegions()
@@ -135,8 +141,9 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// A relative call comes back with the routine's exit, and the return address it pushed
-    /// has been pulled by the routine's return.
+    /// A relative call (a <c>per</c> of the return address, then a branch) comes back with the
+    /// exit state of the routine it branches to, and that routine's return has pulled the
+    /// return address the call pushed.
     /// </summary>
     [Fact]
     public void ARelativeCallReturnsWithTheExitAndNothingPushed()
@@ -171,7 +178,10 @@ public sealed class RequirementsTests
         Assert.Equal(0, StateAt(analysis, "tay").Stack?.Depth);
     }
 
-    /// <summary>A return with a <c>.next</c> is a jump to the address pushed, and pulls it.</summary>
+    /// <summary>
+    /// A return followed by a <c>.next</c> is a jump to the address pushed, and pulls that
+    /// address off the stack.
+    /// </summary>
     [Fact]
     public void AReturnUsedAsAJumpPullsTheAddress()
     {
@@ -192,8 +202,9 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// A list or a table of routines stands for every routine in it, so an indirect call through
-    /// one is checked against each entry and returns with the merge of their exits.
+    /// A <c>.next</c> that names a list or a table of routines names every routine in it, so an
+    /// indirect call through it is checked against each routine's entry state and returns with
+    /// the merge of their exit states.
     /// </summary>
     [Theory]
     [InlineData(".list handlers {\n    wide\n    wider\n}\n")]
@@ -257,8 +268,9 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// Code in a nested segment block that runs off its end runs into whatever that segment
-    /// holds next, which is no more the routine's than the end of the routine is.
+    /// Code in a nested segment block that runs off the end of the block runs into whatever
+    /// that segment holds next. That is no more part of the routine than what follows the
+    /// routine's own end, so it needs a <c>.next</c> just the same.
     /// </summary>
     [Fact]
     public void ANestedSegmentBlockThatRunsOffItsEndNeedsANext()
@@ -280,8 +292,9 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// Only the state a declaration gives is checked at a jump into another routine. `p` leaves
-    /// by the jump, so it returns the way `owner` does, which is what its `-&gt;` says.
+    /// A jump to a label inside another routine is checked only against the state the label's
+    /// <c>.state</c> declares. `p` leaves by the jump, so it returns the way `owner` does, which
+    /// is what the `-&gt;` in its signature declares.
     /// </summary>
     [Fact]
     public void AJumpIntoAnotherRoutineMeetsItsDeclaration()
@@ -303,8 +316,9 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// A jump into another routine hands its caller what that routine hands back, as a tail
-    /// call to the routine itself does, so what this one promises has to be the same.
+    /// A jump into another routine hands the jumping routine's caller whatever that routine
+    /// returns with, as a tail call to it would, so the jumping routine's declared exit state
+    /// has to match.
     /// </summary>
     [Fact]
     public void AJumpIntoAnotherRoutineReturnsTheWayItDoes()

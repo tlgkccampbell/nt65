@@ -4,14 +4,15 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Fixtures;
 
 /// <summary>
-/// Every nt65 source in the repository is written in the one layout, and reaches it from
-/// however it was written. There is nothing to choose: what a line is indented by is what the
-/// braces around it say, so laying a file out from no indentation at all, or from far too much
-/// of it, gives back the file that is checked in, character for character.
+/// Every nt65 source in the repository is in the standard layout, and formatting produces that
+/// layout whatever whitespace the file started with. The formatter has nothing to choose: a
+/// line's indentation is determined by the braces around it, so formatting a file with no
+/// indentation at all, or with far too much, gives back the checked-in file character for
+/// character.
 /// <para>
 /// That is also the whole proof that formatting changes no meaning. The snapshots under
-/// <c>expected</c> are the output of the sources as they are checked in; a layout that moved
-/// anything but whitespace would have to move one of them.
+/// <c>expected</c> are the output of the sources as they are checked in, so a formatter that
+/// changed anything but whitespace would change one of them.
 /// </para>
 /// </summary>
 public sealed partial class FormattingTests
@@ -45,11 +46,11 @@ public sealed partial class FormattingTests
     }
 
     /// <summary>
-    /// The two properties that must hold of a file nobody has finished typing: the tree gives
-    /// its text back, every line's pieces included, and laying it out settles at once — what
-    /// was laid out is what laying it out again gives. Over every source in the repository and
-    /// every way of cutting its lines short, because a half-written file is what an editor
-    /// formats.
+    /// The two properties that must hold for a file nobody has finished typing: the syntax tree
+    /// reproduces its text exactly, every token of every line included, and formatting is
+    /// idempotent — formatting the formatted text changes nothing. Checked over every source in the
+    /// repository and every way <see cref="BrokenLines"/> cuts its lines short, because a
+    /// half-written file is what an editor usually formats.
     /// </summary>
     [Fact]
     public void AHalfWrittenSourceReadsBackWholeAndLaysOutOnce()
@@ -75,10 +76,10 @@ public sealed partial class FormattingTests
     }
 
     /// <summary>
-    /// The same file written every other way whitespace allows: at the margin, buried in tabs
-    /// and spaces with something left after the last token of every line, and with the column a
-    /// run of data lines sits on squeezed shut. Line breaks are left alone, because a file keeps
-    /// the ones it was written with.
+    /// The same file with its whitespace changed: with no indentation; with tabs and spaces
+    /// before and after every line; and with the gap closed up where a run of data lines aligns
+    /// its directives in a column. Line breaks are left alone, because the formatter keeps the
+    /// ones a file was written with.
     /// </summary>
     private static IEnumerable<string> Manglings(string text)
     {
@@ -89,7 +90,7 @@ public sealed partial class FormattingTests
         yield return Column().Replace(flat, ": ");
     }
 
-    /// <summary>The first line that differs, which is what says what the layout did.</summary>
+    /// <summary>The first line that differs, which shows what the formatter changed.</summary>
     private static string Difference(string expected, string actual)
     {
         string[] want = expected.ReplaceLineEndings("\n").Split('\n'), got = actual.ReplaceLineEndings("\n").Split('\n');
@@ -104,7 +105,7 @@ public sealed partial class FormattingTests
         return "  nothing differs line by line, so the line breaks do";
     }
 
-    /// <summary>What a line is written after, which the layout is free to choose.</summary>
+    /// <summary>A line's leading whitespace, which the formatter is free to choose.</summary>
     [GeneratedRegex(@"^[ \t]+", RegexOptions.Multiline)]
     private static partial Regex Indent();
 
@@ -112,7 +113,7 @@ public sealed partial class FormattingTests
     [GeneratedRegex(@"^[^\r\n]*", RegexOptions.Multiline)]
     private static partial Regex Line();
 
-    /// <summary>The gap between a declaration's <c>:</c> and the directive a run lines up on.</summary>
+    /// <summary>The gap between a declaration's <c>:</c> and its directive, where a run of lines aligns the directives in a column.</summary>
     [GeneratedRegex(@":[ \t]{2,}(?=\.)")]
     private static partial Regex Column();
 }

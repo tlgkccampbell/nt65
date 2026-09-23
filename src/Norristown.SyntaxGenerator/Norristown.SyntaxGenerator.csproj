@@ -6,12 +6,12 @@
     <IsPackable>false</IsPackable>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <!-- Release tracking is for an analyzer package with users to keep faith with; this one is
-         built beside the code it writes and has one diagnostic. -->
+    <!-- RS2008 asks for analyzer release tracking, which matters for a published package with
+         users; this generator is built beside the code it generates and has one diagnostic. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Pinned below the compiler the SDK ships, which is what has to load this. -->
+    <!-- Pinned no newer than the compiler the SDK ships, since that compiler has to load this. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
   </ItemGroup>

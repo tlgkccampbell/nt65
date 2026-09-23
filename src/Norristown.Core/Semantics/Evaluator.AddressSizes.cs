@@ -25,12 +25,12 @@ internal sealed partial class Evaluator
         a is null ? b : b is null ? a : (AddressSize)Math.Max((int)a, (int)b);
 
     /// <summary>
-    /// The address size of an expression: a constant's value decides, the distance between two
-    /// places in one data declaration among them, and otherwise the widest of the address
-    /// symbols it names.
+    /// The address size of an expression: when it has a numeric value (a constant, including the
+    /// distance between two places in one data declaration), that value decides; otherwise the
+    /// widest of the address symbols it names does.
     /// </summary>
     /// <param name="expression">The expression to size.</param>
-    /// <param name="segment">The segment <c>*</c> stands in.</param>
+    /// <param name="segment">The segment that <c>*</c> is in.</param>
     /// <param name="known">
     /// The expression's value where the caller has it, so that sizing an expression does not
     /// evaluate it a second time and report what it found twice.
@@ -43,13 +43,14 @@ internal sealed partial class Evaluator
         if (!named)
             return (known ?? Evaluate(expression)).ImpliedAddressSize();
 
-        // Addresses nt65 has a value for are a distance between two places in one data
-        // declaration, which is a constant, and a constant's value decides.
+        // An expression that names addresses and still has a numeric value is a distance
+        // between two places in one data declaration, which is a constant, so its value decides.
         return (known ?? Evaluate(expression)) is { IsNumber: true } value ? value.ImpliedAddressSize() : widest;
 
         void Walk(SyntaxNode node)
         {
-            // What the linker says of a segment is as wide as the segment function makes it.
+            // A segment function's value comes from the linker, and its width is the one the
+            // segment functions give.
             if (node is CallExpressionSyntax asked
                 && SegmentFunctions.Of(asked, segments, name => SymbolOf(name) is not null) is not null)
             {
@@ -58,8 +59,9 @@ internal sealed partial class Evaluator
                 return;
             }
 
-            // A span is the difference of two addresses, which is a number; an end is an
-            // address, as wide as the label it follows.
+            // `.spanof` is the difference of two addresses, which is a number, so it adds no
+            // width. `.endof` needs no case: it is an address as wide as the symbol it
+            // measures, which walking its argument finds.
             if (node is CallExpressionSyntax { Function: { } function }
                 && function.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase))
             {

@@ -3,13 +3,13 @@ using System.Collections.Immutable;
 namespace Norristown.SyntaxGenerator;
 
 /// <summary>
-/// One property of a node, as the table writes it: either a slot of the node's fixed layout,
-/// which the property reads, or a property worked out from other ones, which says what it
-/// returns in <see cref="Read"/>.
+/// One property of a node, as the table writes it: either a slot in the node's fixed layout,
+/// which the property reads, or a property computed from other ones, whose expression is given
+/// in <see cref="Read"/>.
 /// </summary>
 /// <param name="Name">The property's name.</param>
-/// <param name="Type">The slot's type, whose trailing <c>?</c> is what optional means.</param>
-/// <param name="Summary">The property's summary, a line per line of it.</param>
+/// <param name="Type">The slot's type; a trailing <c>?</c> marks the slot optional.</param>
+/// <param name="Summary">The property's summary, one string per line.</param>
 /// <param name="Read">What a derived property returns, or the empty string for a slot.</param>
 /// <param name="Role">Whether it is a slot of the node or a property derived from other ones.</param>
 /// <param name="Kinds">The kinds a token slot may hold; empty for a slot that is not a token.</param>
@@ -59,7 +59,10 @@ public sealed record NodeSlot(
     /// <summary>The type without its trailing <c>?</c>.</summary>
     public string BareType => Type.TrimEnd('?');
 
-    /// <summary>The constructor parameter a slot arrives as, named after the property.</summary>
+    /// <summary>
+    /// The constructor parameter name for the slot: the property's name with its first letter
+    /// lowered, prefixed with <c>@</c> when that is a C# keyword.
+    /// </summary>
     public string Field
     {
         get

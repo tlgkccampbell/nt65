@@ -6,10 +6,11 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <summary>One token and the trivia around it.</summary>
 internal sealed class GreenToken : GreenNode
 {
-    // The missing token of each kind that reports nothing, which every node that wants one
-    // shares: such a token has no text, no trivia and no diagnostic of its own, so one per kind
-    // is all there is to have. They are held here and nowhere else, so the lexer's cache can
-    // never hand one out for a token the source really wrote. A kind is a byte, hence the size.
+    // One shared missing token per kind, for missing tokens that report no diagnostic: such a
+    // token has no text, no trivia and no diagnostic of its own, so a single instance per kind
+    // serves every node that needs one. They are held here and not in the lexer's cache, so the
+    // cache can never hand one out for a token the source actually wrote. A SyntaxKind fits in a
+    // byte, hence the array's size.
     private static readonly GreenToken?[] missing = new GreenToken?[byte.MaxValue + 1];
 
     internal GreenToken(SyntaxKind kind, string text, ImmutableArray<GreenTrivia> leading,
@@ -20,9 +21,10 @@ internal sealed class GreenToken : GreenNode
         LeadingTrivia = leading;
         TrailingTrivia = trailing;
 
-        // A lexical error covers the token's text, and arrives with the token rather than after
-        // it: the cache never shares a token that has one, so it is one token's own. A literal
-        // can be wrong in more than one way, and each of them is a separate thing to correct.
+        // A lexical error covers the token's text and is given to the constructor rather than
+        // reported afterwards. That is safe because the cache never shares a token that has an
+        // error, so the diagnostic belongs to this one occurrence. A literal can be wrong in more
+        // than one way, and each error is reported separately.
         foreach (var error in errors ?? [])
             Report(new GreenDiagnostic(TriviaWidth(leading), text.Length, error));
     }
@@ -47,8 +49,8 @@ internal sealed class GreenToken : GreenNode
     public ImmutableArray<GreenTrivia> TrailingTrivia { get; }
 
     /// <summary>
-    /// Whether the token stands where one belongs that the source does not have. It has no
-    /// text and no trivia, so it is nowhere in the file's text and takes up no width.
+    /// Whether the token fills a place the grammar requires but the source does not write. It
+    /// has no text and no trivia, so it is nowhere in the file's text and takes up no width.
     /// </summary>
     public override bool IsMissing { get; }
 
@@ -81,9 +83,9 @@ internal sealed class GreenToken : GreenNode
     }
 
     /// <summary>
-    /// The missing token of <paramref name="kind"/> that says why it is missing. It is an
-    /// instance of its own rather than the shared one, since what it reports is about the one
-    /// place it stands in.
+    /// The missing token of <paramref name="kind"/> that reports why it is missing. It is a new
+    /// instance rather than the shared one, since its diagnostic applies only to the one place
+    /// where it is used.
     /// </summary>
     /// <param name="kind">The kind of token the source does not have.</param>
     /// <param name="diagnostic">What to say about it, placed within the token.</param>

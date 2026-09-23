@@ -3,8 +3,8 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The paths a file writes that name another file: what an <c>.incbin</c> includes, resolved
-/// beside the file that writes it, as the build resolves it.
+/// The paths in a file that name another file, which are those an <c>.incbin</c> includes. Each
+/// is resolved relative to the file it is written in, as the build resolves it.
 /// </summary>
 public sealed class DocumentLinksTests
 {
@@ -30,12 +30,12 @@ public sealed class DocumentLinksTests
             ["file:///c:/work/src/art/tiles.bin", "file:///c:/work/shared/font.chr"],
             links.Select(link => link.Target));
 
-        // The link is the written path, quotes and all, so a click lands on it.
+        // The link's range is the written path, quotes included, so a click anywhere on it follows it.
         Assert.Equal(new Position(2, 22), links[0].Range.Start);
         Assert.Equal(new Position(2, 37), links[0].Range.End);
     }
 
-    /// <summary>A file with nothing to include has no links, and neither has a path a constant names.</summary>
+    /// <summary>An <c>.incbin</c> whose path is given by a constant's name, not a string, has no link.</summary>
     [Fact]
     public async Task ANameIsNotALink()
     {

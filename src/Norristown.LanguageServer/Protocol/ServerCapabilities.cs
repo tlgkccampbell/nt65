@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What the server can do. Stages add to this as the layers come online.</summary>
+/// <summary>What the server can do, as announced in its answer to <c>initialize</c>.</summary>
 /// <param name="TextDocumentSync">How open documents are kept in step.</param>
 /// <param name="DocumentSymbolProvider">Whether the server answers <c>textDocument/documentSymbol</c>.</param>
 /// <param name="FoldingRangeProvider">Whether the server answers <c>textDocument/foldingRange</c>.</param>
@@ -16,7 +16,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="CodeActionProvider">Which kinds of change the server offers, or null when it offers none.</param>
 /// <param name="SemanticTokensProvider">How the server classifies names, or null when it does not.</param>
 /// <param name="InlayHintProvider">How the server hints in a line, or null when it does not.</param>
-/// <param name="SelectionRangeProvider">Whether the server answers what a caret grows to take in.</param>
+/// <param name="SelectionRangeProvider">Whether the server answers <c>textDocument/selectionRange</c> (expand selection).</param>
 /// <param name="CallHierarchyProvider">Whether the server answers the three call-hierarchy requests.</param>
 /// <param name="DocumentLinkProvider">How the server answers <c>textDocument/documentLink</c>, or null when it does not.</param>
 /// <param name="DocumentFormattingProvider">Whether the server lays a whole file out.</param>

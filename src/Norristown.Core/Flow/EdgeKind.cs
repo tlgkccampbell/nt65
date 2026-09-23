@@ -12,6 +12,6 @@ public enum EdgeKind
     /// <summary>A call: the block it returns to is the one after the call, not this one.</summary>
     Call,
 
-    /// <summary>A <c>.next</c> said so, where the operand could not.</summary>
+    /// <summary>A <c>.next</c> declared this successor, where the operand could not say where control goes.</summary>
     Declared,
 }

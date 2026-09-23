@@ -4,9 +4,9 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What one inline <c>.scope</c> block of a routine does to the registers: which of them are,
-/// wherever the block is left, still what they were where it was entered. A block is a part of
-/// a routine and asks the same question of itself that the routine asks of its caller.
+/// What one inline <c>.scope</c> block of a routine does to the registers: which of them still
+/// hold, wherever the block is left, the values they had when it was entered. This is the
+/// question asked of a whole routine, applied to one part of it.
 /// </summary>
 /// <param name="Opener">The line that opens the block, where the answer belongs.</param>
 /// <param name="Kept">The registers it hands on unchanged.</param>

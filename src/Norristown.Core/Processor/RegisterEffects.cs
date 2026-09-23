@@ -1,13 +1,13 @@
 namespace Norristown.Processor;
 
 /// <summary>
-/// Which registers each instruction writes, and which ones move a register's value to another
-/// register rather than making one up. What the instruction tables say is the widest answer;
-/// this narrows it where the mode or the operand decides.
+/// Which registers each instruction writes, and which instructions copy one register's value
+/// into another rather than producing a new value. The instruction tables give the widest
+/// answer; this narrows it where the mode or the operand decides.
 /// <para>
 /// A write is any change the caller cannot predict, so a transfer counts as one even though
-/// what lands in the register came from another: what the value is worth is
-/// <see cref="Moved"/>'s answer, and this one only says the register was written at all.
+/// the new value came from another register: where the value came from is what
+/// <see cref="Moved"/> says, and <see cref="Written"/> only says the register was written at all.
 /// </para>
 /// </summary>
 public static class RegisterEffects
@@ -25,7 +25,7 @@ public static class RegisterEffects
         "inc" or "dec" => mode == AddressingMode.Accumulator ? Registers.A : Registers.None,
 
         // `rep` and `sep` write the flags their operand names, and bit 0 is the carry. An
-        // operand nt65 cannot work out may name it.
+        // operand whose value nt65 cannot work out may name the carry, so it is assumed to.
         "rep" or "sep" => constant is { } flags && (flags & 1) == 0 ? Registers.None : Registers.C,
 
         _ => Instructions.Facts(mnemonic).Writes,
@@ -37,7 +37,10 @@ public static class RegisterEffects
     /// </summary>
     public static (Registers From, Registers To)? Moved(string mnemonic) => Instructions.Facts(mnemonic).Copies;
 
-    /// <summary>The register as a message and a lens name it: <c>A</c>, <c>X</c>, <c>Y</c>, <c>C</c>.</summary>
+    /// <summary>
+    /// The registers as a message or a code lens names them, separated by commas: <c>A</c>,
+    /// <c>X</c>, <c>Y</c>, <c>C</c>.
+    /// </summary>
     public static string Spell(Registers registers) =>
         string.Join(", ", Each(registers).Select(register => register switch
         {

@@ -54,15 +54,17 @@ public sealed class ProjectsTests : IDisposable
             Regex.Replace(uri, "^file:///([A-Za-z]):", m => $"file:///{m.Groups[1].Value.ToLowerInvariant()}%3A");
         await using var client = await TestClient.StartAsync(AsVsCode(Uri("")), null, timeout);
 
-        // Once the client has named a file its own way, that is the name it is published under.
+        // Once the client has opened a file under its own spelling of the URI, diagnostics are
+        // published under that spelling.
         await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), Read("src/main.nt65"));
         Assert.Empty((await client.NextDiagnosticsAsync(AsVsCode(Uri("src/main.nt65")), timeout)).Diagnostics);
     }
 
     /// <summary>
-    /// A change on disk to what a program reads is published again: the project file, a source
-    /// no one has open, and a file an <c>.incbin</c> measured. A file nothing reads is not news.
-    /// Nothing here is ever opened: every file of a project is reported on either way.
+    /// A change on disk to any file a program reads makes it publish again: the project file, a
+    /// source no one has open, and a file an <c>.incbin</c> includes. A change to a file nothing
+    /// reads publishes nothing. No file here is opened: every file of a project is reported on
+    /// regardless.
     /// </summary>
     [Fact]
     public async Task WhatAProgramReadsChangingOnDiskIsPublishedAgain()
@@ -99,9 +101,9 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
-    /// The project file is reported on as well. It is not a file of the program, and what is
-    /// wrong with it is what stops the program being read at all, so it is worth a squiggle
-    /// where it is written.
+    /// Diagnostics are published for the project file as well. It is not a source of the
+    /// program, but a mistake in it can stop the program being read at all, so it is worth a
+    /// squiggle where the mistake is written.
     /// </summary>
     [Fact]
     public async Task WhatIsWrongWithTheProjectFileIsPublishedForIt()
@@ -119,8 +121,9 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
-    /// The configuration the client chooses is what a project is built as, and the branches it
-    /// leaves out are the ones dimmed; a project without that configuration builds its own settings.
+    /// A project is built with the configuration the client chooses, and the conditional branches
+    /// that configuration leaves out are dimmed; a project with no configuration of that name is
+    /// built with its default settings.
     /// </summary>
     [Fact]
     public async Task TheChosenConfigurationDecidesWhatIsDimmed()
@@ -139,8 +142,8 @@ public sealed class ProjectsTests : IDisposable
         Assert.Equal([3], Dimmed(await NextForAsync(client, "app/main.nt65", timeout)));
         Assert.Empty((await NextForAsync(client, "lib/main.nt65", timeout)).Diagnostics);
 
-        // The project the configuration does not name builds its own settings either way, so
-        // the other project is the only one whose dimmed lines move.
+        // The project with no `debug` configuration builds its default settings either way, so
+        // the app project is the only one whose dimmed lines move.
         await client.ConfigureAsync(null);
         Assert.Equal([1], Dimmed(await NextForAsync(client, "app/main.nt65", timeout)));
     }

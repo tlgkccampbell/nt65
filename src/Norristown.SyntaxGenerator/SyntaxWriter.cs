@@ -5,9 +5,9 @@ namespace Norristown.SyntaxGenerator;
 
 /// <summary>
 /// Writes the C# the node table describes: a red class and a green class per node, the switch
-/// from kind to class, and the visitors. It builds strings, which is enough for a table this
-/// size, and touches nothing outside itself, so the generator hands what it makes to the
-/// compiler and the tests ask for the same text in memory.
+/// from kind to class, and the visitors. It builds plain strings, which is enough for a table
+/// this size, and has no side effects, so the generator hands its output to the compiler and
+/// the tests can ask for the same text in memory.
 /// </summary>
 public static class SyntaxWriter
 {
@@ -107,9 +107,9 @@ public static class SyntaxWriter
                 + "    public override TResult? Accept<TResult>(SyntaxVisitor<TResult> visitor) where TResult : default =>\n"
                 + $"        {call};\n");
 
-            // A node is changed by being rebuilt: `Update` over every slot, and one `With` per
-            // slot that calls it. A hand-written node holds pieces its green node does not, so
-            // there is nothing here the table could write for one.
+            // A node is changed by being rebuilt: an `Update` taking every slot, and one `With`
+            // per slot that calls it. A hand-written node holds pieces its green node does not,
+            // so the table cannot generate these for one.
             if (!node.IsHandWritten && table.Layout(node).Length > 0)
             {
                 var slots = table.Layout(node);
@@ -128,7 +128,10 @@ public static class SyntaxWriter
         return text.ToString();
     }
 
-    /// <summary>The property an abstract class declares for a slot its subclasses place themselves.</summary>
+    /// <summary>
+    /// The abstract property an abstract class declares for a slot whose position each subclass
+    /// decides in its own layout.
+    /// </summary>
     private static string Declaration(NodeSlot slot) =>
         Summary(slot.Summary, "    ") + $"    public abstract {slot.Type} {slot.Name} {{ get; }}\n";
 
@@ -156,21 +159,21 @@ public static class SyntaxWriter
     };
 
     /// <summary>
-    /// The node's <c>Update</c>: one parameter per slot, in source order, giving back the node
-    /// itself when every slot still holds what it held and a new node over the slots given
-    /// otherwise. Same green node, same red node, which is what lets a rewrite that changes
-    /// nothing come back as the tree it went in as.
+    /// The node's <c>Update</c>: one parameter per slot, in source order, returning the node
+    /// itself when every slot still holds the same green node, and otherwise a new node built
+    /// from the slots given. Returning the same red node when nothing changed is what lets a
+    /// rewrite that changes nothing return the tree it was given.
     /// </summary>
     private static string Update(NodeRow node, ImmutableArray<LaidOutSlot> slots)
     {
         var text = new StringBuilder();
         text.Append("    /// <summary>\n");
-        text.Append("    /// This node with each of its pieces as given, or this node itself when none of them\n");
-        text.Append("    /// moved. What it builds belongs to no file until a rewrite puts it into one.\n");
+        text.Append("    /// A copy of this node with the given children, or this node itself if none of them\n");
+        text.Append("    /// changed. A new node belongs to no syntax tree until a rewrite puts it into one.\n");
         text.Append("    /// </summary>\n");
         foreach (var (_, slot, _) in slots)
             text.Append($"    /// <param name=\"{slot.DocName}\">{ParamDoc(slot)}</param>\n");
-        text.Append("    /// <returns>This node, or a new one over the pieces given.</returns>\n");
+        text.Append("    /// <returns>This node, or a new node with the given children.</returns>\n");
         text.Append(Parameters(
             $"    public {node.Name} Update(", [.. slots.Select(s => $"{s.Slot.Type} {s.Slot.Field}")], ") =>"));
 
@@ -195,9 +198,9 @@ public static class SyntaxWriter
     {
         var arguments = slots.Select(s => s.Index == replaced.Index ? s.Slot.Field : s.Slot.Name);
         var text = new StringBuilder();
-        text.Append($"    /// <summary>This node with <see cref=\"{replaced.Slot.Name}\"/> as given.</summary>\n");
+        text.Append($"    /// <summary>A copy of this node with <see cref=\"{replaced.Slot.Name}\"/> replaced.</summary>\n");
         text.Append($"    /// <param name=\"{replaced.Slot.DocName}\">{ParamDoc(replaced.Slot)}</param>\n");
-        text.Append("    /// <returns>This node, or a new one with that piece replaced.</returns>\n");
+        text.Append("    /// <returns>This node if the child is unchanged, otherwise a new node with it replaced.</returns>\n");
         var head = $"    public {node.Name} With{replaced.Slot.Name}({replaced.Slot.Type} {replaced.Slot.Field}) =>";
         text.Append(head.Length <= Wrap ? head + "\n" : Parameters(
             $"    public {node.Name} With{replaced.Slot.Name}(",
@@ -207,7 +210,7 @@ public static class SyntaxWriter
         return text.ToString();
     }
 
-    /// <summary>The green node <paramref name="name"/> holds, which is what two slots are compared by.</summary>
+    /// <summary>The expression for the green node <paramref name="name"/> holds; <c>Update</c> compares slots by it.</summary>
     private static string Held(NodeSlot slot, string name) =>
         slot.List == ListShape.None && !slot.IsRequired ? $"{name}?.Green" : $"{name}.Green";
 
@@ -242,9 +245,9 @@ public static class SyntaxWriter
     }
 
     /// <summary>
-    /// The factory: one method per kind of node, over the same rows the classes are written
-    /// from. Each takes the node's pieces, in source order, and hands back the node the typed
-    /// green constructor makes of them.
+    /// The factory: one method per kind of node, generated from the same rows as the classes.
+    /// Each takes the node's pieces, in source order, and returns the node the typed green
+    /// constructor builds from them.
     /// </summary>
     private static string FactoryFile(NodeTree table)
     {
@@ -263,10 +266,11 @@ public static class SyntaxWriter
             text.Append(Summary(node.Summary, "    "));
             foreach (var (_, slot, _) in slots)
                 text.Append($"    /// <param name=\"{slot.DocName}\">{ParamDoc(slot)}</param>\n");
-            text.Append("    /// <returns>The node, which belongs to no file until a rewrite puts it into one.</returns>\n");
+            text.Append("    /// <returns>The new node, which belongs to no syntax tree until a rewrite puts it into one.</returns>\n");
 
-            // A piece the source may leave out altogether may be left out here too, where the
-            // ones after it can be: an optional slot in the middle of a node still has to be said.
+            // Optional single-piece slots at the end of the parameter list default to null, so a
+            // caller can leave them out; an optional slot before a required one or a list still
+            // has to be passed.
             var last = slots.Length;
             while (last > 0 && !slots[last - 1].Slot.IsRequired && slots[last - 1].Slot.List == ListShape.None)
                 last--;
@@ -285,8 +289,8 @@ public static class SyntaxWriter
 
     /// <summary>
     /// The rewriter: a method per kind of node that rewrites the node's slots and calls
-    /// <c>Update</c>, which gives the node back unchanged when nothing under it moved. A node
-    /// with no slots keeps the default, which is the node itself.
+    /// <c>Update</c>, which returns the node unchanged when nothing under it changed. A node
+    /// with no slots keeps the default, which returns the node itself.
     /// </summary>
     private static string RewriterFile(NodeTree table)
     {
@@ -314,7 +318,7 @@ public static class SyntaxWriter
         return text.ToString();
     }
 
-    /// <summary>How the rewriter reads one slot of a node, rewritten.</summary>
+    /// <summary>The argument the rewriter passes to <c>Update</c> for one slot: the slot's content, rewritten.</summary>
     private static string Rewritten(NodeSlot slot)
     {
         if (slot.List != ListShape.None)
@@ -366,8 +370,8 @@ public static class SyntaxWriter
         foreach (var (_, slot, _) in slots)
             text.AppendLine($"        {slot.Name} = {slot.Field};");
 
-        // A node holds what its children hold, so a walk for a diagnostic or an annotation need
-        // only follow the slots that lead to one.
+        // A node's flags include its children's, so a search for a diagnostic or an annotation
+        // need only follow the slots that contain one.
         if (slots.Length > 0)
             text.Append(RolledUp(slots));
         text.AppendLine("    }");
@@ -382,7 +386,8 @@ public static class SyntaxWriter
             text.AppendLine("    }");
         }
 
-        // The parser reads back what it built by name, as it wrote it, rather than by slot index.
+        // Each slot also gets a named property, so that the parser can read back what it built
+        // by name rather than by slot index.
         foreach (var (_, slot, _) in slots)
         {
             text.AppendLine();
@@ -424,8 +429,9 @@ public static class SyntaxWriter
 
     /// <summary>
     /// The assignment that rolls <c>Flags</c> up from <paramref name="slots"/>, one slot to a
-    /// line once it will not fit on one. What a node holds below it — a diagnostic, an annotation
-    /// — is one word, so a node reads each of its slots once however many of them there are.
+    /// line once it will not fit on one. The flags for what a node holds below it — diagnostics,
+    /// annotations — share one field, so the constructor reads each slot's flags once, however
+    /// many kinds of flag there are.
     /// </summary>
     private static string RolledUp(ImmutableArray<LaidOutSlot> slots)
     {
@@ -467,20 +473,20 @@ public static class SyntaxWriter
         text.AppendLine("namespace Norristown.Syntax;");
         text.AppendLine();
         text.AppendLine("/// <summary>");
-        text.AppendLine("/// Dispatches on what a node is: <see cref=\"Visit\"/> hands a node to the method its class");
-        text.AppendLine("/// has here, and every one of those hands it on to <see cref=\"DefaultVisit\"/> unless it is");
-        text.AppendLine("/// overridden. Override the nodes a feature is about and leave the rest;");
-        text.AppendLine("/// <see cref=\"SyntaxWalker\"/> is the one that goes on down the tree.");
+        text.AppendLine("/// Dispatches on a node's type: <see cref=\"Visit\"/> calls the <c>Visit…</c> method for the");
+        text.AppendLine("/// node's class, and each of those calls <see cref=\"DefaultVisit\"/> unless it is overridden.");
+        text.AppendLine("/// Override the methods for the node types you care about. This class does not descend into");
+        text.AppendLine("/// children; <see cref=\"SyntaxWalker\"/> is the visitor that walks the whole tree.");
         text.AppendLine("/// </summary>");
         if (generic)
-            text.AppendLine("/// <typeparam name=\"TResult\">What visiting a node works out.</typeparam>");
+            text.AppendLine("/// <typeparam name=\"TResult\">The type of result each visit returns.</typeparam>");
         text.AppendLine($"public abstract class {name}");
         text.AppendLine("{");
-        text.AppendLine("    /// <summary>Hands <paramref name=\"node\"/> to the method its class has, and does nothing for null.</summary>");
+        text.AppendLine("    /// <summary>Calls the <c>Visit…</c> method for the class of <paramref name=\"node\"/>; does nothing for null.</summary>");
         text.AppendLine("    /// <param name=\"node\">The node to visit, or null.</param>");
         if (generic)
         {
-            text.AppendLine("    /// <returns>What the method for its class worked out, or the default for none.</returns>");
+            text.AppendLine("    /// <returns>That method's result, or the default when <paramref name=\"node\"/> is null.</returns>");
             text.AppendLine("    public virtual TResult? Visit(SyntaxNode? node) => node is null ? default : node.Accept(this);");
         }
         else
@@ -488,7 +494,7 @@ public static class SyntaxWriter
             text.AppendLine("    public virtual void Visit(SyntaxNode? node) => node?.Accept(this);");
         }
         text.AppendLine();
-        text.AppendLine("    /// <summary>What every method below does unless it is overridden.</summary>");
+        text.AppendLine("    /// <summary>Called by every <c>Visit…</c> method that is not overridden; does nothing by default.</summary>");
         text.AppendLine("    /// <param name=\"node\">The node visited.</param>");
         if (generic)
         {
@@ -508,7 +514,7 @@ public static class SyntaxWriter
             text.AppendLine($"    /// <summary>Visits <see cref=\"{node.Name}\"/>.</summary>");
             text.AppendLine("    /// <param name=\"node\">The node visited.</param>");
             if (generic)
-                text.AppendLine("    /// <returns>What visiting it worked out.</returns>");
+                text.AppendLine("    /// <returns>The result of visiting the node.</returns>");
             text.AppendLine($"    public virtual {result} Visit{node.BareName}({node.Name} node) => DefaultVisit(node);");
         }
 

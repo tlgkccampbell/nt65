@@ -20,7 +20,7 @@
     rts                     ;! error[keeps-broken]: `breaks_it` promises `keeps x`, and X is not what the routine was entered with here: restore it before returning, or a `.state keeps x` where the value comes back says so
 }
 
-; A save that does not come back on every path is no save on the path it is missing from.
+; A save that is not restored on every path does not count on the path that skips the restore.
 .proc forgets_the_carry: keeps a, c {
     php
     beq @quiet
@@ -82,7 +82,7 @@
     rts
 }
 
-; A branch into one is the same way out, on the path where it is taken.
+; A branch into another routine's label is the same way out, on the path where it is taken.
 .proc branches_in: keeps x {
     beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, and X is not what the routine was entered with here: control does not come back from `partway`, and `loses_x` does not promise to keep x: a `keeps x` on `loses_x` says it hands it back, and a `.next ?` here ends the path with nothing checked
     rts
@@ -95,8 +95,8 @@
     rts
 }
 
-; And where the routine the label is in promises to keep the register, the jump is certified:
-; whoever jumps in is handed it back with everyone else.
+; And where the routine the label is in promises to keep the register, the jump is accepted:
+; that routine hands the register back to every caller, including whoever jumped in.
 .proc hands_on: keeps a {
     jmp holds_a::partway
 }

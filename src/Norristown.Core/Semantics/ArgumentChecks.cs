@@ -5,16 +5,17 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What a call's arguments are checked for once constants have values and the call is being
-/// laid out where it stands: that a <c>const</c> with a range is in it, that an enum kind is
-/// given a member of its enum, and that an <c>operand</c> that lists its modes is given one of
-/// them. The rest of a call is checked when names are resolved (<see cref="MacroInvocation"/>),
-/// and a macro's header where the macro is declared (<see cref="CheckHeader"/>).
+/// laid out at its place in a segment: that a <c>const</c> argument with a range is within
+/// it, that an enum kind is given a member of its enum, and that an <c>operand</c> that lists
+/// its modes is given one of them. The rest of a call is checked when names are resolved
+/// (<see cref="MacroInvocation"/>), and a macro's header where the macro is declared
+/// (<see cref="CheckHeader"/>).
 /// </summary>
 public static class ArgumentChecks
 {
     /// <summary>
-    /// Checks the arguments <paramref name="call"/> writes, read where the caller stands at
-    /// <paramref name="caller"/>, in <paramref name="segment"/>.
+    /// Checks the arguments written in <paramref name="call"/>, evaluating them in the caller's
+    /// expansion <paramref name="caller"/> and in <paramref name="segment"/>.
     /// </summary>
     /// <returns>Whether every argument passed, which is when the body is worth laying out.</returns>
     public static bool Check(
@@ -127,9 +128,10 @@ public static class ArgumentChecks
     }
 
     /// <summary>
-    /// What a macro's conditions are checked for once names are resolved: that each word one
-    /// compares with what a parameter stands for is one the parameter may be. A comparison with a
-    /// word it never is holds for no argument at all, which is true of the definition, not of a call.
+    /// What a macro's conditions are checked for once names are resolved: that each word a
+    /// condition compares a parameter with is a value the parameter can take. A comparison with a
+    /// word the parameter can never be gives the same result for every argument, so it is a
+    /// mistake in the definition and is reported there rather than at a call.
     /// </summary>
     public static void CheckComparisons(
         Symbol macro, Func<NameExpressionSyntax, Symbol?> symbolOf, Action<TextSpan, DiagnosticMessage> report)
@@ -159,8 +161,8 @@ public static class ArgumentChecks
 
     /// <summary>
     /// The mode an operand argument is in, as <c>.mode</c> spells it, and for a plain address
-    /// that is a direct-page one, the <c>zp</c> word that says so as well. An argument that
-    /// passes on another <c>operand</c> parameter is in the mode that one was given.
+    /// that is a direct-page one, the matching <c>zp</c> mode as well. An argument that is
+    /// itself another <c>operand</c> parameter is followed to the operand that parameter was given.
     /// </summary>
     private static (string Mode, string? Direct)? ModeOf(SemanticModel model, SyntaxNode operand, Expansion? at, string? segment)
     {

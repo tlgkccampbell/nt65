@@ -112,7 +112,7 @@ public sealed class BlockTests
 
             """, SyntaxDump.Blocks(tree));
 
-        // The line itself is unreadable, and that is all it is: one message, on it.
+        // The half-typed line does not parse, and that is its only effect: one message, on it.
         Assert.Equal(["6:13: expected an expression"], Messages(tree));
     }
 

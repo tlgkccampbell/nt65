@@ -5,8 +5,8 @@ namespace Norristown.Semantics;
 /// <summary>
 /// What a macro parameter accepts, as it is written after the <c>:</c>. A <c>one</c>
 /// carries the words it allows, a <c>list</c> what each of its items is, a <c>const</c> the
-/// range it takes, an <c>operand</c> the modes it takes and an enum kind the enum, so the kinds
-/// that take something inside them describe it here rather than by pointing back at syntax.
+/// range it takes, an <c>operand</c> the modes it takes and an enum kind the enum, so each kind
+/// carries whatever was written inside its parentheses.
 /// </summary>
 /// <param name="Kind">Which kind it is.</param>
 /// <param name="Words">The words a <c>one</c> accepts, or the modes an <c>operand</c> does; empty for every other kind, and for an <c>operand</c> that takes any mode.</param>
@@ -16,7 +16,7 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
     /// <summary>An expression, which is what a parameter with no kind written takes.</summary>
     public static readonly ArgumentKind Expression = new(ParameterKind.Expr, [], null);
 
-    /// <summary>The words an <c>operand(...)</c> may list: the modes <c>.mode</c> gives, and the three it gives for a direct-page address as <c>abs</c>.</summary>
+    /// <summary>The words an <c>operand(...)</c> may list: the modes <c>.mode</c> gives, plus <c>zp</c>, <c>zpx</c> and <c>zpy</c>, the direct-page forms that <c>.mode</c> reports as <c>abs</c>, <c>absx</c> and <c>absy</c>.</summary>
     public static IReadOnlyList<string> OperandModes { get; } =
         ["imm", "acc", "abs", "absx", "absy", "zp", "zpx", "zpy", "ind", "indx", "indy", "sr", "sry", "long", "longy"];
 
@@ -50,8 +50,8 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
 
     /// <summary>
     /// What is written after the <c>:</c> of a parameter, read from the syntax.
-    /// A kind the parser could not read is an expression, which is the kind that
-    /// accepts most and so says least about an argument that is already wrong.
+    /// A kind the parser could not read is treated as an expression, the kind that accepts
+    /// the most, so that arguments are not reported against a header that is already wrong.
     /// </summary>
     public static ArgumentKind Read(ParameterKindSyntax? written)
     {

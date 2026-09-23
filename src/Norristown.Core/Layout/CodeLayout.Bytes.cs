@@ -5,13 +5,14 @@ namespace Norristown.Layout;
 
 /// <summary>
 /// Where the bytes land: which stream the walk is writing into, how far it has filled it,
-/// where each line's bytes and each label stand among them, and how much room a measured
+/// where each line's bytes and each label fall among them, and how many bytes a measured
 /// routine or declaration came to.
 /// <para>
-/// A distance is known within one run of a segment's bytes, which is what branch range, the
-/// long branches and a fall-through read. A segment's bytes are one run across its regions and
-/// blocks, in the order the file writes them, as ca65 writes them; an <c>.align</c> or a
-/// <c>.place</c> ends it. A long branch starts short and is lengthened where its target turns
+/// The distance between two positions is known only within one run of a segment's bytes; the
+/// branch range check, long-branch sizing and <c>.fallthrough</c> checks all rely on such
+/// distances. A segment's bytes form one run across all its regions and blocks, in the order
+/// the file writes them, which is how ca65 writes them; an <c>.align</c> or a <c>.place</c>
+/// ends the run. A long branch starts short and is lengthened where its target turns
 /// out to be out of reach, which moves everything after it, so the file is laid out again until
 /// none changes.
 /// </para>
@@ -21,18 +22,21 @@ public sealed partial class CodeLayout
     /// <summary>The stream the walk is writing into.</summary>
     private int Stream => streams[^1];
 
-    /// <summary>The run of known distances the walk is writing into: its segment's.</summary>
+    /// <summary>
+    /// The run the walk is writing into: the current segment's run, or, for bytes outside
+    /// every segment, the current stream's.
+    /// </summary>
     private int Measured => segment is { } named ? RunOf(named) : measuredIn.GetValueOrDefault(Stream, Stream);
 
     /// <summary>Whether a distance is one a branch can reach.</summary>
     private static bool InRange(int reach) => reach is >= -128 and <= 127;
 
     /// <summary>
-    /// A <c>.place</c>, where another module's bytes go. Whatever that module writes stands
-    /// between the bytes before the line and the bytes after it, so nothing after it is at a
-    /// distance this file knows from anything before it: what is known across it is the
-    /// translation unit's to say, once every module in it is laid out. One written anywhere
-    /// but at file level places nothing, and has been reported.
+    /// A <c>.place</c>, where another module's bytes go. Whatever that module writes comes
+    /// between the bytes before the line and the bytes after it, so this file cannot know the
+    /// distance from anything before it to anything after it; only the translation unit can
+    /// work that out, once every module in it is laid out. A <c>.place</c> written anywhere
+    /// but at file level places nothing, and has already been reported.
     /// </summary>
     private void PlaceModule(PlaceDirectiveSyntax directive)
     {
@@ -79,8 +83,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A <c>.fallthrough</c>, which generates nothing and stands where the routine's bytes end:
-    /// where the routine it names has to start, which is asked of it the way it is of a label.
+    /// A <c>.fallthrough</c>, which generates nothing and is placed where the routine's bytes
+    /// end. That is where the routine it names has to start, and its placement is looked up
+    /// the same way a label's is.
     /// </summary>
     private void FallsThrough(FallthroughDirectiveSyntax directive)
     {
@@ -106,8 +111,8 @@ public sealed partial class CodeLayout
             Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Says($"`{symbol.DisplayName}`"));
         }
 
-        // A label a macro expands outside a routine is a position in no code, which binding
-        // could not see where the body was written.
+        // A label that a macro expansion places outside any routine marks a position in no
+        // code. Binding could not report it, because it only sees the macro body as written.
         if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
         {
             Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Says(symbol.DisplayName, ""));
@@ -131,9 +136,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Where the label an expression names stands. A macro parameter stands for what the
-    /// call gave it, and what the call gave was written in the caller, so it is placed at
-    /// the caller's level rather than at the body's.
+    /// Where the label an expression names is placed. A macro parameter is resolved to the
+    /// argument the call passed, and that argument was written in the caller, so it is looked
+    /// up at the caller's expansion level rather than the macro body's.
     /// </summary>
     private Placement? Located(SyntaxNode expression, Expansion? on)
     {
@@ -152,7 +157,7 @@ public sealed partial class CodeLayout
 
     /// <summary>
     /// Lengthens every long branch this walk found out of reach, and says whether any
-    /// changed. A branch only ever grows, so asking again settles.
+    /// changed. A branch only ever grows, so repeating the walk until nothing changes ends.
     /// </summary>
     private bool Lengthen()
     {
@@ -160,8 +165,8 @@ public sealed partial class CodeLayout
         foreach (var branch in branches)
         {
             var at = (branch.Statement.Position, branch.On);
-            // A target at a distance nt65 does not know is always long: nothing says it is
-            // near enough, and a branch that cannot reach is no branch at all.
+            // A long branch whose distance nt65 does not know is always lengthened: nothing
+            // shows the target is near enough, and a short branch that cannot reach is wrong.
             if (!branch.Long || lengthened.Contains(at) || Distance(branch) is { } reach && InRange(reach))
                 continue;
             lengthened.Add(at);
@@ -171,9 +176,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// The short branches that cannot reach what they name. A distance nt65 does not know is
-    /// left to ca65, whose own check stands; a long branch has been lengthened rather than
-    /// reported.
+    /// Reports the short branches that cannot reach their targets. A distance nt65 does not
+    /// know is left to ca65, which checks the range itself; a long branch out of reach has
+    /// been lengthened rather than reported.
     /// </summary>
     private void CheckBranchRange()
     {
@@ -197,9 +202,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Takes what this walk worked out about the measured spans, and says whether any of
-    /// them changed. A span is not what any length depends on here, so one more walk
-    /// settles them.
+    /// Takes the measured spans this walk worked out, and says whether any of them changed.
+    /// No length in the layout depends on a span, so one more walk is enough for them to stop
+    /// changing.
     /// </summary>
     private bool Settle()
     {

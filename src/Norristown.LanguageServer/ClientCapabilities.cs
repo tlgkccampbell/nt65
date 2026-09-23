@@ -3,28 +3,30 @@ using System.Text.Json;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What the client at the other end can take, read once from the <c>initialize</c> request and
-/// asked of from then on. A capability nobody declares is off: a client that says nothing gets
-/// the plain answer, which every client understands.
+/// The optional protocol features the client supports, read once from the <c>initialize</c>
+/// request and consulted from then on. A capability the client does not declare is treated as
+/// off: a client that declares nothing gets the plain form of each answer, which every client
+/// understands.
 /// </summary>
 /// <param name="RefreshesTokens">Whether the client can be asked to fetch semantic tokens again.</param>
 /// <param name="RefreshesLenses">Whether it can be asked to fetch code lenses again.</param>
 /// <param name="RefreshesHints">Whether it can be asked to fetch inlay hints again.</param>
-/// <param name="Snippets">Whether a completion may write more than a word, with stops in it.</param>
+/// <param name="Snippets">Whether a completion may insert a snippet with tab stops rather than plain text.</param>
 /// <param name="DocumentChanges">
 /// Whether a workspace edit may be a list of per-document edits, each naming the revision it was
-/// worked out against, so that one worked out against a buffer that has since changed is refused
-/// rather than applied.
+/// computed against, so that an edit computed against a buffer that has since changed is
+/// refused rather than applied.
 /// </param>
 /// <param name="HierarchicalSymbols">Whether an outline may be a tree rather than a flat list.</param>
 /// <param name="WorkspaceFolders">Whether the client opened folders, and will say when they change.</param>
 /// <param name="WillRenameFiles">
-/// Whether the client asks before it moves a file, so that the edits the move calls for are
-/// applied with it rather than after it.
+/// Whether the client asks the server before it moves a file, so that the edits the move
+/// requires are applied together with it rather than afterwards.
 /// </param>
 /// <param name="WatchesWhatItIsAsked">
-/// Whether the client can be asked, after it has connected, to watch something more: which
-/// files an <c>.incbin</c> measures is the program's to say and is not known before it is read.
+/// Whether the client supports registering file watchers dynamically, so it can be asked after
+/// connecting to watch more files. This matters because the files an <c>.incbin</c> reads are
+/// named by the program and are not known until it has been read.
 /// </param>
 internal sealed record ClientCapabilities(
     bool RefreshesTokens,
@@ -37,7 +39,7 @@ internal sealed record ClientCapabilities(
     bool WillRenameFiles,
     bool WatchesWhatItIsAsked)
 {
-    /// <summary>A client that has declared nothing, which is what a server assumes until it has.</summary>
+    /// <summary>A client that has declared nothing, which is what the server assumes until <c>initialize</c> arrives.</summary>
     public static ClientCapabilities None { get; } =
         new(false, false, false, false, false, false, false, false, false);
 

@@ -28,8 +28,8 @@ public sealed class RemapCommandTests : IDisposable
     public void Dispose() => root.Delete(recursive: true);
 
     /// <summary>
-    /// The map is found beside the <c>.s</c> the debug file names, which is named from the
-    /// directory the build ran in, and the debug file is rewritten where it stands.
+    /// The line map is found beside the <c>.s</c> the debug file names, whose path is relative to
+    /// the directory the build ran in, and the debug file is rewritten in place.
     /// </summary>
     [Fact]
     public void TheDebugFileIsRemappedInPlaceFromTheMapBesideTheOutput()
@@ -57,7 +57,7 @@ public sealed class RemapCommandTests : IDisposable
         Assert.Contains("name=\"src/main.nt65\"", Read("mapped.dbg"));
     }
 
-    /// <summary>A debug file whose output has no map beside it is somebody else's, and is untouched.</summary>
+    /// <summary>A debug file whose <c>.s</c> has no line map beside it was not built from nt65 output, and is left unchanged.</summary>
     [Fact]
     public void ADebugFileWithNoMapIsLeftAlone()
     {
@@ -68,7 +68,7 @@ public sealed class RemapCommandTests : IDisposable
         Assert.Equal(Linked, Read("game.dbg"));
     }
 
-    /// <summary>What it cannot do it says, and says which file it is about.</summary>
+    /// <summary>Each failure is reported, naming the file it concerns where there is one.</summary>
     [Theory]
     [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, 1, "nowhere.dbg: error: file not found")]
     [InlineData(new[] { "remap-dbg" }, 2, "nt65: remap-dbg takes the debug file ld65 wrote")]

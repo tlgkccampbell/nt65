@@ -7,9 +7,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The two views beside a source: what the file became, and what a macro call becomes. Both are
-/// one request each, so that a client is only showing and highlighting, and both answer about
-/// the program as the editor holds it rather than as the disk does.
+/// The two views shown beside a source: the ca65 output the file compiles to, and what a macro
+/// call expands to. Each is a single request, so the client only has to show and highlight the
+/// result, and both describe the program as the editor holds it rather than as it is on disk.
 /// </summary>
 public sealed class ViewRequestsTests
 {
@@ -55,7 +55,7 @@ public sealed class ViewRequestsTests
         Assert.Null(output.Note);
         Assert.Contains("lda #<SCREEN", output.Text, StringComparison.Ordinal);
 
-        // The header is the `.feature` block, which is there for ca65: a view opens past it.
+        // The header is the `.feature` block ca65 needs; a view opens scrolled past it.
         Assert.True(output.Header > 0);
         Assert.All(output.Lines, run => Assert.True(run.First >= output.Header));
 
@@ -83,7 +83,8 @@ public sealed class ViewRequestsTests
             new Range(new Position(15, 16), new Position(15, 22)), "MISSING"));
         _ = await client.NextDiagnosticsAsync(Uri, timeout);
 
-        // Having been asked once, the server says when the program has settled after an edit.
+        // Once the output has been requested, the server says when the program has settled after
+        // each edit.
         var said = await client.NextOutputChangedAsync(timeout);
         Assert.Equal(Uri, said.GetProperty("uri").GetString());
 
@@ -115,21 +116,21 @@ public sealed class ViewRequestsTests
         Assert.Empty(expansion.Links);
         Assert.Null(expansion.Note);
 
-        // Hover over the call says the signature and the comment as it always did, and then the
-        // one line a call is asked about, and then what it becomes.
+        // Hover over the call shows the signature and the comment as for any macro, then the
+        // summary line, then the expansion itself.
         var hover = await client.HoverAsync(Uri, new Position(15, 6), timeout);
         Assert.NotNull(hover);
         Assert.Contains(".macro set16(dest: operand, value)", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Matches(@"expands to\s+4 lines · 8 bytes · 10 cycles", hover.Contents.Value);
         Assert.Contains("lda #<SCREEN", hover.Contents.Value, StringComparison.Ordinal);
 
-        // Four lines fit, so there is nothing left to send anyone to a view for.
+        // All four lines fit in the hover, so there is no link to the expansion view.
         Assert.DoesNotContain("Show expansion", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Past eight lines the listing stops being something a reader takes in at a glance, so what
-    /// is left is a link to the view that holds it, saying how much was left out.
+    /// Past eight lines the listing stops being something a reader takes in at a glance, so the
+    /// hover shows eight and a link to the view that holds the rest, saying how much was left out.
     /// </summary>
     [Fact]
     public async Task ALongExpansionIsSummarisedAndLinkedTo()
@@ -159,7 +160,7 @@ public sealed class ViewRequestsTests
         Assert.Contains("[Show expansion](command:nt65.showExpansion?", said, StringComparison.Ordinal);
         Assert.Contains("— 2 more lines", said, StringComparison.Ordinal);
 
-        // Eight lines and no more: the listing is the working, and the summary is the answer.
+        // Eight lines and no more: the listing is the detail, and the summary line is the answer.
         var listing = said.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
         Assert.Equal(8, listing.Length);
         Assert.Equal("lda #0", listing[0].Trim());
@@ -167,8 +168,8 @@ public sealed class ViewRequestsTests
 
     /// <summary>
     /// The hover's link is followed with exactly what the link carries. An editor that escapes
-    /// the drive's colon opened the file under one spelling and the link names it under the
-    /// server's, and the two are one file: the link used to answer that the caret was on no call.
+    /// the drive's colon opened the file under one spelling while the link may name it under the
+    /// server's, and the two must be treated as one file, or the link finds no call at the caret.
     /// </summary>
     [Fact]
     public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorSpellsTheFile()
@@ -207,7 +208,7 @@ public sealed class ViewRequestsTests
         Assert.Equal("clear!(5)", expansion.Title);
     }
 
-    /// <summary>A call written out in place of itself, and the reasons it is not offered.</summary>
+    /// <summary>A call can be inlined: the action replaces it with its expansion in the source.</summary>
     [Fact]
     public async Task ACallIsInlinedWhereThatChangesNothingButTheText()
     {
@@ -230,8 +231,8 @@ public sealed class ViewRequestsTests
     }
 
     /// <summary>
-    /// A call written inside a macro body is expanded by whatever expands that body, so it is
-    /// offered greyed with the reason rather than quietly left out.
+    /// A call written inside a macro body is expanded as part of that body and cannot be inlined
+    /// on its own, so the action is offered disabled, with the reason, rather than quietly left out.
     /// </summary>
     [Fact]
     public async Task ACallInsideABodyIsRefusedWithTheReason()

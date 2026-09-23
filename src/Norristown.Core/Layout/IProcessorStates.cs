@@ -4,13 +4,14 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// What the 65816's state is where each statement stands, which is what sizes an immediate,
-/// times an instruction and gives a frame slot its offset.
+/// The 65816's processor state at each statement, which layout needs to size an immediate,
+/// time an instruction and give a frame slot its offset.
 /// <para>
-/// Only the flow analysis works that out, and the flow analysis reads a layout to do it: the
-/// file is laid out once with nothing here, which is enough to find where control goes, and
-/// again with the analysis that first walk made possible. So layout asks for the state through
-/// this rather than naming the analysis, and the dependency runs one way.
+/// Only the flow analysis works that state out, and the flow analysis needs a layout to do it:
+/// the file is laid out once without any state, which is enough to find where control goes,
+/// and then again with the analysis that the first layout made possible. So layout asks for
+/// the state through this interface rather than referring to the analysis directly, and the
+/// dependency runs only one way.
 /// </para>
 /// </summary>
 public interface IProcessorStates

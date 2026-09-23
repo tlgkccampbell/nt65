@@ -45,8 +45,8 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
 
     /// <summary>
     /// The bytes on it, deepest first, for an editor that lists what a routine is holding. The
-    /// saved-register stack counts pushes and this one counts bytes, so a reader that wants
-    /// pushes groups these by each entry's size.
+    /// <see cref="SavedStack"/> has one entry per push and this one has one per byte, so a
+    /// reader that wants pushes groups these by each entry's size.
     /// </summary>
     public IReadOnlyList<StackEntry> Entries => entries;
 

@@ -4,8 +4,8 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What <c>.endof</c> and <c>.spanof</c> ask about: where a routine or a data declaration
-/// ends. They describe layout rather than shape, so what they are worth is
-/// settled by whoever has laid the file out, and in the output they become a label just
+/// ends. They describe layout rather than shape, so their values are
+/// settled by the code that has laid the file out, and in the output they become a label just
 /// past the last byte and a difference from it.
 /// </summary>
 public static class Extents

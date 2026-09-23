@@ -3,9 +3,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Who calls a routine, and what it calls, across modules. The edges are the flow analysis's:
-/// a <c>jsr</c>, and a tail jump, which hands control on and comes back to this routine's
-/// caller.
+/// Which routines call a routine, and which routines it calls, across modules. The call edges
+/// come from the flow analysis: a <c>jsr</c> is one, and so is a tail jump, which passes control
+/// to a routine that then returns straight to the jumping routine's caller.
 /// </summary>
 public sealed class CallHierarchyTests
 {
@@ -41,7 +41,7 @@ public sealed class CallHierarchyTests
         }
         """;
 
-    /// <summary>A routine the caret is on is what a hierarchy starts from, wherever it is declared.</summary>
+    /// <summary>With the caret on a routine's name, the hierarchy starts at the routine's declaration, even in another file.</summary>
     [Fact]
     public async Task APathToARoutineStartsAHierarchyAtWhereItIsDeclared()
     {
@@ -75,8 +75,9 @@ public sealed class CallHierarchyTests
     }
 
     /// <summary>
-    /// Everything that calls a routine, from every module: each caller once, with every call it
-    /// writes. A tail jump is a call, because control comes back from it to this caller's caller.
+    /// Everything that calls a routine, from every module: each caller is listed once, with every
+    /// call it makes. A tail jump counts as a call, because the routine jumped to returns to the
+    /// jumping routine's caller.
     /// </summary>
     [Fact]
     public async Task IncomingCallsAreEveryCallerAcrossTheProgram()
@@ -94,7 +95,7 @@ public sealed class CallHierarchyTests
         Assert.Equal([10], callers[1].FromRanges.Select(range => range.Start.Line));
     }
 
-    /// <summary>What a routine calls, which is the other half of the same edges.</summary>
+    /// <summary>What a routine calls: the same call edges, followed in the other direction.</summary>
     [Fact]
     public async Task OutgoingCallsAreWhatTheRoutineItselfCalls()
     {

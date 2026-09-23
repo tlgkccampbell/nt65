@@ -5,9 +5,9 @@ namespace Norristown.Semantics;
 /// <summary>
 /// A word a macro body's condition compares with what a parameter stands for: a mode, in
 /// <c>.mode(src) == imm</c>, or a word a <c>one(...)</c> lists, in <c>reg == x</c> or, over a
-/// <c>list(one(...))</c>, in <c>.each regs, r { .if r == a }</c>. A word is never looked up, so
-/// a misspelt one is no error of its own; what the parameter may be says whether the
-/// comparison can ever hold.
+/// <c>list(one(...))</c>, in <c>.each regs, r { .if r == a }</c>. The word is never looked up as
+/// a name, so a misspelling is not reported as an unknown name; instead, the values the
+/// parameter can take decide whether the comparison can ever hold.
 /// </summary>
 /// <param name="Word">The word, as the condition writes it.</param>
 /// <param name="Compared">What it is compared with, as the condition writes it: <c>.mode(src)</c> or <c>reg</c>.</param>
@@ -16,7 +16,7 @@ namespace Norristown.Semantics;
 /// <param name="IsMode">Whether the word is compared with <c>.mode</c>, and so is a mode.</param>
 public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name, ArgumentKind Accepts, bool IsMode)
 {
-    /// <summary>The modes <c>.mode</c> gives: those an <c>operand(...)</c> may list but the direct-page three.</summary>
+    /// <summary>The modes <c>.mode</c> gives: those an <c>operand(...)</c> may list, except the three direct-page ones.</summary>
     public static IReadOnlyList<string> Modes { get; } =
         [.. ArgumentKind.OperandModes.Where(mode => !mode.StartsWith("zp", StringComparison.Ordinal))];
 
@@ -38,7 +38,7 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
         if (accepts.Words.Count == 0)
             return Modes;
 
-        // A direct-page mode is one `.mode` spells as the absolute mode it is among.
+        // `.mode` reports a direct-page mode as the matching absolute one (`zpx` as `absx`).
         return [.. accepts.Words
             .Select(mode => mode.StartsWith("zp", StringComparison.Ordinal) ? "abs" + mode[2..] : mode)
             .Distinct()];

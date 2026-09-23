@@ -17,7 +17,8 @@ namespace Norristown.Semantics;
 /// A program in which some files changed can be built from the one before it by reading only
 /// those files again, together with every file the change can reach: a file that looked up a
 /// name whose meaning changed, and a file whose constants the changed files' constants are
-/// worth something through. Nothing any other file resolved or evaluated can have changed.
+/// evaluated from, when the edit could close a cycle through them. Nothing any other file
+/// resolved or evaluated can have changed.
 /// </para>
 /// </summary>
 public sealed class ProgramModel
@@ -31,9 +32,9 @@ public sealed class ProgramModel
     // The names each file looked for in the others, found or not.
     private readonly IReadOnlyDictionary<string, IReadOnlySet<LookedUpName>> lookedUp;
 
-    // The names each file wrote that the file declaring them does not export. They are said
+    // The names each file wrote that the file declaring them does not export. They are reported
     // where they are written, and the file that declares one is not also told nothing uses it,
-    // so a file that starts or stops writing one is news to the file that declares it.
+    // so a file that starts or stops writing one affects the file that declares it.
     private readonly IReadOnlyDictionary<string, IReadOnlySet<UnexportedName>> unexported;
 
     // What each file's own analysis found — binding, evaluating its symbols, checking its
@@ -101,7 +102,7 @@ public sealed class ProgramModel
         var tables = new List<Diagnostic>();
         var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration, target, tree == defines)).ToList();
 
-        // A define is visible in every file by being one, as if every file brought it in.
+        // Every define is visible in every file, as if every file had brought it in.
         var modules = binders.Select(binder => binder.Module).ToList();
         var defined = binders.FirstOrDefault(binder => binder.Tree == defines)?.FileScope.Symbols ?? [];
         foreach (var symbol in defined)
@@ -167,7 +168,8 @@ public sealed class ProgramModel
             CheckExportSizes(result.Symbols, byFile);
         }
 
-        // After the aliases, because one that writes nothing has taken the routine's by now.
+        // After the aliases, because by now an alias that writes no signature has taken the
+        // routine's.
         foreach (var result in bound)
             CheckDeclaredSignatures(result.Symbols, byFile, target);
         CheckDefineNames(modules, defines, tables);
@@ -196,24 +198,24 @@ public sealed class ProgramModel
     }
 
     /// <summary>
-    /// What <paramref name="symbol"/> stands for in this program. A file that was not read
-    /// again after another file changed still names what that file declared before, which is
-    /// the same declaration under the same name; this is the symbol for it now.
+    /// The symbol in this program that corresponds to <paramref name="symbol"/>. A file that
+    /// was not read again after another file changed still names what that file declared
+    /// before, which is the same declaration under the same name; this is the symbol for it now.
     /// </summary>
     public Symbol Current(Symbol symbol) => forwarding.Current(symbol);
 
     /// <summary>
     /// Every place <paramref name="symbol"/> is written, in every file of the program, its
     /// declaration included, in file and source order. A file kept from before an edit
-    /// elsewhere names what the edited file declared then, so what each reference stands for
-    /// is compared as what it stands for now.
+    /// elsewhere names what the edited file declared then, so each reference's symbol is
+    /// compared by its current version.
     /// </summary>
     public IReadOnlyList<(SemanticModel File, SymbolReference Reference)> ReferencesTo(Symbol symbol) =>
         ReferencesTo([symbol]);
 
     /// <summary>
-    /// The same for several symbols at once, which is what one name declared under several of
-    /// them needs: an enum member and the instances of a family named after it.
+    /// The same for several symbols at once, which a name that covers several symbols needs:
+    /// an enum member and the instances of a family named after it.
     /// </summary>
     public IReadOnlyList<(SemanticModel File, SymbolReference Reference)> ReferencesTo(
         IReadOnlyCollection<Symbol> symbols)
@@ -319,14 +321,15 @@ public sealed class ProgramModel
             CheckExportSizes(result.Symbols, found);
         }
 
-        // After the aliases, because one that writes nothing has taken the routine's by now.
+        // After the aliases, because by now an alias that writes no signature has taken the
+        // routine's.
         foreach (var result in bound.Values)
             CheckDeclaredSignatures(result.Symbols, found, cpu);
         CheckDefineNames(replaced, defines, tables);
 
-        // A name whose meaning changed is news to every file that looked it up in its module. A
-        // macro, a function or a list that names it in its body has changed too, and is news in
-        // turn to every file that looked that up. A module that changed its name or what it
+        // A name whose meaning changed affects every file that looked it up in its module. A
+        // macro, a function or a list that names it in its body has changed too, and affects in
+        // turn every file that looked that up. A module that changed its name or what it
         // re-exports changed what paths mean, and every file is read again.
         foreach (var path in dirty)
         {
@@ -335,7 +338,8 @@ public sealed class ProgramModel
             var after = FileInterface.Of(binders[path].Module, bound[path].Symbols, resolved);
             HashSet<string> changed = [.. FileInterface.Changed(before, after)];
 
-            // Two declarations under one name leave a file that names it with no telling which.
+            // Two declarations under one name leave a file that names it unable to tell which
+            // one it means.
             if (!Forwarding.HasDistinctNames(byPath[path].Symbols) || !Forwarding.HasDistinctNames(bound[path].Symbols))
                 changed.UnionWith(before.Keys.Concat(after.Keys));
             if (changed.Count == 0)
@@ -354,9 +358,9 @@ public sealed class ProgramModel
         }
 
         // A file that has started or stopped writing a name another file does not export is
-        // news to the file that declares it: that file says nothing uses the name, or stops
-        // saying it. Nothing else carries this, because the fact is in one file and what it
-        // silences is in another.
+        // affects the file that declares it: that file starts or stops reporting that nothing
+        // uses the name. Nothing else tracks this, because the cause is in one file and the
+        // diagnostic it suppresses is in another.
         var written = new Dictionary<string, IReadOnlySet<UnexportedName>>(this.unexported, StringComparer.Ordinal);
         foreach (var (path, binder) in binders)
         {
@@ -370,9 +374,9 @@ public sealed class ProgramModel
 
         // What is wrong with the program rather than with one file — two exports under one
         // linker name, two files that are one module — is reported on whichever of them sorts
-        // later, which need not be a file that changed. That file says something new from here
-        // on, and what it says the rest of it depends on: a file with an error in it is not
-        // told about the names it never uses. So it is read again with the others.
+        // later, which need not be a file that changed. That file's diagnostics then change, and
+        // its other diagnostics depend on them: a file with an error in it is not told about the
+        // names it never uses. So it is read again with the others.
         foreach (var path in Named(this.tables).Union(Named(tables), StringComparer.Ordinal))
         {
             if (!dirty.Contains(path) && !Spelled(this.tables, path).SequenceEqual(Spelled(tables, path), StringComparer.Ordinal))
@@ -381,8 +385,8 @@ public sealed class ProgramModel
         if (affected.Count > 0)
             return null;
 
-        // What every other file found stands, carried to where an edit moved it. A file that
-        // said something about a place an edit rewrote is read again, and says it afresh.
+        // Every other file's diagnostics are kept, moved to follow the edit. A file with a
+        // diagnostic at a place the edit rewrote is read again, and reports it afresh.
         var byFile = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
         foreach (var (path, diagnostics) in this.byFile)
         {
@@ -439,7 +443,7 @@ public sealed class ProgramModel
                 group => group.Select(name => name.QualifiedName).ToHashSet(StringComparer.Ordinal),
                 StringComparer.Ordinal);
 
-    /// <summary>What of <paramref name="path"/> another file names, which is nothing for most files.</summary>
+    /// <summary>The unexported names of <paramref name="path"/> that another file names, which is none for most files.</summary>
     private static IReadOnlySet<string> Names(IReadOnlyDictionary<string, HashSet<string>> named, string path) =>
         named.GetValueOrDefault(path) ?? [];
 
@@ -474,8 +478,8 @@ public sealed class ProgramModel
         Symbol? SetOf(NameExpressionSyntax name) => Evaluator.SymbolNamed(name, resolved);
         foreach (var symbol in symbols)
         {
-            // An instance of a family reads its signature with what the binding is worth there,
-            // so `dbr = Bank::b` is that bank on each of them.
+            // An instance of a family reads its signature with the binding's value for that
+            // instance, so `dbr = Bank::b` is that instance's bank.
             var bound = symbol.Bound is { } held
                 ? new Dictionary<Symbol, Expansion.Bound> { [held.Binding] = held.Value }
                 : null;
@@ -503,7 +507,7 @@ public sealed class ProgramModel
     /// An extern proc that names a routine, <c>.proc r_long = r: far</c>, is another name for
     /// that routine, and what it declares is what every call through it is checked against. So
     /// it has to declare what the routine does: otherwise near code is reached with <c>jsl</c>,
-    /// or a caller is held to widths the routine never asked for, with nothing said. One that
+    /// or a caller is held to widths the routine never asked for, with no diagnostic. One that
     /// declares nothing takes the routine's signature.
     /// </summary>
     private static void CheckAliases(

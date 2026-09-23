@@ -6,37 +6,37 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A <see cref="SyntaxVisitor{TResult}"/> that writes a tree back out: every method rewrites the
-/// pieces of its node and calls that node's <c>Update</c>, which hands the node back unchanged
-/// when nothing under it moved. Override the kinds a fix is about, return what they are to
-/// become, and leave the rest; a rewrite that changes nothing gives back the tree it was given,
-/// the same objects and all.
+/// A <see cref="SyntaxVisitor{TResult}"/> that produces a rewritten tree: every method rewrites
+/// the pieces of its node and calls that node's <c>Update</c>, which returns the node unchanged
+/// when nothing under it changed. Override the methods for the kinds a fix is about, return
+/// what they are to become, and leave the rest; a rewrite that changes nothing returns the tree
+/// it was given, the very same objects.
 /// <para>
-/// A statement and everything under it is rebuilt where it stands, out of the green nodes the
-/// pieces already hold, so a rewritten node costs what it changed and no more. A line, a block
-/// and the file are not: a line holds the tokens the lexer read rather than what they parse to,
-/// so what changed on a line is written back as text and the file is parsed again from there.
-/// That is why a <c>Visit</c> of a file gives the root of a <em>new</em> tree — every other
-/// character of the file is the same character, and the lines the change did not touch keep the
-/// nodes they had.
+/// A statement and everything under it is rebuilt in place, from the green nodes its pieces
+/// already hold, so a rewrite costs only what it changes. A line, a block and the file are
+/// handled differently: a line holds the tokens the lexer read rather than what they parse to,
+/// so the changes on a line are written back as text and the file is parsed again from there.
+/// That is why a <c>Visit</c> of a file returns the root of a <em>new</em> tree — every other
+/// character of the file stays the same, and the lines the change did not touch keep the nodes
+/// they had.
 /// </para>
 /// <para>
-/// A <see cref="SyntaxAnnotation"/> crosses that reparse. Every annotated piece of what the
-/// rewrite writes is remembered with what it is and where it stands in the new text, and after
-/// the file is read again the piece of the same kind at the same place is given the annotations
-/// back. Where the reparse read the text another way and there is no such piece, the annotations
-/// are dropped, and nothing is said about it.
+/// A <see cref="SyntaxAnnotation"/> survives that reparse. Every annotated piece the rewrite
+/// writes is recorded with its kind and its position in the new text, and after the file is
+/// parsed again the piece of the same kind at the same position gets the annotations back. If
+/// the reparse reads the text differently and there is no such piece, the annotations are
+/// dropped without any diagnostic.
 /// </para>
 /// </summary>
 public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
 {
-    // The text a rewrite of a file, a block or a line has changed so far, in source order and
-    // never overlapping: one per piece of a line that came back different. It is null except
-    // while such a rewrite is running, which is also what tells a nested one to only collect.
+    // The text changes a rewrite of a file, a block or a line has made so far, in source order
+    // and never overlapping: one per piece of a line that came back different. It is null except
+    // while such a rewrite is running, and being non-null tells a nested one to only collect.
     private List<TextChange>? changes;
 
-    // The annotated pieces of what those changes write, which is what puts an annotation back on
-    // the piece it was on once the file has been parsed again. Null and non-null with `changes`.
+    // The annotated pieces those changes write, used to put each annotation back on its piece
+    // once the file has been parsed again. Null exactly when `changes` is.
     private List<Tagged>? tagged;
 
     /// <summary>A node no method is overridden for is left as it is, with everything under it.</summary>
@@ -45,9 +45,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     public override SyntaxNode? DefaultVisit(SyntaxNode node) => node;
 
     /// <summary>
-    /// Rewrites a token. The default leaves it alone; an override gives back the token it is to
-    /// become, which <see cref="SyntaxToken.WithText"/>, <see cref="SyntaxToken.WithTriviaFrom"/>
-    /// and <see cref="SyntaxFactory"/> are how to write.
+    /// Rewrites a token. The default leaves it alone; an override returns the replacement token,
+    /// usually built with <see cref="SyntaxToken.WithText"/>, <see cref="SyntaxToken.WithTriviaFrom"/>
+    /// or <see cref="SyntaxFactory"/>.
     /// </summary>
     /// <param name="token">The token visited.</param>
     /// <returns>What it is to become.</returns>
@@ -157,8 +157,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     public override SyntaxNode? VisitLine(LineSyntax node) => Rewritten(node);
 
     /// <summary>
-    /// The node a required slot came back as. A slot that must hold something cannot be rewritten
-    /// to nothing, and a node of another kind does not fit where the table says one kind goes.
+    /// The rewritten node for a required slot, checked: a required slot cannot be rewritten to
+    /// null, and a node of another kind does not fit where Syntax.xml says one kind goes.
     /// </summary>
     /// <typeparam name="T">What the slot holds.</typeparam>
     /// <param name="rewritten">What the rewrite gave back.</param>
@@ -170,9 +170,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             : $"a rewrite put a {rewritten.Kind} where {slot} belongs");
 
     /// <summary>
-    /// <paramref name="kept"/> written with the whitespace <paramref name="removed"/> had after
-    /// it: a list that loses its last item keeps whatever stood between the list and the rest of
-    /// the line, so that what is left is not written up against it.
+    /// <paramref name="kept"/> with the trailing trivia of <paramref name="removed"/> appended:
+    /// a list that loses its last item keeps the trivia that separated the list from the rest of
+    /// the line, so that what follows is not written up against the new last item.
     /// </summary>
     private static T Carrying<T>(T kept, T removed) where T : SyntaxNode
     {
@@ -183,7 +183,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         return (T)kept.ReplaceToken(end, end.WithTrailingTrivia([.. end.TrailingTrivia, .. after.TrailingTrivia]));
     }
 
-    /// <summary>The token an optional slot came back as, which is nothing where the slot is empty.</summary>
+    /// <summary>Rewrites the token in an optional slot; an empty slot stays empty.</summary>
     private SyntaxToken? VisitToken(SyntaxToken? token) => token is { } written ? VisitToken(written) : null;
 
     /// <summary>The item a list came back with, checked to be of the list's own kind.</summary>
@@ -194,9 +194,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             : null;
 
     /// <summary>
-    /// A file, a block or a line rewritten: what changed on each of its lines, written back into
-    /// the file's text, and the file parsed again from there. A rewrite nested inside another
-    /// only collects, so that one tree is built however deep the walk went.
+    /// Rewrites a file, a block or a line: the changes on each of its lines are written back into
+    /// the file's text and the file is parsed again from there. A rewrite nested inside another
+    /// only collects its changes, so that one new tree is built however deep the walk went.
     /// </summary>
     private SyntaxNode Rewritten(SyntaxNode node)
     {
@@ -254,10 +254,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
 
     /// <summary>
     /// <paramref name="tree"/> with the annotations of <paramref name="tagged"/> put back on the
-    /// pieces they were written on. A piece is looked for by what it is and where it stands: the
-    /// node or the token of the same kind whose full span is the one the annotated piece was
-    /// written at. A reparse that read the text another way leaves no such piece, and those
-    /// annotations are dropped.
+    /// pieces they were written on. A piece is matched by kind and position: the node or token
+    /// of the same kind whose full span is the one the annotated piece was written at. A reparse
+    /// that read the text differently leaves no such piece, and those annotations are dropped.
     /// </summary>
     /// <param name="tree">The file as it reads after the change.</param>
     /// <param name="written">Where each change's own text lands in that file.</param>
@@ -276,8 +275,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             wanted.Add(mark with { At = at });
         }
 
-        // The lines already carrying annotations keep the parse they carry them on; the lines
-        // just read again are given theirs back on the pieces the reparse made of them.
+        // Lines that already carry annotations keep the parse that carries them; lines just
+        // parsed again get their annotations back on the pieces the reparse produced.
         var kept = new Parser.Result?[tree.LineCount];
         for (var i = 0; i < kept.Length; i++)
         {
@@ -287,8 +286,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         var any = false;
         foreach (var (line, wanted) in byLine)
         {
-            // What the statement could not take is the line's too, and a piece of it may be
-            // what was annotated.
+            // The line's skipped tokens are searched too, since an annotated piece may be among
+            // them.
             var read = tree.GetLine(line);
             var reattacher = new Reattacher(wanted);
             var statement = read.Statement;
@@ -326,8 +325,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         }
         foreach (var child in node.ChildNodes)
         {
-            // A line is visited whole first, so that a rewrite may swap or drop one; where it
-            // comes back as itself, the pieces it is written in are what the rewrite reached.
+            // Each line is visited as a whole first, so that a rewrite can replace or remove it;
+            // if it comes back unchanged, the changes collected from its pieces stand.
             if (child is not LineSyntax line)
             {
                 Collect(child);
@@ -339,8 +338,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             if (ReferenceEquals(rewritten, line))
                 continue;
 
-            // The whole line is being written over, so whatever the walk down it found is part
-            // of what goes: one change for the line, never one inside a span already replaced.
+            // The whole line is being replaced, so any changes collected from inside it are
+            // discarded: one change covers the line, never one inside a span already replaced.
             changes.RemoveRange(before, changes.Count - before);
             tagged.RemoveRange(marked, tagged.Count - marked);
             Changed(line, rewritten);
@@ -348,15 +347,15 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     }
 
     /// <summary>
-    /// What a rewrite changes on one line: its <c>.export</c>, its statement, what was left over,
-    /// its break. A line any of them changes is read again whole, so the statement or what was
-    /// left over, where it carries an annotation and was not itself rewritten, is written again
-    /// as it stands, for its annotations to be found where it lands.
+    /// Collects what a rewrite changes on one line: its <c>.export</c>, its statement, its
+    /// skipped tokens and its line break. A line with any change is parsed again whole, so a
+    /// statement or skipped tokens that carry an annotation but were not themselves rewritten
+    /// are written out again unchanged, so that their annotations are found where they land.
     /// </summary>
     private void CollectLine(LineSyntax line)
     {
-        // Each piece is visited in the order it is written, which a rewrite that counts or
-        // carries something from token to token relies on, before anything is written.
+        // Each piece is visited in source order, before the file's text is rewritten; a rewrite
+        // that counts tokens or carries state from one token to the next relies on that order.
         if (line.ExportKeyword is { } exported)
             Changed(exported, VisitToken(exported));
         var statement = Visit(line.Statement);
@@ -370,9 +369,10 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     }
 
     /// <summary>
-    /// A piece of a line the rewrite gave back as <paramref name="rewritten"/>: a change where it
-    /// changed, and where it did not but <paramref name="moved"/> says the line is read again, a
-    /// change writing it as it stands when it carries an annotation.
+    /// Records a change for a piece of a line that the rewrite returned as
+    /// <paramref name="rewritten"/>. When the piece is unchanged but <paramref name="moved"/> says
+    /// the line will be parsed again, and the piece carries an annotation, a change writing it
+    /// out unchanged is recorded so that its annotations are tracked.
     /// </summary>
     private void Kept(SyntaxNode written, SyntaxNode? rewritten, bool moved)
     {
@@ -404,10 +404,10 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     }
 
     /// <summary>
-    /// Remembers the annotated pieces of <paramref name="tree"/> that stand between the changes.
-    /// The file is parsed again from the first change to the last, in one span, so a line the
-    /// rewrite never wrote over is still read again where it lies between two that it did; what
-    /// it carries crosses that reparse with the rest.
+    /// Records the annotated pieces of <paramref name="tree"/> that lie between the changes. The
+    /// file is parsed again in one span from the first change to the last, so a line the rewrite
+    /// never changed is still parsed again when it lies between two that it did; its annotations
+    /// have to cross that reparse with the rest.
     /// </summary>
     /// <param name="tree">The file as it stands.</param>
     /// <param name="changes">What the rewrite writes, in source order.</param>
@@ -423,8 +423,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             if (to <= from)
                 continue;
 
-            // How far the text of this gap has moved: everything written before it, against
-            // everything it stood after.
+            // How far this gap's text has moved: where it starts in the new text, minus where it
+            // started in the old.
             var moved = written[i] + changes[i].NewText.Length - from;
             foreach (var piece in tree.Root.AnnotatedPieces())
             {
@@ -487,8 +487,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         ImmutableArray<SyntaxAnnotation> Annotations);
 
     /// <summary>
-    /// A rewrite that hands back the pieces it is given, annotated: a node or a token standing
-    /// where an annotated one stood, and of the same kind, is the piece that was annotated.
+    /// A rewrite that returns the pieces it visits with their annotations restored: a node or a
+    /// token of the same kind, at the same position, as a recorded annotated piece is taken to be
+    /// that piece.
     /// </summary>
     /// <param name="wanted">The annotated pieces to look for, all on one line.</param>
     private sealed class Reattacher(List<Tagged> wanted) : SyntaxRewriter
@@ -499,8 +500,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             if (node is null)
                 return null;
 
-            // The piece is looked for before the walk goes down, because that is where the node
-            // still stands in the file; what comes back is a node of its own with no place yet.
+            // Look the node up before visiting its children, while it still has its position in
+            // the file; the rewritten node that comes back is detached and has no position yet.
             var found = Wanted(node.FullSpan, node.Kind, isToken: false);
             var rewritten = base.Visit(node);
             return found.IsEmpty || rewritten is null ? rewritten : rewritten.WithAdditionalAnnotations(found);

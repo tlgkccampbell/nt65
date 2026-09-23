@@ -9,7 +9,7 @@ public static class SegmentNames
     /// <summary>
     /// The segment a token names: an identifier, or a name in quotes, which is an error that
     /// still names the segment. Segment names hold no escapes, so the quotes come off by hand.
-    /// A missing token names nothing, which is the one place that is said.
+    /// A missing token names nothing, and this is the one place that is checked.
     /// </summary>
     public static string? Of(SyntaxToken token) => token.IsMissing ? null : token.Kind switch
     {

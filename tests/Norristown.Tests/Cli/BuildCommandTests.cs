@@ -40,7 +40,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.False(Exists("app/build/hw/vic.s.lines"));
     }
 
-    /// <summary><c>--config</c> gives the configuration's defines over the project's, and its output directory.</summary>
+    /// <summary><c>--config</c> applies the configuration's defines over the project's, and its output directory.</summary>
     [Fact]
     public void AConfigurationChoosesDefinesAndOutput()
     {
@@ -136,8 +136,8 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A file named on the command line is built as part of its project, so a name another module
-    /// exports means what it means, and only that file's output is written.
+    /// A file named on the command line is built as part of its project, so names that other
+    /// modules export resolve as usual, and only that file's output is written.
     /// </summary>
     [Fact]
     public void ANamedFileIsBuiltWithinItsProject()
@@ -154,9 +154,9 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A project file with something wrong with it is why a build finds no files far more
-    /// often than a missing `files` is, so what is wrong with it comes first and the forty
-    /// lines of usage stay away: the command line is not what there is to fix.
+    /// When a build finds no files, an error in the project file is a far more common cause than a
+    /// missing `files`, so the project file's diagnostics come first and the forty lines of usage
+    /// text are not printed: the command line is not what needs fixing.
     /// </summary>
     [Fact]
     public void AProjectFilesOwnProblemIsSaidBeforeThereAreNoFiles()
@@ -172,7 +172,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.DoesNotContain("usage: nt65 build", said);
     }
 
-    /// <summary>With no project, a name from a module the build lacks says so, and an assumed CPU is noted.</summary>
+    /// <summary>With no project, a name from a module missing from the build is reported, and a build that assumes a CPU notes it.</summary>
     [Fact]
     public void WithoutAProjectWhatIsMissingIsSaid()
     {
@@ -209,14 +209,14 @@ public sealed class BuildCommandTests : IDisposable
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.d")));
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.h")));
 
-        // It exits as a build would, so what a build refuses it refuses.
+        // It exits with the code a build would, so a program a build rejects fails the check too.
         File("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
         Assert.Equal(1, Run(app, "build", "--check").Code);
     }
 
     /// <summary>
-    /// <c>--json</c> puts one object per diagnostic on standard output, with the related spans a
-    /// line leaves to an editor, and leaves standard error to what nt65 says about itself.
+    /// <c>--json</c> puts one object per diagnostic on standard output, including the related spans
+    /// the one-line form leaves to an editor, and keeps standard error for nt65's own messages.
     /// </summary>
     [Fact]
     public void JsonWritesOneObjectPerDiagnostic()
@@ -246,8 +246,9 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Colour marks what a diagnostic is and nothing else, so the position stays selectable and
-    /// the message is not competing with it. Whether there is any is the caller's to decide.
+    /// Colour highlights a diagnostic's severity and nothing else, so the position stays
+    /// selectable and does not compete with the message. Whether to use colour at all is the
+    /// caller's decision.
     /// </summary>
     [Fact]
     public void ColourMarksWhatADiagnosticIs()
@@ -288,8 +289,8 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A command or an option nt65 does not have is one line of news and where to read the rest.
-    /// The usage text answers <c>nt65</c> on its own and <c>--help</c>, which asked for it.
+    /// An unknown command or option gets a one-line error and a pointer to <c>--help</c>. The
+    /// usage text is printed only for <c>nt65</c> on its own and for <c>--help</c>, which asks for it.
     /// </summary>
     [Fact]
     public void WhatIsNotACommandSaysSoAndPointsAtTheHelp()
@@ -312,8 +313,9 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// <c>--stdout</c> writes one file's ca65 and nothing else: the same text the editor shows
-    /// beside the source, with a first line where the program is wrong and no files written.
+    /// <c>--stdout</c> writes one file's ca65 and nothing else: the same text as the editor's
+    /// output preview, with a first line saying so when the program has errors, and no files
+    /// written.
     /// </summary>
     [Fact]
     public void StdoutWritesOneFilesOutputAndNoFiles()
@@ -328,7 +330,8 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Contains("    rts\n", written, StringComparison.Ordinal);
         Assert.False(Exists("app/build/main.s"));
 
-        // A program that is wrong still says what could be written, under a line saying so.
+        // A program with errors still prints what could be written, under a line saying it is
+        // incomplete.
         File("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n");
         var (wrong, incomplete, reported) = Apart(app, false, "build", "--stdout", "main.nt65");
         Assert.Equal(1, wrong);
@@ -338,16 +341,16 @@ public sealed class BuildCommandTests : IDisposable
             incomplete,
             StringComparison.Ordinal);
 
-        // It answers about one file, so it is one file it is asked about.
+        // It prints one file's output, so it needs exactly one file named.
         Assert.Equal(2, Run(app, "build", "--stdout").Code);
     }
 
     /// <summary>
-    /// A module another places has no output of its own. <c>--stdout</c> on its file writes its
-    /// part of its unit's output, between the comments that open and close it, which is what the
-    /// editor shows beside it; naming it writes the unit it is in; and the output it had while it
-    /// stood alone is deleted by the next whole build, as any output the program no longer
-    /// writes is.
+    /// A module that another module places has no output of its own. <c>--stdout</c> on its file
+    /// writes its part of the translation unit's output, between the comments that open and close
+    /// it, which is what the editor's preview shows; naming its file writes the unit it is placed
+    /// in; and the output it had while it stood alone is deleted by the next whole-program build,
+    /// like any output the program no longer writes.
     /// </summary>
     [Fact]
     public void APlacedModuleIsWrittenAsItsPartOfTheUnit()
@@ -385,7 +388,7 @@ public sealed class BuildCommandTests : IDisposable
         return (code, output + error);
     }
 
-    /// <summary>The two streams kept apart, for what is written to one and not to the other.</summary>
+    /// <summary>Runs nt65 with standard output and standard error kept apart, for checking which stream something goes to.</summary>
     private static (int Code, string Output, string Error) Apart(
         string directory, bool colour, params string[] arguments)
     {

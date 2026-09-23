@@ -3,12 +3,13 @@ using Norristown.Tests.Oracle;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// The SNES corpus program with mistakes planted in it, of the kinds its study planted: a call
-/// in the wrong width, a data bank or a direct page that does not reach what an operand names,
-/// a register written from a bank it is not mirrored in, a routine called or left the wrong
-/// way, a frame bigger than the stack. Signature sets and the rest of the ceremony it no longer
-/// writes must not have hidden any of them. Each is in a routine of its own, so one compile
-/// catches them all.
+/// The SNES corpus program with mistakes planted in it: a call made with a register in the
+/// wrong width, a data bank or direct page that does not reach the address an operand names,
+/// a hardware register written while the data bank is one it is not mirrored in, a routine
+/// called or returned from the wrong way, and a stack frame bigger than what was pushed. The
+/// program no longer writes out signature sets and the other annotations it once needed, and
+/// dropping them must not have hidden any of these mistakes. Each mistake is in a routine of
+/// its own, so one compile catches them all.
 /// </summary>
 public sealed class PlantedMistakesTests
 {

@@ -6,18 +6,20 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Diagnostics">The diagnostic it fixes, or none for a change nothing reported.</param>
 /// <param name="Edit">The change.</param>
 /// <param name="IsPreferred">
-/// Whether it is the change to apply without asking which, left unsaid where it is one of
-/// several readings of the same line and the programmer is the one who knows.
+/// Whether a client may apply this change without asking the programmer to choose. Left null
+/// where the change is one of several plausible readings of the same line, since only the
+/// programmer knows which was meant.
 /// </param>
 /// <param name="Command">
-/// What the client runs once it has applied the change, or null for a change that is done when
-/// it is written: a routine lifted out of another is named by the programmer, so the client is
-/// asked to start a rename on the name it was given to begin with.
+/// What the client runs once it has applied the change, or null for a change that is complete
+/// once its edits are applied. A change that writes a placeholder name, such as a routine
+/// extracted from another, asks the client to start a rename on that placeholder so the
+/// programmer can name it.
 /// </param>
 /// <param name="Disabled">
-/// Why it cannot be applied here, or null for one that can. A change that would change what
-/// the line means is worth offering greyed with the reason, so that looking for it finds the
-/// reason rather than nothing.
+/// Why the change cannot be applied here, or null if it can. A change that would alter what the
+/// line means is still offered, greyed out with the reason, so that a programmer looking for
+/// it finds the reason rather than nothing.
 /// </param>
 internal sealed record CodeAction(
     string Title,

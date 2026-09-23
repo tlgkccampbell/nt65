@@ -5,9 +5,9 @@ namespace Norristown.Layout;
 
 /// <summary>
 /// What an <c>.ensure</c> writes: the <c>rep</c> that makes the widths it names 16 bits and
-/// the <c>sep</c> that makes them 8, each only where the analysis did not find the width
-/// already holding. Its effect on the state is the same whatever it writes, so the choice is
-/// made once the analysis has settled and never feeds back into it.
+/// the <c>sep</c> that makes them 8, each written only where the analysis did not find that
+/// width already in effect. Its effect on the state is the same whatever it writes, so the
+/// choice is made once the analysis has settled and never feeds back into it.
 /// </summary>
 /// <param name="Reset">The flags the <c>rep</c> clears, or zero when there is none.</param>
 /// <param name="Set">The flags the <c>sep</c> sets, or zero when there is none.</param>
@@ -17,8 +17,9 @@ public readonly record struct Ensured(int Reset, int Set)
     public int Length => (Reset != 0 ? 2 : 0) + (Set != 0 ? 2 : 0);
 
     /// <summary>
-    /// What <paramref name="directive"/> writes where <paramref name="before"/> reaches it. A
-    /// width that is not known there, or a directive nothing reaches, is set all the same.
+    /// What <paramref name="directive"/> writes when the state reaching it is
+    /// <paramref name="before"/>. A width that is not known there, or a directive no state
+    /// reaches (a null <paramref name="before"/>), is always set.
     /// </summary>
     public static Ensured Of(EnsureDirectiveSyntax directive, ProcessorState? before)
     {

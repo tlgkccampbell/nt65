@@ -10,16 +10,17 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <para>
 /// Each thread keeps its own tables. They are small and direct-mapped, so one shared set
 /// would have threads lexing different files evicting each other, and the whitespace table
-/// — which every indented line reaches — would churn worst of all. A token's slot is hashed
-/// from the identity of its trivia list, so a lost whitespace entry takes every token that
-/// was sharing that list with it. Sharing across threads would save one token object per
-/// thread and cost all of that, so it is not worth having; the tables also need no locks
-/// this way, and what the cache holds never depends on what another thread is doing.
+/// — which every indented line uses — would churn worst of all. A token's slot is hashed
+/// from the identity of its trivia list, so evicting a whitespace entry also strands every
+/// cached token that shared that list: the next lookup builds a new list, and those tokens no
+/// longer match it. Sharing across threads would save one token object per thread and cost
+/// all of that, so it is not worth having; per-thread tables also need no locks, and what the
+/// cache holds never depends on what another thread is doing.
 /// </para>
 /// <para>
-/// Only the lexer puts a token in here, so nothing that a rewrite made can ever come back out of
-/// it: a token given a diagnostic is refused outright, and a token given a
-/// <see cref="SyntaxAnnotation"/> is a copy made well after the lexer has finished with the line.
+/// Only the lexer puts tokens in here, so no token changed after lexing can come back out of
+/// it: a token with a diagnostic is never cached, and a token with a
+/// <see cref="SyntaxAnnotation"/> is a copy made after the lexer has finished with the line.
 /// </para>
 /// </summary>
 internal static class GreenCache

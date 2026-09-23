@@ -7,9 +7,9 @@ namespace Norristown.Tests.Semantics;
 public sealed class MacroExpansionTests
 {
     /// <summary>
-    /// The ca65 a one-file program becomes, without the header or the imports. A program that
-    /// names no segment is placed in the code segment, on a line of its own before the rest,
-    /// and every program is module `main`, on a line before that.
+    /// The ca65 a one-file program becomes, without the header lines every output starts with.
+    /// A program that names no segment is given a <c>.segment CODE</c> line before the rest, and
+    /// every program is given a <c>.module main</c> line before that.
     /// </summary>
     private static string Body(string text)
     {
@@ -65,7 +65,7 @@ public sealed class MacroExpansionTests
             """));
     }
 
-    /// <summary>An operand parameter stands as a whole operand, index and all.</summary>
+    /// <summary>An operand argument is substituted as a whole operand, index included.</summary>
     [Fact]
     public void AnOperandArgumentKeepsItsIndex()
     {
@@ -84,7 +84,7 @@ public sealed class MacroExpansionTests
     }
 
     /// <summary>
-    /// An argument stands for its whole self, parenthesized, so <c>value * 2</c> with the
+    /// An argument is substituted as a parenthesized whole, so <c>value * 2</c> with the
     /// argument <c>1 + 2</c> is 6, where ca65's textual substitution would give 5.
     /// </summary>
     [Fact]
@@ -102,7 +102,7 @@ public sealed class MacroExpansionTests
             """));
     }
 
-    /// <summary>Each expansion's locals are its own, and are named so in the output.</summary>
+    /// <summary>Each expansion's local labels are its own, and get distinct names in the output.</summary>
     [Fact]
     public void EachExpansionRenamesWhatItsBodyDeclares()
     {
@@ -171,8 +171,9 @@ public sealed class MacroExpansionTests
     }
 
     /// <summary>
-    /// <c>.byteof</c> is byte n of an operand: a shift and a mask of an immediate, and the
-    /// byte after it for a mode that has one. One macro then serves constants and memory.
+    /// <c>.byteof</c> is byte n of an operand: a shift and a mask of an immediate's value, and
+    /// the address plus n for a mode that addresses memory. One macro then serves constants and
+    /// memory alike.
     /// </summary>
     [Fact]
     public void ByteofServesConstantsAndMemoryAlike()
@@ -269,7 +270,7 @@ public sealed class MacroExpansionTests
         Assert.Equal(1, written.Split('\n').Count(line => line.Trim() == "nop"));
     }
 
-    /// <summary>A default is what a call that leaves a parameter out gets.</summary>
+    /// <summary>A call that leaves a parameter out gets that parameter's default.</summary>
     [Fact]
     public void ADefaultFillsInWhatACallLeavesOut()
     {

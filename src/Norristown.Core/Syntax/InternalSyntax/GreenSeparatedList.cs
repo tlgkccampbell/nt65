@@ -32,7 +32,10 @@ internal sealed class GreenSeparatedList : GreenNode
     /// <summary>How many items the list has, separators aside.</summary>
     public int Count => (Children.Length + 1) / 2;
 
-    /// <summary>How many separators the list has: one fewer than the items, or as many.</summary>
+    /// <summary>
+    /// How many separators the list has: one fewer than the items, or as many when the source
+    /// ends the list with one.
+    /// </summary>
     public int SeparatorCount => Children.Length / 2;
 
     /// <inheritdoc/>

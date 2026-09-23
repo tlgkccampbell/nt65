@@ -3,10 +3,10 @@ using Norristown.Syntax;
 namespace Norristown;
 
 /// <summary>
-/// Where the places one version of a file names are in the next. The two texts are compared
-/// for what they begin and end with in common: what comes before the difference stays where
-/// it was, what comes after it moves by however much longer or shorter the text got, and
-/// what is inside it is gone.
+/// Maps positions in one version of a file to the same positions in the next version. The two
+/// texts are compared for the prefix and suffix they share: a position before the changed
+/// region stays where it was, a position after it shifts by however much longer or shorter the
+/// text got, and a position inside it has no counterpart.
 /// </summary>
 internal sealed class EditMap
 {
@@ -29,7 +29,10 @@ internal sealed class EditMap
         end = old.Length - common;
     }
 
-    /// <summary>What moves a diagnostic through every one of <paramref name="maps"/>, each about its own file.</summary>
+    /// <summary>
+    /// A function that moves a diagnostic through every one of <paramref name="maps"/> (each for its
+    /// own file), returning null when any map cannot move it.
+    /// </summary>
     public static Func<Diagnostic, Diagnostic?> Composed(IReadOnlyList<EditMap> maps) => diagnostic =>
     {
         foreach (var map in maps)
@@ -42,8 +45,8 @@ internal sealed class EditMap
     };
 
     /// <summary>
-    /// Every diagnostic of <paramref name="diagnostics"/> as <paramref name="moved"/> moves it,
-    /// or null when one of them could not be.
+    /// Every diagnostic in <paramref name="diagnostics"/> moved by <paramref name="moved"/>, or
+    /// null when any one of them could not be moved.
     /// </summary>
     public static List<Diagnostic>? Moved(IEnumerable<Diagnostic> diagnostics, Func<Diagnostic, Diagnostic?> moved)
     {

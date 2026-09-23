@@ -7,8 +7,8 @@ namespace Norristown.Layout;
 /// block of that segment, as ca65 writes them. A nested segment block's bytes are in its own
 /// segment's run, at their place in the text, and the run around it continues across it. An
 /// <c>.align</c> ends the run it is in, because how many bytes it generates depends on an
-/// address, which nt65 never knows, and a <c>.place</c> ends every run, because what the
-/// placed module writes is between.
+/// address, which nt65 never knows, and a <c>.place</c> ends every run, because the placed
+/// module's bytes come in between.
 /// </para>
 /// </summary>
 /// <param name="Stream">Which run of bytes.</param>

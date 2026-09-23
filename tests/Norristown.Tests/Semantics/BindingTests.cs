@@ -103,7 +103,7 @@ public sealed class BindingTests
         Assert.Equal(ScopeKind.Proc, model.Symbol("@done").Scope.Kind);
     }
 
-    /// <summary>A nested scope can branch to its proc's cheap local, which is what the language asks for.</summary>
+    /// <summary>Code in a nested scope can branch to a cheap local of its enclosing proc: cheap locals are looked up outward.</summary>
     [Fact]
     public void ACheapLocalIsFoundOutwardThroughScopes()
     {
@@ -171,8 +171,9 @@ public sealed class BindingTests
     }
 
     /// <summary>
-    /// A register is the one word a name may not be: <c>asl a</c> is a question about an
-    /// operand, which position cannot answer. A mnemonic is a name, and only warned about.
+    /// A register is the one word that cannot be a name: in <c>asl a</c> the operand could be
+    /// the register or the name, and its position cannot tell them apart. A mnemonic may be a
+    /// name, and only draws a warning.
     /// </summary>
     [Fact]
     public void ARegisterIsTheOneWordANameMayNotBe()
@@ -251,8 +252,8 @@ public sealed class BindingTests
     }
 
     /// <summary>
-    /// A path reaches only what every scope on the way out has a name for, so a cheap local
-    /// and anything inside an anonymous <c>.scope</c> are named by themselves alone.
+    /// A path can reach a symbol only if every scope enclosing it has a name, so a cheap local
+    /// and anything inside an anonymous <c>.scope</c> have no qualified name beyond their own.
     /// </summary>
     [Fact]
     public void OnlyNamesWithAWayInAreQualified()
@@ -287,8 +288,9 @@ public sealed class BindingTests
     }
 
     /// <summary>
-    /// A member a record gives a value names the member of its type, on one line or several, in
-    /// an array's body and inside a record member, so a rename or a highlight finds it there too.
+    /// Where a record gives a member a value (<c>x = 1</c>), the name is a reference to that member
+    /// of its type, whether the record is on one line or several, in an array's body, or nested
+    /// in another record's member, so a rename or a highlight finds it there too.
     /// </summary>
     [Fact]
     public void AMemberARecordGivesAValueIsAReferenceToIt()

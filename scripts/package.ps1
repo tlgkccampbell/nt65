@@ -2,8 +2,8 @@
 # language server published into it. Both run on an installed .NET 10 runtime.
 #   dotnet tool install --global nt65 --configfile artifacts/nuget.config
 #   code --install-extension artifacts/nt65-<version>.vsix
-# -Version packages as that version instead of the one in the tree, which is what the release
-# workflow passes the tag as.
+# -Version packages as that version instead of the one in the tree; the release workflow passes
+# the tag's version this way.
 [CmdletBinding()]
 param([string]$Version)
 
@@ -18,9 +18,10 @@ New-Item -ItemType Directory -Force $artifacts | Out-Null
 $packVersion = @(if ($Version) { "-p:Version=$Version" })
 dotnet pack (Join-Path $root 'src/Norristown.Cli/Norristown.Cli.csproj') --nologo -v q -c Release -o $artifacts @packVersion
 
-# A framework-dependent server, so one extension serves every platform .NET runs on. Windows
-# locks a running server's files, and a delete that fails halfway leaves a server that cannot
-# start, so a running one stops the script before anything is removed.
+# The server is published framework-dependent, so one extension works on every platform .NET
+# runs on. Windows locks a running server's files, and a delete that fails partway leaves a
+# server that cannot start, so if the packaged server is running, the script stops before
+# deleting anything.
 if ($IsWindows) {
     $running = Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
         Where-Object { $_.CommandLine -like "*$server*" }
@@ -45,8 +46,8 @@ try {
 finally {
     Pop-Location
 }
-# A package source of the artifacts alone, which works where a NuGet configuration maps
-# package sources and `--add-source` is refused.
+# A NuGet configuration whose only package source is artifacts/. It works even where the
+# user's NuGet configuration uses package source mapping, which makes `--add-source` fail.
 @'
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>

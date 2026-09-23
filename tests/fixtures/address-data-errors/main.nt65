@@ -18,7 +18,7 @@
     .byte table             ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: `<table` is its low byte
     .byte table + 1         ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: `<table` is its low byte
 
-    ; What says which bits it keeps is fine.
+    ; A form that says which bits it keeps is accepted.
     .addr .loword(sprite)
     .byte <table, table - table
     .faraddr sprite + 1
@@ -41,7 +41,7 @@
     rts
 }
 
-; An enum is a set of numbers.
+; An enum member is a constant number, so it cannot name an address.
 .enum Handler {
     first = main            ;! error[enum-member-is-not-an-address]: `first` is an enum member, whose value is a constant, and this names an address
     second

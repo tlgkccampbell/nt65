@@ -1,13 +1,13 @@
-# Every corpus program and every example, built end to end against the pinned cc65: the
+# Builds every corpus program and every example end to end against the pinned cc65: the
 # command line, the project file and its globs, `--depfile`, `--c-header`, then ca65, cc65,
 # ld65 and `remap-dbg`. The test suite compiles the same sources in process and assembles
-# them through the oracle; what only a build reaches is `nt65 build` itself and the files it
-# writes, which is why this is a gate step rather than a test.
+# them through the ca65 oracle; only a real build exercises `nt65 build` itself and the files
+# it writes, which is why this is a gate step rather than a test.
 #
-# It drives the same steps as each program's build.sh and the interop Makefile. Those stay
-# as the documented way to build one by hand; the gate does not take `make` or `sh` as a
-# dependency for what PowerShell can run, and an incremental build is what the Makefile is
-# for, not what a gate wants.
+# It runs the same steps as each program's build.sh and the interop Makefile. Those remain
+# the documented way to build a program by hand; the gate does not depend on `make` or `sh`
+# for steps PowerShell can run, and it wants a clean build, not the incremental build the
+# Makefile exists for.
 [CmdletBinding()]
 param([string]$Configuration = 'Debug')
 
@@ -27,9 +27,10 @@ foreach ($tool in $nt65, $ca65, $ld65) {
     }
 }
 
-# A clean assembly or link says nothing at all, so anything either of them says is a failure.
-# nt65 is allowed to warn — the interop program's C header warns about two routines whose
-# linker names C cannot spell, on purpose — and what it says is shown either way.
+# A clean run of ca65, cc65 or ld65 prints nothing, so any output counts as a failure unless
+# -MayWarn is given. `nt65 build` is allowed to warn — the interop program's C header
+# deliberately warns about two routines whose linker names are not valid C identifiers — and
+# its output is printed either way.
 function Run([string]$exe, [string[]]$arguments, [switch]$MayWarn) {
     $said = (& $exe @arguments 2>&1 | Out-String).Trim()
     $failed = $LASTEXITCODE -ne 0 -or (-not $MayWarn -and $said.Length -gt 0)
@@ -49,9 +50,10 @@ function Sources([string]$directory, [string]$pattern) {
     Get-ChildItem $directory -Filter $pattern -Recurse -File | Sort-Object FullName
 }
 
-# Each program: where it is, what `nt65 build` is given, where the output lands, the linker
-# configuration, the image, the hand-written ca65 and C beside it, and a script that makes
-# what the sources include before nt65 measures it.
+# Each program: its directory, the arguments to `nt65 build`, where the generated ca65 lands,
+# the linker configuration, the image, the hand-written ca65 (and the CPU to assemble it for)
+# and C beside it, and a script that generates the files the sources include with `.incbin`
+# before nt65 reads their sizes.
 $programs = @(
     @{ Name = 'c64';    Directory = 'tests/corpus/c64';    Build = @();
        Generated = 'build';             Config = 'c64.cfg';  Image = 'build/game.prg' }
@@ -70,8 +72,8 @@ foreach ($program in $programs) {
     $watch = [Diagnostics.Stopwatch]::StartNew()
     Push-Location (Join-Path $root $program.Directory)
     try {
-        # From nothing every time: the gate is asking whether a build works, not whether an
-        # incremental one does, and a stale object file would link either way.
+        # Build from clean every time: the gate checks that a full build works, not an
+        # incremental one, and a stale object file would link and hide a failure.
         if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }
         if ($program.Prepare) {
             & (Join-Path (Get-Location) $program.Prepare)
@@ -94,7 +96,7 @@ foreach ($program in $programs) {
 
         # The C is compiled against the header nt65 just wrote, which is what the header is
         # for. It is not linked: the cc65 runtime it would need is not part of this program,
-        # and the hand-written `asm/main.s` stands in for it in the image.
+        # and the hand-written `asm/main.s` takes its place in the image.
         foreach ($source in Sources $program.C '*.c') {
             New-Item -ItemType Directory -Force 'build/c' | Out-Null
             $assembly = Join-Path 'build/c' ($source.BaseName + '.s')

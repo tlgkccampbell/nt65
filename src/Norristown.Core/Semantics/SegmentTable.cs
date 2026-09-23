@@ -9,7 +9,7 @@ namespace Norristown.Semantics;
 /// <summary>
 /// The program's segments. Every segment is declared exactly once, by a
 /// <c>.segment NAME: size</c> item in one file or in <c>nt65.json</c>; the standard names are
-/// predeclared, and that predeclaration is what stands when the program says nothing, so a
+/// predeclared, and that predeclaration applies when the program does not declare them, so a
 /// program may declare one of them once, at its own size, to give it a direct page, a bank or
 /// mirrors. A segment block naming a segment declared nowhere is an error, so a misspelled
 /// name is caught before ld65 runs.
@@ -36,7 +36,7 @@ public sealed class SegmentTable
     private readonly Dictionary<string, AddressSpace> spaces = new(StringComparer.Ordinal);
 
     // The `dp = e` and `bank = e` a file's declarations write, by segment. They are expressions,
-    // worth something only once the program's constants are, which is after the table is needed.
+    // with values only once the program's constants have them, which is after the table is needed.
     private readonly Dictionary<string, SeparatedSyntaxList<SegmentAttributeSyntax>> attributes = new(StringComparer.Ordinal);
 
     private SegmentTable(Dictionary<string, Segment> segments) => this.segments = segments;
@@ -60,7 +60,8 @@ public sealed class SegmentTable
 
     /// <summary>
     /// The table for a program whose project file declares some of its segments. Those
-    /// are read first, so a file declaring one of them is the declaration that is reported.
+    /// are read first, so when a file declares one of them too, the file's declaration is the one
+    /// reported as the duplicate.
     /// </summary>
     public static SegmentTable Build(
         IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, IEnumerable<AddressSpace> configuredSpaces,
@@ -136,13 +137,13 @@ public sealed class SegmentTable
         return null;
     }
 
-    /// <summary>What is said of a segment that declares mirrors and no home bank for them to mirror.</summary>
+    /// <summary>The diagnostic for a segment that declares mirrors and no home bank for them to mirror.</summary>
     public static DiagnosticMessage MirrorsNeedABank(string segment) =>
         Catalogue.SegmentMirrorsNeedABank.Says(segment);
 
     /// <summary>
-    /// Works out the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> the files' declarations write, now that
-    /// <paramref name="valueOf"/> can answer what an expression is worth.
+    /// Works out the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> the files'
+    /// declarations write, now that <paramref name="valueOf"/> can evaluate expressions.
     /// </summary>
     public void Evaluate(Func<ExpressionSyntax, long?> valueOf, List<Diagnostic> diagnostics)
     {

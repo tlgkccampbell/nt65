@@ -9,7 +9,8 @@ namespace Norristown.Layout;
 /// to. How much room a directive takes is a question about what the program means, so it is
 /// answered once, by the semantic model; what is left here is what the assembler will
 /// refuse: a value too wide for the directive holding it, text that is not bytes, a
-/// reservation whose count nt65 cannot work out, and a count its values do not come to.
+/// reservation whose count nt65 cannot work out, and an element count that does not match the
+/// number of values given.
 /// </summary>
 public static class DataLengths
 {
@@ -90,14 +91,16 @@ public static class DataLengths
         var name = DataSyntax.NameOf(element);
         var operands = ElementsOf(directive);
 
-        // Storage is declared with its type, and padding has no name to declare.
+        // A declaration's storage is given by its element type, not by `.res`, and padding
+        // such as `.align` is not something a name can declare.
         if (directive.Parent is DataDeclarationSyntax && name is ".res" or ".align")
         {
             Report(directive, model, diagnostics, on,
                 name == ".res" ? Catalogue.ResNotADeclaration.Says() : Catalogue.AlignNotADeclaration.Says(),
 
                 // The room a `.res` reserves is the count of the `.byte[n]` that replaces it.
-                // An `.align` is a place to write the declaration rather than a way to write it.
+                // An `.align` only positions a declaration and cannot become one, so it gets
+                // no fix.
                 name == ".res" && on is null && directive.Tree == model.Tree
                     ? new DiagnosticFix(FixKind.Storage)
                     : null);
@@ -132,8 +135,8 @@ public static class DataLengths
                 }
                 break;
 
-            // A far address in a 16-bit slot is not the address meant: ca65 would keep the low
-            // bits of it in an `.addr` without a word.
+            // A far address in a 16-bit slot is not the address meant: in an `.addr`, ca65
+            // would silently keep only its low 16 bits.
             case ".word":
             case ".beword":
             case ".addr":
@@ -148,7 +151,8 @@ public static class DataLengths
                 Values(operands, model, diagnostics, Holds(name), on);
                 break;
 
-            // The byte directives take an address and keep one byte of it, so they limit nothing.
+            // The byte directives take an address and keep one byte of it, so no range limit
+            // applies to their values.
             case ".lobytes":
             case ".hibytes":
             case ".bankbytes":
@@ -198,7 +202,7 @@ public static class DataLengths
 
     /// <summary>
     /// The text an operand is: a string or a string constant, or the text a charmap is applied
-    /// to. Null for anything else, a character among them, which is a number.
+    /// to. Null for anything else, including a character literal, which is a number.
     /// </summary>
     private static string? TextOf(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
@@ -211,9 +215,10 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// An array's count: a constant, and the number its values come to when it has values. A
-    /// short table is exactly the mistake a count is there to catch, so values are never padded
-    /// out to it — except one text, which is padded with zero to the count it declares.
+    /// Checks an array's element count: it must be a constant, and when values are given it
+    /// must match how many there are. A short table is exactly the mistake a count is there to
+    /// catch, so values are never padded out to it, except for a single text, which is padded
+    /// with zeros to the declared count.
     /// </summary>
     private static void CheckCount(DataDirectiveSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
@@ -241,8 +246,9 @@ public static class DataLengths
     private static string Elements(long count) => count == 1 ? "element" : "elements";
 
     /// <summary>
-    /// The records an element type of <c>.type T</c> gives: each value is one braced record,
-    /// and one record written over several lines is the block the directive's line opens.
+    /// Checks the records given for an element type <c>.type T</c>: each value must be one
+    /// braced record, or a single record written over several lines as the block the
+    /// directive's line opens.
     /// </summary>
     private static void Records(
         Symbol type, StatementSyntax directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model,
@@ -428,7 +434,10 @@ public static class DataLengths
             written, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
     }
 
-    /// <summary>The name an operand is, or is a constant away from, or null when it is neither.</summary>
+    /// <summary>
+    /// The name an operand consists of, or the name it adds a constant to or subtracts one
+    /// from; null when it is neither.
+    /// </summary>
     private static NameExpressionSyntax? AddressIn(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
         var address = operand;
@@ -444,8 +453,9 @@ public static class DataLengths
     /// <summary>
     /// A far address in a 16-bit slot. ca65 keeps the low 16 bits of one in an <c>.addr</c>
     /// and refuses one in a <c>.word</c>, so either way what was written is not what is meant.
-    /// An address, or an address plus or minus a constant, is what is looked at: anything
-    /// else, such as <c>.loword(far)</c> or the difference of two addresses, says what it keeps.
+    /// Only an address, or an address plus or minus a constant, is checked: anything else,
+    /// such as <c>.loword(far)</c> or the difference of two addresses, already states
+    /// explicitly which bits it keeps.
     /// </summary>
     private static void NoFarAddresses(
         string directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
@@ -462,7 +472,10 @@ public static class DataLengths
         }
     }
 
-    /// <summary><c>.res n</c> or <c>.res n, fill</c>: the count is a constant.</summary>
+    /// <summary>
+    /// <c>.res n</c> or <c>.res n, fill</c>: checks that the count is a constant in range and
+    /// the fill is a byte.
+    /// </summary>
     private static void Reserved(
         SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {

@@ -5,7 +5,7 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>Applying what the server sends back, the way an editor would.</summary>
 internal static class Editing
 {
-    /// <summary><paramref name="text"/> with <paramref name="edits"/> made, the last in the file first so the earlier stay where they are.</summary>
+    /// <summary><paramref name="text"/> with <paramref name="edits"/> applied, last in the file first so that earlier edits' positions stay valid.</summary>
     public static string Apply(string text, IReadOnlyList<TextEdit> edits)
     {
         var starts = new List<int> { 0 };

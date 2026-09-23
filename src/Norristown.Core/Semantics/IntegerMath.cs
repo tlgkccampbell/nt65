@@ -8,7 +8,7 @@ namespace Norristown.Semantics;
 /// the program: a square root, a scaled product and the two trigonometric functions a table is
 /// built with. Every one of them takes whole numbers and answers a whole number.
 /// <para>
-/// Nothing here is floating point, and nothing here may be: what a declaration is worth is
+/// Nothing here is floating point, and nothing here may be: a declaration's value is
 /// written into the output, so two machines that disagreed about the last bit of a sine would
 /// assemble different bytes from one program. Each answer is defined as a whole number — the
 /// nearest one to an exact value, with a half going away from zero — and is worked out in exact
@@ -29,8 +29,8 @@ public static class IntegerMath
 
     /// <summary>
     /// The largest turn and scale the trigonometric functions take. A value the output carries
-    /// fits ca65's 32 bits anyway, and bounding both keeps the arithmetic to a size worth
-    /// nothing to think about.
+    /// fits ca65's 32 bits anyway, and bounding both keeps the intermediate numbers comfortably
+    /// small.
     /// </summary>
     public const long Limit = 0x7fffffff;
 
@@ -151,8 +151,8 @@ public static class IntegerMath
         var subtract = true;
 
         // The angle is at most a quarter turn, so each term after the first few is a fraction of
-        // the one before it and the series reaches nothing long before this many terms. The
-        // count is here so that a mistake in the constant above cannot turn a build into a hang.
+        // the one before it and the terms reach zero long before this many. The limit is here
+        // so that a mistake in the constants above cannot turn a build into a hang.
         for (var k = sine ? 2 : 1; k < 200; k += 2)
         {
             term = term * square / ((long)k * (k + 1)) >> Bits;

@@ -18,12 +18,12 @@ public sealed class ExplainCommandTests
         Assert.StartsWith("unused-symbol, a warning by default", said, StringComparison.Ordinal);
         Assert.Contains(Catalogue.Find("unused-symbol")!.Explanation.Split(' ')[0], said, StringComparison.Ordinal);
 
-        // The holes a sentence leaves are numbered for nt65, and are marked rather than shown.
+        // Numbered placeholders such as `{0}` mean nothing to a reader, so they are shown as `...`.
         Assert.DoesNotContain("{0}", said, StringComparison.Ordinal);
         Assert.Contains("\"diagnostics\": { \"unused-symbol\": \"off\" }", said, StringComparison.Ordinal);
     }
 
-    /// <summary>Every entry can be asked about, whatever its sentence is made of.</summary>
+    /// <summary>Every entry can be explained, whatever its message format contains.</summary>
     [Fact]
     public void EveryNameIsExplained()
     {
@@ -46,7 +46,7 @@ public sealed class ExplainCommandTests
             Assert.Contains(descriptor.Id, said, StringComparison.Ordinal);
     }
 
-    /// <summary>A name nt65 has no entry for is a mistake, and is answered with the one it is nearly.</summary>
+    /// <summary>An unknown name is treated as a mistake, and the closest known name is suggested.</summary>
     [Fact]
     public void ANameItHasNoEntryForSaysWhichOneIsNear()
     {

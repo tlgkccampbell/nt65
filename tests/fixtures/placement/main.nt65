@@ -5,7 +5,7 @@
 
 .cpu 6502
 
-; A private name tables writes too: each placed module writes its own with the module in front.
+; `tables` has a private `count` too: each placed module writes its own with its module in front.
 count = 3
 
 .segment CODE
@@ -16,7 +16,7 @@ count = 3
     rts
 }
 
-; Its bytes go here in CODE, and in RODATA where RODATA has reached, in its own order.
+; tables' CODE goes here, and its RODATA wherever RODATA has reached, each in its own order.
 .place tables
 
 .segment RODATA

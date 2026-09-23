@@ -54,7 +54,7 @@ rts                                 ;! error[instruction-outside-a-routine]: an 
     .next bytes                         ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
 }
 
-; A region is the file's own structure, and inside a block a segment is braced.
+; A `.segment NAME` region belongs at file level; inside a block, a segment is braced.
 .scope place {
     .segment BSS                        ;! error[segment-region-misplaced]: a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME { }` places what it holds
 }

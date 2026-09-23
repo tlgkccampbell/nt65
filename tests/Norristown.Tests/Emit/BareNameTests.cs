@@ -1,9 +1,10 @@
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// That the check over every fixture's and every corpus program's output can fail at all.
-/// It is the check itself under test here, not the emitter: a check that passes because it
-/// looks at nothing is how the alias mnemonics stayed hidden.
+/// Tests that the <see cref="BareNames"/> check, which runs over every fixture's and every corpus
+/// program's output, can fail at all. The check itself is under test here, not the emitter: a
+/// check that passes because it examines nothing is how the alias mnemonics (such as the
+/// 65816's <c>swa</c> and <c>tad</c>) went unnoticed.
 /// </summary>
 public sealed class BareNameTests
 {
@@ -19,8 +20,9 @@ public sealed class BareNameTests
     }
 
     /// <summary>
-    /// The same words on a CPU whose ca65 table has none of them, a use rather than a
-    /// definition, and a name that only starts with one, are all left alone.
+    /// None of these is reported: the same names under a CPU whose ca65 instruction table lacks
+    /// them, a use of such a name rather than a definition, a name that merely starts with one,
+    /// and a file with no <c>.setcpu</c> header, such as a line map.
     /// </summary>
     [Fact]
     public void AnythingCa65WouldNotMisreadIsLeftAlone()

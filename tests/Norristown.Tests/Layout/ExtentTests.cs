@@ -39,7 +39,10 @@ public sealed class ExtentTests
         Assert.Contains("; .proc g  main.nt65:7\ng:\n", written, StringComparison.Ordinal);
     }
 
-    /// <summary>Data is measured the same way, whether it holds elements or is mixed.</summary>
+    /// <summary>
+    /// Data is measured the same way, whether it is a list of elements or a block of mixed
+    /// statements.
+    /// </summary>
     [Theory]
     [InlineData(".data table: .byte 1, 2, 4, 8\n\n.data n: .word .spanof(table)\n", "table__end", 4)]
     [InlineData(".data blob {\n    .byte 1\n    .data inner: .word 2\n}\n\n.data n: .word .spanof(blob)\n", "blob__end", 3)]
@@ -148,7 +151,7 @@ public sealed class ExtentTests
             "main.nt65:4: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
     }
 
-    /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
+    /// <summary>The ca65 source written for <paramref name="text"/>, placed in the code segment.</summary>
     private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     /// <summary>How many bytes layout worked out for the one thing the file measures.</summary>

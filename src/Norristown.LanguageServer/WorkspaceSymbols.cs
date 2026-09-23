@@ -3,19 +3,19 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The declarations of every file in the workspace whose names hold what the programmer typed,
-/// its letters in order, whatever their case. They are read from each file's outline, so a search
-/// analyzes nothing.
+/// Workspace symbol search: the declarations in every file of the workspace whose names contain
+/// the letters the programmer typed, in order, ignoring case. They are read from each file's
+/// outline, so a search analyzes nothing.
 /// </summary>
 internal static class WorkspaceSymbols
 {
-    /// <summary>How many a search returns at most, which is more than anyone reads.</summary>
+    /// <summary>The most results a search returns, which is already more than anyone reads.</summary>
     private const int Most = 500;
 
     /// <summary>The declarations in <paramref name="files"/> that match <paramref name="query"/>, best matches first.</summary>
     /// <param name="files">Every file of the workspace, which may be hundreds.</param>
     /// <param name="query">What the programmer typed.</param>
-    /// <param name="cancellation">Asked between files: a search the person has moved on from stops here.</param>
+    /// <param name="cancellation">Checked between files, so a search the user has moved on from stops early.</param>
     public static IReadOnlyList<Protocol.SymbolInformation> Matching(
         IEnumerable<SyntaxTree> files, string query, CancellationToken cancellation = default)
     {
@@ -35,7 +35,8 @@ internal static class WorkspaceSymbols
 
     /// <summary>
     /// How well <paramref name="name"/> matches: 0 for the same name, 1 for one that starts with the
-    /// query, 2 for one that holds it, 3 for one that holds its letters in order; null for no match.
+    /// query, 2 for one that contains it, 3 for one that contains its letters in order (and for an
+    /// empty query); null for no match.
     /// </summary>
     public static int? Score(string name, string query)
     {
@@ -71,7 +72,7 @@ internal static class WorkspaceSymbols
                     container)));
             }
 
-            // A segment block holds declarations without naming them.
+            // A segment block holds declarations but adds nothing to their container name.
             var inner = item.Kind == OutlineKind.Segment ? container
                 : container is null ? item.Name
                 : $"{container}::{item.Name}";
@@ -79,7 +80,7 @@ internal static class WorkspaceSymbols
         }
     }
 
-    /// <summary>The module a file's <c>.module</c> names, or null.</summary>
+    /// <summary>The module a file's <c>.module</c> names, or null when its first non-blank line is not a <c>.module</c>.</summary>
     private static string? ModuleOf(SyntaxTree tree)
     {
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())

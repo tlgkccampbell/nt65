@@ -7,8 +7,8 @@ using StreamJsonRpc.Protocol;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The wire: LSP's <c>Content-Length</c> frames over a pair of streams, and the one place that
-/// decides what may cross. StreamJsonRpc's own handler reads a frame and hands it straight to
+/// The transport: LSP's <c>Content-Length</c> frames over a pair of streams, and the single
+/// place that decides which messages get through. StreamJsonRpc's own handler reads a frame and hands it straight to
 /// the formatter, and anything the formatter dislikes — a body that is not JSON, a
 /// <c>"params": null</c> its request type cannot count the arguments of — comes out of the read
 /// loop as an exception and ends the connection. Nothing a client sends should end a server, so
@@ -31,10 +31,10 @@ internal sealed class Framing : MessageHandlerBase
 
     private const string ContentLength = "Content-Length:";
 
-    /// <summary>What <see cref="NextLengthAsync"/> answers for a stream that has ended.</summary>
+    /// <summary>What <see cref="NextLengthAsync"/> returns for a stream that has ended.</summary>
     private const int StreamOver = -1;
 
-    /// <summary>What it answers for headers that name no length, which nothing can resynchronize.</summary>
+    /// <summary>What it returns for headers that give no length, after which the stream cannot be resynchronized.</summary>
     private const int NoLength = -2;
 
     private readonly Stream input;
@@ -42,7 +42,7 @@ internal sealed class Framing : MessageHandlerBase
     private readonly byte[] buffer = new byte[8192];
     private readonly List<byte> header = new(64);
 
-    // What of `buffer` has been read from the stream and not yet handed on.
+    // The part of `buffer`, from `at` up to `have`, read from the stream but not yet consumed.
     private int at;
     private int have;
 
@@ -56,7 +56,7 @@ internal sealed class Framing : MessageHandlerBase
         this.output = output;
     }
 
-    /// <summary>Where the server is in its life, which the frames going past are what moves.</summary>
+    /// <summary>The server's lifecycle phase, advanced by the <c>initialize</c> and <c>shutdown</c> messages that pass through.</summary>
     public ServerPhase Phase { get; private set; }
 
     public override bool CanRead => true;
@@ -113,9 +113,9 @@ internal sealed class Framing : MessageHandlerBase
         };
 
     /// <summary>
-    /// <paramref name="content"/> without a <c>params</c> that is null, which is how a client
-    /// spells a request that takes none and what the formatter's request type cannot read.
-    /// The frame comes back as it was where there is nothing to take off.
+    /// <paramref name="content"/> with a null <c>params</c> removed. A client may send
+    /// <c>"params": null</c> for a request that takes none, which the formatter's request type
+    /// cannot read. The frame is returned unchanged when there is nothing to remove.
     /// </summary>
     private static byte[] WithoutNullParameters(JsonElement message, byte[] content)
     {
@@ -137,8 +137,8 @@ internal sealed class Framing : MessageHandlerBase
     }
 
     /// <summary>
-    /// The frame to hand on, or null for one this layer has answered itself. What is passed on
-    /// is what moves the server's life along, so the phase is kept here.
+    /// The frame to pass on, or null for one this layer has answered itself. Only the messages
+    /// passed on advance the server's lifecycle, so the phase is tracked here.
     /// </summary>
     private async ValueTask<byte[]?> PassedAsync(byte[] content, CancellationToken cancellationToken)
     {
@@ -164,8 +164,8 @@ internal sealed class Framing : MessageHandlerBase
                 return null;
             }
 
-            // A message with no method is an answer to something the server asked, and is no
-            // business of the server's life.
+            // A message with no method is a response to a request the server sent, and does not
+            // affect the lifecycle.
             if (!message.RootElement.TryGetProperty("method", out var named)
                 || named.ValueKind != JsonValueKind.String || named.GetString() is not { } method)
             {
@@ -174,8 +174,8 @@ internal sealed class Framing : MessageHandlerBase
 
             if (Refusal(method) is var (code, why))
             {
-                // A notification nobody may answer is dropped, which is what the protocol says
-                // to do with one that arrives before the server is initialized.
+                // A refused notification cannot be answered, so it is dropped, as the protocol
+                // requires for one that arrives before the server is initialized.
                 if (IdOf(message.RootElement) is { } id)
                     await RefuseAsync(id, code, why, cancellationToken).ConfigureAwait(false);
                 return null;
@@ -194,8 +194,8 @@ internal sealed class Framing : MessageHandlerBase
     /// <summary>Why <paramref name="method"/> may not be handled now, or null when it may.</summary>
     private (JsonRpcErrorCode Code, string Why)? Refusal(string method) => (Phase, method) switch
     {
-        // Giving up on a request is the protocol looking after itself, and is never refused:
-        // a client that has stopped waiting has stopped waiting whatever the server is doing.
+        // Cancellation is never refused, in any phase: a client that has stopped waiting for a
+        // request has stopped waiting whatever state the server is in.
         (_, "$/cancelRequest") => null,
         (ServerPhase.Starting, not ("initialize" or "exit")) =>
             (ServerNotInitialized, "the server has not been initialized"),
@@ -219,8 +219,8 @@ internal sealed class Framing : MessageHandlerBase
 
     /// <summary>
     /// How long the next frame's body is, from its headers; <see cref="StreamOver"/> at the end
-    /// of the stream and <see cref="NoLength"/> for headers that give no length. Headers a
-    /// server has no use for are read and passed over.
+    /// of the stream and <see cref="NoLength"/> for headers that give no length. Other headers
+    /// are read and ignored.
     /// </summary>
     private async ValueTask<int> NextLengthAsync(CancellationToken cancellationToken)
     {

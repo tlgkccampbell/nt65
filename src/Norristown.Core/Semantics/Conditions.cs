@@ -12,9 +12,9 @@ namespace Norristown.Semantics;
 /// <param name="Cpu">The CPU the build is for, which <c>.target</c> and <c>.has</c> ask about.</param>
 /// <param name="Defines">What the build defines, by name.</param>
 /// <param name="Setting">
-/// What a written name is worth as a <c>.config</c>, with what is wrong with it reported
-/// through the second argument. Null where the name names no setting and nothing was said
-/// about it, which is what leaves it to be reported as naming nothing at all.
+/// The value of a written name as a <c>.config</c> setting, with any problem with it reported
+/// through the second argument. Returns null when the name is not a setting and nothing has
+/// been reported about it, which leaves the caller to report it as an unknown name.
 /// </param>
 internal sealed record Conditions(
     Cpu Cpu,

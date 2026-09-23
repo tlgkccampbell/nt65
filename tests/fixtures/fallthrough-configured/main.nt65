@@ -1,8 +1,8 @@
-; `.fallthrough` is the last line of a routine's body as the configuration resolves it, so it
-; may end a branch of an `.if` chain that ends the body, to any depth. In each configuration at
-; most one remains, and what it names is checked there: a branch this build does not take is
-; not read, and may name a routine this build does not declare. msbasic's routines run into
-; different routines on Commodore machines and elsewhere.
+; `.fallthrough` must be the last line of a routine's body once the configuration's `.if`s are
+; resolved, so it may end a branch of an `.if` chain that ends the body, at any depth. Each
+; configuration keeps at most one, and only that one is checked: a branch this build does not
+; take is not read, and may name a routine this build does not declare. msbasic's routines fall
+; into different routines on Commodore machines and elsewhere.
 .module main
 .cpu 6502
 
@@ -11,7 +11,7 @@
 .export FRM_VARIABLE, LOAD_FAC_FROM_YA, STROUT, PUTSTR, LC92B, NESTED, OUTDO
 
 .segment CODE
-; Elsewhere a jump; on Commodore machines a fall-through into a routine only they have.
+; A jump on most machines; on Commodore machines, a fall-through into a routine only they have.
 .proc FRM_VARIABLE {
     lda #1
     .if !CONFIG_CBM_ALL {

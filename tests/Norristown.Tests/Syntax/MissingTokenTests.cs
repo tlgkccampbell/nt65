@@ -38,8 +38,8 @@ public sealed class MissingTokenTests
         Assert.False(written.IsMissing);
         Assert.NotSame(GreenToken.Missing(SyntaxKind.OpenBrace), written);
 
-        // The cache shares tokens the lexer asks for, and a missing one is not among them,
-        // however little text a written token has.
+        // The cache shares the tokens the lexer asks for, and never hands back a missing token,
+        // even for a written token with no text.
         var empty = GreenCache.Token(SyntaxKind.Identifier, "", [], [], null);
         Assert.False(empty.IsMissing);
         Assert.NotSame(GreenToken.Missing(SyntaxKind.Identifier), empty);

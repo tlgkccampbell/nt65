@@ -10,8 +10,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// The names come from two headers — the repetition's line and the enum's member list — and
 /// nothing is concatenated, so which names a family declares is read from the source without
-/// evaluating anything. What the body declares stays local to each turn, as a repetition's
-/// always has; only the instances are names the file has.
+/// evaluating anything. What the body declares stays local to each turn, as in any
+/// repetition; only the instances become names in the file.
 /// </para>
 /// </summary>
 public sealed class Family
@@ -38,7 +38,7 @@ public sealed class Family
     /// </summary>
     public StatementSyntax Declaration { get; }
 
-    /// <summary>The block the turns are written out from: the <c>.each</c>'s, or the <c>.multiproc</c>'s own.</summary>
+    /// <summary>The block each turn writes out: the <c>.each</c>'s, or the <c>.multiproc</c>'s own.</summary>
     public BlockSyntax Block { get; }
 
     /// <summary>The name the repetition binds, which each instance is named from.</summary>
@@ -64,8 +64,8 @@ public sealed class Family
         member is not null && byMember.TryGetValue(member, out var instance) ? instance : null;
 
     /// <summary>
-    /// The instance being written out at <paramref name="on"/>: the member of the turn that
-    /// writes this family's block, or null outside one.
+    /// The instance being written out at <paramref name="on"/>: the one for the member of the
+    /// enclosing turn that writes this family's block, or null outside such a turn.
     /// </summary>
     public Symbol? InstanceAt(Expansion? on)
     {
@@ -78,11 +78,11 @@ public sealed class Family
     }
 
     /// <summary>
-    /// The same problem found on more than one instance, said once. A family's body is written
-    /// once, so a mistake in it is found once per instance, and each is reported naming the
-    /// instance it was found on. Where two of those are the same news — the same place, the
-    /// same words but for which instance they name — the name of the instance gives way to the
-    /// name the repetition binds, and the one message stands for all of them.
+    /// The same problem found on more than one instance, reported once. A family's body is
+    /// written once, so a mistake in it is found once per instance, and each report names the
+    /// instance it was found on. When two or more reports are otherwise identical — the same
+    /// place, the same severity, the same words apart from the instance named — they are
+    /// replaced by a single message that names the repetition's binding instead.
     /// </summary>
     public static IReadOnlyList<Diagnostic> Collapsed(IReadOnlyList<Family> families, IReadOnlyList<Diagnostic> found)
     {

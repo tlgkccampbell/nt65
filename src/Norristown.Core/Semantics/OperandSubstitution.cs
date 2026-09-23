@@ -3,8 +3,8 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What an operand written in a macro body stands for once its <c>operand</c> parameter
-/// does: the operand the call gave, and the byte of it the body asked for.
+/// What an operand written in a macro body becomes once its <c>operand</c> parameter is
+/// replaced by the argument: the operand the call gave, and the byte of it the body asked for.
 /// </summary>
 /// <param name="Parameter">The parameter the body named.</param>
 /// <param name="Operand">The operand the call gave, with the braces off.</param>
@@ -20,7 +20,7 @@ public sealed record OperandSubstitution(
 {
     /// <summary>
     /// Whether the argument is a plain address: one written braced as an address operand, or
-    /// one written unbraced, which is an expression and so an address by being one.
+    /// one written unbraced, which is an expression and so counts as a plain address.
     /// </summary>
     public bool IsAddress => Operand is AbsoluteOperandSyntax || !IsOperandForm;
 

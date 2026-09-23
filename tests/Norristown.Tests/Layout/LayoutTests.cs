@@ -9,7 +9,10 @@ namespace Norristown.Tests.Layout;
 /// <summary>Addressing-mode selection and instruction and data lengths.</summary>
 public sealed class LayoutTests
 {
-    /// <summary>The narrowest mode at least as wide as the operand, whatever the source wrote.</summary>
+    /// <summary>
+    /// Layout picks the narrowest mode the instruction has that is at least as wide as the
+    /// operand, unless an <c>a:</c> or <c>z:</c> prefix in the source picks one.
+    /// </summary>
     [Theory]
     [InlineData("lda ptr", AddressingMode.Direct, 2)]
     [InlineData("lda buf", AddressingMode.Absolute, 3)]
@@ -180,8 +183,9 @@ public sealed class LayoutTests
     }
 
     /// <summary>
-    /// Tokens the parser had to skip are no value of the directive they were left on, so a
-    /// line whose junk was reported does not also count as one element too many.
+    /// Tokens the parser had to skip are not values of the directive they were found on, so a
+    /// line whose stray tokens were already reported is not also reported as having one
+    /// element too many.
     /// </summary>
     [Theory]
     [InlineData(".data d {\n.byte[2] 1, 2 ]\n}", "the values of an array go in braces: `.byte[n] { 1, 2 }`")]

@@ -29,7 +29,7 @@ HUD_PAGE = $0300
 .segment WRAM
 .data score: .word
 
-; The signature's example: D and B at entry, and so at exit.
+; The design's signature example: D and B given at entry, and so also holding at exit.
 .segment CODE
 .proc hud: a8, i16, dp = $2100, dbr = $7e {
     lda ptr                 ; ZP2 is reached through the direct page at $2100
@@ -152,7 +152,7 @@ HUD_PAGE = $0300
     rts
 }
 
-; A caller in one of the banks meets it, and so does a caller in fewer of them.
+; A caller whose B is one of those banks meets it, and so does one whose set is a subset.
 .proc from_one: a8, i8, dbr = $80 {
     jsr anywhere
     jsr fewer

@@ -7,8 +7,8 @@ public static class Commands
 {
     /// <summary>
     /// Runs nt65 with <paramref name="arguments"/> from <paramref name="directory"/>, and returns
-    /// the exit code: 0 when it did what it was asked, 1 when what it was given is wrong, 2 when
-    /// the command is.
+    /// the exit code: 0 when it did what it was asked, 1 when its input (the program or a file) is
+    /// wrong, 2 when the command line is.
     /// </summary>
     public static int Run(
         string[] arguments, string directory, TextWriter output, TextWriter error,
@@ -46,8 +46,8 @@ public static class Commands
             case ["import-inc", .. var converted]:
                 return ImportIncCommand.Run(converted, Path.GetFullPath(directory), output, error);
 
-            // A first argument nt65 has no meaning for: one line of news and where to read the
-            // rest, rather than the usage text, which asked for nothing and buries the news.
+            // An unrecognised first argument: print a one-line error and a pointer to --help,
+            // rather than the whole usage text, which nobody asked for and which buries the error.
             case [var word, ..]:
                 return Wrong(error, word.StartsWith('-')
                     ? $"`{word}` is not an option"
@@ -59,7 +59,7 @@ public static class Commands
         return 2;
     }
 
-    /// <summary>Says what is wrong with the command line, and where its usage text is.</summary>
+    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns 2.</summary>
     private static int Wrong(TextWriter error, string problem)
     {
         error.WriteLine($"nt65: {problem}");

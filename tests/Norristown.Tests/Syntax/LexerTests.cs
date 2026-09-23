@@ -27,7 +27,7 @@ public sealed class LexerTests
     [InlineData(@"'c' '\n' '\x41' '\'' '""' ';'", @"CharacterLiteral:'c' CharacterLiteral:'\n' CharacterLiteral:'\x41' CharacterLiteral:'\'' CharacterLiteral:'""' CharacterLiteral:';'")]
     [InlineData(@"""text"" ""a\""b"" ""\\"" """" ""it's; not a comment""", @"StringLiteral:""text"" StringLiteral:""a\""b"" StringLiteral:""\\"" StringLiteral:"""" StringLiteral:""it's; not a comment""")]
     [InlineData("'é'", "CharacterLiteral:'é'")]
-    // Multi-character tokens: `a->b` is not `a - >b`, written with spaces it is.
+    // Multi-character tokens: `a->b` holds an arrow, not the `-` and `>` that `a - >b` holds.
     [InlineData("a->b", "Register:a Arrow:-> Identifier:b")]
     [InlineData("a - >b", "Register:a Minus:- Greater:> Identifier:b")]
     [InlineData("'A'..'Z'", "CharacterLiteral:'A' DotDot:.. CharacterLiteral:'Z'")]
@@ -72,9 +72,9 @@ public sealed class LexerTests
     }
 
     /// <summary>
-    /// Every escape a literal gets wrong is said, since each is a separate thing to correct.
-    /// What a character literal holds is not counted where an escape was refused: how many
-    /// characters it comes to is not news while one of them could not be read.
+    /// Every bad escape in a literal is reported, since each is a separate thing to correct. A
+    /// character literal with a bad escape is not also checked for holding exactly one character:
+    /// the count means little while one of its characters could not be read.
     /// </summary>
     [Theory]
     [InlineData(@"""\q\z""", new[] { @"unknown escape `\q`", @"unknown escape `\z`" })]
@@ -121,10 +121,11 @@ public sealed class LexerTests
     /// <summary>
     /// The cache's tables are per-thread, so what this test sees is decided by its own calls and
     /// not by whatever else the suite is lexing beside it. They are also small and direct-mapped,
-    /// and where two tokens of one line want the same slot neither of them is shared — a property
-    /// of the table rather than of the sharing, and one that moves with the run, since the hash a
-    /// slot comes from is seeded afresh per process. So the sharing is asked of several lines and
-    /// wanted of one: a lexer that shares nothing fails every one of them.
+    /// and where two tokens of one line map to the same slot, neither of them ends up shared. That
+    /// is a limit of the table rather than a failure of sharing, and which lines it hits varies
+    /// from run to run, because the hash is seeded afresh in each process. So the test tries
+    /// several lines and requires full sharing on only one: a lexer that shares nothing fails on
+    /// all of them.
     /// </summary>
     [Fact]
     public void CommonTokensAreShared()

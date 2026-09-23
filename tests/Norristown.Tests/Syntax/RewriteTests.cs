@@ -12,7 +12,9 @@ namespace Norristown.Tests.Syntax;
 /// </summary>
 public sealed class RewriteTests
 {
-    /// <summary>A slot given what it already holds is no change, so the node is the same node.</summary>
+    /// <summary>
+    /// Updating a slot with what it already holds is no change, so the same node comes back.
+    /// </summary>
     [Fact]
     public void UpdateWithWhatIsAlreadyThereGivesBackTheSameNode()
     {
@@ -23,19 +25,22 @@ public sealed class RewriteTests
         Assert.Same(instruction, instruction.WithMnemonic(instruction.Mnemonic));
         Assert.Same(instruction, instruction.WithOperand(instruction.Operand));
 
-        // The same text is the same token, so rebuilding one changes nothing either.
+        // A token given the text it already has is the same token, so that changes nothing either.
         Assert.Same(instruction, instruction.WithMnemonic(instruction.Mnemonic.WithText("lda")));
     }
 
-    /// <summary>A <c>With</c> gives a node of its own, which belongs to no file until one takes it.</summary>
+    /// <summary>
+    /// A <c>With</c> gives a new node with no parent, in a tree of its own holding only its text,
+    /// until a rewrite puts it into a file.
+    /// </summary>
     [Fact]
     public void WithGivesANodeThatBelongsToNoFileYet()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda #1\n}\n");
         var instruction = tree.Root.DescendantNodes().OfType<InstructionStatementSyntax>().Single();
 
-        // WithTriviaFrom keeps what stood around the token written over, the indentation of the
-        // line among it, so the piece reads as the piece it replaces.
+        // WithTriviaFrom copies the trivia around the replaced token, the line's indentation
+        // among it, so the new token sits where the old one did.
         var built = instruction.WithMnemonic(SyntaxFactory.Mnemonic("ldx").WithTriviaFrom(instruction.Mnemonic));
         Assert.NotSame(instruction, built);
         Assert.Equal("    ldx #1", built.ToFullString());
@@ -61,7 +66,7 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// Every name in the file written as a new token saying the same thing: the tree is rebuilt
+    /// Every name in the file replaced by a new token with the same text: the tree is rebuilt
     /// from end to end and reads back as the file it came from, byte for byte.
     /// </summary>
     [Fact]
@@ -79,8 +84,8 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// One number written as another, over every source that has one: the file is what it was,
-    /// with that span and nothing else replaced.
+    /// Replacing the first number in every source that has one changes that span of the file
+    /// and nothing else.
     /// </summary>
     [Fact]
     public void ReplacingOneNumberChangesOnlyItsSpan()
@@ -113,7 +118,7 @@ public sealed class RewriteTests
         Assert.Equal(".proc main {\n    lda #2\n    rts\n}\n", root.Tree.Text);
         Assert.Equal(".proc main {\n    lda #1\n    rts\n}\n", tree.Text);
 
-        // Its diagnostics, its lines and its blocks are a tree's, not a fragment's.
+        // The result is a whole tree, with its own diagnostics, lines and blocks, not a fragment.
         Assert.Empty(root.Tree.Diagnostics);
         Assert.Equal(5, root.Tree.LineCount);
         Assert.IsType<BlockSyntax>(root.Tree.GetLine(1).Parent);
@@ -190,7 +195,9 @@ public sealed class RewriteTests
         Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
     }
 
-    /// <summary>Every token a node was written with, the ones the source did not write left out.</summary>
+    /// <summary>
+    /// The text of every token under a node, leaving out missing tokens and line breaks.
+    /// </summary>
     private static List<string> Written(SyntaxNode node) =>
         [.. node.DescendantTokens()
             .Where(token => !token.IsMissing && token.Kind != SyntaxKind.EndOfLine)
@@ -201,7 +208,7 @@ public sealed class RewriteTests
     {
     }
 
-    /// <summary>Every name written as a new token saying exactly what the old one said.</summary>
+    /// <summary>Replaces every identifier with a new token of the same text and trivia.</summary>
     private sealed class Rebuilt : SyntaxRewriter
     {
         public override SyntaxToken VisitToken(SyntaxToken token) => token.Kind == SyntaxKind.Identifier

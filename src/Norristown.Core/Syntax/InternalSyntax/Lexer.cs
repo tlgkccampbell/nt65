@@ -79,7 +79,7 @@ internal static class Lexer
             var word = text[pos..SkipWord(text, pos)];
             pos += word.Length;
 
-            // A CPU name that is no number — `65c02`, `65sc02` — is one word of its own.
+            // A CPU name that is not a valid number — `65c02`, `65sc02` — is a token of its own.
             // `6502` and `65816` are numbers, and the places that take a CPU name take either.
             var wrong = Digits(word, '\0', "decimal", char.IsAsciiDigit);
             if (wrong is not null && SyntaxFacts.IsCpuName(word.ToString()))
@@ -179,7 +179,7 @@ internal static class Lexer
         return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Says(rune)));
     }
 
-    /// <summary>The one thing wrong with a token as the list of them it is given as, or null.</summary>
+    /// <summary>A single error wrapped in the list a token takes its errors as, or null for none.</summary>
     private static IReadOnlyList<DiagnosticMessage>? One(DiagnosticMessage? error) =>
         error is { } one ? [one] : null;
 
@@ -195,7 +195,7 @@ internal static class Lexer
     /// digits is a separator, in any base: <c>$7f_ff</c>, <c>%1010_1010</c> and <c>1_000</c>
     /// are the numbers their digits spell. <paramref name="prefix"/> is the <c>$</c> or <c>%</c>
     /// the digits follow, or <c>\0</c> for a decimal number, so that a message names the number
-    /// as it was written; nothing is put together until there is something to say.
+    /// as it was written; the message text is built only once there is an error to report.
     /// </summary>
     private static DiagnosticMessage? Digits(ReadOnlySpan<char> digits, char prefix, string radix, Func<char, bool> isDigit)
     {
@@ -218,9 +218,10 @@ internal static class Lexer
 
     /// <summary>
     /// A character or string literal, up to its closing quote or the end of the line. The
-    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Every escape it cannot read is
-    /// reported, since each is a separate thing to correct; that a character literal holds
-    /// more than one character is not, where an escape it could not read is why.
+    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Every unreadable escape is reported,
+    /// since each needs its own correction. A character literal that does not hold exactly one
+    /// character is reported only when every escape was readable, since otherwise a bad escape
+    /// is the likely cause.
     /// </summary>
     private static IReadOnlyList<DiagnosticMessage>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {
@@ -273,8 +274,8 @@ internal static class Lexer
             }
         }
 
-        // An escape that could not be read is why the characters do not come to one, so the
-        // count is news only where every escape was read.
+        // A bad escape is the likely reason the character count is not one, so the count is
+        // reported only when every escape was read.
         if (isChar && characters != 1 && errors is null)
         {
             return One(characters == 0 ? Catalogue.CharacterEmpty : Catalogue.CharacterTooLong);

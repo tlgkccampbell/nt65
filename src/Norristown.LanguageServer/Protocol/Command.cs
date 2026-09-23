@@ -2,8 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>Something the client runs once it has applied a completion or a code action.</summary>
-/// <param name="Title">What the command is called, which nothing here shows.</param>
+/// <summary>
+/// A command for the client to run once it has applied a completion or a code action, or when a
+/// code lens is clicked.
+/// </summary>
+/// <param name="Title">
+/// The command's title. A code lens displays it as the lens text; after a completion or a code
+/// action it is not shown.
+/// </param>
 /// <param name="Name">The command, as the client knows it.</param>
 /// <param name="Arguments">What it is run with, or null for a command that takes nothing.</param>
 internal sealed record Command(

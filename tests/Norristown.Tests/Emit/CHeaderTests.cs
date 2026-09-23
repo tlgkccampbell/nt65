@@ -48,9 +48,9 @@ public sealed class CHeaderTests
         """;
 
     /// <summary>
-    /// Structs and unions in cc65's types with the size nt65 gives them asserted, enums,
-    /// constants as <c>#define</c>, data sized by its count, and routines as <c>void name(void)</c>,
-    /// all under their linker names less cc65's leading <c>_</c>.
+    /// Structs and unions in cc65's types, with a static assertion of the size nt65 gives them;
+    /// enums; constants as <c>#define</c>; data sized by its element count; and routines as
+    /// <c>void name(void)</c>; all named by their linker names without cc65's leading <c>_</c>.
     /// </summary>
     [Fact]
     public void WhatTheProgramExportsIsDeclaredInC()
@@ -104,8 +104,8 @@ public sealed class CHeaderTests
     }
 
     /// <summary>
-    /// An index is a use rather than a declaration, so a program that reaches into an exported
-    /// array declares exactly what one that does not declares.
+    /// Indexing is a use rather than a declaration, so a program that indexes into an exported
+    /// array gets exactly the same header as one that does not.
     /// </summary>
     [Fact]
     public void IndexingAnExportLeavesTheHeaderAsItIs()
@@ -130,8 +130,9 @@ public sealed class CHeaderTests
     }
 
     /// <summary>
-    /// C names a routine or data declaration with <c>_</c> in front, so one exported without such a
-    /// name is left out with a warning, as is the type of data whose type is not exported.
+    /// cc65 puts <c>_</c> in front of the linker name of every C routine or data declaration, so an
+    /// export whose linker name does not start with one is left out with a warning; data whose
+    /// type is not exported is declared as bytes, also with a warning.
     /// </summary>
     [Fact]
     public void WhatCCannotNameIsLeftOutWithAWarning()

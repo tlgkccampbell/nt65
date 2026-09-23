@@ -8,9 +8,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The fixes for the diagnostics that name one, asked of the workspace directly rather than
-/// over the wire: each is applied, the file it leaves is compared with what the programmer
-/// would have written, and what that file says is checked to be nothing at all.
+/// The fixes for diagnostics that suggest one, requested from the workspace directly rather than
+/// through the protocol: each is applied, the resulting file is compared with what the programmer
+/// would have written, and that file is checked to have no diagnostics at all.
 /// </summary>
 public sealed class FixesTests
 {
@@ -108,8 +108,8 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// An export is written where the file's own exports go, under its <c>.module</c>, which is
-    /// where the fix for a name another module cannot see writes one too.
+    /// The fix that exports an unused name writes the <c>.export</c> directly under the file's
+    /// <c>.module</c>, which is also where the fix for a name another module cannot see writes one.
     /// </summary>
     [Fact]
     public void ExportingWhatNothingNamesWritesTheExportUnderTheModule()
@@ -125,8 +125,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A width the analysis cannot work out is the programmer's to say, so both widths are
-    /// offered and neither is the one to apply without asking.
+    /// Where the analysis cannot work out a register width, only the programmer can say which it
+    /// is, so both widths are offered and neither is marked preferred, since neither should be
+    /// applied without asking.
     /// </summary>
     [Fact]
     public void AWidthThatIsNotKnownOffersEitherOne()
@@ -147,7 +148,7 @@ public sealed class FixesTests
             Editing.Apply(Header + Body, actions[0].Edit.Changes[Uri]));
     }
 
-    /// <summary>A name brought in and never written is faded, and the item that brought it may go.</summary>
+    /// <summary>A name brought in by <c>.use</c> and never used is shown faded, and a fix removes it from the <c>.use</c>.</summary>
     [Fact]
     public void AUseItemNothingNamesIsOfferedForRemoval()
     {
@@ -171,9 +172,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A bracket the line does not have is written where the tree holds the place for it. Where
-    /// the piece belongs is the missing token's answer and not the text's, so a line with a
-    /// comment after it has the brace written before the comment rather than after it.
+    /// A missing bracket is written where the syntax tree holds a place for the missing token.
+    /// The position comes from that token rather than from the end of the text, so on a line with
+    /// a trailing comment the brace is written before the comment rather than after it.
     /// </summary>
     [Theory]
     [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
@@ -193,8 +194,8 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// The brace a routine's body needs is written, and what the file then says is nothing: the
-    /// fix leaves a file that parses and means what it reads as.
+    /// Writing the missing brace of a routine's body leaves a file with no diagnostics: one that
+    /// parses and means what it appears to mean.
     /// </summary>
     [Fact]
     public void WritingTheMissingBraceLeavesAFileWithNothingWrong()
@@ -210,9 +211,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A name ca65 would read as an instruction is a matter of reading, so the fix writes
+    /// A name that ca65 would read as an instruction has no mechanical fix, so the fix writes
     /// nothing: it puts the caret on the name and starts a rename, because what it should be
-    /// called is the programmer's to say and nothing else's to guess.
+    /// called is for the programmer to decide, not for the server to guess.
     /// </summary>
     [Fact]
     public void AMnemonicNameOffersARenameAndWritesNothing()
@@ -238,7 +239,7 @@ public sealed class FixesTests
         Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));
     }
 
-    /// <summary>The whole file, which is what a client asks about when it asks about all of it.</summary>
+    /// <summary>A range covering the whole file, as a client sends when it asks for actions across all of it.</summary>
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)

@@ -10,7 +10,7 @@
 .export handler, draw_row, save_slot
 
 ; A routine with no body: nothing will ever contradict what it says, so what it says is all
-; anyone can know. The C64 KERNAL hands X and Y back, which used to live in a comment.
+; anyone can know. The C64 KERNAL documents that CHROUT hands X and Y back; `keeps` says so.
 .proc CHROUT = $FFD2: keeps x, y
 
 .segment BSS

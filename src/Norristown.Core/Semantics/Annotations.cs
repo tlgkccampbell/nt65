@@ -7,9 +7,9 @@ namespace Norristown.Semantics;
 /// which replaces where flow goes after a statement, and <c>.patch</c>, which acknowledges
 /// a store into the instruction stream.
 /// <para>
-/// Each applies to the statement above it and comes before any following label, so which
-/// statement an annotation is about is a question about siblings: only the walk that has
-/// the whole run of them can answer it.
+/// Each applies to the statement above it and comes before any following label, so finding
+/// the statement an annotation applies to means looking at its sibling lines: only code that
+/// walks the whole list of siblings can answer it.
 /// </para>
 /// </summary>
 public static class Annotations
@@ -61,9 +61,9 @@ public static class Annotations
     }
 
     /// <summary>
-    /// Why an annotation cannot stand where it does, or null when it can. What it is about
-    /// has to be above it: a label below takes the address the annotation's statement ends
-    /// at, and an annotation about nothing is a claim about nothing.
+    /// Why an annotation is misplaced, or null when it is not. The statement it applies to must
+    /// be above it, because a label below it takes the address where that statement ends; an
+    /// annotation with no statement above it has nothing to apply to.
     /// </summary>
     public static DiagnosticMessage? Misplaced(LineSyntax line, StatementSyntax directive) =>
         Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Says(Spell(directive));

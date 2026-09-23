@@ -4,9 +4,9 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What a macro call is shown as: the body with the arguments in place, written as nt65 rather
-/// than as the ca65 the emitter writes, one level at a time. The fixture's macros are the
-/// language's own set of them, so they are what this is asked about.
+/// How a macro call's expansion is shown: the body with the arguments substituted, written as
+/// nt65 rather than as the ca65 the emitter produces, one level of calls at a time. The tests
+/// use the macros fixture, which holds one of every kind of macro the language has.
 /// </summary>
 public sealed class ExpansionTests
 {
@@ -19,7 +19,7 @@ public sealed class ExpansionTests
             return (analysis, analysis.File("main.nt65"));
         });
 
-    /// <summary>An expansion is what the programmer would have written: the operand goes in whole.</summary>
+    /// <summary>An expansion reads as the programmer would have written it: an operand argument is substituted whole, index included.</summary>
     [Fact]
     public void AnOperandArgumentGoesInWholeAndCarriesItsIndex()
     {
@@ -44,7 +44,7 @@ public sealed class ExpansionTests
             Written("set16!({buf,x}, $1234)"));
     }
 
-    /// <summary>A `.byteof` is the byte it asks for: of the value for an immediate, of the address for a mode that has one.</summary>
+    /// <summary>A `.byteof` is written as the byte it selects: a byte of the value for an immediate, and of the address for a mode that has one.</summary>
     [Fact]
     public void ByteofIsWrittenAsTheByteItAsksFor()
     {
@@ -67,8 +67,9 @@ public sealed class ExpansionTests
     }
 
     /// <summary>
-    /// A `.each` over a `list` argument is written out as its turns, because nt65 has no way to
-    /// write a call's arguments as a list; the `.if` inside each turn is the branch it takes.
+    /// A `.each` over a `list` argument is written out one iteration at a time, because nt65 has
+    /// no syntax for a call's arguments as a list; each `.if` inside an iteration is replaced by
+    /// the branch it takes.
     /// </summary>
     [Fact]
     public void ARepetitionOverTheArgumentsIsWrittenOut()
@@ -98,7 +99,7 @@ public sealed class ExpansionTests
             Written("times_x!(8)"));
     }
 
-    /// <summary>A call inside a body is left as a call, with a way to ask for it one level down.</summary>
+    /// <summary>A macro call inside the body is left as a call, with a link that expands it one level further.</summary>
     [Fact]
     public void ACallInsideABodyIsLeftAsACall()
     {
@@ -117,7 +118,7 @@ public sealed class ExpansionTests
         Assert.Equal(0, link.Line);
         Assert.Equal("branch_unless!(cs, @skip)", link.Text);
 
-        // Asked for, that one call is written out in place and the rest stands as it was.
+        // Following the link expands that one call in place and leaves the rest as it was.
         Assert.Equal(
             """
             bcc @skip
@@ -138,7 +139,7 @@ public sealed class ExpansionTests
         Assert.Equal(".byte E4, 1", Written("note!(E4)"));
     }
 
-    /// <summary>The summary is the answer: what it becomes, in words before numbers.</summary>
+    /// <summary>The summary says what the call becomes: how many lines, bytes and cycles it expands to.</summary>
     [Fact]
     public void TheSummarySaysWhatTheCallBecomes()
     {
@@ -156,14 +157,14 @@ public sealed class ExpansionTests
         var calls = 0;
         foreach (var node in model.Tree.Root.DescendantNodes().OfType<Norristown.Syntax.MacroCallSyntax>())
         {
-            // A call written inside a body is expanded by whatever expands that body: on its
-            // own its arguments are names and not values, and there is nothing to write out.
+            // A call written inside a macro body is expanded as part of that body: on its own,
+            // its arguments are parameter names rather than values, so there is nothing to write out.
             if (InAMacroBody(node))
                 continue;
             calls++;
 
-            // What is shown has to be nt65 a person could have written, so it parses on its
-            // own — one level at a time, and written out all the way down.
+            // What is shown must be nt65 a person could have written, so it must parse on its
+            // own, both expanded one level and expanded all the way down.
             foreach (var all in (bool[])[false, true])
             {
                 var expansion = MacroExpansion.Of(analysis, model, node, null, all);

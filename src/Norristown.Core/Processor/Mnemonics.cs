@@ -3,22 +3,21 @@ namespace Norristown.Processor;
 /// <summary>
 /// What each instruction is called, and which of the processor's flags it writes. Neither is
 /// anything nt65 works out: they are datasheet facts, in WDC's words, kept here because the
-/// one place they are wanted is beside an instruction an editor is showing. The names are
+/// only place they are needed is beside an instruction the editor is showing. The names are
 /// trimmed of the tail that says what the instruction works on, since the line already says
 /// that: <c>load accumulator</c> rather than <c>load accumulator with memory</c>.
 /// <para>
 /// The undocumented opcodes of the NMOS 6502 have no datasheet to take a name from, so each is
-/// named for the two documented instructions it does at once, which is what it is; the ones
-/// whose result depends on the part say so, since that is the thing a reader most needs to be
-/// told about them.
+/// named after the two documented instructions it performs at once; the ones whose result
+/// varies from part to part say so, since that is what a reader most needs to know about them.
 /// </para>
 /// </summary>
 public static class Mnemonics
 {
     /// <summary>
     /// The status register's flags, high bit first, which is the order they are listed in.
-    /// <c>M</c> and <c>X</c> are the 65816's width flags, and only the instructions that
-    /// write the register as a whole reach them.
+    /// <c>M</c> and <c>X</c> are the 65816's width flags, and only <c>rep</c>, <c>sep</c> and
+    /// the instructions that write the whole register change them.
     /// </summary>
     private static readonly (int Bit, string Name)[] Status =
     [
@@ -27,8 +26,8 @@ public static class Mnemonics
     ];
 
     /// <summary>
-    /// What <paramref name="mnemonic"/> is called, or null for one no CPU here has. The eight
-    /// forms of each bit instruction share a name, because the bit they name is on the line.
+    /// What <paramref name="mnemonic"/> is called, or null for one no supported CPU has. The
+    /// eight forms of each bit instruction share a name, because the bit number is already on the line.
     /// </summary>
     public static string? Name(string mnemonic) => Bare(mnemonic) switch
     {
@@ -154,8 +153,8 @@ public static class Mnemonics
     /// The flags <paramref name="mnemonic"/> writes, in the order the status register holds
     /// them, or null where it writes none. An instruction that writes the register whole is
     /// <c>all</c> rather than a list of every flag there is; <paramref name="constant"/> is
-    /// the value of the immediate where the program says it, which is what turns a
-    /// <c>rep</c> or a <c>sep</c> from <c>all</c> into the flags its mask names.
+    /// the value of the immediate when it is known, which is what turns a <c>rep</c> or a
+    /// <c>sep</c> from <c>all</c> into the flags its mask names.
     /// </summary>
     public static string? Flags(Cpu cpu, string mnemonic, AddressingMode mode, long? constant)
     {
@@ -170,8 +169,8 @@ public static class Mnemonics
         if (name == "bit")
             return mode == AddressingMode.Immediate ? "Z" : "N V Z";
 
-        // The NMOS 6502 leaves the decimal flag as it found it through an interrupt, which is
-        // the trap every CMOS part closed by clearing it.
+        // The NMOS 6502 leaves the decimal flag unchanged when it takes an interrupt, a trap
+        // every CMOS part closed by clearing the flag.
         if (name is "brk" or "cop")
             return cpu == Cpu.Mos6502 ? "I" : "D I";
         return Bare(name) switch
@@ -181,7 +180,7 @@ public static class Mnemonics
             "asl" or "lsr" or "rol" or "ror" => "N Z C",
             "and" or "eor" or "ora" or "lda" or "ldx" or "ldy" => "N Z",
 
-            // The undocumented opcodes write what the pair of instructions each is writes.
+            // Each undocumented opcode writes the flags its pair of documented instructions writes.
             "rra" or "isc" or "arr" => "N V Z C",
             "slo" or "rla" or "sre" or "dcp" or "alr" or "anc" or "axs" => "N Z C",
             "lax" or "las" or "ane" => "N Z",

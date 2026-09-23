@@ -26,13 +26,13 @@ public sealed record RegisterState(
         RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, null);
 
     /// <summary>
-    /// What a label another routine may jump into starts from: nothing known in the registers,
-    /// over the stack a call to the routine leaves, which is nothing, since whoever jumps in
-    /// arrives as a call would and has made no save of this routine's.
+    /// The starting state at a label that another routine may jump into: nothing known about
+    /// the registers, and an empty stack. Code that jumps in arrives as a call would, and has
+    /// pushed none of the saves this routine makes.
     /// </summary>
     public static RegisterState Outside { get; } = Unknown with { Stack = SavedStack.Empty };
 
-    /// <summary>Why the stack is unknown, where it is and the analysis can say.</summary>
+    /// <summary>Why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
     /// <summary>What <paramref name="register"/> may hold.</summary>

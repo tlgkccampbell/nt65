@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 namespace Norristown.Tests;
 
 /// <summary>
-/// What the catalogue promises about itself. The names are a compatibility promise, so they are
-/// held to one spelling; the sentences are composite format strings, so a brace in one that is
-/// not a hole would throw where it is said rather than here.
+/// Checks the catalogue's own invariants. The names are a compatibility promise, so they must
+/// all follow one naming style; the messages are composite format strings, so a brace in one that
+/// is not a placeholder would otherwise throw only when the diagnostic is reported, not here.
 /// </summary>
 public sealed partial class CatalogueTests
 {
@@ -18,7 +18,7 @@ public sealed partial class CatalogueTests
         Assert.Equal(Catalogue.All.Count, Catalogue.All.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
-    /// <summary>A name is what <c>nt65 explain</c> and the project file are given, so both find it.</summary>
+    /// <summary>A name is what <c>nt65 explain</c> and the project file are given, so looking it up must find its entry.</summary>
     [Fact]
     public void EveryNameIsFound()
     {
@@ -28,8 +28,9 @@ public sealed partial class CatalogueTests
     }
 
     /// <summary>
-    /// Every sentence is one a site can say: each brace is a hole or an escape, and the holes
-    /// run from the first with none left out, so no argument a site passes goes nowhere.
+    /// Every message format can be formatted: each brace is a placeholder or an escaped brace,
+    /// and the placeholders are numbered from <c>{0}</c> with none skipped, so every argument a
+    /// reporting site passes appears in the message.
     /// </summary>
     [Fact]
     public void EverySentenceCanBeSaid()
@@ -56,7 +57,7 @@ public sealed partial class CatalogueTests
         }
     }
 
-    /// <summary>How many holes a format has, which is one more than the highest it numbers.</summary>
+    /// <summary>How many placeholders a format has, taken as one more than the highest placeholder number.</summary>
     private static int Holes(string format) =>
         Hole().Matches(format).Select(m => int.Parse(m.Groups[1].Value) + 1).DefaultIfEmpty(0).Max();
 

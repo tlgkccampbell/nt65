@@ -6,7 +6,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What an expression evaluates to: a number, a string, or nothing when the expression
-/// names an address or needs a layer that is not online yet.
+/// names an address or needs something only a later stage knows, such as layout.
 /// <para>
 /// Arithmetic is 64-bit and signed while nt65 computes, and what the output carries has to
 /// fit ca65's 32 bits. Where a value fits is a question about the place it is written — a
@@ -82,9 +82,10 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     };
 
     /// <summary>
-    /// Text as a literal would write it: a byte that is no printable ASCII character, such as one
-    /// with bit 7 set that a function built, is written <c>\xHH</c>, so what is shown can be
-    /// written back. A character above <c>$ff</c>, which only a charmap can map, is kept as it was typed.
+    /// Text as a literal would write it: a byte that is not a printable ASCII character, such as
+    /// one with bit 7 set that a function built, is written <c>\xHH</c>, so what is shown can be
+    /// written back. A character above <c>$ff</c>, which only a charmap can map, is kept as it
+    /// was typed.
     /// </summary>
     private static string Quoted(string text)
     {

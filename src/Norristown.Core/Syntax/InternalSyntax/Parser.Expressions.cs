@@ -2,14 +2,14 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax.InternalSyntax;
 
-// Expressions: the operator levels, the names an expression is written with, and the two
-// places the language wants parentheses.
+// Expressions: the operator levels, the names an expression is written with, and the places
+// where the language requires parentheses.
 internal sealed partial class Parser
 {
     /// <summary>
     /// An expression, at the loosest binding level. Every expression inside another is read
     /// through here or through <see cref="ParseUnary"/>, so this is where the nesting is
-    /// counted and where a nest too deep to read stops.
+    /// counted and where parsing stops when the nesting gets too deep.
     /// </summary>
     private ExpressionSyntax ParseExpression()
     {
@@ -32,8 +32,9 @@ internal sealed partial class Parser
             var right = ParseBinary(level - 1);
             CheckRequiredParentheses(operatorIndex, op, left, right);
 
-            // The expression is the node the missing parentheses are about, so it takes what was
-            // said over its operator, and whatever an operand of it was reported for.
+            // A missing-parentheses diagnostic, reported over the operator, is about this whole
+            // expression, so it is attached here, along with any diagnostic on an operand that no
+            // inner node claimed.
             left = Own(new BinaryExpressionSyntax(left, op, right));
         }
         return left;
@@ -158,20 +159,20 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The part that stands where a name belongs the source does not have, saying so unless
-    /// <paramref name="message"/> is null, which is where something else has said it better.
+    /// A name part for a name the source does not write, reporting <paramref name="message"/>
+    /// on it; a null message reports nothing, for when another diagnostic already covers it.
     /// </summary>
     private IdentifierNameSyntax MissingPart(DiagnosticMessage? message) =>
         new(message is not { } said ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, said),
             null);
 
-    /// <summary>A path of one part, that part being only the place a name belongs.</summary>
+    /// <summary>A path whose only part is a missing name.</summary>
     private GreenSeparatedList MissingParts(DiagnosticMessage? message) => new([MissingPart(message)]);
 
-    /// <summary>The name that stands where one belongs the source does not have.</summary>
+    /// <summary>A name expression for a name the source does not write.</summary>
     private NameExpressionSyntax MissingName(DiagnosticMessage? message) => new(null, MissingParts(message));
 
-    /// <summary><c>[i]</c> after a name: which element of a counted declaration it stands for.</summary>
+    /// <summary><c>[i]</c> after a name: which element of a counted declaration the name refers to.</summary>
     private ElementIndexSyntax ParseElementIndex()
     {
         var open = Advance();

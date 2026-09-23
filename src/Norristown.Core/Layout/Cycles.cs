@@ -8,8 +8,8 @@ namespace Norristown.Layout;
 /// How long each instruction takes on each CPU. The count is an interval, because some of
 /// what it depends on is not in the program: whether an indexed read crosses a page,
 /// whether a branch is taken and crosses one, and on the 65C02 whether the decimal flag
-/// is set. Every count that is an interval carries what its top is paid for, so a reader is
-/// never left to guess which way their line will go.
+/// is set. Every count that is an interval carries the causes of the extra cycles at its top,
+/// so a reader never has to guess what decides where in the interval their line falls.
 /// <para>
 /// On the 65816 most counts depend on the widths and the mode, so they are worked out from
 /// the state the analysis found reaching the instruction; where it does not know a width,
@@ -18,13 +18,16 @@ namespace Norristown.Layout;
 /// </summary>
 public static class Cycles
 {
-    /// <summary>The instructions that only read, so an indexed one pays for a page crossing only sometimes.</summary>
+    /// <summary>
+    /// The instructions that only read, so an indexed form takes the extra page-crossing cycle
+    /// only when the address actually crosses a page.
+    /// </summary>
     private const string Reads = "adc and bit cmp cpx cpy eor lda ldx ldy ora sbc";
 
-    /// <summary>The instructions that write, so an indexed one always pays.</summary>
+    /// <summary>The instructions that write, so an indexed form always takes the page-crossing cycle.</summary>
     private const string Writes = "sta stx sty stz";
 
-    /// <summary>The instructions that read, change and write back, which always pay.</summary>
+    /// <summary>The instructions that read, change and write back, which always take the page-crossing cycle.</summary>
     private const string Modifies = "asl dec inc lsr rol ror";
 
     /// <summary>An indexed or indirect-indexed operand whose address carries into the high byte.</summary>
@@ -33,19 +36,25 @@ public static class Cycles
     /// <summary>A branch whose condition holds.</summary>
     private const string Taken = "+1 when taken";
 
-    /// <summary>A taken branch whose target is on another page, where being taken is also in doubt.</summary>
+    /// <summary>
+    /// A taken branch whose target is on another page, for a conditional branch, where whether
+    /// the branch is taken at all is also unknown.
+    /// </summary>
     private const string TakenCrossing = "+1 when that crosses a page";
 
-    /// <summary>The same, for a branch that is always taken and has only the page to pay for.</summary>
+    /// <summary>The same, for a branch that is always taken, where only the page crossing is unknown.</summary>
     private const string Crosses = "+1 when it crosses a page";
 
     /// <summary>A direct-page operand on a 65816 whose D the analysis could not follow.</summary>
     private const string DirectPage = "+1 when the low byte of D is not zero";
 
-    /// <summary>Arithmetic on a 65C02, which the program does not say the decimal flag for.</summary>
+    /// <summary>Arithmetic on a 65C02, where the program does not say whether the decimal flag is set.</summary>
     private const string Decimal = "+1 in decimal mode";
 
-    /// <summary>An interrupt or its return, where the analysis could not follow the mode.</summary>
+    /// <summary>
+    /// An interrupt or its return, where the analysis could not tell whether the 65816 is in
+    /// native or emulation mode.
+    /// </summary>
     private const string NativeMode = "+1 in native mode";
 
     /// <summary>The undocumented opcodes that read, change and write back, which always pay the index cycle.</summary>
@@ -59,8 +68,8 @@ public static class Cycles
 
     /// <summary>
     /// How long <paramref name="mnemonic"/> takes in <paramref name="mode"/>, or null when
-    /// nt65 has no count for it. A branch is counted as taken or not, both, so its interval
-    /// covers the whole of what it can cost.
+    /// nt65 has no count for it. A branch is counted both taken and not taken, so its
+    /// interval covers everything it can cost.
     /// </summary>
     public static Timing? Of(Cpu cpu, string mnemonic, AddressingMode mode, ProcessorState? state = null)
     {
@@ -76,9 +85,10 @@ public static class Cycles
     }
 
     /// <summary>
-    /// What a long branch costs in the form it was given. Short, it is the branch. Long, the
-    /// condition that would have branched now falls into a <c>jmp</c>, and the one that
-    /// would not takes the opposite branch over it.
+    /// What a long branch costs in the form it was laid out in. The short form costs what the
+    /// branch costs. In the long form the branch is inverted to skip over a <c>jmp</c>: when
+    /// the original condition holds, execution falls through into the <c>jmp</c>, and when it
+    /// does not, the inverted branch is taken over it.
     /// </summary>
     public static CycleCount OfLongBranch(bool inverted) => inverted
         ? new CycleCount(3, 5)
@@ -88,7 +98,8 @@ public static class Cycles
     /// A 65816 instruction. The table counts the 8-bit form; a 16-bit register adds a cycle
     /// for each extra byte read or written, two for a read-modify-write, and a 16-bit index
     /// always pays the page-crossing cycle an 8-bit one pays only sometimes. A direct operand
-    /// costs one more when the low byte of D is not zero, which is known where D is.
+    /// costs one more when the low byte of D is not zero, which is known wherever the analysis
+    /// knows D.
     /// </summary>
     private static Timing? Of65816(string mnemonic, AddressingMode mode, ProcessorState state)
     {
@@ -133,7 +144,8 @@ public static class Cycles
             // byte of a 16-bit register last of all.
             var total = new Timing(least) + direct;
 
-            // A read indexed across a page pays for the carry, which a 16-bit index always does.
+            // An indexed read takes an extra cycle when it crosses a page, and always takes it
+            // with a 16-bit index.
             if (reads && mode is AddressingMode.AbsoluteX or AddressingMode.AbsoluteY or AddressingMode.DirectIndirectY)
                 total += index == Width.Sixteen ? new Timing(1) : new Timing(new CycleCount(0, 1), Crossing);
             return total + Wider(sized, modifies ? 2 : 1, indexed ? "X and Y" : "A");
@@ -188,8 +200,9 @@ public static class Cycles
     }
 
     /// <summary>
-    /// What <paramref name="register"/> being 16 bits adds: <paramref name="cycles"/> if it
-    /// is, up to that where the analysis does not know which it is.
+    /// What <paramref name="register"/> being 16 bits adds, given its <paramref name="width"/>:
+    /// <paramref name="cycles"/> if it is 16 bits, none if it is 8, and anywhere from none up
+    /// to <paramref name="cycles"/> where the analysis does not know the width.
     /// </summary>
     private static Timing Wider(Width width, int cycles, string register) => width switch
     {
@@ -322,8 +335,8 @@ public static class Cycles
         Add(table, "trb tsb", AddressingMode.Direct, 5);
         Add(table, "trb tsb", AddressingMode.Absolute, 6);
 
-        // A shift indexed absolutely pays for a page crossing only when it crosses one;
-        // increment and decrement pay whatever they do.
+        // On the 65C02 an absolute-indexed shift takes the page-crossing cycle only when it
+        // crosses a page; increment and decrement always take it.
         Add(table, "asl lsr rol ror", AddressingMode.AbsoluteX, new Timing(new CycleCount(6, 7), Crossing));
         Add(table, "inc dec", AddressingMode.AbsoluteX, 7);
         Add(table, "inc dec", AddressingMode.Accumulator, 2);

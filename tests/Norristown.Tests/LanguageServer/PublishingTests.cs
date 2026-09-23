@@ -7,9 +7,9 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// What a keystroke publishes, and when. The promise to the person typing is that a squiggle
-/// never flickers and is never about text that is gone, and each of the rules that keeps it is
-/// checked here. The wait between an edit and what the rest of the program has to say is held
-/// by the test, so none of this costs real time.
+/// never flickers and never refers to text that has gone, and each rule that keeps that promise
+/// is checked here. The delay between an edit and the diagnostics for the rest of the program is
+/// controlled by the test, so none of this takes real time.
 /// </summary>
 public sealed class PublishingTests
 {
@@ -43,9 +43,9 @@ public sealed class PublishingTests
         """;
 
     /// <summary>
-    /// The file the caret is in hears at once; the rest of the program hears once the typing
-    /// has stopped. The edit here is in gfx and what it breaks is in main, which is the case
-    /// the two timings exist for.
+    /// Diagnostics for the edited file are published at once; those for the rest of the program
+    /// once typing has stopped. The edit here is in gfx and what it breaks is in main, which is
+    /// the case the two timings exist for.
     /// </summary>
     [Fact]
     public async Task TheEditedFileHearsAtOnceAndTheRestOnceTheTypingStops()
@@ -54,7 +54,7 @@ public sealed class PublishingTests
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout);
 
-        // `clear` comes off the export line, which is news to main and to nothing else.
+        // `clear` is removed from the export line, which changes main's diagnostics and no others.
         await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
             new Range(new Position(1, 8), new Position(1, 15)), ""));
 
@@ -71,8 +71,8 @@ public sealed class PublishingTests
 
     /// <summary>
     /// A run of keystrokes: what is published about a file never goes back to an older revision
-    /// of it, and a file that is still part of the program is never emptied and then filled in
-    /// again, which is what a flickering squiggle is.
+    /// of it, and a file that is still part of the program never has its diagnostics cleared and
+    /// then published again, which is what makes a squiggle flicker.
     /// </summary>
     [Fact]
     public async Task ARunOfKeystrokesNeverGoesBackAndNeverEmptiesAFileThatIsStillThere()
@@ -99,17 +99,17 @@ public sealed class PublishingTests
         Assert.Equal(version, published[^1].Version);
         Assert.Equal([.. published.Select(one => one.Version).Order()], published.Select(one => one.Version));
 
-        // gfx is part of the program throughout, and nothing about it changed, so it is never
-        // told that it has no problems and then told again that it has one.
+        // gfx is part of the program throughout and nothing about it changes, so it is never
+        // published with no diagnostics and then with its diagnostic again.
         var elsewhere = client.Pending().Where(one => one.Uri == GfxUri).ToList();
         Assert.DoesNotContain(elsewhere, one => one.Diagnostics.Count == 0);
     }
 
     /// <summary>
-    /// The edited document is never asked to fetch its colours again — the client asks about
-    /// the document it is showing by itself — and the other files are asked only when the edit
-    /// reached past the file it was made in, which is when what their names refer to can have
-    /// moved.
+    /// The client is never asked to refetch semantic tokens for the edited document alone —
+    /// it refetches the document it is showing by itself — and is asked to refetch the others
+    /// only when the edit reaches past its own file, since only then can what their names refer
+    /// to have changed.
     /// </summary>
     [Fact]
     public async Task OnlyAnEditThatReachesPastItsOwnFileAsksForAnythingToBeFetchedAgain()
@@ -118,13 +118,13 @@ public sealed class PublishingTests
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout, refreshesTokens: true);
 
-        // A keystroke in a routine body: nothing outside main can have moved.
+        // A keystroke in a routine body: nothing outside main can have changed.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(
             new Range(new Position(7, 4), new Position(7, 7)), "nop"));
         await client.NextDiagnosticsAsync(MainUri, timeout);
         await held.ReleaseAsync(timeout);
 
-        // A constant main reads, changed in gfx: now it has.
+        // A constant that main reads, changed in gfx: now something outside gfx has changed.
         await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
             new Range(new Position(3, 9), new Position(3, 14)), "$0800"));
         await client.NextDiagnosticsAsync(GfxUri, timeout);
@@ -146,9 +146,9 @@ public sealed class PublishingTests
             Assert.Equal(uri, (await client.NextDiagnosticsAsync(cancellation)).Uri);
             await held.ReleaseAsync(cancellation);
 
-            // Opening a file reads the whole program, so everything about it may have moved
-            // and the client is asked to fetch it again. That is not what any of these tests
-            // is about, so it is taken off here.
+            // Opening a file analyzes the whole program, so any token may have changed and the
+            // client is asked to refetch them. None of these tests is about that, so that request
+            // is consumed here.
             if (refreshesTokens)
                 await client.NextTokensRefreshAsync(cancellation);
         }

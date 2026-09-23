@@ -5,7 +5,7 @@
 
 .cpu 6502
 
-; A whole turn in the table's own units, and how far the wave reaches either way.
+; The number of table steps in a whole turn, and the wave's amplitude either side of zero.
 TURN  = 256
 SCALE = 127
 

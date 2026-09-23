@@ -1,11 +1,11 @@
-; What a family is worth to the file that uses it: the instances are ordinary names, and a
-; path that ends in the binding builds the table beside them.
+; How another file uses a family: each instance is an ordinary name, and a path ending in the
+; `.each` binding builds a table of them.
 .module main
 .use hw::Bank
 .use snd::stop
 
 .segment RODATA
-; `play` is not exported and each of its routines is, so they are reached through it.
+; `play` itself is not exported but each of its routines is, so they are named through it.
 .data playing: .addr[] {
     .each Bank, b {
         snd::play::b

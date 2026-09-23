@@ -69,7 +69,7 @@ public readonly record struct StateItem(
     /// <summary>
     /// Whether a list says something and every item of it is a <c>keeps</c>. Such a list says
     /// what a register holds and nothing about the processor state, so it neither declares a
-    /// label nor answers what a routine with no body assumes.
+    /// label's state nor counts as the declaration a routine with no body needs.
     /// </summary>
     public static bool OnlyKeeps(SyntaxNode? list)
     {
@@ -78,9 +78,9 @@ public readonly record struct StateItem(
     }
 
     /// <summary>
-    /// The banks a <c>dbr = [...]</c> item names, once <paramref name="valueOf"/> can say what
-    /// each is worth; null, with the range that is not a bank or a run of them, or the item
-    /// itself where it names none, when they are not a set.
+    /// The banks a <c>dbr = [...]</c> item names, each evaluated with <paramref name="valueOf"/>.
+    /// When they do not make a set, null, with <paramref name="invalid"/> set to the range that
+    /// is not a bank or a run of banks, or to the item itself when it names no ranges.
     /// </summary>
     public BankSet? BanksOf(Func<ExpressionSyntax, long?> valueOf, out SyntaxNode? invalid)
     {

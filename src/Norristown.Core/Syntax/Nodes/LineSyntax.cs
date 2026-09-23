@@ -4,11 +4,11 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// One source line, in the pieces it is written in: the <c>.export</c> that exports what it
-/// declares, its <see cref="Statement"/>, whatever the statement could not take, and the line
-/// break that ends it. Those pieces are the line's children, so a walk of the tree meets each
-/// token once and under the node it is part of; <see cref="Tokens"/> is the same line read as the
-/// lexer read it, as a flat run of tokens belonging to the line.
+/// One source line, split into the pieces it is made of: an optional <c>.export</c> that
+/// exports what the line declares, its <see cref="Statement"/>, any tokens the statement could
+/// not consume, and the line break that ends it. Those pieces are the line's children, so a walk
+/// of the tree reaches each token once, under the node it is part of; <see cref="Tokens"/> gives
+/// the same line as the lexer read it, as a flat run of tokens whose parent is the line.
 /// </summary>
 public sealed partial class LineSyntax : SyntaxNode
 {
@@ -32,9 +32,9 @@ public sealed partial class LineSyntax : SyntaxNode
 
     /// <summary>
     /// The <c>.export</c> written before a declaration, which exports what the line declares, or
-    /// null. It belongs to the line rather than to the declaration, as the line break does, so
-    /// the declaration reads as the same one written without it;
-    /// <see cref="StatementSyntax.IsExported"/> says the <c>.export</c> is there.
+    /// null. Like the line break, it belongs to the line rather than to the declaration, so the
+    /// declaration's node looks the same whether or not it is exported;
+    /// <see cref="StatementSyntax.IsExported"/> says whether the <c>.export</c> is there.
     /// </summary>
     public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : Tokens[0];
 
@@ -52,13 +52,13 @@ public sealed partial class LineSyntax : SyntaxNode
     public SyntaxToken EndOfLineToken => Tokens[^1];
 
     /// <summary>
-    /// The line's tokens as the lexer read them, the line break last. They belong to the line,
-    /// and the same tokens are held again by the pieces the line is written in, where they belong
-    /// to the node each is part of; the pieces hold a missing token as well, which the source does
-    /// not write and the lexer never read.
+    /// The line's tokens as the lexer read them, the line break last; their parent is the line.
+    /// The same tokens are also held by the line's pieces, where each one's parent is the node it
+    /// is part of. The pieces can also hold missing tokens, which the source does not contain and
+    /// so do not appear here.
     /// <para>
     /// The list is a view over the line, so reading a whole file's tokens through it neither
-    /// allocates nor makes a statement: it is the line as the lexer left it.
+    /// allocates nor parses any statement.
     /// </para>
     /// </summary>
     public SyntaxTokenList Tokens => new(this);
@@ -66,15 +66,15 @@ public sealed partial class LineSyntax : SyntaxNode
     /// <inheritdoc/>
     /// <remarks>
     /// A green line holds the tokens the lexer read and not the pieces they parse to, so the
-    /// line's own answer is both of theirs, and the tree works it out for every line as it is
-    /// built rather than each line working it out again.
+    /// answer has to cover both. The tree computes it for every line once, as it is built, rather
+    /// than each line computing it again.
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LineIndex);
 
     /// <inheritdoc/>
     /// <remarks>
     /// As with the diagnostics: the green line holds the tokens the lexer read rather than the
-    /// pieces they parse to, so the line's answer is both of theirs and the tree works it out.
+    /// pieces they parse to, so the answer covers both, and the tree computes it once per line.
     /// </remarks>
     public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LineIndex);
 

@@ -2,7 +2,7 @@
 # header nt65 writes, linked with ld65. `make CONFIG=debug` builds the debug configuration.
 ROOT   := ../../..
 TOOLS  := $(ROOT)/.cache/cc65/bin
-# What the tools are called: the same build on either system, bar the suffix.
+# Tool names differ between systems only by the .exe suffix on Windows.
 X      := $(if $(filter Windows_NT,$(OS)),.exe,)
 NT65   := $(ROOT)/src/Norristown.Cli/bin/Debug/net10.0/nt65$(X)
 CC65   := $(TOOLS)/cc65$(X)

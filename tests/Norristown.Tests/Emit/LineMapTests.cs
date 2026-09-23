@@ -3,8 +3,8 @@ using Norristown.Emit;
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// The map beside a generated <c>.s</c>, which is where the lines of the output say what they
-/// came from now that nothing in the output says it.
+/// The line map written beside a generated <c>.s</c>, which records the source line each output
+/// line came from, since the output itself does not.
 /// </summary>
 public sealed class LineMapTests
 {
@@ -41,7 +41,7 @@ public sealed class LineMapTests
         }
     }
 
-    /// <summary>What a map says is what it is read back as.</summary>
+    /// <summary>A map reads back as the sources and line mappings it was written from.</summary>
     [Fact]
     public void AMapReadsBackAsWhatItWasWrittenFrom()
     {
@@ -84,7 +84,7 @@ public sealed class LineMapTests
         Assert.Contains(expected, problem);
     }
 
-    /// <summary>The ca65 and the map a one-file program is written as.</summary>
+    /// <summary>The ca65 output and the line map that a one-file program compiles to.</summary>
     private static (OutputFile Code, OutputFile Map) Compiled(string source)
     {
         var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);

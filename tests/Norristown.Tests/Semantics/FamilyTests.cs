@@ -3,10 +3,10 @@ using Norristown.Semantics;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// Routine families: a declaration named after the name a repetition binds, which declares
-/// one per member of the enum walked. <c>.multiproc</c> is the two blocks folded into one
-/// line, so the two forms are one construct and the test for that is that they write the
-/// same bytes.
+/// Routine families: a <c>.proc</c> inside an <c>.each</c> over an enum, named with the name the
+/// <c>.each</c> binds, which declares one routine per member of the enum. <c>.multiproc</c> folds
+/// those two blocks into one line, so the two forms are one construct, and the test of that is
+/// that they write the same bytes.
 /// </summary>
 public sealed class FamilyTests
 {
@@ -33,7 +33,7 @@ public sealed class FamilyTests
 
     /// <summary>
     /// <c>.multiproc E, b: signature { }</c> is <c>.each E, b { .proc b: signature { } }</c>,
-    /// so the two write the same output byte for byte: the folded form is a spelling.
+    /// so the two write the same output byte for byte: the folded form is only another spelling.
     /// </summary>
     [Fact]
     public void TheFoldedFormWritesWhatTheLongFormDoes()

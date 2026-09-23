@@ -56,8 +56,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The values written after the directive on its own line, as the tail they are; null where
-    /// there are none to read, which leaves the directive no tail at all.
+    /// The values written after the directive on the same line, as an inline tail; null when
+    /// there are none, in which case the directive has no tail.
     /// </summary>
     private DataTailSyntax? ParseInlineData() =>
         ParseSeparatedList(ParseExpression) is { } values ? new InlineDataSyntax(values) : null;
@@ -73,8 +73,8 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>.data name: element</c>, or <c>.data name {</c> for mixed data. The name is
-    /// required: data is declared to be named, and the segment of the same name is written
-    /// <c>.segment DATA</c>.
+    /// required: <c>.data</c> always declares named data. To switch to the segment called
+    /// DATA, write <c>.segment DATA</c>.
     /// </summary>
     private GreenNode ParseDataDeclaration()
     {
@@ -129,8 +129,8 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>{ member = value, … }</c>, a record, or <c>{ value, … }</c>, a list of elements.
-    /// <c>=</c> is in no expression, so the first item says which, and <c>{}</c> is a record
-    /// that names no member.
+    /// No expression contains <c>=</c>, so the first item decides which one it is, and
+    /// <c>{}</c> is a record that sets no member.
     /// </summary>
     private GreenNode ParseBracedValue()
     {

@@ -4,18 +4,18 @@ using Norristown.Processor;
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// What the output defines at the margin, held against the words ca65 reads as instructions
-/// under the <c>.setcpu</c> the output itself writes. ca65 takes one of those at the start of
-/// a line for an instruction, so a bare definition under such a name is output ca65 refuses,
-/// which is an nt65 bug by the contract of §1.
+/// Checks the names the output defines at the start of a line against the words ca65 reads as
+/// instructions under the <c>.setcpu</c> the output itself writes. ca65 reads such a word at the
+/// start of a line as an instruction, so a bare definition with that name is output ca65
+/// rejects, and output ca65 rejects is always an nt65 bug.
 /// <para>
 /// It runs over what a caller has already compiled — every fixture, every corpus program —
-/// rather than compiling anything of its own, so it costs the suite nothing.
+/// rather than compiling anything of its own, so it adds no compilation to the suite.
 /// </para>
 /// </summary>
 internal static partial class BareNames
 {
-    /// <summary>A name defined at the margin: a label, an assignment, or the <c>z := *</c> a label named `z` becomes.</summary>
+    /// <summary>A name defined at the start of a line: a label, an assignment, or the <c>z := *</c> nt65 writes for a label named <c>z</c>.</summary>
     [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?::=|:|=)")]
     private static partial Regex Defined();
 

@@ -3,10 +3,10 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// That <c>scripts/test.ps1 -Ca65 -Fixture &lt;text&gt;</c> ran something. Every oracle test
-/// narrows itself to what the selection names and stands down when it names nothing of its
-/// own, so a name with a typo in it used to pass green over an empty set — the worst answer
-/// there is, since it looks like the one the run was asking for.
+/// Checks that <c>scripts/test.ps1 -Ca65 -Fixture &lt;text&gt;</c> ran something. Every oracle
+/// test restricts itself to the fixtures and programs the selection matches, and does nothing
+/// when it matches none, so a misspelled selection would otherwise pass with nothing checked —
+/// the worst outcome, since it looks exactly like the success the run was asking for.
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class SelectionTests

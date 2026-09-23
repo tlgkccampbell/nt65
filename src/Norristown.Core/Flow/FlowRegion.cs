@@ -33,7 +33,10 @@ public sealed class FlowRegion
     /// <summary>What one pass through it costs with what it calls, worked out across the program.</summary>
     public RoutineCost Total { get; internal set; }
 
-    /// <summary>Which registers it hands back as it was entered with them, worked out across the program.</summary>
+    /// <summary>
+    /// Which registers it returns holding the values it was entered with, worked out across
+    /// the program.
+    /// </summary>
     public RoutineRegisters Registers { get; internal set; } = RoutineRegisters.Everything;
 
     /// <summary>What one pass through each inline <c>.scope</c> block of it costs.</summary>
@@ -47,8 +50,8 @@ public sealed class FlowRegion
     public IReadOnlyList<(Syntax.TextSpan Opener, Syntax.TextSpan Whole)> Inline { get; }
 
     /// <summary>
-    /// Which registers each inline <c>.scope</c> block of it hands back as they were where the
-    /// block was entered, worked out across the program.
+    /// Which registers each inline <c>.scope</c> block of it leaves holding the values they had
+    /// when the block was entered, worked out across the program.
     /// </summary>
     public IReadOnlyList<ScopeRegisters> ScopeRegisters { get; internal set; } = [];
 

@@ -4,9 +4,9 @@ namespace Norristown.Tests.Syntax;
 
 /// <summary>
 /// Annotations: a tag put on a node or a token that survives a rewrite, so that the piece a fix
-/// inserted can be found again in the tree that comes back. The hard part is the text boundary — a
-/// rewrite that reaches a line writes text and parses the file again — and most of what is here
-/// is about what crosses it and what does not.
+/// inserted can be found again in the tree that comes back. The hard part is the text boundary: a
+/// rewrite that changes a line writes that line out as text and the file is parsed again, and most
+/// of these tests are about which annotations survive that reparse and which do not.
 /// </summary>
 public sealed class AnnotationTests
 {
@@ -27,10 +27,11 @@ public sealed class AnnotationTests
         Assert.Equal(number.FullSpan.Length, tagged.FullSpan.Length);
         Assert.Equal(number.ContainsDiagnostics, tagged.ContainsDiagnostics);
 
-        // It belongs to no file until a rewrite puts it into one, as an `Update` does.
+        // Like a node made by `Update`, it belongs to no tree until a rewrite puts it into one.
         Assert.Null(tagged.Parent);
 
-        // It is itself, and is found by being itself: what it says is for the reader.
+        // An annotation matches by identity, not by value: another with the same kind and data
+        // is a different annotation. Its data is only there for whoever reads it.
         Assert.True(tagged.HasAnnotation(tag));
         Assert.False(tagged.HasAnnotation(new SyntaxAnnotation("probe", "the mask")));
         Assert.True(tagged.HasAnnotations("probe"));
@@ -42,7 +43,7 @@ public sealed class AnnotationTests
         Assert.False(tree.Root.ContainsAnnotations);
     }
 
-    /// <summary>What is put on comes off again, by the annotation itself or by its kind.</summary>
+    /// <summary>An annotation can be removed again, by the annotation itself or by its kind.</summary>
     [Fact]
     public void AnAnnotationComesOffAgain()
     {
@@ -55,7 +56,7 @@ public sealed class AnnotationTests
         Assert.True(tagged.HasAnnotation(one));
         Assert.True(tagged.HasAnnotation(two));
 
-        // Putting on what is already there changes nothing, and so is the same node.
+        // Adding annotations the node already carries changes nothing, and returns the same node.
         Assert.Same(tagged, tagged.WithAdditionalAnnotations(one, two));
 
         var without = tagged.WithoutAnnotations(one);
@@ -74,9 +75,9 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
-    /// A rewrite of a piece rebuilds the nodes above it, and what they carry goes on to what they
-    /// become: a tag on a node outlives a change to what is under it, and a tag on a token
-    /// outlives that token being spelled another way.
+    /// Rewriting a piece rebuilds the nodes above it, and each rebuilt node keeps the annotations
+    /// of the node it replaces: a tag on a node outlives a change to what is under it, and a tag
+    /// on a token outlives that token being spelled another way.
     /// </summary>
     [Fact]
     public void RebuildingANodeKeepsWhatItCarries()
@@ -118,7 +119,7 @@ public sealed class AnnotationTests
         Assert.NotSame(tree, root.Tree);
         Assert.Equal(Program, root.ToFullString());
 
-        // A new tree, a new node, and the tag on the node standing where the old one stood.
+        // A new tree and a new node, with the tag on the new node at the old node's position.
         var found = Assert.Single(root.GetAnnotatedNodes(tag));
         Assert.IsType<NumberExpressionSyntax>(found);
         Assert.Equal("16", found.GetText());
@@ -126,7 +127,8 @@ public sealed class AnnotationTests
         Assert.Equal([found], root.GetAnnotatedNodes("probe"));
         Assert.Equal([found], root.GetAnnotatedNodesAndTokens(tag).Select(piece => piece.AsNode()));
 
-        // Rolled up, so that finding it costs a walk of the subtrees that hold one.
+        // ContainsAnnotations is rolled up through the ancestors, so a search walks only the
+        // subtrees that hold an annotation.
         Assert.True(root.ContainsAnnotations);
         Assert.True(found.Ancestors().All(node => node.ContainsAnnotations));
         Assert.False(root.Tree.GetLine(3).ContainsAnnotations);
@@ -154,8 +156,8 @@ public sealed class AnnotationTests
 
     /// <summary>
     /// An edit elsewhere in the file leaves an annotated line alone, green node and all, so what
-    /// it carries is still there. A line the edit reaches is parsed again, and its annotations go
-    /// with the parse they were on — which is what Roslyn does too.
+    /// it carries is still there. A line the edit reaches is parsed again, and its annotations are
+    /// discarded with the old parse, which is what Roslyn does too.
     /// </summary>
     [Fact]
     public void AnEditKeepsWhatTheLinesItLeavesAloneCarry()
@@ -165,20 +167,20 @@ public sealed class AnnotationTests
         var tag = new SyntaxAnnotation("probe");
         var annotated = tree.Root.ReplaceNode(number, number.WithAdditionalAnnotations(tag)).Tree;
 
-        // A line typed on three lines down: the annotated line keeps its green node and its tag.
+        // Text typed on another line (line 3): the annotated line keeps its green node and its tag.
         var elsewhere = annotated.WithChange(new TextChange(annotated.GetPosition(3, 7), 0, "  ; back"));
         Assert.Equal("16", Assert.Single(elsewhere.Root.GetAnnotatedNodes(tag)).GetText());
 
-        // The line itself typed over: it is read again, and what was on it is gone.
+        // Typing over the annotated line itself reparses it, and the annotation is lost.
         var over = annotated.WithChange(new TextChange(annotated.GetPosition(1, 9), 2, "32"));
         Assert.Empty(over.Root.GetAnnotatedNodes(tag));
         Assert.False(over.Root.ContainsAnnotations);
     }
 
     /// <summary>
-    /// What the reparse makes no matching piece of loses its annotations, and says nothing about
-    /// it. A line is the plainest case of that: a rewrite writes a line back as text, so a tag on
-    /// what is written <em>on</em> the line crosses and a tag on the line itself has nothing to
+    /// A piece for which the reparse makes no matching piece loses its annotations, silently. A
+    /// line is the plainest case of that: a rewrite writes a line back as text, so a tag on what is
+    /// written <em>on</em> the line survives, and a tag on the line node itself has nothing to
     /// land on.
     /// </summary>
     [Fact]
@@ -218,15 +220,16 @@ public sealed class AnnotationTests
         Assert.Equal("lda #0", normalized.ToFullString());
         Assert.Equal("0", Assert.Single(normalized.GetAnnotatedNodes(tag)).GetText());
 
-        // And on a token, which the normalizer rewrites every one of.
+        // The same holds for a tag on a token, even though the normalizer rewrites every token.
         var token = tagged.DescendantTokens().Single(one => one.Kind == SyntaxKind.Mnemonic);
         var onToken = tagged.ReplaceToken(token, token.WithAdditionalAnnotations(tag));
         Assert.Equal("lda", Assert.Single(onToken.NormalizeWhitespace().GetAnnotatedTokens(tag)).Text);
     }
 
     /// <summary>
-    /// What a statement could not take is part of its line, and a tag on it survives a rewrite of
-    /// that line: the tagging itself, and a name written over beside it, each read the line again.
+    /// Tokens a statement could not take are skipped tokens that belong to its line, and a tag on
+    /// them survives a rewrite of that line. Both the rewrite that adds the tag and a rename of a
+    /// name beside it reparse the line.
     /// </summary>
     [Fact]
     public void ATagOnWhatALineLeftOverSurvivesARewriteOfTheLine()
@@ -245,8 +248,9 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
-    /// The lexer's cache shares a token between the places a file writes it, so an annotated one
-    /// must never get into it: the cache is the lexer's alone, and a tag makes a token of its own.
+    /// The lexer's cache shares one token instance among all the places a file writes it, so an
+    /// annotated token must never get into it: adding a tag makes a new token, and the cache holds
+    /// only tokens the lexer made.
     /// </summary>
     [Fact]
     public void AnAnnotatedTokenIsNotSharedThroughTheCache()
@@ -265,7 +269,7 @@ public sealed class AnnotationTests
     /// <summary>
     /// Over every source in the repository: a node tagged, an identity rewrite run over it, and a
     /// token written over elsewhere on its line and on another line. The tagged node is found again
-    /// each time, the same kind saying the same thing, and the file reads as it did.
+    /// each time, with the same kind and the same text, and the file's text is unchanged.
     /// </summary>
     [Fact]
     public void ATaggedNodeIsFoundAgainWhateverElseTheRewriteWrites()
@@ -300,8 +304,9 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
-    /// The node to tag: one written inside a statement, picked from the file by a seed of its own
-    /// so that the sweep meets a different kind in every source and the same one every run.
+    /// The node to tag: one written inside a statement, picked at random with a seed taken from
+    /// the file's length, so that the sweep meets different kinds across sources and the same node
+    /// on every run.
     /// </summary>
     private static SyntaxNode? Chosen(SyntaxTree tree)
     {
@@ -314,8 +319,8 @@ public sealed class AnnotationTests
     /// <summary>
     /// The file with one name written over, on the tagged node's own line and on another line,
     /// which is what makes the reparse cover the line the tag is on and the lines around it. Only
-    /// the name of an <see cref="IdentifierNameSyntax"/> is written over, because a word that is a
-    /// name wherever it stands is one the rewrite cannot change the shape of the line with.
+    /// the name of an <see cref="IdentifierNameSyntax"/> is written over, because renaming a word
+    /// that is a name wherever it stands cannot change how the line parses.
     /// </summary>
     private static IEnumerable<(string What, SyntaxNode Written)> Elsewhere(SyntaxNode root, SyntaxNode tagged)
     {
@@ -335,7 +340,10 @@ public sealed class AnnotationTests
         }
     }
 
-    /// <summary>What is wrong with the one node <paramref name="tag"/> is to be found on, if anything.</summary>
+    /// <summary>
+    /// The problems, if any, with finding <paramref name="tag"/> on exactly one node, of kind
+    /// <paramref name="kind"/> and with the text <paramref name="said"/>.
+    /// </summary>
     private static IEnumerable<string> Found(
         string named, string what, SyntaxNode root, SyntaxAnnotation tag, SyntaxKind kind, string said)
     {

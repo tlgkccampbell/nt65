@@ -30,8 +30,8 @@ public enum WholeProgramReason
     CpuChanged,
 
     /// <summary>
-    /// What the program as a whole found says something about a place an edit rewrote: a
-    /// segment's <c>dp</c> or <c>bank</c>, or the segment table.
+    /// A diagnostic from analyzing the program as a whole (about a segment's <c>dp</c> or
+    /// <c>bank</c>, or about the segment table) points at text the edit rewrote.
     /// </summary>
     DiagnosticInEditedText,
 }

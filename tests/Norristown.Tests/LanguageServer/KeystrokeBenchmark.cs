@@ -8,11 +8,11 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an edit costs, in the two parts the server publishes it in: what the caret waits for —
-/// the edit, the analysis, and the diagnostics of the edited file, which go out at once — and
-/// what the whole program costs, which goes out once the typing has stopped. Not part of the
-/// edit loop; <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most from a
-/// Release build.
+/// What an edit costs, in the two stages the server publishes diagnostics in: what the typist
+/// waits for — applying the edit, the analysis, and the edited file's diagnostics, which are sent
+/// at once — and the whole program's diagnostics, which are sent once typing has stopped. Not
+/// part of the everyday test run; <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers
+/// mean most from a Release build.
 /// </summary>
 public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 {
@@ -45,13 +45,13 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, "_SIZE = "), 12, 14, "17", "27");
     }
 
-    /// <summary>One file of many routines, which is what rerunning only the edited routine would save on.</summary>
+    /// <summary>A single file of many routines: the case that reanalyzing only the edited routine would speed up.</summary>
     [Fact]
     [Trait("Category", "Benchmark")]
     public void AKeystrokeInALargeFile()
     {
-        // Each routine is exported, as a module's routines are: one nothing calls and nothing
-        // exports is warned about, and what is measured here is the file's size and not that.
+        // Each routine is exported, as a real module's routines are: a routine that nothing calls
+        // or exports gets a warning, and this measures the cost of the file's size, not of that.
         var text = GeneratedProject.Text(0, 1) + string.Concat(Enumerable.Range(0, 200).Select(i => $$"""
             .export .proc big{{i}}: a8, i8 {
                 ldx #0

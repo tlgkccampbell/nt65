@@ -7,7 +7,7 @@ namespace Norristown.Processor;
 /// to ca65 cannot collide with it.
 /// </summary>
 /// <param name="Name">The name the source writes.</param>
-/// <param name="Value">What it is worth.</param>
+/// <param name="Value">Its value.</param>
 /// <param name="Declaration">Where it was given: the project file, or the command line.</param>
 public sealed record Define(string Name, long Value, Span Declaration)
 {

@@ -5,9 +5,9 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// A run of statements that is entered only at its first and left only at its last: what
-/// runs, runs all of it. A label starts one, and a statement that transfers control ends
-/// one.
+/// A run of statements that is entered only at its first and left only at its last, so if any
+/// of it runs, all of it runs. A label starts a new block, and a statement that transfers
+/// control ends one.
 /// </summary>
 public sealed class BasicBlock
 {
@@ -24,7 +24,7 @@ public sealed class BasicBlock
         Stream = stream;
     }
 
-    /// <summary>Which block it is, among its routine's.</summary>
+    /// <summary>The block's index among its routine's blocks.</summary>
     public int Index { get; }
 
     /// <summary>The label it starts at, or null for a block nothing names.</summary>
@@ -46,18 +46,22 @@ public sealed class BasicBlock
     public IReadOnlyList<int> Predecessors => predecessors;
 
     /// <summary>
-    /// The routine its call names, if it makes one nt65 can follow. A call ends a block, so
-    /// there is at most one, and what it costs is that routine's own cost.
+    /// The routine the block's call names, if it makes a call nt65 can follow. A call ends a
+    /// block, so there is at most one, and what the called routine costs is counted as that
+    /// routine's own cost rather than this block's.
     /// </summary>
     public IReadOnlyList<Symbol> Calls => calls;
 
     /// <summary>
-    /// Whether it calls somewhere nt65 cannot name: through a pointer, or at an address no
-    /// declaration stands at. What such a call costs is not in the program.
+    /// Whether it calls somewhere nt65 cannot identify: through a pointer, or at an address no
+    /// declaration is placed at. What such a call costs cannot be worked out from the program.
     /// </summary>
     public bool CallsUnknown { get; internal set; }
 
-    /// <summary>Whether anything runs into it from above rather than naming it.</summary>
+    /// <summary>
+    /// Whether the block above falls through into it, as opposed to control reaching it only
+    /// by a transfer to its label.
+    /// </summary>
     public bool IsFallenInto { get; internal set; }
 
     /// <summary>Whether any path from the routine's entry reaches it.</summary>
@@ -92,25 +96,26 @@ public sealed class BasicBlock
     public CycleCount? Cycles { get; internal set; }
 
     /// <summary>
-    /// Why it has no count, in a sentence, where nt65 knows the instruction and still cannot
-    /// say what it takes; null where it has a count, and where the line is one nt65 could not
-    /// lay out at all.
+    /// Why it has no count, in a sentence, where nt65 knows the instruction but still cannot
+    /// say how long it takes; null where it has a count, and where the uncounted line is one
+    /// nt65 could not lay out at all.
     /// </summary>
     public string? Uncounted { get; internal set; }
 
     /// <summary>
-    /// How many times one pass through the routine runs it, where it is a loop counting
-    /// itself down from an immediate; null for every other block, whose turns are not in the
-    /// program.
+    /// How many times one pass through the routine runs it, where it is a loop counting a
+    /// register down from an immediate; null for every other block, whose iteration count
+    /// the program does not state.
     /// </summary>
     public int? Turns { get; internal set; }
 
-    /// <summary>What running it every one of those turns costs, or null where they are not known.</summary>
+    /// <summary>What running it all of those iterations costs, or null where they are not known.</summary>
     public CycleCount? LoopCycles { get; internal set; }
 
     /// <summary>
-    /// The block a counted loop this one closes comes back to, so that a walk stops at the
-    /// latch rather than going round again; null for every other block.
+    /// For the latch of a counted loop, the index of the loop's header block, which the latch
+    /// branches back to; a walk stops at the latch rather than going round again. Null for
+    /// every other block.
     /// </summary>
     public int? Repeats { get; internal set; }
 
@@ -118,7 +123,10 @@ public sealed class BasicBlock
 
     internal void Called(Symbol routine) => calls.Add(routine);
 
-    /// <summary>The same, for a target that may not have resolved to anything at all.</summary>
+    /// <summary>
+    /// Records a call whose target may not have resolved to any routine; an unresolved one
+    /// sets <see cref="CallsUnknown"/>.
+    /// </summary>
     internal void SetCalled(Symbol? routine)
     {
         if (routine is null)

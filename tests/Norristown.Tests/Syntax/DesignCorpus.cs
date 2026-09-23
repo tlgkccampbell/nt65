@@ -29,8 +29,8 @@ internal static class DesignCorpus
             var lines = ReadLines(document);
             for (var i = 0; i < lines.Length; i++)
             {
-                // A fence indented inside a list is a fence: an example that slipped past this
-                // because of where it stands would be one no fixture holds and nobody notices.
+                // A fence indented inside a Markdown list still counts: an example skipped because
+                // of its indentation would escape the fixture check, and nobody would notice.
                 if (lines[i].TrimStart() != "```" + tag)
                     continue;
                 var start = i + 1;

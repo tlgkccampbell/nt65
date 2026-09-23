@@ -23,9 +23,9 @@ public static class SyntaxFacts
     public static readonly IReadOnlyList<string> Registers = ["a", "x", "y", "s"];
 
     /// <summary>
-    /// The registers a <c>keeps</c> item may name, lower case. The carry is among them and the
-    /// stack pointer is not, and <c>c</c> is an ordinary identifier everywhere else, so what
-    /// these are is not what the lexer calls a register.
+    /// The registers a <c>keeps</c> item may name, lower case. The list includes the carry and
+    /// leaves out the stack pointer, and <c>c</c> is an ordinary identifier everywhere else, so
+    /// it is not the same set as the names the lexer treats as registers.
     /// </summary>
     public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c"];
 
@@ -37,13 +37,17 @@ public static class SyntaxFacts
         ".defined", ".has", ".select", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles", ".maxcycles",
     ];
 
-    /// <summary>The four a macro body adds, which ask about the arguments it was given.</summary>
+    /// <summary>
+    /// The four extra built-in functions available inside a macro body, which ask about the
+    /// arguments the macro was given.
+    /// </summary>
     public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".exprof", ".empty"];
 
     /// <summary>
-    /// The CPU names, lower case, in the order nt65 lists them. Which processors there are is
-    /// not the lexer's business, but how one is written is: <c>.cpu</c> and <c>.target</c> take
-    /// a name here and nothing else, and two of them are tokens no other rule would make.
+    /// The CPU names, lower case, in the order nt65 lists them. Which processors exist is not
+    /// the lexer's concern, but how their names are spelled is: <c>.cpu</c> and <c>.target</c>
+    /// take one of these names and nothing else, and the names that start with a digit but are
+    /// not numbers are lexed as CPU-name tokens, which no other rule would produce.
     /// </summary>
     public static readonly IReadOnlyList<string> CpuNames = ["6502", "6502x", "65sc02", "r65c02", "65c02", "65816"];
 
@@ -119,9 +123,9 @@ public static class SyntaxFacts
         [".frame"] = new(SyntaxKind.FrameDirective),
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    // The element types a data declaration or a struct member is an array of, by the size of
-    // one element. `.type T` is the other, whose size is its type's. Every width has a
-    // big-endian partner, so nobody wonders which widths have one.
+    // The element types of data declarations and struct members, mapped to the size of one
+    // element. `.type T` is the only other element type, and its size is that of T. Every
+    // multi-byte integer width has a big-endian partner, so there is no asking which do.
     private static readonly FrozenDictionary<string, int> elementTypes = new Dictionary<string, int>
     {
         [".byte"] = 1,
@@ -231,14 +235,15 @@ public static class SyntaxFacts
 
     /// <summary>
     /// Whether <paramref name="text"/> names an address-size prefix, which is written before
-    /// a <c>:</c> in operand position. <c>z</c>, <c>f</c> and <c>d</c> are also ordinary
-    /// identifiers; nothing else can be written there, so the case does not matter.
+    /// a <c>:</c> in operand position. <c>z</c>, <c>f</c> and <c>d</c> are ordinary identifiers
+    /// elsewhere, but nothing else can be written in that position, so reading them as prefixes
+    /// there is safe. Case is ignored.
     /// </summary>
     public static bool IsAddressPrefix(string text) =>
         text.Length == 1 && char.ToLowerInvariant(text[0]) is 'z' or 'a' or 'f' or 'd';
 
     /// <summary>
-    /// Whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item
+    /// Whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item.
     /// <paramref name="suffix"/> is <see cref="SyntaxKind.Star"/>,
     /// <see cref="SyntaxKind.Question"/>, <see cref="SyntaxKind.Equals"/>, or
     /// <see cref="SyntaxKind.None"/> when the name stands alone.
@@ -257,7 +262,8 @@ public static class SyntaxFacts
     /// <summary>
     /// The precedence level of a binary operator, 3 to 13 with 3 binding tightest, or 0
     /// when the token is not one. <c>.mod</c> is a directive rather than a punctuation token,
-    /// because <c>%</c> begins a binary number, so which directive it is has to be said as well.
+    /// because <c>%</c> begins a binary number, so the text is needed to tell it from other
+    /// directives.
     /// </summary>
     /// <param name="kind">What the token is.</param>
     /// <param name="text">The token's text, which tells one directive from another.</param>
@@ -278,7 +284,10 @@ public static class SyntaxFacts
         _ => 0,
     };
 
-    /// <summary>The shifts and the bitwise operators, whose operands require parentheses around them.</summary>
+    /// <summary>
+    /// The shifts and the bitwise operators, whose operands must be parenthesized when they use
+    /// a different binary operator.
+    /// </summary>
     public static bool IsBitwiseOperator(SyntaxKind kind) => kind is SyntaxKind.LessLess
         or SyntaxKind.GreaterGreater or SyntaxKind.Ampersand or SyntaxKind.Caret or SyntaxKind.Bar;
 
@@ -286,7 +295,11 @@ public static class SyntaxFacts
     public static bool IsLogicalOperator(SyntaxKind kind) =>
         kind is SyntaxKind.AmpersandAmpersand or SyntaxKind.CaretCaret or SyntaxKind.BarBar;
 
-    /// <summary>The unary operators that take a byte out of an address, which are kept clear of binary operators.</summary>
+    /// <summary>
+    /// The unary operators that take one byte of an address. One at the right end of a binary
+    /// operator's left operand must be parenthesized, since <c>&lt;label + 1</c> looks as if the
+    /// <c>&lt;</c> applied to the whole sum.
+    /// </summary>
     public static bool IsByteOperator(SyntaxKind kind) =>
         kind is SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 
@@ -333,8 +346,9 @@ public static class SyntaxFacts
     /// <summary>
     /// The canonical WDC mnemonics of the CPUs, and the undocumented opcodes of the NMOS 6502
     /// in ca65's spellings, since those have no canonical name of their own. ca65's alternative
-    /// 65816 spellings (<c>tad</c>, <c>swa</c> and the rest) are ordinary identifiers; ca65's
-    /// <c>tas</c> is not one of those, and is an undocumented opcode below.
+    /// 65816 spellings (<c>tad</c>, <c>swa</c> and the rest) are ordinary identifiers here. The
+    /// exception is <c>tas</c>: here it is the NMOS undocumented opcode listed below, not ca65's
+    /// alternative spelling.
     /// </summary>
     private static IEnumerable<string> CpuMnemonics()
     {

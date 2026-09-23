@@ -6,9 +6,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets across modules: a name that crosses modules is one name, so definition,
-/// references and rename cross with it, through the <c>.use</c> that brings it in, and an edit
-/// in one module changes what is wrong with another.
+/// What an editor gets across modules: an exported name is the same symbol in every module that
+/// uses it, so definition, references and rename follow it into those modules through the
+/// <c>.use</c> that brings it in, and an edit in one module changes the diagnostics of another.
 /// </summary>
 public sealed class WorkspaceRequestsTests
 {
@@ -66,9 +66,9 @@ public sealed class WorkspaceRequestsTests
         Assert.Contains("```nt65\n.proc gfx::clear\n```", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("from       gfx.nt65", hover.Contents.Value, StringComparison.Ordinal);
 
-        // What the call costs, worked out from the flow of the file that declares the routine,
-        // which is not the file the call is written in. It is what a caller came to ask, so it
-        // stands above the rule and where the routine lives stands under it.
+        // What the call costs, worked out from the flow analysis of the file that declares the
+        // routine rather than the file the call is written in. It is what a caller hovers to find
+        // out, so it comes above the rule, and the routine's address comes below it.
         Assert.Contains(
             "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\n```\n---\n",
             hover.Contents.Value,
@@ -106,8 +106,8 @@ public sealed class WorkspaceRequestsTests
     }
 
     /// <summary>
-    /// A name a <c>.use ... as</c> gives is the using module's own: renaming the symbol leaves it
-    /// alone, and renaming it renames only it.
+    /// An alias given by <c>.use ... as</c> belongs to the module that declares it: renaming the
+    /// original symbol leaves the alias alone, and renaming the alias changes only the alias.
     /// </summary>
     [Fact]
     public async Task ARenameKeepsAnAliasApartFromTheNameItStandsFor()
@@ -166,9 +166,9 @@ public sealed class WorkspaceRequestsTests
     }
 
     /// <summary>
-    /// An edit that leaves what other modules see of a module alone analyzes only that file, so
-    /// main.nt65 is still the analysis from before the edit. What it names is what gfx.nt65
-    /// declares now, wherever the edit moved it.
+    /// An edit that does not change what other modules can see of a module reanalyzes only that
+    /// file, so main.nt65 keeps its analysis from before the edit. Its names must still resolve to
+    /// what gfx.nt65 declares now, wherever the edit moved those declarations.
     /// </summary>
     [Fact]
     public async Task NamesStillCrossModulesAfterAnEditOnlyOneFileWasAnalyzedFor()

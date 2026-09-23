@@ -93,7 +93,7 @@ internal static class Json
         return at + 1;
     }
 
-    /// <summary>What the characters between two quotes stand for: the escapes a path may carry.</summary>
+    /// <summary>The value of a JSON string's contents, undoing the escapes a path may contain.</summary>
     private static string Read(string written) =>
         written.Replace("\\\\", "\\", StringComparison.Ordinal)
             .Replace("\\\"", "\"", StringComparison.Ordinal)

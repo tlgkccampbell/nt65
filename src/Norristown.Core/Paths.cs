@@ -2,8 +2,8 @@ namespace Norristown;
 
 /// <summary>
 /// Logical paths: relative to the project's root, with <c>/</c> separators whatever the
-/// platform. Sources, outputs and the files an <c>.incbin</c> names are all known by one, so
-/// what nt65 writes reads the same on every machine.
+/// platform. Sources, outputs and the files an <c>.incbin</c> names are all identified by a
+/// logical path, so what nt65 writes is the same on every machine.
 /// </summary>
 public static class Paths
 {
@@ -35,16 +35,19 @@ public static class Paths
         return string.Join('/', parts);
     }
 
-    /// <summary>What <paramref name="path"/>, written in the file <paramref name="file"/>, names.</summary>
+    /// <summary>
+    /// The logical path that <paramref name="path"/> refers to when it is written in the file
+    /// <paramref name="file"/>: relative to that file's directory unless it is rooted.
+    /// </summary>
     public static string Beside(string file, string path) =>
         IsRooted(path) || Directory(file) is not { Length: > 0 } directory
             ? Normalized(path)
             : Normalized($"{directory}/{path}");
 
     /// <summary>
-    /// <paramref name="path"/> as it is reached from <paramref name="directory"/>, both relative
-    /// to the same root. When the directory is above the root, the way down again is not
-    /// known, and the path is left as the root sees it.
+    /// <paramref name="path"/> made relative to <paramref name="directory"/>, where both are
+    /// relative to the same root. When the directory lies above the root, the route back down
+    /// from it is unknown, so the path is returned unchanged, as it is when either is rooted.
     /// </summary>
     public static string Relative(string directory, string path)
     {

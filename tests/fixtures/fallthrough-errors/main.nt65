@@ -52,13 +52,13 @@
     .fallthrough value  ;! error[fallthrough-not-a-routine]: `value` is a data declaration, and `.fallthrough` names the routine flow runs into
 }
 
-; A macro body is no routine's body, whoever calls it.
+; A macro body is not a routine's body, whichever routine calls the macro.
 .macro runs_on() {
     .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
 }
 
-; The spelling a fall-through had before `.fallthrough`: after an ordinary instruction and after
-; a direct call nt65 knows where flow goes, and the `.next` ending the body says what to write.
+; A `.next` ending the body where nt65 already knows where flow goes: after an ordinary
+; instruction or a direct call, the error says to write `.fallthrough` instead.
 .proc after_lda: a8 {
     lda #4
     .next after_call    ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `lda #4` runs on into what follows it: a routine that runs into the one after it says so with `.fallthrough`
@@ -87,8 +87,8 @@
     rts
 }
 
-; A branch ends the body only when its chain is the last thing in the body, and only its own
-; last line does.
+; A `.fallthrough` in a branch ends the body only when its `.if` chain is the last thing in the
+; body and the `.fallthrough` is the branch's own last line.
 .proc chain_then_more: a8 {
     .if 1 {
         .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into

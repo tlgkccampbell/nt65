@@ -130,8 +130,9 @@ public sealed class TextMateGrammarTests
     }
 
     /// <summary>
-    /// The block each line is in the body of, looking through conditionals and repetitions, which
-    /// the grammar does not follow. A block's opener is written in the block around it.
+    /// For each line, the kind of block whose body it is in, looking through conditionals and
+    /// repetitions, which the grammar does not track. A block's opener line belongs to the block
+    /// around it, not to the block it opens.
     /// </summary>
     private static Dictionary<int, BlockKind> Bodies(SyntaxTree tree)
     {

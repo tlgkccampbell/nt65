@@ -4,12 +4,14 @@ using Norristown.Processor;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// The words ca65 reads as an instruction, held against ca65's own tables in the pinned
-/// source. It is how the alias spellings were missed: the list was nt65's idea of the
-/// processor rather than the assembler's of its input, so this reads the assembler's.
+/// The words ca65 reads as an instruction, checked against the instruction tables in the
+/// pinned ca65 source. Alias spellings were missed while nt65's list described the processor
+/// rather than what the assembler accepts as input, so this test reads the assembler's own
+/// tables.
 /// <para>
-/// It needs no assembler run, only the source checkout <c>scripts/build-cc65.ps1</c> makes,
-/// which is why it is an oracle test: the gate builds cc65 before it runs them.
+/// It runs no assembler, but it needs the cc65 source checkout that
+/// <c>scripts/build-cc65.ps1</c> makes, which is why it is an oracle test: the gate builds
+/// cc65 before it runs the oracle tests.
 /// </para>
 /// </summary>
 [Trait("Category", "Oracle")]
@@ -19,14 +21,18 @@ public sealed partial class Ca65InstructionTests
     [GeneratedRegex(@"^\s*\{\s*""(?<name>[A-Za-z0-9]+)""")]
     private static partial Regex Row();
 
-    /// <summary>Where one of the tables begins: the name follows the struct it closes.</summary>
+    /// <summary>
+    /// The line where one of the tables begins: the table's name follows the closing brace of
+    /// its struct type.
+    /// </summary>
     [GeneratedRegex(@"^\}\s*(?<table>InsTab\w+)\s*=\s*\{")]
     private static partial Regex Table();
 
     /// <summary>
-    /// For every CPU, the words the emitter would prefix are exactly ca65's table for the
-    /// <c>.setcpu</c> nt65 writes. A ca65 that gains an instruction fails this when the pin
-    /// moves, which is when there is something to decide.
+    /// For every CPU, the words the emitter writes with a module prefix when they are used as
+    /// names are exactly ca65's table for the <c>.setcpu</c> nt65 writes. If a newer ca65 gains
+    /// an instruction, this fails when the pinned version is moved, which is when there is
+    /// something to decide.
     /// </summary>
     [Fact]
     public void TheWordsNt65PrefixesAreCa65sOwnTable()

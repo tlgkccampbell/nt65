@@ -2,7 +2,7 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// What a call is checked for: each argument against its parameter's kind, the arguments
-/// against the parameters as a whole, and the macro against reaching itself.
+/// against the parameters as a whole, and the macro against calling itself, directly or not.
 /// </summary>
 public sealed class MacroCallTests
 {
@@ -110,7 +110,7 @@ public sealed class MacroCallTests
         Assert.Equal([$"9: {message}"], model.Problems());
     }
 
-    /// <summary>A word is checked against the list and never looked up, so a register is fine.</summary>
+    /// <summary>A <c>one</c> argument is a word checked against the list and never looked up as a name, so a register is fine.</summary>
     [Fact]
     public void AOneArgumentIsAWordRatherThanAName()
     {
@@ -186,7 +186,7 @@ public sealed class MacroCallTests
         Assert.Same(model.Symbol("ptr"), model.SymbolAt("ptr", 2));
     }
 
-    /// <summary>After the first, each block says which parameter it is.</summary>
+    /// <summary>After the first block, each further block names the parameter it is for.</summary>
     [Fact]
     public void ASecondBlockIsNamedByItsContinuation()
     {
@@ -316,9 +316,9 @@ public sealed class MacroCallTests
     }
 
     /// <summary>
-    /// Only an operand's own index says what it is indexed by: an unbraced argument is an
-    /// expression, and a name in it that reads as a register is still only a name, so
-    /// <c>dest+1</c> is not refused for having no next byte.
+    /// Only a braced operand carries its own index: an unbraced argument is an expression, and a
+    /// name in it that reads as a register, such as <c>s</c>, is still only a name. So the name
+    /// is the one error, and <c>dest+1</c> is not refused for having no next byte.
     /// </summary>
     [Fact]
     public void AnUnbracedArgumentIsIndexedByNothing()

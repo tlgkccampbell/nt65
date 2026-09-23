@@ -12,7 +12,7 @@ namespace Norristown.Project;
 /// <para>
 /// Diagnostics point at the key they are about, found by searching the text for it. That is
 /// enough for an editor to put a squiggle in the right place without a JSON parser that
-/// tracks positions, and a key written twice is a JSON question rather than an nt65 one.
+/// tracks positions; a key written twice is a matter for JSON, and nt65 does not check for it.
 /// </para>
 /// </summary>
 public static class ProjectFile
@@ -30,15 +30,15 @@ public static class ProjectFile
     private static readonly string[] ignored = ["$schema"];
 
     /// <summary>
-    /// Every key the file may hold, for whoever describes it to an editor. The schema the
-    /// extension contributes is kept in step with these three lists.
+    /// Every key the file may hold, for code that describes the file to an editor. The schema
+    /// the editor extension contributes has to be kept in step with these lists.
     /// </summary>
     public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
 
     /// <summary>The keys one named configuration may hold.</summary>
     public static IReadOnlyList<string> ConfigurationKeys { get; } = ["defines", "diagnostics", "out"];
 
-    /// <summary>What a <c>diagnostics</c> entry may say, which is how much its name matters.</summary>
+    /// <summary>The values a <c>diagnostics</c> entry may give: the severity to report that diagnostic at, or <c>off</c>.</summary>
     public static IReadOnlyList<string> Levels { get; } = ["off", "warning", "error"];
 
     /// <summary>The keys one segment may hold.</summary>
@@ -49,7 +49,7 @@ public static class ProjectFile
 
     /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
-    /// logical path diagnostics name it by; what is wrong with it comes back in the settings.
+    /// logical path diagnostics refer to it by; problems with it are returned in the settings.
     /// </summary>
     public static ProjectSettings Read(string path, string text)
     {
@@ -133,8 +133,8 @@ public static class ProjectFile
     }
 
     /// <summary>
-    /// What a key nt65 does not know is reported as, with the key it is nearly when there is
-    /// one: a typo is one letter from the key it was meant to be.
+    /// The message for a key nt65 does not know, naming the known key it most nearly matches
+    /// when there is one: a typo is usually a letter away from the key it was meant to be.
     /// </summary>
     private static DiagnosticMessage Unknown(string key)
     {
@@ -156,7 +156,7 @@ public static class ProjectFile
         _ => null,
     };
 
-    /// <summary>A define's name, or a <c>.config</c>'s written with its module's path, as <c>hw::SOUND</c>.</summary>
+    /// <summary>Whether text is a define's name, or a <c>.config</c>'s name written with its module's path, as <c>hw::SOUND</c>.</summary>
     private static bool IsName(string text) => text.Split("::").All(part =>
         part.Length > 0 && (char.IsAsciiLetter(part[0]) || part[0] == '_')
         && part.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'));
@@ -176,8 +176,8 @@ public static class ProjectFile
 
         /// <summary>
         /// The <c>defines</c> of <paramref name="root"/>, which is the project or one of its
-        /// configurations; <paramref name="from"/> is where that is written, so a define both
-        /// give is reported where this one gives it.
+        /// configurations; <paramref name="from"/> is the text offset where that object is
+        /// written, so that a define both of them give is reported at the one being read.
         /// </summary>
         public IReadOnlyList<Define> Defines(JsonElement root, int from = 0)
         {
@@ -203,9 +203,9 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"diagnostics": { "unused-symbol": "off" }</c>: how much each named diagnostic
-        /// matters to this project, over the severity the catalogue gives it.
-        /// <paramref name="from"/> is where the object being read is written, so a configuration's
+        /// <c>"diagnostics": { "unused-symbol": "off" }</c>: the severity this project reports
+        /// each named diagnostic at, overriding the one the catalogue gives it.
+        /// <paramref name="from"/> is the text offset of the object being read, so a configuration's
         /// entry is reported where that configuration gives it.
         /// </summary>
         public IReadOnlyDictionary<string, Severity?> Severities(JsonElement root, int from = 0)
@@ -347,11 +347,6 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"$2100-$21ff": ["$00-$3f", "$80-$bf"]</c>: the banks an absolute constant address
-        /// in each range may be reached from. A range is written <c>first-last</c> or as one
-        /// address, and two ranges may not overlap, so an address has one answer.
-        /// </summary>
-        /// <summary>
         /// <c>"spc": "data"</c>: the address spaces other than the host's, each with whether it
         /// runs this program's processor.
         /// </summary>
@@ -373,6 +368,11 @@ public static class ProjectFile
             return [.. read.OrderBy(space => space.Name, StringComparer.Ordinal)];
         }
 
+        /// <summary>
+        /// <c>"$2100-$21ff": ["$00-$3f", "$80-$bf"]</c>: the banks an absolute constant address
+        /// in each range may be reached from. A range is written <c>first-last</c> or as one
+        /// address, and two ranges may not overlap, so each address has only one answer.
+        /// </summary>
         public IReadOnlyList<AccessRange> Ranges(JsonElement root)
         {
             if (!Object(root, "ranges", out var ranges))
@@ -459,7 +459,10 @@ public static class ProjectFile
         public void Report(string key, DiagnosticMessage message, int from = 0) =>
             diagnostics.Add(new Diagnostic(At(key, from), Severity.Error, message));
 
-        /// <summary>How much a diagnostic matters, where the word is one of the three; <c>off</c> is no severity.</summary>
+        /// <summary>
+        /// Whether <paramref name="written"/> is one of the three severity words, with the
+        /// severity it names in <paramref name="level"/>; <c>off</c> gives null.
+        /// </summary>
         private static bool Level(string? written, out Severity? level)
         {
             level = written switch

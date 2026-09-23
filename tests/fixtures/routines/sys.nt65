@@ -17,7 +17,7 @@ CODE_BANK = $80
 ; An interrupt handler entered in native mode.
 .export .signature isr = interrupt, native
 
-; A set may carry `noreturn`, as it carries `far`: the routines of this family jump away and
+; A set may carry `noreturn`, as it carries `far`: the routines declared with it jump away and
 ; do not come back.
 .export .signature trap = std, noreturn
 

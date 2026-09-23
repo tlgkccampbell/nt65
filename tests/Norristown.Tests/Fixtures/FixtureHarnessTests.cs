@@ -38,8 +38,9 @@ public sealed class FixtureHarnessTests : IDisposable
     }
 
     /// <summary>
-    /// A message the fixture writes and the compiler no longer says is a difference of its own,
-    /// so that rewording one moves the line that holds the words and nothing else.
+    /// A diagnostic whose message in the fixture differs from what the compiler now says is
+    /// reported as its own kind of failure, rather than as one missing and one unexpected
+    /// diagnostic, so that rewording a message changes only the fixture line holding its text.
     /// </summary>
     [Fact]
     public void ARewordedMessageFailsOnItsOwnAndUpdateRewritesIt()

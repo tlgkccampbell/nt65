@@ -7,8 +7,9 @@ public enum OutputKind
     Ca65,
 
     /// <summary>
-    /// The line map beside one, which is not assembled: it says where the lines of that ca65
-    /// came from, for <c>nt65 remap-dbg</c> to put into ld65's debug file after the link.
+    /// The line map written beside a ca65 file, which is not assembled: it says which source
+    /// lines that file's lines came from, for <c>nt65 remap-dbg</c> to put into ld65's debug
+    /// file after the link.
     /// </summary>
     LineMap,
 }

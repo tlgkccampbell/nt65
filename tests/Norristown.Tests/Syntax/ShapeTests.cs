@@ -10,9 +10,9 @@ namespace Norristown.Tests.Syntax;
 /// <summary>
 /// Every node the parser builds has the shape its row in the node table describes: it is its
 /// kind's own green class, it has a slot for each piece in source order, a required slot holds
-/// something, and what a slot holds is the type or one of the kinds the table names. It is asked
-/// of every source in the repository and of every way of cutting its lines short, so a node the
-/// parser only builds from a half-written line is held to it too.
+/// something, and what a slot holds is the type or one of the kinds the table names. The check
+/// runs over every source in the repository and every way of cutting its lines short, so a node
+/// the parser builds only from a half-written line is checked too.
 /// </summary>
 public sealed class ShapeTests
 {
@@ -34,7 +34,10 @@ public sealed class ShapeTests
         Assert.True(failures.Count == 0, string.Join("\n", failures.Distinct().Take(40)));
     }
 
-    /// <summary>What is wrong with <paramref name="green"/>, if anything, keyed by its kind.</summary>
+    /// <summary>
+    /// Records in <paramref name="problems"/> what is wrong with <paramref name="green"/>, if
+    /// anything, keyed by its kind; only the first problem found for a kind is kept.
+    /// </summary>
     private static void Check(NodeTree table, GreenNode green, SortedDictionary<string, string> problems)
     {
         var kind = green.Kind.ToString();

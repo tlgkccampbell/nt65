@@ -4,9 +4,10 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The words a file's conditions compare with what a parameter stands for (<see cref="ComparedWord"/>).
-/// A word is never looked up, so no reference stands there; these are what hover, colour and
-/// completion say of one instead.
+/// The bare words a file's macro conditions compare a parameter's argument with, such as a mode
+/// or a word a <c>one(...)</c> lists (<see cref="ComparedWord"/>). Such a word is never looked up
+/// as a name, so there is no symbol reference for it; hover, semantic colouring and completion
+/// use these instead.
 /// </summary>
 internal static class ComparedWords
 {

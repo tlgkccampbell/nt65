@@ -4,12 +4,13 @@ using Norristown.Syntax;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 fmt</c>: writes the files it is given in the one layout nt65 sources are written in,
-/// or, with <c>--check</c>, says which of them are not in it already.
+/// <c>nt65 fmt</c>: rewrites the files it is given in nt65's single standard layout, or, with
+/// <c>--check</c>, lists the ones that are not in that layout already.
 /// <para>
-/// It needs no program: formatting is a property of one file's own lines and braces, so a file
-/// that names no module and belongs to no project still formats. Named nothing, it formats what
-/// the project says the program is, which is what a repository-wide run wants.
+/// It needs no program: formatting depends only on one file's own lines and braces, so a file
+/// that names no module and belongs to no project can still be formatted. Given no files, it
+/// formats every file the project's <c>files</c> globs match, which suits a run over a whole
+/// repository.
 /// </para>
 /// </summary>
 public static class FormatCommand

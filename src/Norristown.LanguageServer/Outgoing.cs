@@ -3,23 +3,23 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The edge every answer leaves by. Two things happen to an answer here, and they are the two
-/// things that depend on the client rather than on the program:
+/// The last step every answer passes through on its way to the client. Two things happen to
+/// an answer here, and they are the two that depend on the client rather than on the program:
 /// <list type="bullet">
 /// <item>every URI in it is spelled the way the client spells that file. VS Code escapes a
 /// drive's colon, <c>file:///c%3A/src</c>, and nt65 does not; a file named one way in a
 /// diagnostic and another in a go-to-definition is two files to an editor.</item>
 /// <item>an edit is put in the shape the client takes: a list of per-document edits, each
-/// naming the revision it was worked out against, where the client declared
+/// naming the revision it was computed against, where the client declared
 /// <c>documentChanges</c>, and a plain map of edits where it did not.</item>
 /// </list>
-/// Nothing here knows what an answer means; it only names its files.
+/// Nothing here interprets an answer; it only rewrites the file URIs in it and reshapes edits.
 /// </summary>
-/// <param name="workspace">What the editor is working on, which knows how the client names a file.</param>
+/// <param name="workspace">What the editor is working on, which knows how the client spells each file's URI.</param>
 /// <param name="client">What the client declared it can take.</param>
 internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
 {
-    /// <summary>How the client names the file a URI from inside the compiler points at.</summary>
+    /// <summary>The client's spelling of the URI for the file that a URI produced by the compiler points at.</summary>
     public string Spell(string uri) => workspace.UriOf(Workspace.PathOf(uri));
 
     /// <summary>A place in a file, named the way the client names it.</summary>
@@ -71,15 +71,15 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     public IReadOnlyList<CodeAction> Spell(IReadOnlyList<CodeAction> actions) => [.. actions.Select(Spell)];
 
     /// <summary>
-    /// A command the client runs once a change is written. Its first argument is the file to
-    /// put the caret in, which is a URI like any other.
+    /// A command the client runs once a change is applied. Its first argument, when it is a
+    /// string, is the URI of the file to put the caret in, and is respelled like any other.
     /// </summary>
     public Command? Spell(Command? command) =>
         command?.Arguments is [string uri, ..] arguments
             ? command with { Arguments = [Spell(uri), .. arguments.Skip(1)] }
             : command;
 
-    /// <summary>A routine in the call hierarchy, which the client hands back as the server gave it.</summary>
+    /// <summary>A routine in the call hierarchy, which the client later sends back unchanged in follow-up requests.</summary>
     public CallHierarchyItem Spell(CallHierarchyItem item) => item with { Uri = Spell(item.Uri) };
 
     public IReadOnlyList<CallHierarchyItem> Spell(IReadOnlyList<CallHierarchyItem> items) =>
@@ -100,9 +100,8 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
         [.. links.Select(link => link with { Target = Spell(link.Target) })];
 
     /// <summary>
-    /// A file's outline: the tree the segments and scopes make, for a client that takes one,
-    /// and the flat list the protocol had first for a client that does not, each entry naming
-    /// what it is written in.
+    /// A file's outline: the tree formed by its segments and scopes, for a client that supports
+    /// one, or else the older flat list, in which each entry names its container.
     /// </summary>
     /// <param name="uri">The file the outline is of, as the client named it.</param>
     /// <param name="outline">What the file declares.</param>

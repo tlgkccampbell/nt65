@@ -42,7 +42,7 @@
 .segment BSS
 .data table: .byte[4]
 
-; The routines are members of the image, and each names the others bare.
+; The routines are members of the image, and each names the others without a path.
 .segment RODATA
 .data image {
     .data main {

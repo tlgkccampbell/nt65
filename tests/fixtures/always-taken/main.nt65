@@ -23,7 +23,7 @@
     rts
 }
 
-; `bne L297E ; always`, where the value loaded is not zero.
+; msbasic's `bne L297E ; always`, taken because the value just loaded is not zero.
 .proc skip_ahead {
     lda #1
     bne done

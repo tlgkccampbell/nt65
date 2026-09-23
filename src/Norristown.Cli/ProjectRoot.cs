@@ -3,17 +3,17 @@ using Norristown.Project;
 namespace Norristown.Cli;
 
 /// <summary>
-/// Where the program is and how its paths are spelled. Everything nt65 knows is named relative
-/// to the root, the directory that holds <c>nt65.json</c>; everything it says is named relative
-/// to where the person running it is.
+/// Finds the project and converts its paths. Internally, nt65 names files relative to the
+/// project root, the directory that holds <c>nt65.json</c>; in its output, it names them
+/// relative to the directory it was run from.
 /// </summary>
 internal static class ProjectRoot
 {
     /// <summary>
     /// The project file a build reads: the one <c>--project</c> names, as a file or as the
     /// directory holding it, or the nearest one at or above <paramref name="directory"/>. A path
-    /// <c>--project</c> named comes back whether or not it exists, because that is what the
-    /// message about it says.
+    /// given with <c>--project</c> is returned whether or not it exists, so that the error about
+    /// it names the path the user gave.
     /// </summary>
     public static string? Chosen(string? project, string directory)
     {

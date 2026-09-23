@@ -17,7 +17,7 @@ namespace Norristown.Layout;
 /// <param name="Routine">The routine it is inside, or null at file level.</param>
 /// <param name="Stream">Which stream of bytes it lands in.</param>
 /// <param name="Segment">The segment its bytes land in, or null outside every segment.</param>
-/// <param name="Label">The label it declares, for a step that is one; null for every other.</param>
+/// <param name="Label">The label the step declares, for a label's step; null for every other.</param>
 /// <param name="Closes">
 /// Whether the step is where an expansion or a splice written as <paramref name="Statement"/>
 /// ends, rather than where it starts. The ends of a macro call with a state signature, and of

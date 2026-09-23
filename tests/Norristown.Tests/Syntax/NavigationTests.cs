@@ -10,13 +10,16 @@ namespace Norristown.Tests.Syntax;
 /// </summary>
 public sealed class NavigationTests
 {
-    /// <summary>How much is said about one variant before the rest of it is the same news.</summary>
+    /// <summary>
+    /// The most problems each check reports for one variant; beyond that, more reports would
+    /// only repeat the same failure.
+    /// </summary>
     private const int Most = 5;
 
     /// <summary>
-    /// Every source, whole and cut short, put through every way of finding a place in it. They
-    /// are asked together because parsing the variants costs more than the asking does, and one
-    /// parse answers all of them.
+    /// Every source, whole and cut short, put through every way of finding a place in it. The
+    /// checks share one parse of each variant, because parsing the variants costs more than
+    /// running the checks does.
     /// </summary>
     [Fact]
     public void FindingAPlaceWorksOnWholeAndBrokenLines()
@@ -89,7 +92,7 @@ public sealed class NavigationTests
         Assert.Same(opener.Statement, tree.Root.FindToken(opener.Statement.Span.Start).Parent);
         Assert.Same(opener, tree.Root.FindToken(opener.Position).Parent);
 
-        // What the statement could not take is a piece of the line of its own, after the statement.
+        // Tokens the statement could not take are a separate piece of the line, after the statement.
         var skipped = (LineSyntax)((SyntaxNode)tree.Root).ChildNodes[1];
         Assert.Equal(
             [SyntaxKind.InstructionStatement, SyntaxKind.SkippedTokens, SyntaxKind.EndOfLine],
@@ -261,7 +264,7 @@ public sealed class NavigationTests
         (left is null && right is null)
         || (left is { } one && right is { } other && one.Position == other.Position && one.Kind == other.Kind);
 
-    /// <summary>A token as a failure names it, and what stands for no token at all.</summary>
+    /// <summary>A token as a failure message names it, or "nothing" where there is no token.</summary>
     private static string Told(SyntaxToken? token) =>
         token is { } written ? $"`{written.Text}` ({written.Kind} at {written.FullSpan})" : "nothing";
 }

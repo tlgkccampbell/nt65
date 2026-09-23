@@ -21,9 +21,9 @@ public sealed class CorpusTests
     }
 
     /// <summary>
-    /// Every macro call the editor offers to write out, in every corpus program, written out:
-    /// what a real program assembles to does not move because a call was replaced by what it
-    /// expands to. The fixtures check each construct; these are the combinations real code uses.
+    /// Every macro call the editor offers to inline, in every corpus program, is inlined, and
+    /// replacing a call with its expansion must not change what a real program assembles to.
+    /// The fixtures check each construct; these are the combinations real code uses.
     /// </summary>
     [Fact]
     public void WritingOutEveryCallLeavesTheProgramsTheSame()

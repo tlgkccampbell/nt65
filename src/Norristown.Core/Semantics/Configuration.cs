@@ -5,14 +5,13 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Which <c>.if</c> branches a build takes, and so which of the program is there at all.
+/// Which <c>.if</c> branches a build takes, and so which parts of the program exist at all.
 /// <para>
 /// A condition tests the build configuration and never the program: it may use literals,
 /// operators, built-in functions, defines and <c>.config</c> settings, and nothing else a file
-/// declares. That is what
-/// lets every condition be answered here, before a single declaration has been collected —
-/// which declarations exist follows from the configuration alone, so the same name may be
-/// declared under two conditions and only one of them is real. A check that depends on the
+/// declares. That is what lets every condition be answered here, before a single declaration
+/// has been collected — which declarations exist follows from the configuration alone, so the
+/// same name may be declared under two conditions and only one of them is real. A check that depends on the
 /// program is an <c>.assert</c>, which is evaluated last.
 /// </para>
 /// </summary>
@@ -156,7 +155,7 @@ public sealed class Configuration
     /// The configuration of a program in which <paramref name="before"/> became
     /// <paramref name="after"/>. A condition depends on nothing but the file it is in, the
     /// build and the settings, and a file that declares a setting is analyzed with the whole
-    /// program, so every other file's answers stand.
+    /// program, so every other file's answers remain valid.
     /// </summary>
     internal Configuration Replacing(
         SyntaxTree before, SyntaxTree after, Cpu cpu, IEnumerable<Define> defines, List<Diagnostic> diagnostics)
@@ -174,8 +173,8 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The defines a name in a file may be, by name. A define written with a module's path is a
-    /// <c>.config</c> the build sets instead, and no name in a file.
+    /// The build's defines that a plain name in a file can refer to, by name. A define written
+    /// with a module's path sets a <c>.config</c> instead, and is not a name a file can write.
     /// </summary>
     private static Dictionary<string, long> Plain(IEnumerable<Define> defines)
     {
@@ -262,7 +261,7 @@ public sealed class Configuration
         private bool Branch(BlockSyntax block, StatementSyntax opener, bool already)
         {
             // The CPU is configuration, and a condition may test it with `.target`, so a
-            // `.cpu` under an `.if` would be deciding what decides it.
+            // `.cpu` under an `.if` would change the very thing its condition may depend on.
             foreach (var node in block.DescendantNodes())
             {
                 if (node is CpuDirectiveSyntax)
@@ -305,11 +304,11 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The <c>.config</c> items of a program: in-file defines, each its module's own. One is
-    /// written at file level outside every block, so that which settings exist depends on no
-    /// condition, and its value may use literals, built-ins, the build's defines and other
-    /// settings. The build sets one a module exports by its qualified name, which makes what the
-    /// file writes a default.
+    /// The <c>.config</c> items of a program: defines written in source files, each belonging to
+    /// its module. Each is written at file level outside every block, so that which settings
+    /// exist depends on no condition, and its value may use literals, built-ins, the build's
+    /// defines and other settings. The build can set one that a module exports by its qualified
+    /// name, which makes the value the file writes only a default.
     /// </summary>
     private sealed class Settings
     {
@@ -335,7 +334,7 @@ public sealed class Configuration
 
         /// <summary>
         /// Every setting <paramref name="trees"/> declare, with what the build sets, each
-        /// evaluated once so that what is wrong with one is said whether or not anything reads it.
+        /// evaluated once so that what is wrong with one is reported whether or not anything reads it.
         /// </summary>
         public static Settings Read(
             IReadOnlyList<SyntaxTree> trees, Cpu cpu, Dictionary<string, long> defines, IEnumerable<Define> set,
@@ -393,8 +392,9 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// The same settings, read from a file that <paramref name="before"/> became. Neither
-        /// declares a setting, or the whole program would be read again, so every value stands.
+        /// The same settings, after <paramref name="before"/> became <paramref name="after"/>.
+        /// Neither version declares a setting (otherwise the whole program would be read again),
+        /// so every value is kept.
         /// </summary>
         public Settings Replacing(SyntaxTree before, SyntaxTree after)
         {
@@ -413,9 +413,9 @@ public sealed class Configuration
             Evaluator.ForConditions(new Conditions(cpu, defines, Lookup), diagnostics);
 
         /// <summary>
-        /// What a name written in a condition is worth as a setting, or null when it names
-        /// none and nothing was reported about it, which leaves it to be reported as naming
-        /// nothing at all.
+        /// The value of a name written in a condition, as a setting, or null when it names no
+        /// setting and nothing was reported about it, which leaves the caller to report it as an
+        /// unknown name.
         /// </summary>
         public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
@@ -425,16 +425,16 @@ public sealed class Configuration
             return reported ? Value.Unknown : null;
         }
 
-        /// <summary>What the setting <paramref name="name"/> in <paramref name="tree"/> is worth, or null.</summary>
+        /// <summary>The value of the setting <paramref name="name"/> in <paramref name="tree"/>, or null.</summary>
         public long? ValueOf(SyntaxTree tree, string name) =>
             modules.TryGetValue(tree, out var module) && byName.TryGetValue((module, name), out var setting)
                 ? values.GetValueOrDefault(setting)
                 : null;
 
         /// <summary>
-        /// The setting a name written in <paramref name="tree"/> stands for: one its own module
-        /// declares, one a <c>.use</c> brought in, or one written with its module's path. Whether
-        /// anything was reported about it, such as a setting another module keeps to itself.
+        /// The setting a name written in <paramref name="tree"/> refers to: one its own module
+        /// declares, one a <c>.use</c> brought in, or one written with its module's path; and
+        /// whether anything was reported about it, such as a setting another module does not export.
         /// </summary>
         public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
@@ -464,7 +464,7 @@ public sealed class Configuration
             return (found, false);
         }
 
-        /// <summary>What a setting is worth: what the build sets, or else what its file writes.</summary>
+        /// <summary>The value of a setting: what the build sets, or else what its file writes.</summary>
         public long? Worth(Setting setting)
         {
             if (values.TryGetValue(setting, out var known))

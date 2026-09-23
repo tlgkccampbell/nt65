@@ -147,9 +147,9 @@
     rts
 }
 
-; Print the $ff-terminated text that follows the call at the tile given by the two
-; bytes before it: `jsr print_inline` then `.word tile` then the text... here fixed at
-; two bytes of tile index, as the signature says.
+; Take the tile index from the two bytes that follow the call (`jsr print_inline` then
+; `.word tile`) into X, and return past them, as the signature's `inline 2` says. The text
+; itself is not printed here.
 .proc print_inline: std, inline 2 {
     rep #$20
     lda 1,s                     ; return address - 1

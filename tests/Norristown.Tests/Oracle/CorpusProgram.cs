@@ -9,7 +9,7 @@ namespace Norristown.Tests.Oracle;
 /// its <c>nt65.json</c>, the sources its globs name, which may be outside it, one linker
 /// configuration, and whatever hand-written ca65, include files and binaries sit beside them.
 /// Its <c>build/</c> directory is output and is never read, and a directory with no
-/// <c>nt65.json</c> is no program, only sources programs share.
+/// <c>nt65.json</c> is not a program, only sources that programs share.
 /// </summary>
 /// <param name="Name">The program's directory name.</param>
 /// <param name="Directory">Where it is.</param>
@@ -28,8 +28,9 @@ internal sealed record CorpusProgram(
     IReadOnlyList<(string Name, byte[] Content)> Other)
 {
     /// <summary>
-    /// Every corpus program and example, or those whose name contains NT65_FIXTURE
-    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>), but those only <c>scripts/corpus.ps1</c> can build.
+    /// Every corpus program and example, or only those whose name contains NT65_FIXTURE
+    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>), except the ones only their own build scripts
+    /// can build, which <c>scripts/corpus.ps1</c> runs.
     /// </summary>
     public static IReadOnlyList<CorpusProgram> All()
     {
@@ -45,8 +46,9 @@ internal sealed record CorpusProgram(
     }
 
     /// <summary>
-    /// Programs that are more than this reads: the LoROM template converts its assets with
-    /// Python before nt65 can measure them, links a second image with a second configuration,
+    /// Programs with build steps this loader does not model: the LoROM template converts its
+    /// assets with Python before nt65 can read their sizes, links a second image with a second
+    /// configuration,
     /// and assembles its hand-written ca65 with no CPU; msbasic is ten programs, one per
     /// configuration, each with a linker configuration of its own and an image to match. The
     /// gate builds both end to end.

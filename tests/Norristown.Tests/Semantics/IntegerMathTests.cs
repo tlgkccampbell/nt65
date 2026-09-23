@@ -3,9 +3,9 @@ using Norristown.Semantics;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// The arithmetic the compile-time built-ins are worked out in. Every answer is a whole number,
-/// nothing here is floating point, and the same program gives the same bytes on every machine,
-/// so what each function promises is held to exactly.
+/// The integer arithmetic the compile-time built-ins are worked out in. Every answer is a whole
+/// number and nothing here uses floating point, so the same program gives the same bytes on
+/// every machine; what each function promises is therefore checked exactly.
 /// </summary>
 public sealed class IntegerMathTests
 {
@@ -34,7 +34,7 @@ public sealed class IntegerMathTests
     [InlineData(1L << 62, 4, 8, 1L << 61)]
     [InlineData(1000000, 1000000, 1000000, 1000000)]
 
-    // A half goes away from zero, either way.
+    // A result exactly halfway between two whole numbers rounds away from zero, in either sign.
     [InlineData(1, 1, 2, 1)]
     [InlineData(3, 1, 2, 2)]
     [InlineData(-1, 1, 2, -1)]
@@ -47,7 +47,7 @@ public sealed class IntegerMathTests
     [Fact]
     public void MulDivByZeroHasNoAnswer() => Assert.Null(IntegerMath.MulDiv(1, 1, 0));
 
-    /// <summary>An answer that leaves 64 bits is no answer at all, rather than a wrapped one.</summary>
+    /// <summary>A result that does not fit in 64 bits is no answer at all, rather than a wrapped one.</summary>
     [Fact]
     public void MulDivThatLeavesSixtyFourBitsHasNoAnswer() =>
         Assert.Null(IntegerMath.MulDiv(long.MaxValue, 4, 2));
@@ -97,8 +97,9 @@ public sealed class IntegerMathTests
         Assert.Equal(expected, IntegerMath.Cos(angle, turn, scale));
 
     /// <summary>
-    /// The identity every table rests on: at the scale a table is written in, the sine and the
-    /// cosine of one angle square to the scale, give or take what rounding each of them took.
+    /// The identity every table rests on: at the scale a table is written in, the squares of the
+    /// sine and the cosine of one angle add up to the square of the scale, give or take the
+    /// rounding each of them took.
     /// </summary>
     [Fact]
     public void SineAndCosineSquareToTheScale()

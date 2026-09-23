@@ -58,7 +58,7 @@
     }
 }
 
-; What nt65 answers as it is written.
+; nt65 answers these at edit time, exactly as they are written.
 .assert .sizeof(cursor) == 2 && .countof(cursor) == 1, "cursor"
 .assert .sizeof(buffer) == 16 && .countof(buffer) == 16, "buffer"
 .assert .sizeof(points) == 8 && .countof(points) == 4, "points"
@@ -101,8 +101,8 @@
 }
 
 .proc main {
-    ; An element of a record array is its index times the type's size in: this is the third
-    ; sprite's tile, reached both ways.
+    ; An element of a record array starts at its index times the type's size: this is the
+    ; third sprite's tile, addressed both ways.
     ldx #2 * .sizeof(Sprite)
     lda sprites::tile,x
     lda sprites + 2 * .sizeof(Sprite) + Sprite::tile

@@ -12,8 +12,8 @@ internal sealed partial class Parser
         if (AtEnd)
             return Finish(new LabeledLineSyntax(label, null));
 
-        // A label may be followed by an instruction, a data directive or a macro call, whose
-        // name may be an instruction's.
+        // A label may be followed by an instruction, a data directive or a macro call, and a
+        // macro may be named after an instruction.
         if ((Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang) || Lines.IsCallOfMnemonic(tokens, index))
             return Finish(new LabeledLineSyntax(label, ParseMacroCall()));
         if (Kind == SyntaxKind.Mnemonic)
@@ -60,7 +60,8 @@ internal sealed partial class Parser
         else if (named)
             Report(Catalogue.ExpectedName.Says("a name"));
 
-        // The name and the brace are separate news, so a line missing both is told about both.
+        // A missing name and a missing brace are separate problems, so a line missing both gets
+        // a diagnostic for each.
         var brace = Kind == SyntaxKind.OpenBrace ? Advance() : Missing(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Says(
             "`{`"));
         return kind switch
@@ -85,14 +86,15 @@ internal sealed partial class Parser
         else
             Report(Catalogue.ExpectedParenthesis.Says("`(` and the parameter names"));
 
-        // The `=` and the body are two pieces, and a line that writes neither is missing both.
+        // The `=` and the body are separate pieces, so a line that writes neither is told about
+        // both.
         var equals = Kind == SyntaxKind.Equals
             ? Advance()
             : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says("`=` and the body"));
         return new FuncDeclarationSyntax(keyword, name, parameters, equals, ParseExpression());
     }
 
-    /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for items a signature uses.</summary>
+    /// <summary><c>.signature std = a8, i16, dp = 0</c>: a name for a set of items signatures can use.</summary>
     private GreenNode ParseSignatureDeclaration()
     {
         var keyword = Advance();
@@ -100,12 +102,12 @@ internal sealed partial class Parser
         var equals = Expect(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says(
             "`=` and the items: `.signature std = a8, i16`"));
 
-        // The items are written after the `=`, so a line without one names nothing to read them as.
+        // The items come after the `=`, so a line without one has no items to read.
         return new SignatureDeclarationSyntax(
             keyword, name, equals, equals.IsMissing ? null : ParseStateList());
     }
 
-    /// <summary><c>.config NAME = value</c>: a setting, whose value the build may give instead.</summary>
+    /// <summary><c>.config NAME = value</c>: a setting, whose value the build may override.</summary>
     private GreenNode ParseConfig()
     {
         var keyword = Advance();
@@ -125,8 +127,8 @@ internal sealed partial class Parser
         }
         return new ConfigDeclarationSyntax(keyword, name, Advance(), ParseExpression());
 
-        // A line that stops short has a place for the `=` and the value all the same, and what
-        // has been said about the piece it stopped at is news enough for one line.
+        // A line that stops short still gets slots for the `=` and the value, filled with
+        // missing pieces; the diagnostic on the piece where it stopped is enough for one line.
         GreenNode Unwritten(GreenToken setting, GreenToken equals) =>
             new ConfigDeclarationSyntax(keyword, setting, equals, new ErrorExpressionSyntax(null));
     }
@@ -181,8 +183,8 @@ internal sealed partial class Parser
         }
         else
         {
-            // A line that does not name its segment is read no further: what is written where
-            // the name belongs is the whole news about it.
+            // A line that does not name its segment is parsed no further: the missing name is
+            // the only thing reported about it.
             name = Missing(SyntaxKind.Identifier, Catalogue.ExpectedName.Says("a segment name"));
             return opensBlock
                 ? new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace))
@@ -193,8 +195,8 @@ internal sealed partial class Parser
                     : new SegmentRegionSyntax(keyword, name, null);
         }
 
-        // A `{` after the name opens a block, unless something else follows it on the line: then
-        // the line opens nothing and the brace is the region line's, misplaced.
+        // A `{` after the name opens a block only when it ends the line. Otherwise the line opens
+        // nothing, and the brace is kept on the region line as a misplaced token.
         if (opensBlock)
             return new SegmentBlockSyntax(keyword, name, Expect(SyntaxKind.OpenBrace));
         if (!declaration)
@@ -216,7 +218,7 @@ internal sealed partial class Parser
         var size = Advance();
 
         // The attributes are a list of their own, so the `,` between the size and the first of
-        // them is the declaration's rather than the list's.
+        // them belongs to the declaration rather than to the list.
         GreenToken? comma = null;
         GreenSeparatedList? attributes = null;
         if (Kind == SyntaxKind.Comma)
@@ -227,7 +229,10 @@ internal sealed partial class Parser
         return new SegmentDeclarationSyntax(keyword, name, colon, size, comma, attributes);
     }
 
-    /// <summary><c>dp = expr</c>, <c>bank = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
+    /// <summary>
+    /// <c>dp = expr</c>, <c>bank = expr</c>, <c>space = expr</c> or
+    /// <c>mirrors = [$00..$3f, $80..$bf]</c>.
+    /// </summary>
     private GreenNode ParseSegmentAttribute()
     {
         if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors") && !AtWord("space"))
@@ -277,12 +282,12 @@ internal sealed partial class Parser
         var keyword = Advance();
         var name = ExpectName(Catalogue.ExpectedName.Says("a routine name"));
 
-        // An address and a signature are both written after the name, so a routine with none is
-        // read no further; the `{` after it still opens the block it opens.
+        // An address and a signature both come after the name, so a routine with no name is
+        // parsed no further; a `{` after it still opens the routine's block.
         if (name.IsMissing)
             return new ProcDeclarationSyntax(keyword, name, null, ExpectOpenBrace());
 
-        // `.proc name = expr` is an extern proc: a signature and an address, with no body.
+        // `.proc name = expr` is an extern proc: an address and an optional signature, with no body.
         if (Kind == SyntaxKind.Equals)
         {
             var equals = Advance();
@@ -299,9 +304,9 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>, named
-    /// after the member. It folds a repetition and a routine into one line, so it is read as a
-    /// repetition's opener and then a routine's signature. The name to bind is what the
-    /// routines are named from, so it is not optional as a repetition's is.
+    /// after the member. It combines a repetition and a routine on one line, so it is parsed as a
+    /// repetition's opener followed by a routine's signature. The bound name is what the
+    /// routines are named from, so unlike a repetition's it is required.
     /// </summary>
     private GreenNode ParseMultiProc()
     {
@@ -310,8 +315,8 @@ internal sealed partial class Parser
         var comma = Expect(SyntaxKind.Comma, Catalogue.ExpectedComma.Says(
             "`,` and the name to bind: `.multiproc Channel, ch {`"));
 
-        // The name is written after the `,`, so where there is no comma there is nowhere for it
-        // to have been written and the comma is the whole news about the line.
+        // The name comes after the `,`, so when the comma is missing the name cannot have been
+        // written either; only the missing comma is reported.
         var name = comma.IsMissing
             ? GreenToken.Missing(SyntaxKind.Identifier)
             : ExpectName(Catalogue.ExpectedName.Says("the name to bind, which each routine is named from"));
@@ -330,8 +335,9 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>.export</c> before a declaration, which exports what it declares, or a list of names:
-    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>. A declaration reads as the same
-    /// declaration written without the <c>.export</c>, which the line holds instead.
+    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>. An exported declaration parses
+    /// exactly as it would without the <c>.export</c>; the line holds the <c>.export</c> token,
+    /// not the declaration.
     /// </summary>
     private GreenNode ParseExport()
     {
@@ -407,8 +413,8 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
 
-        // The quotes are the mistake, not the name, so the string is left for the line to hold
-        // rather than read as a name it is not.
+        // The quotes are the mistake, not the name, so the string is not read as a name; it is
+        // left for the line to hold as skipped tokens.
         if (Kind == SyntaxKind.StringLiteral)
         {
             Report(Catalogue.ModuleNameQuoted);
@@ -438,15 +444,15 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>. A
-    /// path is always written from the root of the modules, and names at least a module and
-    /// one name in it, or a module.
+    /// path is always written from the root of the module hierarchy, and names a module, or a
+    /// module and a name in it.
     /// </summary>
     private GreenNode ParseUse()
     {
         var keyword = Advance();
 
-        // With no path there is nothing for the rest of the line to name a part of, so what
-        // follows is the line's to hold rather than the directive's.
+        // With no path, nothing that follows can refer to part of one, so the rest of the line
+        // is left for the line to hold as skipped tokens rather than parsed by the directive.
         var named = AtName;
         var path = ParsePath(Catalogue.ExpectedName.Says("what to use: `.use module::name`"));
         if (!named)
@@ -461,8 +467,8 @@ internal sealed partial class Parser
             var openBrace = Advance();
             var items = ParseSeparatedList(ParseUseItem);
 
-            // The `{` is written, so the `}` that closes it has a place on the line whether or not
-            // the source reached it, and the missing token stands there.
+            // The `{` was written, so the closing `}` gets a slot whether or not the source wrote
+            // it; if not, a missing token fills the slot.
             var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Says("`}`"));
             return new UseDirectiveSyntax(
                 keyword, path, colonColon, null, openBrace, items, closeBrace, null, null);
@@ -498,9 +504,9 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>a::b::c</c> as a name, stopping before a <c>::</c> that is not followed by a name: the
-    /// <c>::</c> of a <c>::*</c> or a <c>::{</c> is the directive's to take, and any other is the
-    /// line's. The name that stands where one belongs when not even the first is written, with
-    /// <paramref name="expected"/> reported there.
+    /// <c>::</c> of a <c>::*</c> or a <c>::{</c> is left for the directive to take, and any other
+    /// is left for the line as skipped tokens. When not even the first name is written, this
+    /// returns a missing name with <paramref name="expected"/> reported on it.
     /// </summary>
     private NameExpressionSyntax ParsePath(DiagnosticMessage expected)
     {
@@ -524,8 +530,8 @@ internal sealed partial class Parser
 
     /// <summary>
     /// <c>name</c>, <c>name: size</c>, <c>name: proc(...)</c>, <c>name: .word[8]</c> or a
-    /// checked <c>name = expr</c>. An element type may follow a size, which is where an
-    /// import of data in the zero page says both what it is and where it lives.
+    /// checked <c>name = expr</c>. An element type may follow a size, so that an import of
+    /// zero-page data can say both what the data is and where it lives.
     /// </summary>
     private GreenNode? ParseImportItem()
     {
@@ -564,8 +570,8 @@ internal sealed partial class Parser
                     Report(Catalogue.ExpectedAddressSize.Says("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
             }
         }
-        // `in SEGMENT` says which segment an imported address is in, which is what its
-        // references are checked against.
+        // `in SEGMENT` says which segment an imported address is in; references to the name are
+        // checked against that segment.
         GreenToken? inKeyword = null;
         GreenToken? segment = null;
         if (colon is not null && AtWord("in"))
@@ -601,8 +607,8 @@ internal sealed partial class Parser
         }
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
-        // One cause, one diagnostic: a directive that is no element type has been reported
-        // already, and what stands after it is the same mistake.
+        // One cause, one diagnostic: a directive that is not an element type has been reported
+        // already, and anything after it is part of the same mistake.
         if (element && !AtEnd && Kind != SyntaxKind.Comma)
             Report(Catalogue.ImportHoldsNoValues.Says(directive.Text));
         return new DataDirectiveSyntax(directive, type, count, null);

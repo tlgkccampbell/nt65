@@ -7,9 +7,9 @@ using Microsoft.CodeAnalysis.Text;
 namespace Norristown.SyntaxGenerator;
 
 /// <summary>
-/// Writes the syntax classes the node table describes into whatever compilation carries the
-/// table as an additional file, which is <c>Norristown.Core</c>. The pipeline hangs off the
-/// table's own text, so an edit anywhere else in the project regenerates nothing.
+/// Generates the syntax classes the node table describes into any compilation that includes
+/// the table as an additional file, which is <c>Norristown.Core</c>. The pipeline depends only
+/// on the table's text, so an edit anywhere else in the project regenerates nothing.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class SyntaxSourceGenerator : IIncrementalGenerator
@@ -28,8 +28,9 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Collected rather than taken one at a time, so that a project which does not carry the
-        // table hears about the table rather than about the hundred classes it does not have.
+        // Collected rather than taken one at a time, so that a project without the table gets one
+        // diagnostic saying the table is missing, rather than errors about the hundred classes it
+        // then lacks.
         var tables = context.AdditionalTextsProvider
             .Where(file => NameOf(file.Path) == TableName)
             .Select((file, token) => new Table(file.Path, file.GetText(token)?.ToString()))
@@ -73,7 +74,7 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
             return;
         }
 
-        // No byte-order mark: the repository is UTF-8 without one, and these files are read.
+        // No byte-order mark, to match the repository's UTF-8 files; generated files are read too.
         var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         foreach (var file in files)
             context.AddSource(file.Key, SourceText.From(file.Value, utf8));

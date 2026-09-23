@@ -50,8 +50,8 @@ public static class OutputManifest
             }
         }
 
-        // Whether the record has to be written again is a question about its text, which is
-        // nt65's own and is compared as nt65 compares text.
+        // Whether the record needs rewriting depends only on its text, which nt65 itself wrote,
+        // so it is compared ordinally, as nt65 compares its own text.
         if (!before.SequenceEqual(now, StringComparer.Ordinal))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(record)!);

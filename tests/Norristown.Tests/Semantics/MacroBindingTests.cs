@@ -24,7 +24,7 @@ public sealed class MacroBindingTests
         Assert.Equal(SymbolKind.Macro, macro.Kind);
         Assert.Equal(["dest", "value"], macro.Parameters.Select(p => p.Name));
 
-        // A parameter with no kind written takes an expression, which is what accepts most.
+        // A parameter with no kind written takes an expression, the kind that accepts the most.
         Assert.Equal(ParameterKind.Operand, macro.Parameters[0].Kind);
         Assert.Equal(ParameterKind.Expr, macro.Parameters[1].Kind);
 
@@ -49,12 +49,13 @@ public sealed class MacroBindingTests
             ["const", "ident", "one(eq, ne)", "list(one(x, y))", "block", "block"],
             parameters.Select(p => p.Accepts.ToString()));
 
-        // Only the last may be left out, and what it stands for then is a block with nothing in it.
+        // The `list` and the parameter with a default may be left out; that block then stands for
+        // an empty one.
         Assert.Equal([false, false, false, true, false, true], parameters.Select(p => p.IsOptional));
         Assert.True(parameters[5].Empty);
     }
 
-    /// <summary>A default is written in the header, so it means what it means there.</summary>
+    /// <summary>A default is written in the header, so its names resolve where the macro is declared.</summary>
     [Fact]
     public void ADefaultResolvesWhereTheMacroIsDeclared()
     {
@@ -154,7 +155,7 @@ public sealed class MacroBindingTests
             model.Problems());
     }
 
-    /// <summary>A macro in a <c>.scope</c> outside any routine is where one belongs.</summary>
+    /// <summary>A macro may be declared in a <c>.scope</c> that is outside any routine.</summary>
     [Fact]
     public void AMacroMayBeDeclaredInAScope()
     {
@@ -164,7 +165,7 @@ public sealed class MacroBindingTests
         Assert.Equal("gfx::m", model.Symbol("m").QualifiedName);
     }
 
-    /// <summary>A body that declared what an <c>ident</c> parameter names would name it in the caller.</summary>
+    /// <summary>A body may not declare the name an <c>ident</c> parameter stands for, since that would declare it in the caller.</summary>
     [Fact]
     public void AnIdentParameterCannotBeDeclaredInTheBody()
     {
@@ -195,7 +196,7 @@ public sealed class MacroBindingTests
             model.Problems());
     }
 
-    /// <summary>A name on its own splices a block, and only a block parameter is one.</summary>
+    /// <summary>A name on a line of its own splices a block, so it must name a <c>block</c> parameter.</summary>
     [Fact]
     public void ASpliceNamesABlockParameter()
     {
@@ -207,7 +208,7 @@ public sealed class MacroBindingTests
             model.Problems());
     }
 
-    /// <summary>Outside a macro body a name alone is simply a line that reads as nothing.</summary>
+    /// <summary>Outside a macro body, a name alone on a line is not a statement at all.</summary>
     [Fact]
     public void ANameAloneOutsideAMacroIsNotALine()
     {

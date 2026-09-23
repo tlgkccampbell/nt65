@@ -13,64 +13,67 @@ namespace Norristown.LanguageServer;
 
 internal sealed class Server
 {
-    /// <summary>How long without an edit before what is wrong with the rest of the program is published.</summary>
+    /// <summary>How long after the last edit before the rest of the program's diagnostics are published.</summary>
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
 
     private readonly ServerLog log;
     private readonly Framing framing;
     private readonly Workspace workspace = new();
 
-    // What is published for every file but the edited one waits for the typing to stop. A
-    // feature that follows the program rather than the caret — the output beside the source —
-    // hangs off the same wait, so that it moves when the squiggles do.
+    // Publishing diagnostics for every file but the edited one waits for typing to stop. A
+    // feature that follows the whole program rather than the caret — the output view beside
+    // the source — is refreshed after the same wait, so that it updates when the squiggles do.
     private readonly Debounce settling;
 
-    // The exit code the process is to leave with, once `exit` or the editor's going says so.
+    // The exit code for the process, set once `exit` arrives or the editor process goes away.
     private readonly TaskCompletionSource<int> leaving =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // What was last published for each URI, so that a file nobody has open is sent again only
-    // when what is wrong with it changed, and the newest revision the client has sent of each
-    // open one, so that nothing is published about text that is gone. A keystroke's own
-    // publishing and the settled program's can be under way at once, so both are concurrent.
+    // A signature of the diagnostics last published for each URI, so that a file is sent again
+    // only when its diagnostics change; and the newest revision the client has sent of each
+    // open file, so that nothing is published about text that has since changed. Publishing
+    // for a keystroke and publishing after the debounce can run at once, so both are concurrent.
     private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
     private JsonRpc? rpc;
 
-    // What the client can take, and the edge every answer goes out by.
+    // What the client supports, and the last step every answer passes through on its way out.
     private ClientCapabilities client = ClientCapabilities.None;
     private Outgoing outgoing;
 
-    // Which hints the editor shows, from its settings, and the one switch a command throws for
-    // as long as this server runs: the cycle counts are wanted while a routine is being timed
-    // and not for the rest of the week, so they are turned on for the session rather than saved.
+    // Which hints the editor shows, from its settings, and the cycle-hint override a command
+    // toggles for as long as this server runs: cycle counts are wanted while a routine is being
+    // timed, not permanently, so the toggle lasts for the session and is not saved.
     private HintSettings hints = HintSettings.Default;
     private bool? cyclesThisSession;
 
-    // What each item of the last list offered is for, kept until the next list replaces it: the
-    // client resolves an item of the list it is showing, which is always the one just answered.
+    // The documentation of each item in the last completion list, kept until the next list
+    // replaces it: the client only resolves items of the list it is showing, which is always
+    // the one most recently returned.
     private IReadOnlyDictionary<string, string> described =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
-    // The names of each file as the client was last given them, under the name it would ask
-    // about them by. A client asking what changed is holding one of these; one asking about an
-    // answer this server no longer has is given the whole thing instead.
+    // The semantic tokens last sent for each file, under the result id the client will quote
+    // when it asks for a delta. A client quoting an id this server no longer has is sent the
+    // full tokens instead.
     private readonly ConcurrentDictionary<string, (string Id, IReadOnlyList<int> Data)> classified =
         new(StringComparer.Ordinal);
     private int classifiedId;
 
-    // The editor that started this server. It is watched rather than asked: an editor that
-    // crashes never sends `exit`, and a server nobody is talking to should not outlive it.
+    // The editor process that started this server. It is watched rather than relied on to send
+    // `exit`: an editor that crashes never sends it, and a server with no client should not
+    // outlive its editor.
     private Process? parent;
 
-    // Whether anything has asked what a file became. A client showing that is told when the
-    // program has settled; one that never asked is not sent a notification it has no handler
-    // for. It is set from a request and read from the publishing, which are different threads.
+    // Whether the client has ever asked for a file's output. Such a client is notified when the
+    // program settles after an edit; one that never asked is not sent a notification it may
+    // have no handler for. It is set by a request handler and read by the publishing code, which
+    // run on different threads.
     private volatile bool watchingOutput;
 
     // The binaries the client has been asked to watch. The editor watches the sources and the
-    // project files by itself; which files an `.incbin` measures is the program's to say, and
-    // is not known before it has been read.
+    // project files by itself, but which files `.incbin` directives include is up to the
+    // program and is not known until it has been read.
     private IReadOnlyList<string> watchedBinaries = [];
 
     private Server(ServerLog log, Framing framing, Delay delay)
@@ -81,22 +84,23 @@ internal sealed class Server
         outgoing = new Outgoing(workspace, client);
     }
 
-    /// <summary>Which hints are shown: the editor's settings, with the session's own switch over them.</summary>
+    /// <summary>Which hints are shown: the editor's settings, with this session's cycle-hint toggle overriding them.</summary>
     private HintSettings Shown =>
         cyclesThisSession is { } session ? hints with { Cycles = session } : hints;
 
     /// <summary>
-    /// Serves one client until it sends <c>exit</c>, the editor that started it goes, or the
-    /// connection is lost, and answers with the code the process is to leave with: 0 where the
-    /// client shut it down and said goodbye, 1 where it said goodbye without shutting down, and
-    /// 70 where nt65 itself failed, which is what has the editor's client start a new server.
+    /// Serves one client until it sends <c>exit</c>, the editor that started the server exits,
+    /// or the connection is lost, and returns the process's exit code: 0 when the client sent
+    /// <c>shutdown</c> before <c>exit</c> or the connection was lost, 1 when it sent <c>exit</c>
+    /// without <c>shutdown</c> or the editor went away, and 70 when nt65 itself failed, which
+    /// makes the editor's client start a new server.
     /// </summary>
     /// <param name="input">Where the client's messages arrive.</param>
     /// <param name="output">Where the server's messages go.</param>
-    /// <param name="log">Where the server says what it is doing.</param>
+    /// <param name="log">Where the server logs what it is doing.</param>
     /// <param name="delay">
-    /// How the wait between an edit and publishing the rest of the program is done, for a test
-    /// that drives it itself; the real wait where nothing says otherwise.
+    /// How to wait between an edit and publishing the rest of the program, supplied by a test
+    /// that drives the wait itself; a real delay when not given.
     /// </param>
     public static async Task<int> RunAsync(Stream input, Stream output, ServerLog log, Delay? delay = null)
     {
@@ -108,8 +112,8 @@ internal sealed class Server
         rpc.StartListening();
         try
         {
-            // `exit` is answered by the process leaving, which the handler cannot do from
-            // inside the dispatch it is running in, so it says so here instead.
+            // `exit` is handled by the process exiting, which the handler cannot do from inside
+            // the dispatch it runs in, so it completes `leaving` and the exit happens here.
             if (await Task.WhenAny(rpc.Completion, server.leaving.Task).ConfigureAwait(false) == server.leaving.Task)
                 return await server.leaving.Task.ConfigureAwait(false);
             await rpc.Completion.ConfigureAwait(false);
@@ -122,9 +126,10 @@ internal sealed class Server
         }
         catch (Exception e)
         {
-            // The handler of last resort: the loop itself failed, which is a bug in nt65. It
-            // goes to the log for the report and to the person for the news, and the process
-            // leaves with a failure so that the client does not talk to a server that is gone.
+            // The handler of last resort: the message loop itself failed, which is a bug in nt65.
+            // The exception goes to the log for a bug report and is shown to the user, and the
+            // process exits with a failure code so the client does not keep talking to a dead
+            // server.
             log.Write($"internal error: {e}");
             await server.ShowAsync(MessageType.Error, $"nt65: internal error: {e.Message}").ConfigureAwait(false);
             return 70;
@@ -177,15 +182,15 @@ internal sealed class Server
             DocumentFormattingProvider: true,
             DocumentRangeFormattingProvider: true,
 
-            // A position is a UTF-16 offset in a line, which is what the protocol's own default
-            // is and what nt65 has always measured; saying so lets a client that would rather
-            // count differently know not to.
+            // Positions are UTF-16 offsets within a line, the protocol's own default and what
+            // nt65 has always used; stating it tells a client that would prefer another encoding
+            // not to use one.
             PositionEncoding: "utf-16",
 
-            // A client that opened folders is asked to say when they change, so a folder added
-            // to the workspace brings its projects with it; one that asks before it moves a file
-            // is asked about every file, because which of them a program includes is the
-            // program's to say and is not known before it has been read.
+            // A client that supports workspace folders is asked to report changes to them, so a
+            // folder added to the workspace brings its projects with it. A client that asks
+            // before moving a file is asked about every file, because which files a program
+            // includes is decided by the program and is not known until it has been read.
             Workspace: client.WorkspaceFolders || client.WillRenameFiles
                 ? new WorkspaceServerCapabilities(
                     client.WorkspaceFolders ? new WorkspaceFoldersServerCapabilities(true, true) : null,
@@ -222,7 +227,7 @@ internal sealed class Server
         workspace.Configure(configuration);
 
         // Which hints are shown is a setting like any other, and the editor is holding hints
-        // worked out under the old one.
+        // computed under the old value, so it is asked to fetch them again.
         var shown = HintSettings.Of(settings);
         if (shown != hints)
         {
@@ -233,9 +238,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Turns the cycle counts on or off for as long as this server runs, and says which it now
-    /// is, for the editor to show. It is a command rather than a setting because it is wanted
-    /// while a routine is being timed and not for the rest of the week.
+    /// Toggles the cycle-count hints for as long as this server runs, and returns the new state
+    /// for the editor to show. It is a command rather than a setting because cycle counts are
+    /// wanted while a routine is being timed, not permanently.
     /// </summary>
     [JsonRpcMethod("nt65/toggleCycleHints")]
     public bool ToggleCycleHints(JsonElement _)
@@ -247,9 +252,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The few words drawn in the lines the editor is showing. Only those lines are worked out:
-    /// hints are fetched again as a file is scrolled, and the lines nobody is looking at are
-    /// not what a keystroke should pay for.
+    /// The inlay hints for the lines the editor is showing. Only those lines are computed: the
+    /// client fetches hints again as a file is scrolled, and a keystroke should not pay for
+    /// lines nobody is looking at.
     /// </summary>
     [JsonRpcMethod("textDocument/inlayHint")]
     public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request, CancellationToken cancellation)
@@ -280,8 +285,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Files changed on disk: a project file, a source no one has open, or a file an <c>.incbin</c>
-    /// measured. What is wrong is published again when any of them is one a program reads.
+    /// Files changed on disk: a project file, a source no one has open, or a binary an
+    /// <c>.incbin</c> includes. Diagnostics are published again when any of them is a file a
+    /// program reads.
     /// </summary>
     [JsonRpcMethod("workspace/didChangeWatchedFiles")]
     public Task DidChangeWatchedFilesAsync(DidChangeWatchedFilesParams request, CancellationToken cancellation)
@@ -293,11 +299,12 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Files are about to move. A module's name is its own and its output is named after that,
-    /// so what moves with a source is small: a <c>files</c> entry that names it literally, and
-    /// the <c>.incbin</c> paths that are resolved beside whichever end moved. A glob that no
-    /// longer matches is said rather than rewritten, because which glob was meant to cover the
-    /// file is the programmer's to say.
+    /// Files are about to be moved or renamed. A module's name comes from its <c>.module</c> line
+    /// and its output is named after that, so moving a source needs few edits: a <c>files</c>
+    /// entry that names it literally, and <c>.incbin</c> paths, which are resolved relative to
+    /// the including file and so change when either end moves. A glob that stops matching is
+    /// reported rather than rewritten, because only the programmer knows which glob was meant to
+    /// cover the file.
     /// </summary>
     [JsonRpcMethod("workspace/willRenameFiles")]
     public async Task<WorkspaceEdit?> WillRenameFilesAsync(
@@ -317,12 +324,13 @@ internal sealed class Server
     public IReadOnlyList<string> Configurations(JsonElement _) => workspace.Configurations();
 
     /// <summary>
-    /// What a file became: the ca65 a build writes for it as the program stands in the editor
-    /// now, unsaved edits included, and which lines of it each line of the source wrote. A file
-    /// the program does not hold is answered with nothing, which is the client's to say.
+    /// The output for a file: the ca65 a build would write for it from the program as it stands
+    /// in the editor, unsaved edits included, and which output lines each source line produced.
+    /// For a file no program holds the answer is null, and what to show is up to the client.
     /// <para>
-    /// Having been asked once, the server says whenever the program has settled after an edit,
-    /// so that a view beside the source moves when the squiggles do.
+    /// Once this has been requested, the server sends <c>nt65/outputChanged</c> whenever the
+    /// program settles after an edit, so that a view beside the source updates when the
+    /// squiggles do.
     /// </para>
     /// </summary>
     [JsonRpcMethod("nt65/output")]
@@ -339,9 +347,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// What the macro call at a place becomes, as nt65 rather than as ca65: the body with the
-    /// arguments in place. Calls inside it are left as calls, one level at a time, each with
-    /// what to send back to have that one written out too.
+    /// What the macro call at a position expands to, written as nt65 rather than ca65: the body
+    /// with the arguments substituted. Nested calls are left unexpanded, one level at a time,
+    /// each with the index path to send back to have it expanded too.
     /// </summary>
     [JsonRpcMethod("nt65/expansion")]
     public ExpansionResult? Expansion(ExpansionParams request, CancellationToken cancellation)
@@ -379,10 +387,10 @@ internal sealed class Server
             return;
         }
 
-        // The file the caret is in hears at once, from its own analysis; the rest of the
-        // program hears once the typing stops, because an edit in one file can change what is
-        // wrong with another and a squiggle that comes and goes on every keystroke is worse
-        // than one that arrives a moment late.
+        // The edited file's diagnostics are published at once, from its own analysis; the rest
+        // of the program's are published once typing stops. An edit in one file can change what
+        // is wrong with another, and a squiggle that flickers on every keystroke is worse than
+        // one that arrives a moment late.
         newest[request.TextDocument.Uri] = request.TextDocument.Version;
         await PublishOwnAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false);
         PublishTheRestSoon(request.TextDocument.Uri);
@@ -395,14 +403,15 @@ internal sealed class Server
         newest.TryRemove(request.TextDocument.Uri, out _);
         log.Write($"closed {request.TextDocument.Uri}");
 
-        // A closed file of a program is still reported on; one that belonged to no program
-        // leaves with the document, and is cleared by whatever it is no longer among.
+        // A closed file that belongs to a program is still reported on. One that belonged to no
+        // program goes away with the document, and since it is no longer among the files
+        // published, the publish below clears its diagnostics.
         return PublishEverythingAsync(null, cancellation);
     }
 
     /// <summary>
-    /// What a file declares. A client that takes a tree gets the one the segments and scopes
-    /// make; one that does not gets the flat list the protocol had first.
+    /// The file's outline: a tree of its segments and scopes for a client that supports one, or
+    /// the protocol's older flat list otherwise.
     /// </summary>
     [JsonRpcMethod("textDocument/documentSymbol")]
     public object DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
@@ -455,8 +464,8 @@ internal sealed class Server
         if (At(request, cancellation) is not { } asked)
             return null;
 
-        // A name the language will not accept is the client's to show and the programmer's
-        // to correct, so it comes back as a failed request rather than as an empty edit.
+        // A new name the language will not accept is returned as a failed request, which the
+        // client shows for the programmer to correct, rather than as an empty edit.
         var (edit, problem) = Lsp.ToRename(asked.Program, asked.Model, asked.Position, request.NewName);
         return problem is null ? outgoing.Spell(edit) : throw new LocalRpcException(problem);
     }
@@ -473,9 +482,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// What one item of the last list offered is for. A file's names carry a paragraph each,
-    /// and a list of hundreds would be mostly prose nobody is reading, so the comment above a
-    /// declaration is fetched for the one item the caret is on.
+    /// Fills in the documentation of one item of the last completion list. Each name may carry a
+    /// paragraph of comment, and a list of hundreds would be mostly prose nobody reads, so the
+    /// comment above a declaration is fetched only for the item the client highlights.
     /// </summary>
     [JsonRpcMethod("completionItem/resolve")]
     public CompletionItem Resolve(CompletionItem request, CancellationToken cancellation)
@@ -510,8 +519,8 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The file laid out as nt65 writes one. It needs no analysis: what a line is written at is
-    /// what its own file's braces say, so a file with a mistake in it still formats.
+    /// The whole file formatted in nt65's layout. It needs no analysis: a line's indentation
+    /// depends only on the braces in its own file, so a file with errors in it still formats.
     /// </summary>
     [JsonRpcMethod("textDocument/formatting")]
     public IReadOnlyList<TextEdit> Formatting(DocumentFormattingParams request, CancellationToken cancellation)
@@ -523,8 +532,8 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The chosen lines laid out. The whole file decides where they go — a run of data lines
-    /// says together where its column is — and only the chosen ones move.
+    /// The selected lines formatted. Layout is computed over the whole file — a run of data
+    /// lines, for instance, shares one column — but only the selected lines are changed.
     /// </summary>
     [JsonRpcMethod("textDocument/rangeFormatting")]
     public IReadOnlyList<TextEdit> RangeFormatting(
@@ -544,8 +553,8 @@ internal sealed class Server
             : [];
 
     /// <summary>
-    /// What calls a routine, and what it calls. The item comes back from the client as the
-    /// server gave it, so the program it belongs to is found from the file it names.
+    /// What calls a routine (and, in the next method, what it calls). The client sends the item
+    /// back as the server gave it, so the program it belongs to is found from the file it names.
     /// </summary>
     [JsonRpcMethod("callHierarchy/incomingCalls")]
     public IReadOnlyList<CallHierarchyIncomingCall> IncomingCalls(
@@ -583,8 +592,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The names of the lines the editor is showing. A file of thousands of lines is read a
-    /// screenful at a time, and the screenful is what colours it while the rest is worked out.
+    /// The semantic tokens for the lines the editor is showing. For a file of thousands of
+    /// lines the client asks for the visible screenful, which is coloured while the rest of
+    /// the file is computed.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/range")]
     public Protocol.SemanticTokens SemanticTokensRange(
@@ -597,9 +607,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// What changed since the answer the client is holding. An edit in one place moves a
-    /// handful of numbers in a file of thousands; a client holding an answer this server no
-    /// longer has gets the whole thing instead.
+    /// What changed since the tokens the client is holding. An edit in one place changes a
+    /// handful of numbers in a file of thousands; a client quoting a result id this server no
+    /// longer has gets the full tokens instead.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/full/delta")]
     public object SemanticTokensDelta(SemanticTokensDeltaParams request, CancellationToken cancellation)
@@ -613,8 +623,8 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// What a caret grows to take in as the selection is widened: the operand, the instruction,
-    /// the block and the routine, which is the tree the file already is.
+    /// The ranges each caret's selection steps through as it is expanded: the operand, the
+    /// instruction, the block and the routine, taken straight from the syntax tree.
     /// </summary>
     [JsonRpcMethod("textDocument/selectionRange")]
     public IReadOnlyList<SelectionRange> SelectionRanges(
@@ -641,8 +651,8 @@ internal sealed class Server
     public object? Shutdown() => null;
 
     /// <summary>
-    /// Goodbye. The process leaves with 0 where the client shut the server down first and 1
-    /// where it did not, which is what the protocol asks for; the loop is told rather than
+    /// The client is done. The process exits with 0 if the client sent <c>shutdown</c> first and
+    /// 1 if it did not, as the protocol requires; the message loop is signalled rather than
     /// stopped, because a handler cannot end the dispatch it is running in.
     /// </summary>
     [JsonRpcMethod("exit")]
@@ -673,9 +683,9 @@ internal sealed class Server
             $"{d.Range.Start.Line}:{d.Range.Start.Character}:{(int)d.Severity}:{d.Message}"));
 
     /// <summary>
-    /// Watches the editor that started this server, where it named itself. An editor that
-    /// crashes never sends <c>exit</c>, and a server nobody is talking to should not outlive
-    /// it; one that has already gone is not waited for at all.
+    /// Watches the editor process that started this server, when the client gave its process
+    /// id. An editor that crashes never sends <c>exit</c>, and a server with no client should
+    /// not outlive it; if the editor has already exited, the server leaves at once.
     /// </summary>
     /// <param name="processId">The editor's process id, or null where it gave none.</param>
     private void Watch(int? processId)
@@ -692,18 +702,19 @@ internal sealed class Server
         }
         catch (ArgumentException)
         {
-            // There is no such process: the editor went between starting this server and being
-            // named by it, which is the case the watch exists for.
+            // There is no such process: the editor exited between starting this server and the
+            // server looking it up, which is exactly the case the watch exists for.
             Leave(1, $"the editor that started it (pid {id}) has gone");
         }
         catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // A process this server may not watch. Carrying on is better than leaving over it.
+            // This server is not allowed to watch that process. Carrying on without the watch is
+            // better than exiting over it.
             log.Write($"the editor that started it (pid {id}) cannot be watched: {e.Message}");
         }
     }
 
-    /// <summary>Says that the process is to leave, and why.</summary>
+    /// <summary>Signals that the process should exit with <paramref name="code"/>, and logs why.</summary>
     private void Leave(int code, string why)
     {
         if (leaving.TrySetResult(code))
@@ -711,9 +722,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// What is wrong with the file the client has just opened or edited, published at once,
-    /// from the analysis that edit asked for. The file the caret is in is the one the person
-    /// is looking at, and it hears without waiting for anything.
+    /// Publishes the diagnostics of the file the client has just opened or edited, at once, from
+    /// the analysis that edit triggered. It is the file the user is looking at, so it is
+    /// published without waiting for anything.
     /// </summary>
     private async Task PublishOwnAsync(string uri, CancellationToken cancellation)
     {
@@ -722,8 +733,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The rest of the program, once the typing has stopped. <paramref name="changed"/> is the
-    /// file the client is editing, which has already heard and does not hear again.
+    /// Publishes the rest of the program once typing has stopped. <paramref name="changed"/> is
+    /// the file the client is editing, whose diagnostics were already published and are not
+    /// sent again.
     /// </summary>
     private void PublishTheRestSoon(string changed) =>
         settling.After(async () =>
@@ -734,24 +746,23 @@ internal sealed class Server
             }
             catch (Exception e) when (e is ConnectionLostException or ObjectDisposedException)
             {
-                // The client went away while the typing was settling; nobody is waiting.
+                // The client disconnected during the debounce wait; nobody is waiting for this.
                 log.Write($"the rest of the program was not published: {e.Message}");
             }
         });
 
     /// <summary>
-    /// Publishes what is wrong with every file of every program. Not only the open ones: an
-    /// export broken in one file is what is wrong with every module that uses it, and none of
-    /// them may be open.
+    /// Publishes diagnostics for every file of every program, not only the open ones: an export
+    /// broken in one file breaks every module that uses it, and none of those may be open.
     /// </summary>
     /// <param name="changed">
     /// The file the client is editing, which has already been published from its own analysis
-    /// and is passed over here; null when this is not an edit.
+    /// and is skipped here; null when this is not an edit.
     /// </param>
-    /// <param name="cancellation">Asked between files, since a program may hold hundreds.</param>
+    /// <param name="cancellation">Checked between files, since a program may hold hundreds.</param>
     /// <param name="refresh">
-    /// Whether the client may be asked to fetch what it holds again. It is not worth asking as
-    /// the client connects, when it is holding nothing yet.
+    /// Whether the client may be asked to fetch semantic tokens, lenses and hints again. There
+    /// is no point asking as the client connects, when it holds nothing yet.
     /// </param>
     private async Task PublishEverythingAsync(
         string? changed, CancellationToken cancellation, bool refresh = true)
@@ -765,10 +776,10 @@ internal sealed class Server
                 _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
-        // The client holds what it was last told until it is told otherwise, so a file that
-        // left the program, or that the client named differently, is emptied by hand. A file
-        // that is still in the program is never emptied: its squiggles stand until the ones
-        // that replace them arrive.
+        // The client keeps the diagnostics it was last sent until told otherwise, so a file that
+        // has left the program, or is now named by a different URI, is explicitly cleared. A
+        // file still in the program is never cleared: its squiggles stay until their
+        // replacements arrive.
         foreach (var gone in published.Keys.Where(uri => !current.Contains(uri)).ToList())
         {
             published.TryRemove(gone, out _);
@@ -776,21 +787,22 @@ internal sealed class Server
                 new PublishDiagnosticsParams(gone, null, [])).ConfigureAwait(false);
         }
 
-        // The binaries this program includes may have changed with it, and the editor watches
+        // The set of binaries the programs include may have changed, and the editor watches
         // only what it can know about without reading the program.
         await WatchBinariesAsync().ConfigureAwait(false);
 
-        // A view of what a file became follows the program rather than the caret, so it hears
-        // once the typing has stopped, from the same wait the rest of the squiggles come on.
+        // The output view follows the whole program rather than the caret, so it is notified
+        // once typing has stopped, after the same wait as the rest of the diagnostics.
         if (watchingOutput)
         {
             await rpc!.NotifyWithParameterObjectAsync("nt65/outputChanged",
                 new OutputChangedParams(changed)).ConfigureAwait(false);
         }
 
-        // What a name in another file refers to, and what a routine costs with its calls, moved
-        // only if the edit reached past the file it was made in; the edited file is not asked
-        // to fetch anything, because the client asks about the document it is showing itself.
+        // What a name in another file refers to, and what a routine costs including its calls,
+        // can only have changed if the edit reached past the file it was made in. An edit that
+        // did not needs no refresh, because the client re-fetches for the document it is
+        // showing by itself.
         if (!refresh || (changed is not null && !workspace.ReachedOtherFiles(Workspace.PathOf(changed))))
             return;
         if (client.RefreshesTokens)
@@ -798,14 +810,14 @@ internal sealed class Server
         if (client.RefreshesLenses)
             _ = RefreshAsync("workspace/codeLens/refresh", "code lenses");
 
-        // What a call costs and what state it leaves behind are what a hint says, and both move
-        // with an edit in another file.
+        // Hints show what a call costs and what state it leaves behind, and both can change with
+        // an edit in another file.
         RefreshHints();
     }
 
     /// <summary>
-    /// Asks the client to fetch the hints it is showing again, where it can be asked. What a
-    /// hint says moves when a setting changes and when an edit elsewhere in the program lands.
+    /// Asks the client to fetch the hints it is showing again, where it supports that. Hints
+    /// change when a setting changes and when an edit elsewhere in the program lands.
     /// </summary>
     private void RefreshHints()
     {
@@ -820,9 +832,9 @@ internal sealed class Server
     /// already gone.
     /// </summary>
     /// <param name="file">The file and what is wrong with it.</param>
-    /// <param name="always">Whether to send even where nothing changed, which the edited file does.</param>
-    /// <param name="cancellation">Asked before anything is sent.</param>
-    /// <returns>Whether the client was told anything.</returns>
+    /// <param name="always">Whether to send even when nothing changed, as for the edited file.</param>
+    /// <param name="cancellation">Checked before anything is sent.</param>
+    /// <returns>Whether anything was sent to the client.</returns>
     private async Task<bool> SendAsync(Published file, bool always, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
@@ -840,10 +852,10 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Asks the client to watch the files this workspace's programs include, where it can be
-    /// asked. The editor watches the sources and the project files by itself; which files an
-    /// <c>.incbin</c> measures follows from reading the program, so it is asked for here and
-    /// asked for again whenever the set changes.
+    /// Asks the client to watch the binaries this workspace's programs include, where it
+    /// supports that. The editor watches the sources and the project files by itself; which
+    /// files <c>.incbin</c> directives include is known only from reading the program, so the
+    /// watch is registered here and registered again whenever that set changes.
     /// </summary>
     private async Task WatchBinariesAsync()
     {
@@ -877,8 +889,8 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Puts a message in front of the person, where the client shows one. A client that is
-    /// already gone hears nothing, which is not worth saying twice.
+    /// Shows a message to the user in the client. If the client has already gone, the message
+    /// is only written to the log.
     /// </summary>
     /// <param name="type">How bad the news is.</param>
     /// <param name="message">What to show.</param>
@@ -896,8 +908,9 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// Asks the client to fetch something again. It is not waited for: the client answers after
-    /// it has asked, and a client that has gone away has nothing to refresh.
+    /// Asks the client to fetch something again. Callers do not await it: the client replies only
+    /// after it has sent its own requests to re-fetch, and a client that has gone away has
+    /// nothing to refresh.
     /// </summary>
     private async Task RefreshAsync(string method, string what)
     {
@@ -912,8 +925,8 @@ internal sealed class Server
     }
 
     /// <summary>
-    /// The names of a whole file, classified, under a name of its own so that the client can
-    /// ask what changed about it next time.
+    /// The semantic tokens of a whole file, stored under a new result id so that the client can
+    /// ask for a delta against them next time.
     /// </summary>
     private Protocol.SemanticTokens Classified(string uri)
     {
@@ -926,7 +939,7 @@ internal sealed class Server
         return new Protocol.SemanticTokens(data, id);
     }
 
-    /// <summary>What a file the client named means, or null when the program does not hold it.</summary>
+    /// <summary>The semantic model of the file a URI names, or null when no program holds it.</summary>
     private SemanticModel? Model(string uri)
     {
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
@@ -954,8 +967,8 @@ internal sealed class Server
     }
 
     /// <summary>One request, resolved to what it is about.</summary>
-    /// <param name="Analysis">Everything the program means, for a question about its layout.</param>
-    /// <param name="Program">Every file, for a name that crosses one.</param>
+    /// <param name="Analysis">The analysis of the whole program, for questions about layout and flow.</param>
+    /// <param name="Program">Every file, for names that cross from one file to another.</param>
     /// <param name="Model">The file the caret is in.</param>
     /// <param name="Position">Where in that file's text.</param>
     private sealed record Asked(

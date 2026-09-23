@@ -42,8 +42,9 @@ public sealed class DebugFileRemapTests
         """;
 
     /// <summary>
-    /// The source becomes a file of its own, each of its lines a record with the spans of every
-    /// generated line that came from it, and the module names the source rather than the ca65.
+    /// The source is added as a file record of its own, with a line record for each source line
+    /// that lists the spans of every generated line that came from it, and the module's file
+    /// becomes the source rather than the ca65.
     /// </summary>
     [Fact]
     public void TheSourceIsAddedAsAFileWithALineForEachOfItsLines()
@@ -55,7 +56,7 @@ public sealed class DebugFileRemapTests
         Assert.Contains("line\tid=6,file=2,line=12,type=1,span=2\n", remapped);
         Assert.Contains("mod\tid=0,name=\"main.o\",file=2\n", remapped);
 
-        // The counts are what a debugger sets its tables up from, so they follow.
+        // A debugger sizes its tables from the counts in the `info` record, so they are updated.
         Assert.Contains("info\tcsym=0,file=3,lib=0,line=7,", remapped);
     }
 
@@ -73,7 +74,7 @@ public sealed class DebugFileRemapTests
         Assert.Contains("line\tid=4,file=1,line=3,span=3\n", remapped);
         Assert.Contains("mod\tid=1,name=\"hand.o\",file=1\n", remapped);
 
-        // Line 2 of the output came from nowhere, so nothing new claims it.
+        // Line 2 of the output came from no source line, so no new line record refers to it.
         Assert.Contains("line\tid=3,file=0,line=2\n", remapped);
         Assert.DoesNotContain("line=2,type=1", remapped);
     }
@@ -87,12 +88,12 @@ public sealed class DebugFileRemapTests
     {
         var remapped = Remapped(Linked);
 
-        // Line 0 became line 5, and line 2 became line 6; line 4 is the hand-written module's.
+        // Line record 0 maps to new record 5, and 2 to 6; record 4 is the hand-written module's.
         Assert.Contains("sym\tid=0,name=\"start\",addrsize=absolute,scope=0,def=0+5,ref=2+4+6,", remapped);
         Assert.Contains("sym\tid=1,name=\"other\",addrsize=absolute,scope=0,def=4,", remapped);
     }
 
-    /// <summary>Doing it twice does what doing it once did, so a build that repeats it is safe.</summary>
+    /// <summary>Remapping an already remapped file changes nothing, so a build that repeats the step is safe.</summary>
     [Fact]
     public void RemappingTwiceChangesNothingTheSecondTime()
     {
@@ -101,7 +102,7 @@ public sealed class DebugFileRemapTests
         Assert.Equal(once, Remapped(once));
     }
 
-    /// <summary>A debug file whose <c>.s</c> files have no maps is somebody else's, and is left alone.</summary>
+    /// <summary>A debug file whose <c>.s</c> files have no line maps was not built from nt65 output, and is left unchanged.</summary>
     [Fact]
     public void ADebugFileWithNoMapsIsUnchanged()
     {
@@ -109,7 +110,7 @@ public sealed class DebugFileRemapTests
         Assert.Null(problem);
     }
 
-    /// <summary>ld65 writes the file in text mode, and what goes back is ended the way it arrived.</summary>
+    /// <summary>ld65 writes the file in text mode, so the remapped file keeps whichever line endings it arrived with.</summary>
     [Fact]
     public void TheLineEndingsThatArrivedAreTheOnesWrittenBack()
     {

@@ -9,7 +9,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// What the editor says about a <c>.place</c>: the module its path names, where that module is
-/// declared, how the path is coloured, and the fix for placing a module that stands alone.
+/// declared, how the path is coloured, and the fix for placing a module not declared <c>placed</c>.
 /// </summary>
 public sealed class PlacementRequestsTests
 {
@@ -19,8 +19,9 @@ public sealed class PlacementRequestsTests
     private const string Main = ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n";
 
     /// <summary>
-    /// A module is no symbol, so the path a <c>.place</c> writes is answered for itself: what
-    /// the module's declaration says, whose output it is written in, and where it is declared.
+    /// A module is not a symbol, so hover and go to definition handle the path a <c>.place</c>
+    /// writes themselves: what the module's declaration says, whose output it is written into,
+    /// and where it is declared.
     /// </summary>
     [Fact]
     public void ThePathAPlaceWritesNamesTheModule()
@@ -41,7 +42,7 @@ public sealed class PlacementRequestsTests
         Assert.Equal(new Range(new Position(0, 8), new Position(0, 12)), definition.Range);
     }
 
-    /// <summary>The path is coloured as a module's, which the grammar cannot tell from a name.</summary>
+    /// <summary>The path is coloured as a module, which the grammar alone cannot tell from any other name.</summary>
     [Fact]
     public void ThePathAPlaceWritesIsColouredAsAModule()
     {
@@ -54,8 +55,8 @@ public sealed class PlacementRequestsTests
     }
 
     /// <summary>
-    /// Placing a module that says nothing about being placed is refused where the <c>.place</c>
-    /// is, and the fix is written where the module is declared: it marks it <c>placed</c>.
+    /// Placing a module that does not declare itself <c>placed</c> is an error at the
+    /// <c>.place</c>, and the fix edits the module's own declaration to mark it <c>placed</c>.
     /// </summary>
     [Fact]
     public void PlacingAModuleThatStandsAloneOffersToDeclareItPlaced()
@@ -71,7 +72,7 @@ public sealed class PlacementRequestsTests
         Assert.Equal(".module part: placed\n" + Part[".module part\n".Length..], Editing.Apply(Part, action.Edit.Changes[PartUri]));
     }
 
-    /// <summary>The whole file, which is what a client asks about when it asks about all of it.</summary>
+    /// <summary>A range covering the whole file, as a client sends when it asks for actions across all of it.</summary>
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string main, string part)

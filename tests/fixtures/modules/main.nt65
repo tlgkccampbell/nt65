@@ -10,8 +10,8 @@
 .use hw::*
 .use rt::host_tick
 
-; A name an instruction is spelled like is a name here, and warned about wherever it is
-; written: the same word reads as an instruction to whoever reads it next.
+; A name spelled like an instruction is still a name here, and is warned about where it is
+; declared: the same word reads as an instruction to whoever reads it next.
 .segment ZEROPAGE
 .data REP: .byte                ;! warning[mnemonic-name]: `REP` is an instruction on the 65816; as a name it is legal and easy to misread
 .data per: .byte                ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread

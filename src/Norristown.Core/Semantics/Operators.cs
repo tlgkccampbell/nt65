@@ -5,12 +5,12 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What each operator does to numbers. Arithmetic is 64-bit and signed, and an operation
-/// that leaves those 64 bits has no value: nothing wraps, because a wrapped number is one
-/// nobody wrote.
+/// whose result does not fit in those 64 bits has no value: nothing wraps, because a wrapped
+/// result is a number nobody wrote.
 /// <para>
-/// Nothing is reported from here. Where there is no value, <c>refused</c> says why, for
-/// whoever asked to report at the span it knows; a division by zero says nothing, because the
-/// caller knows the operand that is zero and says it better.
+/// Nothing is reported from here. Where there is no value, <c>refused</c> says why, and the
+/// caller reports it at the span it has; a division by zero sets no reason, because the caller
+/// knows which operand is zero and can report it more precisely.
 /// </para>
 /// </summary>
 internal static class Operators
@@ -48,8 +48,8 @@ internal static class Operators
         refused = null;
         switch (op.Kind)
         {
-            // The four that can leave 64 bits are worked out in 128 and answered only where
-            // what they came to is a 64-bit number after all.
+            // The four that can overflow 64 bits are computed in 128 bits, and give a value only
+            // when the result fits in 64 bits after all.
             case SyntaxKind.Star:
                 return Within((Int128)a * b, op, a, b, out refused);
             case SyntaxKind.Plus:
@@ -93,7 +93,7 @@ internal static class Operators
         _ => false,
     };
 
-    /// <summary>The operators that cannot leave 64 bits: the comparisons, the bits and the logic.</summary>
+    /// <summary>The operators that cannot overflow 64 bits: the comparisons, the bitwise and the logical ones.</summary>
     private static long? Plain(SyntaxKind op, long a, long b) => op switch
     {
         SyntaxKind.Less => Truth(a < b),
@@ -126,14 +126,14 @@ internal static class Operators
     }
 
     /// <summary>
-    /// An operation as the message spells it back. A shift counts places, which are a small
+    /// An operation as the message quotes it. A shift counts places, which are a small
     /// decimal number rather than the mask or the address every other value is.
     /// </summary>
     private static string Written(SyntaxToken op, long a, long b) => op.Kind == SyntaxKind.LessLess
         ? $"{Value.Of(a)} {op.Text} {b.ToString(CultureInfo.InvariantCulture)}"
         : $"{Value.Of(a)} {op.Text} {Value.Of(b)}";
 
-    /// <summary>Whether a shift counts a number of places a 64-bit value has, and says so if not.</summary>
+    /// <summary>Whether a shift count is from 0 to 63, setting <paramref name="refused"/> when it is not.</summary>
     private static bool Counted(long places, out DiagnosticMessage? refused)
     {
         refused = places is < 0 or > 63

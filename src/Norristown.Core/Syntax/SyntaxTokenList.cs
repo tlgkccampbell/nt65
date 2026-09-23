@@ -39,7 +39,7 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
     /// </summary>
     internal GreenList? Green => list?.Green as GreenList;
 
-    /// <summary>The <paramref name="length"/> tokens from <paramref name="start"/>, which is what a slice pattern reads.</summary>
+    /// <summary>The <paramref name="length"/> tokens from <paramref name="start"/>; C# slice patterns call this.</summary>
     /// <param name="start">The first token to take.</param>
     /// <param name="length">How many to take.</param>
     public ImmutableArray<SyntaxToken> Slice(int start, int length)

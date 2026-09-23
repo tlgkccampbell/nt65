@@ -5,13 +5,13 @@ namespace Norristown.Emit;
 /// <summary>
 /// One module's ca65 as the program stands, for showing beside the source it came from and for
 /// <c>nt65 build --stdout</c>. It is the file a build writes, with one difference: a build
-/// writes nothing for a program that is wrong, and this writes what the emitter got to anyway,
-/// under a first line saying that it is incomplete and why.
+/// writes nothing for a program with errors, and this shows whatever the emitter produced
+/// anyway, under a first line saying that it is incomplete and why.
 /// <para>
-/// A module another places has no file of its own: what it became is its part of the file its
-/// translation unit is written as, from the comment that opens the part to the one that closes
-/// it, what it places in turn included. What it exports and imports is at the top of that file,
-/// with every other module's.
+/// A module that another module places has no file of its own: its output is its part of its
+/// translation unit's file, from the comment that opens that part to the comment that closes
+/// it, including any modules it places in turn. What it exports and imports is at the top of
+/// that file, along with every other module's.
 /// </para>
 /// <para>
 /// Where each line came from is carried beside the text rather than in it, as it is in the map
@@ -24,10 +24,10 @@ namespace Norristown.Emit;
 /// <param name="Text">The ca65, always with <c>\n</c> line endings.</param>
 /// <param name="SourceLines">
 /// Which line of <see cref="Source"/> each line of <see cref="Text"/> came from, counting from
-/// one, or 0 for a line that came from nowhere the source wrote — the header, the blank lines
-/// between routines, and the note on an incomplete one.
+/// one, or 0 for a line with no counterpart in the source — the header, the blank lines
+/// between routines, and the note at the top of incomplete output.
 /// </param>
-/// <param name="Note">Why the output is incomplete, or null when the program is not wrong.</param>
+/// <param name="Note">Why the output is incomplete, or null when the program has no errors.</param>
 public sealed record OutputPreview(
     string Path, string Source, string Text, IReadOnlyList<int> SourceLines, string? Note)
 {
@@ -48,10 +48,10 @@ public sealed record OutputPreview(
     }
 
     /// <summary>
-    /// The part of <paramref name="output"/> <paramref name="path"/> wrote, and which of that
-    /// source's lines each of its lines came from: the whole file for the module it is named
-    /// after, and the lines of its part for a module placed in it. A line another module wrote
-    /// came from nowhere this source did.
+    /// The part of <paramref name="output"/> written for the source <paramref name="path"/>, and
+    /// which of that source's lines each of its lines came from: the whole file for the module
+    /// it is named after, and the lines of its part for a module placed in it. A line written
+    /// for another module maps to 0.
     /// </summary>
     private static (string Text, IReadOnlyList<int> Lines) PartOf(OutputFile output, string path)
     {
@@ -70,9 +70,9 @@ public sealed record OutputPreview(
     }
 
     /// <summary>
-    /// Why the output for <paramref name="path"/> is incomplete, or null when nothing is wrong.
-    /// The answer comes before the working: what it is, then where the first of it is, and only
-    /// then how many there are.
+    /// Why the output for <paramref name="path"/> is incomplete, or null when there are no errors.
+    /// The note leads with the conclusion: that the output is incomplete, then how many errors
+    /// the program has, then where the first of them is and what it says.
     /// </summary>
     private static string? Incomplete(ProgramAnalysis analysis, string path)
     {
@@ -81,7 +81,7 @@ public sealed record OutputPreview(
             return null;
 
         // The file's own errors are the ones the person looking at it can fix, so they are the
-        // ones named; where all of them are elsewhere, the file they are in is the news.
+        // ones named; when all of them are in other files, the note names the file of the first.
         var own = errors.Where(d => d.Span.File == path).ToList();
         var first = own.Count > 0 ? own[0] : errors[0];
         var where = first.Span.File == path

@@ -10,7 +10,7 @@
 .segment BSS
 .data value: .word
 
-; The signature's example: 16-bit A at entry, 8-bit at the `rts`.
+; The design's signature example: 16-bit A at entry, 8-bit at the `rts`.
 .segment CODE
 .proc render: a16, i8 -> a8, i8 {
     lda #$1234          ; 16-bit immediate
@@ -20,7 +20,7 @@
 }
 
 ; A label reached by a jump from further down the file is sized by the width that arrives
-; there, not by the code above it, so the `.a16` goes where the design shows it.
+; there, not by the code above it, so the output's `.a16` goes at the label.
 .proc fill: a16 {
     sep #$20
     bra @b
@@ -104,7 +104,7 @@
     rts
 }
 
-; A jump to another routine is a tail call: it returns for this one.
+; A jump to another routine is a tail call: that routine's return is this one's.
 .proc tail: a16 -> a8 {
     sep #$20
     jmp render_again

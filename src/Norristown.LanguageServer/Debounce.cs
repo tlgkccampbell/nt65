@@ -5,7 +5,7 @@ namespace Norristown.LanguageServer;
 /// keystrokes does the work once, after the last of them; a wait that has been replaced runs out
 /// and then does nothing.
 /// </summary>
-/// <param name="quiet">How long without a call the work waits for.</param>
+/// <param name="quiet">How long there must be no further call before the work runs.</param>
 /// <param name="delay">How the waiting is done, which a test supplies itself.</param>
 internal sealed class Debounce(TimeSpan quiet, Delay delay)
 {

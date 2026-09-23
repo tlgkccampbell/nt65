@@ -32,13 +32,14 @@ public sealed partial class BlockSyntax : SyntaxNode
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A block holds the lines it is written over rather than what they parse to, so it answers
-    /// over those lines, as <see cref="SyntaxNode.GetDiagnostics"/> does.
+    /// A block's children are its source lines rather than the statements they parse to, so this
+    /// is answered from the tree's per-line record for the block's lines, the same way
+    /// <see cref="SyntaxNode.GetDiagnostics"/> collects them.
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LastLineIndex);
 
     /// <inheritdoc/>
-    /// <remarks>A block answers over the lines it is written over, as it does for the diagnostics.</remarks>
+    /// <remarks>Answered from the tree's per-line record for the block's lines, as for the diagnostics.</remarks>
     public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LastLineIndex);
 
     private GreenBlock GreenBlock => (GreenBlock)Green;

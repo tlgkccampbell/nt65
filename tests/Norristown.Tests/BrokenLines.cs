@@ -26,9 +26,10 @@ internal static class BrokenLines
     }
 
     /// <summary>
-    /// The line's first <paramref name="keep"/> tokens, or all but its last −<paramref name="keep"/>.
-    /// A line that opens or closes a block keeps its brace, so the blocks stay what they were
-    /// and the lines inside them are still read in the grammar of their body.
+    /// The line's first <paramref name="keep"/> tokens or, when <paramref name="keep"/> is
+    /// negative, all but its last -<paramref name="keep"/> (always at least one). A line that ends
+    /// by opening a block keeps its brace, so the blocks are unchanged and the lines inside them
+    /// are still parsed as part of the block's body.
     /// </summary>
     private static string Cut(string line, int keep)
     {

@@ -4,8 +4,8 @@ namespace Norristown.Processor;
 
 /// <summary>
 /// What each statement does to the path running through it, and which expression names
-/// where it goes. Every quirk has a syntactic fingerprint, so this reads off the mnemonic
-/// and the addressing mode alone.
+/// where it goes. Every special case can be recognised from the syntax, so this decides from
+/// the mnemonic and the addressing mode alone.
 /// </summary>
 public static class Transfers
 {
@@ -45,9 +45,9 @@ public static class Transfers
     }
 
     /// <summary>
-    /// The expression a transfer names as its target, or null when it names none.
-    /// <c>bbr0 flags, @skip</c> branches to the second of its two expressions; everything
-    /// else names its only one.
+    /// The expression a transfer names as its target, or null when the statement has no
+    /// operand. <c>bbr0 flags, @skip</c> branches to the second of its two expressions;
+    /// everything else names its first, or the operand itself when it holds no expression.
     /// </summary>
     public static SyntaxNode? TargetOf(SyntaxNode statement, AddressingMode? mode)
     {

@@ -24,8 +24,9 @@ public sealed class TreeDiagnosticsTests
         var reported = Assert.Single(brace.Green.Diagnostics);
         Assert.Equal("expected `{`, or `= address` for a routine with no body", reported.Message.Text);
 
-        // The token sits after the trivia that follows `p`, and the caret reaches back over it to
-        // where the `{` belongs: the end of the last token the line really has.
+        // The missing token sits after the trivia that follows `p`, and the diagnostic's negative
+        // offset reaches back over that trivia to where the `{` belongs: just past the line's last
+        // real token.
         Assert.Equal(new TextSpan(16, 0), brace.FullSpan);
         Assert.Equal(-9, reported.Offset);
         Assert.Equal(0, reported.Width);
@@ -35,8 +36,8 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// A node holds what its children hold, all the way up, which is what lets a walk for
-    /// diagnostics skip the subtrees that have none.
+    /// A node contains a diagnostic whenever any of its descendants does, all the way up, which
+    /// is what lets a walk for diagnostics skip the subtrees that have none.
     /// </summary>
     [Fact]
     public void ContainsDiagnosticsRollsUpToTheParent()
@@ -88,8 +89,8 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// A token that reports something is one token's own, never the one the cache hands out for
-    /// every place the same text is written.
+    /// A token with a diagnostic is always an instance of its own, never the shared one the cache
+    /// hands out for every place the same text is written.
     /// </summary>
     [Fact]
     public void ATokenWithADiagnosticIsNeverShared()
@@ -99,7 +100,7 @@ public sealed class TreeDiagnosticsTests
         Assert.NotSame(errored, Lexer.LexLine("$1G").Tokens[0]);
         Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], [Catalogue.NumberInvalid.Says("hexadecimal", "$1G")]));
 
-        // The missing token of a kind is shared only while it says nothing.
+        // The missing token of a kind is shared only when it carries no diagnostic.
         var quiet = GreenToken.Missing(SyntaxKind.OpenBrace);
         Assert.False(quiet.ContainsDiagnostics);
         Assert.Same(quiet, GreenToken.Missing(SyntaxKind.OpenBrace));
@@ -122,8 +123,8 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// A line, a block and a file hold the tokens of their lines rather than what those lines parse
-    /// to, so each of them answers over the lines it is written over, the errors about the braces
+    /// A line, a block and a file are made of their lines' tokens rather than of what those lines
+    /// parse to, so each reports the diagnostics of every line it spans, errors about the braces
     /// among them.
     /// </summary>
     [Fact]
@@ -145,8 +146,8 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// An unclosed brace is about the braces over the lines rather than about anything on one, and
-    /// the line it is reported on, the blocks over it and the file all hold it.
+    /// An unclosed brace is a fault in the block structure rather than in anything on one line,
+    /// yet the line it is reported on, the blocks around that line and the file all hold it.
     /// </summary>
     [Fact]
     public void ABraceErrorBelongsToTheLineItIsReportedOn()
@@ -164,7 +165,8 @@ public sealed class TreeDiagnosticsTests
     /// <summary>
     /// The root says it holds a diagnostic exactly when the file has one, over every source in the
     /// repository and every way of cutting its lines short, and what it holds is what the tree
-    /// reports. Every line under it answers for itself, and the lines together are the file.
+    /// reports. Each line's flag agrees with its own diagnostics, and the lines' diagnostics
+    /// together are the file's.
     /// </summary>
     [Fact]
     public void TheRootAnswersForTheWholeFileOnWholeAndBrokenLines()

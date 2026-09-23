@@ -107,8 +107,8 @@ public static class Instructions
     /// <summary>
     /// Whether a mnemonic's operand names a place to reach rather than an address to size, so
     /// what it takes is a near or a far target: every jump, call and branch, and <c>per</c>,
-    /// which reaches its target the way <c>brl</c> does and pushes it. Which names those are is
-    /// the same question whatever the program is built for, so every CPU nt65 knows is asked.
+    /// which reaches its target the way <c>brl</c> does and pushes it. The answer does not
+    /// depend on which CPU the program is built for, so the modes on every CPU nt65 knows are checked.
     /// </summary>
     public static bool IsControlTransfer(string mnemonic) =>
         CpuNames.All.Any(cpu => Modes(cpu, mnemonic).Any(mode =>
@@ -138,7 +138,7 @@ public static class Instructions
     }
 
     /// <summary>
-    /// What each mnemonic is. The groups read the way the passes above ask about them: what
+    /// What each mnemonic is. The groups follow the questions later passes ask: what
     /// writes which register, what moves one to another, what calls, returns and stores, what
     /// the stack instructions move, and what the 65816 sizes by a width.
     /// </summary>
@@ -158,7 +158,7 @@ public static class Instructions
 
         // A block move counts down in A and walks X and Y along the two banks. Swapping the
         // carry with the emulation flag truncates the index registers and hides half the
-        // accumulator, and a software interrupt runs a handler this program may not even hold.
+        // accumulator, and a software interrupt runs a handler this program may not even contain.
         Fact(table, "mvn mvp", f => f with { Writes = Registers.A | Registers.X | Registers.Y });
         Fact(table, "xce brk cop", f => f with { Writes = Registers.All });
 
@@ -199,7 +199,8 @@ public static class Instructions
         Fact(table, "ane", f => f with { Writes = Registers.A });
         Fact(table, "slo rla sre rra dcp isc sax sha shx shy tas", f => f with { Stores = true });
 
-        // Nothing after `jam` runs, so what it leaves is no question anyone gets to ask.
+        // Nothing runs after `jam`, so what it leaves in the registers never matters; it is
+        // simply marked as writing all of them.
         Fact(table, "jam", f => f with { Writes = Registers.All });
         return table.ToFrozenDictionary(StringComparer.Ordinal);
     }
@@ -250,14 +251,14 @@ public static class Instructions
 
     /// <summary>
     /// The NMOS 6502's undocumented opcodes, in ca65's spellings and its forms, which is what
-    /// the output has to assemble as. They are not a processor's set: no datasheet lists them,
-    /// and which of them a part runs the same way is a fact about the silicon. What nt65 takes
-    /// from ca65 is the names, the modes and the encodings; what each does, and what it costs,
-    /// is read from the NMOS behaviour and is left out where it is not one answer.
+    /// the output has to assemble as. They are not a documented instruction set: no datasheet
+    /// lists them, and which of them a given part runs the same way is a fact about its silicon.
+    /// What nt65 takes from ca65 is the names, the modes and the encodings; what each does, and
+    /// what it costs, is taken from how NMOS parts behave, and left out where parts disagree.
     /// <para>
-    /// The documented set also grows one instruction: <c>nop</c> takes the operands its
-    /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are instructions here
-    /// and nowhere else.
+    /// One documented instruction also gains modes: <c>nop</c> takes the operands its
+    /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are valid here and
+    /// on no other CPU.
     /// </para>
     /// </summary>
     private static FrozenDictionary<string, FrozenSet<AddressingMode>> Build6502X()
@@ -283,7 +284,7 @@ public static class Instructions
         Add(table, "shx tas las", AddressingMode.AbsoluteY);
         Add(table, "shy", AddressingMode.AbsoluteX);
 
-        // Every opcode that stops the processor is one word here, as ca65 spells it.
+        // The several opcodes that stop the processor share one mnemonic, `jam`, as ca65 spells it.
         Add(table, "jam", AddressingMode.Implied);
         Add(table, "nop",
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,

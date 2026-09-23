@@ -28,8 +28,8 @@ E4     = 64
     sta dest+1
 }
 
-; `.byteof(p, n)` is byte n of an operand: a byte of the value for an immediate, and the
-; byte after it for a mode that has one. One macro then serves constants and memory.
+; `.byteof(p, n)` is byte n of an operand: byte n of the value for an immediate, and the byte n
+; places past the address for a mode that has one. One macro then serves constants and memory.
 .macro mov16(dest: operand, src: operand) {
     lda .byteof(src, 0)
     sta dest

@@ -3,16 +3,16 @@ using System.Text;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// The one layout an nt65 file is written in. Leading whitespace means nothing to the
-/// language, so moving what stands before a line's first token, dropping what follows its
-/// last, and setting the gap between a data line's name and its directive cannot change what
-/// any line means, and there is nothing left to argue about.
+/// Formats an nt65 file into its single canonical layout, which has no options. Whitespace
+/// between tokens means nothing to the language, so re-indenting a line, trimming what follows
+/// its last token, and changing the gap between a data line's name and its directive cannot
+/// change what any line means.
 /// <para>
-/// Names sit at the margin of whatever holds them; what a block holds is indented one step
-/// further than the line that opens it; a routine's cheap locals sit at the routine's own
-/// margin, where they read as the routine's shape rather than as another instruction; and a
-/// run of named data lines with nothing between them lines up on its directives. It is the
-/// layout the generated ca65 already uses.
+/// Labels are indented like any other line, at the margin of whatever holds them; the lines
+/// inside a block are indented one step further than the line that opens it; a routine's cheap
+/// locals are pulled back to the routine's own margin, so they read as the routine's structure
+/// rather than as another instruction; and a run of consecutive named data lines is aligned so
+/// that their directives start in one column. This is the layout the generated ca65 already uses.
 /// </para>
 /// </summary>
 public static class Formatter
@@ -20,7 +20,7 @@ public static class Formatter
     /// <summary>How far one block indents what it holds.</summary>
     public const int IndentWidth = 4;
 
-    /// <summary>What a line may be padded with, and what is dropped from the end of one.</summary>
+    /// <summary>The whitespace characters trimmed from both ends of a line before it is laid out.</summary>
     private static readonly char[] Blank = [' ', '\t'];
 
     /// <summary>The text of <paramref name="tree"/>, formatted.</summary>
@@ -43,9 +43,10 @@ public static class Formatter
 
     /// <summary>
     /// What formatting lines <paramref name="first"/> to <paramref name="last"/> would change,
-    /// 0-based and inclusive, one replacement per line that moves, in order. The whole file is
-    /// laid out either way, because a run of data lines says together where its column goes and
-    /// what holds a line is what the file around it says; only the lines asked about come back.
+    /// 0-based and inclusive, one replacement per line that changes, in order. The whole file is
+    /// laid out either way, because a line's indentation depends on the blocks around it and a
+    /// data line's alignment column depends on the rest of its run; only changes to the requested
+    /// lines are returned.
     /// </summary>
     public static IReadOnlyList<TextChange> Changes(SyntaxTree tree, int first, int last)
     {
@@ -68,8 +69,9 @@ public static class Formatter
         var at = 0;
         Walk(tree.Root, 0, depths, ref at);
 
-        // A line is its indent, the name it declares, and the rest. Only a named data line has
-        // a name of its own here: every other line is one piece, written where it goes.
+        // Each line is split into its indent, the name it declares, and the rest. Only a named
+        // data line gets a separate name, so that it can be aligned; every other line is kept
+        // as one piece after its indent.
         var indents = new int[tree.LineCount];
         var names = new string?[tree.LineCount];
         var rest = new string[tree.LineCount];
@@ -102,9 +104,9 @@ public static class Formatter
 
     /// <summary>
     /// The lines put together, with each run of named data lines padded out to the one column
-    /// its longest name asks for, so that a run reads as a column the way hand-written ca65 does.
-    /// A line that says something about the next declaration is part of the run it stands in;
-    /// anything else, an empty line included, ends one.
+    /// its longest name needs, so that a run reads as a column the way hand-written ca65 does.
+    /// A comment-only line inside a run does not end it; any other line, an empty one included,
+    /// does.
     /// </summary>
     private static string[] Assembled(int[] indents, string?[] names, string[] rest, bool[] comments)
     {
@@ -136,11 +138,14 @@ public static class Formatter
         return formatted;
     }
 
-    /// <summary>How many blocks hold each line; the file's own lines are held by none.</summary>
+    /// <summary>
+    /// Records in <paramref name="depths"/> how many blocks hold each line; top-level lines have
+    /// depth 0. A block's opener line, and its closer line when it has one, count as outside it.
+    /// </summary>
     private static void Walk(SyntaxNode node, int depth, int[] depths, ref int line)
     {
-        // A region opens a block with no brace, holding the rest of its segment, so it is the
-        // one block whose contents stay where the line that opened it is.
+        // A region (a file-level `.segment NAME` with no brace) holds the rest of its segment,
+        // and it is the one block whose contents are not indented past its opening line.
         var block = node as BlockSyntax;
         var inner = block is null || block.BlockKind == BlockKind.Region ? depth : depth + 1;
         var members = node.ChildNodes;
@@ -165,11 +170,12 @@ public static class Formatter
         line.LineKind == LineKind.Label && line.Tokens[0].Kind == SyntaxKind.CheapLocal;
 
     /// <summary>
-    /// The <c>:</c> after the name a data line declares, which a run lines its directives up
-    /// against, or -1 where the line declares no data. It is a name written after nothing but
-    /// directives, with a directive after it: a member of a layout, a <c>.data</c> line, or one
-    /// of those with <c>.export</c> in front. A <c>:</c> anywhere else is an address-size prefix
-    /// or the start of a signature, and what follows one of those is no directive.
+    /// The token index of the <c>:</c> after the name a data line declares, or -1 if the line
+    /// declares no data; a run aligns its directives on the column after this colon. The name
+    /// must be preceded only by directives (if anything) and its colon followed by a directive:
+    /// a member of a layout, a <c>.data</c> line, or either with <c>.export</c> in front. A
+    /// <c>:</c> anywhere else is an address-size prefix or the start of a signature, and neither
+    /// is followed by a directive.
     /// </summary>
     private static int NamedData(LineSyntax line)
     {
@@ -180,8 +186,8 @@ public static class Formatter
         var name = 0;
         while (tokens[name].Kind == SyntaxKind.Directive)
         {
-            // An import writes an element type as well, and is no run of one declaration a
-            // line: a `.import` carries several items, so there is no column for it to keep.
+            // An `.import` line also writes an element type after its colon and can declare
+            // several items, so it is not one declaration per line and gets no aligned column.
             if (tokens[name].Text.Equals(".import", StringComparison.OrdinalIgnoreCase))
                 return -1;
             name++;

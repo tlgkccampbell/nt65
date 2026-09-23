@@ -110,9 +110,9 @@ internal static class TextMateGrammar
 
     /// <summary>
     /// Scopes each character of each line the way a TextMate tokenizer runs the grammar. From the
-    /// current position, the end of the innermost open block and every rule it holds are tried,
-    /// the leftmost match wins, and an earlier one breaks a tie, the end first. A block's end may
-    /// be <c>$</c>, which matches at the end of a line.
+    /// current position, the end of the innermost open block and every rule it holds are tried.
+    /// The leftmost match wins; on a tie the rule listed earlier wins, and the block's end beats
+    /// every rule. A block's end may be <c>$</c>, which matches at the end of a line.
     /// </summary>
     public static string?[][] Scope(IReadOnlyList<string> lines)
     {
@@ -242,8 +242,8 @@ internal static class TextMateGrammar
     /// <summary>
     /// Every token of a line in source order, taken from the pieces it is written in: the
     /// <c>.export</c> that exports what it declares, its statement, whatever the statement could
-    /// not take, and the line break that ends it. A missing token is nowhere in the text, so it
-    /// is nothing for the grammar to have painted.
+    /// not take, and the line break that ends it. A missing token has no text, so the grammar
+    /// has nothing to scope for it and it is left out.
     /// </summary>
     private static List<SyntaxToken> Tokens(LineSyntax line)
     {
@@ -287,7 +287,8 @@ internal static class TextMateGrammar
         var rules = new Dictionary<string, IReadOnlyList<Rule>> { [LineRules] = line };
         var include = Rule.Including(LineRules);
 
-        // Brackets inside a header or a call, so that their `)` does not close it.
+        // Parentheses nested inside a macro header or a call, matched as a block of their own so
+        // that their `)` does not end the header or the call.
         var parentheses = new Rule(Begin: @"\(", End: @"\)", Patterns: [include]);
 
         // What a macro parameter takes, from its `:` to the `,`, `)` or `=` after the kind: the

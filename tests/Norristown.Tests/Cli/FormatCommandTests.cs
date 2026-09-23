@@ -15,7 +15,7 @@ public sealed class FormatCommandTests : IDisposable
 
     public void Dispose() => root.Delete(recursive: true);
 
-    /// <summary>A file named on the command line is written in the one layout, and said nothing about.</summary>
+    /// <summary>A file named on the command line is rewritten in the standard layout, and nothing is printed.</summary>
     [Fact]
     public void ANamedFileIsWrittenInTheOneLayout()
     {
@@ -47,8 +47,8 @@ public sealed class FormatCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Named nothing, it formats the program the nearest project describes, found from wherever
-    /// it is run, which is the whole-repository run.
+    /// Given no files, it formats the files of the nearest project at or above the directory it
+    /// runs in, which is how a whole repository is formatted.
     /// </summary>
     [Fact]
     public void NamedNothingItFormatsWhatTheProjectNames()
@@ -68,8 +68,9 @@ public sealed class FormatCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Formatting needs no program, so a file that belongs to none still formats; with no file
-    /// named and no project to ask, there is nothing to format and the usage text says so.
+    /// Formatting needs no program, so a named file that belongs to no project still formats; but
+    /// with no file named and no project to take files from, there is nothing to format, and nt65
+    /// says so before printing the usage text.
     /// </summary>
     [Fact]
     public void WithNothingToFormatItSaysSo()

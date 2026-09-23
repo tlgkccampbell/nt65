@@ -3,9 +3,10 @@ using System.Text;
 namespace Norristown.Cli;
 
 /// <summary>
-/// The whole catalogue as one page, which <c>nt65 explain --markdown</c> prints and
-/// <c>docs/DIAGNOSTICS.md</c> is. Nothing about the page is written by hand, so an entry added
-/// to the catalogue is on it and one reworded reads the same in both places.
+/// The whole diagnostic catalogue as one Markdown page, which <c>nt65 explain --markdown</c>
+/// prints and which is checked in as <c>docs/DIAGNOSTICS.md</c>. None of the page is written by
+/// hand, so an entry added to the catalogue appears on it, and a reworded entry reads the same in
+/// the catalogue and on the page.
 /// </summary>
 internal static class DiagnosticsPage
 {
@@ -47,8 +48,8 @@ internal static class DiagnosticsPage
             page.Append($"\n## {area.Name}\n\n{area.About}\n");
             foreach (var entry in Under(area))
             {
-                // An error is what a diagnostic is unless the heading says otherwise, so only
-                // the ones a project can turn down carry how much they matter.
+                // A diagnostic is an error unless its heading says otherwise, so only the ones a
+                // project can turn down have their default severity in the heading.
                 var turned = entry.Severity == Severity.Error ? "" : $" — {Reported(entry.Severity)}";
                 page.Append($"\n### `{entry.Id}`{turned}\n\n> {entry.Format}\n\n{entry.Explanation}\n");
             }
@@ -56,14 +57,14 @@ internal static class DiagnosticsPage
         return page.ToString();
     }
 
-    /// <summary>What an area holds, in name order, which is the order the page prints them in.</summary>
+    /// <summary>The entries in an area, in name order, which is the order the page prints them in.</summary>
     private static IReadOnlyList<DiagnosticDescriptor> Under(DiagnosticArea area) =>
         [.. Catalogue.All.Where(entry => entry.Area == area)];
 
-    /// <summary>Where a heading is linked from the table, as a Markdown reader names it.</summary>
+    /// <summary>The anchor a Markdown renderer gives a heading, used to link to it from the table.</summary>
     private static string Anchor(string heading) =>
         "#" + heading.ToLowerInvariant().Replace(' ', '-');
 
-    /// <summary>How much a diagnostic matters, as the table's last column says it.</summary>
+    /// <summary>A severity in lower case, as the table and the headings print it.</summary>
     private static string Reported(Severity severity) => severity.ToString().ToLowerInvariant();
 }

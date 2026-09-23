@@ -4,11 +4,11 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// One call, with each parameter matched to what it was given. Binding and expansion both
-/// ask the same question of the same line, so they work this out the same way and the
-/// answer is nobody's to keep.
+/// ask the same question of the same line, so both work it out here, the same way, and
+/// neither keeps the answer.
 /// <para>
-/// A diagnostic lands on the side of the call that can fix it: everything here is
-/// about one call's arguments, so everything here is reported at the call.
+/// A diagnostic goes where the fix belongs: everything here is about one call's arguments,
+/// so everything here is reported at the call.
 /// </para>
 /// </summary>
 public sealed class MacroInvocation
@@ -35,8 +35,8 @@ public sealed class MacroInvocation
 
     /// <summary>
     /// Matches <paramref name="call"/>'s arguments to <paramref name="macro"/>'s parameters,
-    /// reporting what is wrong with them into <paramref name="diagnostics"/> when a caller
-    /// wants to hear about it.
+    /// reporting what is wrong with them into <paramref name="diagnostics"/> when it is not
+    /// null.
     /// </summary>
     public static MacroInvocation Of(
         MacroCallSyntax call, Symbol macro, SyntaxTree tree, List<Diagnostic>? diagnostics,
@@ -140,7 +140,8 @@ public sealed class MacroInvocation
             for (var i = 0; i < blocks.Count; i++)
             {
                 // The first block binds by position; each `} name {` after it says which
-                // parameter it is, because a macro may take several and skip none silently.
+                // parameter it is, because a macro may take several and none may be skipped
+                // silently.
                 MacroParameter? parameter;
                 if (blocks[i].Opener.Statement is BlockContinuationSyntax continuation)
                 {
@@ -227,8 +228,8 @@ public sealed class MacroInvocation
                     var word = value is NameExpressionSyntax { SimpleName: { } only } ? only.Text : null;
 
                     // A word may be passed on from a `one` parameter of the macro whose body
-                    // writes the call, so long as this list holds everything that one allows
-                    // which word it is is not known until there is an expansion.
+                    // writes the call. Which word it is is not known until there is an
+                    // expansion, so this list has to hold every word that parameter allows.
                     if (word is not null && lookup?.Invoke(word) is
                         { Kind: SymbolKind.MacroParameter, Parameter.Accepts: { Kind: ParameterKind.One } passed })
                     {

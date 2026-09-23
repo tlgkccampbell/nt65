@@ -5,9 +5,9 @@ namespace Norristown.Tests.Syntax;
 public sealed class IncrementalTests
 {
     /// <summary>
-    /// How many of the replay's edits are made before what they gave is checked. The edits are a
-    /// chain and are made one at a time, but what is asked of an edit is about that edit alone, so
-    /// a batch of them is checked at once and the batch is what bounds the trees held while it is.
+    /// How many of the replay's edits are made before their results are checked. The edits are a
+    /// chain and are made one at a time, but each check concerns its own edit alone, so a batch of
+    /// them is checked in parallel, and the batch size bounds how many trees are held meanwhile.
     /// </summary>
     private const int Batch = 64;
 
@@ -40,8 +40,8 @@ public sealed class IncrementalTests
 
     /// <summary>
     /// A broken line's diagnostics are part of the nodes its parse hands back, so an edit
-    /// somewhere else keeps them without parsing the line again — and their spans move with the
-    /// line, because what a green node holds is an offset within itself.
+    /// somewhere else keeps them without parsing the line again, and their spans move with the
+    /// line, because a green node holds a diagnostic's offset relative to itself.
     /// </summary>
     [Fact]
     public void AnEditElsewhereKeepsABrokenLineAndItsDiagnostics()
@@ -60,7 +60,8 @@ public sealed class IncrementalTests
             [new Span("main.nt65", 3, 8, 8)],
             edited.Diagnostics.Select(d => d.Span));
 
-        // And text inserted on the line above it, which shifts nothing at all.
+        // And text inserted on the line above it, which leaves the diagnostic's line and column
+        // as they were.
         var indented = tree.WithChange(new TextChange(0, 0, "    "));
         Assert.Same(tree.Parsed(1).Node, indented.Parsed(1).Node);
         Assert.Equal(tree.Diagnostics, indented.Diagnostics);
@@ -105,8 +106,8 @@ public sealed class IncrementalTests
     /// <para>
     /// Making an edit costs almost nothing and comparing what it gave with a full parse costs
     /// nearly all of the replay, so the edits are made a batch at a time and the batch's steps are
-    /// compared beside each other. The step reported is still the earliest one that has anything
-    /// wrong with it, which is the one the replay would have stopped at.
+    /// compared in parallel. The step reported is still the earliest one that has anything wrong
+    /// with it, which is the one a step-by-step replay would have stopped at.
     /// </para>
     /// </summary>
     [Fact]
@@ -138,10 +139,10 @@ public sealed class IncrementalTests
     }
 
     /// <summary>
-    /// A keystroke's edits arrive together, and applying them in one pass gives the tree
-    /// applying them one at a time gives. The changes are random and made in runs of up to
-    /// five, each naming a place in what the ones before it left, which is how a client
-    /// writes them.
+    /// The edits of one keystroke arrive together, and applying them in one pass gives the same
+    /// tree as applying them one at a time. The changes are random, in runs of up to five, and
+    /// each one's position refers to the text the earlier ones in its run left, which is how a
+    /// client sends them.
     /// </summary>
     [Fact]
     public void ChangesTogetherMatchTheSameChangesOneAtATime()
@@ -199,7 +200,7 @@ public sealed class IncrementalTests
             Assert.Fail(failures[0]);
     }
 
-    /// <summary>Checks a batch's steps beside each other and fails on the earliest bad one.</summary>
+    /// <summary>Checks a batch's steps in parallel and fails on the earliest bad one.</summary>
     private static void Compare(List<Step> batch)
     {
         var failures = Repo.CollectFailures(batch, step => Problems(step).Take(1));

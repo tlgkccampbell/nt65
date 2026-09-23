@@ -1,4 +1,4 @@
-; What the declarative constructs make wrong.
+; Mistakes in the declarative constructs.
 .module main
 
 .charmap screen {
@@ -23,9 +23,9 @@
     w: .word
 }
 
-; A layout that holds itself has no size, which is the same ring any constant would be.
-; An instance of one is still written out — every file of a wrong program is — and what
-; writes it walks into the type, so it has to stop where the analysis stopped.
+; A layout that holds itself has no size, the same cycle a constant defined by itself is.
+; An instance of one is still written out, as every file of a program with errors is, and
+; the writer walks into the type, so it has to stop where the analysis stopped.
 .struct Ring {          ;! error[defined-in-terms-of-itself]: `Ring` is defined in terms of itself
     self: .type Ring       ;! error[member-reserves-nothing]: `self` reserves no room a member may take
 }

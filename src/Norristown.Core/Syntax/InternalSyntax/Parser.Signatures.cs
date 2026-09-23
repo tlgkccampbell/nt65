@@ -25,16 +25,16 @@ internal sealed partial class Parser
 
     private GreenNode? ParseStateItem()
     {
-        // A name that is no item's word names a signature set, which stands for its items. One
-        // spelled like a width, `a9`, is a width misspelled.
+        // A name that is not an item word names a signature set, which stands for its items. A
+        // name shaped like a width, such as `a9`, is treated as a misspelled width instead.
         if (Kind == SyntaxKind.ColonColon
             || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)))
         {
             return new StateSetItemSyntax(ParseName());
         }
 
-        // `?` on its own is every tracked part of the state unknown, the state a routine
-        // reached from outside nt65 is entered in.
+        // `?` on its own marks every tracked part of the state as unknown, which is the state a
+        // routine called from outside nt65 starts in.
         if (Kind == SyntaxKind.Question)
             return new StateUnknownItemSyntax(Advance());
 
@@ -49,8 +49,9 @@ internal sealed partial class Parser
         var name = Advance();
 
         // `dp = e` and `dbr = e` are the parts given a value with an `=`, and `dbr = [...]` a set
-        // of banks; the value is read before the word is checked, so that a misspelled part is
-        // the last news about the item. Which word takes a set is the signature's to say.
+        // of banks. The value is parsed before the word is checked, so that a misspelled name is
+        // the last diagnostic reported for the item. Which words may take a set of banks is
+        // checked when the signature is analysed, not here.
         if (Kind == SyntaxKind.Equals)
         {
             var equals = Advance();
@@ -67,7 +68,7 @@ internal sealed partial class Parser
             if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
                 Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
 
-            // The item is what a misspelled word is an item of, so it takes what was said of it.
+            // The misspelled-name diagnostic is about the item, so the item takes it.
             return Own(new StateValueItemSyntax(name, equals, given));
         }
 
@@ -97,9 +98,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The registers of a <c>keeps a, x</c>. A bare register name is an item nowhere else, so
-    /// the list runs on through the commas that separate the signature's own items, and stops
-    /// at the first comma that is followed by anything else.
+    /// The registers of a <c>keeps a, x</c>. A bare register name is not an item anywhere else
+    /// in a signature, so the list continues through the commas that also separate the
+    /// signature's own items, and stops at the first comma followed by anything else.
     /// </summary>
     private GreenSeparatedList? ParseKeptRegisters()
     {

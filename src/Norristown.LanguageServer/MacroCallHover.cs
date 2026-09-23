@@ -4,12 +4,13 @@ using Norristown.Semantics;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What hover adds over a macro call, and nothing else: the signature and the comment are the
-/// hover every name gets, and what a call is asked about is what it becomes.
+/// The part of a hover that is specific to a macro call. The signature and the doc comment come
+/// from the hover every name gets; what this adds is what the call expands to.
 /// <para>
-/// The row is the answer and leads the grid; the listing under the card is the working, and is
-/// there for the short macros where it fits. Past eight lines the listing stops being something
-/// a reader takes in at a glance, so what is left is a link to the view that holds it.
+/// The <c>expands to</c> row is the answer and is among the leading rows of the hover's grid.
+/// The listing of the expansion goes below the rest of the hover as supporting detail, and is
+/// shown in full only for short macros. Past eight lines a listing can no longer be taken in
+/// at a glance, so the rest is replaced by a link to the expansion view.
 /// </para>
 /// </summary>
 internal static class MacroCallHover
@@ -18,10 +19,10 @@ internal static class MacroCallHover
     private const int Shown = 8;
 
     /// <summary>
-    /// What the call under the caret becomes, as the grid's row says it, or null where the
+    /// What the call under the caret expands to, as the grid's row shows it, or null where the
     /// caret is not on a call.
     /// </summary>
-    /// <param name="analysis">The program, for what the call lays out to.</param>
+    /// <param name="analysis">The program, for the bytes and cycles the call assembles to.</param>
     /// <param name="model">The file the caret is in.</param>
     /// <param name="reference">The name under the caret.</param>
     public static string? Becomes(ProgramAnalysis analysis, SemanticModel model, SymbolReference reference) =>
@@ -31,16 +32,16 @@ internal static class MacroCallHover
     /// <paramref name="card"/> with the expansion written under it, or <paramref name="card"/>
     /// unchanged where the caret is not on a call.
     /// </summary>
-    /// <param name="card">The hover as every name gets it.</param>
-    /// <param name="analysis">The program, for what the call lays out to.</param>
+    /// <param name="card">The hover text as every name gets it.</param>
+    /// <param name="analysis">The program, for the bytes and cycles the call assembles to.</param>
     /// <param name="model">The file the caret is in.</param>
     /// <param name="reference">The name under the caret.</param>
     public static string Added(
         string card, ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
     {
         // An expansion the analysis could not write out is not shown: a listing that is nearly
-        // right about what a line became is worse than no listing. The row still says what it
-        // becomes, because that is worked out from the layout and not from the text.
+        // right about what a line became is worse than no listing. The summary row is still
+        // shown, because it comes from the layout and not from the expansion text.
         if (At(analysis, model, reference) is not { Refusal: null, Lines.Count: > 0 } expansion)
             return card;
         var zones = new List<string>
@@ -53,7 +54,7 @@ internal static class MacroCallHover
         return string.Join("\n---\n", zones);
     }
 
-    /// <summary>The call the caret is on, where the name under it is the macro that call names.</summary>
+    /// <summary>The expansion of the call the caret is on, where the name under the caret is the call's macro name.</summary>
     private static MacroExpansion? At(
         ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
     {
@@ -67,8 +68,9 @@ internal static class MacroCallHover
     }
 
     /// <summary>
-    /// The link to the view that holds the whole expansion, saying how much of it the hover
-    /// left out. It runs the client's own command, which is where the view lives.
+    /// The link to the view that shows the whole expansion, saying how many lines the hover
+    /// left out. It runs a command the client provides, since the view is implemented in the
+    /// client.
     /// </summary>
     private static string Link(SemanticModel model, int position, int rest)
     {

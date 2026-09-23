@@ -1,6 +1,6 @@
-# What the fast suite reaches, printed and gated on nothing. The gate does not run this: the
-# profiler costs several times what the suite does, and nothing here decides whether a change
-# is good. CI runs it and puts the table in the job summary.
+# Measures and prints the line coverage of the fast suite; nothing fails on the result. The
+# gate does not run this: the profiler makes the suite several times slower, and nothing here
+# decides whether a change is good. CI runs it and puts the table in the job summary.
 #   pwsh scripts/coverage.ps1 [-Types 12]
 [CmdletBinding()]
 param([int]$Types = 12)
@@ -14,14 +14,15 @@ New-Item -ItemType Directory -Force (Split-Path $report) | Out-Null
 dotnet build (Join-Path $root 'tests/Norristown.Tests/Norristown.Tests.csproj') --nologo -v q -clp:NoSummary
 dotnet tool restore
 
-# The suite is run as the edit loop runs it, so the two are the same set of tests; collection
-# follows the process tree, so it reaches the runner pwsh starts.
+# The suite is run through test.ps1, as the edit loop runs it, so both cover the same set of
+# tests; collection follows child processes, so it includes the test runner that pwsh starts.
 dotnet dotnet-coverage collect --output $report --output-format cobertura -- `
     pwsh -NoProfile (Join-Path $PSScriptRoot 'test.ps1') -NoBuild
 
-# A type's lines, from the class entries the report writes per lambda and per nested class as
-# well as for the type itself; a line number is counted once however many entries name it. The
-# report names the assembly as the package and the type by its namespace, which is Norristown.
+# Gather each type's lines. The report writes a class entry for each lambda and nested class as
+# well as for the type itself, so those are folded into the type, and a line number is counted
+# once however many entries list it. The report names the assembly as the package, and each
+# type by its full name, which begins with the namespace Norristown.
 $covered = @{}
 $total = @{}
 $core = ([xml](Get-Content $report -Raw)).SelectSingleNode("//package[@name='Norristown.Core']")

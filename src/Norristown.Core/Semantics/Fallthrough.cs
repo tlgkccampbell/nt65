@@ -3,13 +3,14 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Where a <c>.fallthrough</c> may stand. It is about the end of a routine's body rather than
-/// about the statement above it, so it is the body's last line as the configuration resolves
-/// it: whatever stands above it — an instruction, a call, a label — every path that reaches the
-/// end of the body runs into the routine it names. A branch of an <c>.if</c> chain that is itself
-/// the last thing in the body ends the body in the configurations that take it, so its last line
-/// may be one too, to any depth; conditions are settled before analysis, so in each
-/// configuration at most one of them remains, and it is last.
+/// Where a <c>.fallthrough</c> is allowed. It applies to the end of a routine's body rather
+/// than to the statement above it, so it must be the body's last line once the configuration's
+/// conditionals are resolved: whatever is above it — an instruction, a call, a label — it says
+/// that every path reaching the end of the body runs on into the routine it names. A branch of
+/// an <c>.if</c> chain that is itself the last thing in the body ends the body in the
+/// configurations that take it, so a <c>.fallthrough</c> may also be the last line of such a
+/// branch, to any depth; conditions are settled before analysis, so in each configuration at
+/// most one of them remains, and it is last.
 /// </summary>
 public static class Fallthrough
 {

@@ -44,8 +44,8 @@ public sealed class Scope
     /// <summary>
     /// Whether every scope from here out to the file has a name, so what is declared here
     /// can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is inline code, and
-    /// nothing outside it can name what it declares; neither is a macro body, whose
-    /// declarations are local to each expansion and so are no one name at all.
+    /// nothing outside it can name what it declares; nor can anything outside a macro body,
+    /// whose declarations are local to each expansion, so none of them is a single name.
     /// </summary>
     public bool IsReachableByPath
     {
@@ -63,7 +63,7 @@ public sealed class Scope
     /// <summary>
     /// The nearest scope of <paramref name="kind"/> from here outward, this one included, or
     /// null when nothing out to the file is one: the macro body a name is written in, the
-    /// repetition a line is a turn of.
+    /// repetition a line is inside.
     /// </summary>
     public Scope? Enclosing(ScopeKind kind)
     {

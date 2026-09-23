@@ -16,7 +16,7 @@ namespace Norristown.Semantics;
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
-    // The parts of the state a bare `?` stands for, each of them unknown.
+    // The parts of the state a bare `?` covers, each of them made unknown.
     private static readonly StatePart[] trackedParts =
         [StatePart.A, StatePart.Index, StatePart.E, StatePart.DirectPage, StatePart.DataBank];
 
@@ -50,7 +50,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <summary>
     /// The registers it hands back as it was entered with them, <c>keeps a, x</c>; none for a
     /// routine that promises nothing. A routine with a body is checked against it; one without
-    /// is taken at its word, which is the only way to know anything about a body that is not here.
+    /// is trusted, since the promise is the only thing known about a body that is not here.
     /// </summary>
     public Processor.Registers Keeps { get; init; }
 
@@ -61,7 +61,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// Whether the routine wrote a signature with at least one item in it, rather than taking the
     /// default or writing an empty <c>proc()</c>. A routine with no body is held to this on the
     /// 65816, because nothing else says what a caller must hold to. A signature of nothing but
-    /// <c>keeps</c> does not answer it: which registers come back says nothing about the widths.
+    /// <c>keeps</c> does not count: which registers come back says nothing about the widths.
     /// </summary>
     public bool DeclaresState =>
         syntax is not null && StateItem.Read(syntax).Any(item => item.Part != StatePart.Keeps);
@@ -88,8 +88,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     /// <summary>
     /// What a proc, an extern proc or an import writes, as far as it can be read from its
-    /// syntax alone: the signature sets it names count for nothing, and the values of its items
-    /// are unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is
+    /// syntax alone: the signature sets it names are ignored, and the values of its items are
+    /// unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is
     /// the <c>: entry -&gt; exit</c> of a proc or the <c>proc(...)</c> of an import, or null
     /// where nothing was written.
     /// </summary>
@@ -126,8 +126,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     /// <summary>
     /// The signature with the signature sets it names read, and the values of its <c>dp = e</c>,
-    /// <c>dbr = e</c> and <c>args n</c> items, which are expressions and so can be worked out
-    /// only once the program's constants are. What is wrong with it is reported to
+    /// <c>dbr = e</c> and <c>args n</c> items, which are expressions and so can be evaluated
+    /// only once the program's constants have been. What is wrong with it is reported to
     /// <paramref name="report"/>.
     /// </summary>
     public Signature Resolved(
@@ -162,7 +162,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             _ => ((StateListSyntax?)null, (StateListSyntax?)null),
         };
 
-        // The items the signature sets it names give, which are reported where each set is declared.
+        // The items that come from the signature sets this signature names; problems with them
+        // are reported where each set is declared.
         var fromSets = new HashSet<(SyntaxTree Tree, int Position)>();
         var entry = Take(entryList, isExit: false);
         var exit = Take(exitList, isExit: true);
@@ -283,7 +284,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         TextSpan At(Parts parts, StateItem item) =>
             Here(item) || parts.SetReference is not { } reference ? item.Node.Span : reference.Span;
 
-        // `dp = e` is worth e once the constants are known, and unknown before; `dp?` is
+        // `dp = e` has the value of e once the constants are known, and is unknown before; `dp?` is
         // unknown and `dp*` unchanged. A value a set gives is reported where the set is declared.
         StateValue? ValueOf(StateItem? item, long largest)
         {
@@ -314,12 +315,13 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return StateValue.Of(value);
         }
 
-        // A set of banks at entry is the bank the routine is entered with, one of them, and so is
-        // handed back as it was unless the exit says otherwise.
+        // A set of banks at entry means the routine is entered with one of those banks, and
+        // hands that same bank back unless the exit says otherwise.
         static StateValue? Entered(StateValue? value) =>
             value is { Kind: StateValueKind.Among } among ? StateValue.Within(among.Banks) : value;
 
-        // `dbr*` after the arrow of a routine entered with one of a set is that bank, handed back.
+        // `dbr*` after the arrow, for a routine entered with one of a set of banks, means it
+        // hands back whichever bank it was entered with.
         StateValue? Handed(StateValue? value) =>
             value is { Kind: StateValueKind.Unchanged } && entryState.B.Kind == StateValueKind.Within ? entryState.B : value;
 
@@ -378,8 +380,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return parts;
         }
 
-        // The items a set stands for, the sets it names spread out in place. Before the program's
-        // names are resolved a set stands for nothing.
+        // The items a set gives, with the sets it names expanded in place. Before the program's
+        // names are resolved a set gives nothing.
         List<StateItem> Expand(StateItem reference, HashSet<Symbol> seen)
         {
             var items = new List<StateItem>();

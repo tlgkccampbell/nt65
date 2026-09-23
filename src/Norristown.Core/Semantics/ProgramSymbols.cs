@@ -15,9 +15,9 @@ namespace Norristown.Semantics;
 /// </para>
 /// <para>
 /// Lookup finds a module's private names too, because a better diagnostic for one is that
-/// it exists and is not exported. Whether it may actually be used is asked of the whole name
-/// once it resolves: an interior label reached as <c>hw::outer::inner</c> is exported by
-/// <c>inner</c>, and <c>outer</c> itself need not be.
+/// it exists and is not exported. Whether it may actually be used is checked on the whole name
+/// once it resolves: an interior label reached as <c>hw::outer::inner</c> needs <c>inner</c>
+/// to be exported, and <c>outer</c> itself need not be.
 /// </para>
 /// </summary>
 public sealed class ProgramSymbols
@@ -127,9 +127,9 @@ public sealed class ProgramSymbols
 
     /// <summary>
     /// What <paramref name="name"/> is in <paramref name="module"/>: a name its file declares at
-    /// its top level, exported or not, or a name it re-exports. <paramref name="touched"/> hears
-    /// of every name looked for, with the module it was looked for in, those a re-export leads
-    /// through included.
+    /// its top level, exported or not, or a name it re-exports. <paramref name="touched"/> is
+    /// called with every name looked for and the module it was looked for in, including those
+    /// a re-export leads through.
     /// </summary>
     public Symbol? Member(Module module, string name, Action<string?, string>? touched = null) =>
         Member(module, name, touched, []);
@@ -213,7 +213,7 @@ public sealed class ProgramSymbols
         IReadOnlyList<Reexport> Reexports);
 
     /// <summary>A name a module re-exports: <c>.export .use hw::vic::border</c>.</summary>
-    /// <param name="Name">The name it is part of the module as.</param>
+    /// <param name="Name">The name under which it becomes part of the module.</param>
     /// <param name="Path">The path it was brought in from, from the root of the modules.</param>
     public sealed record Reexport(string Name, IReadOnlyList<string> Path);
 }

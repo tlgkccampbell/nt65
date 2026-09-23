@@ -1,6 +1,6 @@
 {
-  // How much a diagnostic matters is the project's to say, by name. An error is not a
-  // project's to turn down, so only a warning moves here.
+  // A project sets how much a diagnostic matters, by its name. A project may not turn an
+  // error down, so only warnings are changed here: one is turned off and one made an error.
   "cpu": "6502",
   "files": ["*.nt65"],
   "diagnostics": {

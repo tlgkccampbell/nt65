@@ -8,10 +8,11 @@ const views = require('./views');
 
 let client;
 
-// The server: the configured executable; in a development host, the Debug build of this
-// repository, which the launch task has just built; else the one packaged with the extension,
-// which runs on the installed .NET. A package script run leaves a packaged server beside a
-// development copy too, and that one is only as new as the last package.
+// Which server to start: the executable `nt65.server.path` names; in a development host, this
+// repository's Debug build, which the launch task has just built; otherwise the server packaged
+// with the extension, run on the installed .NET. Running the package script also leaves a
+// packaged server in a development checkout, and that copy is only as new as the last package,
+// which is why the Debug build is preferred there.
 function serverOptions(context) {
   const configured = vscode.workspace.getConfiguration('nt65').get('server.path');
   if (configured) return { command: configured };
@@ -26,7 +27,8 @@ function serverOptions(context) {
 
 // The nt65 command the build tasks run: the configured one; in a development host, the Debug
 // build of this repository; else the command on the path, which is where `dotnet tool install`
-// puts it. The extension carries a language server, not a command, so there is nothing else.
+// puts it. The extension bundles only the language server, not the command, so there is no
+// packaged fallback.
 function cliCommand(context) {
   const configured = vscode.workspace.getConfiguration('nt65').get('cli.path');
   if (configured) return configured;
@@ -97,8 +99,8 @@ function statusItem(context) {
   }));
 }
 
-// Which kinds of hint the editor shows, as the server reads them. They go over with the
-// `initialize` request and again, with the rest of the `nt65` settings, whenever they change.
+// The inlay-hint settings, in the shape the server reads. They are sent with the `initialize`
+// request, and again, with the rest of the `nt65` settings, whenever they change.
 function hintSettings() {
   const nt65 = vscode.workspace.getConfiguration('nt65');
   return {
@@ -110,9 +112,10 @@ function hintSettings() {
   };
 }
 
-// Shows whether the cycle counts are in the lines, and switches them when clicked. They are
-// switched for as long as the server runs rather than saved: they are wanted while a routine is
-// being timed and not for the rest of the week, so the server holds which it is and this shows it.
+// A status bar item that shows whether cycle-count inlay hints are on, and toggles them when
+// clicked. The toggle lasts as long as the server runs and is not saved to settings, because
+// cycle counts are wanted while a routine is being timed and not afterwards; the server holds
+// the state and this item shows it. Once toggled, the item stops following the setting.
 function cycleCounts(context) {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
   item.command = 'nt65.toggleCycleCounts';
@@ -147,9 +150,10 @@ async function selectConfiguration() {
     .update('configuration', picked === own ? '' : picked, vscode.ConfigurationTarget.Workspace);
 }
 
-// Starts a rename on a name the server had to write and the programmer has to give, such as
-// the routine a few lines were lifted into. The server sends where the name is once its change
-// has been applied, which is the file as the editor now holds it.
+// Starts a rename on a name the server had to make up and the programmer should choose, such as
+// the name of a routine that a refactoring has just extracted a few lines into. The server
+// sends the name's position after its edit has been applied, so the position is in the
+// document as the editor now holds it.
 async function renameAt(uri, line, character) {
   const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
   const editor = await vscode.window.showTextDocument(document, { preserveFocus: false });
@@ -161,9 +165,9 @@ async function renameAt(uri, line, character) {
 
 async function activate(context) {
   // The active configuration goes to the server when it starts, and again whenever the `nt65`
-  // settings change. What is watched is what a program is made of: the sources and the project
-  // files. The binaries an `.incbin` measures are the program's to name, so the server asks to
-  // be told about those itself, once it has read the program.
+  // settings change. The client watches the kinds of file every program is made of: the sources
+  // and the project files. Which binaries an `.incbin` reads depends on the program, so the
+  // server registers its own watch for those once it has read the program.
   client = new LanguageClient('nt65', 'nt65',
     serverOptions(context),
     {
@@ -181,8 +185,8 @@ async function activate(context) {
         ],
       },
     });
-  // `nt65.rename` is the server's to run and nobody's to type, so it is registered without
-  // being contributed: the command palette has nothing to offer for it.
+  // `nt65.rename` is invoked by the server, never typed by the user, so it is registered here
+  // but not contributed in package.json, and the command palette does not list it.
   context.subscriptions.push(
     vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
     vscode.commands.registerCommand('nt65.rename', renameAt),

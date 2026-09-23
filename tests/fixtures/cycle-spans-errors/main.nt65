@@ -1,6 +1,6 @@
-; A sum along a run of instructions bounds one pass only where the run is one pass, so a span
-; with a call or a loop in it has no bound and says which it found. The ends are positions in
-; one routine, and anything else is a span that is not one.
+; A sum of cycles along a run of instructions bounds one pass only when the run is straight-line
+; code, so a span holding a call, a loop or an untraceable jump has no bound, and the error says
+; which it found. Both ends must be positions in one routine, the start before the end.
 .module main
 
 .cpu 6502
@@ -63,6 +63,6 @@
 LIMIT = 4
 .assert .mincycles(LIMIT, calling::after) == 0             ;! error[cycles-needs-a-position]: `LIMIT` is a constant, and a cycle span runs from one position in code to another
 
-; A span is layout, not a shape, so it cannot say how much room a declaration reserves.
+; A cycle count is known only once code is laid out, so it cannot size a declaration.
 .segment BSS
 .data room: .byte[.mincycles(calling::before, calling::after)]  ;! error[element-count-not-constant]: an array's count is a constant

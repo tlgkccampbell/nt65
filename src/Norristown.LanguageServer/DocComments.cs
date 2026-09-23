@@ -13,8 +13,8 @@ internal static class DocComments
 {
     /// <summary>
     /// The comment above what <paramref name="symbol"/> declares, or null when it has none.
-    /// Every instance of a family is declared on the family's line, so each shows the
-    /// family's comment.
+    /// Every instance of a family (the declarations a repetition makes) is declared on the
+    /// family's line, so each instance shows the family's comment.
     /// </summary>
     public static string? Of(Symbol symbol) => Above(symbol.Tree, symbol.NameSpan.Start);
 
@@ -31,8 +31,8 @@ internal static class DocComments
         }
         lines.Reverse();
 
-        // A rule of `;` characters over a declaration is a separator rather than a comment,
-        // and so is a comment that says nothing at all.
+        // A separator line made only of `;` characters strips to nothing, as does an empty
+        // comment, so a declaration with only those above it has no doc comment.
         var text = string.Join("\n", lines).Trim();
         return text.Length == 0 ? null : text;
     }

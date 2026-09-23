@@ -24,7 +24,7 @@ public sealed partial class FileSyntax : SyntaxNode
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(0, Tree.LineCount - 1);
 
     /// <inheritdoc/>
-    /// <remarks>The root answers for the whole file, as it does for the diagnostics.</remarks>
+    /// <remarks>The root covers every line of the file, as it does for the diagnostics.</remarks>
     public override bool ContainsAnnotations => Tree.LinesContainAnnotations(0, Tree.LineCount - 1);
 
     /// <summary>

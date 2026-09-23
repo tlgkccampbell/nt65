@@ -9,13 +9,16 @@ namespace Norristown.Project;
 /// </summary>
 /// <param name="Cpu">The processor the program is built for; a <c>.cpu</c> item must agree.</param>
 /// <param name="Files">Globs naming the source files. Their order is not significant.</param>
-/// <param name="Out">Where each <c>foo.s</c> goes, mirroring the source tree; null writes beside the source.</param>
+/// <param name="Out">
+/// The output directory, under which each module's <c>.s</c> is written at a path made from its
+/// module name, wherever its source is; null writes under the project root.
+/// </param>
 /// <param name="Defines">The build configuration, and whatever <c>-D</c> added or overrode.</param>
 /// <param name="Segments">Segments declared by the project rather than by a file.</param>
 /// <param name="Diagnostics">
 /// What was wrong with reading the project, and with the command line that added to it. A
-/// project that cannot be read is the program's problem, not the reader's, so these travel
-/// with the settings and are reported alongside everything else.
+/// project that cannot be read is reported as a problem with the program rather than failing
+/// the reader, so these travel with the settings and are reported alongside everything else.
 /// </param>
 public sealed record ProjectSettings(
     Cpu? Cpu,
@@ -25,7 +28,7 @@ public sealed record ProjectSettings(
     IReadOnlyList<Segment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
-    /// <summary>What a project that says nothing about any diagnostic gives.</summary>
+    /// <summary>The severities of a project that overrides no diagnostic: an empty map.</summary>
     public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
         new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
 
@@ -36,9 +39,9 @@ public sealed record ProjectSettings(
     public IReadOnlyList<AccessRange> Ranges { get; init; } = [];
 
     /// <summary>
-    /// What each named diagnostic is reported as, over the severity the catalogue gives it;
-    /// a name mapped to null is not reported at all. An error is never turned down, which is
-    /// said where the project file asks for it.
+    /// The severity each named diagnostic is reported at, overriding the one the catalogue
+    /// gives it; a name mapped to null is not reported at all. An error is never lowered, and
+    /// a project file that asks for that gets an error at the entry that asks.
     /// </summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = NoSeverities;
 
@@ -51,7 +54,7 @@ public sealed record ProjectSettings(
     /// <summary>
     /// The settings the configuration named <paramref name="name"/> builds with: its defines over
     /// the project's, and its <c>out</c> if it gives one. A name the project does not have is
-    /// reported at <paramref name="given"/>, and the project's own settings build.
+    /// reported at <paramref name="given"/>, and the project's own settings are used.
     /// </summary>
     public ProjectSettings Configured(string name, Span given)
     {
@@ -73,7 +76,7 @@ public sealed record ProjectSettings(
         return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
     }
 
-    /// <summary>The project's answers about each diagnostic, with <paramref name="over"/> on top.</summary>
+    /// <summary>The project's severity for each diagnostic, with <paramref name="over"/>'s taking precedence.</summary>
     private IReadOnlyDictionary<string, Severity?> Reported(IReadOnlyDictionary<string, Severity?> over)
     {
         if (over.Count == 0)

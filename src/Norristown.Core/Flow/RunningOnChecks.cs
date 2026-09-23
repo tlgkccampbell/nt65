@@ -4,12 +4,12 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Whether each routine a <c>.fallthrough</c> says runs into another does, where the file it is
-/// in cannot say on its own: into another module's routine, or past a <c>.place</c>. Within one
+/// Checks each <c>.fallthrough</c> claim that the file containing it cannot check on its own:
+/// one that runs into another module's routine, or across a <c>.place</c>. Within one
 /// translation unit nt65 lays out every byte, each segment's in the order the unit writes it,
-/// and the answer is read off that layout: what a placed module writes to other segments does
-/// not stand between two routines of one. Across units the order of the bytes is the link's,
-/// which nt65 does not know, so the claim is an error there.
+/// and the answer is read off that layout: bytes a placed module writes to other segments do
+/// not come between two routines of one segment. Across units the order of the bytes is
+/// decided by the linker, which nt65 does not know, so such a claim is an error.
 /// </summary>
 internal static class RunningOnChecks
 {

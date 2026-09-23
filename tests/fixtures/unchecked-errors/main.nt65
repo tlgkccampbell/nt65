@@ -121,7 +121,7 @@
     rts
 }
 
-; A jump in leaves this routine there, so it returns the way `saved_across` does.
+; A jump in leaves this routine for good, so it returns the way `saved_across` does.
 .proc into_saved: a16, i16 -> a8, i8 {
     jmp saved_across::resumed
 }

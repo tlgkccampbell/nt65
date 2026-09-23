@@ -6,8 +6,8 @@ namespace Norristown.Tests.Syntax;
 /// What a comma-separated list holds where the commas are not written as the grammar wants
 /// them. A separated list alternates an item and the comma after it, so the parser takes a
 /// comma only after an item it already has, and the first item it cannot read ends the list:
-/// the tokens past that are the line's, as any other leftovers are. An item that is an
-/// expression is always there, because the parser leaves the empty expression where it could
+/// the tokens past that become the line's skipped tokens, like any other leftovers. An item that
+/// is an expression is always there, because the parser puts an empty expression where it could
 /// read none, so a list of expressions keeps a place for every comma written.
 /// </summary>
 public sealed class SeparatedListParsingTests
@@ -17,7 +17,7 @@ public sealed class SeparatedListParsingTests
     [InlineData("f(1, 2)", 2, 1)]
     [InlineData("f(1)", 1, 0)]
     [InlineData("f()", 0, 0)]
-    // An expression the parser cannot read is the empty expression, which stands as the item.
+    // Where there is no expression to read, the parser puts an empty one, which is the item.
     [InlineData("f(1,)", 2, 1)]
     [InlineData("f(,1)", 2, 1)]
     [InlineData("f(1,,2)", 3, 2)]
@@ -34,9 +34,9 @@ public sealed class SeparatedListParsingTests
     }
 
     /// <summary>
-    /// A list whose items are written some other way has no item to stand between two commas,
-    /// so it ends at the gap, the comma before it is its last piece, and the rest of the line
-    /// is what the line holds as it holds any other leftovers.
+    /// A list whose items are not expressions has no empty item to put between two commas, so
+    /// it ends at the gap: the comma before the gap is its last piece, and the rest of the line
+    /// becomes the line's skipped tokens, like any other leftovers.
     /// </summary>
     [Theory]
     [InlineData(".export a, b", 2, 1, "")]
@@ -56,7 +56,7 @@ public sealed class SeparatedListParsingTests
 
     /// <summary>
     /// The items and the commas are the holder's own children, in source order, so a walk of the
-    /// tree meets them where the list itself is and never meets the node over the list.
+    /// tree meets them where the list itself is and never meets a node wrapping the list.
     /// </summary>
     [Fact]
     public void AHoldersChildrenAreItsItemsAndItsSeparators()
@@ -80,7 +80,7 @@ public sealed class SeparatedListParsingTests
         Assert.Equal(["(", ")"], arguments.ChildNodesAndTokens().Select(child => child.ToFullString()));
     }
 
-    /// <summary>The <c>)</c> a list is not closed with stands in its slot, missing.</summary>
+    /// <summary>When a list is not closed, the slot for its <c>)</c> holds a missing token.</summary>
     [Fact]
     public void AnUnclosedListStandsItsClosingParenthesis()
     {

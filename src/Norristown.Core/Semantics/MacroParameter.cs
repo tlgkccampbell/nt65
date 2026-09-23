@@ -4,7 +4,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// One parameter of a macro: the name its body uses, what an argument of it may be, and
-/// what it stands for when a call leaves it out.
+/// what it gets when a call leaves it out.
 /// </summary>
 /// <param name="Symbol">The name, as the body sees it.</param>
 /// <param name="Accepts">What an argument of it may be.</param>

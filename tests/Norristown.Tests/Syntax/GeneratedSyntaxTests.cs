@@ -32,8 +32,8 @@ public sealed class GeneratedSyntaxTests
 
     /// <summary>
     /// What the table records about a piece of a node: its type, whether it is required, and the
-    /// kinds a token may be. A list is always required — nothing written is an empty list, not a
-    /// missing one.
+    /// kinds a token may be. A list is always required: when nothing is written it is an empty
+    /// list, never a missing one.
     /// </summary>
     [Fact]
     public void APieceSaysItsTypeAndItsKinds()
@@ -48,8 +48,9 @@ public sealed class GeneratedSyntaxTests
     }
 
     /// <summary>
-    /// Every slot of every node's layout can be read from the node: a slot written by a class
-    /// above it is abstract there and overridden here, so the property reads the right place.
+    /// Every slot of every node's layout can be read from the node: a slot declared by a base
+    /// class is abstract there and overridden in the derived class, so the property reads the
+    /// right slot.
     /// </summary>
     [Fact]
     public void EverySlotOfALayoutIsAPropertyOfTheClass()
@@ -130,7 +131,7 @@ public sealed class GeneratedSyntaxTests
         foreach (var node in tree.Root.DescendantNodes().Prepend(tree.Root))
             Assert.Equal(MethodNames.Expected(node), node.Accept(visitor));
 
-        // The kinds the visitor overrides are all in that source, so every answer was tested.
+        // Every kind the visitor overrides occurs in that source, so every override was tested.
         Assert.Equal(
             ["AbsoluteOperand", "Block", "File", "InstructionStatement", "Label", "LabeledLine", "Line", "ProcDeclaration"],
             tree.Root.DescendantNodes().Prepend(tree.Root).Select(node => node.Kind.ToString())

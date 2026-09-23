@@ -16,8 +16,8 @@ namespace Norristown.Layout;
 /// </summary>
 public sealed class UnitLayout
 {
-    // For each file's run of known distances, where its pieces stand in the unit's runs: the
-    // offset in the file's run a piece starts at, and the unit's run and offset it is at there.
+    // For each file's run, the pieces it is split into in the unit's runs: the offset in the
+    // file's run at which a piece starts, and the unit's run and offset that piece starts at.
     private readonly Dictionary<(string File, int Run), List<(int From, int Run, int At)>> pieces = [];
 
     // Where each segment's bytes have reached, as the unit's run and the offset in it.
@@ -44,9 +44,9 @@ public sealed class UnitLayout
     }
 
     /// <summary>
-    /// Where <paramref name="placement"/>, which is where something stands in the layout of
-    /// <paramref name="tree"/>, stands in the unit: its run and offset, or null where nothing
-    /// the unit laid out is at a known distance from it.
+    /// Translates <paramref name="placement"/>, a position in the layout of
+    /// <paramref name="tree"/>, to a position in the unit: the unit's run and the offset in it,
+    /// or null where nothing the unit laid out is at a known distance from it.
     /// </summary>
     public (int Run, int Offset)? Where(SyntaxTree tree, Placement placement)
     {

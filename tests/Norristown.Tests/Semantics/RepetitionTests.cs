@@ -1,15 +1,15 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// <c>.repeat</c> and <c>.each</c>: how many turns a body stands for, what its name is worth
-/// on each of them, and what is written out.
+/// <c>.repeat</c> and <c>.each</c>: how many turns (iterations) a body stands for, what its
+/// bound name's value is on each of them, and what is written out.
 /// </summary>
 public sealed class RepetitionTests
 {
     /// <summary>
-    /// The example: the index counts from zero, so this is the eight single bits. Every turn
-    /// came out as the same line in terms of the index, so the output says it once, with ca65's
-    /// own counter, which counts from zero too.
+    /// The index counts from zero, so this table is the eight single-bit values. Every turn
+    /// came out as the same line in terms of the index, so the output writes it once, inside a
+    /// ca65 <c>.repeat</c> whose counter also counts from zero.
     /// </summary>
     [Fact]
     public void RepeatCountsFromZero()
@@ -21,7 +21,7 @@ public sealed class RepetitionTests
         Assert.Contains(".endrepeat\n", main);
     }
 
-    /// <summary>A repetition inside another sees both names, and each counts with its own.</summary>
+    /// <summary>A repetition inside another sees both index names, and each counts independently.</summary>
     [Fact]
     public void RepetitionsNest()
     {
@@ -33,7 +33,7 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// The example: an RTS dispatch table. The items are labels, so the name stands for the
+    /// An RTS dispatch table. The list's items are labels, so the bound name stands for the
     /// label itself rather than for a number, which a label does not have.
     /// </summary>
     [Fact]
@@ -96,8 +96,8 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A turn decides how much room a line takes, not just what it says, so each one is
-    /// sized on its own.
+    /// Each turn can change how much room a line takes, not just what it says, so each turn's
+    /// line is sized on its own.
     /// </summary>
     [Fact]
     public void ATurnDecidesHowMuchRoomALineTakes()
@@ -109,7 +109,7 @@ public sealed class RepetitionTests
             Lines(main, ".res").Select(line => line[".res".Length..].Split(';')[0].Trim()));
     }
 
-    /// <summary>A count nt65 cannot work out, and a walk over something that is neither.</summary>
+    /// <summary>A count nt65 cannot work out, a negative count, and an <c>.each</c> over something that is neither a list nor an enum.</summary>
     [Theory]
     [InlineData(".data here: .byte 0\n.data t: .byte[] {\n.repeat here, i {\n    i\n}\n}\n", "a `.repeat` count is a constant, and this is not one")]
     [InlineData("SIZE = -1\n.data t: .byte[] {\n.repeat SIZE, i {\n    i\n}\n}\n", "a `.repeat` count cannot be negative, and this one is -1")]
@@ -121,7 +121,8 @@ public sealed class RepetitionTests
 
     /// <summary>
     /// A block whose opener is no repetition at all — a <c>.repeat</c> written after a label,
-    /// which the parser refuses — stands for no turns, and says nothing further about itself.
+    /// which the parser refuses — stands for no turns, and nothing is reported beyond the
+    /// parser's error.
     /// </summary>
     [Fact]
     public void ALineThatOpensNoRepetitionStandsForNoTurns()
@@ -147,8 +148,8 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A repetition whose turns came out as the same lines is said once, however many of them
-    /// there are: the showcase is a table of the numbers themselves.
+    /// A repetition whose turns all came out as the same lines is written once, however many turns
+    /// there are; the clearest case is a table of the index values themselves.
     /// </summary>
     [Fact]
     public void ARepetitionSaidOnceIsThreeLinesHoweverManyTurnsItRuns()
@@ -160,9 +161,9 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A repetition is unrolled first, and only what came out the same is said once: turns that
-    /// differ in a decision nt65 made — here how much room each line takes — are all written out,
-    /// because a ca65 <c>.repeat</c> could not say them.
+    /// A repetition is unrolled first, and is written once only if every turn came out the same:
+    /// turns that differ in a decision nt65 made — here how much room each line takes — are all
+    /// written out, because a ca65 <c>.repeat</c> could not express them.
     /// </summary>
     [Fact]
     public void TurnsThatCameOutDifferentlyAreAllWrittenOut()
@@ -173,7 +174,7 @@ public sealed class RepetitionTests
         Assert.DoesNotContain(".endrep", main);
     }
 
-    /// <summary>Two turns read no better said once, so the threshold is three.</summary>
+    /// <summary>Two turns read no better as a <c>.repeat</c> than written out, so it takes three turns to be written once.</summary>
     [Fact]
     public void TwoTurnsAreWrittenOut()
     {

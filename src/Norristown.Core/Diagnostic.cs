@@ -9,7 +9,7 @@ namespace Norristown;
 public sealed record Diagnostic(
     Span Span, string Id, Severity Severity, string Message, IReadOnlyList<RelatedSpan> Related)
 {
-    /// <summary>What <paramref name="message"/> says, where the catalogue's severity is right.</summary>
+    /// <summary>A diagnostic that reports <paramref name="message"/> at the severity the catalogue gives it.</summary>
     public Diagnostic(Span span, DiagnosticMessage message)
         : this(span, message.Descriptor.Id, message.Descriptor.Severity, message.Text, []) { }
 
@@ -18,8 +18,9 @@ public sealed record Diagnostic(
         : this(span, message.Descriptor.Id, message.Descriptor.Severity, message.Text, related) { }
 
     /// <summary>
-    /// The same, where how much it matters is the site's to say: a construct the 65816 refuses
-    /// and an earlier processor only wonders about is one diagnostic, said twice as loudly.
+    /// The same, with a severity chosen by the reporting site rather than the catalogue: a
+    /// construct that is an error on the 65816 and only a warning on earlier processors is one
+    /// diagnostic, reported at a different severity on each.
     /// </summary>
     public Diagnostic(Span span, Severity severity, DiagnosticMessage message)
         : this(span, message.Descriptor.Id, severity, message.Text, []) { }

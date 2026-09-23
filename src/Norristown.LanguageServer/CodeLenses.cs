@@ -6,13 +6,13 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What is shown above a routine, and above each inline <c>.scope</c> block of one: what a
-/// pass through it costs, and which registers it hands on. A <c>.scope</c> at file level holds
-/// declarations and no code, so it has neither; one inside a routine is a part of that routine,
-/// and has both.
+/// The code lenses shown above a routine and above each inline <c>.scope</c> block inside one:
+/// how many cycles a pass through it costs, and which registers it preserves. A <c>.scope</c>
+/// at file level holds only declarations and no code, so it gets neither lens; a <c>.scope</c>
+/// inside a routine is part of that routine's code and gets both.
 /// <para>
-/// The two are lenses of their own rather than one line, because they answer different
-/// questions and a reader looking for one should not have to read past the other.
+/// Cost and preserved registers are separate lenses rather than one line, because they answer
+/// different questions and a reader looking for one should not have to read past the other.
 /// </para>
 /// </summary>
 internal static class CodeLenses
@@ -41,10 +41,11 @@ internal static class CodeLenses
             }
         }
 
-        // Every instance of a family is declared on one line and answers at it. Where every
-        // instance answers the same the line says it once; where they differ, each says which
-        // instance it is about. The two kinds are grouped apart, so one of them differing
-        // between instances does not make the other say which instance it is about too.
+        // Every instance of a family (the routines a repetition declares) is declared on one
+        // line, so all their lenses land on that line. Where every instance has the same text,
+        // the line shows it once; where they differ, each lens is prefixed with its instance's
+        // name. Cost and register lenses are grouped separately, so instances differing in one
+        // kind does not force instance names onto the other.
         var lenses = new List<(int At, int Kind, Protocol.CodeLens Lens)>();
         foreach (var at in found.GroupBy(lens => (lens.At, lens.Kind)))
         {
@@ -64,23 +65,24 @@ internal static class CodeLenses
     }
 
     /// <summary>
-    /// What it costs, as the lens says it: an interval where a path has a longest, the fewest
-    /// and a <c>+</c> where it loops, and what it costs with its calls after that, or a word
-    /// saying they are not in the count when nt65 cannot follow one of them.
-    /// <paramref name="endless"/> is what to say where no path leaves at all.
+    /// A routine's cost as the lens shows it: a cycle interval when the longest path is bounded,
+    /// or the minimum followed by <c>+</c> when it is not, with <c>, loops</c> when the routine
+    /// loops; then the cost including its calls, or <c>not counting calls</c> when nt65 cannot
+    /// follow one of them. <paramref name="endless"/> is the text to show when no path leaves
+    /// the routine at all.
     /// <para>
-    /// The hover says it too, at the declaration and at every call, and calls this so that the
-    /// two agree word for word.
+    /// The hover shows the cost too, at the declaration and at every call, and calls this so
+    /// that the two agree word for word.
     /// </para>
     /// </summary>
     internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless)
     {
-        // A routine no path leaves has no pass to cost, which is worth saying rather than
-        // leaving a line that looks as though the lens failed on it.
+        // A routine that no path leaves has no complete pass to cost. Say so, rather than show
+        // nothing and look as though the lens failed.
         if (!cost.Ends)
             return endless;
-        // A routine holding an instruction whose time only the run says has no count, and the
-        // word for it is better than no lens at all.
+        // A routine containing an instruction whose cycle count is only known at run time has
+        // no count; saying why is better than showing no lens at all.
         if (cost is not { Least: { } least })
             return cost.Uncounted is { } why ? $"not counted: {why}" : null;
         var count = Count(least, cost.Most);
@@ -91,33 +93,33 @@ internal static class CodeLenses
         if (total is not { Least: { } with })
             return $"{count}, not counting calls";
 
-        // Where a routine hands control to one that never comes back, the count is what it
-        // takes to get there, which is worth saying plainly rather than through the calls.
+        // Where a routine passes control to one that never returns, the count covers only the
+        // path up to that point, so the lens says so explicitly.
         var ending = total.Value.Ends ? "" : ", then never returns";
 
-        // What it calls may cost nothing at all to this count, and saying the same number
-        // twice says less than saying it once.
+        // When the calls add nothing to the count, show the number once rather than repeating
+        // it as the with-calls figure.
         return with == cost.Least && total.Value.Most == cost.Most
             ? count + ending
             : $"{count}, {Count(with, total.Value.Most)} with calls{ending}";
     }
 
     /// <summary>
-    /// Which registers a routine hands back as it was entered with them. A routine nt65 could
-    /// not cost is one it could not lay out either, and what it keeps would be worked out from
-    /// bytes that are not the ones it would assemble to.
+    /// Which registers a routine returns holding the values it was entered with, or null when
+    /// no path through the routine, its calls included, returns.
     /// </summary>
     private static string? Kept(FlowRegion region) => region.Total.Ends
         ? Spell(region.Registers.Kept, region.Registers.Complete)
         : null;
 
     /// <summary>
-    /// What is kept, as a lens says it. The hover spells the list the same way and leaves the
-    /// word off, because the key beside it already says what the list is.
+    /// The preserved registers as the lens shows them. The hover formats the list the same way
+    /// but leaves off the word "preserves", because the label beside it already says what the
+    /// list is.
     /// </summary>
     private static string Spell(Registers kept, bool complete) => $"preserves {Lsp.Spell(kept, complete)}";
 
-    /// <summary>A count as it is shown: an interval, or the fewest and a <c>+</c> where there is no most.</summary>
+    /// <summary>A cycle count as shown: an interval, or the minimum and a <c>+</c> when there is no maximum.</summary>
     private static string Count(int least, int? most) =>
         most is { } bound ? Lsp.Spell(new CycleCount(least, bound)) : $"{least}+ cycles";
 }

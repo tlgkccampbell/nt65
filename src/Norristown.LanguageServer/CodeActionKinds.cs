@@ -1,15 +1,16 @@
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The kinds of change an editor offers, as the protocol names them. A fix answers something
-/// reported; a refactor is asked for at a selection and answers nothing.
+/// The kinds of code action the server offers, as the protocol names them. A quick fix resolves
+/// a reported diagnostic; a refactor is requested at a selection and is not tied to any
+/// diagnostic.
 /// </summary>
 internal static class CodeActionKinds
 {
     /// <summary>A fix for a diagnostic.</summary>
     public const string QuickFix = "quickfix";
 
-    /// <summary>A change that says the same thing another way.</summary>
+    /// <summary>A change that rewrites code without changing what it means.</summary>
     public const string Rewrite = "refactor.rewrite";
 
     /// <summary>A change that lifts code out into a declaration of its own.</summary>

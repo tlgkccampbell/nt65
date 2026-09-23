@@ -53,7 +53,7 @@ public sealed class MacroModuleTests
         Assert.Contains("lib__SCREEN = $0400", written);
         Assert.Contains(".import lib__table", written);
 
-        // The macro itself is no symbol to the linker, and the library writes nothing for it.
+        // The macro itself is not a symbol to the linker, and the library writes nothing for it.
         Assert.DoesNotContain("set16", outputs["lib.s"]);
         Assert.DoesNotContain(".import set16", written);
     }

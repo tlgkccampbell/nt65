@@ -25,7 +25,7 @@ public sealed class AssertionTests
 
     /// <summary>
     /// A failed assertion is always an error. ca65's levels choose when a check runs, which
-    /// nt65 decides itself, so writing one says so.
+    /// nt65 decides for itself, so writing a level is reported.
     /// </summary>
     [Fact]
     public void AnAssertionTakesNoLevel()
@@ -69,7 +69,7 @@ public sealed class AssertionTests
         Assert.Contains(".assert irq >= $8000, lderror, \"irq must be in ROM\"", main);
     }
 
-    /// <summary>An <c>.error</c> the build reaches is what it says, and never reaches ca65.</summary>
+    /// <summary>An <c>.error</c> the build reaches is reported with its own message, and nothing is written for ca65.</summary>
     [Fact]
     public void AnErrorTheBuildReachesIsReported()
     {

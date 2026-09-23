@@ -4,10 +4,12 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// What a mnemonic is, beyond which modes it has. Every pass above layout reads this table,
-/// so a mnemonic missing from it says the quiet wrong thing rather than failing: a call that
-/// does not call, a push that moves nothing. The sets are written out a second time here for
-/// the same reason <see cref="RegisterEffectsTests"/> writes its table twice.
+/// The facts about each mnemonic beyond which addressing modes it has: whether it calls,
+/// returns, stores, pushes or pulls, and which width sizes its immediate. Every pass built on
+/// layout reads this table, so a mnemonic missing from it gives a silently wrong answer rather
+/// than a failure: a call not treated as a call, a push that moves nothing. The sets are
+/// written out a second time here for the same reason <see cref="RegisterEffectsTests"/>
+/// writes its table twice.
 /// </summary>
 public sealed class InstructionFactsTests
 {
@@ -31,7 +33,7 @@ public sealed class InstructionFactsTests
             Where(facts => facts.Stores));
     }
 
-    /// <summary>Each push moves as much as the register it holds, and each pull the same.</summary>
+    /// <summary>Each push and each pull moves the stack by the size of what it transfers.</summary>
     [Fact]
     public void EachPushAndPullMovesWhatItHolds()
     {
@@ -45,14 +47,18 @@ public sealed class InstructionFactsTests
         Assert.Equal(PushSize.OneByte, Instructions.Facts("php").Pushes);
         Assert.Equal(PushSize.TwoBytes, Instructions.Facts("pei").Pushes);
 
-        // What a push holds is a register only where a pull could give it back to one: the
-        // data bank, the direct page and the program bank are not among them.
+        // `Held` names a register only for those `Registers` tracks: A, X, Y and, through the
+        // status byte, the carry. The data bank, the direct page and the program bank are not
+        // among them.
         Assert.Equal(["pha", "php", "phx", "phy", "pla", "plp", "plx", "ply"], Where(f => f.Held != Registers.None));
         Assert.Equal(Registers.A, Instructions.Facts("pla").Held);
         Assert.Equal(Registers.C, Instructions.Facts("php").Held);
     }
 
-    /// <summary>ca65 sizes exactly these immediates from the width it is told.</summary>
+    /// <summary>
+    /// These are exactly the instructions whose immediate operand ca65 sizes from the register
+    /// width it has been told.
+    /// </summary>
     [Fact]
     public void TheWidthDependentImmediatesAreTheOnesCa65Sizes()
     {

@@ -2,17 +2,20 @@ using System.Collections.Immutable;
 
 namespace Norristown.SyntaxGenerator;
 
-/// <summary>One node of the table: the class to write, what it derives from, and its properties.</summary>
+/// <summary>One node of the table in Syntax.xml: the class to write, what it derives from, and its properties.</summary>
 /// <param name="Name">The class's name.</param>
 /// <param name="Base">The class it derives from.</param>
 /// <param name="Kinds">The kinds whose nodes are of this class; empty for an abstract one.</param>
-/// <param name="Summary">The class's summary, a line per line of it.</param>
+/// <param name="Summary">The class's summary, one string per line.</param>
 /// <param name="IsAbstract">Whether the class is abstract, and so has no kind and no visitor method.</param>
 /// <param name="IsInternal">Whether the class is internal, and so has no visitor method.</param>
 /// <param name="IsHandWritten">Whether the class is written by hand and only its <c>Accept</c> generated.</param>
-/// <param name="IsPartial">Whether a hand-written half holds members the table cannot say.</param>
-/// <param name="IsMissingNode">Whether a node of this kind stands where one belongs that the source lacks.</param>
-/// <param name="Layout">The slot order, by name, when it is not the base's slots and then this node's own.</param>
+/// <param name="IsPartial">Whether a hand-written partial class adds members the table cannot describe.</param>
+/// <param name="IsMissingNode">Whether a node of this kind fills a place the source did not write anything in.</param>
+/// <param name="Layout">
+/// The slot order, by name, when it is not the default of the base's slots followed by this node's
+/// own; empty otherwise.
+/// </param>
 /// <param name="Slots">The class's properties, in the order they are written.</param>
 public sealed record NodeRow(
     string Name,

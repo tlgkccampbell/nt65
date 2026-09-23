@@ -7,11 +7,11 @@ namespace Norristown.Processor;
 /// <para>
 /// This is not nt65's instruction set and is not what a program may write. ca65 keeps
 /// alternative spellings nt65 does not have — <c>swa</c>, <c>tad</c>, <c>dea</c>, <c>ina</c> —
-/// and takes any word in its table at the start of a line for an instruction, so a name
-/// defined bare there would be read as one. What nt65 does about that belongs to the
-/// emitter, which writes such a name with its module in front. The words are held here
+/// and takes any word in its table at the start of a line for an instruction, so a label
+/// with that name, written without a prefix, would be read as one. Handling that is the
+/// emitter's job: it writes such a name with its module in front. The words are kept here
 /// because they are a fact about the assembler rather than about the processor, and a test
-/// reads ca65's own tables out of the pinned source and holds these to them.
+/// reads ca65's own tables from the pinned ca65 source and checks these lists against them.
 /// </para>
 /// </summary>
 public static class Ca65Instructions
@@ -70,8 +70,8 @@ public static class Ca65Instructions
 
     /// <summary>
     /// Whether ca65 would read <paramref name="name"/> as an instruction under any
-    /// <c>.setcpu</c> nt65 writes. A name the linker is given has to hold for every one of
-    /// them: which CPU a module is built for is not what decides whether ca65 can define it.
+    /// <c>.setcpu</c> nt65 writes. A name given to the linker has to be definable under every
+    /// one of them: whether ca65 can define it must not depend on which CPU a module is built for.
     /// </summary>
     public static bool HasAnywhere(string name) => anywhere.Contains(name);
 

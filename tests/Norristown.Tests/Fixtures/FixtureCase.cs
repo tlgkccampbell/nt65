@@ -35,7 +35,7 @@ internal sealed partial record FixtureCase(
 {
     public const string DefaultExpectedDirectory = "expected";
 
-    /// <summary>Held while a fixture's own text is written back, which several cases may do at once.</summary>
+    /// <summary>Held while updated annotations are written back to a fixture's files, which several cases may do at once.</summary>
     private static readonly Lock Writing = new();
 
     public static IReadOnlyList<FixtureCase> All()
@@ -120,16 +120,16 @@ internal sealed partial record FixtureCase(
         }
     }
 
-    /// <summary>What a fixture expects of one diagnostic. Columns are not checked.</summary>
+    /// <summary>The expectation that matches a reported diagnostic. Columns are not checked.</summary>
     public static Expectation Of(Diagnostic d) =>
         new(d.Span.File, d.Span.Line, d.Severity.ToString().ToLowerInvariant(), d.Id, d.Message);
 
-    /// <summary>The comparison form, for the runs that only ask whether two are the same.</summary>
+    /// <summary>A diagnostic as a string, for checks that only ask whether two sets of diagnostics are the same.</summary>
     public static string Format(Diagnostic d) => Of(d).ToString();
 
     /// <summary>
-    /// How long a file an <c>.incbin</c> names is. A fixture's binaries sit beside its
-    /// sources, wherever the tests happen to be run from.
+    /// The length of a file an <c>.incbin</c> names, found in the fixture's directory: a
+    /// fixture's binaries sit beside its sources, wherever the tests happen to be run from.
     /// </summary>
     public long? BinaryLength(string path)
     {
@@ -138,8 +138,8 @@ internal sealed partial record FixtureCase(
     }
 
     /// <summary>
-    /// The binaries a fixture's sources name, at their paths in the fixture, which is where
-    /// the generated file looks for them from its own path.
+    /// Every <c>.bin</c> file in the fixture, at its path relative to the fixture, which is where
+    /// the generated file looks for it relative to its own path.
     /// </summary>
     public IReadOnlyList<(string Name, byte[] Content)> Binaries() =>
         [.. System.IO.Directory.GetFiles(Directory, "*.bin", SearchOption.AllDirectories)
@@ -164,10 +164,10 @@ internal sealed partial record FixtureCase(
         [.. Annotated().SelectMany(ParseInlineDiagnostics)];
 
     /// <summary>
-    /// Writes what <paramref name="actual"/> says into the annotations that already stand for
-    /// it, so that rewording a message is not a fixture edit. An annotation is only rewritten
-    /// where exactly one diagnostic on its line is reported under its name; anything else is a
-    /// difference the fixture should be failing over.
+    /// Writes the messages in <paramref name="actual"/> into the existing annotations that match
+    /// them, so that rewording a message needs no hand edit to the fixture. An annotation is
+    /// rewritten only where exactly one diagnostic on its line is reported with its severity and
+    /// name; any other mismatch is a difference the fixture should fail on.
     /// </summary>
     public List<Expectation> UpdateInlineDiagnostics(IReadOnlyList<Expectation> actual)
     {
@@ -198,8 +198,8 @@ internal sealed partial record FixtureCase(
             if (!changed)
                 continue;
 
-            // A fixture built more than one way is several cases over the same files, run
-            // beside each other, and each of them writes the same text back.
+            // A fixture built more than one way is several cases over the same files, run in
+            // parallel, and each of them writes the same text back, so the writes take a lock.
             var path = System.IO.Path.Combine(Directory, file.Path);
             var whole = string.Join('\n', lines);
             lock (Writing)
@@ -223,17 +223,18 @@ internal sealed partial record FixtureCase(
 
     /// <summary>
     /// One diagnostic as a fixture expects it: where it is, the name it is reported under, and
-    /// what it says. The name and the place are what a diagnostic is matched on; the words are
-    /// a second expectation, so that rewording one moves one line and not two.
+    /// what it says. The name and the place are what a diagnostic is matched on; the message is a
+    /// second expectation, so that a reworded message fails as one difference, not as one missing
+    /// and one unexpected diagnostic.
     /// </summary>
     /// <param name="File">The file it is reported in.</param>
     /// <param name="Line">The 1-based line it is reported on.</param>
-    /// <param name="Severity">How much it matters, as the message writes it.</param>
+    /// <param name="Severity">The severity, in lower case as the annotation writes it.</param>
     /// <param name="Id">The catalogue name.</param>
     /// <param name="Message">What it says.</param>
     internal readonly record struct Expectation(string File, int Line, string Severity, string Id, string Message)
     {
-        /// <summary>Everything but the words, which is what one is matched on.</summary>
+        /// <summary>Everything but the message, which is what a diagnostic is matched on.</summary>
         public string Where => $"{File}:{Line}: {Severity}[{Id}]";
 
         public override string ToString() => $"{Where}: {Message}";

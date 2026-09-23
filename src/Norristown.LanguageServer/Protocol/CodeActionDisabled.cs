@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>
-/// Why a change is offered and cannot be applied. A client shows it greyed with the reason,
-/// which is how a rewrite that would change what the line means says so rather than quietly
-/// not being there.
+/// Why an offered change cannot be applied. A client shows the change greyed out with the
+/// reason, so a rewrite that would alter what the line means explains itself instead of
+/// silently missing from the menu.
 /// </summary>
-/// <param name="Reason">What stands in the way, as a sentence.</param>
+/// <param name="Reason">What prevents the change, as a sentence.</param>
 internal sealed record CodeActionDisabled(string Reason);

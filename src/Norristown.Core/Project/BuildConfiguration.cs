@@ -12,6 +12,6 @@ namespace Norristown.Project;
 /// <param name="Declaration">Where the project file names it.</param>
 public sealed record BuildConfiguration(string Name, IReadOnlyList<Define> Defines, string? Out, Span Declaration)
 {
-    /// <summary>What it reports each named diagnostic as, over the project's own answers.</summary>
+    /// <summary>The severity it reports each named diagnostic at, overriding the project's own.</summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = ProjectSettings.NoSeverities;
 }

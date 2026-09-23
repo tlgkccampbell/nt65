@@ -1,7 +1,7 @@
 # A release, on a `v*` tag: the gate on both systems, then the tool package and the extension
-# built as the tag says, kept as artifacts of the run and attached to a release of that name.
-# Nothing is published to nuget.org or to the marketplace: no secrets exist here, and where a
-# release goes is the owner's to say.
+# built with the tag's version, kept as artifacts of the run and attached to a release named
+# after the tag. Nothing is published to nuget.org or to the marketplace: this repository holds
+# no secrets for them, and where a release is published is the owner's decision.
 name: release
 
 on:

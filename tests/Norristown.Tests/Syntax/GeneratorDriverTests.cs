@@ -6,9 +6,9 @@ using Norristown.SyntaxGenerator;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The generator as the compiler runs it: over the repository's table it writes one file per type
-/// and says nothing, and over a table it cannot read it says so where the trouble is instead of
-/// throwing out of the build.
+/// The generator as the compiler runs it: given the repository's table it writes one file per
+/// type and reports nothing, and given a table it cannot read it reports a diagnostic at the
+/// problem instead of throwing and taking the build down.
 /// </summary>
 public sealed class GeneratorDriverTests
 {
@@ -37,9 +37,9 @@ public sealed class GeneratorDriverTests
     }
 
     /// <summary>
-    /// A node under a class the table does not have would be a C# error in a file nobody
-    /// wrote, and one under itself a walk up the hierarchy that never ends. Both are read off
-    /// the table instead.
+    /// A node whose base class is not in the table would be a C# error in a generated file, and
+    /// a node that is its own base would make the walk up the hierarchy loop forever. Both are
+    /// reported as diagnostics on the table instead.
     /// </summary>
     [Theory]
     [InlineData("<Node Name=\"WidgetSyntax\" Base=\"GadgetSyntax\"/>", "WidgetSyntax derives from")]
@@ -54,8 +54,8 @@ public sealed class GeneratorDriverTests
     }
 
     /// <summary>
-    /// A project that does not carry the table hears about the table, rather than about the
-    /// hundred classes it then does not have.
+    /// A project without the table gets one diagnostic saying so, rather than errors for the
+    /// hundred classes that are then never generated.
     /// </summary>
     [Fact]
     public void NoTableAtAllIsADiagnostic()
@@ -81,9 +81,9 @@ public sealed class GeneratorDriverTests
     }
 
     /// <summary>
-    /// An edit to the project that is not an edit to the table writes nothing again: the pipeline
-    /// hangs off the table's text, which is what keeps an editor from regenerating a hundred
-    /// classes on every keystroke.
+    /// An edit to the project that is not an edit to the table regenerates nothing: the pipeline
+    /// depends only on the table's text, which is what keeps an editor from regenerating a
+    /// hundred classes on every keystroke.
     /// </summary>
     [Fact]
     public void AnEditThatIsNotToTheTableRegeneratesNothing()

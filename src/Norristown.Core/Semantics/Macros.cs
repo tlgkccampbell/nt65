@@ -75,13 +75,13 @@ public static class Macros
     /// from the names its bodies resolved to, without expanding anything, which is what makes
     /// every expansion bounded.
     /// <para>
-    /// Macros that reach one another are one problem, reported once, at the one of them that
-    /// comes first in the program by file and position, on the first call on the way back to
-    /// it. Which macro the check starts from does not change what is said or where, so a
-    /// program checked a few files at a time says what it says checked whole.
+    /// Macros that reach one another are one problem, reported once, for whichever of them
+    /// comes first in the program by file and position, at the first call on the path back to
+    /// it. Which macro the check starts from does not change what is reported or where, so a
+    /// program checked a few files at a time gets the same report as one checked whole.
     /// </para>
     /// <para>
-    /// <paramref name="current"/> is what a callee stands for now: a macro of a file that was
+    /// <paramref name="current"/> maps a callee to its symbol now: a macro of a file that was
     /// not read again may still name an earlier version of another file's macro.
     /// <paramref name="report"/> is given the macro each problem is reported for.
     /// </para>
@@ -205,7 +205,7 @@ public static class Macros
         ? Catalogue.DeclarationInAMacroBody.Says(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
-    /// <summary>The two halves of that sentence, or null where the statement may stand.</summary>
+    /// <summary>The two halves of that message, what is refused and why, or null when the statement is allowed.</summary>
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax =>

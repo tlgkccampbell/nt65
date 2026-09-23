@@ -16,9 +16,9 @@ public sealed class WorkspaceTests
     private const string Source = ".module main\n.proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
     /// <summary>
-    /// What <see cref="Uri"/> is as a path, the same on every host: the workspace takes the
-    /// drive's colon for a drive wherever it runs, since a path is a name to the analysis and
-    /// only the editor's URI has to come back unchanged.
+    /// <see cref="Uri"/> as a path, the same on every host: the workspace treats <c>c:</c> as a
+    /// drive wherever it runs, because to the analysis a path is only a name, and only the
+    /// editor's URI has to come back unchanged.
     /// </summary>
     private const string Named = "c:/work/main.nt65";
 
@@ -38,10 +38,10 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
-    /// And back again, the same way on every host. A rooted path is no URI to .NET's reader
+    /// And back again, the same way on every host. .NET does not read a rooted path as a URI
     /// unless it starts with a drive letter, and on Linux every path a workspace carries starts
-    /// with a <c>/</c> — the drive letter of an editor on Windows among them — so a path the
-    /// analysis names another file by has to be written out as one rather than handed over bare.
+    /// with a <c>/</c> — including one holding a Windows editor's drive letter — so a path the
+    /// analysis uses to name another file has to be written out as a URI rather than passed bare.
     /// </summary>
     [Fact]
     public void ARootedPathComesBackAsAFileUriOnEveryHost()
@@ -49,7 +49,7 @@ public sealed class WorkspaceTests
         Assert.Equal("file:///home/u/p/main.nt65", Lsp.ToUri("/home/u/p/main.nt65"));
         Assert.Equal("file:///c:/work/main.nt65", Lsp.ToUri("/c:/work/main.nt65"));
 
-        // What a URI holds is escaped, whatever the file is called.
+        // Characters a URI cannot hold are escaped, whatever the file is called.
         Assert.Equal("file:///home/u/my%20file.nt65", Lsp.ToUri("/home/u/my file.nt65"));
         Assert.Equal("file:///home/u/a%23b.nt65", Lsp.ToUri("/home/u/a#b.nt65"));
 
@@ -60,8 +60,8 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
-    /// The editor's active configuration is the one the program is analyzed as: its defines over
-    /// the project's, and a name the project does not have is reported.
+    /// The program is analyzed with the editor's active configuration: its defines override the
+    /// project's, and a configuration name the project does not have is reported.
     /// </summary>
     [Fact]
     public void TheActiveConfigurationIsWhatTheProgramIsAnalyzedAs()
@@ -132,7 +132,7 @@ public sealed class WorkspaceTests
         Assert.Equal(SyntaxDump.Full(fresh), SyntaxDump.Full(changed.Tree));
     }
 
-    /// <summary>A change with no range replaces the document, which is what a client falls back to.</summary>
+    /// <summary>A change with no range replaces the whole document, the form a client falls back to without incremental edits.</summary>
     [Fact]
     public void AChangeWithNoRangeReplacesTheWholeDocument()
     {

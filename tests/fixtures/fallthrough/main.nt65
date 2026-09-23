@@ -2,7 +2,7 @@
 ; of its body, whatever ends the body: an instruction, a call, an `.if` chain taken or not, a
 ; label. The routine it names has to start where this one ends, and the fall-through is checked
 ; as a tail call against its signature. A `.next` is only about the statement above it: after
-; data flow runs into, a routine it names is a jump there, which need not be the next one.
+; data that flow runs into, the routine it names is a jump target and need not be the next one.
 .module main
 
 .cpu 65816
@@ -74,8 +74,8 @@
     rts
 }
 
-; A skip that lands past the next routine on one that is not written next: the `.next` is a
-; jump to it, checked as a tail call, and nothing says the two are adjacent.
+; A `bit` skip that lands not on the next routine but on the one after it: the `.next` is a
+; jump there, checked as a tail call, and nothing requires the two to be adjacent.
 .proc skips: a8, i8 {
     lda #1
     .byte $2c           ; bit abs: swallows the `ldx #2` of `skipped`

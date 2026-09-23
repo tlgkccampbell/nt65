@@ -1,7 +1,7 @@
 namespace Norristown.Syntax.InternalSyntax;
 
-// An instruction and the operand forms. Which ones each CPU and mnemonic allow is
-// layout's to say; here they are only read.
+// An instruction and the operand forms. Which forms each CPU and mnemonic allow is checked
+// later, during layout; the parser only reads them.
 internal sealed partial class Parser
 {
     private InstructionStatementSyntax ParseInstruction()
@@ -10,7 +10,7 @@ internal sealed partial class Parser
         return new InstructionStatementSyntax(mnemonic, AtEnd ? null : ParseOperand());
     }
 
-    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is layout's to say.</summary>
+    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is checked during layout.</summary>
     private OperandSyntax ParseOperand()
     {
         if (Kind == SyntaxKind.Hash)
@@ -75,9 +75,9 @@ internal sealed partial class Parser
             }
         }
 
-        // An attempt that comes to nothing leaves nothing: the tokens it read are read again as
-        // an ordinary expression, and the nodes it built go with the diagnostics they were given,
-        // so no missing token it stood in for outlives it.
+        // A failed attempt leaves no trace: its tokens are read again as an ordinary expression,
+        // and the nodes it built are discarded along with the diagnostics reported while building
+        // them, so no diagnostic about a missing token from the attempt survives it.
         index = start;
         if (pending.Count > placed)
             pending.RemoveRange(placed, pending.Count - placed);

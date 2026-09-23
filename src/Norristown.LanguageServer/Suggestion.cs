@@ -9,12 +9,12 @@ namespace Norristown.LanguageServer;
 /// <param name="Text">What choosing it writes.</param>
 /// <param name="Documentation">The comment above the declaration it names, or null.</param>
 /// <param name="Band">
-/// How near what it names is to the caret: the names in scope first, in the order the binder
-/// reaches them, then the modules, then the words the language spells, then the instructions.
-/// The thing meant is nearly always the nearest.
+/// How near the thing it names is to the caret, for sorting: names in scope first, in the order
+/// the binder reaches them, then modules, then the language's own words, then instructions.
+/// The one meant is nearly always the nearest.
 /// </param>
 /// <param name="Order">Where it stands within its band; everything within one band that shares an order is alphabetical.</param>
-/// <param name="IsSnippet">Whether what it writes has stops in it, which only a block opener does.</param>
+/// <param name="IsSnippet">Whether what it writes is a snippet with tab stops, which only a block opener is.</param>
 internal readonly record struct Suggestion(
     Protocol.CompletionItemKind Kind,
     string? Detail,
@@ -27,13 +27,13 @@ internal readonly record struct Suggestion(
     /// <summary>A name the caret can reach as it is written, nearest first.</summary>
     public const int InScope = 1;
 
-    /// <summary>A module, which a path has to be walked into.</summary>
+    /// <summary>A module, whose members are reached by writing a path into it.</summary>
     public const int Module = 2;
 
-    /// <summary>A word the language spells: a directive, a signature item, the mark a number starts with.</summary>
+    /// <summary>A word of the language itself: a directive, a signature item, or a number's prefix character.</summary>
     public const int Spelled = 3;
 
-    /// <summary>An instruction, of which every CPU has more than anyone means at one caret.</summary>
+    /// <summary>An instruction; every CPU has far more of these than could be meant at any one caret, so they sort last.</summary>
     public const int Instruction = 4;
 
     /// <summary>What the client sorts on: the band, then the place within it, then the label.</summary>

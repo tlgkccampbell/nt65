@@ -20,7 +20,10 @@ public sealed class StateAnalysisTests
         Assert.Equal(new ProcessorState(Width.Eight, Width.Eight, ProcessorMode.Unknown), state.Processor);
     }
 
-    /// <summary>A `rep` in a mode nobody knows could be a no-op, so it leaves the widths unknown.</summary>
+    /// <summary>
+    /// When the mode is not known, a `rep` might be a no-op (it widens nothing in emulation
+    /// mode), so it leaves the widths unknown.
+    /// </summary>
     [Fact]
     public void ARepInAnUnknownModeLeavesTheWidthsUnknown()
     {
@@ -38,7 +41,10 @@ public sealed class StateAnalysisTests
         Assert.Equal(new ProcessorState(Width.Eight, Width.Eight, ProcessorMode.Emulation), state.Processor);
     }
 
-    /// <summary>A flag byte nt65 cannot work out might set or clear anything.</summary>
+    /// <summary>
+    /// A `rep` whose flag byte nt65 cannot evaluate might clear either width bit, so both
+    /// widths become unknown.
+    /// </summary>
     [Fact]
     public void ARepOfAnUnknownValueForgetsBothWidths()
     {
@@ -49,7 +55,7 @@ public sealed class StateAnalysisTests
     }
 
     [Theory]
-    // `clc` then `xce` enters native mode: from emulation mode the widths are 8 bits there.
+    // `clc` then `xce` enters native mode; coming from emulation mode, both widths start at 8 bits.
     [InlineData("emu", "clc", "a8, i8, native")]
     [InlineData("a8, i8, native", "clc", "a8, i8, native")]
     [InlineData("e?", "clc", "a?, i?, native")]
@@ -58,7 +64,7 @@ public sealed class StateAnalysisTests
     [InlineData("native", "sec", "a8, i8, emu")]
     [InlineData("e?", "sec", "a8, i8, emu")]
 
-    // Any other `xce` swaps in a carry nobody knows.
+    // After any other `xce` the carry it swapped in is unknown, so the mode is too.
     [InlineData("native", "nop", "a?, i?, e?")]
     public void AnXceTakesItsModeFromTheCarrySetJustBeforeIt(string entry, string before, string after)
     {
@@ -106,7 +112,10 @@ public sealed class StateAnalysisTests
         Assert.Equal(0, state.Stack?.Depth);
     }
 
-    /// <summary>A `plp` that finds no saved status forgets the widths, and `.state` gives them back.</summary>
+    /// <summary>
+    /// A `plp` with no status saved by a `php` in the routine makes the widths unknown, until
+    /// a `.state` declares them again.
+    /// </summary>
     [Fact]
     public void APlpOfAStatusSavedElsewhereNeedsAState()
     {
@@ -131,8 +140,9 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// A routine that pulls what its caller pushed knows nothing about what is beneath its stack
-    /// any more, and goes on tracking what it pushes from there.
+    /// Once a routine pulls more than it pushed, reaching into what its caller pushed, the
+    /// analysis no longer knows where the stack's base is; it goes on tracking later pushes
+    /// relative to that unknown base.
     /// </summary>
     [Fact]
     public void PullingMoreThanWasPushedForgetsTheBase()
@@ -142,7 +152,10 @@ public sealed class StateAnalysisTests
         Assert.Equal(AnalysisStack.Unanchored, state.Stack);
     }
 
-    /// <summary>A push of a register whose width is not known moves the stack by an amount nobody knows.</summary>
+    /// <summary>
+    /// A push of a register whose width is not known moves the stack by an unknown amount, so
+    /// the stack is no longer tracked.
+    /// </summary>
     [Fact]
     public void APushOfUnknownWidthForgetsTheStack()
     {
@@ -152,8 +165,8 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// An indirect call returns with whatever the routines its `.next` names return with,
-    /// and must meet every one of their entries.
+    /// An indirect call returns with the merge of what the routines its `.next` names return
+    /// with, and must meet the entry state of every one of them.
     /// </summary>
     [Fact]
     public void AnIndirectCallReturnsWithTheMergeOfItsRoutinesExits()
@@ -210,8 +223,8 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// A jump to its own entry is a tail call like any other: the state there must be the
-    /// entry again, rather than silently merging with it.
+    /// A jump to the routine's own entry is a tail call like any other: the state at the jump
+    /// must match the declared entry state, rather than being silently merged into it.
     /// </summary>
     [Fact]
     public void AJumpToTheRoutinesOwnEntryIsChecked()
@@ -269,8 +282,8 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// A label a `.state` declares is an entry point, and one some path also reaches is
-    /// checked against that path.
+    /// A label that a `.state` declares is an entry point; when a path in the routine also
+    /// reaches it, the state along that path is checked against the declaration.
     /// </summary>
     [Fact]
     public void AStateDeclaresALabelAndIsCheckedWhereItIsReached()
@@ -313,8 +326,8 @@ public sealed class StateAnalysisTests
             }
             """));
 
-        // A loop that changes a width: the head learns on the back edge that A may be either,
-        // and is walked once more with that.
+        // A loop that changes a width: the back edge tells the loop head that A may be either
+        // width, and the head is walked once more with that.
         Assert.Equal(2, MostWalks("""
             .proc p: a8, i8 {
             @loop:
@@ -325,8 +338,8 @@ public sealed class StateAnalysisTests
             }
             """));
 
-        // Two nested loops, each pushing: the stack at each head is forgotten on the first
-        // round, and nothing is left to change after that.
+        // Two nested loops, each pushing: the stack depth at each loop head becomes unknown on
+        // the first round, and nothing is left to change after that.
         Assert.Equal(2, MostWalks("""
             .proc p: a8, i8 {
                 php
@@ -344,10 +357,10 @@ public sealed class StateAnalysisTests
             }
             """));
 
-        // The design's "at most two passes per block" does not hold once one part of the state
-        // is forgotten only because another was. The first round forgets the stack; with no
-        // saved status to find, the second round's `plp` forgets the index width too, which
-        // the head learns only on a third walk. Each part can change at most twice, so the
+        // A bound of "at most two walks per block" does not hold once one part of the state
+        // becomes unknown only because another did. The first round loses the stack; with no
+        // saved status to find, the second round's `plp` loses the index width too, which the
+        // loop head learns only on a third walk. Each part can change at most twice, so the
         // bound is one walk more than the number of parts, not two.
         Assert.Equal(3, MostWalks("""
             .proc p: a8, i8 {
@@ -370,13 +383,13 @@ public sealed class StateAnalysisTests
     [InlineData(".proc p: a8, i8 {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
     [InlineData(".proc p: a8, i8 {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
 
-    // `lda #c`, `tcd` with A 8 bits transfers a high byte nobody knows.
+    // With A 8 bits wide, `lda #c` then `tcd` transfers a high byte that is not known.
     [InlineData(".proc p: a8, i8 {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
 
-    // Anything between the load and the transfer loses it.
+    // Any instruction between the load and the transfer loses the known value.
     [InlineData(".proc p: a16, i8 {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
 
-    // A pull of something other than a pushed value loads what nobody knows.
+    // Pulling a value that was not pushed as a constant loads an unknown value.
     [InlineData(".proc p: a8, i8 {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
 
     // Two paths that pushed different constants agree on the depth, not on the value.
@@ -400,7 +413,11 @@ public sealed class StateAnalysisTests
         Assert.Equal("a8, i8, native, dp = $2002", state.Processor.ToString());
     }
 
-    /// <summary>A label a `.state` declares starts from what its routine says of D and B, so only a routine that declares them needs its labels to.</summary>
+    /// <summary>
+    /// A label that a `.state` declares starts from what its routine declares about D and B:
+    /// in a routine that declares nothing about them the label's `.state` need not either, but
+    /// in a routine that declares them the label's `.state` must as well.
+    /// </summary>
     [Fact]
     public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
     {
@@ -420,7 +437,11 @@ public sealed class StateAnalysisTests
             .Select(problem => Renumbered(problem))
             .ToList();
 
-    /// <summary>A problem's line as the test wrote it, without the <c>.module</c>, <c>.cpu</c> and <c>.segment</c> lines every test is given.</summary>
+    /// <summary>
+    /// The problem with its line number counted from the start of the test's own text, not
+    /// counting the <c>.module</c>, <c>.cpu</c> and <c>.segment</c> lines every test is
+    /// compiled after.
+    /// </summary>
     private static string Renumbered(string problem)
     {
         var parts = problem.Split(':', 3);

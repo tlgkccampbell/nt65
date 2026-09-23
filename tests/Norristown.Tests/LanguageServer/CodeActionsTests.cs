@@ -6,8 +6,8 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The fixes the diagnostics name, offered as code actions: each is applied, and the file it
-/// leaves is compared with what the programmer would have written.
+/// The fixes that diagnostics suggest, offered as code actions: each is applied, and the
+/// resulting file is compared with what the programmer would have written by hand.
 /// </summary>
 public sealed class CodeActionsTests
 {
@@ -86,7 +86,7 @@ public sealed class CodeActionsTests
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics.Select(d => d.Message));
     }
 
-    /// <summary>A name another module declares and does not export is exported there, and one it exports is brought in here.</summary>
+    /// <summary>A name another module declares but does not export gets an <c>.export</c> in that module; one it does export gets a <c>.use</c> here.</summary>
     [Fact]
     public async Task TheMissingExportOrUseIsWrittenWhereItBelongs()
     {
@@ -114,8 +114,8 @@ public sealed class CodeActionsTests
         var timeout = TestContext.Current.CancellationToken;
         await using var client = await TestClient.StartAsync(timeout);
 
-        // On the 6502 an immediate has no width to be told, so the half-written line is only
-        // what the parser says about it, and nothing can be written from here that fixes it.
+        // On the 6502 an immediate has only one width, so the only diagnostic on the half-written
+        // line is the parser's, and no edit the server could write would fix it.
         await client.OpenAsync(MainUri, ".module main\n.cpu 6502\n.segment CODE\n.export .proc main {\n    lda #\n    rts\n}\n");
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 

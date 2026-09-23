@@ -16,12 +16,12 @@ namespace Norristown.Layout;
 /// </param>
 /// <param name="Cycles">How long the instruction takes, or null for data and for one nt65 has no count for.</param>
 /// <param name="Causes">
-/// What the top of <paramref name="Cycles"/> is paid for where the count is an interval, in
-/// the order it is paid; empty where the count is exact.
+/// Where <paramref name="Cycles"/> is an interval, what the extra cycles at the top of it are
+/// spent on, in the order they are spent; empty where the count is exact.
 /// </param>
 /// <param name="Bits">
-/// How wide a 65816 immediate that follows a register's width is, 8 or 16; null for every
-/// other line, and on the CPUs whose immediates are always a byte.
+/// The width, 8 or 16, of a 65816 immediate whose size follows a register's width; null for
+/// every other line, and on the CPUs whose immediates are always a byte.
 /// </param>
 /// <param name="Ensured">What an <c>.ensure</c> writes; null for every other line.</param>
 /// <param name="Slot">

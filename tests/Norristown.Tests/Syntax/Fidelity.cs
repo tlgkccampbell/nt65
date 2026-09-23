@@ -29,7 +29,7 @@ internal static class Fidelity
         }
     }
 
-    /// <summary>A line as the pieces it is written in spell it, in the order they are written.</summary>
+    /// <summary>The text of a line rebuilt from its pieces, in the order they are written.</summary>
     private static string Pieces(LineSyntax line) =>
         (line.ExportKeyword?.ToFullString() ?? "")
         + line.Statement.ToFullString()

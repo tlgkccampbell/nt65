@@ -43,36 +43,37 @@ internal sealed class LineContext
     /// <summary>The tokens before that name, or before the caret when there is none.</summary>
     public IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> Before { get; }
 
-    /// <summary>The kind of place the line is written in, which decides what may be written there.</summary>
+    /// <summary>The kind of context the line is in, which decides what may be written there.</summary>
     public Place Place { get; }
 
-    /// <summary>Whether a routine holds the line, where a <c>.proc</c> and a <c>.macro</c> may not go.</summary>
+    /// <summary>Whether the line is inside a routine, where a <c>.proc</c> or a <c>.macro</c> may not be declared.</summary>
     public bool InProc { get; }
 
-    /// <summary>Whether a macro body holds the line, which declares nothing the rest of the program shares.</summary>
+    /// <summary>Whether the line is inside a macro body, which may declare nothing the rest of the program shares.</summary>
     public bool InMacro { get; }
 
-    /// <summary>Whether a repetition holds the line, where a definition would differ on every turn.</summary>
+    /// <summary>Whether the line is inside a repetition, where a declaration would be made again on every iteration.</summary>
     public bool InRepetition { get; }
 
     /// <summary>
     /// Whether any block holds the line at all, an open <c>.segment</c> region included. A
-    /// <c>.config</c> is written where none does: which settings a program has is part of what
-    /// a build sets, and may not itself depend on where in a file it was written.
+    /// <c>.config</c> may only be written where none does: which settings a program has is
+    /// fixed by the build, and may not depend on where in a file the setting was written.
     /// </summary>
     public bool InBlock { get; }
 
     /// <summary>
-    /// Whether the line is at file level: in no block but an open <c>.segment</c> region, which
-    /// is where a <c>.place</c> goes. Which modules share a translation unit depends on no
-    /// condition, and the region the line is in is only where the file's own bytes are going.
+    /// Whether the line is at file level: inside no block other than an open <c>.segment</c>
+    /// region. This is where a <c>.place</c> goes: which modules share a translation unit must
+    /// not depend on any condition, and a segment region only says where the file's own bytes
+    /// go.
     /// </summary>
     public bool AtFileLevel { get; }
 
     /// <summary>The type a <c>.type T { }</c> initializer gives values to, or null outside one.</summary>
     public IReadOnlyList<string>? RecordType { get; }
 
-    /// <summary>Whether the caret is inside a comment or a text literal, where nothing is written.</summary>
+    /// <summary>Whether the caret is inside a comment or a text literal, where nothing is completed.</summary>
     public bool InText { get; }
 
     /// <summary>Whether this is the file's first line, the only place a <c>.module</c> goes.</summary>
@@ -121,8 +122,8 @@ internal sealed class LineContext
         var lineStart = tree.LineStarts[line];
         var tokens = Lexed(tree, lineStart, position);
 
-        // A name that runs right up to the caret is the one being typed. A `.` on its own is
-        // not yet a directive and lexes as nothing, and is the start of one all the same.
+        // A name that runs right up to the caret is the one being typed. A `.` on its own lexes
+        // as a bad token rather than a directive, but it is the start of one all the same.
         var partial = tokens.Count > 0
             && (tokens[^1].Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.Mnemonic
                     or SyntaxKind.Register or SyntaxKind.Directive
@@ -133,10 +134,10 @@ internal sealed class LineContext
     }
 
     /// <summary>
-    /// The call the caret is in the arguments of, innermost first: the index of the <c>(</c> that
-    /// opens them, and how many arguments come before the caret's. Null outside every call.
-    /// <paramref name="end"/> looks from before that token instead of the caret, for the call
-    /// around one.
+    /// The innermost call whose argument list holds the caret: the index of the <c>(</c> that
+    /// opens the list, and how many arguments come before the caret's. Null outside every call.
+    /// Passing <paramref name="end"/> searches back from before that token index instead of from
+    /// the caret, which finds the call enclosing another.
     /// </summary>
     public (int Open, int Argument)? OpenCall(int? end = null)
     {
@@ -184,7 +185,7 @@ internal sealed class LineContext
         return parts.Count == 0 ? null : parts;
     }
 
-    /// <summary>A whole line's tokens, but for its line break, with where each starts in the file.</summary>
+    /// <summary>All of a line's tokens except its line break, each with its start position in the file.</summary>
     public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
         [.. tree.GetLine(line).Tokens
             .Where(token => token.Kind != SyntaxKind.EndOfLine)
@@ -194,13 +195,13 @@ internal sealed class LineContext
     public static int CodeEnd(SyntaxTree tree, int line) =>
         TokensOf(tree, line) is [.., var last] ? last.Start + last.Text.Length : tree.LineStarts[line];
 
-    /// <summary>Whether a token is one a name can be written as.</summary>
+    /// <summary>Whether a token of this kind can be a name.</summary>
     public static bool IsWord(SyntaxKind kind) =>
         kind is SyntaxKind.Identifier or SyntaxKind.Mnemonic or SyntaxKind.Register;
 
     /// <summary>
-    /// What surrounds the line: the innermost block holding it decides the place, and the
-    /// blocks on the way in decide what may be declared there. The line that opens a block is
+    /// The line's surroundings: the innermost block holding it determines the context, and all
+    /// the enclosing blocks together determine what may be declared there. The line that opens a block is
     /// written in the block around it, not in the one it opens.
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
@@ -213,7 +214,8 @@ internal sealed class LineContext
 
     /// <summary>
     /// Whether the caret is inside a comment or a text literal, which hold prose rather than
-    /// code. The line is read to the caret the way the lexer reads it, far enough to say.
+    /// code. The line is scanned up to the caret, following the lexer's quoting rules only as
+    /// far as needed to tell.
     /// </summary>
     private static bool IsText(string text, int start, int caret)
     {
@@ -252,7 +254,7 @@ internal sealed class LineContext
             .Select(token => (token.Kind, token.Text, start + token.Span.Start))];
 
     /// <summary>What the blocks around a line say about what may be written in it.</summary>
-    /// <param name="Place">The kind of place the innermost block makes.</param>
+    /// <param name="Place">The kind of context the innermost block gives.</param>
     /// <param name="InProc">Whether a routine holds the line.</param>
     /// <param name="InMacro">Whether a macro body holds the line.</param>
     /// <param name="InRepetition">Whether a repetition holds the line.</param>
@@ -264,9 +266,9 @@ internal sealed class LineContext
         bool PastFileLevel)
     {
         /// <summary>
-        /// The same, one block further in. Every kind of block answers that one holds the line,
-        /// whatever else it says about it, because what may be written only at file level is
-        /// ruled out by the block being there rather than by which block it is.
+        /// The surroundings one block further in. Every kind of block sets <c>InBlock</c>,
+        /// whatever else it changes, because what may be written only at file level is ruled out
+        /// by the presence of any block, not by its kind.
         /// </summary>
         public Surrounding Within(BlockSyntax block)
         {

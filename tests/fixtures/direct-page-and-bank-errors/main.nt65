@@ -37,7 +37,7 @@
     rts
 }
 
-; A direct operand reaches D plus its offset, and an absolute one bank B.
+; A direct operand reaches D plus its offset, and an absolute one reaches its address in bank B.
 .proc wrong: a8, i8, dp = $0000, dbr = $00 {
     lda ptr                 ;! error[direct-page-mismatch]: `ptr` is in "ZP2", which is reached through the direct page at $2100, and D is $0000 here
     sta score               ;! error[bank-mismatch]: `score` is in "WRAM", which is in bank $7e, and B is $00 here
@@ -45,7 +45,7 @@
     rts
 }
 
-; The design's catch: a register mirrored only in some banks, reached from bank $7e.
+; The design's motivating case: a register mirrored only in some banks, reached from bank $7e.
 .proc mirrored: a8, i8, dbr = $7e {
     sta $2100               ;! error[range-bank-mismatch]: $2100 is reached only from banks $00-$3f, $80-$bf, and B is $7e here
     rts
@@ -91,7 +91,7 @@
     rts
 }
 
-; `d:` needs D known, and an address in the page D starts.
+; `d:` needs D to be known, and an address inside the 256-byte page that starts at D.
 .proc through: a8, i8 -> a8, i8, dp? {
     lda d:$2105             ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and `through` says `dp*`, which assumes nothing about D
     pea $2100
@@ -144,8 +144,8 @@
     rts
 }
 
-; A conditional branch has no long form to name instead, so what reaches the other bank is a
-; `jml` the opposite branch skips.
+; A conditional branch has no long form to suggest instead, so reaching the other bank takes
+; a `jml`, skipped over by the opposite branch.
 .proc branches: a8, i8 {
     beq low                 ;! error[jump-leaves-bank]: `beq` stays in bank $02, and `low` is in "BANK1", in bank $01: no branch leaves the bank: branching the other way over a `jml` to it does
     rts

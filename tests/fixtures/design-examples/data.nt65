@@ -44,7 +44,7 @@ SCREEN = $0400
     }
 }
 .data handlers: .addr[4] { move, fire, jump, quit }   ; a body must hold exactly its count
-.data header:   .type RomHeader { title = "NT65" }       ; one record (§6.3)
+.data header:   .type RomHeader { title = "NT65" }       ; one record
 .data sprites:  .type Sprite[] {                        ; an array of records
     { x = 10, y = 20 }
     { x = 30, y = 40 }

@@ -3,14 +3,15 @@ using Norristown.LanguageServer;
 namespace Norristown.Cli;
 
 /// <summary>
-/// Serves the language server over stdio, so that an editor which speaks LSP starts it from
-/// the same tool as the command rather than from inside the VS Code extension.
+/// Serves the language server over stdio, so that any editor that speaks LSP can start it by
+/// running the nt65 command itself, rather than the server living only inside the VS Code
+/// extension.
 /// </summary>
 internal static class LspCommand
 {
     /// <summary>
-    /// Answers LSP on standard input and output until the client says to stop, and returns the
-    /// exit code the protocol asks for.
+    /// Serves LSP on standard input and output until the client tells the server to exit, and
+    /// returns the exit code the protocol specifies.
     /// </summary>
     public static int Run(TextWriter error)
     {

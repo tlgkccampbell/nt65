@@ -13,8 +13,8 @@ namespace Norristown.Syntax;
 /// order, and a required piece stands in its slot whether or not the source wrote it. So a
 /// required property is never null, and a piece the source left out is a
 /// <see cref="SyntaxToken"/> with <see cref="SyntaxToken.IsMissing"/> set, of no width, placed
-/// where it belongs. A nullable property means one thing: the piece belongs to a part of the
-/// line the source did not write at all.
+/// where it belongs. A nullable property is null only when the piece belongs to an optional
+/// part of the line that the source did not write at all.
 /// </para>
 /// </summary>
 public abstract class SyntaxNode
@@ -71,8 +71,8 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// Whether this node or anything under it carries a <see cref="SyntaxAnnotation"/>, answered
-    /// without walking, so that looking for an annotated piece of a file costs a walk of the
-    /// subtrees that hold one.
+    /// without walking, so that a search for annotated pieces walks only the subtrees that
+    /// contain one.
     /// </summary>
     public virtual bool ContainsAnnotations => Green.ContainsAnnotations;
 
@@ -122,41 +122,41 @@ public abstract class SyntaxNode
     internal int LastLineIndex => Tree.GetLineIndex(Math.Max(Position, FullSpan.End - 1));
 
     /// <summary>
-    /// The node a child of this one hangs from. It is this node, except on the internal node
-    /// over a list, whose items and separators belong to the node that holds the list: the list
-    /// node keeps their red nodes and is otherwise invisible.
+    /// The node that this node's children report as their parent. It is this node, except for
+    /// the internal node over a list: its items and separators report the node that holds the
+    /// list, and the list node only caches their red nodes and is otherwise invisible.
     /// </summary>
     internal virtual SyntaxNode ChildParent => this;
 
     /// <summary>
-    /// The children this node shows in place of its slots, or null where its slots are its
-    /// children. A line's slots are its tokens, and its children are the pieces it is written
-    /// in, which hold those same tokens: everything that walks the tree reads the pieces, so
-    /// that a token belongs to the node it is part of and is met once.
+    /// The children this node exposes instead of its slots, or null when its slots are its
+    /// children. A line's slots are its tokens, but its children are the pieces it is made of,
+    /// which hold those same tokens. Every walk of the tree goes through the pieces, so each
+    /// token is reached once, with the node it is part of as its parent.
     /// </summary>
     internal virtual ImmutableArray<SyntaxNodeOrToken>? RedChildren => null;
 
-    /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
-    /// <param name="visitor">The visitor to hand it to.</param>
+    /// <summary>Calls the method <paramref name="visitor"/> has for this node's class.</summary>
+    /// <param name="visitor">The visitor to call.</param>
     public abstract void Accept(SyntaxVisitor visitor);
 
-    /// <summary>Hands this node to the method <paramref name="visitor"/> has for its class.</summary>
-    /// <typeparam name="TResult">What visiting a node works out.</typeparam>
-    /// <param name="visitor">The visitor to hand it to.</param>
-    /// <returns>What that method worked out.</returns>
+    /// <summary>Calls the method <paramref name="visitor"/> has for this node's class.</summary>
+    /// <typeparam name="TResult">The type of result the visitor computes.</typeparam>
+    /// <param name="visitor">The visitor to call.</param>
+    /// <returns>The result of that method.</returns>
     public abstract TResult? Accept<TResult>(SyntaxVisitor<TResult> visitor);
 
     /// <summary>This node's children, nodes and tokens together, in source order.</summary>
     public ChildSyntaxList ChildNodesAndTokens() => new(this);
 
     /// <summary>
-    /// The syntax diagnostics of this node and everything under it, in the order the pieces of it
-    /// hold them. Nothing is walked where <see cref="ContainsDiagnostics"/> says there is nothing
-    /// to find.
+    /// The syntax diagnostics of this node and everything under it, in the order of the pieces
+    /// that hold them. Nothing is walked where <see cref="ContainsDiagnostics"/> says there is
+    /// nothing to find.
     /// <para>
-    /// A line answers for everything written on it, and a block and a file for every line under
-    /// them, the errors about their braces included, so the root's answer is the whole file's and
-    /// is the same list as <see cref="SyntaxTree.Diagnostics"/>.
+    /// A line reports everything written on it, and a block or a file reports every line under
+    /// it, errors about its braces included, so the root's result covers the whole file and is
+    /// the same list as <see cref="SyntaxTree.Diagnostics"/>.
     /// </para>
     /// </summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
@@ -168,8 +168,8 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// Every node below this one, parents before children. The walk keeps its own stack rather
-    /// than the machine's: a deeply nested expression is a line somebody wrote, and running out
-    /// of stack would take the process with it.
+    /// than recursing: a deeply nested expression can occur in real source, and a stack overflow
+    /// would kill the process.
     /// </summary>
     public IEnumerable<SyntaxNode> DescendantNodes()
     {
@@ -195,12 +195,12 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// This node with <paramref name="oldNode"/> written as <paramref name="newNode"/>. Nothing
-    /// else moves: every other character of the file is the same character, and a replacement
-    /// that changes nothing gives back this node itself.
+    /// else changes: every other character of the file stays the same, and a replacement that
+    /// changes nothing returns this node itself.
     /// <para>
-    /// A statement and everything under it is rebuilt where it stands. A line, a block and the
-    /// file are written back as text and parsed again, so replacing inside one of those gives the
-    /// matching node of a <em>new</em> tree, which <see cref="Tree"/> answers for.
+    /// A statement and everything under it is rebuilt in place. A line, a block and the file are
+    /// written back out as text and parsed again, so replacing inside one of those returns the
+    /// corresponding node of a <em>new</em> tree, which its <see cref="Tree"/> gives.
     /// </para>
     /// </summary>
     /// <param name="oldNode">The node to write over, which is under this one.</param>
@@ -211,13 +211,15 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// This node with each of <paramref name="nodes"/> written as
-    /// <paramref name="computeReplacement"/> says, which is what a fix over a whole file is. A
-    /// replacement of null takes the node out, which only a list item and an optional piece can
-    /// stand.
+    /// <paramref name="computeReplacement"/> says; a fix applied across a whole file uses this. A
+    /// null replacement removes the node, which is allowed only for a list item or an optional
+    /// piece.
     /// </summary>
     /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
     /// <param name="nodes">The nodes to write over, which are under this one.</param>
-    /// <param name="computeReplacement">The node as it was found, twice, and what to write there.</param>
+    /// <param name="computeReplacement">
+    /// Given the node as it was found, passed as both arguments, returns what to write there.
+    /// </param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceNodes<TNode>(
         IEnumerable<TNode> nodes, Func<TNode, TNode, SyntaxNode?> computeReplacement)
@@ -234,7 +236,9 @@ public abstract class SyntaxNode
 
     /// <summary>This node with each of <paramref name="tokens"/> written as <paramref name="computeReplacement"/> says.</summary>
     /// <param name="tokens">The tokens to write over, which are under this node.</param>
-    /// <param name="computeReplacement">The token as it was found, twice, and what to write there.</param>
+    /// <param name="computeReplacement">
+    /// Given the token as it was found, passed as both arguments, returns what to write there.
+    /// </param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceTokens(
         IEnumerable<SyntaxToken> tokens, Func<SyntaxToken, SyntaxToken, SyntaxToken> computeReplacement) =>
@@ -251,14 +255,14 @@ public abstract class SyntaxNode
     public SyntaxNode RemoveNode(SyntaxNode node) => ReplaceNodes<SyntaxNode>([node], (_, _) => null);
 
     /// <summary>
-    /// This node written with one space where two tokens would otherwise read as one and none
-    /// where none is wanted, and with the trivia it carried thrown away. It is what a node built
-    /// out of bare tokens wants before it goes into a file: the factory invents no whitespace, so
-    /// without this a built <c>lda #0</c> is written <c>lda#0</c>.
+    /// This node with all its trivia, comments included, thrown away and replaced by standard
+    /// spacing: one space where two tokens would otherwise run together, and none elsewhere. A
+    /// node built from bare tokens needs this before it goes into a file: the factory invents no
+    /// whitespace, so without this a built <c>lda #0</c> is written <c>lda#0</c>.
     /// <para>
-    /// What comes out is nt65 a reader can read, not the layout the file is written in:
-    /// <see cref="Formatter"/> is what sets a line's indentation, and running it over the tree a
-    /// rewrite gives back is what puts a built line where it belongs.
+    /// The result is readable nt65, not the file's layout: <see cref="Formatter"/> sets a line's
+    /// indentation, and running it over the tree a rewrite returns is what moves a built line
+    /// to its proper indentation.
     /// </para>
     /// </summary>
     /// <returns>This node, or the node it has become.</returns>
@@ -314,7 +318,7 @@ public abstract class SyntaxNode
     }
 
     /// <summary>Whether this node itself carries <paramref name="annotation"/>.</summary>
-    /// <param name="annotation">The annotation to look for, which is found by being itself.</param>
+    /// <param name="annotation">The annotation to look for, matched by reference.</param>
     public bool HasAnnotation(SyntaxAnnotation annotation) => Green.Annotations.Contains(annotation);
 
     /// <summary>Whether this node itself carries an annotation of <paramref name="kind"/>.</summary>
@@ -438,16 +442,15 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The token <paramref name="position"/> is written in, trivia and all: the token whose full
-    /// span holds the position. The whitespace and the comment after a token belong to it, and
-    /// the indentation before the first token of a line belongs to that token, so a caret in
-    /// either finds the token the trivia is written beside, as it does in Roslyn. A missing token
-    /// has no width and so holds no position: nothing is ever written in one, and one is never
-    /// the answer.
+    /// The token whose full span, trivia included, contains <paramref name="position"/>. The
+    /// whitespace and the comment after a token belong to it, and the indentation before the
+    /// first token of a line belongs to that token, so a caret in either finds the token the
+    /// trivia is written beside, as in Roslyn. A missing token has no width and so contains no
+    /// position, so it is never the result except at the end of a node, below.
     /// <para>
-    /// The end of a node is past everything written in it and holds nothing, and the answer there
-    /// is the node's last token: the line break at the end of a file, or, in a node whose last
-    /// piece the source leaves out, the missing token standing for it.
+    /// The end of a node is past everything written in it and so falls in no token; the result
+    /// there is the node's last token: the line break at the end of a file, or, in a node whose
+    /// last piece the source leaves out, the missing token in its place.
     /// </para>
     /// </summary>
     /// <param name="position">An offset from this node's start to its end.</param>
@@ -495,11 +498,11 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The innermost node holding the whole of <paramref name="span"/>, which is what an editor
-    /// is asking about when it names a range. A span no child of this node holds whole gives this
-    /// node itself, and a span this node does not hold at all is an error. An empty span is a
-    /// caret rather than a selection: it belongs to what is written after it, not to what ends
-    /// where it stands.
+    /// The innermost node containing the whole of <paramref name="span"/>, which is what an
+    /// editor is asking about when it names a range. When no child of this node contains the
+    /// whole span the result is this node, and a span outside this node is an error. An empty
+    /// span is a caret rather than a selection: it belongs to what is written after it, not to
+    /// what ends where it stands.
     /// </summary>
     /// <param name="span">A range within this node.</param>
     public SyntaxNode FindNode(TextSpan span)
@@ -510,9 +513,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// <paramref name="built"/> carrying this node's own annotations, which is what an
-    /// <c>Update</c> hands back: a node rebuilt out of new pieces is still the node that was
-    /// tagged, and the pieces bring whatever they carry themselves.
+    /// <paramref name="built"/> with this node's own annotations added, which is what an
+    /// <c>Update</c> returns: a node rebuilt from new pieces is still the node that was tagged,
+    /// and the pieces keep whatever annotations they carry themselves.
     /// </summary>
     /// <typeparam name="T">What the node is.</typeparam>
     /// <param name="built">The node just rebuilt out of this one's pieces.</param>
@@ -580,14 +583,14 @@ public abstract class SyntaxNode
         return Interlocked.CompareExchange(ref cache[index], created, null) ?? created;
     }
 
-    /// <summary>Whether <paramref name="node"/> is the node over a list, which a parent shows through.</summary>
+    /// <summary>Whether <paramref name="node"/> is a list node, whose items its parent exposes directly.</summary>
     internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
 
     /// <summary>
-    /// Adds this node's diagnostics to <paramref name="result"/>. A green node holds what it and
-    /// its children carry, which is the whole answer for everything but a line, a block and a
-    /// file: those hold the tokens of a line rather than what the line parses to, and each
-    /// overrides this to answer over the lines it is written over.
+    /// Adds this node's diagnostics to <paramref name="result"/>. For most nodes, what the green
+    /// node and its children carry is the whole answer. A line, a block and a file differ: they
+    /// hold a line's tokens rather than what the line parses to, so each overrides this to
+    /// collect the tree's per-line diagnostics for the lines it spans.
     /// </summary>
     /// <param name="result">The list to add to.</param>
     private protected virtual void CollectDiagnostics(List<Diagnostic> result) =>
@@ -640,8 +643,8 @@ public abstract class SyntaxNode
     /// <summary>
     /// Everything below <paramref name="node"/>, nodes and tokens together, a parent before its
     /// children and siblings in source order. The children being walked at each level are held
-    /// here rather than in a stack frame, so how deeply a file nests is not how much stack
-    /// reading it takes.
+    /// here rather than in stack frames, so the stack used does not grow with how deeply the
+    /// file nests.
     /// </summary>
     /// <param name="node">The node to walk below.</param>
     private static IEnumerable<SyntaxNodeOrToken> Below(SyntaxNode node)
@@ -666,7 +669,7 @@ public abstract class SyntaxNode
         }
         finally
         {
-            // A caller that stops early leaves the levels it did not finish.
+            // A caller that stops early leaves unfinished levels, whose enumerators are disposed here.
             foreach (var children in pending)
                 children.Dispose();
         }
@@ -710,9 +713,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Every token under <paramref name="node"/>, in source order, each with whether what holds
-    /// it writes it tight against what follows: a prefix operator and its operand, the pieces of
-    /// an operand and an address prefix are where nt65 leaves no space.
+    /// Every token under <paramref name="node"/>, in source order, each paired with whether its
+    /// parent writes it with no space before the next token: nt65 leaves no space inside a prefix
+    /// operator and its operand, inside an instruction operand, or inside an address prefix.
     /// </summary>
     private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> written)
     {
@@ -728,9 +731,9 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// Whether a space goes between a token of <paramref name="left"/> and one of
-    /// <paramref name="right"/>. What binds tight binds tight on whichever side it is written,
-    /// a word needs telling from the word after it, and an operator is written clear of both of
-    /// its operands.
+    /// <paramref name="right"/>. Punctuation that binds tightly gets no space on its binding
+    /// side, two adjacent words need a space to stay separate, and a binary operator gets a
+    /// space on both sides.
     /// </summary>
     private static bool Apart(SyntaxKind left, SyntaxKind right)
     {
@@ -761,15 +764,15 @@ public abstract class SyntaxNode
         or SyntaxKind.AmpersandAmpersand or SyntaxKind.Bar or SyntaxKind.BarBar or SyntaxKind.Caret
         or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.Arrow;
 
-    /// <summary>The tokens a reader tells apart by the space between them.</summary>
+    /// <summary>Word-like tokens, which need a space between them to be read as separate tokens.</summary>
     private static bool Word(SyntaxKind kind) => kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
         or SyntaxKind.Mnemonic or SyntaxKind.Register or SyntaxKind.Directive or SyntaxKind.NumberLiteral
         or SyntaxKind.CharacterLiteral or SyntaxKind.StringLiteral or SyntaxKind.CpuName or SyntaxKind.BadToken;
 
     /// <summary>
-    /// The child whose text holds <paramref name="position"/>, which the walk down to a token
-    /// goes on through; nothing when no child does. A child of no width holds no position, so a
-    /// missing token is never it.
+    /// The child whose full span contains <paramref name="position"/>, for the walk down to a
+    /// token to continue through; default when no child does. A child of no width contains no
+    /// position, so a missing token is never returned.
     /// </summary>
     private SyntaxNodeOrToken ChildContaining(int position)
     {
@@ -800,9 +803,10 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// The innermost node under this one holding the whole of <paramref name="span"/>, or null
-    /// when no child of it does. A span with a length is held by one child at most, and an empty
-    /// one is held both by what ends where it stands and by what starts there, so every child
-    /// that could hold it is followed down and the narrowest answer, latest written, is the one.
+    /// when no child contains it. A non-empty span is contained by one child at most, but an empty
+    /// one is contained both by the child that ends where it stands and by the child that starts
+    /// there, so every child containing it is searched and the narrowest result wins, with ties
+    /// going to the later child.
     /// </summary>
     private SyntaxNode? ChildHolding(TextSpan span)
     {
@@ -818,7 +822,7 @@ public abstract class SyntaxNode
         return best;
     }
 
-    /// <summary>A rewrite that writes the nodes it was given as something else, or out of the tree.</summary>
+    /// <summary>A rewrite that replaces the nodes it was given, or removes them from the tree.</summary>
     /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
     private sealed class NodeReplacer<TNode> : SyntaxRewriter where TNode : SyntaxNode
     {
@@ -833,14 +837,14 @@ public abstract class SyntaxNode
 
         /// <inheritdoc/>
         /// <remarks>
-        /// A node that is being written over is not walked into: what replaces it is worked out
-        /// from the node as it stands, which is what a fix reads.
+        /// A node that is being replaced is not walked into: its replacement is computed from
+        /// the original node, which is what a fix expects to read.
         /// </remarks>
         public override SyntaxNode? Visit(SyntaxNode? node) =>
             node is TNode found && sought.Contains(node) ? replacement(found, found) : base.Visit(node);
     }
 
-    /// <summary>A rewrite that writes the tokens it was given as something else.</summary>
+    /// <summary>A rewrite that replaces the tokens it was given.</summary>
     private sealed class TokenReplacer : SyntaxRewriter
     {
         private readonly HashSet<SyntaxToken> sought;
@@ -858,8 +862,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// A rewrite that hands back the tokens it was given, in the order they are met. The spacing
-    /// was worked out over the same walk, so the nth token visited is the nth token written.
+    /// A rewrite that returns the already-spaced tokens it was given, in the order it visits
+    /// them. The spacing was computed over the same walk order, so the nth token visited is
+    /// the nth token in the list.
     /// </summary>
     /// <param name="spaced">Every token of the node, in source order, with its new trivia.</param>
     private sealed class Spacer(ImmutableArray<SyntaxToken> spaced) : SyntaxRewriter

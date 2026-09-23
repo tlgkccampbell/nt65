@@ -31,7 +31,7 @@ COUNT = 4
     one
 }
 
-; What a name stands for is not the declaration an index reaches into.
+; Only a data declaration can be indexed, and only when it is named directly.
 .macro row(items) {
     lda items[1]              ;! error[not-indexable]: `items` is a macro parameter, and `[i]` reaches an element of data
 }

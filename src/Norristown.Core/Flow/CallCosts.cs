@@ -32,15 +32,15 @@ public static class CallCosts
     }
 
     /// <summary>
-    /// Which routines control ever comes back out of. A way out of a routine is a block
-    /// nothing follows: a return, a tail jump, or a call to a routine that never comes back.
-    /// The first two bring control back and the last does not, so a routine comes back when
-    /// any way out of it does, and what its tail jump reaches has to come back for that.
+    /// Which routines control ever returns from. An exit from a routine is a reached block with
+    /// no successor inside it: a return, a tail jump, or a call to a routine that never returns.
+    /// A routine returns when any of its exits does: a return always does, a tail jump does
+    /// only when the routine it jumps to returns, and a call that never returns does not.
     /// <para>
-    /// A routine is taken not to come back until something shows that it does, and the answer
-    /// is worked over again until it stops moving: a chain of tail jumps that ends in a loop
-    /// for ever is then found however long the chain is. A call nt65 cannot name, and one to a
-    /// routine with no body, are taken to come back, since saying they do not would be a claim
+    /// A routine is assumed not to return until something shows that it does, and the set is
+    /// recomputed until it stops changing, so a chain of tail jumps that ends in an infinite
+    /// loop is found however long the chain is. A call nt65 cannot identify, and one to a
+    /// routine with no body, are assumed to return, since saying they do not would be a claim
     /// about code that is not here.
     /// </para>
     /// </summary>
@@ -61,7 +61,7 @@ public static class CallCosts
         return found;
     }
 
-    /// <summary>Whether any way out of a routine is one control comes back through.</summary>
+    /// <summary>Whether any exit from a routine is one through which control returns.</summary>
     private static bool ComesBack(
         FlowRegion region,
         Dictionary<(string Path, string Name), FlowRegion> regions,
@@ -80,10 +80,10 @@ public static class CallCosts
     }
 
     /// <summary>
-    /// A routine by its file and its flattened name, rather than by the symbol, which an
-    /// analysis that kept the file before an edit holds a different object for. It is the name
-    /// and not the position, because a file that was kept still names the routines of a file
-    /// that changed at the positions they were at before the edit moved them.
+    /// A routine identified by its file and its flattened name, rather than by its symbol: an
+    /// analysis that kept a file's results from before an edit holds a different symbol object
+    /// for the same routine. It is the name and not the position, because a kept file still
+    /// refers to the routines of an edited file at the positions they had before the edit.
     /// </summary>
     private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
@@ -105,8 +105,8 @@ public static class CallCosts
         if (!walking.Add(name))
             return new RoutineCost(null, null, true, true);
 
-        // The fewest and the most are worked out apart, because a callee that loops has a
-        // fewest and no most, and that leaves its caller the same way round.
+        // The fewest and the most are worked out separately, because a callee that loops has a
+        // fewest but no most, and its caller then has a fewest but no most too.
         var (least, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
         var most = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Most;
         walking.Remove(name);
@@ -121,8 +121,8 @@ public static class CallCosts
                 return null;
             var with = fewest ? own.Least : own.Most;
 
-            // A call inside a counted loop is made once a turn, so what it costs counts as
-            // many times over as the loop runs.
+            // A call inside a counted loop is made once per iteration, so its cost is counted
+            // as many times as the loop runs.
             foreach (var callee in block.Calls)
             {
                 var name = Named(callee);

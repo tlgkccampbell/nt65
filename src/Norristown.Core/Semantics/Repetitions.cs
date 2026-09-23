@@ -4,25 +4,24 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// What a <c>.repeat</c> or an <c>.each</c> unrolls to: one turn per count, per list item or
-/// per enum member. Nothing of it decides anything in the output, so layout and emission each
-/// ask for the turns and walk the body once per turn; whether the lines a counted repetition's
-/// turns came out as can be said once is the emitter's question, asked of those lines.
+/// per enum member. None of this is kept for the output, so layout and emission each ask for
+/// the turns and walk the body once per turn; whether the lines a counted repetition's turns
+/// produce can be written out once rather than per turn is for the emitter to decide from them.
 /// </summary>
 public static class Repetitions
 {
     /// <summary>
-    /// How many turns a repetition is unrolled for. A body is written out once per turn, so
-    /// this is the bound that already holds for the statements a file's expansions come to,
-    /// and the same number: past it nt65 stops rather than filling memory with turns nobody
-    /// could assemble.
+    /// The most turns a repetition is unrolled for. A body is written out once per turn, so
+    /// this is the same bound, with the same number, that already limits the statements a
+    /// file's expansions produce: past it nt65 stops rather than filling memory with turns
+    /// nobody could assemble.
     /// </summary>
     public const int MaximumTurns = 65536;
 
     /// <summary>
-    /// The turns <paramref name="block"/> stands for, inside <paramref name="outer"/>.
-    /// A count or a list nt65 cannot read is reported into
-    /// <paramref name="diagnostics"/>, when a caller wants to hear about it, and stands for
-    /// no turns at all.
+    /// The turns of <paramref name="block"/>, inside <paramref name="outer"/>. A count or a
+    /// list nt65 cannot read is reported into <paramref name="diagnostics"/>, when it is not
+    /// null, and gives no turns at all.
     /// </summary>
     public static IReadOnlyList<Expansion> Of(
         SemanticModel model, BlockSyntax block, Expansion? outer, List<Diagnostic>? diagnostics)
@@ -37,13 +36,13 @@ public static class Repetitions
                 Walked(model, block, family.Expression, binding, outer, diagnostics, folded: true),
 
             // An opener that is none of them, such as a `.repeat` written after a label, opens
-            // no repetition and stands for no turns. The parser has already said what is wrong
-            // with it, and reading it as an `.each` would only say something else instead.
+            // no repetition and gives no turns. The parser has already reported what is wrong
+            // with it, and reading it as an `.each` would only report something else instead.
             _ => [],
         };
     }
 
-    /// <summary>What is said about a repetition of <paramref name="count"/> turns, which is too many.</summary>
+    /// <summary>The diagnostic for a repetition of <paramref name="count"/> turns, which is too many.</summary>
     /// <param name="count">How many turns it runs.</param>
     public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Says(count, MaximumTurns);
 
@@ -99,8 +98,8 @@ public static class Repetitions
         SemanticModel model, BlockSyntax block, SyntaxNode walked, Symbol? binding, Expansion? outer,
         List<Diagnostic>? diagnostics, bool folded = false)
     {
-        // `.multiproc` names its routines after an enum's members, so a list is no answer: the
-        // binder has already said so where the family is declared.
+        // `.multiproc` names its routines after an enum's members, so a list gives no turns; the
+        // binder has already reported it where the family is declared.
         if (folded)
         {
             return model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } enumerated }
@@ -122,7 +121,7 @@ public static class Repetitions
         }
 
         // A list item is kept as it was written: the items may be labels, which have no
-        // value at all, and a name standing for one has to be that label.
+        // value at all, and a name bound to one has to behave as that label.
         if (model.ItemsOf(walked) is { } items)
             return [.. items.Select((item, i) => Expansion.Turn(outer, block, binding, Value.Unknown, item, i))];
 
@@ -143,7 +142,7 @@ public static class Repetitions
         ? Catalogue.DeclarationInARepetition.Says(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
-    /// <summary>The two halves of that sentence, or null where the statement may stand.</summary>
+    /// <summary>The two halves of that message, what is refused and why, or null when the statement is allowed.</summary>
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>

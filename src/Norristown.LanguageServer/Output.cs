@@ -4,10 +4,10 @@ using Norristown.Project;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What a file became, for the view beside it. The text is the ca65 <c>nt65 build</c> writes,
-/// as the program stands in the editor now, and the runs beside it are the line map that build
-/// writes, read the way a caret needs it: which lines of the output each line of the source
-/// wrote, so that moving in either can point at the other.
+/// The output a source file produces, for the side-by-side output view. The text is the ca65
+/// that <c>nt65 build</c> would write from the program as it stands in the editor now, and the
+/// runs are that build's line map, arranged for caret tracking: which output lines each source
+/// line produced, so that moving the caret in either view can highlight the other.
 /// </summary>
 internal static class Output
 {
@@ -31,8 +31,8 @@ internal static class Output
 
     /// <summary>
     /// The line map as runs: each line of the source with the run of output lines it wrote, in
-    /// output order. Lines the output generates nothing traceable for are in no run, and a
-    /// source line that wrote lines in two places has a run for each.
+    /// output order. Output lines that no source line produced belong to no run, and a source
+    /// line that wrote lines in two places has a run for each.
     /// </summary>
     private static IReadOnlyList<Protocol.OutputRun> Runs(IReadOnlyList<int> sources)
     {
@@ -53,8 +53,8 @@ internal static class Output
     }
 
     /// <summary>
-    /// How many lines the output opens with that no line of the source wrote: the note on an
-    /// incomplete one, the <c>.feature</c> block and what the file exports and imports. A view
+    /// How many lines the output starts with that no source line produced: the note on
+    /// incomplete output, the <c>.feature</c> block, and the file's exports and imports. A view
     /// opens past them, because they are there for ca65 rather than for the reader.
     /// </summary>
     private static int Header(IReadOnlyList<int> sources)

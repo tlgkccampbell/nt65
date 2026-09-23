@@ -5,19 +5,19 @@ using Norristown.Syntax;
 namespace Norristown.Tests;
 
 /// <summary>
-/// The order the layers of <c>Norristown.Core</c> stand in, and that none of them reaches back up
-/// it. Two back-edges were found and cut here — the semantic layer leaned on layout for the
-/// instruction tables and the register vocabulary, and layout held the flow analysis — and
-/// nothing but this says they may not come back.
+/// The order of the namespace layers in <c>Norristown.Core</c>, and a check that no layer depends
+/// on one above it. Two such upward dependencies were found and removed — the semantic layer
+/// relied on layout for the instruction tables and the register vocabulary, and layout contained
+/// the flow analysis — and nothing but this test stops them coming back.
 /// </summary>
 public sealed class NamespaceOrderTests
 {
     /// <summary>
     /// The layers, lowest first. Syntax knows nothing of the processor, so every operand form
-    /// parses everywhere; the processor's tables know nothing of what a program means; meaning
-    /// comes before the bytes it lays out; the project file is read as meaning, since its
-    /// segments and addresses are checked the way a file's are; the flow analysis reads a
-    /// layout; and emission is written from all of them.
+    /// parses under every CPU; the processor's tables know nothing of what a program means;
+    /// semantics comes before layout, which assigns the bytes; the project layer sits above
+    /// semantics, because the project file's segments and addresses are checked the same way a
+    /// source file's are; the flow analysis reads a layout; and emission draws on all of them.
     /// </summary>
     private static readonly string[] Order =
     [
@@ -30,7 +30,7 @@ public sealed class NamespaceOrderTests
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
         | BindingFlags.DeclaredOnly;
 
-    /// <summary>Nothing a type holds, takes or hands back is named in a layer above its own.</summary>
+    /// <summary>No type's fields, parameters, return types, base type or interfaces come from a layer above its own.</summary>
     [Fact]
     public void NoTypeNamesALayerAboveItsOwn()
     {
@@ -50,8 +50,8 @@ public sealed class NamespaceOrderTests
     }
 
     /// <summary>
-    /// The same for what only a method body names, which a signature does not show: a layer's
-    /// folder writes neither a <c>using</c> of a layer above it nor a name qualified through one.
+    /// The same check for names used only inside method bodies, which signatures do not show: no
+    /// file in a layer's folder has a <c>using</c> for a layer above it or a name qualified with one.
     /// </summary>
     [Fact]
     public void NoFolderNamesALayerAboveItsOwn()
@@ -73,7 +73,7 @@ public sealed class NamespaceOrderTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    /// <summary>Which layer a namespace is, or null for one the order does not name.</summary>
+    /// <summary>The index of the layer a namespace belongs to, or null for one not in the order.</summary>
     private static int? Layer(string? name)
     {
         var found = Array.FindIndex(Order, layer => name == layer

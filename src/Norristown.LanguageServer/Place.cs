@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The kind of place a line is written in, which is what decides the shape the line may
-/// take. The blocks around the line give it: a <c>.scope</c>, a segment block, a condition
-/// and a repetition all hold whatever their surroundings hold, and everything else says.
+/// The kind of context a line is written in, which decides what the line may contain. It comes
+/// from the enclosing blocks: a <c>.scope</c>, a segment block, a condition or a repetition
+/// allows whatever the block around it allows, and every other block sets the context itself.
 /// </summary>
 internal enum Place
 {

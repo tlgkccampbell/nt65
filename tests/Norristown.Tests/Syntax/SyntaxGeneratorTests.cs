@@ -5,7 +5,7 @@ namespace Norristown.Tests.Syntax;
 /// <summary>
 /// What the generator writes for a node, from a table of its own rather than the repository's:
 /// the red class, whose every property reads a slot of the green one, and the green class, whose
-/// constructor takes one parameter per slot and names each of them back.
+/// constructor takes one parameter per slot and keeps each in a property of its own name.
 /// </summary>
 public sealed class SyntaxGeneratorTests
 {
@@ -40,11 +40,15 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("public SeparatedSyntaxList<WidgetSyntax> Parts => SlotSeparatedList<WidgetSyntax>(2);", red);
         Assert.Contains("public SyntaxToken? CloseBraceToken => SlotTokenOrNull(3);", red);
 
-        // Nothing is searched for and nothing is kept in a field, so the array and its using go too.
+        // No property searches the children or keeps a value in a field, so the class needs no
+        // ImmutableArray, and no using directive for it.
         Assert.DoesNotContain("ImmutableArray", red);
     }
 
-    /// <summary>A property that is no piece of the node says what it returns, and returns that.</summary>
+    /// <summary>
+    /// A member, which is a property that is not one of the node's slots, returns the expression
+    /// its <c>Read</c> gives.
+    /// </summary>
     [Fact]
     public void AMemberReturnsWhatTheTableSaysItDoes()
     {
@@ -68,7 +72,10 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("public override int SlotCount => 1;", Green(member));
     }
 
-    /// <summary>A field reads its slot and a member is read from other properties, and neither is the other.</summary>
+    /// <summary>
+    /// A field reads its slot and may not have a <c>Read</c>; a member is computed from other
+    /// properties and must have one.
+    /// </summary>
     [Fact]
     public void AFieldTakesNoReadAndAMemberWantsOne()
     {
@@ -115,7 +122,10 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("new Red.WidgetSyntax(tree, parent, this, position);", green);
     }
 
-    /// <summary>The parser reads back what it built by name, with the type the slot holds.</summary>
+    /// <summary>
+    /// The green class exposes each slot as a named property of the slot's type, so the parser
+    /// can read back what it built by name.
+    /// </summary>
     [Fact]
     public void TheGreenClassNamesEachSlot()
     {
@@ -159,7 +169,10 @@ public sealed class SyntaxGeneratorTests
         Assert.Contains("GreenNode? packed)", box);
     }
 
-    /// <summary>A node says its slot order where its own slots come between the ones above it.</summary>
+    /// <summary>
+    /// A node gives its slot order in a <c>Layout</c> where its own slots come between the ones it
+    /// inherits from its base classes.
+    /// </summary>
     [Fact]
     public void ALayoutPutsTheSlotsOfTheClassesAboveWhereTheSourceWritesThem()
     {
@@ -187,7 +200,10 @@ public sealed class SyntaxGeneratorTests
             Files(family)["Nodes/LidSyntax.g.cs"]);
     }
 
-    /// <summary>A node's slot order names each of its slots, its own and the ones above it.</summary>
+    /// <summary>
+    /// A <c>Layout</c> must name every slot of the node, its own and the inherited ones, exactly
+    /// once.
+    /// </summary>
     [Fact]
     public void ALayoutNamesEverySlotExactlyOnce()
     {
@@ -245,7 +261,7 @@ public sealed class SyntaxGeneratorTests
     /// <summary>
     /// A green node rolls up what its slots hold as it is built — a diagnostic, an annotation —
     /// so that a walk looking for one of those follows only the slots that lead to one. They are
-    /// one word, so each slot is read once however many things are rolled up.
+    /// bits of one flags word, so each slot is read once however many things are rolled up.
     /// </summary>
     [Fact]
     public void AGreenNodeRollsUpWhatItsSlotsHold()
@@ -260,9 +276,9 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// The factory takes a node's pieces as the red tree writes them and hands them to the typed
-    /// green constructor. A piece the source may leave out altogether may be left out here too,
-    /// where every piece after it can be.
+    /// The factory takes a node's pieces as red-tree values and hands their green nodes to the
+    /// typed green constructor. An optional piece may be left out of the call too, as long as
+    /// every piece after it is optional as well.
     /// </summary>
     [Fact]
     public void TheFactoryBuildsANodeFromItsPieces()
@@ -308,8 +324,8 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// The classes above a node end somewhere. A base that leads back into a circle was a
-    /// hierarchy the generator walked up forever.
+    /// A node's chain of base classes must end. A chain that loops back on itself would have the
+    /// generator walk up the hierarchy forever, so it is reported instead.
     /// </summary>
     [Fact]
     public void AClassDoesNotDeriveFromItself()
@@ -327,8 +343,9 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// The files these nodes make; they are written without the <c>Tree</c> around them, and
-    /// with <c>StatementSyntax</c> under them, since every node is under a node of the table.
+    /// The files generated for <paramref name="nodes"/>, which are written without the enclosing
+    /// <c>Tree</c> element. An abstract <c>StatementSyntax</c> is added for them to derive from,
+    /// since every node's base must be a node of the table.
     /// </summary>
     private static SortedDictionary<string, string> Files(string nodes) =>
         SyntaxWriter.Files(NodeTable.Read(

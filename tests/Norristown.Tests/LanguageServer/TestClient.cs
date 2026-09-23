@@ -28,9 +28,9 @@ internal sealed class TestClient : IAsyncDisposable
         var (clientStream, serverStream) = FullDuplexStream.CreatePair();
         log = new ServerLog(logText);
 
-        // The wait between an edit and what the rest of the program has to say is the server's
-        // to decide and the test's to drive: the suite waits for no real time, and a test about
-        // the wait itself passes one it lets go of when it is ready.
+        // The server decides when to wait between an edit and publishing the rest of the
+        // program's diagnostics, but the test supplies the wait: by default it takes no real
+        // time, and a test about the wait itself passes one that it releases when it is ready.
         server = Server.RunAsync(serverStream, serverStream, log, delay ?? Yield);
         rpc = new JsonRpc(new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
         rpc.AddLocalRpcTarget(notifications);
@@ -46,7 +46,7 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>Whether the server has asked for semantic tokens to be fetched again, without waiting for it to.</summary>
     public bool AskedForTokensRefresh => notifications.TokensRefreshed.Reader.Count > 0;
 
-    /// <summary>Whether anything at all is waiting to be read, which is how a test says nothing came.</summary>
+    /// <summary>Whether no published diagnostics are waiting to be read, which is how a test checks that nothing came.</summary>
     public bool Quiet => notifications.Published.Reader.Count == 0;
 
     /// <summary>Connects and completes the initialize handshake.</summary>
@@ -66,8 +66,8 @@ internal sealed class TestClient : IAsyncDisposable
 
     /// <summary>
     /// What a client of the kind nt65 is written for declares: an outline as a tree, edits
-    /// against a named revision, snippets, the folders it has open, and asking before it moves
-    /// a file. It is what VS Code declares, so it is what most of the suite asks as.
+    /// against a named document version, snippets, the folders it has open, and being asked
+    /// before it moves a file. It is what VS Code declares, so most of the suite connects as it.
     /// </summary>
     public static object Capable(bool refreshesTokens = false, bool refreshesHints = false) => new
     {
@@ -88,9 +88,9 @@ internal sealed class TestClient : IAsyncDisposable
     };
 
     /// <summary>
-    /// Connects as a client that declares <paramref name="capabilities"/>, which is the object
-    /// the protocol's own <c>capabilities</c> is, so that a test says what it can take in the
-    /// spelling a real client would.
+    /// Connects as a client that declares <paramref name="capabilities"/>, an object sent as the
+    /// protocol's own <c>capabilities</c> field, so that a test declares what it supports in the
+    /// same JSON a real client would send.
     /// </summary>
     public static async Task<TestClient> StartAsync(
         object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
@@ -116,7 +116,7 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.NotifyWithParameterObjectAsync("textDocument/didOpen",
             new DidOpenTextDocumentParams(new TextDocumentItem(uri, "nt65", 1, text)));
 
-    /// <summary>Sends edits, in order, as the revision <paramref name="version"/>.</summary>
+    /// <summary>Sends edits, in order, as document version <paramref name="version"/>.</summary>
     public Task ChangeAsync(string uri, int version, params TextDocumentContentChangeEvent[] changes) =>
         rpc.NotifyWithParameterObjectAsync("textDocument/didChange",
             new DidChangeTextDocumentParams(new VersionedTextDocumentIdentifier(uri, version), changes));
@@ -179,11 +179,11 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task NextTokensRefreshAsync(CancellationToken cancellation) =>
         await notifications.TokensRefreshed.Reader.ReadAsync(cancellation);
 
-    /// <summary>Waits for the server to say that the program has settled and what a file became has moved.</summary>
+    /// <summary>Waits for the server to say that the program has settled and a file's output has changed.</summary>
     public async Task<JsonElement> NextOutputChangedAsync(CancellationToken cancellation) =>
         await notifications.OutputChanged.Reader.ReadAsync(cancellation);
 
-    /// <summary>The next message the server put in front of the person.</summary>
+    /// <summary>The next message the server showed to the user.</summary>
     public async Task<ShowMessageParams> NextShowMessageAsync(CancellationToken cancellation) =>
         await notifications.Shown.Reader.ReadAsync(cancellation);
 
@@ -215,7 +215,7 @@ internal sealed class TestClient : IAsyncDisposable
                 new Range(new Position(first, 0), new Position(last, 0))),
             cancellation);
 
-    /// <summary>What one item of the last list offered is for.</summary>
+    /// <summary>Resolves one completion item, which fills in the documentation of what it is for.</summary>
     public Task<CompletionItem> ResolveAsync(CompletionItem item, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<CompletionItem>("completionItem/resolve", item, cancellation);
 
@@ -242,7 +242,7 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.InvokeWithParameterObjectAsync<SemanticTokensDelta>("textDocument/semanticTokens/full/delta",
             new SemanticTokensDeltaParams(new TextDocumentIdentifier(uri), previous), cancellation);
 
-    /// <summary>What a caret at each place grows to take in.</summary>
+    /// <summary>The chain of ranges a selection at <paramref name="position"/> widens through.</summary>
     public Task<IReadOnlyList<SelectionRange>> SelectionRangesAsync(
         string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<SelectionRange>>("textDocument/selectionRange",
@@ -270,7 +270,7 @@ internal sealed class TestClient : IAsyncDisposable
             new ReferenceParams(new TextDocumentIdentifier(uri), position, new ReferenceContext(includeDeclaration)),
             cancellation);
 
-    /// <summary>The same places, as the client marks them.</summary>
+    /// <summary>The places the name at a position is written, as the client highlights them.</summary>
     public Task<IReadOnlyList<DocumentHighlight>> HighlightsAsync(
         string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentHighlight>>("textDocument/documentHighlight",
@@ -297,7 +297,7 @@ internal sealed class TestClient : IAsyncDisposable
         log.Dispose();
     }
 
-    /// <summary>The wait the suite uses: no real time, and still not taken on the caller's own step.</summary>
+    /// <summary>The wait the suite uses by default: no real time, but the server still continues asynchronously rather than on the caller's stack.</summary>
     private static async Task Yield(TimeSpan quiet) => await Task.Yield();
 
     /// <summary>What the server sends without being asked.</summary>

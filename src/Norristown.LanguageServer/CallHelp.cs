@@ -4,14 +4,15 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What the call the caret is in takes: a macro's parameters as its declaration writes them, a
-/// function's, or the parts of a built-in such as <c>.select</c> or <c>.strsub</c>, with the one the caret is in
-/// the argument for.
+/// Signature help for the call the caret is in: a macro's parameters as its declaration writes
+/// them, a function's, or the parameters of a built-in such as <c>.select</c> or <c>.strsub</c>,
+/// with the parameter whose argument the caret is in marked active.
 /// </summary>
 internal static class CallHelp
 {
-    // The built-ins whose parts are worth naming as they are written, with what each gives. A
-    // part written `...` stands for as many more as the call gives.
+    // The built-in functions that get signature help, with their parameter names and a
+    // description of what each returns. A parameter written `...` stands for any number of
+    // further arguments.
     private static readonly Dictionary<string, (string[] Parameters, string Documentation)> builtins =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -29,8 +30,9 @@ internal static class CallHelp
         var line = LineContext.At(model.Tree, position);
         var before = line.Before;
 
-        // The innermost call is the one being written; one that is not a call nt65 can describe
-        // is looked through to the call around it, so an argument's parentheses do not hide it.
+        // The innermost open parenthesis is the call being written. When it is not a call nt65
+        // can describe, such as grouping parentheses in an argument, look outward to the
+        // enclosing call.
         for (var end = before.Count; ;)
         {
             if (line.OpenCall(end) is not { } call)
@@ -61,8 +63,8 @@ internal static class CallHelp
     }
 
     /// <summary>
-    /// The parameter of <paramref name="macro"/> the argument the caret is in is for: the one it
-    /// names when it is written <c>name = value</c>, and otherwise the one in its place. A
+    /// The parameter of <paramref name="macro"/> that the caret's argument is for: the one it
+    /// names when written as <c>name = value</c>, and otherwise the one at its position. A
     /// <c>block</c> parameter takes the block after the parentheses, not a place in them.
     /// </summary>
     /// <param name="macro">The macro called.</param>
@@ -87,7 +89,7 @@ internal static class CallHelp
         return Help($"{macro.Name}!(", written, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
     }
 
-    /// <summary>Where among <paramref name="macro"/>'s parameters the one the caret's argument is for stands; -1 for none.</summary>
+    /// <summary>The index among <paramref name="macro"/>'s parameters of the one the caret's argument is for; -1 for none.</summary>
     private static int Active(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {

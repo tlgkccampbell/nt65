@@ -26,8 +26,8 @@
     rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, and A is not what the routine was entered with here: restore it before returning, or a `.state keeps a` where the value comes back says so
 }
 
-; The same on the 65816, where the label also declares the widths a jump in is checked for:
-; what it cannot declare is the stack, so the `pha` above it is one a jump in has not made.
+; The same on the 65816, where the label's `.state` also declares the widths a jump in is checked
+; against; it cannot declare the stack, so a jump in has not made the `pha` above it.
 .proc saves_across_a_label: a8, i8, keeps a {
     pha
     halfway:
@@ -40,9 +40,9 @@
     jmp saves_across_a_label::halfway
 }
 
-; A jump into another routine's label leaves this routine there, and what it hands back is what
-; the routine the label is in hands back: the word a jump to that routine itself is taken at,
-; since control comes back from neither.
+; A jump into another routine's label leaves this routine for good, so what it hands back is what
+; that routine hands back: its `keeps` is taken at its word, just as for a jump to the routine
+; itself, since control comes back from neither.
 .proc hands_off: a8, i8, keeps a {
     jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, and A is not what the routine was entered with here: control does not come back from `partway`, and `widens` does not promise to keep a: a `keeps a` on `widens` says it hands it back, and a `.next ?` here ends the path with nothing checked
 }

@@ -6,23 +6,24 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// The loops nt65 can say how many turns of. How long most loops run is not in the program,
-/// but the counted loop — a register loaded with an immediate, brought down once a turn and
-/// branched on — says it outright, and it is the loop the cycles go in.
+/// The loops whose iteration count nt65 can work out. The program does not say how long most
+/// loops run, but a counted loop (a register loaded with an immediate, decremented once per
+/// iteration and branched on) states it outright, and such a loop is typically where a
+/// routine's cycles go.
 /// <para>
-/// Only one shape is read: the turn ends with a <c>dex</c> or a <c>dey</c> and a <c>bne</c> or
-/// a <c>bpl</c> back to the top, nothing else in the loop touches that register, there is one
-/// way in, which carries the immediate, and one way out, which is the branch itself. Every
-/// other loop keeps the bound it had, because a loop counted wrongly is worse than one not
-/// counted at all.
+/// Only one shape is recognised: each iteration ends with a <c>dex</c> or <c>dey</c> and then
+/// a <c>bne</c> or <c>bpl</c> back to the top, nothing else in the loop writes that register,
+/// there is one way in, which loads the immediate, and one way out, which is the branch
+/// itself. Every other loop is left uncounted, with no upper bound, because a loop counted
+/// wrongly is worse than one not counted at all.
 /// </para>
 /// </summary>
 internal static class CountedLoops
 {
     /// <summary>
     /// Finds every counted loop in <paramref name="blocks"/> and writes what it costs on it.
-    /// A loop inside another is settled first, so that the turn of the loop around it already
-    /// holds what the inner one costs.
+    /// A loop inside another is settled first, so that the cost of one iteration of the
+    /// enclosing loop already includes what the inner loop costs.
     /// </summary>
     public static void Find(SemanticModel model, CodeLayout layout, IReadOnlyList<BasicBlock> blocks)
     {
@@ -31,9 +32,9 @@ internal static class CountedLoops
             if (Turns(model, blocks, loop) is not { } turns)
                 continue;
 
-            // The loop is taken as counted while its turn is worked out, so that the walk of
-            // it stops at the latch instead of going round again; if the turn turns out not
-            // to be known, it is given back.
+            // The loop is marked as counted while the cost of an iteration is worked out, so
+            // that the walk of it stops at the latch instead of going round again; if that
+            // cost turns out to be unknown, the marking is undone.
             Mark(blocks, loop, turns);
             if (Repeated(layout, blocks, loop, turns) is { } cost)
                 Settle(blocks, loop, cost);
@@ -43,13 +44,13 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// How many turns a loop takes, or null when it is not one nt65 reads. Every part of the
-    /// shape has to hold: anything unexpected leaves the loop uncounted.
+    /// How many iterations a loop runs, or null when it is not a shape nt65 recognises. Every
+    /// part of the shape has to hold: anything unexpected leaves the loop uncounted.
     /// </summary>
     private static int? Turns(SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop)
     {
-        // The turn ends with the counter and the branch that takes it round again: anything
-        // between the two would set the flags the branch reads instead.
+        // Each iteration ends with the decrement immediately followed by the branch back:
+        // anything between the two could set the flags the branch tests instead.
         var steps = Written(blocks[loop.Latch]);
         if (steps.Count < 2)
             return null;
@@ -58,9 +59,9 @@ internal static class CountedLoops
         var counter = Mnemonic(steps[^2])!;
         var register = counter == "dex" ? Registers.X : Registers.Y;
 
-        // The count may come down by more than one a turn, as it does where it walks an array
-        // of words: every one of them runs on the turn, being written in a row before the
-        // branch, so the count comes down by as many as there are.
+        // The count may come down by more than one per iteration, as it does when the loop
+        // walks an array of words: every decrement in the unbroken run just before the branch
+        // executes on each iteration, so the stride is how many of them there are.
         var stride = 0;
         var counting = new HashSet<int>();
         for (var at = steps.Count - 2; at >= 0 && Mnemonic(steps[at]) == counter; at--)
@@ -69,8 +70,8 @@ internal static class CountedLoops
             counting.Add(steps[at].Statement.Position);
         }
 
-        // One way out of it, and it is that branch. A loop something else breaks out of does
-        // not take its turns however many times the count says.
+        // There must be one way out, and it must be that branch. A loop that something else
+        // can exit does not necessarily run as many times as the count says.
         for (var i = 0; i < blocks.Count; i++)
         {
             if (!loop.Inside[i])
@@ -80,8 +81,8 @@ internal static class CountedLoops
                 return null;
         }
 
-        // Nothing else in it may touch the register, or how far it has come is not the
-        // immediate the loop started from.
+        // Nothing else in it may write the register, or its value would no longer follow
+        // from the immediate the loop started from.
         for (var i = 0; i < blocks.Count; i++)
         {
             if (!loop.Inside[i])
@@ -105,10 +106,10 @@ internal static class CountedLoops
         if (from.Count != 1 || Started(model, blocks[from[0]], counter == "dex" ? "ldx" : "ldy", register) is not { } start)
             return null;
 
-        // `bne` runs the count down to zero, so the stride has to divide it or the count goes
-        // past zero and round. `bpl` runs one turn past zero, and reads the sign to know it, so
-        // a count that starts with the sign bit set is not one it counts down from at all. A
-        // count of zero turns on how wide the register is, which is not always known.
+        // `bne` runs the count down to zero, so the stride has to divide it or the count skips
+        // past zero and wraps round. `bpl` runs one more iteration after zero and tests the sign
+        // bit to stop, so a start with the sign bit set does not count down at all. What a start
+        // of zero does depends on the register's width, which is not always known.
         if (start <= 0)
             return null;
         long turns;
@@ -144,10 +145,11 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// Takes the loop as counted, or gives it back. Every block of it runs the same number of
-    /// turns, and a loop inside another runs its own turns on each of the turns around it, so
-    /// the counts multiply. The back edge is marked so that a walk of the routine stops at the
-    /// latch rather than coming round again.
+    /// Marks the loop as counted with <paramref name="turns"/> iterations, or unmarks it when
+    /// that is null. Every block of it runs the same number of iterations, and a loop inside
+    /// another runs all of its iterations on each iteration of the outer one, so the counts
+    /// multiply. The back edge is marked so that a walk of the routine stops at the latch
+    /// rather than going round again.
     /// </summary>
     private static void Mark(IReadOnlyList<BasicBlock> blocks, Loop loop, int? turns)
     {
@@ -161,8 +163,9 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// What all the turns of a loop cost, from what one turn costs. The branch is taken every
-    /// turn but the last, which is the one difference between a turn and the turn that leaves.
+    /// What all the iterations of a loop cost, from what one iteration costs. The branch is
+    /// taken on every iteration but the last, which is the only difference between the final
+    /// iteration and the others.
     /// </summary>
     private static CycleCount? Repeated(CodeLayout layout, IReadOnlyList<BasicBlock> blocks, Loop loop, int turns)
     {
@@ -182,8 +185,9 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// Writes what the loop costs on its header, and nothing on the rest of it: a walk of the
-    /// routine runs through all of them, and every turn of every one is already in that.
+    /// Records the loop's total cost on its header and zero on its other blocks: a walk of the
+    /// routine still passes through all of them, and the header's total already includes every
+    /// iteration of every block.
     /// </summary>
     private static void Settle(IReadOnlyList<BasicBlock> blocks, Loop loop, CycleCount cost)
     {

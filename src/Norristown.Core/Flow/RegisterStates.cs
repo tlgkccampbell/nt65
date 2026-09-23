@@ -6,8 +6,8 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// What the registers hold at each statement of one file, for an editor to show where the
-/// caret is. It is recorded on the walk over the settled answer, so what it holds is what the
-/// analysis finished with and not a round on the way there.
+/// caret is. It is recorded on a final walk after the analysis has settled, so it holds the
+/// finished answer and not an intermediate round.
 /// </summary>
 public sealed class RegisterStates
 {
@@ -29,8 +29,8 @@ public sealed class RegisterStates
     /// with its own answer; what they agree on is the one thing true of the line itself. It is
     /// a merge rather than the first of them because the writings are held in no particular
     /// order, and a hover that depended on which one was found first would not be the same
-    /// hover twice. A writing's line is in the file of the block it writes out, which is
-    /// another file's for a macro declared there.
+    /// hover twice. A writing's line belongs to the file that contains the body it writes
+    /// out, which for a macro declared in another file is that other file.
     /// </summary>
     public RegisterState? AnyBefore(StatementSyntax statement)
     {

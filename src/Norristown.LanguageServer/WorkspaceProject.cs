@@ -10,7 +10,8 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal sealed class WorkspaceProject
 {
-    // Whether the globs name a path, by path: asked of every open document on every analysis.
+    // A cache of whether the globs match each path, since that is checked for every open
+    // document on every analysis.
     private readonly Dictionary<string, bool> owned = new(StringComparer.Ordinal);
 
     // The files on disk, by logical path, read the first time the program is analyzed.
@@ -32,7 +33,7 @@ internal sealed class WorkspaceProject
     /// <summary>The project file, as a logical path.</summary>
     public string File { get; }
 
-    /// <summary>The directory it is in, which its globs start from.</summary>
+    /// <summary>The directory it is in, which its globs are relative to.</summary>
     public string Root { get; }
 
     /// <summary>What the project file says, with the active configuration applied.</summary>
@@ -59,12 +60,12 @@ internal sealed class WorkspaceProject
         Invalidate();
     }
 
-    /// <summary>Forgets the analysis, keeping it to start the next one from.</summary>
+    /// <summary>Discards the current analysis; the previous one is kept for the next analysis to start from.</summary>
     public void Invalidate() => analysis = null;
 
     /// <summary>
-    /// The file at <paramref name="path"/> changed on disk, was created or was deleted. What is
-    /// on disk is read again, if it has been read at all.
+    /// The file at <paramref name="path"/> changed on disk, was created or was deleted. It is
+    /// read again if the project's files on disk have been read at all.
     /// </summary>
     public void Reread(string path)
     {
@@ -77,7 +78,7 @@ internal sealed class WorkspaceProject
             onDisk.Remove(path);
     }
 
-    /// <summary>Whether the last analysis measured <paramref name="path"/> for an <c>.incbin</c>.</summary>
+    /// <summary>Whether the last analysis included <paramref name="path"/> through an <c>.incbin</c>.</summary>
     public bool Measured(string path) => analysis?.Binaries.Contains(path) ?? previous?.Binaries.Contains(path) ?? false;
 
     /// <summary>Every file of the program on disk, read if it has not been.</summary>
@@ -94,8 +95,9 @@ internal sealed class WorkspaceProject
     }
 
     /// <summary>
-    /// What the program means, with <paramref name="open"/> standing in for whatever is on disk
-    /// wherever the project names the file, built once and kept until something changes.
+    /// The program's analysis, with the documents in <paramref name="open"/> that the project
+    /// names taking the place of their files on disk, built once and kept until something
+    /// changes.
     /// </summary>
     public ProgramAnalysis Analysis(IEnumerable<Document> open)
     {

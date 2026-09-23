@@ -5,12 +5,13 @@ using Norristown.Semantics;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// ca65 in a selection, read as nt65: the rewrites that are one line's business and mean the
-/// same thing afterwards. A block that was opened by a word and closed by another is opened by
-/// a brace and closed by one, segments and data directives take their nt65 spellings, ca65's
-/// operator words become the symbols, and what only ca65 needed goes.
+/// Converts ca65 source in a selection to nt65, using only rewrites that concern a single line
+/// and keep its meaning. A block opened and closed by directives (<c>.proc</c> ...
+/// <c>.endproc</c>) is opened and closed by braces instead, segment and data directives take
+/// their nt65 spellings, ca65's operator words become symbols, and directives only ca65 needed
+/// are dropped.
 /// <para>
-/// A line it cannot read is left exactly as it was: an unnamed label, a macro call, an
+/// A line it cannot convert is left exactly as it was: an unnamed label, a macro call, an
 /// <c>.include</c> and anything else that needs a decision rather than a spelling stays for the
 /// programmer, and the diagnostics say so. Converting most of a paste and saying which lines are
 /// still ca65 beats guessing at the rest.
@@ -25,7 +26,7 @@ internal static partial class Ca65Conversion
         ".endif", ".endrep", ".endrepeat",
     };
 
-    /// <summary>The directives nt65 has no use for, whose lines go.</summary>
+    /// <summary>The directives nt65 has no use for, whose lines are removed.</summary>
     private static readonly HashSet<string> dropped = new(StringComparer.OrdinalIgnoreCase)
     {
         ".macpack", ".feature", ".smart", ".autoimport", ".case", ".debuginfo", ".linecont",
@@ -41,7 +42,7 @@ internal static partial class Ca65Conversion
         [".rodata"] = "RODATA",
     };
 
-    /// <summary>ca65's words for the operators nt65 writes as symbols.</summary>
+    /// <summary>ca65's words for the operators nt65 writes as symbols, and the ca65 directive spellings nt65 renames.</summary>
     private static readonly Dictionary<string, string> operators = new(StringComparer.OrdinalIgnoreCase)
     {
         [".bitand"] = "&",
@@ -58,7 +59,7 @@ internal static partial class Ca65Conversion
         [".tag"] = ".type",
     };
 
-    /// <summary>The selection written as nt65, where any of it is ca65 that one line can be read from.</summary>
+    /// <summary>The change that rewrites the selection as nt65, offered only when at least one line of it changes.</summary>
     public static IEnumerable<Change> In(SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
@@ -88,8 +89,8 @@ internal static partial class Ca65Conversion
     }
 
     /// <summary>
-    /// One line as nt65: the same line where nothing about it is ca65's, and null for a line
-    /// that says something only ca65 needed.
+    /// One line converted to nt65: unchanged where nothing in it is specific to ca65, or null
+    /// for a line only ca65 needed, which is removed.
     /// </summary>
     private static string? Converted(string line)
     {
@@ -112,7 +113,7 @@ internal static partial class Ca65Conversion
         return indent + Operators(written) + comment;
     }
 
-    /// <summary>What a line says once its directive is written the nt65 way.</summary>
+    /// <summary>The line with its leading directive rewritten in nt65's form.</summary>
     private static string Renamed(string code, string first)
     {
         var rest = Rest(code, first);
@@ -126,8 +127,8 @@ internal static partial class Ca65Conversion
                 if (Word(rest) is not { } name)
                     return code;
 
-                // A `.define` with parameters is a function, and one without is a constant:
-                // nt65 has both, and neither of them substitutes text.
+                // A `.define` with parameters becomes a function and one without becomes a
+                // constant; nt65 has both, though neither substitutes text as ca65's does.
                 var after = rest[name.Length..];
                 if (!after.StartsWith('('))
                     return $"{name} = {after.Trim()}";
@@ -155,8 +156,8 @@ internal static partial class Ca65Conversion
     }
 
     /// <summary>
-    /// A line that opens a block in ca65, opened with a brace: what followed the word is what
-    /// the block is of, and a macro's parameters go in parentheses.
+    /// A line that opens a block in ca65, rewritten to open it with a brace: the text after the
+    /// directive stays as it is, and a macro's parameters are put in parentheses.
     /// </summary>
     private static string Opened(string code, string first)
     {
@@ -183,7 +184,7 @@ internal static partial class Ca65Conversion
         }
     }
 
-    /// <summary>A label written in front of data, as the declaration that names it.</summary>
+    /// <summary>A label in front of a data directive, rewritten as a <c>.data</c> declaration of that name.</summary>
     private static string LabelledData(string code)
     {
         var match = Labelled().Match(code);
@@ -226,7 +227,8 @@ internal static partial class Ca65Conversion
                 continue;
             }
 
-            // ca65 compares with `=` and `<>`, which mean assignment and nothing in nt65.
+            // ca65 tests inequality with `<>`, which nt65 does not have. (ca65 also compares with
+            // `=`, which nt65 reads as assignment; that is not rewritten here.)
             if (c == '<' && at + 1 < code.Length && code[at + 1] == '>')
             {
                 written.Append("!=");
@@ -239,7 +241,7 @@ internal static partial class Ca65Conversion
         return written.ToString();
     }
 
-    /// <summary>A line as its indent, its code and whatever follows the code, comment and all.</summary>
+    /// <summary>A line split into its indent, its code, and everything after the code, comment included.</summary>
     private static (string Indent, string Code, string Comment) Split(string line)
     {
         var start = 0;
@@ -287,7 +289,7 @@ internal static partial class Ca65Conversion
         return at > start ? code[..at] : null;
     }
 
-    /// <summary>What a line says after <paramref name="first"/>.</summary>
+    /// <summary>The rest of a line's code after <paramref name="first"/>, without leading whitespace.</summary>
     private static string Rest(string code, string first) => code[first.Length..].TrimStart();
 
     /// <summary>A name in front of a data directive, which nt65 declares rather than labels.</summary>

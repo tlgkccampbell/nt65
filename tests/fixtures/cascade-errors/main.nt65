@@ -10,7 +10,7 @@
     sta x
 }
 
-; A type with a reserved name, and an instance of it that therefore cannot be written.
+; A type with a reserved name is reported once, and an instance of it is not reported again.
 .struct S {                 ;! error[register-name]: `S` is a register name and cannot be used as a name
     q: .byte
 }
@@ -26,12 +26,12 @@
 .proc main: a8, i16 {
     load!($10)
 
-    ; A name another module keeps to itself, named three times.
+    ; A name another module does not export, used three times: reported at the first use only.
     lda #lib::twice(1)      ;! error[not-exported]: `lib::twice` is not exported by module `lib`
     lda #lib::twice(2)
     lda #lib::twice(3)
 
-    ; A name another module exports, named as if it were declared here: said once for each.
+    ; A name another module exports, used without its module's path, and then used correctly.
     lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here, and module `lib` exports it: write `lib::thrice`, or bring it in with `.use lib::thrice`
     lda #lib::thrice(1)
 
@@ -60,8 +60,8 @@ lda #1                  ;! error[instruction-outside-a-routine]: these 3 instruc
 sta $10
 rts
 
-; A block holds its lines, so what was written after the `{` says so rather than being
-; unexpected where the opener ended.
+; Text after a block's `{` on the same line is reported as belonging on the next line,
+; rather than as an unexpected token where the opener ended.
 .segment RODATA
 .data inline { .byte 1 }    ;! error[block-brace-ends-the-line]: a block's `{` ends the line that opens it: `.byte` goes on the next line, and `}` on its own
 

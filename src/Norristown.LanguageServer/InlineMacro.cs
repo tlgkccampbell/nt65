@@ -4,20 +4,21 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// A macro call replaced by what it expands to, which is how one stops using a macro. It writes
-/// the same nt65 the expansion view shows, indented where the call was.
+/// The refactoring that replaces a macro call with its expansion, for moving code off a macro.
+/// It writes the same nt65 the expansion view shows, indented to where the call was.
 /// <para>
-/// It is a text edit rather than a rewrite of the tree: the expansion is written from a body in
-/// another place, with its arguments put in and its conditions decided, so there is no node of
-/// this file to replace it with. A rewrite above a statement goes out through text in any case.
+/// It is a text edit rather than a rewrite of the syntax tree: the expansion is built from a
+/// body declared elsewhere, with the arguments substituted and its conditions resolved, so no
+/// node in this file could replace the call. Rewrites of whole statements are emitted as text
+/// edits in any case.
 /// </para>
 /// <para>
-/// A body's names are resolved where the macro is written and its locals belong to each
-/// expansion, so two things stand between the expansion and the file. Where the macro is
-/// another file's, the change is refused: the names would be resolved again here and could mean
-/// something else. Where the body declares anything, the expansion goes in an anonymous
-/// <c>.scope</c>, which is what the language offers for a name that would otherwise be declared
-/// twice in one routine.
+/// Names in a macro body are resolved where the macro is declared, and the names it declares
+/// are local to each expansion, so two problems arise in pasting the expansion into the file.
+/// Where the macro is declared in another file, the change is refused: the names would be
+/// resolved again here and could mean something else. Where the body declares anything, the
+/// expansion goes in an anonymous <c>.scope</c>, which is how the language keeps a name from
+/// being declared twice in one routine.
 /// </para>
 /// </summary>
 internal static class InlineMacro
@@ -72,11 +73,11 @@ internal static class InlineMacro
             [Edits.RemoveLines(tree, first, last) with { Text = written.Count == 0 ? "" : string.Join("\n", written) + "\n" }]);
     }
 
-    /// <summary>The change as it is offered when it cannot be applied: named, and greyed with the reason.</summary>
+    /// <summary>The change as offered when it cannot be applied: titled, and greyed out with the reason.</summary>
     private static Change Refused(string title, string why) =>
         new(title, CodeActionKinds.Rewrite, [], Refused: why);
 
-    /// <summary>The last line the call covers: its own, and the blocks it opens.</summary>
+    /// <summary>The last line the call covers: its own line, or the end of the last block argument it opens.</summary>
     private static int Last(SyntaxTree tree, MacroCallSyntax call, int first)
     {
         var blocks = Macros.BlocksOf(call);
@@ -94,6 +95,6 @@ internal static class InlineMacro
         return false;
     }
 
-    /// <summary>A file as a reader names it: its own name, without the folders above it.</summary>
+    /// <summary>A file's name without its folders, as a message shows it.</summary>
     private static string Named(string path) => path[(path.LastIndexOf('/') + 1)..];
 }

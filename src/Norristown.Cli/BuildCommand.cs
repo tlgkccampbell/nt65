@@ -9,25 +9,27 @@ namespace Norristown.Cli;
 /// <c>nt65 build</c>: finds the project, reads the program, and writes its output, the C header
 /// and the dependencies it was asked for.
 /// <para>
-/// Everything is known by a path relative to the project's root, the directory that holds
-/// <c>nt65.json</c>, which is where a build normally runs: sources, outputs, and what the
-/// output tells ca65 and the debugger. What is said to the person running it is relative to
-/// where they are.
+/// Internally, every file is named by a path relative to the project root, the directory that
+/// holds <c>nt65.json</c> and where a build normally runs: the sources, the outputs, and the
+/// paths the output gives ca65 and the debugger. Paths in messages to the person running nt65
+/// are relative to the directory they ran it from.
 /// </para>
 /// </summary>
 public static class BuildCommand
 {
     /// <summary>
     /// Builds what <paramref name="command"/> asks for, from <paramref name="directory"/>, and
-    /// returns the exit code: 0 when it built, 1 when the program is wrong, 2 when the command is.
+    /// returns the exit code: 0 when it built, 1 when the program has errors, 2 when the command
+    /// line is wrong.
     /// </summary>
     public static int Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
         Run(command, directory, output, error, colour).Code;
 
     /// <summary>
-    /// One build, with what it read, so that a watch knows what to wait on. A failure that
-    /// stopped before the program was found names what it had, which is nothing or the project
-    /// file; the watch is watching the directory as well, so a file appearing is noticed anyway.
+    /// Runs one build and returns its exit code with the files it read, so that a watch knows
+    /// which files to watch. A build that fails before it finds the program's sources lists only
+    /// what it had read by then, which is nothing or the project file; the watch also reacts to
+    /// any <c>.nt65</c> file under the root, so a source that appears is noticed anyway.
     /// </summary>
     internal static BuildResult Run(
         CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
@@ -43,7 +45,7 @@ public static class BuildCommand
         var root = projectFile is null ? directory : Path.GetDirectoryName(projectFile)!;
         string[] watched = projectFile is null ? [] : [projectFile];
 
-        // `--stdout` answers what one file became, so it is one file it is asked about.
+        // `--stdout` prints the output of one file, so it needs exactly one file named.
         if (command.Stdout && command.Files.Count != 1)
         {
             error.WriteLine("nt65: --stdout writes one file's output, so it takes one file");
@@ -64,8 +66,8 @@ public static class BuildCommand
         if (command.Out is { } chosen)
             project = project with { Out = ProjectRoot.Logical(root, Path.GetFullPath(chosen, directory)) };
 
-        // Naming files builds the program they are part of, so that a name another file declares
-        // still means what it means; only the named files are written.
+        // Naming files still builds the whole program they are part of, so that names declared in
+        // other files resolve as usual; only the named files' outputs are written.
         var named = new List<string>();
         foreach (var file in command.Files)
         {
@@ -89,9 +91,10 @@ public static class BuildCommand
 
         if (paths.Count == 0)
         {
-            // A project file with something wrong with it is why a build finds no files far
-            // more often than a missing `files` is, so what is wrong with it is said first,
-            // and the usage is left for when the command line is what there is to fix.
+            // When a build finds no files, an error in the project file is a far more common
+            // cause than a missing `files`, so the project file's diagnostics are reported first.
+            // The usage text is printed only when there are none, since then the command line is
+            // what needs fixing.
             foreach (var d in project.Diagnostics)
                 Say(d);
             error.WriteLine(projectFile is null ? $"nt65: no input files, and no {ProjectFile.Name}"
@@ -105,16 +108,16 @@ public static class BuildCommand
         var sources = paths.Select(path => new SourceFile(path, File.ReadAllText(Path.Combine(root, path)))).ToList();
         var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
 
-        // What a crash names, so that a report says which program nt65 was reading.
+        // Recorded so that, if nt65 crashes, its report says which program it was building.
         Building.Started(paths.Count == 1 ? paths[0] : $"{paths[0]} and {paths.Count - 1} more");
         var analysis = Compiler.Analyze(
             [.. sources.Select(SyntaxTree.Parse)], project, path => Length(Path.Combine(root, path)));
         var compilation = Compiler.Emit(analysis, project, header);
         Building.Nothing();
 
-        // What a watch waits on is what the build read: the sources, and the binaries the outputs
-        // say they include. A program that is wrong writes no output and so names no binaries;
-        // the source that fixes it is in the list either way.
+        // A watch watches the files the build read: the sources, and the binaries the outputs list
+        // as dependencies. A program with errors may list no binaries, but the source that fixes
+        // it is in the list either way.
         watched =
         [
             .. watched,
@@ -126,9 +129,9 @@ public static class BuildCommand
         foreach (var d in compilation.Diagnostics)
             Say(d);
 
-        // `--stdout` answers what the named file became, whatever is wrong with the rest of the
-        // program: what a build would have written, under a note where it is incomplete. It is
-        // the same text the editor shows beside the source, and it writes no files.
+        // `--stdout` prints the named file's output even when the rest of the program has
+        // errors: the text a build would have written, with a note where it is incomplete. It is
+        // the same text the editor's output preview shows, and no files are written.
         if (command.Stdout)
         {
             if (OutputPreview.Of(analysis, project, named[0]) is not { } preview)
@@ -149,12 +152,13 @@ public static class BuildCommand
                 + $"{CpuNames.Spell(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
         }
 
-        // `--check` asked what is wrong, which has now been said, and for nothing else: no
+        // `--check` asks only for the diagnostics, which have now been reported: it writes no
         // output, no header, no dependency file, and no record of what was written.
         if (command.Check)
             return new BuildResult(0, root, watched);
 
-        // A named module another places is written as the translation unit it is in.
+        // When files are named, write each output that contains one of them. A named module that
+        // another module places in its own output is written as part of that output.
         var only = named.Count > 0 && project.Files.Count > 0 ? named.ToHashSet(StringComparer.Ordinal) : null;
         var written = compilation.Outputs
             .Where(o => only is null || o.AllSources.Any(source => only.Contains(source.Path)))
@@ -163,12 +167,14 @@ public static class BuildCommand
         foreach (var o in written)
             Write(Path.Combine(root, o.Path), o.Text, [.. o.Dependencies.Concat(extra).Select(dependency => Path.Combine(root, dependency))]);
 
-        // A partial build leaves alone what it did not write, so only a whole one keeps the record.
+        // A build of named files does not write every output, so only a whole-program build
+        // updates the record of outputs and deletes the ones no longer written.
         if (only is null)
         {
-            // A build that worked says what it tidied up as the note it is: what else goes to
-            // stderr is a diagnostic, and a script that reads stderr for those should not have
-            // to know this one apart. The module may have gone, or be placed in another's output.
+            // Each deleted file is reported as a note, in the same `nt65: note:` form as the other
+            // notes on standard error, so a script that reads standard error does not have to
+            // recognise it separately. An output is deleted when its module has been removed or
+            // is now placed in another module's output.
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
                 error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, which the program no longer writes");
         }
@@ -191,8 +197,9 @@ public static class BuildCommand
     }
 
     /// <summary>
-    /// A span's file as the person running nt65 would write it. One whose file is an option or a
-    /// place with no file of its own keeps the name it was given.
+    /// A span's file, relative to the directory nt65 was run from. A span whose file name is really
+    /// a command-line option (starting with <c>-</c>) or a placeholder in parentheses for a place
+    /// with no file of its own keeps that name unchanged.
     /// </summary>
     private static string Named(string directory, string root, Span span) =>
         span.File.StartsWith('-') || span.File.StartsWith('(')
@@ -201,14 +208,14 @@ public static class BuildCommand
 
     /// <summary>
     /// Writes <paramref name="text"/> to <paramref name="path"/> only when it changes, so a build
-    /// tool sees an unchanged file as unchanged. One whose text is the same but that is older than
-    /// something in <paramref name="dependencies"/> is touched instead, or make would run nt65 for
-    /// it on every build.
+    /// tool sees an unchanged file as unchanged. A file whose text is the same but which is older
+    /// than one of <paramref name="dependencies"/> has its timestamp updated instead, or make would
+    /// consider it out of date and run nt65 again on every build.
     /// <para>
-    /// It is written beside its place and moved onto it, so that whoever reads it sees one
-    /// build's file or another's and never half of each: two builds into one <c>out</c> is
-    /// something a Makefile does by accident, and an assembler reading the file while it is
-    /// written is what would come of it.
+    /// The text is written to a temporary file beside the target and then moved onto it, so a
+    /// reader sees one build's complete file and never a mixture of two. A Makefile can easily run
+    /// two builds into the same <c>out</c> by accident, and without this an assembler could read a
+    /// file while it is being written.
     /// </para>
     /// </summary>
     private static void Write(string path, string text, IReadOnlyList<string> dependencies)
@@ -227,7 +234,7 @@ public static class BuildCommand
         File.Move(written, path, overwrite: true);
     }
 
-    /// <summary>How long a file an <c>.incbin</c> names is, or null when it cannot be read.</summary>
+    /// <summary>The length of a file an <c>.incbin</c> names, or null when it cannot be read.</summary>
     private static long? Length(string path)
     {
         try

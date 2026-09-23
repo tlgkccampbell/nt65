@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 ROOT=../../..
 B=$ROOT/.cache/cc65/bin
-# What the tools are called: the same build on either system, bar the suffix.
+# Tool names differ between systems only by the .exe suffix on Windows.
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) X=.exe ;; *) X= ;; esac
 $ROOT/src/Norristown.Cli/bin/Debug/net10.0/nt65$X build
 for f in build/*.s; do $B/ca65$X -g -l ${f%.s}.lst $f -o ${f%.s}.o; done

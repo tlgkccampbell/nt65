@@ -3,10 +3,10 @@ using System.Globalization;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 explain &lt;name&gt;</c>: what a diagnostic is about, which its one line has no room
-/// for. Named nothing, it lists what there is to ask about; named something nt65 has no entry
-/// for, it says the name it is nearly. Given <c>--markdown</c>, it writes the whole catalogue as
-/// the page <c>docs/DIAGNOSTICS.md</c> is.
+/// <c>nt65 explain &lt;name&gt;</c>: prints the full explanation of a diagnostic, which its
+/// one-line message has no room for. Given no name, it lists every diagnostic; given a name nt65
+/// does not know, it suggests the closest one. Given <c>--markdown</c>, it writes the whole
+/// catalogue as the page checked in as <c>docs/DIAGNOSTICS.md</c>.
 /// </summary>
 internal static class ExplainCommand
 {
@@ -39,8 +39,8 @@ internal static class ExplainCommand
             return 2;
         }
 
-        // The entry, as it reads: what it is called and how much it matters, the sentence it
-        // says with a mark where each piece of the program goes, and then what it is about.
+        // Print the entry: its name and default severity, its message with each placeholder
+        // shown as `...`, its explanation, and the project-file setting that changes it.
         output.WriteLine($"{descriptor.Id}, {Reported(descriptor.Severity)} by default");
         output.WriteLine();
         output.WriteLine($"  {Said(descriptor.Format)}");
@@ -53,7 +53,7 @@ internal static class ExplainCommand
         return 0;
     }
 
-    /// <summary>Every name there is, with how much each matters, for someone who has one to find.</summary>
+    /// <summary>Lists every diagnostic name with its default severity, for someone looking one up.</summary>
     private static void List(TextWriter output)
     {
         output.WriteLine("every diagnostic nt65 reports; `nt65 explain <name>` says what one is about.");
@@ -63,14 +63,14 @@ internal static class ExplainCommand
             output.WriteLine($"  {descriptor.Id.PadRight(width)}  {Reported(descriptor.Severity)}");
     }
 
-    /// <summary>How much a diagnostic matters, as this command says it.</summary>
+    /// <summary>A severity with its article, as this command prints it: "an error", "a warning" or "a note".</summary>
     private static string Reported(Severity severity) =>
         severity.ToString().ToLowerInvariant() is "info" ? "a note" : $"a{(severity == Severity.Error ? "n" : "")} "
             + severity.ToString().ToLowerInvariant();
 
     /// <summary>
-    /// The sentence with a mark where each piece of the program goes, since the holes a format
-    /// leaves are numbered for nt65 rather than for a reader.
+    /// The message format with each numbered placeholder (<c>{0}</c>, <c>{1}</c>, ...) shown as
+    /// <c>...</c>, since the numbers mean something to nt65 but nothing to a reader.
     /// </summary>
     private static string Said(string format)
     {
@@ -80,11 +80,15 @@ internal static class ExplainCommand
         return said.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
     }
 
-    /// <summary>What a project would most likely want to say about it, which is the other way round.</summary>
+    /// <summary>
+    /// The value for the example project-file line: <c>off</c> for a diagnostic that is not an
+    /// error, since turning it off is the likeliest change, and <c>error</c> for an error, which
+    /// cannot be turned down.
+    /// </summary>
     private static string Turned(DiagnosticDescriptor descriptor) =>
         descriptor.Severity == Severity.Error ? "error" : "off";
 
-    /// <summary>The explanation in lines a terminal holds, broken between words.</summary>
+    /// <summary>The explanation broken between words into lines of about 88 characters, to fit a terminal.</summary>
     private static IEnumerable<string> Wrapped(string text)
     {
         var line = "";

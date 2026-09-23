@@ -3,10 +3,10 @@ using System.Text.Json;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The shipped executable, driven over its own standard input and output through a whole life.
-/// Everything else drives the server in this process, which is faster and says nothing about
-/// what happens when the thing an editor starts is sent something an editor would not send.
-/// One process does the lot: starting it costs more than everything asked of it.
+/// The shipped executable, driven over its own standard input and output through its whole
+/// lifecycle. Every other test drives the server in this process, which is faster but says
+/// nothing about how the executable an editor starts copes with messages an editor would not
+/// send. One process runs the whole sequence, because starting it costs more than all of it.
 /// </summary>
 public sealed class ProtocolLifeTests
 {
@@ -40,15 +40,15 @@ public sealed class ProtocolLifeTests
         // A frame that is not JSON is answered where the protocol says, with no id, and the
         // next frame is read as if nothing had happened.
         await server.SendBrokenAsync(timeout);
-        // Whatever the server had to say on its own account first is not the answer.
+        // Skip any notifications the server sent of its own accord before the error.
         var broken = await server.ReceiveAsync(timeout);
         while (!broken.RootElement.TryGetProperty("error", out _))
             broken = await server.ReceiveAsync(timeout);
         Assert.Equal(JsonValueKind.Null, broken.RootElement.GetProperty("id").ValueKind);
         Assert.Equal(ParseError, ErrorIn(broken.RootElement));
 
-        // `"params": null` is how a client spells a request that takes none. It used to end
-        // the process; now the request is answered and the server carries on.
+        // `"params": null` is how a client sends a request that takes no parameters. The
+        // request is answered and the server carries on, rather than the process ending.
         await server.SendAsync("""
             {"jsonrpc":"2.0","id":3,"method":"textDocument/documentSymbol","params":null}
             """, timeout);
@@ -60,7 +60,7 @@ public sealed class ProtocolLifeTests
             """), timeout);
 
         // A cancel for a request that may already be answered: either way the server answers
-        // that id and stays up, which is what an editor does every time a caret moves.
+        // that id and stays up. An editor sends such a cancel every time the caret moves.
         await server.SendAsync(Request(5, "textDocument/documentSymbol", """
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"}}
             """), timeout);
@@ -92,10 +92,10 @@ public sealed class ProtocolLifeTests
     }
 
     /// <summary>
-    /// <c>exit</c> without <c>shutdown</c> first is a failure, which is what the protocol says;
-    /// and a server nobody is talking to should not outlive the editor that started it, which
-    /// never says goodbye when it crashes. The editor here is a second server process, which is
-    /// a process like any other, and its own leaving is what the first assertion is about.
+    /// <c>exit</c> without a <c>shutdown</c> first ends the process with a failure code, as the
+    /// protocol says; and a server should not outlive the editor that started it, because an
+    /// editor that crashes never sends <c>exit</c>. The editor here is played by a second server
+    /// process, and its own exit without <c>shutdown</c> is what the exit-code check is about.
     /// </summary>
     [Fact]
     public async Task LeavingWithoutShuttingDownFailsAndTheServerFollowsTheEditorOut()

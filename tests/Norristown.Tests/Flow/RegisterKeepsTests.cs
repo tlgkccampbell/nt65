@@ -5,9 +5,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// Which registers a routine hands back as it was entered with them: what each instruction
-/// does, how a save and its restore cancel, what a call takes away, and what a routine that
-/// promises more than it keeps is told.
+/// Which registers a routine returns still holding the values it was entered with: what each
+/// instruction changes, how a save and its restore cancel, what a call to another routine
+/// loses, and the diagnostic for a routine whose body does not keep what its signature
+/// promises.
 /// </summary>
 public sealed class RegisterKeepsTests
 {
@@ -18,7 +19,7 @@ public sealed class RegisterKeepsTests
         Assert.Equal(Registers.All, Kept(".proc p {\n    nop\n    rts\n}\n", "p"));
     }
 
-    /// <summary>What an instruction writes, it does not hand back.</summary>
+    /// <summary>A register (or the carry) that an instruction writes is not kept.</summary>
     [Theory]
     [InlineData("lda #1", Registers.X | Registers.Y | Registers.C)]
     [InlineData("ldx #1", Registers.A | Registers.Y | Registers.C)]
@@ -47,7 +48,10 @@ public sealed class RegisterKeepsTests
             + "    ldx #2\n    pla\n    tax\n    pla\n    rts\n}\n", "p"));
     }
 
-    /// <summary>A pull that does not match the push above it gets back nothing anyone can name.</summary>
+    /// <summary>
+    /// A pull into a different register from the one pushed restores nothing: <c>plx</c> after
+    /// <c>pha</c> leaves X holding A's entry value, which is neither register's own.
+    /// </summary>
     [Fact]
     public void APullThatDoesNotMatchItsPushRestoresNothing()
     {
@@ -55,7 +59,10 @@ public sealed class RegisterKeepsTests
             Registers.Y | Registers.C, Kept(".proc p {\n    pha\n    lda #1\n    ldx #2\n    plx\n    rts\n}\n", "p"));
     }
 
-    /// <summary>A `php` and its `plp` hand back the carry, across a call and a label.</summary>
+    /// <summary>
+    /// A `php` and its `plp` hand back the carry, even across a call to a routine that
+    /// changes it.
+    /// </summary>
     [Fact]
     public void APhpAndItsPlpHandBackTheCarry()
     {
@@ -82,8 +89,9 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// Two routines that call each other settle, because the set only ever shrinks: this is the
-    /// one place the registers are easier than the cycle counts, which come out unknown.
+    /// The kept sets of two routines that call each other settle, because the analysis only
+    /// ever removes registers from a set. Here registers are easier than cycle counts, which
+    /// come out unknown for such routines.
     /// </summary>
     [Fact]
     public void TwoRoutinesThatCallEachOtherSettle()
@@ -95,8 +103,8 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// A call to an address no declaration stands at is one nt65 cannot follow, and the answer
-    /// says so rather than letting silence read as safety.
+    /// nt65 cannot follow a call to an address where no routine is declared, and the result is
+    /// marked incomplete, so that the absence of a complaint is not mistaken for safety.
     /// </summary>
     [Fact]
     public void ACallThatCannotBeFollowedIsSaidToBeUnknown()
@@ -108,8 +116,8 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// A routine whose body is not here keeps what it declares and nothing else, which is the
-    /// only way anyone can know: no body will ever say otherwise.
+    /// A routine whose body is not in the program keeps exactly what its signature declares:
+    /// with no body to analyse, the declaration is the only source of that fact.
     /// </summary>
     [Fact]
     public void ARoutineWithNoBodyKeepsWhatItDeclares()
@@ -148,8 +156,9 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// A restore through memory is not seen, because ruling out every store that could have
-    /// reached the byte would need addresses, which are the linker's. A `.state keeps` says it.
+    /// A restore through memory is not recognised, because ruling out every other store that
+    /// could have reached the saved byte would need addresses, which only the linker assigns.
+    /// A `.state keeps` asserts the restore instead.
     /// </summary>
     [Fact]
     public void ARestoreThroughMemoryNeedsSaying()
@@ -164,7 +173,10 @@ public sealed class RegisterKeepsTests
             saved + ".proc p: keeps x {\n    stx xsave\n    ldx #1\n    ldx xsave\n    .state keeps x\n    rts\n}\n"));
     }
 
-    /// <summary>A `.state keeps` where the register was never destroyed is one nobody needed.</summary>
+    /// <summary>
+    /// A `.state keeps` for a register that already holds its entry value is reported as
+    /// redundant.
+    /// </summary>
     [Fact]
     public void ARedundantStateKeepsIsSaidToSayNothing()
     {
@@ -186,7 +198,10 @@ public sealed class RegisterKeepsTests
             Problems(".proc p: interrupt, keeps a {\n    lda #1\n    rti\n}\n"));
     }
 
-    /// <summary>A label another routine may jump into is one nothing arrives at in a known state.</summary>
+    /// <summary>
+    /// A label that a `.state` declares as an entry point may be jumped to from anywhere, so
+    /// nothing is known about the registers there and none is kept.
+    /// </summary>
     [Fact]
     public void ADeclaredLabelIsEnteredWithNothingKnown()
     {
@@ -205,8 +220,8 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// So does a branch to one, on the path it is taken, and so does a `.next` naming one: a
-    /// path that hands control to another routine is a way out of this one.
+    /// A branch to another routine does the same on the path where it is taken, and so does a
+    /// `.next` that names one: a path that passes control to another routine leaves this one.
     /// </summary>
     [Fact]
     public void ABranchToARoutineTakesWhatItBranchesTo()
@@ -227,8 +242,8 @@ public sealed class RegisterKeepsTests
     [Fact]
     public void AStateOfNothingButKeepsDeclaresNothing()
     {
-        // A `.state` after a label makes it an entry point, which is why nothing running into
-        // it is no longer worth reporting. One of nothing but `keeps` leaves it as it was.
+        // A `.state` after a label makes it an entry point, so the label is not reported as
+        // never reached. A `.state` holding only `keeps` does not, and the label is reported.
         Assert.Empty(Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:3: `@entry` is never reached: nothing runs into it and nothing names it"],
@@ -267,12 +282,18 @@ public sealed class RegisterKeepsTests
         [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text)).Problems()
             .Select(Renumbered)];
 
-    /// <summary>The same for a 65816 program, where a push is as wide as the register it moves.</summary>
+    /// <summary>
+    /// <see cref="Problems"/> for a 65816 program, where a push is as wide as the register it
+    /// moves.
+    /// </summary>
     private static IReadOnlyList<string> Wide(string text) =>
         [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
             .Select(Renumbered)];
 
-    /// <summary>A problem's line as the test wrote it, without the three lines every test is given.</summary>
+    /// <summary>
+    /// The problem with its line number counted from the start of the test's own text, not
+    /// counting the three prefix lines every test is compiled after.
+    /// </summary>
     private static string Renumbered(string problem)
     {
         var parts = problem.Split(':', 3);

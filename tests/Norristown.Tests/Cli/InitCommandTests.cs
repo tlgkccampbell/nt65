@@ -6,8 +6,8 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 init</c>: the two files a program is, written so that the next thing run is a build
-/// that works, and never written over something that is there already.
+/// <c>nt65 init</c>: the two files a minimal program consists of, written so that the next
+/// command run is a build that works, and never written over files that already exist.
 /// </summary>
 public sealed class InitCommandTests : IDisposable
 {
@@ -28,7 +28,7 @@ public sealed class InitCommandTests : IDisposable
 
     /// <summary>
     /// The project file holds keys nt65 reads and nothing else, and the source is already in the
-    /// one layout, so a first `nt65 fmt` on a new project changes nothing.
+    /// standard layout, so a first `nt65 fmt` on a new project changes nothing.
     /// </summary>
     [Fact]
     public void WhatItWritesIsWhatNt65WouldWrite()
@@ -44,7 +44,7 @@ public sealed class InitCommandTests : IDisposable
         Assert.Equal((0, ""), Run(root.FullName, "fmt", "--check"));
     }
 
-    /// <summary>The directory named is written into, and made where it is not there.</summary>
+    /// <summary>The files are written into the directory named, which is created if it does not exist.</summary>
     [Fact]
     public void ItWritesIntoTheDirectoryItIsGiven()
     {

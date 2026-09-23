@@ -3,7 +3,7 @@ using Norristown.Project;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
-// The protocol has a Range and a Position of their own, which are the ones a request is asked in.
+// The protocol types define their own Range and Position, which are the ones requests take.
 using Position = Norristown.LanguageServer.Protocol.Position;
 using Range = Norristown.LanguageServer.Protocol.Range;
 
@@ -11,27 +11,27 @@ namespace Norristown.Tests;
 
 /// <summary>
 /// Every source in the repository, whole and with each line cut short, put through everything
-/// above the parser: its names bound, its code laid out, its control followed, and every editor
-/// request answered at every caret on every line. Nothing about the answers is asserted, because
-/// a half-written file has no right answer; only that answering does not throw.
+/// above the parser: its names bound, its code laid out, its control flow analysed, and every
+/// editor request answered at a caret on every line. Nothing about the answers is asserted,
+/// because a half-written file has no right answer; only that answering does not throw.
 /// <para>
-/// This is the net under the analysis, as <see cref="Syntax.TypedNodeTests"/> is the net under the
-/// node accessors. An editor runs all of this over a file that does not parse at every keystroke,
-/// so anything that assumes a piece the parser did not find fails here rather than under
+/// This is the safety net under the analysis, as <see cref="Syntax.TypedNodeTests"/> is under the
+/// node accessors. An editor runs all of this at every keystroke over a file that may not parse,
+/// so code that assumes a piece the parser did not find fails here rather than under
 /// someone's caret.
 /// </para>
 /// </summary>
 public sealed class BrokenSourceTests
 {
-    /// <summary>How much is said about one variant before the rest of it is the same news.</summary>
+    /// <summary>How many problems one variant may report before its remaining lines are skipped, as likely repeats.</summary>
     private const int Most = 5;
 
     [Fact]
     public void EveryRequestAnswersOnWholeAndBrokenLines()
     {
-        // One variant of one source is the unit of work, rather than a whole source: a long file
-        // costs more than a short one and the file as written more than a cut of it, so splitting
-        // them apart is what keeps every core busy to the end.
+        // The unit of parallel work is one variant of one source, not a whole source: a long file
+        // costs more than a short one, and the uncut file more than a cut one, so smaller units
+        // keep every core busy until the end.
         var variants = Repo.Sources()
             .SelectMany(path => BrokenLines.Variants(Repo.ReadText(path))
                 .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
@@ -54,8 +54,8 @@ public sealed class BrokenSourceTests
         ProgramAnalysis analysis;
         try
         {
-            // An `.incbin` is taken to be of unknown length rather than read from disk: how long
-            // it is says where the code after it goes, and nothing here asks where that is.
+            // An `.incbin` is taken to be of unknown length rather than read from disk: its length
+            // only decides where the code after it is placed, and nothing here depends on that.
             analysis = Compiler.Analyze([tree], ProjectSettings.None, _ => (long?)null);
         }
         catch (Exception e)
@@ -69,8 +69,8 @@ public sealed class BrokenSourceTests
             return;
         }
 
-        // A program that is already wrong is written out all the same, so the emitter reads
-        // half-typed lines as everything before it does.
+        // A program with errors is still emitted, so the emitter has to cope with half-typed
+        // lines just as every stage before it does.
         try
         {
             Compiler.Emit(analysis, ProjectSettings.None);
@@ -102,8 +102,8 @@ public sealed class BrokenSourceTests
 
     /// <summary>
     /// Every request an editor makes about one line: the ones that take a position, asked at the
-    /// caret, and the code actions, asked over the line, which is the selection that offers the
-    /// fixes its diagnostics name and the rewrites it allows.
+    /// caret, and the code actions, asked over the whole line, since selecting the line is what
+    /// offers the fixes for its diagnostics and the refactorings that apply to it.
     /// </summary>
     private static void OnLine(
         ProgramAnalysis analysis, SemanticModel model, int line, string where, List<string> problems)
@@ -135,10 +135,10 @@ public sealed class BrokenSourceTests
     }
 
     /// <summary>
-    /// Where the caret is while one line is being written: just past the last word written on it,
-    /// which is where the next keystroke goes and, a reference ending there, still on that word.
-    /// Which word it is moves along the line from one cut variant to the next, so between them
-    /// every word of the line is asked about.
+    /// Where the caret is while a line is being typed: just past the last token on it, which is
+    /// where the next keystroke goes and, since it touches that token, still on a name ending
+    /// there. The last token differs from one cut variant to the next, so across the variants
+    /// the requests are asked at many different tokens of each line.
     /// </summary>
     private static int Caret(SyntaxTree tree, int index)
     {
@@ -147,8 +147,8 @@ public sealed class BrokenSourceTests
     }
 
     /// <summary>
-    /// Runs one request, and says so when it throws. <paramref name="what"/> is asked for the
-    /// message only then, because this runs a few hundred thousand times.
+    /// Runs one request, and records a problem if it throws. <paramref name="what"/> is called to
+    /// build the message only in that case, because this runs a few hundred thousand times.
     /// </summary>
     private static void Answered(List<string> problems, Func<string> what, Action work)
     {
@@ -162,7 +162,7 @@ public sealed class BrokenSourceTests
         }
     }
 
-    /// <summary>An exception as the message names it: what it was, and where it was thrown.</summary>
+    /// <summary>An exception as a problem reports it: its type and message, and where it was thrown.</summary>
     private static string Told(Exception e) =>
         $"{e.GetType().Name}: {e.Message}{(e.StackTrace is { } stack ? "\n" + stack : "")}";
 }

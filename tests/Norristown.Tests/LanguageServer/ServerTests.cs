@@ -10,7 +10,7 @@ public sealed class ServerTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
-    /// <summary>A file with one syntax error on line 4 (0-based line 3).</summary>
+    /// <summary>A file with one syntax error on line 5 (0-based line 4).</summary>
     private const string Broken = ".module main\n.segment CODE\n.export .proc reset {\n    lda #0\n    lda #\n    rts\n}\n";
 
     private const string Fixed = ".module main\n.segment CODE\n.export .proc reset {\n    lda #0\n    lda #1\n    rts\n}\n";
@@ -60,7 +60,7 @@ public sealed class ServerTests
         Assert.Null(diagnostic.RelatedInformation);
     }
 
-    /// <summary>Typing the missing operand clears the error, which is the editor loop.</summary>
+    /// <summary>Typing the missing operand clears the error: the basic edit-and-republish loop.</summary>
     [Fact]
     public async Task EditingAwayAnErrorClearsIt()
     {
@@ -69,7 +69,7 @@ public sealed class ServerTests
         await client.OpenAsync(Uri, Broken);
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        // Insert `1` at the end of line 4, which is where the operand is missing.
+        // Insert `1` at the end of 0-based line 4, which is where the operand is missing.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
             new Range(new Position(4, 9), new Position(4, 9)), "1"));
 
@@ -123,7 +123,7 @@ public sealed class ServerTests
         Assert.Empty(await client.FoldingRangesAsync(Uri, timeout));
     }
 
-    /// <summary>Several edits in one notification apply in order, each to what the last left.</summary>
+    /// <summary>Several edits in one notification apply in order, each to the text the previous one left.</summary>
     [Fact]
     public async Task ChangesInOneNotificationApplyInOrder()
     {

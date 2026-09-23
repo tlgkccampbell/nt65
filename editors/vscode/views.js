@@ -1,24 +1,25 @@
-// The two read-only views that open beside a source: what the file became, and what a macro
-// call becomes. Both are the server's answer shown as it came; nothing here works anything out
-// about the program, so the editor and any other client see the same thing.
+// The two read-only views that open beside a source: the ca65 output the file compiles to, and
+// the expansion of a macro call. Both show the server's response unchanged; nothing here works
+// anything out about the program, so VS Code and any other client show the same thing.
 const vscode = require('vscode');
 
 const OUTPUT = 'nt65-output';
 const EXPANSION = 'nt65-expansion';
 
-// What each open view is showing, by the URI of the view's own document. An output view keeps
-// the source it is of, so that an edit anywhere can have it ask again.
+// What each open view is showing, keyed by the URI of the view's own document. An output view
+// records its source file, so that after an edit anywhere its output can be requested again.
 const shown = new Map();
 
-// The lines a caret points at, in either direction. It is a line highlight and not a selection:
-// a view that moved the caret would fight the typing in the window it was opened from.
+// Highlights the lines that match the caret's line, from source to output or output to source.
+// It is a line highlight and not a selection, because moving the caret in the source window
+// from the view would interfere with typing there.
 const marked = vscode.window.createTextEditorDecorationType({
   isWholeLine: true,
   backgroundColor: new vscode.ThemeColor('editor.rangeHighlightBackground'),
 });
 
 // A virtual document that holds text and nothing else. The text is replaced in place, so the
-// window keeps its scroll and its place in the history when the program settles.
+// window keeps its scroll position and its place in the history when the view is refreshed.
 class Held {
   constructor() {
     this.changed = new vscode.EventEmitter();
@@ -37,13 +38,14 @@ class Held {
 
 const held = new Held();
 
-// The view's own document URI: the scheme, a path that names the window, and the source it is
-// of, so that one source has one view and reopening it reuses the window.
+// The URI of a view's document: the view's scheme, a path that gives the window its title, and
+// the source's URI as the query, so that one source has one view and reopening it reuses the
+// window.
 function addressed(scheme, path, source) {
   return vscode.Uri.from({ scheme, path: path.startsWith('/') ? path : `/${path}`, query: source });
 }
 
-// The runs of output lines one source line became, as the server sends them.
+// The runs of output lines that one source line produced, as the server reports them.
 function runsFor(view, line) {
   return (view.lines || []).filter(run => run.source === line);
 }
@@ -66,8 +68,8 @@ function editorsOf(uri) {
   return vscode.window.visibleTextEditors.filter(editor => editor.document.uri.toString() === uri);
 }
 
-// Asks the server what a file became, and holds the answer. A file the program does not hold
-// has no output, which is the one thing worth saying out loud.
+// Asks the server for a file's output, and stores the answer. A file that is not part of the
+// program has no output; this returns undefined then, so that the caller can tell the user.
 async function askForOutput(client, source) {
   const answer = await client.sendRequest('nt65/output', { textDocument: { uri: source } });
   if (!answer) return undefined;
@@ -105,7 +107,8 @@ async function showOutputBeside(client) {
   followSource(editor);
 }
 
-// The caret moved in a source: its lines are marked in the view of it and scrolled to.
+// When the caret moves in a source, its line's output is highlighted and scrolled to in any
+// output view of that source.
 function followSource(editor) {
   const source = editor.document.uri.toString();
   for (const [uri, view] of shown) {
@@ -116,8 +119,9 @@ function followSource(editor) {
   }
 }
 
-// The caret moved in a view: the line it came from is marked in the source, where the source is
-// on the screen. It is not scrolled to, because the source is where the typing happens.
+// When the caret moves in an output view, the source line it came from is highlighted in any
+// visible editor on that source. The source is not scrolled, because that is where the typing
+// happens.
 function followView(editor) {
   const view = shown.get(editor.document.uri.toString());
   if (!view || view.kind !== OUTPUT) return;
@@ -126,8 +130,9 @@ function followView(editor) {
   for (const opened of editorsOf(view.source)) mark(opened, ranges, false);
 }
 
-// What a macro call becomes, in a view of its own. `into` says which call to write out further
-// at each level: one level at a time, because a fully written out nest of macros is unreadable.
+// Shows the expansion of a macro call in a view of its own. `into` says which nested call to
+// expand further at each level; expansion goes one level at a time, because a fully expanded
+// nest of macros is unreadable. `all` expands every level at once.
 async function showExpansion(client, uri, line, character, into, all) {
   const editor = vscode.window.activeTextEditor;
   const where = uri
@@ -158,9 +163,9 @@ async function showExpansion(client, uri, line, character, into, all) {
   if (answer.note) vscode.window.showWarningMessage(`nt65: ${answer.note}`);
 }
 
-// A view of an expansion offers, on each call left as a call, the way to see that one too, and
-// once at the top the way to see all of them. A lens is the only thing a read-only document can
-// carry, and it is what says the summary as well.
+// The code lenses of an expansion view: on each macro call left unexpanded, one that expands
+// that call too, and at the top one that expands them all. A code lens is the only clickable
+// thing a read-only document can carry, so the summary line at the top is a lens as well.
 function lenses(document) {
   const view = shown.get(document.uri.toString());
   if (!view || view.kind !== EXPANSION) return [];
@@ -183,8 +188,8 @@ function lenses(document) {
   return found;
 }
 
-// Everything the two views need, registered once. `client` is the language client, which is
-// asked for the text and told nothing.
+// Everything the two views need, registered once. `client` is the language client; the views
+// only request text from it and send it no notifications.
 function register(context, client) {
   context.subscriptions.push(
     marked,
@@ -199,8 +204,8 @@ function register(context, client) {
       else followView(event.textEditor);
     }),
 
-    // A view of what a file became follows the program and not the caret, so it asks again when
-    // the server says the program has settled, which is the wait the squiggles come on.
+    // An output view follows the program, not the caret, so it requests its text again when the
+    // server says analysis has caught up after an edit, the same point diagnostics are published.
     client.onNotification('nt65/outputChanged', async () => {
       for (const view of [...shown.values()]) {
         if (view.kind === OUTPUT) await askForOutput(client, view.source);
@@ -214,9 +219,9 @@ function register(context, client) {
     vscode.workspace.onDidCloseTextDocument(document => shown.delete(document.uri.toString())));
 }
 
-// A hover's *Show expansion* is a link to a command, and VS Code runs one from a hover only
-// where the hover says which commands it means. It is the one command named, so a server
-// writing anything else into a hover cannot have the editor run it.
+// A hover's *Show expansion* is a command link, and VS Code runs a command link from a hover
+// only when the hover's Markdown names that command as trusted. Only `nt65.showExpansion` is
+// named, so any other command link a server writes into a hover will not run.
 const middleware = {
   async provideHover(document, position, token, next) {
     const hover = await next(document, position, token);

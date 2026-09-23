@@ -7,16 +7,17 @@ using StreamJsonRpc;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// A request the person has moved on from should stop rather than finish. Every handler takes
-/// the token the client's <c>$/cancelRequest</c> trips, and the places that walk a whole
-/// program ask it between files, which is where a slow answer spends its time.
+/// A request the user no longer wants should stop rather than run to completion. Every handler
+/// takes the token that the client's <c>$/cancelRequest</c> trips, and code that walks a whole
+/// program checks the token between files, since that walk is where a slow request spends its
+/// time.
 /// </summary>
 public sealed class CancellationTests
 {
     /// <summary>
-    /// The five that take none: three are the server's own life, which a client does not
-    /// cancel, and the other two answer from something the server already holds — the
-    /// workspace's list of configurations, and which hints this session shows.
+    /// Every handler takes a token except five: three manage the server's lifecycle, which a
+    /// client does not cancel, and the other two answer from state the server already holds —
+    /// the workspace's list of configurations, and which hints this session shows.
     /// </summary>
     [Fact]
     public void EveryRequestHandlerTakesACancellationToken()
@@ -31,7 +32,7 @@ public sealed class CancellationTests
         Assert.Equal(["Configurations", "Exit", "Initialize", "Shutdown", "ToggleCycleHints"], without);
     }
 
-    /// <summary>A search across a workspace of hundreds of files stops at the next one.</summary>
+    /// <summary>A cancelled search across a workspace of hundreds of files stops before the next file.</summary>
     [Fact]
     public void ASearchAcrossTheWorkspaceStopsBetweenFiles()
     {
@@ -48,9 +49,9 @@ public sealed class CancellationTests
     }
 
     /// <summary>
-    /// The client's <c>$/cancelRequest</c> reaches the token the handler is holding. The frames
-    /// are read by the server's own framing layer, which decides what crosses at all, so what
-    /// this shows is that a cancel crosses it and does what it is for.
+    /// The client's <c>$/cancelRequest</c> reaches the token the handler is holding. Messages
+    /// are read by the server's own framing layer, which decides which messages are passed on at
+    /// all, so this shows that a cancel is passed on and cancels the handler.
     /// </summary>
     [Fact]
     public async Task ACancelFromTheClientTripsTheHandlersToken()
@@ -66,7 +67,7 @@ public sealed class CancellationTests
             new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
         client.StartListening();
 
-        // Nothing but `initialize` is answered before it, this layer included.
+        // The framing layer passes nothing else on until `initialize` has been answered.
         await client.InvokeWithParameterObjectAsync<object?>("initialize", null, timeout);
 
         using var giveUp = new CancellationTokenSource();
@@ -83,7 +84,7 @@ public sealed class CancellationTests
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>The handshake the framing layer waits for before it passes anything else on.</summary>
-        /// <returns>Whether the wait has been asked for yet, which at this point it has not.</returns>
+        /// <returns>Whether <c>waitForever</c> has been called yet, which at this point it has not.</returns>
         [JsonRpcMethod("initialize")]
         public bool Initialize() => Started.Task.IsCompleted;
 

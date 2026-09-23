@@ -3,8 +3,8 @@
 # machine that checked the repository out. (The compiler still accepts CRLF in source.)
 * text=auto eol=lf
 
-# The scripts, said again for themselves: a `sh` on Linux refuses a CRLF shebang, and pwsh
-# and the workflows are read on both systems from the same checkout.
+# The scripts are also listed explicitly: a `sh` on Linux refuses a CRLF shebang, and pwsh
+# scripts and the workflows are read on both systems from the same checkout.
 *.sh text eol=lf
 *.ps1 text eol=lf
 *.yml text eol=lf

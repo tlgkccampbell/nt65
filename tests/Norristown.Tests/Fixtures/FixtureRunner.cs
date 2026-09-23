@@ -11,17 +11,17 @@ internal static class FixtureRunner
     /// <summary>
     /// True when NT65_THOROUGH is set (<c>scripts/test.ps1 -Thorough</c>, which the gate does):
     /// every fixture is compiled with its files reversed and shuffled as well as as written. The
-    /// edit loop leaves it off, where those two runs are the cost of a compile each and prove
-    /// something about a set of files rather than about the edit just made.
+    /// edit loop leaves it off: the two extra runs cost a compile each, and they test something
+    /// about a set of files rather than about the edit just made.
     /// </summary>
     public static bool ThoroughMode => Environment.GetEnvironmentVariable("NT65_THOROUGH") is "1" or "true";
 
     /// <summary>Runs one fixture and returns its failures, empty when it passes.</summary>
     public static IEnumerable<string> Run(FixtureCase fixture, bool update = false, bool thorough = false)
     {
-        // What the analysis meant is kept from the first of the runs, so that what the editor
-        // would show beside each source can be checked against what the build wrote without
-        // reading the program a second time.
+        // The analysis from the first run is kept, so that the output preview of each source can
+        // be checked against what the build wrote, and the macro calls inlined, without
+        // analysing the program again.
         ProgramAnalysis? analyzed = null;
         var failures = Run(
             fixture,
@@ -44,16 +44,16 @@ internal static class FixtureRunner
     }
 
     /// <summary>
-    /// Every macro call the editor offers to write out, written out: the file has to build to
-    /// the same bytes with the call written out as it did with the call, and nothing new may be
-    /// wrong with it. A macro whose only call was written out is one nothing names any more,
-    /// which is the warning it should be and not a difference.
+    /// Inlines, one at a time, every macro call the editor offers to inline: with the call
+    /// replaced by its expansion, the file has to assemble to the same bytes and report nothing
+    /// new. A macro whose only call was inlined is no longer used, and the warning that says so is
+    /// expected rather than a difference.
     /// </summary>
-    /// <param name="name">What a failure names the program.</param>
-    /// <param name="project">What it is built as.</param>
+    /// <param name="name">The program's name, as failures report it.</param>
+    /// <param name="project">The project settings it is built with.</param>
     /// <param name="sources">Its sources, as the analysis read them.</param>
-    /// <param name="binaryLength">How long a file an <c>.incbin</c> names is.</param>
-    /// <param name="analysis">The program, already read.</param>
+    /// <param name="binaryLength">The length of a file an <c>.incbin</c> names.</param>
+    /// <param name="analysis">The program, already analysed.</param>
     public static IEnumerable<string> Inlined(
         string name, ProjectSettings project, IReadOnlyList<SourceFile> sources,
         Func<string, long?> binaryLength, ProgramAnalysis analysis)
@@ -74,9 +74,9 @@ internal static class FixtureRunner
                     continue;
                 }
 
-                // The one file is read again and the rest of the program is kept, which is the
-                // path an editor takes, and only that file is written out again: the edit is
-                // inside one routine, and no other file can have moved.
+                // Only the edited file is parsed again and the rest of the program is reused, as an
+                // editor does, and only that file is emitted again: the edit is inside one routine,
+                // so no other file's output can have changed.
                 var written = source.Text[..edit.Span.Start] + edit.Text + source.Text[edit.Span.End..];
                 var after = Compiler.Analyze(
                     [.. analysis.Program.Files.Select(file => file.Tree)
@@ -95,14 +95,14 @@ internal static class FixtureRunner
         }
     }
 
-    /// <summary>What is wrong with a program, leaving out what a call written out makes unused.</summary>
+    /// <summary>A program's diagnostics, leaving out the unused-symbol warnings that inlining a call can cause.</summary>
     private static IReadOnlyList<string> Reported(ProgramAnalysis analysis) =>
         [.. analysis.Diagnostics.Where(d => d.Id != "unused-symbol").Select(FixtureCase.Format)];
 
     /// <summary>
-    /// What one file assembles to: the length of every line of its output that generates bytes,
-    /// in order. A comment and a label generate none, so this is the program and not the ca65
-    /// that spells it, and a label an expansion no longer names is not a difference.
+    /// What one file assembles to: the byte count of every output line that generates bytes, in
+    /// order. Comments and labels generate none, so this compares the program rather than the
+    /// ca65 text that spells it, and a label the expansion no longer uses is not a difference.
     /// </summary>
     private static string Assembled(ProgramAnalysis analysis, ProjectSettings project, string path) =>
         Compiler.EmitFile(analysis, project, path) is { } output
@@ -121,8 +121,8 @@ internal static class FixtureRunner
     }
 
     /// <summary>
-    /// What the editor shows beside each source, against what the build wrote for it: they are
-    /// one text, or the view is showing something that is not the program.
+    /// The output preview of each source, against what the build wrote for it: they must be the
+    /// same text, or the preview is showing something other than the program.
     /// </summary>
     private static IEnumerable<string> Shown(FixtureCase fixture, ProgramAnalysis analysis)
     {
@@ -149,7 +149,7 @@ internal static class FixtureRunner
 
         var compilation = compile(fixture.Sources);
 
-        // Full fidelity, on every fixture: the tree and each statement read back as the source.
+        // Full fidelity, on every fixture: the tree and each statement reproduce the source text.
         foreach (var file in fixture.Sources)
         {
             foreach (var problem in Syntax.Fidelity.Problems(SyntaxTree.Parse(file)))
@@ -157,8 +157,9 @@ internal static class FixtureRunner
         }
 
         // Output is deterministic: the same sources give byte-identical output, and a
-        // program is a set of files, so other orders must give identical results too. The
-        // orders are the thorough run's; the second run over the same files is every run's.
+        // program is a set of files, so other orders must give identical results too. Other
+        // orders are tried only in a thorough run; the second run over the same files is in
+        // every run.
         if (!Same(compilation, compile(fixture.Sources)))
             Fail("output or diagnostics change between two runs over the same files");
         foreach (var (label, order) in OtherOrders(fixture.Sources, thorough))
@@ -167,9 +168,9 @@ internal static class FixtureRunner
                 Fail($"output or diagnostics change when the files are {label}");
         }
 
-        // Nothing the output defines at the margin may be a word ca65 reads as an instruction.
-        // It is checked here, on what this fixture has already been compiled to, rather than
-        // by a pass of its own over every fixture.
+        // No name the output defines at the start of a line may be a word ca65 reads as an
+        // instruction. It is checked here, on this fixture's existing compilation, rather than
+        // by a separate pass that compiles every fixture again.
         foreach (var output in compilation.Outputs)
             failures.AddRange(Emit.BareNames.Problems(fixture.Name, output.Path, output.Text));
 
@@ -217,10 +218,10 @@ internal static class FixtureRunner
     }
 
     /// <summary>
-    /// What a fixture expects against what it got. They are matched on where a diagnostic is
-    /// and what it is called; the words are a second expectation, checked once a pair has been
-    /// made, so that a reworded message is one line to change rather than a diagnostic gone and
-    /// another arrived in its place.
+    /// Compares the diagnostics a fixture expects with those reported. They are paired on
+    /// location, severity and name; the message is a second expectation, checked once a pair has
+    /// been made, so that a reworded message is one line to change rather than one diagnostic
+    /// missing and another unexpected.
     /// </summary>
     private static void CompareDiagnostics(
         IReadOnlyList<FixtureCase.Expectation> expected,
@@ -265,8 +266,8 @@ internal static class FixtureRunner
         yield return ("shuffled", shuffled);
     }
 
-    // Path and text are what "identical output" means; the lengths beside them are worked
-    // out from the same text.
+    // Identical output means identical paths and text; the line byte counts kept with each
+    // output are derived from the same text, so they need no separate comparison.
     private static bool Same(Compilation a, Compilation b) =>
         Written(a).SequenceEqual(Written(b))
         && a.Diagnostics.Select(FixtureCase.Format).Order(StringComparer.Ordinal)

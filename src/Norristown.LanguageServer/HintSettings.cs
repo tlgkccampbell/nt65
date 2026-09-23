@@ -3,15 +3,16 @@ using System.Text.Json;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Which kinds of hint the editor shows, one switch each, named for what the switch shows. A
-/// file opened for the first time should look like the file, so what is on by default is what
-/// is rare and surprising; what is on nearly every line is asked for rather than assumed.
+/// Which kinds of inlay hint the editor shows, one switch each, named for what the switch shows.
+/// A file opened for the first time should look like its source rather than be crowded with
+/// hints, so the hints on by default are the rare and surprising ones; a hint that would appear
+/// on nearly every line is off until asked for.
 /// </summary>
-/// <param name="StateChanges">A line after which a width, the emulation flag, D or B differs.</param>
-/// <param name="LongBranches">A branch layout had to write as the five-byte form.</param>
-/// <param name="ImpliedValues">A value the declaration does not write.</param>
+/// <param name="StateChanges">A line after which a register width, the emulation flag, D or B changes.</param>
+/// <param name="LongBranches">A branch that layout had to emit in its five-byte long form.</param>
+/// <param name="ImpliedValues">A value the declaration does not write explicitly.</param>
 /// <param name="ParameterNames">Which parameter a positional argument is for.</param>
-/// <param name="Cycles">What every instruction costs, which is the one that is off.</param>
+/// <param name="Cycles">The cycle cost of every instruction; the only hint off by default.</param>
 internal sealed record HintSettings(
     bool StateChanges,
     bool LongBranches,
@@ -22,7 +23,7 @@ internal sealed record HintSettings(
     /// <summary>What an editor that has said nothing gets.</summary>
     public static HintSettings Default { get; } = new(true, true, true, true, false);
 
-    /// <summary>Whether anything at all is shown, so that a request answers nothing without working.</summary>
+    /// <summary>Whether any hint is shown at all, so that a request can return nothing without computing anything.</summary>
     public bool Any => StateChanges || LongBranches || ImpliedValues || ParameterNames || Cycles;
 
     /// <summary>

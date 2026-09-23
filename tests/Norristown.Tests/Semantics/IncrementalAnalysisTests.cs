@@ -22,44 +22,45 @@ public sealed class IncrementalAnalysisTests
         [
             ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", null, 1),                                // a routine body
             ("main.nt65", ".proc main", "\n\n.proc main", null, 1),                                  // lines move below the edit
-            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null, 1),                         // errors.nt65 names it, and it is still 9
+            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null, 1),                         // errors.nt65 names it, but its value is still 9
             ("main.nt65", "BASE = 3", "BASE = 4", null, 3),                                          // app and defs look it up
             ("gfx.nt65", "    iny\n", "    iny\n    iny\n", null, 3),                                // `relay` moves down: defs calls it, main calls defs' `ping`
             ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", null, 3),                                 // main and defs look it up
             ("errors.nt65", "lda undeclared", "lda #1", null, 1),
             ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared, 8), // the file declares a segment
             ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", null, 3),                                    // main and gfx look it up
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 1),                        // `origin` holds `Point`, which is the same
+            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 1),                        // a comment only; `origin` holds a `Point`, which is unchanged
             ("types.nt65", "Point::y", "Point::x", null, 1),
             ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", null, 2),                                // errors.nt65 looks it up
             ("main.nt65", "    rts\n}", "extra:\n    rts\n}", null, 1),                              // a new name, which nobody looks up
             ("main.nt65", "BASE = 4", "BASE = LIMIT", null, 3),                                      // a cycle through two files
-            ("main.nt65", "sta cursor", "sta cursor+1", null, 2),                                    // still in it, and app.nt65 sees no change
+            ("main.nt65", "sta cursor", "sta cursor+1", null, 2),                                    // still in the cycle, and app.nt65 sees no change
             ("main.nt65", "BASE = LIMIT", "BASE = 4", null, 3),
             ("main.nt65", "dex", "dex\n    dex", null, 1),
             ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", null, 2),                        // errors.nt65 looks it up
             ("errors.nt65", "jsr gfx::draw", "jsr gfx::clear", null, 1),
-            // Writing a name segs.nt65 does not export stops segs.nt65 saying nothing uses it,
-            // and taking it away again starts it: the fact is here and what it silences is there.
+            // Naming `HUD_SPARE`, which segs.nt65 does not export, is still a use of it, so
+            // segs.nt65 stops being warned that nothing uses it, and removing the name brings the
+            // warning back: the use is in this file and the warning it silences is in segs.nt65.
             ("errors.nt65", "lda #1\n", "lda #1\n    lda #segs::HUD_SPARE\n", null, 2),
             ("errors.nt65", "    lda #segs::HUD_SPARE\n", "", null, 2),
             ("main.nt65", ".if DEBUG {", ".if !DEBUG {", null, 1),                                   // `TRACE` is gone, and nobody looked it up
             ("main.nt65", "BASE = 4", "BASE = 4 ; four", null, 1),                                   // what it means is the same
             ("defs.nt65", "SCALE  = 3", "SCALE  = 4", null, 2),                                      // gfx calls `scaled`, whose body names it
             ("defs.nt65", "FILL   = $20", "FILL   = $2e", null, 2),                                  // main expands `fill_screen`, whose body names it
-            ("gfx.nt65", "    lda #0\n", "    lda #0 ; clear\n", null, 1),                           // defs' `ping` goes on holding the old `COLORS`
-            ("main.nt65", "sta cursor+1", "sta cursor", null, 1),                                    // which main's expansion of `ping` reaches
+            ("gfx.nt65", "    lda #0\n", "    lda #0 ; clear\n", null, 1),                           // a comment only; defs' `ping` keeps the `COLORS` from before the edit
+            ("main.nt65", "sta cursor+1", "sta cursor", null, 1),                                    // main is analyzed again, and its expansion of `ping` reaches that older `COLORS`
             ("defs.nt65", "y:      .word\n", "y:      .word\nz:      .word\n", null, 4),             // types lays `Line` out from it, main uses `Line`, and gfx brings in `ping`, which moves
-            ("defs.nt65", "z:      .word", "w:      .word", null, 3),                                // the same size, and main writes the names out
+            ("defs.nt65", "z:      .word", "w:      .word", null, 3),                                // a member renamed at the same size; main writes the member names into its output
             ("gfx.nt65", "    nop\n", "    ping!()\n", null, 3),                                     // two macros in two files now call each other
-            ("defs.nt65", "relay!(1)", "relay!(2)", null, 3),                                        // still
-            ("defs.nt65", "; Calls a macro", "; It calls a macro", null, 1),                         // gfx's `relay` goes on holding the old `ping`
-            ("defs.nt65", "; It calls", "; Here.\n; It calls", null, 3),                             // `ping` moves, and callers write its calls' lines
+            ("defs.nt65", "relay!(1)", "relay!(2)", null, 3),                                        // the two macros still call each other
+            ("defs.nt65", "; Calls a macro", "; It calls a macro", null, 1),                         // a comment only; gfx's `relay` keeps the `ping` from before the edit
+            ("defs.nt65", "; It calls", "; Here.\n; It calls", null, 3),                             // `ping` moves down, and its callers' output gives the lines of its calls
             ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
-            ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the set, and errors calls `clear`
+            ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the signature `std`, and errors calls `clear`
             ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
-            // A collision under one linker name is reported on the file that sorts later, which
-            // is not the file that changed: that file is read again all the same.
+            // Two names that collide under one linker name are reported on the file that sorts
+            // later, which is not the file that changed; that file is analyzed again all the same.
             ("app.nt65", "ENTRY = BASE", "ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
             ("app.nt65", "\n.export ENTRY as \"segs__hud_value\"", "", null, 2),
             ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.config TRIAL = 1", WholeProgramReason.SettingsDeclared, 8),
@@ -78,8 +79,8 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
-    /// What is decided for the program as a whole changing — the files in it, the project, the
-    /// CPU — is a reason to analyze all of it, and each says which it was.
+    /// A change to something decided for the program as a whole — the files in it, the project,
+    /// the CPU — makes the whole program be analyzed again, and the analysis says which it was.
     /// </summary>
     [Fact]
     public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()

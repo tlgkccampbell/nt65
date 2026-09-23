@@ -3,8 +3,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets while code is being written: completion, help with a call, the hints in
-/// the lines, and a search for a declaration across the workspace.
+/// What an editor gets while code is being written: completion, signature help for a call, the
+/// code lenses and hovers that report cost and registers, and a search for a declaration across
+/// the workspace.
 /// </summary>
 public sealed class EditingRequestsTests
 {
@@ -34,9 +35,9 @@ public sealed class EditingRequestsTests
     private const string Vic = ".module hw::vic\n.export BORDER = $d020\n";
 
     /// <summary>
-    /// The file completion is asked in. Each <c>|name</c> marks a place a test may put its own
-    /// line, and the name it asks for it by; a test that asks for none writes its line at the
-    /// file's top level.
+    /// The file completion is requested in. Each <c>|name</c> marks a place where a test may put
+    /// a line of its own, and <c>name</c> is what the test calls that place; a test that names a
+    /// place not marked here gets its line at the file's top level.
     /// </summary>
     private const string Main = """
         .module main
@@ -75,24 +76,28 @@ public sealed class EditingRequestsTests
 
     public static TheoryData<string, string, string[], string[]> Completions => new()
     {
-        // After `::`, what the path leads to exports; nothing it keeps private.
+        // After `::`, what the module or type the path names exports, and nothing it keeps private.
         { "body", "    jsr gfx::|", ["Sprite", "SCREEN", "clear"], ["helper", "main"] },
         { "body", "    lda gfx::Sprite::|", ["x", "y"], ["clear"] },
         { "body", "    lda vic::|", ["BORDER"], ["clear"] },
 
-        // A `.use` starts at the modules' root, and in its braces names what the module exports.
+        // A `.use` path starts from the root of the module names, and in its braces offers what
+        // the module exports.
         { "top", ".use |", ["gfx", "hw", "main"], ["clear"] },
         { "top", ".use hw::|", ["vic"], ["gfx"] },
         { "top", ".use gfx::{|", ["SCREEN", "Sprite", "clear"], ["hw", "helper"] },
 
-        // An operand may name anything in scope, what `.use` brought in, and a module to walk into.
+        // An operand may name anything in scope, anything a `.use` brought in, or a module to
+        // write a path into.
         { "body", "    lda |", ["@loop", "clear", "gfx", "main", "twice", "vic"], ["poke", "fast", "lda"] },
         { "macro", "    sta |", ["address", "value"], ["@loop"] },
 
         // A statement starts with an instruction or a macro call.
         { "body", "    |", ["lda", "poke"], ["clear"] },
 
-        // A signature's items, and the signature sets; a `.state` asserts a point, and a macro is not called.
+        // After a routine's `:`, the signature items and the named signatures. A `.state` states the
+        // processor at one point, so it takes no calling convention or named signature; a macro is
+        // not called, so it takes no calling convention either.
         { "top", ".proc other: |", ["a16", "a?", "a*", "dp", "far", "fast", "keeps", "near"], ["clear", "lda"] },
         { "body", "    .state |", ["a16", "dbr", "e?", "keeps", "native"], ["near", "a*", "fast"] },
         { "top", ".macro m(): |", ["a8", "e*"], ["near", "far", "keeps"] },
@@ -102,37 +107,38 @@ public sealed class EditingRequestsTests
         { "body", "    poke!(|", ["address", "value", "clear"], ["lda"] },
         { "body", "    poke!(1, |", ["value"], [] },
 
-        // A name being declared is not completed, and nothing stands between it and the `:`
-        // or the `{` the declaration goes on with.
+        // A name being declared is not completed, and nothing is offered between the name and the
+        // `:` or `{` that follows it.
         { "top", ".proc |", [], ["clear"] },
         { "top", ".proc other |", [], ["clear", "lda", ".proc", "near"] },
         { "top", ".macro m(|", [], ["clear", "expr"] },
         { "top", ".macro m(a: |", ["expr", "const", "operand", "block", "one", "Pitch"], ["clear", "lda"] },
 
-        // Inside a kind: the modes an `operand` may list, what a `list`'s items may be, and
-        // nothing in a `one`, whose words the macro makes up.
+        // Inside a parameter kind: the addressing modes an `operand` may list, the kinds a `list`'s
+        // items may be, and nothing inside a `one`, whose words the macro's author chooses.
         { "top", ".macro m(a: operand(|", ["imm", "zpx", "longy"], ["expr", "clear", "Pitch"] },
         { "top", ".macro m(a: operand(imm, |", ["zp", "abs"], ["expr", "clear"] },
         { "top", ".macro m(a: list(|", ["const", "one", "Pitch"], ["imm", "clear"] },
         { "top", ".macro m(a: one(|", [], ["expr", "imm", "clear"] },
 
-        // An argument is offered what its parameter takes: an enum's members by their bare
-        // names, and a `one`'s words, in its place or named.
+        // An argument is offered the values its parameter accepts: an enum's members by their bare
+        // names, and a `one`'s words, whether the argument is positional or named.
         { "body", "    tone!(|", ["low", "high", "p", "w"], ["up"] },
         { "body", "    tone!(low, |", ["up", "down"], ["low"] },
         { "body", "    tone!(low, up, |", ["low", "high"], ["up"] },
         { "body", "    tone!(w = |", ["up", "down"], ["low"] },
 
-        // A condition compares `.mode(p)` with the modes it may give, and a `one` with its words.
+        // In a condition, `.mode(p)` is compared with the modes the parameter allows, and a `one`
+        // with its words.
         { "pick", "    .if .mode(src) == |", ["imm", "abs"], ["zp", "absx", "clear", "src"] },
         { "pick", "    .if reg != |", ["x", "y"], ["imm", "clear"] },
 
-        // Past what finishes an expression an operator goes, and never a name.
+        // After a complete expression only an operator may follow, never a name.
         { "body", "    lda clear |", [], ["clear", "x", "#"] },
         { "body", "    lda clear + |", ["clear", "twice"], ["x", "#"] },
 
-        // A statement is only what the place it is written in accepts: a file's top level
-        // declares things, and only code holds instructions and what they need.
+        // Only the statements the place accepts are offered: a file's top level holds declarations,
+        // and only code holds instructions and the directives that go with them.
         { "top", "|", [".proc", ".data", ".export", ".cpu"], ["lda", "rts", "poke", ".state"] },
         { "body", "|", [".data", ".scope", ".state", ".ensure", ".byte", "lda", "poke"], [".proc", ".macro", ".cpu", ".config", ".module"] },
         { "macro", "|", ["lda", ".state", ".if"], [".proc", ".macro", ".export", ".import", ".segment"] },
@@ -141,7 +147,8 @@ public sealed class EditingRequestsTests
         { "scope", "|", [".proc", ".macro", ".data"], ["lda", "rts", ".state"] },
         { "body", ".|", [".data", ".state", ".byte"], [".proc", ".config", "clear"] },
 
-        // What a `:` asks for: what a member holds, and how wide an imported name is.
+        // After a `:`, the storage a member or data declaration takes, and the address size of an
+        // imported name; after `.cpu`, the processors.
         { "struct", "    x: |", [".byte", ".word", ".res", ".type"], ["lda", "clear"] },
         { "top", ".data d: |", [".byte", ".addr", ".res", ".incbin"], ["lda", ".proc"] },
         { "top", ".import io: |", ["zp", "abs", "far", "proc"], ["clear"] },
@@ -150,26 +157,26 @@ public sealed class EditingRequestsTests
         // A `}` is followed by the next branch of a condition, and by nothing else.
         { "top", "} |", [".else", ".elseif"], [".proc", "lda", "clear"] },
 
-        // An operand is the forms the instruction has, and the names an address is made of.
+        // An operand is offered the instruction's addressing forms, and names to build an address from.
         { "body", "    lda |", ["#", "z:", "a:", "(", "clear", "@loop"], ["x", "y", "a", "f:", "["] },
         { "body", "    asl |", ["a", "z:", "clear"], ["#", "("] },
         { "body", "    jsr |", ["clear", "main"], ["#", "z:", "a:", "("] },
         { "body", "    inx |", [], ["#", "a", "clear", "lda"] },
 
-        // What indexes the address, which is what the form the operand is in allows.
+        // After the comma, the index registers that the operand's addressing form allows.
         { "body", "    lda table, |", ["x", "y"], ["s", "#", "clear"] },
         { "body", "    lda (table), |", ["y"], ["x", "s"] },
         { "body", "    lda (table, |", ["x"], ["y", "s"] },
         { "body", "    sta table, |", ["x", "y"], ["s"] },
 
-        // A number is written in hex, in binary, as a character, or as the digits that need
-        // no mark at all.
+        // Where a number may go, the prefixes for hex (`$`), binary (`%`) and a character (`'`)
+        // are offered; decimal digits need no prefix.
         { "body", "    lda #|", ["$", "%", "'"], ["x", "z:"] },
         { "body", "    lda |", ["$", "%", "'"], ["x"] },
         { "values", "|", ["$", "%", "'"], ["lda"] },
         { "body", "    inx |", [], ["$", "%", "'"] },
 
-        // An expression may call a built-in function, and three of them only a macro body has.
+        // An expression may call a built-in function, and three of them exist only in a macro body.
         { "body", "    lda #|", [".sizeof", ".lobyte", "clear"], [".mode", ".byteof", "x"] },
         { "macro", "    lda #|", [".sizeof", ".mode", ".byteof", ".empty"], ["x"] },
 
@@ -229,8 +236,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// An instruction that takes an operand is written with the space before it and asks the
-    /// client for what may go there; one that takes none is written on its own.
+    /// An instruction that takes an operand is inserted with a trailing space and a command that
+    /// asks the client to complete the operand; one that takes no operand is inserted alone.
     /// </summary>
     [Fact]
     public async Task AnInstructionThatTakesAnOperandLeadsOnToIt()
@@ -324,8 +331,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// Above each routine, what one pass through it costs: an interval where its paths have a
-    /// longest, the fewest and a <c>+</c> where it loops, and what the count does not follow.
+    /// Above each routine, a lens with the cycles one pass through it costs: a range where its
+    /// paths have a longest, the fewest followed by <c>+</c> where it loops, and a note of what
+    /// the count leaves out.
     /// </summary>
     [Fact]
     public async Task ALensAboveEachRoutineSaysWhatOnePassThroughItCosts()
@@ -384,16 +392,16 @@ public sealed class EditingRequestsTests
                 // No path leaves it, so there is no pass through it to put a cost on.
                 (24, "never returns"),
 
-                // `stz` is not on the 6502, so the line is left out of the stream and what
-                // is left of the routine is not what it would cost. It gets no lens at all.
+                // `stz` is not a 6502 instruction, so the line is left out of the assembled code,
+                // and a count of the rest would not be the routine's real cost. It gets no lens.
             ],
             Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
     }
 
     /// <summary>
-    /// What a routine costs with what it calls, worked out through the call graph: a call
-    /// costs the call and then the callee, a tail jump the same, and a routine that reaches
-    /// itself, one with no body, or one through a pointer leaves no total to give.
+    /// What a routine costs including what it calls, worked out through the call graph: a call
+    /// costs the call instruction plus the callee, as does a tail jump. A routine that calls
+    /// itself, calls a routine with no body, or calls through a pointer gets no total.
     /// </summary>
     [Fact]
     public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
@@ -460,11 +468,11 @@ public sealed class EditingRequestsTests
                 "3 cycles, 11 cycles with calls",
                 "12 cycles, not counting calls",
 
-                // It hands control to a routine that never comes back, so the count is what
-                // it takes to get there and not a call it could not follow.
+                // It jumps to a routine that never returns, so the count is the cost of getting
+                // there, and the jump is not treated as a call the count could not follow.
                 "9 cycles, 17 cycles with calls, then never returns",
 
-                // One way out of it returns, so it is not a routine that never comes back.
+                // One of its paths returns, so it is not marked as never returning.
                 "8-13 cycles",
                 "never returns",
                 "12 cycles, not counting calls",
@@ -473,9 +481,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A block move takes seven cycles for every byte it moves, and how many that is is in A
-    /// when it runs, so the routine around it has no count. The lens says that rather than
-    /// going missing, which reads as though it failed.
+    /// A block move takes seven cycles for every byte it moves, and the number of bytes is in A
+    /// when it runs, so the routine containing it has no count. The lens says so rather than
+    /// being left out, because a missing lens reads as though the analysis failed.
     /// </summary>
     [Fact]
     public async Task ALensSaysWhyARoutineWithABlockMoveHasNoCount()
@@ -503,8 +511,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// An inline <c>.scope</c> is a part of its routine and costs what a pass through it
-    /// costs; one at file level holds declarations and no code, and has nothing to say.
+    /// An inline <c>.scope</c> is part of its routine, and its lens gives what one pass through
+    /// the scope costs; a <c>.scope</c> at file level holds declarations and no code, and gets
+    /// no lens.
     /// </summary>
     [Fact]
     public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineCosts()
@@ -540,9 +549,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What a routine hands back, beside what it costs. Most routines work in the accumulator
-    /// and leave the rest alone, so it is said as what they do not keep; a routine whose calls
-    /// nt65 cannot follow says its answer is not one, because silence would read as safety.
+    /// Which registers a routine preserves, in a lens beside its cost. A routine whose calls
+    /// nt65 cannot follow shows <c>preserves ?</c> rather than no lens, because a missing lens
+    /// would read as though the routine were safe to call.
     /// </summary>
     [Fact]
     public async Task ALensSaysWhichRegistersARoutineHandsBack()
@@ -585,9 +594,10 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A loop that counts a register down from an immediate says how many turns it takes, so
-    /// what it costs is a bound and not a floor. A loop that is any other shape keeps the
-    /// floor it had, because a loop counted wrongly is worse than one not counted.
+    /// A loop that counts a register down from an immediate value has a known number of turns,
+    /// so its cost is a range with an upper bound rather than a minimum with <c>+</c>. A loop of
+    /// any other shape still shows only the minimum, because a loop counted wrongly is worse
+    /// than one not counted.
     /// </summary>
     [Fact]
     public async Task ALoopCountingARegisterDownFromAnImmediateIsCounted()
@@ -681,30 +691,30 @@ public sealed class EditingRequestsTests
                 // `bpl` runs one turn past zero, so `ldy #3` is four turns.
                 "39-42 cycles",
 
-                // The loop loads X itself, so where it has got to is not the immediate.
+                // The loop reloads X from memory, so the count no longer follows from the immediate.
                 "15+ cycles, loops",
 
                 // The count does not start at an immediate.
                 "18+ cycles, loops",
 
-                // The call cuts the turn into two blocks, and the loop is read all the same;
-                // the call is made once a turn, so it counts four times over.
+                // The call splits the loop body into two blocks, and the loop is still counted;
+                // the call is made once per turn, so the callee's cost is counted four times.
                 "51-54 cycles, 75-78 cycles with calls",
                 "6 cycles",
 
-                // Two `dex` a turn walk an array of words: `ldx #4` is three turns of `bpl`.
+                // Two `dex` a turn step through an array of words: `ldx #4` is three turns of `bpl`.
                 "43-45 cycles",
 
-                // A stride of two does not bring five down to zero, so `bne` never sees it.
+                // Stepping by two from five skips zero, so `bne` never sees it: not counted.
                 "19+ cycles, loops",
 
-                // `bpl` reads the sign, and 200 has it set before the loop starts.
+                // `bpl` tests the sign bit, and 200 has it set before the loop starts: not counted.
                 "17+ cycles, loops",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }
 
-    /// <summary>A search finds declarations in files no one has open, by the letters of their names in order.</summary>
+    /// <summary>A search finds declarations in files no one has open, matching names that contain the query's letters in order.</summary>
     [Fact]
     public async Task WorkspaceSymbolsFindDeclarationsByTheirLetters()
     {
@@ -725,9 +735,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// An inline <c>.scope</c> is a part of its routine and is asked the same question of
-    /// itself: a block that saves a register and gives it back keeps it, even where the routine
-    /// around it does not.
+    /// An inline <c>.scope</c> gets its own lens of which registers it preserves, as a routine
+    /// does: a block that saves a register and restores it preserves that register, even where
+    /// the routine around it does not.
     /// </summary>
     [Fact]
     public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutinePreserves()
@@ -755,7 +765,7 @@ public sealed class EditingRequestsTests
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
-        // The routine loses A and X; the block gives A back, so all it costs the routine is X.
+        // The routine clobbers A and X; the block restores A, so the only register it clobbers is X.
         Assert.Equal(
             [(2, "preserves Y, C"), (4, "preserves A, Y, C")],
             lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
@@ -763,8 +773,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A lens is something an editor can be told not to show, so what a routine and an inline
-    /// <c>.scope</c> block hand back is on hover as well as above the line.
+    /// An editor can be set to hide lenses, so which registers a routine or an inline
+    /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
     /// </summary>
     [Fact]
     public async Task HoverOnARoutineAndOnAScopeSaysWhatItPreserves()
@@ -799,9 +809,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What the registers hold at a line, on hover, beside what it costs. A register may hold
-    /// what another was entered with, which is how a 6502 saves X, and saying which one is what
-    /// makes the save readable.
+    /// Hover on a line shows what each register holds there, beside what the line costs. A
+    /// register may hold the value another register had on entry, which is how a 6502 saves X
+    /// (by copying it to A), and naming that register makes the save readable.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhatTheRegistersHoldAtTheLine()
@@ -833,14 +843,14 @@ public sealed class EditingRequestsTests
             after?.Contents.Value,
             StringComparison.Ordinal);
 
-        // The routine pushes nothing, and a missing group is what an empty stack looks like.
+        // The routine pushes nothing, and an empty stack is shown by leaving the stack group out.
         Assert.DoesNotContain("stack", after?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// What a register may hold is a set, and a place two paths reach may hold the entry value
-    /// on one of them and something loaded on the other. Collapsing that to not known hides a
-    /// save that is still good on one path, so the words are joined instead.
+    /// What a register may hold is a set: where two paths meet, it may hold its entry value on
+    /// one path and a newly loaded value on the other. Reducing that to "unknown" would hide a
+    /// save that is still valid on one path, so both descriptions are shown, joined by "or".
     /// </summary>
     [Fact]
     public async Task HoverSpellsOutWhatTwoPathsLeaveInARegister()
@@ -872,8 +882,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What a routine is holding, top of the stack first. A save is worth as much as what it
-    /// saved, and what a <c>pla</c> is about to get back is the question a reader has.
+    /// Hover lists what the routine has pushed, top of the stack first, with what each push
+    /// saved: what a <c>pla</c> is about to get back is what a reader wants to know.
     /// </summary>
     [Fact]
     public async Task HoverListsWhatTheRoutineHasPushed()
@@ -904,8 +914,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A stack the analysis lost track of says so. A missing group is what an empty stack looks
-    /// like, and one nothing is known of is not an empty one.
+    /// Where the analysis has lost track of the stack, hover says so. Leaving the stack group out
+    /// means the stack is empty, and a stack nothing is known about is not an empty one.
     /// </summary>
     [Fact]
     public async Task HoverSaysSoWhereTheStackIsNotKnown()
@@ -930,8 +940,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A reader takes in the top of the stack, which is what the routine is about to pull back,
-    /// so a deep one is cut off and counted rather than run down the screen.
+    /// A reader needs the top of the stack, which is what the routine is about to pull back, so
+    /// a deep stack is cut off with a count of the entries not shown rather than listed in full.
     /// </summary>
     [Fact]
     public async Task HoverCountsThePushesItDoesNotList()
@@ -962,8 +972,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A <c>.frame</c> makes the bytes under it one thing the routine put there, so they are
-    /// read as one row however many pushes went into them.
+    /// A <c>.frame</c> declares the bytes it covers as one structure the routine has pushed, so
+    /// hover shows them as one row however many pushes built them.
     /// </summary>
     [Fact]
     public async Task HoverReadsAFrameAsOnePush()
@@ -995,9 +1005,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// On the 65816 the processor-state analysis knows what the saved-register stack cannot:
-    /// what a <c>php</c> saved, and how wide the register a push moved was, which is what
-    /// decides whether the pull gets the value back at all.
+    /// On the 65816 the processor-state analysis supplies what the stack tracking alone cannot
+    /// know: which status a <c>php</c> saved, and how wide each pushed register was, which
+    /// decides whether a later pull restores the value at all.
     /// </summary>
     [Fact]
     public async Task HoverNamesA65816PushAndSaysHowWideItWas()
@@ -1028,16 +1038,16 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// The lenses that say what a pass costs, which is what these tests are about: what is kept
-    /// is a lens of its own and has a test of its own.
+    /// The lenses that give what a pass costs, which is what these tests check. The lens that
+    /// says which registers are preserved is left out; it has tests of its own.
     /// </summary>
     private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
         lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal));
 
     /// <summary>
-    /// The main file with <paramref name="line"/> in the place <paramref name="where"/> marks,
-    /// the other marked places left empty, and where the line's own <c>|</c> is. A place the
-    /// file does not mark is its top level, past everything else.
+    /// The main file with <paramref name="line"/> at the place marked <paramref name="where"/>,
+    /// the other marked places left empty, and the caret position given by the line's own
+    /// <c>|</c>. A place the file does not mark puts the line at top level, after everything else.
     /// </summary>
     private static (string Text, Position Position) Place(string where, string line)
     {

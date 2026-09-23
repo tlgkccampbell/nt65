@@ -4,11 +4,11 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Works out what expressions are worth, and with them each symbol's kind, value
+/// Works out the values of expressions, and with them each symbol's kind, value
 /// and address size.
 /// <para>
 /// A constant may be written before the names it uses, so evaluation follows references
-/// rather than the order of the file, and a name that ends up needing itself is an error
+/// rather than the order of the file, and a name whose value depends on itself is an error
 /// reported once for the whole cycle. Everything built only from constants gets a value;
 /// an expression naming an address gets none, and is emitted symbolically for ca65 to
 /// resolve.
@@ -23,12 +23,12 @@ internal sealed partial class Evaluator
     private readonly List<Symbol> evaluating = [];
     private readonly Dictionary<Symbol, Value> arguments = [];
 
-    // Names an `.each` bound to a list item, which stand for the item wherever they are
-    // written rather than only for what it is worth.
+    // Names an `.each` bound to a list item. Such a name is replaced by the item itself
+    // wherever it is written, not just by the item's value.
     private readonly Dictionary<Symbol, SyntaxNode> items = [];
 
-    // The enum member a repetition's name stands for on this turn, which a path ending in
-    // that name reaches the member of the same name through.
+    // The enum member each repetition binding is bound to on the current turn. A path that
+    // ends in the binding reaches the container's member of that enum member's name.
     private readonly Dictionary<Symbol, Symbol> members = [];
 
     // What a macro parameter was given, for the built-ins that ask about the argument rather
@@ -45,13 +45,13 @@ internal sealed partial class Evaluator
     private readonly Func<Symbol, Symbol, bool, CycleSpan>? cycles;
 
     // For a program in which one file changed: the symbols of the files that did not, whose
-    // values stand as they were, and which of them this file's symbols read.
+    // values are kept as they were, and which of them this file's symbols read.
     private readonly Func<Symbol, bool>? settled;
     private readonly HashSet<Symbol> settledReads = [];
 
     // The file of the symbol being evaluated when each diagnostic was found, alongside them.
     // What a symbol's evaluation finds belongs to its file even when it is found in another
-    // file's function body, so a file that is not evaluated again keeps saying it.
+    // file's function body, so a file that is not evaluated again keeps reporting it.
     private readonly List<string>? owners;
 
     // Which branches the build takes, for the conditionals in a data body; without it every
@@ -59,31 +59,33 @@ internal sealed partial class Evaluator
     private readonly Configuration? configuration;
 
     // Set when what is being evaluated is a build's own condition, which is read before there
-    // are any declarations and so means something narrower by every name and every call.
+    // are any declarations, so its names and calls can mean much less than they do elsewhere.
     private readonly Conditions? conditions;
 
-    // The declarations already told that a value of theirs is wider than ca65 can hold. The
-    // steps around such a value are the same mistake, and the first of them is the one to name.
+    // The declarations already reported for a value wider than ca65 can hold. The steps of the
+    // same expression around that value are the same mistake, so only the first is reported.
     private readonly HashSet<Symbol> wide = [];
 
-    // The literals already told that they hold a character no encoding is settled for. A macro
-    // body is evaluated once per call, and its text is one piece of text however often it is.
+    // The literals already reported for holding a character outside ASCII. A macro body is
+    // evaluated once per call, but each literal in it is one piece of source, reported once.
     private readonly HashSet<SyntaxNode> outsideAscii = [];
 
     // The data declarations whose places are being worked out, so that one asked about by
-    // what is written inside it answers unknown rather than asking itself again.
+    // what is written inside it gets an unknown answer rather than recursing.
     private readonly HashSet<Symbol> placing = [];
 
-    // Whether the walk over what a file writes to its segments is under way, for a distance
-    // between two declarations, which a length asked for on the way may ask for again.
+    // Whether the walk over what a file writes to its segments is under way, while computing
+    // a distance between two declarations; a length computed on the way may ask for it again.
     private bool apart;
     private Symbol? owner;
 
-    // The symbol whose own value is being worked out, whose every step the output carries.
+    // The symbol whose value expression is being evaluated. The output writes that
+    // expression as written, so every step of it is checked against what ca65 can hold.
     private Symbol? declaring;
 
-    // How deep evaluation is inside values `.select` chose, whose names have to mean something,
-    // and whether a function body is being read with nothing given, when no choice is known.
+    // How many `.select`-chosen values evaluation is inside, where an unresolved name has to
+    // be reported, and whether a function body is being read with no arguments, when no
+    // choice can be made.
     private int choosing;
     private bool readingBody;
 
@@ -111,8 +113,8 @@ internal sealed partial class Evaluator
         this.spans = spans;
         this.cycles = cycles;
 
-        // A name a repetition binds stands for its value on this turn, which is what a
-        // function's parameter already does for its argument.
+        // A repetition's binding takes its value for the current turn, just as a function's
+        // parameter takes its argument's.
         foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Expansion.Bound>())
         {
             if (value.Argument is { } argument)
@@ -167,8 +169,8 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Evaluates <paramref name="expression"/> and reports what is wrong with it. An
-    /// expression that is nobody's value — an operand of a data directive — is never reached
-    /// by the pass over the symbols, so whoever reads it asks for it to be checked.
+    /// expression that is no symbol's value, such as an operand of a data directive, is never
+    /// reached by the pass over the symbols, so the code that reads it calls this to check it.
     /// </summary>
     public static void Check(
         SyntaxNode expression,
@@ -188,8 +190,8 @@ internal sealed partial class Evaluator
             return;
 
         // A named scope is a namespace and has no address of its own, so nothing is written
-        // for it and ca65 would find the name undefined. What a call does with its arguments,
-        // `.spanof` of a scope among them, is the call's to say.
+        // for it and ca65 would find the name undefined. A name inside a call is left for the
+        // call to check, since some calls accept a scope (`.spanof` of a scope, for one).
         foreach (var node in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
@@ -209,7 +211,7 @@ internal sealed partial class Evaluator
         return false;
     }
 
-    /// <summary>The symbol a written name stands for, or null when it names none.</summary>
+    /// <summary>The symbol a written name refers to, or null when it names none.</summary>
     public static Symbol? SymbolNamed(
         SyntaxNode name,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
@@ -229,7 +231,7 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound) =>
         new Evaluator(SegmentTable.Standard, resolved, null, null, bound).ExprOf(call);
 
-    /// <summary>The items a name stands for when it names a list, or null when it does not.</summary>
+    /// <summary>The items of the list a name refers to, or null when it does not name a list.</summary>
     public static IReadOnlyList<SyntaxNode>? ItemsOf(
         SyntaxNode argument,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
@@ -239,7 +241,7 @@ internal sealed partial class Evaluator
             : null;
 
     /// <summary>
-    /// What an expression is worth once every symbol has been evaluated. Nothing is reported
+    /// The value of an expression once every symbol has been evaluated. Nothing is reported
     /// from here: this answers a question an editor asked, about a file that has already had
     /// everything wrong with it reported.
     /// </summary>
@@ -254,15 +256,15 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// An evaluator for the conditions of a build, which are answered before a declaration
-    /// exists. Nothing resolves in one, so it carries no symbols at all: what a name and a
-    /// call may mean there is <paramref name="conditions"/>.
+    /// exists. Nothing resolves in one, so it carries no symbols at all:
+    /// <paramref name="conditions"/> decides what a name and a call may mean there.
     /// </summary>
     public static Evaluator ForConditions(Conditions conditions, List<Diagnostic> diagnostics) =>
         new(SegmentTable.Standard, ReadOnlyDictionary<(SyntaxTree, int), Symbol>.Empty, diagnostics,
             conditions: conditions);
 
     /// <summary>
-    /// What an expression is worth. A caller that reports — the pass over the symbols, and the
+    /// The value of an expression. A caller that reports — the pass over the symbols, and the
     /// conditions of a build — evaluates through here; one that only asks goes through
     /// <see cref="ValueOf"/>.
     /// </summary>
@@ -275,8 +277,8 @@ internal sealed partial class Evaluator
     /// </summary>
     private Value Carried(SyntaxNode node, Value value)
     {
-        // A name is worth what its own declaration says, and what does not fit there is said
-        // there rather than again at every name of it.
+        // A name's value comes from its declaration, and a value too wide for ca65 is reported
+        // there rather than again at every use of the name.
         if (node is NameExpressionSyntax || declaring is not { } within)
             return value;
         if (value.AsNumber() is { } number && !FitsCa65(number) && wide.Add(within))
@@ -290,9 +292,9 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character typed
     /// directly above <c>$7f</c> is an error rather than a byte of some encoding. A charmap
-    /// entry is where such a character says what it becomes, and what a data declaration holds
-    /// is checked where its bytes are laid out, which is where the charmap applied to it is
-    /// known; everything else — a constant, an operand, a condition — is said here.
+    /// entry is where such a character is given a byte, and what a data declaration holds is
+    /// checked where its bytes are laid out, which is where the charmap applied to it is known;
+    /// everything else — a constant, an operand, a condition — is reported here.
     /// </summary>
     private void CheckAscii(LiteralExpressionSyntax literal)
     {
@@ -302,8 +304,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Whether the literal stands somewhere a charmap answers for it, or somewhere layout checks
-    /// it. Text a call builds from it is checked here: layout sees only what the call gave.
+    /// Whether the literal is somewhere a charmap maps it, or somewhere layout checks it. Text
+    /// a call builds from it is checked here, because layout sees only the call's result.
     /// </summary>
     private bool InCharmapOrData(SyntaxNode literal)
     {
@@ -327,8 +329,8 @@ internal sealed partial class Evaluator
 
     private Value Evaluated(SyntaxNode node)
     {
-        // A literal the lexer refused is worth nothing, the way an undeclared name is: what is
-        // wrong with it has been said once, where it is written, and reading it for a value
+        // A literal the lexer refused has no value, as an undeclared name has none: what is
+        // wrong with it has been reported once, where it is written, and reading it for a value
         // would be reading digits that are not digits.
         if (node is LiteralExpressionSyntax { Token.ContainsDiagnostics: true })
             return Value.Unknown;
@@ -395,8 +397,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Works <paramref name="symbol"/> out unless it has been worked out already. Only the
-    /// pass that reports may: by the time anything else asks, every symbol has been evaluated
+    /// Evaluates <paramref name="symbol"/> unless it has been evaluated already. Only the pass
+    /// that reports does so: by the time anything else asks, every symbol has been evaluated
     /// and every type laid out, and answering a question must never write to a symbol another
     /// thread is reading.
     /// </summary>
@@ -482,8 +484,9 @@ internal sealed partial class Evaluator
         // the import says is what nt65 works with, as a routine import's signature is.
         if (symbol.Kind == SymbolKind.Data || symbol.IsTypedStorage)
         {
-            // How much room a declaration takes is nt65's own arithmetic, whatever is being
-            // declared around it: what the output carries of it is the count of a `.res`.
+            // How much room a declaration takes is nt65's own arithmetic, even while another
+            // symbol's value is being evaluated: the output carries only the resulting count, in
+            // a `.res`, so its steps are not checked against what ca65 can hold.
             var outerSizing = declaring;
             declaring = null;
             evaluating.Add(symbol);
@@ -567,7 +570,7 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What a written name is worth. Inside a function body a parameter stands for the
+    /// The value of a written name. Inside a function body a parameter has the value of the
     /// argument it was called with; a member reached through a path is the offsets along
     /// that path added up, which is what makes `Player::pos::y` a number.
     /// </summary>
@@ -579,8 +582,8 @@ internal sealed partial class Evaluator
             return Indexed(name, Evaluate(item));
         if (SymbolOf(name) is not { } symbol)
         {
-            // Binding left a name in a value `.select` chooses between to whichever evaluation
-            // chooses it.
+            // Binding did not report unresolved names in the values `.select` chooses between;
+            // they are reported here, once evaluation has chosen the value they are in.
             if (choosing > 0 && name.SimpleName is { Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone)
                 Report(alone, Catalogue.NotDeclared.Says(alone.Text, ""));
             return Value.Unknown;
@@ -633,15 +636,15 @@ internal sealed partial class Evaluator
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
 
-            // An index the brackets hold nothing between stands in its slot with no text of its
-            // own, and what is missing has already been said where the brackets are.
+            // Empty brackets leave a missing index with no text, and it has already been
+            // reported where the brackets are.
             var written = index.Index;
             if (written.Span.Length == 0)
                 return null;
             if (Evaluate(written).AsNumber() is not { } at)
             {
-                // A name in it that means nothing has been reported where it is written, and
-                // the index is no constant only because of it.
+                // A name in it that does not resolve has already been reported where it is
+                // written, and is the only reason the index is not constant, so nothing more is said.
                 if (Names(written))
                 {
                     Report(written, Catalogue.ElementIndexNotConstant.Says(symbol.DisplayName));
@@ -703,8 +706,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The value a name stands for, evaluating its declaration first if need be. A label has
-    /// no value at all: where it lands is the linker's to say.
+    /// The value of a symbol, evaluating its declaration first if need be. A label has no
+    /// value at all: only the linker knows where it lands.
     /// </summary>
     private Value ValueOfSymbol(Symbol symbol)
     {
@@ -724,8 +727,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The word one side of a comparison stands for: the value when it is already a word, or
-    /// else the bare name written there, which a word is compared against unlooked-up.
+    /// The word one side of a comparison gives: the value when it is already a word, or else
+    /// the bare name written there, which is compared as a word without being looked up.
     /// </summary>
     private static string? WordOf(Value value, ExpressionSyntax written) => value.IsWord
         ? value.Text
@@ -758,9 +761,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What a name resolved to: the last part of the path, which is what it stands for. The
-    /// file is part of the key, because following a name into another file lands on offsets
-    /// that mean something else there.
+    /// What a name resolved to: the last part of the path, which is what the name refers to.
+    /// The file is part of the key, because a position in one file means something else in
+    /// another.
     /// </summary>
     private Symbol? SymbolOf(NameExpressionSyntax name)
     {
@@ -769,8 +772,8 @@ internal sealed partial class Evaluator
         if (BoundItem(name) is NameExpressionSyntax item)
             return SymbolOf(item);
 
-        // A name written from the top level is already a path, so its first part is no more the
-        // whole of it than a second part would be.
+        // A name written with a leading `::` is already a path, so a binding in its first part
+        // is treated as one in a later part would be.
         var reached = name.GlobalToken is not null;
         var names = name.Names;
         for (var i = names.Length - 1; i >= 0; i--)
@@ -781,13 +784,13 @@ internal sealed partial class Evaluator
         return null;
     }
 
-    /// <summary>The same, for whatever is written where a name may be: only a name stands for a symbol.</summary>
+    /// <summary>The same, for whatever is written where a name may be: only a name can refer to a symbol.</summary>
     private Symbol? SymbolOf(SyntaxNode written) => written is NameExpressionSyntax name ? SymbolOf(name) : null;
 
     /// <summary>
     /// What <c>actions::c</c> names, where <c>c</c> walks an enum: the member of <c>actions</c>
-    /// with the same name as the enum member <c>c</c> stands for on this turn. Off any turn,
-    /// as an editor asks, it names nothing.
+    /// named after the enum member <c>c</c> is bound to on the current turn. Outside any turn,
+    /// as when an editor asks, it names nothing.
     /// </summary>
     private Symbol? Namesake(NameExpressionSyntax name, int last, Symbol binding)
     {

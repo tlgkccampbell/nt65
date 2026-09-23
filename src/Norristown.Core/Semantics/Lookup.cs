@@ -34,8 +34,9 @@ internal static class Lookup
         if (!last && program.IsModulePath(name))
             return new Place(null, name);
 
-        // A module on its own is no value, so a name a `*` brought in is what one standing
-        // alone means; with nothing else, it is the module, which is reported as one.
+        // A module on its own is not a value, so a name written alone means what a `*` brought
+        // in, if anything; only when nothing else matches is it the module, which the caller
+        // reports as a module used as a name.
         Place? chosen = null;
         foreach (var module in globs)
         {
@@ -66,7 +67,7 @@ internal static class Lookup
 
     /// <summary>
     /// The part after <paramref name="prefix"/>, which is a module or the start of one's name.
-    /// Whether what it reaches may be named from outside its module is the caller's to say.
+    /// Whether what it reaches may be named from outside its module is for the caller to check.
     /// </summary>
     public static Place? InModule(
         string name,
@@ -109,9 +110,9 @@ internal static class Lookup
     public static string Suggesting(string? near) => near is null ? "" : $"; `{near}` is";
 
     /// <summary>
-    /// What a name may reach into with <c>::</c>: its own scope, or the scope of the type it
-    /// names, which is what makes the fields of <c>.type T</c> data reachable through it. A
-    /// macro has a body and is not one of them: what a body declares is local to each
+    /// The scope that <c>::</c> after a symbol looks in: its own scope, or the scope of the type
+    /// it names, which is what makes the fields of <c>.type T</c> data reachable through it. A
+    /// macro has a body but is excluded: what a body declares is local to each
     /// expansion, so there is no one symbol to name from outside.
     /// </summary>
     public static Scope? BodyOf(Symbol symbol) =>
@@ -124,8 +125,8 @@ internal static class Lookup
     /// two entries share a name the first is what the name means, which is the one rule
     /// <see cref="Outside"/> follows.
     /// <para>
-    /// A module is not among them: it is the start of a path rather than a name that stands
-    /// for something, and which modules a path may start with is the program's to list.
+    /// A module is not among them: it is the start of a path rather than a name that refers
+    /// to something, and the program is what lists the modules a path may start with.
     /// </para>
     /// </summary>
     public static IEnumerable<(string Name, Place Means)> InScope(

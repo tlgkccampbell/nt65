@@ -5,22 +5,22 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The server's lists of which directives may begin a line where, held to the binder that
-/// decides it. Nothing in the language ties the two together: a directive offered where the
-/// binder refuses it is a completion that writes a broken line, and one the binder accepts and
-/// the list leaves out is a directive nobody is offered.
+/// Checks the server's lists of which directives may start a line in each kind of place against
+/// the binder, which is what actually decides. Nothing in the code ties the two together: a
+/// directive offered where the binder rejects it is a completion that writes a broken line, and
+/// one the binder accepts but the list leaves out is a directive nobody is offered.
 /// <para>
-/// Each directive is written as the smallest whole thing it can be, at the start of a line in
-/// each kind of place, and the program is built. Allowed here means nothing is reported about
-/// those lines; offered here is what <see cref="Directives"/> answers for the same caret.
+/// Each directive is written in its smallest complete form, at the start of a line in each kind
+/// of place, and the program is built. "Allowed" here means no error is reported on those lines;
+/// "offered" means <see cref="Directives"/> lists it for a caret at the same position.
 /// </para>
 /// </summary>
 public sealed class DirectivePlacesTests
 {
     /// <summary>
-    /// What each directive is as a line of its own, with <c>#</c> standing for a number that
-    /// keeps each one's names to itself. A block opener closes its own block, so that a whole
-    /// place's worth of them can be written into one program.
+    /// The smallest complete form of each directive, as a line of its own. A <c>#</c> marks where
+    /// a number is appended to a name the snippet declares, so that snippets' names would not
+    /// collide. A block opener closes its own block, so each snippet is complete by itself.
     /// </summary>
     private static readonly Dictionary<string, string> Written = new(StringComparer.Ordinal)
     {
@@ -68,12 +68,13 @@ public sealed class DirectivePlacesTests
     };
 
     /// <summary>
-    /// The ones that are not a line of their own, and so are held to nothing here: two
-    /// continue a block that has to be open above them, two are about the statement above
-    /// them, one may only be the last line of a routine's body, one is about where the stack
-    /// has been left, one names the module and may only be a file's first line, one places a
-    /// module that has to say it may be placed, one names a file on disk, and one fails the
-    /// build on purpose.
+    /// The directives that cannot be tested as a line of their own, and so are not checked
+    /// here: <c>.else</c> and <c>.elseif</c> continue a block that must be open above them;
+    /// <c>.next</c> and <c>.patch</c> describe the statement above them; <c>.fallthrough</c> may
+    /// only be the last line of a routine's body; <c>.frame</c> describes where the stack has
+    /// been left; <c>.module</c> names the module and may only be a file's first line;
+    /// <c>.place</c> places a module that must declare that it may be placed; <c>.incbin</c>
+    /// names a file on disk; and <c>.error</c> fails the build on purpose.
     /// </summary>
     private static readonly string[] Partial =
     [
@@ -81,8 +82,8 @@ public sealed class DirectivePlacesTests
     ];
 
     /// <summary>
-    /// What the server offers at a place and the binder refuses there, which is empty: nothing
-    /// the lists offer writes a line that does not build.
+    /// The directives the server offers at a place but the binder rejects there. Every list is
+    /// empty: nothing the server offers writes a line that does not build.
     /// </summary>
     private static readonly Dictionary<string, string[]> Refused = new(StringComparer.Ordinal)
     {
@@ -93,11 +94,11 @@ public sealed class DirectivePlacesTests
     };
 
     /// <summary>
-    /// What the binder takes at a place and the server does not offer there, which is the
-    /// server being stricter on purpose. A nested <c>.proc</c> is code the outer routine's
-    /// flow analysis cannot follow; a <c>.cpu</c> inside a routine states the program's
-    /// processor from somewhere nobody reads for one; and a <c>.segment</c> block inside a
-    /// macro body or a repetition would be written out once per expansion.
+    /// The directives the binder accepts at a place but the server does not offer there, where
+    /// the server is deliberately stricter. A nested <c>.proc</c> is code the outer routine's
+    /// flow analysis cannot follow; a <c>.cpu</c> inside a routine sets the program's processor
+    /// from a place nobody would look for it; and a <c>.segment</c> block inside a macro body or
+    /// a repetition would be written out once per expansion.
     /// </summary>
     private static readonly Dictionary<string, string[]> Stricter = new(StringComparer.Ordinal)
     {
@@ -107,7 +108,7 @@ public sealed class DirectivePlacesTests
         ["a repetition"] = [".segment"],
     };
 
-    /// <summary>Nothing may be offered that has no minimal form written for it here.</summary>
+    /// <summary>Every directive the server knows is either written out above or listed as partial.</summary>
     [Fact]
     public void EveryDirectiveTheListsKnowIsWrittenHere()
     {
@@ -131,20 +132,21 @@ public sealed class DirectivePlacesTests
                 allowed.Add(directive);
         }
 
-        // Nothing is offered twice, and everything offered is a line the binder takes.
+        // Nothing is offered twice, and everything offered is a line the binder accepts.
         Assert.Equal(offered.Distinct(StringComparer.Ordinal), offered);
         Assert.Equal(
             Refused[place],
             offered.Where(name => !allowed.Contains(name)));
 
-        // And the converse, but for the few the server is stricter about than the binder.
+        // And everything the binder accepts is offered, except the few the server is stricter about.
         Assert.Equal(Stricter[place], allowed.Where(name => !offered.Contains(name)));
     }
 
     /// <summary>
-    /// A setting is offered where one may be written and nowhere else. The places above all sit
-    /// under the preamble's <c>.segment CODE</c>, which is a block the binder counts, so this is
-    /// where the other answer is checked: a file that has opened nothing yet.
+    /// <c>.config</c> is offered only where a setting may be written: before anything has been
+    /// opened. The places tested above all sit under the preamble's <c>.segment CODE</c>, which
+    /// the binder counts as opened, so this test covers the other case, a file that has opened
+    /// nothing yet.
     /// </summary>
     [Fact]
     public void ASettingIsOfferedWhileNothingIsOpenAndNotAfterwards()
@@ -159,8 +161,9 @@ public sealed class DirectivePlacesTests
     }
 
     /// <summary>
-    /// A <c>.place</c> is offered at file level, before any region and in one, and inside no
-    /// block: which modules share a translation unit depends on nothing a block could decide.
+    /// A <c>.place</c> is offered at file level, both before any segment region and inside one,
+    /// but inside no block: which modules share a translation unit cannot depend on anything a
+    /// block could decide.
     /// </summary>
     [Fact]
     public void APlaceIsOfferedAtFileLevelOnly()
@@ -184,7 +187,7 @@ public sealed class DirectivePlacesTests
         return [.. Directives.At(caret).Select(item => item.Name).Where(name => !Partial.Contains(name))];
     }
 
-    /// <summary>What is reported about the lines <paramref name="directive"/> is written on.</summary>
+    /// <summary>The errors reported on the lines that <paramref name="directive"/> is written on, in <paramref name="place"/>.</summary>
     private static IReadOnlyList<string> Errors(string place, string directive)
     {
         var snippet = Written[directive].Replace("#", "1", StringComparison.Ordinal);

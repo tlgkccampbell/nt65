@@ -3,10 +3,10 @@ using System.Text.RegularExpressions;
 namespace Norristown.Project;
 
 /// <summary>
-/// The <c>files</c> globs of a project file. <c>**</c> matches any number of directories and has
-/// to be a whole segment; anything else is a plain pattern for the directory it sits in, with
-/// <c>*</c> and <c>?</c>. A glob may reach above the root, so that a library shared between
-/// projects is part of each.
+/// The <c>files</c> globs of a project file. <c>**</c> matches any number of directories, has to
+/// be a whole segment, and may only be followed by the file-name pattern; the other directory
+/// segments are literal, and the file name is a pattern with <c>*</c> and <c>?</c>. A glob may
+/// reach above the root, so that a library shared between projects is part of each.
 /// </summary>
 public static class SourceGlobs
 {

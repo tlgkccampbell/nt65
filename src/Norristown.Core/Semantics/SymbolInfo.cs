@@ -1,11 +1,11 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a written name means: the symbol it stands for, or the module it names, or nothing at
-/// all. A module is no declaration — it is only the way to one — so a name that stops at a
-/// module answers with the module's path rather than with a symbol.
+/// What a written name means: the symbol it refers to, or the module it names, or nothing at
+/// all. A module is not a declaration — it is only the way to one — so a name that stops at a
+/// module gives the module's path rather than a symbol.
 /// </summary>
-/// <param name="Symbol">The symbol the name stands for, or null.</param>
+/// <param name="Symbol">The symbol the name refers to, or null.</param>
 /// <param name="Module">The module, or the start of one's name, when the name is one.</param>
 public readonly record struct SymbolInfo(Symbol? Symbol, string? Module = null)
 {

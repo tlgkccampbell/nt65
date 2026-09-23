@@ -33,7 +33,7 @@ public sealed class ProjectFileTests
             project.Segments.Select(segment => (segment.Name, segment.Size)));
     }
 
-    /// <summary>An empty file is a project that says nothing, not a broken one.</summary>
+    /// <summary>An empty object is a project that sets nothing, not a broken one.</summary>
     [Fact]
     public void AnEmptyObjectIsAProjectThatSaysNothing()
     {
@@ -90,8 +90,8 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    /// A named configuration gives defines over the project's, by name, and its own output
-    /// directory; with none chosen, the project's own settings build.
+    /// A named configuration overrides the project's defines by name, and can set its own output
+    /// directory; with no configuration chosen, the project's own settings are used.
     /// </summary>
     [Fact]
     public void AConfigurationOverridesTheDefinesAndTheOutput()
@@ -190,8 +190,8 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    /// How much a diagnostic matters is the project's to say by name, and a configuration says
-    /// it over the project, so that a release build can be stricter than the one being worked in.
+    /// A project sets each diagnostic's severity by name, and a configuration can override the
+    /// project's setting, so that a release build can be stricter than the everyday one.
     /// </summary>
     [Fact]
     public void ADiagnosticIsReportedAsTheProjectAndItsConfigurationSay()
@@ -213,8 +213,9 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    /// A warning switched off is gone and one turned up is an error; an error is neither, so a
-    /// construct that is an error here and a warning on another processor cannot be lost.
+    /// A warning set to off is dropped, and one set to error becomes an error; a diagnostic
+    /// reported as an error is never changed, so a construct that is an error here, even if only a
+    /// warning on another processor, cannot be switched off.
     /// </summary>
     [Fact]
     public void WhatTheProjectSaysIsWhatEachDiagnosticIsReportedAs()

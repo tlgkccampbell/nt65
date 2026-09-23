@@ -6,16 +6,17 @@ namespace Norristown.Syntax;
 
 /// <summary>
 /// A node's children, nodes and tokens together, in source order. The list itself is a view
-/// over the node, so asking for it costs nothing; the red node of a child that is a node is
-/// the one the parent keeps, made when first asked for.
+/// over the node, so asking for it costs nothing; a child node's red node is created the first
+/// time it is asked for and then cached by the parent.
 /// <para>
 /// A slot holding nothing shows no child, and a slot holding a list shows the list's items and
 /// separators rather than the node over them, as Roslyn's does: an analyzer walking a node's
 /// children never meets a list node.
 /// </para>
 /// <para>
-/// A line holds its tokens in its slots and shows the pieces it is written in, which hold those
-/// same tokens; every token of a file is therefore met once, under the node it is part of.
+/// A line is the exception to reading children from slots: it stores its tokens directly in its
+/// slots, but its children are the pieces the line is made of, which hold those same tokens. A
+/// walk of the children therefore reaches every token of a file once, under the node it is part of.
 /// </para>
 /// </summary>
 public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
@@ -58,7 +59,7 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         }
     }
 
-    /// <summary>The <paramref name="length"/> children from <paramref name="start"/>, which is what a slice pattern reads.</summary>
+    /// <summary>The <paramref name="length"/> children from <paramref name="start"/>; C# slice patterns call this.</summary>
     /// <param name="start">The first child to take.</param>
     /// <param name="length">How many to take.</param>
     public ImmutableArray<SyntaxNodeOrToken> Slice(int start, int length)

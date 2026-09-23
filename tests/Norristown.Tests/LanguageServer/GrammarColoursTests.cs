@@ -6,16 +6,18 @@ using Norristown.Tests.Syntax;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The grammar colours a file before the server answers, and the server's semantic tokens are
-/// drawn over it when it does. Where the grammar gives a name more than the plain scope, it gives
-/// the scope VS Code maps the server's token to, so the name keeps its colour; and it gives every
-/// declaration one, except the few its line cannot tell apart.
+/// The TextMate grammar colours a file before the server answers, and the server's semantic
+/// tokens are drawn over it once it does. Wherever the grammar gives a name more than the plain
+/// scope, it must give the scope VS Code maps the server's token type to, so the name keeps its
+/// colour when the tokens arrive; and it must give every declaration such a scope, except the few
+/// whose kind cannot be told from their line.
 /// </summary>
 public sealed class GrammarColoursTests
 {
     /// <summary>
-    /// The declarations whose kind their line does not say, as the grammar's scope and the token
-    /// type's: a constant whose expression turns out to name an address, <c>HERE = *</c>.
+    /// The declarations whose kind cannot be told from their line, as pairs of the grammar's scope
+    /// and the token type's: a constant whose expression turns out to name an address, such as
+    /// <c>HERE = *</c>, which the grammar colours as a constant and the server as a variable.
     /// </summary>
     private static readonly HashSet<(string Grammar, string Token)> Undecidable =
     [
@@ -44,7 +46,7 @@ public sealed class GrammarColoursTests
                     var declaration = (data[i + 4] & 1) != 0;
                     if (ScopeOf(type, (data[i + 4] & 2) != 0) is not { } expected)
                         continue;
-                    // A name `.use ... as` gives is whatever the module it comes from says it is.
+                    // A name given by `.use ... as` has whatever kind the module it comes from declares.
                     if (declaration && tree.Lines[line].ToFullString()[..character].TrimEnd().EndsWith(" as", StringComparison.Ordinal))
                         continue;
                     var given = scopes[line][character..(character + data[i + 2])].Distinct().ToList();
@@ -64,7 +66,7 @@ public sealed class GrammarColoursTests
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
-    /// <summary>The scope VS Code colours a token type by, or null for one it gives none, a label.</summary>
+    /// <summary>The scope VS Code colours a token type by, or null for a type given no scope, such as a label.</summary>
     private static string? ScopeOf(string type, bool readOnly) => type switch
     {
         "namespace" => TextMateGrammar.Namespace,

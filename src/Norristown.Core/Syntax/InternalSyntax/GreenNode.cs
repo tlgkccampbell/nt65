@@ -13,11 +13,11 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <param name="fullWidth">The node's width, trivia included.</param>
 internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
 {
-    // What each annotated node carries. It is a table beside the nodes rather than a field on
-    // every one of them because a parse annotates nothing: the parser never writes here, and a
-    // file none of whose nodes is tagged pays not one byte for the ones that could be. The
-    // diagnostics went the other way for the opposite reason — the parser reports on them, and a
-    // lookup on every node that holds one would be paid at every parse.
+    // The annotations each annotated node carries. They live in a side table rather than in a
+    // field on every node because parsing never annotates anything: the parser never writes here,
+    // so a file with no annotated nodes pays no memory for them. Diagnostics use a field for the
+    // opposite reason — the parser does report them, and a table lookup for every node that has
+    // one would be paid on every parse.
     private static readonly ConditionalWeakTable<GreenNode, SyntaxAnnotation[]> carried = new();
 
     private ImmutableArray<GreenDiagnostic> diagnostics;
@@ -57,8 +57,8 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     public abstract int SlotCount { get; }
 
     /// <summary>
-    /// Whether the node stands where one belongs that the source does not have: a missing token,
-    /// or the empty expression the parser leaves where it could read none.
+    /// Whether the node fills a place the grammar requires but the source does not write: a
+    /// missing token, or the empty expression the parser leaves where it could not read one.
     /// </summary>
     public virtual bool IsMissing => false;
 
@@ -79,9 +79,9 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     /// <summary>
     /// Gives this node <paramref name="diagnostic"/>. A node is given its diagnostics while the
     /// parser still has it in hand, before it goes into a parent, which is what lets every parent
-    /// roll <see cref="ContainsDiagnostics"/> up in its constructor. A node that stands for more
-    /// than one place in the file — a token the lexer shares, the missing token of a kind — is
-    /// never given one: it carries what it has from its constructor.
+    /// roll <see cref="ContainsDiagnostics"/> up in its constructor. A node object shared by more
+    /// than one place in the file — a token from the lexer's cache, or the shared missing token of
+    /// a kind — is never given one: it keeps only what its constructor gave it.
     /// </summary>
     /// <param name="diagnostic">The diagnostic, placed within this node.</param>
     internal void Report(GreenDiagnostic diagnostic)
@@ -93,8 +93,8 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     /// <summary>
     /// A copy of this node carrying <paramref name="wanted"/> in place of the annotations it has,
     /// or this node itself where it has none and none is wanted. The copy holds the same children,
-    /// the same width and the same diagnostics — an annotation is no part of what a node says —
-    /// and is a different object, which is the whole of what makes it findable. It is copied
+    /// the same width and the same diagnostics — an annotation is not part of the node's content —
+    /// but is a different object, and that identity alone is what makes it findable. It is copied
     /// rather than rebuilt so that every kind of node, generated and hand-written, is covered by
     /// this one method.
     /// </summary>
@@ -131,9 +131,9 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     }
 
     /// <summary>
-    /// Rolls <see cref="Flags"/> up from <paramref name="nodes"/>, which is what a parent holding
-    /// a run of children does as it is built. The generated nodes, whose children are named slots
-    /// rather than a run, write the same one assignment out.
+    /// Rolls <see cref="Flags"/> up from <paramref name="nodes"/>; a parent whose children are an
+    /// array calls this as it is built. The generated nodes, whose children are named slots rather
+    /// than an array, write out the same assignment for each slot instead.
     /// </summary>
     /// <param name="nodes">The children to roll up from.</param>
     private protected void RollUp<T>(ImmutableArray<T> nodes) where T : GreenNode

@@ -8,15 +8,15 @@ namespace Norristown;
 /// <param name="Diagnostics">Errors, warnings and information, ordered by file, line and column.</param>
 public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyList<Diagnostic> Diagnostics)
 {
-    /// <summary>The ca65 among the outputs: the files that are the program, and are assembled.</summary>
+    /// <summary>The ca65 source files among the outputs: the files that make up the program and are assembled.</summary>
     public IEnumerable<OutputFile> Ca65 => Outputs.Where(output => output.Kind == OutputKind.Ca65);
 
-    /// <summary>The C header of what the program exports, when one was asked for and the program is not wrong.</summary>
+    /// <summary>The C header of what the program exports, when one was asked for and the program has no errors.</summary>
     public string? Header { get; init; }
 
     /// <summary>
-    /// Whether nothing said which processor the program is for, neither the project nor a
-    /// <c>.cpu</c> item, so that it was built for <see cref="Processor.ProgramCpu.Default"/>.
+    /// Whether neither the project nor a <c>.cpu</c> item said which processor the program is
+    /// for, so that it was built for <see cref="Processor.ProgramCpu.Default"/>.
     /// </summary>
     public bool IsCpuAssumed { get; init; }
 }

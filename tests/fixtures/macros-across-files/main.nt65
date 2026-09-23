@@ -7,8 +7,8 @@
 .segment ZEROPAGE
 .data ptr: .word
 
-; A name of the file's own that an expansion's label would otherwise become: the
-; expansion's gives way, since only fixed spellings are kept.
+; A name of this file's own that an expansion's generated label would also take: the generated
+; label is renamed, since names written in the source keep their spelling.
 .segment CODE
 .export .proc delay__loop {
     rts

@@ -30,7 +30,7 @@
     jml (CODE_BANK << 16) | .loword(reset)
 }
 
-; An interrupt handler knows nothing at entry but, here, its mode, and leaves by `rti`.
+; An interrupt handler knows nothing at entry except its mode, here native, and leaves by `rti`.
 .proc nmi: isr {
     rep #$30
     pha

@@ -3,17 +3,17 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What a completion writes, and in what order. A block is a shape with a brace to close, so
-/// the directives that open one are written as the shape; an instruction is not, because
-/// <c>lda ${1:operand}</c> fights the typing of someone who knows what they are writing. What
-/// is listed is ordered by how near it is to the caret, since the thing meant is nearly always
-/// the nearest.
+/// What a completion inserts, and the order of the list. A directive that opens a block is
+/// inserted as a snippet of the whole block, closing brace included; an instruction is inserted
+/// as a plain word, because a snippet such as <c>lda ${1:operand}</c> gets in the way of someone
+/// who knows what they are typing. The list is ordered by how close each name is to the caret,
+/// since the name wanted is nearly always the closest.
 /// </summary>
 public sealed class CompletionStructureTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
-    /// <summary>What opens a block, every one of which a completion writes as the block.</summary>
+    /// <summary>The directives that open a block, each of which a completion inserts as the whole block.</summary>
     private static readonly string[] Openers =
     [
         ".proc", ".multiproc", ".scope", ".macro", ".struct", ".union", ".enum", ".segment", ".if",
@@ -21,8 +21,8 @@ public sealed class CompletionStructureTests
     ];
 
     /// <summary>
-    /// A 65816 file whose routines are declared the same way, so that a new one can be offered
-    /// the shape the others have.
+    /// A 65816 file whose routines all declare the same signature, so that the snippet for a new
+    /// routine can offer that signature too.
     /// </summary>
     private const string Source = """
         .module main
@@ -44,9 +44,9 @@ public sealed class CompletionStructureTests
         """;
 
     /// <summary>
-    /// The block openers are snippets and nothing else is: the name is the first stop and the
-    /// body the last, and on the 65816 a routine stops on the signature the program's other
-    /// routines mostly start with.
+    /// The block openers are snippets and nothing else is: the name is the first tab stop and
+    /// the body the last, and on the 65816 a routine also has a stop for its signature, filled
+    /// in with the one most of the program's other routines declare.
     /// </summary>
     [Fact]
     public async Task ABlockOpenerIsWrittenAsTheBlock()
@@ -60,7 +60,7 @@ public sealed class CompletionStructureTests
         Assert.Equal(".func ${1:name}(${2:parameters}) = $0", Written(items, ".func"));
         Assert.All(Openers, name => Assert.Equal(InsertTextFormat.Snippet, One(items, name).InsertTextFormat));
 
-        // A directive that opens no block is the word it is, and so is everything else.
+        // A directive that opens no block is inserted as its plain name, as is everything else.
         Assert.Null(One(items, ".res").InsertTextFormat);
         Assert.Equal(".res", Written(items, ".res"));
 
@@ -69,7 +69,7 @@ public sealed class CompletionStructureTests
         Assert.Equal("lda ", Written(inside, "lda"));
     }
 
-    /// <summary>A client that did not declare it takes stops gets the plain word, as before.</summary>
+    /// <summary>A client that did not declare snippet support gets the plain word, even for a block opener.</summary>
     [Fact]
     public async Task AClientWithoutStopsGetsThePlainWord()
     {
@@ -85,9 +85,9 @@ public sealed class CompletionStructureTests
 
     /// <summary>
     /// The list is ordered by nearness rather than by spelling: the labels of the routine the
-    /// caret is in, then the file's names, then the modules, then the words the language
-    /// spells, and the instructions last, of which every CPU has more than anyone means at one
-    /// caret.
+    /// caret is in, then the file's names, then the modules, then the language's own words, and
+    /// the instructions last, since every CPU has far more of those than anyone could mean at
+    /// one caret.
     /// </summary>
     [Fact]
     public async Task TheListIsOrderedByNearness()
@@ -96,13 +96,13 @@ public sealed class CompletionStructureTests
         await using var client = await OpenAsync(timeout);
 
         // Where a name goes: the labels of the routine the caret is in, then the file's names,
-        // then the marks a number that is not plain digits starts with.
+        // then the prefixes, such as `$`, that start a number that is not written in decimal.
         var named = await CompletionAsync(client, new Position(13, 8), timeout);
         var reached = (string label) => One(named, label).SortText!;
         Assert.True(string.CompareOrdinal(reached("@again"), reached("SCREEN")) < 0, "this routine's labels first");
         Assert.True(string.CompareOrdinal(reached("SCREEN"), reached("$")) < 0, "the file's names before the marks");
 
-        // Where a statement goes: the words the language spells, and the instructions last.
+        // Where a statement goes: the language's directives first, and the instructions last.
         var starting = await CompletionAsync(client, new Position(14, 4), timeout);
         var order = (string label) => One(starting, label).SortText!;
         Assert.True(string.CompareOrdinal(order(".byte"), order("lda")) < 0, "the words before the instructions");

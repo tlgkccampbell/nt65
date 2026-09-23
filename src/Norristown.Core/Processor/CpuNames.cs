@@ -10,8 +10,8 @@ public static class CpuNames
 
     /// <summary>
     /// The names, as a message lists them: <c>6502</c>, <c>65sc02</c>, and so on. The lexer
-    /// decides what is a CPU name without knowing what a CPU is, so the spellings are its, and
-    /// a message about a name it would not have taken says exactly the ones it takes.
+    /// recognizes CPU names without knowing about <see cref="Cpu"/>, so it owns the spellings,
+    /// and a message about a name it rejected lists exactly the ones it accepts.
     /// </summary>
     public static string Listed => SyntaxFacts.ListedCpuNames;
 

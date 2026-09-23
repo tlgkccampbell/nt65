@@ -4,12 +4,12 @@ using Norristown.Project;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 init</c>: writes the two files a program is, an <c>nt65.json</c> and a
-/// <c>src/main.nt65</c>, so that the first thing a newcomer runs is a build that works rather
-/// than a project file copied out of a document.
+/// <c>nt65 init</c>: writes the two files a minimal program consists of, an <c>nt65.json</c>
+/// and a <c>src/main.nt65</c>, so that a newcomer's first build works without them having to
+/// copy a project file out of the documentation.
 /// <para>
-/// It refuses to overwrite either, and writes neither when it would have to, so running it in a
-/// directory that already holds a program leaves that program alone.
+/// It refuses to overwrite either file, and writes neither if one already exists, so running it
+/// in a directory that already holds a program leaves that program alone.
 /// </para>
 /// </summary>
 public static class InitCommand

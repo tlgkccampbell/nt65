@@ -50,15 +50,15 @@ public static class Outline
             case ProcDeclarationSyntax { Name: { IsMissing: false } name } proc:
                 return new OutlineItem(OutlineKind.Proc, name.Text, proc.Signature?.GetText(), block.Span, name.Span, children);
 
-            // One block, however many routines it declares: the enum it walks and the
-            // signature they share are what a reader needs beside the name it binds.
+            // One item for the block, however many routines it declares. Its detail is the
+            // enum it iterates over and the signature the routines share.
             case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
                     multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
                     block.Span, bound.Span, children);
 
             case ScopeDeclarationSyntax scope:
-                // `.scope { }` is anonymous, and stands under its own directive.
+                // `.scope { }` is anonymous, so the item is labelled with the directive itself.
                 return new OutlineItem(OutlineKind.Scope, scope.Name?.Text ?? ".scope", null,
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 
@@ -69,8 +69,8 @@ public static class Outline
                     block.Span, macro.Span, children);
 
             case SegmentBlockSyntax or SegmentRegionSyntax:
-                // A name written in quotes is an error that still names the segment, and holds no
-                // escapes, so the quotes come off by hand.
+                // A segment name written in quotes is an error, but it still names the segment.
+                // It cannot contain escapes, so removing the quotes is enough.
                 var written = (SegmentStatementSyntax)opener;
                 var segment = written.Name.IsMissing ? written.Keyword : written.Name;
                 return new OutlineItem(OutlineKind.Segment, segment.Text.Trim('"'), null, block.Span, segment.Span, children);
@@ -123,7 +123,10 @@ public static class Outline
         }
     }
 
-    /// <summary>What a declaration writes after its name: an extern proc's address and signature.</summary>
+    /// <summary>
+    /// The declaration's text after its name, trimmed, or null if there is none: an extern
+    /// proc's address and signature, for example.
+    /// </summary>
     private static string? TextAfter(SyntaxNode statement, SyntaxToken name)
     {
         var end = statement.Span.End;

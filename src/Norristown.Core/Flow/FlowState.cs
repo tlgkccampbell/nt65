@@ -10,13 +10,13 @@ namespace Norristown.Flow;
 /// <param name="Stack">What the routine has pushed, or null when that is not known.</param>
 public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
 {
-    /// <summary>Why A's width is unknown, where it is and the analysis can say.</summary>
+    /// <summary>Why A's width is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyA { get; init; }
 
-    /// <summary>Why the index width is unknown, where it is and the analysis can say.</summary>
+    /// <summary>Why the index width is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyIndex { get; init; }
 
-    /// <summary>Why the stack is unknown, where it is and the analysis can say.</summary>
+    /// <summary>Why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
     /// <summary>

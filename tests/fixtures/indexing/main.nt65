@@ -26,7 +26,7 @@
 .data handlers: .addr[4]
 
 .segment RODATA
-; An index through a type is a number, as every path through one is.
+; An index through a type gives an offset, as every path through a type does.
 .data offsets: .byte Actor::tiles[2], Actor::pos::y
 
 ; One text is padded with zero to the count, written on the line or in the body.

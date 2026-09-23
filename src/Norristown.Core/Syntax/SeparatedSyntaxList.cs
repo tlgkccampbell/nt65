@@ -69,7 +69,7 @@ public readonly struct SeparatedSyntaxList<T> : IReadOnlyList<T> where T : Synta
     /// <summary>The items and the separators together, in source order.</summary>
     public ChildSyntaxList GetWithSeparators() => list is null ? default : new(list);
 
-    /// <summary>The <paramref name="length"/> items from <paramref name="start"/>, which is what a slice pattern reads.</summary>
+    /// <summary>The <paramref name="length"/> items from <paramref name="start"/>; C# slice patterns call this.</summary>
     /// <param name="start">The first item to take.</param>
     /// <param name="length">How many to take.</param>
     public ImmutableArray<T> Slice(int start, int length)

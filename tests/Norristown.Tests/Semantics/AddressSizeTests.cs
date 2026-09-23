@@ -37,7 +37,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Far, model.Symbol("away").AddressSize);
     }
 
-    /// <summary>A region places everything after it, up to the next one: there is no default segment.</summary>
+    /// <summary>A <c>.segment</c> region places everything after it, up to the next one; before the first there is no default segment.</summary>
     [Fact]
     public void ARegionPlacesWhatFollowsIt()
     {
@@ -51,7 +51,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("main").AddressSize);
     }
 
-    /// <summary>What has an address needs a segment to have it in, and a constant does not.</summary>
+    /// <summary>Anything with an address must be in a segment; a constant need not be.</summary>
     [Fact]
     public void BytesOutsideEverySegmentAreAnError()
     {
@@ -66,8 +66,8 @@ public sealed class AddressSizeTests
     }
 
     /// <summary>
-    /// An expression naming addresses takes the widest of them, whatever its own value
-    /// would say.
+    /// A constant whose expression names addresses takes the widest of their address sizes,
+    /// whatever its own value would suggest.
     /// </summary>
     [Fact]
     public void AnAliasTakesTheWidestAddressItNames()
@@ -89,7 +89,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Far, model.Symbol("MIXED").AddressSize);
     }
 
-    /// <summary><c>.addrsize</c> is that size in bytes.</summary>
+    /// <summary><c>.addrsize</c> gives a symbol's address size in bytes.</summary>
     [Fact]
     public void AddrsizeIsTheSizeInBytes()
     {

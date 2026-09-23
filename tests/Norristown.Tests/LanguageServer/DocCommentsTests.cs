@@ -6,9 +6,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The comment above a declaration, shown on hover and beside a completion. There is no
-/// doc-comment syntax of its own: the <c>;</c> lines directly above it, each on a line of
-/// its own, are what the author had to say about it.
+/// The comment above a declaration, shown on hover and beside a completion. The language has
+/// no special doc-comment syntax: the <c>;</c> comment lines directly above a declaration, each
+/// on a line of its own, are taken as its documentation.
 /// </summary>
 public sealed class DocCommentsTests
 {
@@ -52,7 +52,7 @@ public sealed class DocCommentsTests
         Assert.Contains("Clears the screen.\nThe border is left alone.", use.Contents.Value);
     }
 
-    /// <summary>A blank line between ends the comment, and a comment on a line of code is nobody's.</summary>
+    /// <summary>A blank line ends the comment, and a comment that shares a line with code documents nothing.</summary>
     [Fact]
     public async Task ABlankLineOrALineOfCodeEndsTheComment()
     {
@@ -66,7 +66,7 @@ public sealed class DocCommentsTests
         Assert.DoesNotContain("how many rows", hover.Contents.Value);
     }
 
-    /// <summary>Every instance of a family is declared on the family's line, so each shows its comment.</summary>
+    /// <summary>Every instance of a family is declared on the family's line, so each shows the family's comment.</summary>
     [Fact]
     public async Task AFamilysInstancesShowTheFamilysComment()
     {
@@ -102,9 +102,9 @@ public sealed class DocCommentsTests
     }
 
     /// <summary>
-    /// A completion says what each name is for too, fetched for the one item the caret is on:
-    /// a file's names carry a paragraph each, and a list of hundreds would be mostly prose
-    /// nobody is reading.
+    /// A completion item carries the comment too, but only when it is resolved for the one item
+    /// the caret is on: each name can carry a paragraph, and sending them all with a list of
+    /// hundreds would be mostly prose nobody is reading.
     /// </summary>
     [Fact]
     public async Task ACompletionCarriesTheComment()
@@ -126,7 +126,7 @@ public sealed class DocCommentsTests
         Assert.Equal("markdown", clear.Documentation.Kind);
         Assert.Equal("Clears the screen.\nThe border is left alone.", clear.Documentation.Value);
 
-        // A name whose declaration has no comment above it resolves to itself.
+        // A name whose declaration has no comment above it resolves with no documentation.
         var rows = Assert.Single(items, item => item.Label == "ROWS");
         Assert.Null((await client.ResolveAsync(rows, timeout)).Documentation);
     }

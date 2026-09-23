@@ -1,12 +1,13 @@
 using Norristown.Cli;
 
-// Colour marks what a diagnostic is, and only where somebody is reading it: a redirected
-// stream is something else's input, and NO_COLOR is the person saying they do not want it.
+// Colour highlights a diagnostic's severity, and is used only when a person is likely reading
+// standard error: a redirected stream is another program's input, and a non-empty NO_COLOR
+// means the user has asked for no colour.
 var colour = !Console.IsErrorRedirected
     && Environment.GetEnvironmentVariable("NO_COLOR") is null or "";
 
-// Ctrl+C ends `--watch` the way its own last line says it does, rather than killing the
-// process in the middle of writing a file.
+// Ctrl+C cancels the token rather than killing the process, so that `--watch` stops cleanly
+// instead of in the middle of writing a file.
 using var interrupted = new CancellationTokenSource();
 Console.CancelKeyPress += (_, stopping) =>
 {
@@ -14,10 +15,10 @@ Console.CancelKeyPress += (_, stopping) =>
     interrupted.Cancel();
 };
 
-// The handler of last resort. Anything that reaches here is a bug in nt65 rather than
-// something wrong with the program being built, and says so: what threw, which program nt65
-// was reading, and the stack to report it with. 70 is what a tool exits with when it failed at
-// its own end, which is what this is.
+// The top-level exception handler. An exception that reaches here is a bug in nt65 rather
+// than a problem with the program being built, and the report says so: what threw, which
+// program nt65 was building, and the stack trace to include in a bug report. 70 is EX_SOFTWARE,
+// the conventional exit code for an internal software error.
 try
 {
     return Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, colour, interrupted.Token);

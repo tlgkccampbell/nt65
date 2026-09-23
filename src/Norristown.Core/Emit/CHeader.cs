@@ -11,8 +11,8 @@ namespace Norristown.Emit;
 /// the symbol's linker name, less the <c>_</c> cc65 puts in front of a C name, so what C
 /// declares is what the linker finds.
 /// <para>
-/// A routine is declared <c>void name(void)</c>, because nt65 says how a routine leaves the
-/// processor and not what C passes it. C does not allow a second, different prototype, so each
+/// A routine is declared <c>void name(void)</c>, because nt65 describes the processor state a
+/// routine leaves, not the arguments C passes it. C does not allow a second, different prototype, so each
 /// declaration is skipped when <c>NT65_OWN_name</c> is defined, and the programmer's own
 /// prototype takes its place.
 /// </para>
@@ -23,7 +23,8 @@ public sealed class CHeader
     private readonly List<Diagnostic> diagnostics;
     private readonly StringBuilder text = new();
 
-    // The types the header defines, which data and members of them may be written as.
+    // The types the header has defined so far. Data and members of these types are declared
+    // with the C type; anything else is declared as bytes.
     private readonly HashSet<Symbol> defined = [];
 
     private CHeader(ProgramModel program, List<Diagnostic> diagnostics)
@@ -86,8 +87,8 @@ public sealed class CHeader
         Line($"#ifndef {guard}");
         Line($"#define {guard}");
 
-        // A member of a named enum is written in its enum, and a field of data of a type is
-        // reached through the data.
+        // A member of a named enum is written inside its enum rather than as a #define, and a
+        // field of typed data is reached through the data rather than on its own.
         var constants = exported.Where(symbol => symbol is { Kind: SymbolKind.Constant, IsDefine: false, IsConfig: false }
             && symbol.Value.AsNumber() is not null && ProgramSymbols.IsLinked(symbol)
             && symbol.Scope.Owner is not { Kind: SymbolKind.Enum }).ToList();
@@ -149,8 +150,8 @@ public sealed class CHeader
     }
 
     /// <summary>
-    /// A struct or a union, after the exported types its members hold; a type that holds itself,
-    /// which nt65 has already reported, is written once.
+    /// Writes a struct or a union, after first writing the exported types its members hold; a
+    /// type that contains itself, which nt65 has already reported, is written only once.
     /// </summary>
     private void Layout(Symbol type, IReadOnlyList<Symbol> types, HashSet<Symbol> visiting)
     {
@@ -209,6 +210,7 @@ public sealed class CHeader
     /// <summary>
     /// Whether C can name <paramref name="symbol"/>: cc65 puts <c>_</c> in front of every C name,
     /// so a routine or data declaration C uses is exported under a name that starts with one.
+    /// When C cannot name it, a diagnostic saying so is reported.
     /// </summary>
     private bool Reachable(Symbol symbol, string what)
     {

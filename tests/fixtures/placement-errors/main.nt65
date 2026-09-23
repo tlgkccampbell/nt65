@@ -14,7 +14,7 @@
     .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `.fallthrough fourth` says flow runs on into `fourth`, and it does not start where this routine ends: a routine runs into the one written directly after it
 }
 
-.place middle                       ; its bytes stand between the two
+.place middle                       ; its bytes go between `third` and `fourth`
 
 .export .proc fourth {
     lda #4

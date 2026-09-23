@@ -19,8 +19,8 @@
     .export .multiproc Bank, b: a8, i8, dbr = Bank::b {
         lda level::b
 
-        ; A condition in the body may name the enum's members: the binding's own value is one
-        ; of them, so they are known where a turn's conditions are answered.
+        ; A condition in the body may name the enum's members: the binding's value is one of
+        ; them, so they are known when each iteration's conditions are evaluated.
         .if b == Bank::hi {
             inc a
         }
@@ -30,7 +30,7 @@
 }
 
 ; The long form, which is what `.multiproc` stands for: an `.each` whose body declares under
-; the name it binds. A cheap local in the body is that instance's, as a turn's always is.
+; the name it binds. A cheap local in the body belongs to that instance, as in any iteration.
 .export .scope stop {
     .each Bank, b {
         .proc b: a8, i8 {

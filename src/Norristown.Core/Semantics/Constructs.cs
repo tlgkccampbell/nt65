@@ -3,9 +3,8 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Which constructs the stages so far implement, and what a block opener says. Binding,
-/// layout and emission all walk the same lines and must agree about which of them they are
-/// ready to read.
+/// Questions about block openers and directives that binding, layout and emission all ask.
+/// They walk the same lines and must agree on the answers, so the answers live in one place.
 /// </summary>
 public static class Constructs
 {
@@ -30,8 +29,8 @@ public static class Constructs
     public static string? SegmentOf(StatementSyntax opener) =>
         opener is SegmentStatementSyntax segment ? SegmentNames.Of(segment.Name) : null;
 
-    // A message the line does not write is no message: an `.assert` leaves the slot empty, and
-    // an `.error` holds the missing token that stands where the quotes belong.
+    // A message the line does not write is null: an `.assert` without one leaves the slot
+    // empty, and an `.error` without one holds a missing token where the string belongs.
     private static string? MessageOf(SyntaxToken? message) =>
         message is { IsMissing: false } written ? Literals.Text(written.Text) : null;
 

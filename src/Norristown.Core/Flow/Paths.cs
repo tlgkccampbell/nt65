@@ -20,8 +20,9 @@ internal static class Paths
         Through(blocks, 0, _ => true, Costing);
 
     /// <summary>
-    /// What a block costs where a pass runs it once, and what all its turns cost where it
-    /// counts itself: a loop whose turns are known is no longer somewhere a path loops.
+    /// What a block costs: its own cycles where a pass runs it once, or, for a block in a
+    /// counted loop, its share of the whole loop's cost (all of it on the header, none on the
+    /// rest). A counted loop's back edge is not followed, so it no longer makes a path cycle.
     /// </summary>
     public static CycleCount? Costing(BasicBlock block) => block.LoopCycles ?? block.Cycles;
 
@@ -45,8 +46,8 @@ internal static class Paths
         if (!ends)
             return (null, null, false);
 
-        // One block with no count leaves the whole of it without one, the same way it leaves
-        // its own block without one.
+        // If any reachable block has no count, the whole pass has none, just as one uncounted
+        // instruction leaves its block without a count.
         for (var i = 0; i < blocks.Count; i++)
         {
             if (reached[i] && weight(blocks[i]) is null)
@@ -75,7 +76,10 @@ internal static class Paths
         return found;
     }
 
-    /// <summary>The blocks a path may run after this one, its calls and what it leaves aside.</summary>
+    /// <summary>
+    /// The blocks a path may run after this one, ignoring call edges, edges out of the region,
+    /// and the back edge of a counted loop.
+    /// </summary>
     private static IEnumerable<int> Onward(BasicBlock block, Func<int, bool> inside) =>
         block.Successors
             .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To) && edge.To != block.Repeats)
@@ -88,8 +92,8 @@ internal static class Paths
         || !block.Successors.Any(edge => edge.Kind != EdgeKind.Call);
 
     /// <summary>
-    /// The shortest path to where it ends. No block costs less than nothing, so this holds
-    /// however the blocks are joined, loops among them.
+    /// The shortest path to where it ends. No block has a negative cost, so this works however
+    /// the blocks are joined, including when they form loops.
     /// </summary>
     private static int? Least(
         IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)

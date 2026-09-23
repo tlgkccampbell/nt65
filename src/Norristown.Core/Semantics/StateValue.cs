@@ -78,7 +78,8 @@ public readonly record struct StateValue(StateValueKind Kind, long Value)
 
     /// <summary>
     /// What a <c>.state dbr = [...]</c> naming <paramref name="asserted"/> leaves: the banks both
-    /// say it may be, still the entry value where it was, and null where they have none in common.
+    /// say it may be, still marked as the entry value if it was one, or null when they have none
+    /// in common.
     /// </summary>
     public StateValue? Narrowed(BankSet asserted)
     {

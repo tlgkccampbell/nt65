@@ -1,15 +1,15 @@
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// §13's promise that the output does not depend on ca65's command line, run rather than
-/// asserted: every corpus program is assembled under a set of option sets that would change
-/// what a hand-written file means, and the linked image has to come out byte for byte the
-/// same as the baseline's, with ca65 saying nothing at <c>-W2</c>.
+/// Tests, by running it, the promise that nt65's output does not depend on ca65's command line:
+/// every corpus program is assembled under several option sets that would change what a
+/// hand-written file means, and the linked image has to come out byte for byte the same as the
+/// baseline's, with ca65 printing nothing at <c>-W2</c>.
 /// <para>
-/// The options go only to what nt65 wrote. A hand-written module in the corpus is somebody
-/// else's file and nt65 promises nothing about it, so it is assembled as its own build script
-/// assembles it. The sets run beside each other, and the whole thing is gate work: it spawns
-/// an assembler per file per set.
+/// The options are passed only to the files nt65 wrote. A hand-written module in the corpus is
+/// not nt65's output and nt65 promises nothing about it, so it is assembled as its own build
+/// script assembles it. The option sets run in parallel, and the test belongs in the gate rather
+/// than the edit loop, since it starts an assembler per file per set.
 /// </para>
 /// </summary>
 [Trait("Category", "Oracle")]
@@ -84,9 +84,9 @@ public sealed class HostileOptionTests
                 continue;
             }
 
-            // Every segment carries its address size, so a memory model that disagrees with
-            // the segment table is an error naming the segment rather than a quiet change of
-            // addressing modes. That is the promise; being refused is keeping it.
+            // Every segment nt65 writes states its address size, so a memory model that disagrees
+            // with the segment table produces an error naming the segment rather than a silent
+            // change of addressing modes. That error keeps the promise, so it is accepted here.
             if (set.MaySayTheSegmentsDisagree
                 && result.Messages.Contains("Segment attribute mismatch", StringComparison.Ordinal))
             {

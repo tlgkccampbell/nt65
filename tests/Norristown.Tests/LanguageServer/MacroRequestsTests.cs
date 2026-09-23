@@ -65,7 +65,7 @@ public sealed class MacroRequestsTests
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
     }
 
-    /// <summary>A name in a body goes to where the body could see it, which is where it is declared.</summary>
+    /// <summary>Go to definition on a name in a macro body lands on the declaration the body sees, without expanding anything.</summary>
     [Fact]
     public async Task DefinitionFromInsideABodyReachesTheFile()
     {
@@ -83,7 +83,7 @@ public sealed class MacroRequestsTests
         Assert.Equal(3, macro.Range.Start.Line);
     }
 
-    /// <summary>Every place a parameter is named, which is every line of the body that uses it.</summary>
+    /// <summary>The references to a parameter are the lines of its macro's body that use it.</summary>
     [Fact]
     public async Task ReferencesToAParameterStayInItsBody()
     {
@@ -107,8 +107,8 @@ public sealed class MacroRequestsTests
     }
 
     /// <summary>
-    /// A block argument is the caller's code, so a name in it is the caller's name and is
-    /// renamed with it — a body that splices the block is never expanded to find that out.
+    /// A block argument is the caller's code, so a name in it is the caller's and is renamed
+    /// along with the caller's declaration, without expanding the body that splices it in.
     /// </summary>
     [Fact]
     public async Task RenamingALabelUsedInABlockArgumentWorks()
@@ -126,8 +126,8 @@ public sealed class MacroRequestsTests
     }
 
     /// <summary>
-    /// A body's own label is the macro's, not the caller's: two <c>@loop</c>s, one in a body
-    /// and one in a proc, are two labels and neither rename touches the other.
+    /// A label declared in a macro body belongs to the macro, not to the caller: the references
+    /// to the body's <c>@loop</c> stay inside the body and never reach a label of the caller's.
     /// </summary>
     [Fact]
     public async Task ABodysLabelIsNotTheCallers()
@@ -178,8 +178,8 @@ public sealed class MacroRequestsTests
         """;
 
     /// <summary>
-    /// Hover on a parameter, or anywhere in the kind after its `:`, says what the parameter takes,
-    /// and on a mode an `operand` lists, what an operand in that mode is written as.
+    /// Hover on a parameter, or anywhere in the kind after its `:`, says what the parameter
+    /// accepts; hover on a mode an `operand` lists also says how an operand in that mode is written.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhatAParameterTakes()
@@ -209,8 +209,9 @@ public sealed class MacroRequestsTests
     }
 
     /// <summary>
-    /// Hover on a word a condition compares with a parameter says what the word is, what it is
-    /// compared with and what that takes, and when the parameter can never be it, says so.
+    /// Hover on a word that a condition compares a parameter with says what the word is, which
+    /// parameter it is compared with and what that parameter accepts, and says so when the
+    /// parameter can never be that word.
     /// </summary>
     [Fact]
     public async Task HoverOnAComparedWordSaysWhatItIs()
@@ -245,7 +246,7 @@ public sealed class MacroRequestsTests
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Typed);
 
-        // The one thing wrong is the comparison `src` can never make true, which is a warning.
+        // The only diagnostic is a warning on the comparison `src` can never make true.
         var said = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal(("comparison-never-holds", DiagnosticSeverity.Warning, 8), (said.Code, said.Severity, said.Range.Start.Line));
 
@@ -254,7 +255,7 @@ public sealed class MacroRequestsTests
         var hover = await client.HoverAsync(Uri, new Position(15, 11), timeout);
         Assert.Contains("Instrument::kick", hover?.Contents.Value, StringComparison.Ordinal);
 
-        // The operand argument names the data, which is what it takes.
+        // The `kick` passed as the operand argument names the data, since an operand takes an address.
         var data = await client.DefinitionAsync(Uri, new Position(16, 33), timeout);
         Assert.Equal(13, data?.Range.Start.Line);
 
@@ -270,7 +271,8 @@ public sealed class MacroRequestsTests
         }
         Assert.Equal("enumMember", at[(15, 10)]);
 
-        // A word a condition compares with a parameter is one of the set the parameter names.
+        // A word a condition compares a parameter with is coloured as a member of the set the
+        // parameter's kind names.
         Assert.Equal("enumMember", at[(6, 22)]);
         Assert.Equal("enumMember", at[(6, 36)]);
         Assert.Equal("variable", at[(16, 32)]);

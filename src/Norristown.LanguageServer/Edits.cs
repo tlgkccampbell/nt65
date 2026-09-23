@@ -4,16 +4,16 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What every change is built out of: where a line starts and ends, how deep it is indented,
-/// where a new line goes, and how a name is written everywhere it is written. Nothing here
-/// knows what a change means; it only writes text at a place in a file.
+/// The building blocks of code actions: where a line starts and ends, how deep it is indented,
+/// where a new line goes, and renaming a name everywhere it is written. Nothing here knows what
+/// a change is for; it only writes text at a place in a file.
 /// </summary>
 internal static class Edits
 {
-    /// <summary>How much deeper a body is indented than the line that opens it, where nothing else says.</summary>
+    /// <summary>How much deeper a body is indented than the line that opens it, when the file gives nothing to copy.</summary>
     public const string Indent = "    ";
 
-    /// <summary>The text a diagnostic is reported on, as a range in its file.</summary>
+    /// <summary>The text a diagnostic is reported on, as a span of its file.</summary>
     public static TextSpan SpanOf(SyntaxTree tree, Span span)
     {
         var line = Math.Clamp(span.Line - 1, 0, tree.LineStarts.Length - 1);
@@ -53,7 +53,10 @@ internal static class Edits
         return tree.Text[start..at];
     }
 
-    /// <summary>How the lines under a line are indented: as the next line with code is, when it is deeper.</summary>
+    /// <summary>
+    /// The indentation for lines in the block <paramref name="line"/> opens: that of the next
+    /// line with code when it is deeper, or else this line's indentation plus one level.
+    /// </summary>
     public static string BodyIndent(SyntaxTree tree, int line)
     {
         var own = IndentOf(tree, line);
@@ -86,7 +89,7 @@ internal static class Edits
     /// <summary>The block <paramref name="line"/> opens, as a range of the file; null for a line that opens none.</summary>
     public static TextSpan? BodyOf(SyntaxTree tree, int line) => BlockOpenedBy(tree, line)?.FullSpan;
 
-    /// <summary>The block that holds <paramref name="line"/>, innermost first, or null at a file's top level.</summary>
+    /// <summary>The innermost block that holds <paramref name="line"/>, or null at a file's top level.</summary>
     public static BlockSyntax? BlockAround(SyntaxTree tree, int line)
     {
         // A line that opens a block is written in the block around it, not in the one it opens.
@@ -96,15 +99,15 @@ internal static class Edits
 
     /// <summary>
     /// The block <paramref name="line"/> opens, or null for a line that opens none. A block's
-    /// opener is the first line written in it, so the block is what that line hangs from.
+    /// opening line is the first line in it, so the line's parent is the block.
     /// </summary>
     public static BlockSyntax? BlockOpenedBy(SyntaxTree tree, int line) =>
         tree.GetLine(line).Parent is BlockSyntax block && block.LineIndex == line ? block : null;
 
     /// <summary>
-    /// Writing <paramref name="symbol"/> as <paramref name="name"/> everywhere the program
-    /// writes it. A name another file brought in under one of its own is left alone: that file
-    /// wrote the <c>.use ... as</c> and goes on reaching the symbol through it.
+    /// The edits that rename <paramref name="symbol"/> to <paramref name="name"/> everywhere the
+    /// program writes it. An alias another file gave it with <c>.use ... as</c> is left alone:
+    /// that file goes on reaching the symbol through its alias.
     /// </summary>
     public static IReadOnlyList<Edit> Rename(ProgramModel program, Symbol symbol, string name) =>
         [.. program.ReferencesTo(symbol)
@@ -121,8 +124,8 @@ internal static class Edits
     }
 
     /// <summary>
-    /// A processor state as a signature or a <c>.state</c> writes it: the parts it says
-    /// something about, in the order the language writes them.
+    /// A processor state as a signature or a <c>.state</c> writes it: only the parts that are
+    /// not unchanged, in the order the language writes them.
     /// </summary>
     public static string SpellState(ProcessorState state) =>
         string.Join(", ", new[]
@@ -136,9 +139,9 @@ internal static class Edits
 
     /// <summary>
     /// The head of the routine or macro <paramref name="line"/> declares: the signature it
-    /// already has, and where the <c>{</c> that opens its body begins. Null for a line that
-    /// declares neither, and for one whose <c>{</c> is the place for a brace the source has not
-    /// written, because nothing goes before a brace that is not there.
+    /// already has, and the position just before the <c>{</c> that opens its body. Null for a
+    /// line that declares neither, and for one whose <c>{</c> is missing from the source, since
+    /// there is then no brace to insert before.
     /// </summary>
     public static (ProcSignatureSyntax? Signature, int BeforeBrace)? RoutineHead(SyntaxTree tree, int line)
     {
@@ -156,9 +159,9 @@ internal static class Edits
 
     /// <summary>
     /// <paramref name="item"/> written into the signature of the routine <paramref name="line"/>
-    /// opens: after the items it already declares, or as the signature it does not yet have. The
-    /// entry is what the item joins, so it goes at the end of the entry and before any
-    /// <c>-&gt;</c>; null comes back for a line that declares no routine.
+    /// opens: after the items it already declares, or as a new signature if it has none. The
+    /// item belongs to the entry state, so it goes at the end of the entry part, before any
+    /// <c>-&gt;</c>. Null for a line that declares no routine.
     /// </summary>
     public static Edit? SignatureItem(SyntaxTree tree, int line, string item)
     {
@@ -170,9 +173,9 @@ internal static class Edits
     }
 
     /// <summary>
-    /// A name like <paramref name="wanted"/> that nothing in <paramref name="model"/>'s file
-    /// declares. A cheap local is in a namespace of its own and clashes with nothing, so what
-    /// it is called does not stand in the way of a name like it.
+    /// <paramref name="wanted"/>, or <paramref name="wanted"/> followed by the smallest number
+    /// from 2 up, whichever nothing in <paramref name="model"/>'s file declares. Cheap locals
+    /// live in a namespace of their own and clash with nothing, so their names are ignored.
     /// </summary>
     public static string UnusedName(SemanticModel model, string wanted)
     {

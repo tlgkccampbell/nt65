@@ -9,8 +9,8 @@ public sealed partial class OracleTests
 {
     /// <summary>
     /// Hand-written ca65 files in tests/oracle. A trailing <c>;= N</c> on a line says ca65
-    /// must generate N bytes for it; until nt65 computes lengths, that is what exercises
-    /// the listing comparison.
+    /// must generate N bytes for it, which exercises the listing comparison independently of
+    /// nt65's own output.
     /// </summary>
     [Fact]
     public void HandWrittenFilesAssembleCleanly()
@@ -47,9 +47,9 @@ public sealed partial class OracleTests
     /// <summary>
     /// Everything nt65 generates must assemble with no errors and no warnings — a ca65
     /// diagnostic on nt65 output is an nt65 bug — and ca65 must generate exactly as
-    /// many bytes for each line as nt65 worked out for it. Those lengths are what
-    /// branch range, cycle counts and assertions will be built on, so agreeing with the
-    /// assembler about them is the check that matters.
+    /// many bytes for each line as nt65 worked out for it. Branch ranges, cycle counts and
+    /// assertions are built on those lengths, so agreeing with the assembler about them is the
+    /// check that matters.
     /// </summary>
     [Fact]
     public void GeneratedOutputAssemblesToTheLengthsNt65Computed()
@@ -108,8 +108,8 @@ public sealed partial class OracleTests
 
     /// <summary>
     /// A checked import is a promise nt65 made about a value it has already used in its own
-    /// arithmetic, and the linker is what keeps it: link the same program against a module
-    /// that defines the symbol differently and ld65 must refuse it.
+    /// arithmetic, and the linker enforces it: link the same program against a module that
+    /// defines the symbol differently and ld65 must refuse it.
     /// </summary>
     [Fact]
     public void ACheckedImportWithTheWrongValueFailsTheLink()
@@ -135,9 +135,9 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
-    /// An initialized instance is one directive per member, and the bytes it comes to are
-    /// the bytes a programmer would have written by hand. Assembling both and comparing the
-    /// linked images is what says the layout is right rather than merely plausible.
+    /// An initialized struct instance is written as one directive per member, and the bytes it
+    /// produces are the bytes a programmer would have written by hand. Assembling both and
+    /// comparing the linked images shows the layout is right rather than merely plausible.
     /// </summary>
     [Fact]
     public void AnInitializedInstanceAssemblesToTheBytesWrittenByHand()
@@ -193,10 +193,10 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
-    /// A placed module's bytes land where its <c>.place</c> stands, in every segment it writes
-    /// to: in CODE between the routines around the line, and in RODATA after what the placing
-    /// file had written there and before what it writes next. The linked image says so, byte for
-    /// byte, against the same program written as one file by hand.
+    /// A placed module's bytes land where its <c>.place</c> line is, in every segment it writes
+    /// to: in CODE between the routines on either side of that line, and in RODATA after what the
+    /// placing file had written there and before what it writes next. The linked image is checked
+    /// byte for byte against the same program written by hand as one file.
     /// </summary>
     [Fact]
     public void APlacedModulesBytesLandWhereItsPlaceStands()
@@ -261,11 +261,12 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
-    /// A repetition in the body of a macro another module exports counts in the module that
-    /// calls it: every turn's binding is the turn's number there as it is at home, so the turns
-    /// are written as the bytes they come to rather than as the body's text with the name left
-    /// in, which ca65 would take for a symbol nobody declared. The linked image is the text's
-    /// bytes, the last with its top bit set, and so is the same call made at home.
+    /// A <c>.repeat</c> in the body of a macro that another module exports is counted out in the
+    /// module that calls it: in each iteration the loop variable is the iteration number there,
+    /// just as in the macro's own module, so each iteration is written as the bytes it produces
+    /// rather than as the body's text with the variable left in, which ca65 would read as an
+    /// undeclared symbol. The linked image is the text's bytes with the last one's top bit set,
+    /// and so is the same call to a macro defined in the calling module.
     /// </summary>
     [Fact]
     public void ARepetitionInAnotherModulesMacroCountsWhereItIsCalled()
@@ -361,9 +362,10 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
-    /// Text a function builds links to the bytes the same text written for ca65 does: msbasic's
-    /// `htasc` sets bit 7 on a message's last byte, and because a function is evaluated with the
-    /// constants, a message's offset in the table is a constant a one-byte immediate takes.
+    /// Text built by a <c>.func</c> links to the same bytes as the same text written directly for
+    /// ca65: msbasic's `htasc` sets bit 7 on a message's last byte, and because a function is
+    /// evaluated along with the constants, a message's offset in the table is a constant that a
+    /// one-byte immediate operand accepts.
     /// </summary>
     [Fact]
     public void TextAFunctionBuildsIsTheTextCa65Writes()
@@ -436,7 +438,7 @@ public sealed partial class OracleTests
         }
         for (var i = 0; i < lines.Length; i++)
         {
-            // A line nt65 makes no claim about is one the assembler settles for itself.
+            // A negative length means nt65 makes no claim about the line; ca65's count stands.
             if (output.LineBytes[i] < 0)
                 continue;
             if (result.LineBytes[i] != output.LineBytes[i])

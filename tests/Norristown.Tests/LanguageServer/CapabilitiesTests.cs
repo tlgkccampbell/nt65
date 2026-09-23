@@ -8,9 +8,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What the client declared it can take, read once and gated on from then on. A client that
-/// declares nothing is given the plain answer, which every client understands, and one that
-/// declares more is given more.
+/// The capabilities the client declares, read once and used from then on to decide the form of
+/// each answer. A client that declares nothing is given the plain form, which every client
+/// understands, and one that declares more is given the richer forms it declared.
 /// </summary>
 public sealed class CapabilitiesTests : IDisposable
 {
@@ -94,9 +94,10 @@ public sealed class CapabilitiesTests : IDisposable
     }
 
     /// <summary>
-    /// A client that takes them gets the outline as a tree and the edit a second way as well,
-    /// naming the revision it was worked out against, so that one worked out against a buffer
-    /// that has moved on is refused rather than written into the wrong place.
+    /// A client that declares them gets the outline as a tree, and the edit a second time as
+    /// document changes naming the document version it was computed against, so that an edit
+    /// computed against a buffer that has since changed is refused rather than applied in the
+    /// wrong place.
     /// </summary>
     [Fact]
     public async Task AClientThatTakesThemGetsATreeAndAnEditAgainstARevision()
@@ -120,7 +121,7 @@ public sealed class CapabilitiesTests : IDisposable
         Assert.Equal(7, one.TextDocument.Version);
         Assert.Equal(edit.Changes[Uri], one.Edits);
 
-        // The client says the folders it has open, so the server asks to be told when they change.
+        // The client declared workspace folder support, so the server asks to be told when they change.
         Assert.True(client.Initialized.Capabilities.Workspace!.WorkspaceFolders!.ChangeNotifications);
     }
 

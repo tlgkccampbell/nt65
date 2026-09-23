@@ -1,6 +1,6 @@
-; `.mincycles` and `.maxcycles` count what one pass from one position to another costs. A sum
-; along a run of instructions bounds a pass only where the run is one pass, so the span holds
-; no call and no loop, and where the count is exact both answers are the same number.
+; `.mincycles` and `.maxcycles` give the cost in cycles of one pass from one position to another.
+; A sum along a run of instructions bounds a pass only when the run is straight-line code, so the
+; span holds no call and no loop, and where every count is exact both answers are the same.
 .module main
 
 .cpu 6502
@@ -29,9 +29,9 @@
 .assert .mincycles(raster::top, raster::bottom) == 17, "the raster line moved"
 .assert .maxcycles(raster::top, raster::bottom) == 17, "the raster line moved"
 
-; A branch is 2 not taken and 3 taken, and one more when a taken branch crosses a page, so a
-; span with one in it is a range rather than a number: the lowest is what the pass can cost and
-; the highest is what it can cost.
+; A branch takes 2 cycles not taken and 3 taken, and one more when a taken branch crosses a
+; page, so a span with one in it is a range rather than a number: `.mincycles` gives the
+; cheapest pass and `.maxcycles` the most expensive.
 .export .proc either {
     start:
     lda colour

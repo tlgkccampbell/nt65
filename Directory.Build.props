@@ -12,7 +12,7 @@
     <!-- Public members carry XML documentation, and generating the file also lets IDE0005
          (unnecessary using) report on build. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- Output never depends on the machine's culture (PLAN.md, determinism). -->
+    <!-- Output never depends on the machine's culture, so builds are deterministic. -->
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- The version nt65 reports. A build from a checkout is a development build and says so;

@@ -6,13 +6,13 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What the 65816's analysis needs written beside each construct it cannot follow. Every
-/// trick has a syntactic fingerprint — an indirect jump, a computed target, a label used as
-/// data, a store into code — and each needs an annotation that says what the analysis cannot
+/// What the 65816's analysis needs written beside each construct it cannot follow. Each such
+/// trick can be recognised from its syntax — an indirect jump, a computed target, a label used
+/// as data, a store into code — and each needs an annotation that says what the analysis cannot
 /// see: a <c>.next</c> saying where flow goes, a <c>.state</c> declaring the state at a label,
-/// or a <c>.patch</c> acknowledging a store. On the 6502 and its CMOS variants nothing consumes
-/// the state, so none of this is required there, and a routine that runs off its end is only
-/// a warning.
+/// or a <c>.patch</c> acknowledging a store. On the 6502 and its CMOS variants nothing depends
+/// on the processor state, so none of this is required there, and a routine that runs off its
+/// end is only a warning.
 /// </summary>
 internal sealed class Requirements
 {
@@ -107,8 +107,8 @@ internal sealed class Requirements
         {
             if (i > index && !blocks[i].IsFallenInto)
                 return false;
-            // A step is a value, so the first one is asked for as its statement: a block of
-            // nothing but `.state` lines has none.
+            // Step is a struct, so the search runs over the statements instead, where
+            // FirstOrDefault gives null for a block of nothing but `.state` lines.
             if (blocks[i].Steps
                     .Select(step => step.Statement)
                     .FirstOrDefault(statement => statement is not StateDirectiveSyntax) is { } first)
@@ -120,9 +120,9 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// What the last statement of a block needs: an indirect or computed transfer a
-    /// <c>.next</c>, a return that jumps a <c>.next</c>, and a jump to somewhere a declaration
-    /// is needed a declaration.
+    /// Checks what the last statement of a block needs: an indirect or computed transfer needs
+    /// a <c>.next</c>, a return used as a jump needs a <c>.next</c>, and a jump to a label that
+    /// has to be declared needs that declaration.
     /// </summary>
     private void CheckTail(FlowRegion region, BasicBlock block)
     {
@@ -166,8 +166,8 @@ internal sealed class Requirements
             return;
         var target = Targets.Of(model, written, step.On);
 
-        // A name that names nothing has been reported where it is written; a call to anything
-        // but a routine is the state analysis's to report, with the call's other checks.
+        // A name that resolves to nothing has been reported where it is written; a call to
+        // anything but a routine is reported by the state analysis, with the call's other checks.
         if (target is null)
         {
             if (!calls && written is not NameExpressionSyntax)
@@ -206,7 +206,7 @@ internal sealed class Requirements
         }
     }
 
-    /// <summary>The first data a data label stands on, or null when it stands on none.</summary>
+    /// <summary>The first data statement a data label labels, or null when it labels none.</summary>
     private static Step? DataAt(Labelled labelled)
     {
         var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
@@ -243,8 +243,8 @@ internal sealed class Requirements
 
     /// <summary>
     /// A routine that does not end in a transfer of control runs off its end into whatever is
-    /// written after it, which a <c>.fallthrough</c> naming that routine says, and is then
-    /// checked as a tail call.
+    /// written after it. A <c>.fallthrough</c> naming that routine declares that this is
+    /// intended, and the routine is then checked as a tail call.
     /// </summary>
     private void CheckEnd(FlowRegion region)
     {
@@ -272,8 +272,8 @@ internal sealed class Requirements
             : Catalogue.RoutineRunsOffTheEnd.Says(
                 routine, "the end of a segment block", "that segment holds next", "a `.next` says where flow goes");
 
-        // Where the routine written next is known, the fix names it; anywhere else it ends the
-        // path, which says nothing about what comes next.
+        // Where the routine written next is known, the fix names it; anywhere else the fix is
+        // a `.next ?`, which ends the path without claiming anything about what comes next.
         var after = own ? flow.WrittenAfter(region) : null;
         var runsInto = after is { } next
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
@@ -310,8 +310,8 @@ internal sealed class Requirements
 
     /// <summary>
     /// Every place a label on code is named other than as the target of a branch, a jump or a
-    /// call: a store into it needs a <c>.patch</c>, and any other use makes the label
-    /// somewhere flow may arrive unseen, which needs a declaration or a <c>.next</c>.
+    /// call: a store into it needs a <c>.patch</c>, and any other use means flow may arrive at
+    /// the label without the analysis seeing it, which needs a declaration or a <c>.next</c>.
     /// </summary>
     private void CheckUses()
     {
@@ -382,7 +382,10 @@ internal sealed class Requirements
         mode is not (null or AddressingMode.Immediate or AddressingMode.Accumulator or AddressingMode.Implied)
         && Mnemonic(statement).Stores;
 
-    /// <summary>What the statement's instruction is, or nothing at all where it is not one.</summary>
+    /// <summary>
+    /// The facts about the statement's instruction, or <see cref="InstructionFacts.None"/>
+    /// where the statement is not an instruction.
+    /// </summary>
     private static InstructionFacts Mnemonic(SyntaxNode statement) =>
         statement is InstructionStatementSyntax instruction
             ? Instructions.Facts(instruction.Mnemonic.Text)
@@ -419,6 +422,6 @@ internal sealed class Requirements
     private DiagnosticFix? EndPath(Step step) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.EndPath) : null;
 
-    /// <summary>A label that starts a block: the region and block it starts, and whether it stands on code.</summary>
+    /// <summary>A label that starts a block: the region and block it starts, and whether it labels code.</summary>
     private readonly record struct Labelled(FlowRegion Region, BasicBlock Block, bool IsCode);
 }

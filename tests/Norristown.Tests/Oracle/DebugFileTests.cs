@@ -6,16 +6,17 @@ namespace Norristown.Tests.Oracle;
 /// <summary>
 /// What a debugger is told, end to end: assemble nt65's output with the pinned <c>ca65 -g</c>,
 /// link it with <c>ld65 --dbgfile</c>, and remap the debug file from the line maps. nt65 writes
-/// no <c>.dbg</c> directives, so this is the only thing that says the bytes can be traced back
+/// no <c>.dbg</c> directives, so this is the only test that checks the bytes can be traced back
 /// to the <c>.nt65</c> they came from.
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class DebugFileTests
 {
     /// <summary>
-    /// Every line of the <c>.s</c> that the map maps and that ld65 recorded bytes for is named
-    /// again as the source line it came from, with the same spans: nothing the assembler
-    /// generated is lost on the way, and nothing is claimed for a line that generated none.
+    /// Every line of a <c>.s</c> that its line map covers and that ld65 recorded bytes for is also
+    /// recorded, after remapping, as the source line it came from, with the same spans: nothing
+    /// the assembler generated is lost on the way, and nothing is claimed for a line that
+    /// generated none.
     /// </summary>
     [Fact]
     public void RemappingNamesTheSourceOfEveryMappedLineThatMadeBytes()
@@ -47,8 +48,8 @@ public sealed class DebugFileTests
                 yield break;
             }
 
-            // What each `.s` line of each file was recorded as covering, and what the map says it
-            // came from, against what the remapped file now says about that source line.
+            // For each `.s` line: the spans ld65 recorded for it and the source line its map says
+            // it came from, checked against the spans the remapped file gives that source line.
             var files = Files(result.DebugFile);
             var after = Records(remapped, "line")
                 .Where(record => record.TryGetValue("type", out var type) && type == "1")
@@ -75,7 +76,7 @@ public sealed class DebugFileTests
         }
     }
 
-    /// <summary>Running it twice does nothing the second time, so a build that repeats it is safe.</summary>
+    /// <summary>Remapping an already remapped debug file changes nothing, so a build that repeats the step is safe.</summary>
     [Fact]
     public void RemappingWhatIsAlreadyRemappedChangesNothing()
     {
@@ -104,9 +105,9 @@ public sealed class DebugFileTests
     }
 
     /// <summary>
-    /// A translation unit of several modules is one object, which the debug file names by the
-    /// root's source; each placed module's lines name its own source, so that stepping into a
-    /// placed routine shows the file it was written in.
+    /// A translation unit of several modules assembles to one object, which the remapped debug
+    /// file attributes to the root module's source; each placed module's lines still name its own
+    /// source, so that stepping into a placed routine shows the file it was written in.
     /// </summary>
     [Fact]
     public void APlacedModulesLinesNameItsOwnSource()
@@ -126,8 +127,8 @@ public sealed class DebugFileTests
         var remapped = DebugFile.Remap(result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var problem);
         Assert.True(remapped is not null, problem);
 
-        // The object main.s became is named by main's source, and every source of its unit has
-        // lines of its own.
+        // The object assembled from main.s is attributed to main's source, and every source in
+        // its translation unit has line records of its own.
         var module = Records(remapped, "mod").Single(record => record["name"] == "main.o");
         Assert.Equal("main.nt65", Files(remapped)[module["file"]]);
         var lines = Records(remapped, "line").Where(record => record.GetValueOrDefault("type") == "1").ToList();

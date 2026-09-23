@@ -5,7 +5,7 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// <c>.loadof(SEGMENT)</c>, <c>.runof(SEGMENT)</c> and <c>.spanof(SEGMENT)</c>: where the linker
-/// loaded a segment, where it runs and how many bytes it holds. They stand for the
+/// loaded a segment, where it runs and how many bytes it holds. They become the
 /// <c>__SEGMENT_LOAD__</c>, <c>__SEGMENT_RUN__</c> and <c>__SEGMENT_SIZE__</c> that ld65 defines
 /// for a segment its configuration gives <c>define=yes</c>, so a program names them through the
 /// segment table rather than importing three names nothing checks.
@@ -23,14 +23,14 @@ public static class SegmentFunctions
             ? name
             : null;
 
-    /// <summary>The segment a <c>.runof(SEGMENT)</c> names, which is where the address it stands for is; null for any other call.</summary>
+    /// <summary>The segment a <c>.runof(SEGMENT)</c> names, which is the segment its address is in; null for any other call.</summary>
     public static string? Runs(CallExpressionSyntax call) =>
         FunctionOf(call) == ".runof" ? NameIn(call)?.Text : null;
 
     /// <summary>
     /// What a call asks about a segment: the function and the segment, or null when it is not
-    /// one of the three or names no declared segment. <c>.spanof</c> of a name that is a symbol
-    /// asks about the symbol, as it always has.
+    /// one of the three or names no declared segment. <c>.spanof</c> of a name that is also a
+    /// symbol measures the symbol instead.
     /// </summary>
     public static (string Function, Segment Segment)? Of(CallExpressionSyntax call, SemanticModel model) =>
         Of(call, model.Segments, name => model.SymbolOf(name) is not null);
@@ -56,7 +56,7 @@ public static class SegmentFunctions
 
     /// <summary>
     /// How wide an address it is: absolute, which is how ld65 defines all three, so an
-    /// operand that reaches a load address in another bank says <c>f:</c>.
+    /// operand that reaches a load address in another bank has to write <c>f:</c>.
     /// </summary>
     public static AddressSize SizeOf() => AddressSize.Absolute;
 

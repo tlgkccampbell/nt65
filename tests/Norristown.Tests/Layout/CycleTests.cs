@@ -10,8 +10,8 @@ namespace Norristown.Tests.Layout;
 /// something the program does not say: whether an indexed read crosses a page, whether a
 /// branch is taken, and on the 65C02 whether the decimal flag is set.
 /// <para>
-/// The ca65 oracle checks lengths, not timings, so the reference values below are the only
-/// thing standing behind this table.
+/// The ca65 oracle checks instruction lengths, not timings, so the reference values below are
+/// the only check on nt65's cycle table.
 /// </para>
 /// </summary>
 public sealed class CycleTests
@@ -34,7 +34,8 @@ public sealed class CycleTests
     [InlineData("sta", AddressingMode.AbsoluteY, "5")]
     [InlineData("sta", AddressingMode.DirectIndirectY, "6")]
 
-    // Read, change and write back: always the long way round.
+    // Read, modify and write back: a fixed count, and the indexed form always pays the cycle
+    // a read pays only on a page crossing.
     [InlineData("asl", AddressingMode.Accumulator, "2")]
     [InlineData("asl", AddressingMode.Direct, "5")]
     [InlineData("asl", AddressingMode.DirectX, "6")]
@@ -70,8 +71,8 @@ public sealed class CycleTests
     [InlineData("jmp", AddressingMode.AbsoluteIndirect, "5")]
     [InlineData("nop", AddressingMode.Implied, "2")]
 
-    // A read-modify-write folded into an arithmetic instruction costs what the pair costs,
-    // and pays the index cycle whatever it does.
+    // An undocumented read-modify-write combined with an arithmetic operation costs what the
+    // read-modify-write alone costs, and its indexed forms always pay the index cycle.
     [InlineData("slo", AddressingMode.Direct, "5")]
     [InlineData("slo", AddressingMode.DirectX, "6")]
     [InlineData("rla", AddressingMode.Absolute, "6")]
@@ -90,7 +91,8 @@ public sealed class CycleTests
     [InlineData("sax", AddressingMode.Absolute, "4")]
     [InlineData("sax", AddressingMode.DirectIndirectX, "6")]
 
-    // The immediate-only opcodes, and the indexed stores, which settle the address first.
+    // The immediate-only opcodes, and the indexed stores, which always pay the page-crossing
+    // cycle because they settle the address before writing.
     [InlineData("alr", AddressingMode.Immediate, "2")]
     [InlineData("axs", AddressingMode.Immediate, "2")]
     [InlineData("sha", AddressingMode.AbsoluteY, "5")]
@@ -98,7 +100,8 @@ public sealed class CycleTests
     [InlineData("shx", AddressingMode.AbsoluteY, "5")]
     [InlineData("tas", AddressingMode.AbsoluteY, "5")]
 
-    // `nop` reads an operand here, and its indexed form is a read like any other.
+    // The undocumented `nop` forms read an operand, and the indexed form pays for a page
+    // crossing only when it crosses one, like any other read.
     [InlineData("nop", AddressingMode.Direct, "3")]
     [InlineData("nop", AddressingMode.AbsoluteX, "4-5")]
     public void The6502xTakesAsLongAsItsTableSays(string mnemonic, AddressingMode mode, string cycles)
@@ -107,8 +110,8 @@ public sealed class CycleTests
     }
 
     /// <summary>
-    /// <c>jam</c> stops the processor: there is no next cycle to reach, so it is counted
-    /// nowhere and the block it is in says why rather than quietly leaving it out.
+    /// <c>jam</c> halts the processor, so it has no cycle count; the block containing it
+    /// reports why it has no count rather than quietly leaving the instruction out.
     /// </summary>
     [Fact]
     public void JamHasNoCount() => Assert.Null(Cycles.Of(Cpu.Mos6502X, "jam", AddressingMode.Implied));
@@ -169,7 +172,7 @@ public sealed class CycleTests
     [InlineData("ldx", AddressingMode.Immediate, "a16, i8, native", "2")]
     [InlineData("ldx", AddressingMode.Immediate, "a8, i16, native", "3")]
 
-    // A width nobody knows covers both.
+    // An unknown width gives an interval covering both widths.
     [InlineData("lda", AddressingMode.Immediate, "a?, i8, native", "2-3")]
 
     // An indexed read pays for crossing a page only sometimes, unless the index is 16 bits,
@@ -230,8 +233,8 @@ public sealed class CycleTests
     }
 
     /// <summary>
-    /// A direct operand costs one more cycle when the low byte of D is not zero, and may
-    /// where D is not known.
+    /// A direct operand costs one more cycle when the low byte of D is not zero, and may cost
+    /// one more when D is not known.
     /// </summary>
     [Theory]
     [InlineData("unchanged", "3-4")]
@@ -242,15 +245,16 @@ public sealed class CycleTests
         var d = page == "unchanged"
             ? StateValue.Unchanged
             : StateValue.Of(Convert.ToInt64(page[1..], 16));
-        // This is about D, so the widths are given rather than left to the default, which is `a*`.
+        // This test is about D, so the widths are fixed at 8 bits rather than left at the
+        // default, which leaves them unchanged (`a*`) and so not a single known width.
         var processor = ProcessorState.Default with { A = Width.Eight, Index = Width.Eight, D = d };
 
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, "lda", AddressingMode.Direct, processor)?.Count.ToString());
     }
 
     /// <summary>
-    /// A block move takes seven cycles for every byte it moves, and how many that is is in A
-    /// when it runs, so nt65 gives it no count.
+    /// A block move takes seven cycles for every byte it moves, and the number of bytes is
+    /// whatever A holds at run time, so nt65 gives it no count.
     /// </summary>
     [Fact]
     public void ABlockMoveHasNoCount()
@@ -258,7 +262,10 @@ public sealed class CycleTests
         Assert.Null(Cycles.Of(Cpu.Wdc65816, "mvn", AddressingMode.BlockMove, ProcessorState.Default));
     }
 
-    /// <summary>The count layout keeps is the one for the mode it chose.</summary>
+    /// <summary>
+    /// The cycle count layout records for an instruction is the one for the addressing mode
+    /// layout chose for it: direct for a zero-page operand, absolute for any other.
+    /// </summary>
     [Fact]
     public void LayoutKeepsTheCountForTheModeItChose()
     {
@@ -290,7 +297,8 @@ public sealed class CycleTests
 
     /// <summary>
     /// A long branch costs what the form chosen for it costs. Short, it is the branch.
-    /// Long, the condition that would have branched falls into a <c>jmp</c> instead.
+    /// Long, it is the inverted branch, which falls through into a <c>jmp</c> when the original
+    /// condition holds.
     /// </summary>
     [Fact]
     public void ALongBranchCostsWhatItsFormCosts()

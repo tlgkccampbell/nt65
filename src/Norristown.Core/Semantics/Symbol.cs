@@ -75,15 +75,19 @@ public sealed class Symbol
     public string? Segment { get; internal set; }
 
     /// <summary>
-    /// For one instance of a family, the name its repetition binds and what that name is worth
-    /// here, which is what a signature naming the binding is read with. Null for everything else.
+    /// For one instance of a family, the repetition's binding and its value for this instance,
+    /// which is what a signature naming the binding is read with. Null for everything else.
     /// </summary>
     public (Symbol Binding, Expansion.Bound Value)? Bound { get; internal set; }
 
     /// <summary>The expression after <c>=</c>, or null for a label, proc body or scope.</summary>
     public ExpressionSyntax? ValueExpression { get; internal init; }
 
-    /// <summary>The scope a <c>.proc</c>, a <c>.scope</c> or mixed data opens; null for everything else.</summary>
+    /// <summary>
+    /// The scope the symbol's declaration opens: the body of a <c>.proc</c>, a <c>.scope</c>,
+    /// mixed data, a macro, a <c>.func</c>, or a named enum, struct or union; null for
+    /// everything else.
+    /// </summary>
     public Scope? Body { get; internal set; }
 
     /// <summary>
@@ -95,7 +99,7 @@ public sealed class Symbol
     /// <summary>The value, where nt65 knows it. For a struct member, its offset.</summary>
     public Value Value { get; internal set; }
 
-    /// <summary>How many bytes the symbol stands for, where that is a question with an answer.</summary>
+    /// <summary>How many bytes the symbol occupies, where that is both meaningful and known.</summary>
     public long? Size { get; internal set; }
 
     /// <summary>How many elements those bytes are, for a type, an array or a data label.</summary>
@@ -129,8 +133,8 @@ public sealed class Symbol
     internal void AddCall(Symbol callee, Span at) => calls.Add((callee, at));
 
     /// <summary>
-    /// The names a macro's body uses that it did not declare and was not given: what an
-    /// expansion of it needs wherever it lands. A file that calls the macro has to be able to
+    /// The names a macro's body uses that it did not declare and was not given: what every
+    /// expansion of it needs, whichever file it is in. A file that calls the macro has to be able to
     /// reach all of them, and its output brings in the ones another file declares.
     /// </summary>
     public IReadOnlyList<(Symbol Used, Span At)> Uses => uses;
@@ -215,8 +219,8 @@ public sealed class Symbol
 
     /// <summary>
     /// Whether the symbol is defined in terms of itself, which evaluation reported once for
-    /// the whole ring. It has no value and, for a type, no layout, so nothing that walks into
-    /// one may walk into this.
+    /// the whole ring. It has no value and, for a type, no layout, so code that walks into
+    /// symbols' values or layouts must not walk into this one.
     /// </summary>
     public bool IsCyclic { get; internal set; }
 

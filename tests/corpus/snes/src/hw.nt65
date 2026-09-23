@@ -18,8 +18,8 @@
 CODE_BANK = $80
 WRAM_BANK = $7e
 
-; The state nearly every routine is called in and returns in: a signature names it and says
-; what differs.
+; The state nearly every routine is called in and returns in. A signature names this set and
+; adds only what differs.
 .export .signature std = a8, i16, dp = 0, dbr = CODE_BANK
 
 ; A BGR555 colour from 5-bit components.
@@ -60,7 +60,7 @@ WRAM_BANK = $7e
 .segment WRAM
 .data oam_shadow: .type Sprite[128]
 
-; Screen off: force blank at full brightness 0.
+; Screen off: force blank, with brightness 0.
 .macro ppu_off(): a8 {
     lda #$80
     sta inidisp_shadow

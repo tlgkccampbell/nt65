@@ -1,6 +1,6 @@
 # Builds cc65, ca65 and ld65 from the cc65 commit pinned in scripts/cc65.commit into
-# .cache/cc65/bin, with the headers C and its assembly include in .cache/cc65. The source checkout lives in
-# .cache/cc65-src. Both are git-ignored.
+# .cache/cc65/bin, and copies cc65's C headers (include) and assembly includes (asminc) into
+# .cache/cc65. The source checkout lives in .cache/cc65-src. Both are git-ignored.
 # Needs git, make and a C compiler on the path; on Windows that is a MinGW gcc.
 [CmdletBinding()]
 param([switch]$Force)
@@ -13,7 +13,8 @@ $sha = (Get-Content (Join-Path $PSScriptRoot 'cc65.commit') -Raw).Trim()
 $src = Join-Path $root '.cache/cc65-src'
 $bin = Join-Path $root '.cache/cc65/bin'
 $short = $sha.Substring(0, 7)
-# What make names the programs it builds: everything else here is the same on either system.
+# The suffix make gives the programs it builds, which is the only part of this script that
+# differs between Windows and other systems.
 $exe = if ($IsWindows) { '.exe' } else { '' }
 
 if (-not $Force -and (Test-Path (Join-Path $bin "ca65$exe")) -and (Test-Path (Join-Path $bin "cc65$exe"))) {

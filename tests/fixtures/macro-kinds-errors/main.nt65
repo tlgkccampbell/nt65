@@ -39,8 +39,8 @@
     lda p
 }
 
-; A word a condition compares with a parameter is one the parameter may be. `zp` is a mode
-; `.mode` spells `abs`, so that comparison may hold.
+; A condition that compares a parameter with a word the parameter can never be is warned about.
+; `.mode` reports a `zp` operand as `abs`, so comparing with `abs` can hold.
 .macro pick(src: operand(imm, zp), reg: one(x, y), regs: list(one(a, x))) {
     .if .mode(src) == imm {
         nop

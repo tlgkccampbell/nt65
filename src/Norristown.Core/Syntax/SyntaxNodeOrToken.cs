@@ -65,8 +65,8 @@ public readonly struct SyntaxNodeOrToken
     public string ToFullString() => node is not null ? node.ToFullString() : IsToken ? token.ToFullString() : "";
 
     /// <summary>
-    /// Its text over <see cref="Span"/>: no surrounding trivia and no line break, which is what
-    /// reads a list's items and separators without asking which of the two each one is.
+    /// Its text over <see cref="Span"/>: no surrounding trivia and no line break. This reads a
+    /// list's items and separators alike without checking which of the two each one is.
     /// </summary>
     public string GetText() => node is not null ? node.GetText() : IsToken ? token.Text : "";
 

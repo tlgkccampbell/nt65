@@ -44,8 +44,8 @@ public static class NodeTable
             nodes.Add(node);
         }
 
-        // The classes above a node end somewhere: a base that leads back into a circle is a
-        // hierarchy with no top, and every walk up one would run forever.
+        // The chain of classes above a node has to end: a chain of bases that loops back on
+        // itself is a hierarchy with no top, and every walk up it would run forever.
         var rows = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         foreach (var node in nodes)
         {
@@ -109,7 +109,8 @@ public static class NodeTable
             }
         }
 
-        // A slot is read from the node's layout; anything else has to say what it returns.
+        // A <Field> reads its slot from the node's layout; a <Member> has no slot, and has to say
+        // what it returns in a <Read>.
         if ((read.Length > 0) != (role == SlotRole.Member))
         {
             throw Bad(element, role == SlotRole.Member
@@ -126,7 +127,7 @@ public static class NodeTable
             Kinds(element));
     }
 
-    /// <summary>The kinds <paramref name="element"/> names, which a node and a token field both do.</summary>
+    /// <summary>The kinds named by <paramref name="element"/>'s <c>Kind</c> children, which nodes and token fields both have.</summary>
     private static ImmutableArray<string> Kinds(XElement element)
     {
         var kinds = ImmutableArray.CreateBuilder<string>();
@@ -139,8 +140,10 @@ public static class NodeTable
     }
 
     /// <summary>
-    /// The summary inside <paramref name="wrapper"/>, a line per line of it, as the XML it is
-    /// written into: the markup a summary carries is the file's own, and comes back as it went in.
+    /// The summary inside <paramref name="owner"/>'s <paramref name="wrapper"/> element, one
+    /// trimmed string per non-blank line, kept as XML text: markup in the summary, such as
+    /// <c>&lt;c&gt;</c> or <c>&lt;see&gt;</c>, comes back out as it went in, for the generated
+    /// doc comment.
     /// </summary>
     private static ImmutableArray<string> Summary(XElement owner, string wrapper)
     {

@@ -26,9 +26,9 @@ $exe = if ($IsWindows) { '.exe' } else { '' }
 $runner = Join-Path $root "tests/Norristown.Tests/bin/$configuration/net10.0/Norristown.Tests$exe"
 
 if ($Benchmark) {
-    # The test project asks for the server collector, which the suite wants and an editor does
-    # not: the timings are what an edit costs in the shipped binaries, so they are taken with the
-    # collector those binaries use.
+    # The test project enables the server garbage collector, which suits the suite but not an
+    # editor. The timings are meant to show what an edit costs in the shipped binaries, so they
+    # run with the workstation collector those binaries use.
     $savedGc = $env:DOTNET_gcServer
     try {
         $env:DOTNET_gcServer = '0'
@@ -43,16 +43,17 @@ if ($Benchmark) {
 # Not -stopOnFail: xUnit then exits as if cancelled (Ctrl+C status), which upsets the calling
 # shell. The gate stops at the first failing step, which is the fail-fast that matters.
 #
-# -parallelMode all runs the tests of a class beside each other rather than one after another,
-# which is what the two longest classes want: a replay of hundreds of edits is a step at a time
-# whatever else runs, and the three random-edit seeds are three replays that need not queue.
+# -parallelMode all runs the tests within a class in parallel, not only the classes. The two
+# longest classes need this: each replay of hundreds of edits is sequential in itself, and the
+# three random-edit seeds are three independent replays that need not wait for one another.
 $runnerArgs = @('-noLogo', '-parallelMode', 'all')
 $runnerArgs += if ($Ca65) { '-trait', 'Category=Oracle' } else { '-trait-', 'Category=Oracle', '-trait-', 'Category=Benchmark' }
 if ($Fixture -and -not $Ca65) { $runnerArgs += '-class', 'Norristown.Tests.Fixtures.FixtureTests' }
 
-# Tier 0 is instrumented so that tier 1 can be told what the program did, and a suite that is
-# over in three seconds never calls anything often enough to be paid back: the instrumented code
-# is what most of the run executes. The benchmarks above keep it, because the shipped binaries do.
+# Tiered PGO is turned off. It instruments tier-0 code to collect a profile for tier-1
+# compilation, and a suite that finishes in three seconds rarely calls anything often enough to
+# recoup that cost, so most of the run would execute the slower instrumented code. The
+# benchmarks above keep PGO on, because the shipped binaries do.
 $saved = $env:NT65_FIXTURE, $env:NT65_UPDATE, $env:NT65_THOROUGH, $env:DOTNET_TieredPGO
 try {
     $env:DOTNET_TieredPGO = '0'

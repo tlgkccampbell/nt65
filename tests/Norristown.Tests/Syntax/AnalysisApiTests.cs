@@ -49,14 +49,17 @@ public sealed class AnalysisApiTests
         Assert.Equal(new TextSpan(11, 21), brace.FullSpan);
     }
 
-    /// <summary>A piece the source did not write, which is in its slot all the same.</summary>
+    /// <summary>
+    /// A required token the source did not write is still in its slot, as a missing token.
+    /// </summary>
     [Fact]
     public void FixedSlotsAndMissingTokens()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".proc main\n    rts\n}\n");
         var proc = tree.Root.DescendantNodes().OfType<ProcDeclarationSyntax>().Single();
 
-        // Required, so never null; missing, so no text and no width, placed where it belongs.
+        // The brace is required, so it is never null; it is missing, so it has no text and no
+        // width, and sits where it would have been written.
         Assert.True(proc.OpenBraceToken.IsMissing);
         Assert.Equal("", proc.OpenBraceToken.Text);
         Assert.Equal(new TextSpan(10, 0), proc.OpenBraceToken.Span);
@@ -65,7 +68,8 @@ public sealed class AnalysisApiTests
         Assert.Equal(new TextSpan(0, 10), proc.Span);
         Assert.Equal(".proc main", proc.ToFullString());
 
-        // Nullable means the source wrote no signature at all, which is a different thing.
+        // An optional piece the source did not write is null instead, which is a different
+        // thing from a missing token.
         Assert.Null(proc.Signature);
     }
 
@@ -103,7 +107,7 @@ public sealed class AnalysisApiTests
         Assert.Null(names[0].SimpleName);
         Assert.Equal("border", names[0].LastPart!.Name.Text);
 
-        // One part and nothing before it is one name, which is the common case.
+        // A name of one part with no qualifier also has a SimpleName, for the common case.
         Assert.Equal("count", names[1].SimpleName!.Value.Text);
     }
 
@@ -145,8 +149,8 @@ public sealed class AnalysisApiTests
     {
         var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda (1\n}\n");
 
-        // The root answers for the file, and says whether there is anything to answer without
-        // walking anything.
+        // The root reports the diagnostics of the whole file, and ContainsDiagnostics says
+        // whether there are any without walking the tree.
         Assert.True(tree.Root.ContainsDiagnostics);
         Assert.Equal(tree.Diagnostics, tree.Root.GetDiagnostics());
 
@@ -156,7 +160,7 @@ public sealed class AnalysisApiTests
         Assert.Equal("expected `)`", reported.Message);
         Assert.Equal(new Span("main.nt65", 2, 11, 11), reported.Span);
 
-        // It belongs to the token standing where the `)` was not written.
+        // The diagnostic is attached to the missing token that stands where `)` should be.
         var missing = instruction.DescendantTokens().Single(token => token.IsMissing);
         Assert.Equal(SyntaxKind.CloseParen, missing.Kind);
         Assert.Equal(reported, Assert.Single(missing.GetDiagnostics()));
@@ -173,12 +177,12 @@ public sealed class AnalysisApiTests
         var hex = new Hexadecimal().Visit(tree.Root)!;
         Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta mask\n}\n", hex.ToFullString());
 
-        // A rename: one name said another way, wherever it is written.
+        // A rename: every occurrence of one identifier replaced by another.
         var named = hex.DescendantTokens().Where(token => token is { Kind: SyntaxKind.Identifier, Text: "mask" });
         var renamed = hex.ReplaceTokens(named, (old, _) => SyntaxFactory.Identifier("flags").WithTriviaFrom(old));
         Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta flags\n}\n", renamed.ToFullString());
 
-        // A rewritten file is a new tree; the one it came from is what it was.
+        // A rewritten file is a new tree; the tree it came from is unchanged.
         Assert.NotSame(tree, renamed.Tree);
         Assert.Equal(written, tree.Text);
 
@@ -187,8 +191,8 @@ public sealed class AnalysisApiTests
     }
 
     /// <summary>
-    /// A tag on what a fix inserts, and the same tag found again in the tree that comes back,
-    /// which is the one thing that can say where the piece ended up.
+    /// An annotation put on what a fix inserts, and found again in the tree the rewrite
+    /// returns. The annotation is the only reliable way to find where the inserted piece ended up.
     /// </summary>
     [Fact]
     public void AnnotatingWhatAFixInserts()
@@ -199,10 +203,12 @@ public sealed class AnalysisApiTests
         var root = new Widen(widened).Visit(tree.Root)!;
         Assert.Equal(".proc main: a8, i8 {\n    rts\n}\n", root.ToFullString());
 
-        // Where `i8` ended up: the caret goes here, and no counting of characters would say it.
+        // Where `i8` ended up, which is where an editor would put the caret. Counting characters
+        // could not reliably say where that is; the annotation does.
         Assert.Equal(new TextSpan(16, 2), root.GetAnnotatedNodes(widened).Single().Span);
 
-        // The tag is no part of what the piece says, and it is found by being itself.
+        // The annotation does not change the node's text, and it matches by identity: a new
+        // annotation of the same kind is a different annotation.
         var inserted = root.GetAnnotatedNodes("widened").Single();
         Assert.Equal("i8", inserted.GetText());
         Assert.True(inserted.HasAnnotation(widened));
@@ -213,15 +219,15 @@ public sealed class AnalysisApiTests
         Assert.Empty(root.GetAnnotatedTokens(widened));
         Assert.Equal([inserted], root.GetAnnotatedNodesAndTokens(widened).Select(piece => piece.AsNode()));
 
-        // An edit elsewhere leaves the line alone, and the tag with it; the line itself typed
-        // over is read again, and what was on it is gone.
+        // An edit on another line leaves the annotated line, and so its annotation, untouched.
+        // An edit to the annotated line itself reparses that line, and the annotation is lost.
         var elsewhere = root.Tree.WithChange(new TextChange(root.Tree.GetPosition(1, 7), 0, "  ; done"));
         Assert.Equal("i8", elsewhere.Root.GetAnnotatedNodes(widened).Single().GetText());
         Assert.Empty(root.Tree
             .WithChange(new TextChange(root.Tree.GetPosition(0, 12), 2, "a16"))
             .Root.GetAnnotatedNodes(widened));
 
-        // A token tagged and written in is found the same way.
+        // A token annotated and put in by a rewrite is found the same way.
         var name = root.DescendantTokens().Single(token => token.Text == "main");
         var renamed = new SyntaxAnnotation("renamed");
         var written = root.ReplaceToken(name, SyntaxFactory.Identifier("start")
@@ -231,8 +237,8 @@ public sealed class AnalysisApiTests
     }
 
     /// <summary>
-    /// A fix: a routine that says only what the accumulator is has the index registers said too,
-    /// and what it writes carries a tag so that whoever ran it can find it.
+    /// A fix: a routine whose state list is only <c>a8</c> gets <c>i8</c> added, and the item it
+    /// adds carries an annotation so that whoever ran the fix can find it.
     /// </summary>
     /// <param name="tag">The tag to put on the item the fix writes.</param>
     private sealed class Widen(SyntaxAnnotation tag) : SyntaxRewriter
@@ -242,8 +248,8 @@ public sealed class AnalysisApiTests
             if (node.Items is not [StateFlagItemSyntax { Name.Text: "a8" } a8])
                 return node;
 
-            // What stood after the last item stands after the list still, so it moves to the item
-            // that is now the last: the `{` of the routine reads as it did.
+            // The trailing trivia of the old last item belongs after the list, so it moves to the
+            // new last item, and the space before the routine's `{` is kept.
             var written = SyntaxFactory.StateFlagItem(
                 SyntaxFactory.Identifier("i8").WithTrailingTrivia(a8.Name.TrailingTrivia));
             return node.WithItems(SyntaxFactory.SeparatedList(

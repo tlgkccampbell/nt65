@@ -59,12 +59,12 @@
     rts
 }
 
-; Where main lands is the linker's to say, so this one is written out for ld65.
+; Where main lands is decided by the linker, so this assertion is written out for ld65.
 .assert main >= $0200, "main must be past the zero page"
 .assert main != trace && main == main, "ca65 spells these operators its own way"
 
-; A repetition is unrolled by nt65, one turn at a time, and what the turns came out as is
-; what decides whether the output can say them once.
+; nt65 unrolls a repetition one iteration at a time, and what the iterations produce decides
+; whether the output can write them once, as a single ca65 `.repeat`.
 .list handlers {
     main, trace
 }
@@ -117,8 +117,8 @@
     }
 }
 
-; A chain at file level and a chain inside a proc are read the same way, and what indentation
-; either is written with means nothing at all.
+; A chain at file level and a chain inside a proc are read the same way, and indentation
+; means nothing in either.
 .if PLATFORM == 1 {
     COLUMNS = 40
 } .else {

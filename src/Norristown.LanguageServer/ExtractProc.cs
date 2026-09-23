@@ -5,34 +5,35 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Lines of a routine lifted into a routine of their own, with a call left where they were.
+/// The refactoring that moves lines of a routine into a new routine of their own, leaving a
+/// call in their place.
 /// <para>
-/// The selection has to be code that a call can stand for: whole lines of one routine, with
-/// nothing in them that leaves the routine, no name that only the routine around them declares,
-/// and nothing outside them naming a label they declare. Where any of that does not hold, the
-/// lines are not offered for extraction rather than extracted wrongly.
+/// The selection must be code a call can replace: whole lines of one routine, with no
+/// instruction that leaves the routine, no reference to a label the enclosing routine declares
+/// outside the selection, and no reference from outside to a label declared in the selection.
+/// Where any of that does not hold, extraction is not offered, rather than done wrongly.
 /// </para>
 /// <para>
-/// On the 65816 the new routine declares the state the analysis finds where the lines were: the
-/// state reaching the first of them, and the state reaching whatever followed the last, which
-/// is what the lines leave. A routine that says nothing about the state would be read as
-/// assuming the defaults, which is not what the code was written under.
+/// On the 65816 the new routine's signature declares the processor state the analysis finds at
+/// the lines: the state on entry to the first, and, as the exit state, the state on entry to
+/// whatever followed the last. A routine that states nothing would be read as assuming the
+/// default state, which is not what the code was written for.
 /// </para>
 /// </summary>
 internal static class ExtractProc
 {
-    /// <summary>The instructions a selection ends a path with, which a call cannot stand for.</summary>
+    /// <summary>The instructions that end a path out of the routine, which a call cannot replace.</summary>
     private static readonly HashSet<string> leaves =
         new(StringComparer.OrdinalIgnoreCase) { "rts", "rtl", "rti", "jmp", "jml", "brk" };
 
-    /// <summary>The lines <paramref name="range"/> covers, as a routine of their own, where they may be one.</summary>
+    /// <summary>The change that extracts the lines <paramref name="range"/> covers into a routine, where that is possible.</summary>
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
         var first = Math.Clamp(range.Start.Line, 0, tree.LineStarts.Length - 1);
 
-        // A selection that ends where a line starts covers the lines above it, which is how an
-        // editor spells a selection made by dragging down the left of them.
+        // A selection ending at the start of a line covers only the lines above it; that is how
+        // an editor represents whole lines selected by dragging down the margin.
         var last = range.End.Line > first && range.End.Character == 0 ? range.End.Line - 1 : range.End.Line;
         last = Math.Clamp(last, first, tree.LineStarts.Length - 1);
         if (Selected(tree, first, last) is not { } lines)
@@ -49,8 +50,9 @@ internal static class ExtractProc
         var signature = Signature(analysis, model, lines, last);
         var declaration = $"\n{indent}.proc {name}{signature} {{\n{written}\n{body}rts\n{indent}}}\n";
 
-        // The call stands where the lines did, indented as they were — unless they started
-        // with a label at the margin, which is no indent for an instruction to take.
+        // The call goes where the lines were, indented as they were, unless they started with a
+        // label at the left margin, which is no indentation for an instruction; then the call
+        // takes the body's indentation.
         var call = Edits.IndentOf(tree, first) is { Length: > 0 } own ? own : body;
         var declared = Edits.InsertAfter(tree, Edits.BlockEnd(tree, block.LineIndex), declaration.TrimEnd('\n'));
         var edits = new List<Edit>
@@ -59,25 +61,24 @@ internal static class ExtractProc
             declared,
         };
 
-        // What the routine is called is the programmer's to say, so the editor is asked to
-        // start a rename on the name it was given to be going on with.
+        // Only the programmer can choose the routine's name, so the editor is asked to start a
+        // rename on the placeholder name.
         var at = declared.Text.IndexOf($".proc {name}", StringComparison.Ordinal) + ".proc ".Length;
         yield return new Change("Extract into a `.proc`", CodeActionKinds.Extract, edits,
             Names: new Change.Placeholder(declared, at));
     }
 
     /// <summary>
-    /// What to call the routine before the programmer says: the label the selection starts
-    /// with, which is the one word about these lines that the file already has, and null where
-    /// it starts with none.
+    /// The placeholder name for the new routine: the label the selection starts with, which is
+    /// the only name the file already gives these lines, or null where it starts with none.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
         StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
-    /// The lines of the selection, where every one of them is code a call can stand for: an
-    /// instruction, a label, or a line with nothing on it. Null for a selection holding
-    /// anything else, or one that leaves the routine part way through.
+    /// The lines of the selection, provided each is code a call can replace: an instruction, a
+    /// label, or a blank line. Null for a selection holding anything else, one containing an
+    /// instruction that leaves the routine, or one with no instruction at all.
     /// </summary>
     private static IReadOnlyList<int>? Selected(SyntaxTree tree, int first, int last)
     {
@@ -114,8 +115,8 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// Whether the selection stands on its own: nothing in it names a label of the routine
-    /// around it, and nothing outside it names a label declared in it.
+    /// Whether the selection is self-contained: nothing in it names a label the enclosing
+    /// routine declares outside it, and nothing outside it names a label declared in it.
     /// </summary>
     private static bool IsSelfContained(
         SemanticModel model, SyntaxTree tree, IReadOnlyList<int> lines, int first, int last)
@@ -128,9 +129,9 @@ internal static class ExtractProc
             if (reference.Symbol is not { Kind: SymbolKind.Label } label)
                 continue;
 
-            // A label declared in the selection travels with it, and one outside it stays
-            // where it is: either way, a name written on the wrong side of the line is what
-            // says the lines cannot be lifted out on their own.
+            // A label declared in the selection moves with it, and one declared outside stays
+            // behind; a reference on the other side of that boundary from its label means the
+            // lines cannot be extracted on their own.
             var declared = label.NameSpan.Start >= from && label.NameSpan.End <= to;
             if (inside != declared && label.Routine is not null)
                 return false;
@@ -139,9 +140,9 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// What the new routine declares: the state reaching the first line and, where it differs,
-    /// the state the lines leave, which is what reached whatever followed them. Nothing at all
-    /// on the processors that have no state to track.
+    /// The new routine's signature: the state on entry to the first line and, where it differs,
+    /// the state the lines exit with, which is the state on entry to whatever followed them.
+    /// Empty on processors that have no such state to track.
     /// </summary>
     private static string Signature(
         ProgramAnalysis analysis, SemanticModel model, IReadOnlyList<int> lines, int last)
@@ -165,8 +166,8 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// A line as it was written. The new routine stands where the old one does, so its body is
-    /// indented the way that one's was, and a label at the margin stays at the margin.
+    /// A line exactly as written. The new routine is declared at the same level as the old one,
+    /// so its body keeps the old body's indentation, and a label at the margin stays there.
     /// </summary>
     private static string Written(SyntaxTree tree, int line) =>
         tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();

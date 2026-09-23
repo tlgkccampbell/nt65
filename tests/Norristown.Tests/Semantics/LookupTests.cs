@@ -4,14 +4,14 @@ using Norristown.Project;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// What a name means where it is written, asked of the model rather than found by binding a
-/// name that is already there. An editor asks these about a line being typed, and the answers
-/// have to be the ones the line will get once it is written: the binder and the model run the
-/// same lookup, and these are the programs where two lookups could have differed.
+/// What a name would mean at a position, asked of the model directly rather than found by
+/// binding a name already written there. An editor asks this about a line being typed, and the
+/// answers must be the ones the line will get once it is written: the binder and the model run
+/// the same lookup, and these are the programs where two separate lookups could have differed.
 /// </summary>
 public sealed class LookupTests
 {
-    /// <summary>A build that gives every file a define, which is what a glob has to lose to.</summary>
+    /// <summary>A build that gives every file the define <c>LIMIT</c>, which a name brought in by a glob must lose to.</summary>
     private static ProjectSettings WithDefine => ProjectSettings.None with
     {
         Defines = [new Define("LIMIT", 7, default)],
@@ -58,8 +58,8 @@ public sealed class LookupTests
         Assert.Equal("hw", bound.Module);
         Assert.Equal(bound, model.GetSymbolInfo(written, ["hw", "BORDER"]).Symbol);
 
-        // Written alone it is the constant: a module is no value, so a name a `*` brought in
-        // is what stands there. Which of the two a part means is what the part after it says.
+        // Written alone, `hw` is the constant: a module is not a value, so it means the name the
+        // `*` brought in. Whether a part of a path means the module depends on the part after it.
         Assert.Equal("other", model.GetSymbolInfo(written, ["hw"]).Symbol?.Module);
     }
 
@@ -95,7 +95,7 @@ public sealed class LookupTests
         Assert.Empty(model.LookupSymbols(outside, "@loop"));
     }
 
-    /// <summary>A name brought in under another is offered, and reached, under the name written here.</summary>
+    /// <summary>A name brought in under an alias with <c>.use ... as</c> is offered and resolved under the alias only.</summary>
     [Fact]
     public void AUseAsNameStandsForWhatItBroughtIn()
     {
@@ -133,8 +133,8 @@ public sealed class LookupTests
     }
 
     /// <summary>
-    /// A misspelled name in another module is told what it was nearly, as a misspelled one in
-    /// this file is, and the same fix puts it right.
+    /// A misspelled name in another module gets the same nearest-name suggestion as a misspelled
+    /// name in this file, and the same fix puts it right.
     /// </summary>
     [Fact]
     public void AMisspelledNameInAnotherModuleIsToldWhatItWasNearly()

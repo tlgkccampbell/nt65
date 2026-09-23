@@ -9,10 +9,10 @@ namespace Norristown;
 public static class Spelling
 {
     /// <summary>
-    /// The one of <paramref name="candidates"/> that <paramref name="written"/> is nearly:
-    /// one that differs from it by a letter or two. A short name has to match more closely
-    /// than a long one, because two letters apart is most of the short names there are. Where
-    /// two are equally near, the earlier by ordinal is the answer, so the same file always
+    /// The candidate in <paramref name="candidates"/> that <paramref name="written"/> most nearly
+    /// matches, or null: one that differs from it by a letter or two. A short name has to match
+    /// more closely than a long one, because most short names are within two letters of each
+    /// other. Where two are equally near, the ordinally earlier one wins, so the same file always
     /// gives the same suggestion.
     /// </summary>
     public static string? Nearest(string written, IEnumerable<string> candidates)

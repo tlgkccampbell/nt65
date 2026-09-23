@@ -8,8 +8,8 @@ namespace Norristown.Tests.Syntax;
 public sealed class ChildSyntaxListTests
 {
     /// <summary>
-    /// A slot holding a list shows the list's items and separators, not the node over them, so
-    /// a walk of a node's children never meets one.
+    /// A slot holding a list gives the list's items and separators as children, not a node
+    /// wrapping them, so a walk of a node's children never meets a list node.
     /// </summary>
     [Fact]
     public void ChildrenAreNodesAndTokensTogether()

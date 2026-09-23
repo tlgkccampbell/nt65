@@ -26,8 +26,8 @@
     rts
 }
 
-; A nested segment block is a detour: the stream around it carries straight on, so a
-; branch across one is a distance like any other.
+; A nested segment block places its contents in another segment, so the code around it stays
+; contiguous, and a branch across the block has a known distance like any other.
 .proc around_a_detour {
     beq @out
     .segment RODATA {

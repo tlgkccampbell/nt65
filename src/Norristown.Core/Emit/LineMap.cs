@@ -9,22 +9,23 @@ namespace Norristown.Emit;
 /// <para>
 /// ca65 has one way to say that a generated line came from somewhere else, a <c>.dbg line</c>
 /// directive before the line itself, and nt65 would need one before nearly every instruction it
-/// writes. That is a third of the output, standing between every two lines of a routine, and
-/// the point of writing ca65 rather than object code is that a person can read it. So the map
-/// is a file of its own, and <c>nt65 remap-dbg</c> puts what it says into ld65's debug file
-/// after the link, where a debugger reads it (§13).
+/// writes. That would be a third of the output, interleaved with every routine, and the point
+/// of writing ca65 rather than object code is that a person can read it. So the map is a file
+/// of its own, and <c>nt65 remap-dbg</c> copies what it says into ld65's debug file after the
+/// link, where a debugger reads it.
 /// </para>
 /// <para>
-/// The format is one record a line. <c>version</c> is the format's, and is checked; <c>file</c>
-/// names a source, by its path from the project root and its size in bytes, under the number
-/// the <c>line</c> records use for it, one for each module a translation unit holds; and <c>line</c> maps one line of the <c>.s</c>, counting
-/// from 1, to a source and a line of it. Lines the <c>.s</c> generates no bytes for are not
-/// mapped, and neither is anything a source did not write.
+/// The format is one record per line. <c>version</c> gives the format version, which is
+/// checked. <c>file</c> declares a source, by its path from the project root and its size in
+/// bytes, under the number the <c>line</c> records use for it; there is one for each module the
+/// translation unit holds. <c>line</c> maps one line of the <c>.s</c>, counting from 1, to a
+/// source and a line in it. Lines the <c>.s</c> generates no bytes for are not mapped, and
+/// neither is any line that did not come from a source.
 /// </para>
 /// </summary>
 public static class LineMap
 {
-    /// <summary>The format this nt65 writes and reads.</summary>
+    /// <summary>The format version this nt65 writes and reads.</summary>
     public const int Version = 1;
 
     /// <summary>What is added to a <c>.s</c> path to name the map beside it.</summary>
@@ -57,7 +58,7 @@ public static class LineMap
 
     /// <summary>
     /// Reads a map, or returns null with <paramref name="problem"/> saying what is wrong with it.
-    /// Anything nt65 did not write is not a map, and is refused rather than half read.
+    /// Anything that is not in the form nt65 writes is rejected outright rather than partly read.
     /// </summary>
     public static SourceLines? Read(string text, out string? problem)
     {

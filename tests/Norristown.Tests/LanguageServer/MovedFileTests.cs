@@ -3,10 +3,10 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What moving a file asks the program to change. A module's name is written in its
-/// <c>.module</c> line and its output is named after that, so a source that moves changes less
-/// than it looks: what moves with it is a <c>files</c> entry that names it, and the
-/// <c>.incbin</c> paths resolved beside whichever end moved.
+/// What moving a file requires the program to change. A module's name comes from its
+/// <c>.module</c> line and its output is named after that, so moving a source changes less than
+/// it might seem: only a <c>files</c> entry that names it, and the <c>.incbin</c> paths that are
+/// resolved relative to whichever file moved, the including source or the binary.
 /// </summary>
 public sealed class MovedFileTests : IDisposable
 {
@@ -17,7 +17,7 @@ public sealed class MovedFileTests : IDisposable
     /// <summary>
     /// A <c>files</c> entry naming the file literally is rewritten; the <c>.incbin</c> paths in
     /// a file that went to another folder are rewritten to reach the same binaries from it; and
-    /// a glob that stops matching is said rather than rewritten.
+    /// a glob that stops matching is reported in a warning rather than rewritten.
     /// </summary>
     [Fact]
     public async Task WhatMovesWithAFileIsWrittenAndWhatCannotBeIsSaid()
@@ -49,8 +49,8 @@ public sealed class MovedFileTests : IDisposable
         Assert.Equal(3, project.Range.Start.Line);
 
         // The file that writes an `.incbin` goes a folder deeper, so the path it writes has to
-        // reach the same file from there. The glob that named it no longer matches, and which
-        // glob was meant to cover it is the programmer's to say, so that is said and not written.
+        // reach the same file from there. The glob that named it no longer matches, and only the
+        // programmer can say which glob should cover it now, so the server warns and edits nothing.
         var included = await RenameAsync(client, timeout, ("gfx/sprite.nt65", "gfx/tiles/sprite.nt65"));
         Assert.NotNull(included);
         var path = Assert.Single(included.Changes[Folder("gfx/sprite.nt65")]);
@@ -69,7 +69,7 @@ public sealed class MovedFileTests : IDisposable
             Assert.Single(binary.Changes[Folder("gfx/sprite.nt65")]).NewText);
     }
 
-    /// <summary>A client that does not ask before it moves a file is not offered the filter.</summary>
+    /// <summary>A client that does not declare <c>willRename</c> support is not registered for it; one that does is registered for every file.</summary>
     [Fact]
     public async Task AClientThatDoesNotAskIsNotRegisteredFor()
     {

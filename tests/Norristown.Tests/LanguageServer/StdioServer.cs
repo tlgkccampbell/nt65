@@ -23,10 +23,10 @@ internal sealed class StdioServer : IDisposable
         output = process.StandardOutput.BaseStream;
     }
 
-    /// <summary>The server's process id, for a test about who is watching whom.</summary>
+    /// <summary>The server's process id, so a test can give it to another server as the editor to watch.</summary>
     public int Id => process.Id;
 
-    /// <summary>What the process left with, once it has.</summary>
+    /// <summary>The process's exit code, once it has exited.</summary>
     public int ExitCode => process.ExitCode;
 
     /// <summary>Starts the shipped executable over a pipe, as an editor does.</summary>
@@ -107,10 +107,10 @@ internal sealed class StdioServer : IDisposable
         }
     }
 
-    /// <summary>Waits for the process to leave; false when it is still running.</summary>
+    /// <summary>Waits up to <paramref name="within"/> for the process to exit; false if it is still running.</summary>
     public bool Left(TimeSpan within) => process.WaitForExit((int)within.TotalMilliseconds);
 
-    /// <summary>Stops the process the way an editor that crashed does: without a word.</summary>
+    /// <summary>Kills the process without warning, the way an editor that crashes stops.</summary>
     public void Kill()
     {
         process.Kill();

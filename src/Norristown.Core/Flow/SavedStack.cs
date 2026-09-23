@@ -5,15 +5,14 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// What a routine has pushed, as far as saving and restoring a register goes: one entry per
-/// push, top last. A <c>pha</c> puts what the accumulator holds on it and the <c>pla</c> that
-/// finds it again takes it back, which is how a save and a restore cancel with a call or a
-/// label between them.
+/// push, top last. A <c>pha</c> records what the accumulator holds, and the matching <c>pla</c>
+/// takes it back, so a save and a restore cancel out even with a call or a label between them.
 /// <para>
-/// This is not the 65816's analysis stack. That one follows a saved status register, a direct
-/// page and a data bank by value, to say what the widths and the banks are; this one follows
-/// whose entry value a push holds, to say what a routine hands back. A null stack stands for
-/// one nothing is known of, which is where <c>txs</c> leaves it and where two paths that
-/// pushed different amounts meet.
+/// This is not the 65816's <see cref="AnalysisStack"/>. That one tracks a saved status
+/// register, direct page and data bank by value, to work out the widths and the banks; this one
+/// tracks which register's entry value each push holds, to work out which registers a routine
+/// returns unchanged. A null <see cref="SavedStack"/> means nothing is known about the stack,
+/// which is the case after <c>txs</c> and where two paths that pushed different amounts meet.
 /// </para>
 /// </summary>
 public sealed class SavedStack : IEquatable<SavedStack>
@@ -41,10 +40,10 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// the same size and width, and otherwise nothing known. A pull of something else, or of
     /// more than the routine pushed, reaches bytes that are not its own.
     /// <para>
-    /// A width nobody knows is not the same width twice: a call between the push and the pull
-    /// may have widened the register, and then the pull takes back bytes the push never put
-    /// there. Unchanged is not that case, because a routine that hands a register back as it
-    /// found it hands its width back too.
+    /// Two unknown widths are not taken to be the same width: a call between the push and the
+    /// pull may have widened the register, and then the pull takes back bytes the push never
+    /// put there. <see cref="Semantics.Width.Unchanged"/> does not have this problem, because
+    /// a routine that leaves a register's width as it found it leaves the same width at both.
     /// </para>
     /// </summary>
     public RegisterValue Pulled(PushSize size, Semantics.Width width) =>

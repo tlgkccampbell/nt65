@@ -7,7 +7,7 @@
 
 .export putc, memcpy
 
-; A signature cannot be varied by CPU in place, so the set it names is varied instead.
+; A routine's signature cannot vary by CPU in place, so the set it names varies instead.
 .if .target(65816) {
     .signature shared = a16, i16, dbr = $7e
 } .else {
