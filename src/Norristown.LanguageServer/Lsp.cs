@@ -1117,14 +1117,12 @@ internal static class Lsp
                 above.Add(prose);
             if (lead.Count > 0)
                 above.Add(Written(lead, column));
+            // The rule separates the leading rows from the rest, so without leading rows there is
+            // nothing for it to separate, and the rest follows as the leading rows would.
+            if (lead.Count == 0)
+                return string.Join("\n\n", rest.Count == 0 ? above : [.. above, Written(rest, column)]);
             var answer = string.Join("\n\n", above);
-
-            // Markdown reads a line of text directly above `---` as a heading, so where the
-            // comment is the last thing above the rule, a blank line keeps it text.
-            var rule = lead.Count == 0 && prose is { Length: > 0 } ? "\n\n---\n" : "\n---\n";
-            return rest.Count == 0
-                ? answer
-                : answer.Length == 0 ? Written(rest, column) : $"{answer}{rule}{Written(rest, column)}";
+            return rest.Count == 0 ? answer : $"{answer}\n---\n{Written(rest, column)}";
         }
 
         private static IReadOnlyList<(string Key, string Value)?> Trimmed(

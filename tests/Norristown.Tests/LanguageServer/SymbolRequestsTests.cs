@@ -314,9 +314,8 @@ public sealed class SymbolRequestsTests
             ```
             """.ReplaceLineEndings("\n"), routine!.Contents.Value);
 
-        // A routine with no body has no cost to lead with, so its comment comes straight before
-        // the rule, with a blank line between: Markdown reads a line of text directly above
-        // `---` as a heading.
+        // A routine with no body has no cost to lead with, and a rule would separate nothing,
+        // so the rest follows the comment as the leading rows would.
         var bodiless = await client.HoverAsync(Uri, new Position(11, 6), timeout);
         Assert.Equal("""
             ```nt65
@@ -325,7 +324,6 @@ public sealed class SymbolRequestsTests
 
             Writes the character in A.
 
-            ---
             ```nt65-hover
             value    $ffd2 (65490)
             address  abs (2 bytes)
