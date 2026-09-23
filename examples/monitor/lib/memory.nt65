@@ -1,7 +1,7 @@
 ; The commands that read and write memory: M, : and F.
 .module monitor::memory
 
-.use platform::putc
+.use platform::{putc, text}
 .use monitor::addr
 .use monitor::text::{print_byte, print_word, space, newline}
 .use monitor::macros::{mov16, add16, inc16}
@@ -119,7 +119,7 @@ LINES = 8                           ; what M shows when it is not told where to 
 ; Shows eight bytes from `addr` in hex and as characters, and moves `addr` past them. Returns
 ; with the carry set if that took it past the top of memory.
 .proc dump_line {
-    lda #':'
+    lda #text(':')
     jsr putc
     ldx addr+1
     lda addr
@@ -136,12 +136,12 @@ LINES = 8                           ; what M shows when it is not told where to 
     ldy #0
 @character:
     lda (addr),y
-    cmp #' '
+    cmp #text(' ')
     bcc @unprintable
-    cmp #'Z' + 1
+    cmp #text('Z') + 1
     bcc @printable
 @unprintable:
-    lda #'.'
+    lda #text('.')
 @printable:
     jsr putc
     iny

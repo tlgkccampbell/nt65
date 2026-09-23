@@ -1,7 +1,7 @@
 ; The commands that run code and show what it left: G and R.
 .module monitor::run
 
-.use platform::putc
+.use platform::{putc, text}
 .use monitor::{registers, Registers}
 .use monitor::text::{print, print_byte, print_word, space, newline}
 .use monitor::macros::mov16
@@ -36,7 +36,7 @@
 ; R: shows the registers.
 .proc show {
     jsr print
-    .strz "  PC   AC XR YR SP NV-BDIZC"
+    .strz text("  PC   AC XR YR SP NV-BDIZC")
     jsr newline
     jsr space
     jsr space
@@ -59,7 +59,7 @@
 @flag:
     asl a
     pha
-    lda #'0'
+    lda #text('0')
     adc #0
     jsr putc
     pla

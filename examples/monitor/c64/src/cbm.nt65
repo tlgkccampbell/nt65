@@ -1,0 +1,16 @@
+; Commodore text.
+.module cbm
+
+.export petscii
+
+; PETSCII as the KERNAL's CHROUT takes it with the uppercase and graphics characters showing,
+; as they do when the machine starts. That set has no lower case, so a lower-case letter is
+; an error rather than the graphic that shares its code.
+.charmap petscii {
+    ' '..'Z' = $20
+    '['      = $5B
+    '£'      = $5C
+    ']'      = $5D
+    '↑'      = $5E
+    '←'      = $5F
+}

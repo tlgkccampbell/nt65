@@ -8,17 +8,19 @@
 .use monitor::registers
 .use monitor::parse::line
 
-.export LINE_LENGTH, putc, read_line, exit, start
+.export LINE_LENGTH, NEWLINE, putc, read_line, exit, start
+.export .use cbm::petscii as text   ; the KERNAL reads and writes PETSCII
 
 LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
+NEWLINE = $0D                       ; RETURN
 
-; The KERNAL writes PETSCII, which agrees with ASCII on every character the monitor writes.
 .proc putc = $FFD2: keeps x, y      ; CHROUT
 .proc CHRIN = $FFCF                 ; reads the line the cursor is on, a character at a time
 .proc READY = $E37B: noreturn       ; BASIC's warm start
 
 CBINV = $0316                       ; where the KERNAL's interrupt entry goes on a BRK
 CLEAR = $93                         ; PETSCII's clear screen
+UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and graphics characters
 
 .segment BSS
 .data old_brk: .addr
@@ -35,6 +37,8 @@ CLEAR = $93                         ; PETSCII's clear screen
     sta CBINV
     lda #>on_brk
     sta CBINV+1
+    lda #UPPERCASE                  ; the characters `text` is written for
+    jsr putc
     lda #CLEAR
     jsr putc
     jmp monitor::main
@@ -46,7 +50,7 @@ CLEAR = $93                         ; PETSCII's clear screen
     sta length
 @next:
     jsr CHRIN
-    cmp #monitor::text::NEWLINE
+    cmp #NEWLINE
     beq @done
     ldx length
     cpx #LINE_LENGTH
@@ -59,7 +63,7 @@ CLEAR = $93                         ; PETSCII's clear screen
     ldx length
     lda #0
     sta line,x
-    lda #monitor::text::NEWLINE
+    lda #NEWLINE
     jmp putc
 }
 

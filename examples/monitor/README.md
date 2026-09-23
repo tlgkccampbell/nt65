@@ -106,7 +106,10 @@ editor a library file shows as part of the first platform's program.
 - `c64/src/platform.nt65`: the `platform` module. The KERNAL's screen editor reads each line,
   which is why a line already on the screen can be entered again, and the KERNAL writes each
   character; `putc` is the KERNAL's `CHROUT` itself, declared with the registers it keeps. A
-  `BRK` comes in through the KERNAL's BRK vector, below the registers the KERNAL pushed.
+  `BRK` comes in through the KERNAL's BRK vector, below the registers the KERNAL pushed. It
+  re-exports `cbm::petscii` as `text`, and switches the machine to the uppercase and graphics
+  characters that charmap is written for.
+- `c64/src/cbm.nt65`: PETSCII as a charmap, with the uppercase and graphics characters showing.
 - `c64/src/stub.nt65`: the load address and the BASIC line `10 SYS2061`, whose digits are
   worked out from the address it names.
 - `c64/c64.cfg`: the linker configuration, which puts the monitor where BASIC programs load
@@ -116,10 +119,10 @@ editor a library file shows as part of the first platform's program.
 
 1. A folder with an `nt65.json` whose `files` are its own and `../lib/*.nt65`, giving its
    `cpu` and the segments its linker configuration places.
-2. A module named `platform` exporting `LINE_LENGTH`, `putc`, `read_line` and `exit`, as the
-   comment at the top of `lib/monitor.nt65` describes them, and starting the monitor: it gets
-   the machine ready, sends a `BRK` to `monitor::broke` with the registers stored in
-   `monitor::registers`, and jumps to `monitor::main`.
+2. A module named `platform` exporting `text`, `NEWLINE`, `LINE_LENGTH`, `putc`, `read_line`
+   and `exit`, as the comment at the top of `lib/monitor.nt65` describes them, and starting the
+   monitor: it gets the machine ready, sends a `BRK` to `monitor::broke` with the registers
+   stored in `monitor::registers`, and jumps to `monitor::main`.
 3. A linker configuration, an entry in `build.ps1`'s table of platforms, and sessions in
    `tests/<platform>` with an entry in `test.ps1`'s table, which says which emulator runs it and
    where its screen is. `test.ps1` reads a screen in the C64's screen codes; a platform whose
@@ -132,6 +135,11 @@ it; the C64's screen editor already does that, and more.
 
 - **A library shared by projects.** The platforms are projects whose files include the
   library's, and the library reaches the platform only through the names `platform` exports.
+- **Text in the machine's own characters.** Every character the library writes or compares is
+  written as `text('A')` or `text("NT65 MONITOR")`, where `text` is the charmap `platform`
+  re-exports under that name. Each program gets its machine's bytes from one source. A
+  character that machine lacks is an error in that program's build, and an `.assert` states
+  the one thing the library needs of the order of a machine's characters.
 - **Data built as the program is compiled.** The opcode table is sixteen lines of text, as a
   data sheet lays it out; `.each` and `.repeat` walk it, and a `.func` packs each name into
   two bytes, so the 256-entry tables are written by nt65, not by a script.

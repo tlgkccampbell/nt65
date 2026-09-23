@@ -3118,9 +3118,12 @@ What another module's output does with a name depends on its kind:
 - **Another module's name** is re-exported with `.export .use hw::vic::border`, which makes
   `border` part of this module's interface: users reach it as `hw::border`, and it keeps the
   linker name of its definition, so a re-export emits nothing. A facade module presents the
-  names its submodules define this way. A re-export names what it re-exports, explicitly or
-  in braces; `.export .use hw::vic::*` is an error, because a glob would grow the interface
-  silently.
+  names its submodules define this way. A re-export may rename, `.export .use hw::sid::volume
+  as sid_volume`, and is then reached by the new name only. This way a module that each
+  program supplies can give a stable name to whatever that program picked, such as the
+  charmap a shared library writes its text in. A re-export names what it re-exports,
+  explicitly or in braces; `.export .use hw::vic::*` is an error, because a glob would grow
+  the interface silently.
 - **A macro** that is exported may name only what its module exports, or what another module
   does. One whose body names something its module keeps private is an error at its
   declaration: the body resolves names where it is declared, and an expansion in another

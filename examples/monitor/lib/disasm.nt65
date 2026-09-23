@@ -1,7 +1,7 @@
 ; D: shows memory as instructions.
 .module monitor::disasm
 
-.use platform::putc
+.use platform::{putc, text}
 .use monitor::addr
 .use monitor::opcodes::{Mode, operand_size, name_lo, name_hi, modes}
 .use monitor::text::{print, print_byte, print_word, space, newline}
@@ -70,7 +70,7 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
     tax
     lda sizes,x
     sta size
-    lda #','
+    lda #text(',')
     jsr putc
     ldx addr+1
     lda addr
@@ -123,7 +123,7 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
     rol a
     dex
     bne @bit
-    adc #'?'                        ; the carry is clear: A was under 32 before the last rol
+    adc #text('?')                  ; the carry is clear: A was under 32 before the last rol
     jsr putc
     dey
     bne @letter
@@ -155,18 +155,18 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
             rts
         } .elseif m == Mode::acc {
             jsr space
-            lda #'A'
+            lda #text('A')
             jmp putc
         } .else {
             jsr space
             .if m == Mode::imm {
-                lda #'#'
+                lda #text('#')
                 jsr putc
             } .elseif m == Mode::ind || m == Mode::indx || m == Mode::indy {
-                lda #'('
+                lda #text('(')
                 jsr putc
             }
-            lda #'$'
+            lda #text('$')
             jsr putc
             .if m == Mode::rel {
                 jsr print_target
@@ -184,18 +184,18 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
             }
             .if m == Mode::zpx || m == Mode::absx {
                 jsr print
-                .strz ",X"
+                .strz text(",X")
             } .elseif m == Mode::zpy || m == Mode::absy {
                 jsr print
-                .strz ",Y"
+                .strz text(",Y")
             } .elseif m == Mode::indx {
                 jsr print
-                .strz ",X)"
+                .strz text(",X)")
             } .elseif m == Mode::indy {
                 jsr print
-                .strz "),Y"
+                .strz text("),Y")
             } .elseif m == Mode::ind {
-                lda #')'
+                lda #text(')')
                 jsr putc
             }
             rts

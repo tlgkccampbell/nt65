@@ -5,6 +5,7 @@
 ; routine that finds one jumps to `monitor::error` rather than returning.
 .module monitor::parse
 
+.use platform::text
 .use monitor::error
 
 .export LINE_SIZE, line, value, begin, skip, blanks, number, byte, expect_end
@@ -24,9 +25,9 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
     ldx #0
 @next:
     lda line,x
-    cmp #' '
+    cmp #text(' ')
     beq @skip
-    cmp #'.'
+    cmp #text('.')
     bne @found
 @skip:
     inx
@@ -48,7 +49,7 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
     ldx at
 @next:
     lda line,x
-    cmp #' '
+    cmp #text(' ')
     bne @found
     inx
     bne @next
@@ -111,19 +112,19 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 
 ; The value of the hex digit in A, with the carry clear, or the carry set if it is not one.
 .proc digit: keeps x, y {
-    cmp #'0'
+    cmp #text('0')
     bcc @not
-    cmp #'9' + 1
+    cmp #text('9') + 1
     bcc @decimal
-    cmp #'A'
+    cmp #text('A')
     bcc @not
-    cmp #'F' + 1
+    cmp #text('F') + 1
     bcs @not
-    sbc #'A' - 10 - 1               ; the carry is clear, so this takes one more
+    sbc #text('A') - 10 - 1         ; the carry is clear, so this takes one more
     clc
     rts
 @decimal:
-    sbc #'0' - 1                    ; the same
+    sbc #text('0') - 1              ; the same
     clc
     rts
 @not:

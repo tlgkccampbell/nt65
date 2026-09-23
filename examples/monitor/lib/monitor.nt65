@@ -3,9 +3,13 @@
 ; The monitor is a library. It has no nt65.json of its own: each platform is a project whose
 ; files are these and its own, and whose own include a module named `platform` that exports
 ;
+;   text                the charmap the machine's characters are in, which the monitor
+;                       applies to every character it writes or reads, and which has to
+;                       run from space to `Z` in ASCII's order
+;   NEWLINE             the character that ends a line
 ;   LINE_LENGTH         the longest line `read_line` reads
-;   putc: keeps x, y    writes the character in A, which is an ASCII capital, digit or
-;                       punctuation mark, a space, or NEWLINE
+;   putc: keeps x, y    writes the character in A, which is a capital, digit or
+;                       punctuation mark, a space, or NEWLINE, in `text`
 ;   read_line           reads a line typed at the keyboard into `parse::line`, at most
 ;                       `parse::LINE_SIZE` - 1 characters followed by a zero, and leaves the
 ;                       cursor at the start of the next line
@@ -15,7 +19,7 @@
 ; `broke` with the registers the BRK found stored in `registers`, and jumps to `main`.
 .module monitor
 
-.use platform::putc
+.use platform::{putc, text}
 .use monitor::text::{print, newline}
 .use monitor::{parse, memory, disasm, run}
 
@@ -45,7 +49,7 @@
 }
 
 .segment RODATA
-.data letters:  .byte "M:FDGRX?"
+.data letters:  .byte text("M:FDGRX?")
 .data handlers: .addr commands
 
 .assert .sizeof(letters) == .countof(commands), "every command needs a letter"
@@ -71,7 +75,7 @@
     lda home
     sta registers::sp
     jsr print
-    .strz "NT65 MONITOR"
+    .strz text("NT65 MONITOR")
     jsr newline
     .fallthrough prompt
 }
@@ -81,7 +85,7 @@
 .proc prompt: noreturn {
     ldx home
     txs
-    lda #'.'
+    lda #text('.')
     jsr putc
     jsr platform::read_line
     jsr parse::begin
@@ -120,37 +124,37 @@
 ; forty columns, so none wraps.
 .proc help {
     jsr print
-    .strz "NUMBERS ARE HEX"
+    .strz text("NUMBERS ARE HEX")
     jsr newline
     jsr print
-    .strz "M [FROM [TO]]   SHOW MEMORY"
+    .strz text("M [FROM [TO]]   SHOW MEMORY")
     jsr newline
     jsr print
-    .strz ":ADDR BYTE...   WRITE BYTES"
+    .strz text(":ADDR BYTE...   WRITE BYTES")
     jsr newline
     jsr print
-    .strz "F FROM TO BYTE  FILL MEMORY"
+    .strz text("F FROM TO BYTE  FILL MEMORY")
     jsr newline
     jsr print
-    .strz "D [FROM [TO]]   DISASSEMBLE"
+    .strz text("D [FROM [TO]]   DISASSEMBLE")
     jsr newline
     jsr print
-    .strz "G [ADDR]        RUN CODE"
+    .strz text("G [ADDR]        RUN CODE")
     jsr newline
     jsr print
-    .strz "R               SHOW REGISTERS"
+    .strz text("R               SHOW REGISTERS")
     jsr newline
     jsr print
-    .strz "X               LEAVE THE MONITOR"
+    .strz text("X               LEAVE THE MONITOR")
     jsr newline
     jsr print
-    .strz "?               SHOW THIS LIST"
+    .strz text("?               SHOW THIS LIST")
     jmp newline
 }
 
 ; A command found something it cannot read: say so, and read the next one.
 .proc error: noreturn {
-    lda #'?'
+    lda #text('?')
     jsr putc
     jsr newline
     jmp prompt
@@ -162,7 +166,7 @@
     ldx home
     txs
     jsr print
-    .strz "BRK"
+    .strz text("BRK")
     jsr newline
     jsr run::show
     jmp prompt

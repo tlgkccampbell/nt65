@@ -275,7 +275,10 @@ Definitions several modules share, such as a machine's hardware registers, go in
 that exports them. A module that grows too large is split into submodules, such as `hw::vic`
 and `hw::sid`, that export what they share. A module can present names its submodules
 declare as its own with `.export .use hw::vic::border`, which is then reached as
-`hw::border`.
+`hw::border`. With `as`, it presents one under a name of its own:
+`.export .use hw::sid::volume as sid_volume` is reached as `hw::sid_volume`. A library can
+name what each program supplies this way. For example, each machine's `platform` module
+re-exports its character map as `platform::text`, and the library writes `text("READY")`.
 
 ## Segments
 
