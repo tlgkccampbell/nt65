@@ -16,43 +16,58 @@ namespace Norristown.Processor;
 /// </summary>
 public static class Ca65Instructions
 {
+    // Static field initializers run in text order, so the word lists come before the sets
+    // built from them.
+
     // ca65's table for the 6502, which every later table in it starts from.
-    private const string Mos6502 =
-        "adc and asl bcc bcs beq bit bmi bne bpl brk bvc bvs clc cld cli clv cmp cpx cpy dec "
-        + "dex dey eor inc inx iny jmp jsr lda ldx ldy lsr nop ora pha php pla plp rol ror rti "
-        + "rts sbc sec sed sei sta stx sty tax tay tsx txa txs tya";
+    private static readonly string[] Mos6502 =
+    [
+        "adc", "and", "asl", "bcc", "bcs", "beq", "bit", "bmi", "bne", "bpl", "brk", "bvc", "bvs",
+        "clc", "cld", "cli", "clv", "cmp", "cpx", "cpy", "dec", "dex", "dey", "eor", "inc", "inx",
+        "iny", "jmp", "jsr", "lda", "ldx", "ldy", "lsr", "nop", "ora", "pha", "php", "pla", "plp",
+        "rol", "ror", "rti", "rts", "sbc", "sec", "sed", "sei", "sta", "stx", "sty", "tax", "tay",
+        "tsx", "txa", "txs", "tya",
+    ];
 
     // The NMOS 6502's undocumented opcodes, which ca65 reads only under `6502X`.
-    private const string Undocumented =
-        "alr anc ane arr axs dcp isc jam las lax rla rra sax sha shx shy slo sre tas";
+    private static readonly string[] Undocumented =
+    [
+        "alr", "anc", "ane", "arr", "axs", "dcp", "isc", "jam", "las", "lax", "rla", "rra", "sax",
+        "sha", "shx", "shy", "slo", "sre", "tas",
+    ];
 
     // What the CMOS parts add, `dea` and `ina` among them, which nt65 spells `dec a` and `inc a`.
-    private const string Cmos = "bra dea ina phx phy plx ply stz trb tsb";
+    private static readonly string[] Cmos = ["bra", "dea", "ina", "phx", "phy", "plx", "ply", "stz", "trb", "tsb"];
 
-    // Rockwell's bit instructions, each in eight forms, and WDC's two that stop the clock.
-    private const string Bits = "bbr bbs rmb smb";
+    // Rockwell's bit instructions, each in the eight forms ca65's table lists one by one.
+    private static readonly string[] Bits =
+        [.. from name in new[] { "bbr", "bbs", "rmb", "smb" } from bit in Enumerable.Range(0, 8) select $"{name}{bit}"];
 
-    private const string Wdc = "stp wai";
+    // WDC's two that stop the clock.
+    private static readonly string[] Wdc = ["stp", "wai"];
 
     // The 65816's own, with the alternative spellings ca65 keeps for six of its transfers.
-    private const string Wdc65816 =
-        "brl cop cpa jml jsl mvn mvp pea pei per phb phd phk plb pld rep rtl sep swa tad tas "
-        + "tcd tcs tda tdc tsa tsc txy tyx wdm xba xce";
+    private static readonly string[] Wdc65816 =
+    [
+        "brl", "cop", "cpa", "jml", "jsl", "mvn", "mvp", "pea", "pei", "per", "phb", "phd", "phk",
+        "plb", "pld", "rep", "rtl", "sep", "swa", "tad", "tas", "tcd", "tcs", "tda", "tdc", "tsa",
+        "tsc", "txy", "tyx", "wdm", "xba", "xce",
+    ];
 
     private static readonly FrozenSet<string> mos6502 = Words(Mos6502);
 
-    private static readonly FrozenSet<string> mos6502X = Words(Mos6502, Undocumented);
+    private static readonly FrozenSet<string> mos6502X = Words([.. Mos6502, .. Undocumented]);
 
-    private static readonly FrozenSet<string> cmos65SC02 = Words(Mos6502, Cmos);
+    private static readonly FrozenSet<string> cmos65SC02 = Words([.. Mos6502, .. Cmos]);
 
-    private static readonly FrozenSet<string> rockwell65C02 = Words(Mos6502, Cmos, Numbered(Bits));
+    private static readonly FrozenSet<string> rockwell65C02 = Words([.. Mos6502, .. Cmos, .. Bits]);
 
-    private static readonly FrozenSet<string> wdc65C02 = Words(Mos6502, Cmos, Numbered(Bits), Wdc);
+    private static readonly FrozenSet<string> wdc65C02 = Words([.. Mos6502, .. Cmos, .. Bits, .. Wdc]);
 
-    private static readonly FrozenSet<string> wdc65816 = Words(Mos6502, Cmos, Wdc, Wdc65816);
+    private static readonly FrozenSet<string> wdc65816 = Words([.. Mos6502, .. Cmos, .. Wdc, .. Wdc65816]);
 
     private static readonly FrozenSet<string> anywhere =
-        Words(Mos6502, Undocumented, Cmos, Numbered(Bits), Wdc, Wdc65816);
+        Words([.. Mos6502, .. Undocumented, .. Cmos, .. Bits, .. Wdc, .. Wdc65816]);
 
     /// <summary>The words ca65 has under the <c>.setcpu</c> nt65 writes for <paramref name="cpu"/>.</summary>
     public static IReadOnlySet<string> Of(Cpu cpu) => cpu switch
@@ -75,10 +90,5 @@ public static class Ca65Instructions
     /// </summary>
     public static bool HasAnywhere(string name) => anywhere.Contains(name);
 
-    /// <summary>The eight forms of each bit instruction, which ca65's table lists one by one.</summary>
-    private static string Numbered(string bare) =>
-        string.Join(' ', bare.Split(' ').SelectMany(name => Enumerable.Range(0, 8).Select(bit => $"{name}{bit}")));
-
-    private static FrozenSet<string> Words(params string[] lists) =>
-        lists.SelectMany(list => list.Split(' ')).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+    private static FrozenSet<string> Words(string[] words) => words.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 }
