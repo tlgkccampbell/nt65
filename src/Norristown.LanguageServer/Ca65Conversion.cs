@@ -253,29 +253,8 @@ internal static partial class Ca65Conversion
     }
 
     /// <summary>What follows a line's code: the whitespace and the comment, if any.</summary>
-    private static string Comment(string line)
-    {
-        var quote = '\0';
-        for (var at = 0; at < line.Length; at++)
-        {
-            if (quote != '\0')
-            {
-                if (line[at] == '\\')
-                    at++;
-                else if (line[at] == quote)
-                    quote = '\0';
-            }
-            else if (line[at] is '"' or '\'')
-            {
-                quote = line[at];
-            }
-            else if (line[at] == ';')
-            {
-                return line[at..];
-            }
-        }
-        return "";
-    }
+    private static string Comment(string line) =>
+        LineComments.Start(line) is var at and >= 0 ? line[at..] : "";
 
     /// <summary>The first word of a line's code: a directive, a mnemonic or a name.</summary>
     private static string? Word(string code)

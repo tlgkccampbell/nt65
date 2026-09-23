@@ -81,6 +81,29 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// Checks that the hover's headline, which drops the comment at the end of the declaring
+    /// line, does not mistake a <c>;</c> inside a quoted character or string for the start of
+    /// that comment.
+    /// </summary>
+    [Fact]
+    public async Task HoverKeepsASemicolonThatIsQuoted()
+    {
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(
+            Uri, ".module main\nSEMI = ';' ; the separator\n.segment RODATA\n.data text: .byte \"a\\\";b\" ; escaped\n");
+        await client.NextDiagnosticsAsync(timeout);
+
+        var character = await client.HoverAsync(Uri, new Position(1, 0), timeout);
+        Assert.NotNull(character);
+        Assert.Contains("```nt65\nSEMI = ';'\n```", character.Contents.Value, StringComparison.Ordinal);
+
+        var text = await client.HoverAsync(Uri, new Position(3, 7), timeout);
+        Assert.NotNull(text);
+        Assert.Contains("```nt65\n.data text: .byte \"a\\\";b\"\n```", text.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The only names the output spells differently from the source are those ca65 would read as
     /// an instruction, which the emitter prefixes with the module's name. Hover mentions the output
     /// name for those and no others: every other name keeps its spelling, so it would add nothing.

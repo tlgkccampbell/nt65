@@ -414,17 +414,8 @@ internal static class Lsp
     /// </summary>
     private static string Written(string line)
     {
-        var quoted = false;
-        for (var i = 0; i < line.Length; i++)
-        {
-            if (line[i] == '"')
-                quoted = !quoted;
-            else if (line[i] == ';' && !quoted)
-            {
-                line = line[..i];
-                break;
-            }
-        }
+        if (LineComments.Start(line) is var comment and >= 0)
+            line = line[..comment];
         return line.TrimEnd().TrimEnd('{').Trim();
     }
 
