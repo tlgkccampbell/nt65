@@ -1,0 +1,132 @@
+; Reading a command from the line the platform read.
+;
+; A command is a letter followed by numbers in hex, separated by spaces. Each routine here
+; reads on from where the last one stopped. What cannot be read is the typist's mistake, so a
+; routine that finds one jumps to `monitor::error` rather than returning.
+.module monitor::parse
+
+.use monitor::error
+
+.export LINE_SIZE, line, value, begin, skip, blanks, number, byte, expect_end
+
+LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, and its zero
+
+.segment BSS
+.data line:  .byte[LINE_SIZE]
+.data at:    .byte                     ; the offset in `line` of the next character to read
+.data value: .word                  ; the number `number` read
+
+.segment CODE
+; Starts reading the line: returns its first character in A, with Z set if there is none.
+; Dots before it are the prompt, which a platform that reads the line back off the screen
+; may include.
+.proc begin: keeps y {
+    ldx #0
+@next:
+    lda line,x
+    cmp #' '
+    beq @skip
+    cmp #'.'
+    bne @found
+@skip:
+    inx
+    bne @next
+@found:
+    stx at
+    lda line,x
+    rts
+}
+
+; Steps past the character just read.
+.proc skip: keeps x, y {
+    inc at
+    rts
+}
+
+; Steps past spaces: returns the next character in A, with Z set at the end of the line.
+.proc blanks: keeps y {
+    ldx at
+@next:
+    lda line,x
+    cmp #' '
+    bne @found
+    inx
+    bne @next
+@found:
+    stx at
+    lda line,x
+    rts
+}
+
+; Reads a number of one to four hex digits into `value`, after any spaces.
+.proc number: keeps y {
+    lda #0
+    sta value
+    sta value+1
+    jsr blanks
+    jsr digit
+    bcs @bad
+@next:
+    ldx value+1
+    cpx #$10
+    bcs @bad                        ; a fifth digit
+    ; Four shifts make room for the digit in the low four bits.
+    ldx #4
+@shift:
+    asl value
+    rol value+1
+    dex
+    bne @shift
+    ora value
+    sta value
+    jsr skip
+    ldx at
+    lda line,x
+    jsr digit
+    bcc @next
+    rts
+@bad:
+    jmp error
+}
+
+; Reads a number that fits in a byte into A.
+.proc byte: keeps y {
+    jsr number
+    lda value+1
+    bne @too_big
+    lda value
+    rts
+@too_big:
+    jmp error
+}
+
+; Checks that nothing but spaces is left on the line.
+.proc expect_end: keeps y {
+    jsr blanks
+    bne @more
+    rts
+@more:
+    jmp error
+}
+
+; The value of the hex digit in A, with the carry clear, or the carry set if it is not one.
+.proc digit: keeps x, y {
+    cmp #'0'
+    bcc @not
+    cmp #'9' + 1
+    bcc @decimal
+    cmp #'A'
+    bcc @not
+    cmp #'F' + 1
+    bcs @not
+    sbc #'A' - 10 - 1               ; the carry is clear, so this takes one more
+    clc
+    rts
+@decimal:
+    sbc #'0' - 1                    ; the same
+    clc
+    rts
+@not:
+    sec
+    rts
+}

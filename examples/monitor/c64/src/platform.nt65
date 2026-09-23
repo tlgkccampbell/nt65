@@ -1,0 +1,98 @@
+; The monitor on the Commodore 64. The KERNAL's screen editor reads each line, so a line
+; already on the screen, such as one M wrote, can be changed and entered again; the KERNAL
+; writes each character; and a BRK comes in through the KERNAL's BRK vector.
+.module platform
+
+.cpu 6502
+
+.use monitor::registers
+.use monitor::parse::line
+
+.export LINE_LENGTH, putc, read_line, exit, start
+
+LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
+
+; The KERNAL writes PETSCII, which agrees with ASCII on every character the monitor writes.
+.proc putc = $FFD2: keeps x, y      ; CHROUT
+.proc CHRIN = $FFCF                 ; reads the line the cursor is on, a character at a time
+.proc READY = $E37B: noreturn       ; BASIC's warm start
+
+CBINV = $0316                       ; where the KERNAL's interrupt entry goes on a BRK
+CLEAR = $93                         ; PETSCII's clear screen
+
+.segment BSS
+.data old_brk: .addr
+.data length:  .byte
+
+; The BASIC line's SYS lands here.
+.segment STARTUP
+.proc start: noreturn {
+    lda CBINV
+    sta old_brk
+    lda CBINV+1
+    sta old_brk+1
+    lda #<on_brk
+    sta CBINV
+    lda #>on_brk
+    sta CBINV+1
+    lda #CLEAR
+    jsr putc
+    jmp monitor::main
+}
+
+.segment CODE
+.proc read_line {
+    lda #0
+    sta length
+@next:
+    jsr CHRIN
+    cmp #monitor::text::NEWLINE
+    beq @done
+    ldx length
+    cpx #LINE_LENGTH
+    bcs @next                       ; the line is full: read the rest, and drop it
+    and #$7F                        ; a shifted letter, which is PETSCII $C1 to $DA, as a capital
+    sta line,x
+    inc length
+    jmp @next
+@done:
+    ldx length
+    lda #0
+    sta line,x
+    lda #monitor::text::NEWLINE
+    jmp putc
+}
+
+; Puts back the BRK vector and returns to BASIC.
+.proc exit: noreturn {
+    lda old_brk
+    sta CBINV
+    lda old_brk+1
+    sta CBINV+1
+    jmp READY
+}
+
+; The KERNAL's interrupt entry pushes A, X and Y above the flags and return address that the
+; BRK pushed, and comes here when the B flag says it was a BRK.
+.proc on_brk: noreturn {
+    pla
+    sta registers::yr
+    pla
+    sta registers::xr
+    pla
+    sta registers::ac
+    pla
+    sta registers::sr
+    ; The return address is two past the BRK.
+    pla
+    sec
+    sbc #2
+    sta registers::pc
+    pla
+    sbc #0
+    sta registers::pc+1
+    tsx
+    stx registers::sp
+    cli                             ; the KERNAL reads the keyboard in its interrupt handler
+    jmp monitor::broke
+}

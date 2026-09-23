@@ -1,0 +1,227 @@
+; D: shows memory as instructions.
+.module monitor::disasm
+
+.use platform::putc
+.use monitor::addr
+.use monitor::opcodes::{Mode, operand_size, name_lo, name_hi, modes}
+.use monitor::text::{print, print_byte, print_word, space, newline}
+.use monitor::memory::{range, last}
+
+.export list
+
+INSTRUCTIONS = 16                   ; what D shows when it is not told where to stop
+
+.segment BSS
+.data count:  .byte                  ; instructions still to show, or 0 to stop past `last`
+.data opcode: .byte
+.data mode:   .byte
+.data size:   .byte                   ; the bytes after the opcode
+.data name:   .word                   ; the opcode's name, still packed
+
+.segment RODATA
+.data sizes: .byte[] {
+    .each Mode, m {
+        operand_size(m)
+    }
+}
+.data operands: .addr[] {
+    .each Mode, m {
+        operand::m
+    }
+}
+
+.segment CODE
+; D [from [to]]: shows instructions from `from`, or from where the last M or D stopped, up to
+; the one that holds `to`, or sixteen of them.
+.proc list {
+    jsr range
+    lda #0
+    bcs @count
+    lda #INSTRUCTIONS
+@count:
+    sta count
+@next:
+    jsr instruction
+    bcs @done                       ; the instruction ended at the top of memory
+    lda count
+    beq @to_last
+    dec count
+    bne @next
+    rts
+@to_last:
+    lda last
+    cmp addr
+    lda last+1
+    sbc addr+1
+    bcs @next
+@done:
+    rts
+}
+
+; Shows the instruction at `addr`, as its address, its bytes and what they mean, and moves
+; `addr` past it. Returns with the carry set if that took it past the top of memory.
+.proc instruction {
+    ldy #0
+    lda (addr),y
+    sta opcode
+    tax
+    lda modes,x
+    sta mode
+    tax
+    lda sizes,x
+    sta size
+    lda #','
+    jsr putc
+    ldx addr+1
+    lda addr
+    jsr print_word
+    ; The instruction's bytes, in the three columns the longest one needs.
+    ldy #0
+@column:
+    jsr space
+    cpy size
+    beq @byte
+    bcc @byte
+    jsr space
+    jsr space
+    jmp @step
+@byte:
+    lda (addr),y
+    jsr print_byte
+@step:
+    iny
+    cpy #3
+    bne @column
+    jsr space
+    jsr print_name
+    jsr print_operand
+    jsr newline
+    sec                             ; one for the opcode
+    lda addr
+    adc size
+    sta addr
+    lda addr+1
+    adc #0
+    sta addr+1
+    rts
+}
+
+; Unpacks the opcode's name, five bits to a letter, and writes it.
+.proc print_name {
+    ldx opcode
+    lda name_lo,x
+    sta name
+    lda name_hi,x
+    sta name+1
+    ldy #3
+@letter:
+    lda #0
+    ldx #5
+@bit:
+    asl name
+    rol name+1
+    rol a
+    dex
+    bne @bit
+    adc #'?'                        ; the carry is clear: A was under 32 before the last rol
+    jsr putc
+    dey
+    bne @letter
+    rts
+}
+
+; Writes the operand as its addressing mode shows it; the printer's RTS returns from here.
+.proc print_operand {
+    lda mode
+    asl a
+    tax
+    lda operands,x
+    sta @vector
+    lda operands+1,x
+    sta @vector+1
+    jmp (@vector)
+    .next operands
+
+    .segment BSS {
+    @vector: .res 2
+    }
+}
+
+; One printer for each addressing mode, all from the one body below: `operand::zpx` writes
+; ` $12,X` from the byte after the opcode.
+.scope operand {
+    .multiproc Mode, m {
+        .if m == Mode::imp {
+            rts
+        } .elseif m == Mode::acc {
+            jsr space
+            lda #'A'
+            jmp putc
+        } .else {
+            jsr space
+            .if m == Mode::imm {
+                lda #'#'
+                jsr putc
+            } .elseif m == Mode::ind || m == Mode::indx || m == Mode::indy {
+                lda #'('
+                jsr putc
+            }
+            lda #'$'
+            jsr putc
+            .if m == Mode::rel {
+                jsr print_target
+            } .elseif operand_size(m) == 2 {
+                ldy #2
+                lda (addr),y
+                tax
+                dey
+                lda (addr),y
+                jsr print_word
+            } .else {
+                ldy #1
+                lda (addr),y
+                jsr print_byte
+            }
+            .if m == Mode::zpx || m == Mode::absx {
+                jsr print
+                .strz ",X"
+            } .elseif m == Mode::zpy || m == Mode::absy {
+                jsr print
+                .strz ",Y"
+            } .elseif m == Mode::indx {
+                jsr print
+                .strz ",X)"
+            } .elseif m == Mode::indy {
+                jsr print
+                .strz "),Y"
+            } .elseif m == Mode::ind {
+                lda #')'
+                jsr putc
+            }
+            rts
+        }
+    }
+}
+
+; Writes where the branch at `addr` goes: the address after it, plus its offset, which is
+; signed.
+.proc print_target {
+    ldy #1
+    lda (addr),y
+    ldx addr+1
+    cmp #$80
+    bcc @forward
+    dex                             ; a negative offset's high byte is $FF
+@forward:
+    clc
+    adc addr
+    bcc @after
+    inx
+@after:
+    clc
+    adc #2
+    bcc @same_page
+    inx
+@same_page:
+    jmp print_word
+}

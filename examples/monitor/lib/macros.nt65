@@ -1,0 +1,29 @@
+; Sixteen-bit moves and sums, little-endian, for operands of any mode.
+.module monitor::macros
+
+.export mov16, add16, inc16
+
+.macro mov16(dest: operand, src: operand) {
+    lda .byteof(src, 0)
+    sta dest
+    lda .byteof(src, 1)
+    sta dest+1
+}
+
+; dest += value, with the carry set if the sum passed $FFFF.
+.macro add16(dest: operand, value: operand) {
+    clc
+    lda .byteof(dest, 0)
+    adc .byteof(value, 0)
+    sta dest
+    lda .byteof(dest, 1)
+    adc .byteof(value, 1)
+    sta dest+1
+}
+
+.macro inc16(dest: operand) {
+    inc dest
+    bne @done
+    inc dest+1
+@done:
+}

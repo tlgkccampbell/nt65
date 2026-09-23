@@ -119,6 +119,10 @@ stays hand-written ca65 for the SPC700 and links in beside the nt65 output.
 that builds ten versions of Microsoft BASIC for the 6502, from Commodore's first PET BASIC to
 Intellivision's Keyboard Component, each byte for byte the original ROM.
 
+[`examples/monitor`](examples/monitor) is a machine-language monitor written for nt65 from the
+start: a library that knows nothing of the machine it runs on, and a project for each platform
+that supplies what it needs, the Commodore 64 first. Its sessions run in VICE.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

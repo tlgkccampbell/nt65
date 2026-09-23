@@ -132,3 +132,26 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)
+
+# The monitor builds once per platform, from a library each platform's project shares, and its
+# sessions run in VICE where VICE is installed.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$monitor = Join-Path $root 'examples/monitor'
+& (Join-Path $monitor 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $monitor 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'monitor: a platform failed to build' -ForegroundColor Red
+    exit 1
+}
+if (Get-Command x64sc -ErrorAction SilentlyContinue) {
+    & (Join-Path $monitor 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $monitor 'test.ps1')
+        Write-Host 'monitor: a session in VICE differs or did not finish' -ForegroundColor Red
+        exit 1
+    }
+    Write-Host ("   {0,-11} {1,7} built, its sessions passed in VICE in {2:0.0}s" -f 'monitor', 'c64', $watch.Elapsed.TotalSeconds)
+}
+else {
+    Write-Host ("   {0,-11} {1,7} built in {2:0.0}s; its sessions did not run, because x64sc (VICE) is not on the path" -f 'monitor', 'c64', $watch.Elapsed.TotalSeconds) -ForegroundColor Yellow
+}

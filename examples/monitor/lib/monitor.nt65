@@ -1,0 +1,136 @@
+; A machine-language monitor: look at memory, change it, disassemble it, and run code in it.
+;
+; The monitor is a library. It has no nt65.json of its own: each platform is a project whose
+; files are these and its own, and whose own include a module named `platform` that exports
+;
+;   LINE_LENGTH         the longest line `read_line` reads
+;   putc: keeps x, y    writes the character in A, which is an ASCII capital, digit or
+;                       punctuation mark, a space, or NEWLINE
+;   read_line           reads a line typed at the keyboard into `parse::line`, at most
+;                       `parse::LINE_SIZE` - 1 characters followed by a zero, and leaves the
+;                       cursor at the start of the next line
+;   exit: noreturn      leaves the monitor for whatever ran it
+;
+; The platform also starts the monitor. It gets the machine ready, arranges for a BRK to reach
+; `broke` with the registers the BRK found stored in `registers`, and jumps to `main`.
+.module monitor
+
+.use platform::putc
+.use monitor::text::{print, newline}
+.use monitor::{parse, memory, disasm, run}
+
+.export main, broke, error, Registers, registers, addr
+
+; The registers of the program being debugged, as a BRK left them or `G` will start them.
+.struct Registers {
+    pc: .word
+    ac: .byte
+    xr: .byte
+    yr: .byte
+    sp: .byte
+    sr: .byte
+}
+
+; Each command is a letter and the routine that carries it out. A routine starts with the
+; parser just past its letter, and returns when it is done, or jumps to `error`.
+.list commands {
+    memory::dump                    ; M [from [to]]
+    memory::write                   ; :address byte...
+    memory::fill                    ; F from to byte
+    disasm::list                    ; D [from [to]]
+    run::go                         ; G [address]
+    run::show                       ; R
+    platform::exit                  ; X
+}
+
+.segment RODATA
+.data letters:  .byte "M:FDGRX"
+.data handlers: .addr commands
+
+.assert .sizeof(letters) == .countof(commands), "every command needs a letter"
+
+.segment ZEROPAGE
+.data addr: .word                   ; where M, D, : and F start, and where M and D go on from
+
+.segment BSS
+.data registers: .type Registers
+.data home:      .byte                   ; the stack pointer each command starts with
+
+.segment CODE
+.proc main: noreturn {
+    cld
+    tsx
+    stx home
+    lda #0
+    ldx #.sizeof(registers) - 1
+@clear:
+    sta registers,x
+    dex
+    bpl @clear
+    lda home
+    sta registers::sp
+    jsr print
+    .strz "NT65 MONITOR"
+    jsr newline
+    .fallthrough prompt
+}
+
+; Reads a command and carries it out, for as long as the monitor runs. Every command starts
+; with the stack as `main` found it, so one that stops part-way through leaves nothing behind.
+.proc prompt: noreturn {
+    ldx home
+    txs
+    lda #'.'
+    jsr putc
+    jsr platform::read_line
+    jsr parse::begin
+    beq prompt
+    ldx #.sizeof(letters) - 1
+@find:
+    cmp letters,x
+    beq @found
+    dex
+    bpl @find
+    jmp error
+@found:
+    jsr parse::skip
+    jsr dispatch
+    jmp prompt
+}
+
+; Carries out command X; the command's own RTS returns to `prompt`.
+.proc dispatch {
+    txa
+    asl a
+    tax
+    lda handlers,x
+    sta @vector
+    lda handlers+1,x
+    sta @vector+1
+    jmp (@vector)
+    .next commands
+
+    .segment BSS {
+    @vector: .res 2
+    }
+}
+
+; A command found something it cannot read: say so, and read the next one.
+.proc error: noreturn {
+    lda #'?'
+    jsr putc
+    jsr newline
+    jmp prompt
+}
+
+; Where the platform sends a BRK, with the registers it found stored in `registers`.
+.proc broke: noreturn {
+    cld
+    ldx home
+    txs
+    jsr print
+    .strz "BRK"
+    jsr newline
+    jsr run::show
+    jmp prompt
+}

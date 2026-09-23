@@ -1,0 +1,103 @@
+; The 6502's instructions, as the disassembler reads them: each opcode's name and addressing
+; mode. An opcode the 6502 does not document is `???`, with no operand.
+.module monitor::opcodes
+
+.use monitor::opcodes::Mode as M
+
+.export Mode, operand_size, name_lo, name_hi, modes
+
+.enum Mode {
+    imp                             ; no operand
+    acc                             ; A
+    imm                             ; #$12
+    zp                              ; $12
+    zpx                             ; $12,X
+    zpy                             ; $12,Y
+    abs                             ; $1234
+    absx                            ; $1234,X
+    absy                            ; $1234,Y
+    ind                             ; ($1234)
+    indx                            ; ($12,X)
+    indy                            ; ($12),Y
+    rel                             ; a branch, shown as its target
+}
+
+; How many bytes follow an opcode in mode m.
+.func operand_size(m) = .select(m == Mode::imp || m == Mode::acc, 0, .select(m == Mode::abs || m == Mode::absx || m == Mode::absy || m == Mode::ind, 2, 1))
+
+; A name's three letters, five bits each from the top of a word, counted from '?' so that
+; `???` is zero too.
+.func packed(name) = ((.strat(name, 0) - '?') << 11) | ((.strat(name, 1) - '?') << 6) | ((.strat(name, 2) - '?') << 1)
+
+; Row n holds opcodes $n0 to $nF.
+.list names {
+    "BRK ORA ??? ??? ??? ORA ASL ??? PHP ORA ASL ??? ??? ORA ASL ???"
+    "BPL ORA ??? ??? ??? ORA ASL ??? CLC ORA ??? ??? ??? ORA ASL ???"
+    "JSR AND ??? ??? BIT AND ROL ??? PLP AND ROL ??? BIT AND ROL ???"
+    "BMI AND ??? ??? ??? AND ROL ??? SEC AND ??? ??? ??? AND ROL ???"
+    "RTI EOR ??? ??? ??? EOR LSR ??? PHA EOR LSR ??? JMP EOR LSR ???"
+    "BVC EOR ??? ??? ??? EOR LSR ??? CLI EOR ??? ??? ??? EOR LSR ???"
+    "RTS ADC ??? ??? ??? ADC ROR ??? PLA ADC ROR ??? JMP ADC ROR ???"
+    "BVS ADC ??? ??? ??? ADC ROR ??? SEI ADC ??? ??? ??? ADC ROR ???"
+    "??? STA ??? ??? STY STA STX ??? DEY ??? TXA ??? STY STA STX ???"
+    "BCC STA ??? ??? STY STA STX ??? TYA STA TXS ??? ??? STA ??? ???"
+    "LDY LDA LDX ??? LDY LDA LDX ??? TAY LDA TAX ??? LDY LDA LDX ???"
+    "BCS LDA ??? ??? LDY LDA LDX ??? CLV LDA TSX ??? LDY LDA LDX ???"
+    "CPY CMP ??? ??? CPY CMP DEC ??? INY CMP DEX ??? CPY CMP DEC ???"
+    "BNE CMP ??? ??? ??? CMP DEC ??? CLD CMP ??? ??? ??? CMP DEC ???"
+    "CPX SBC ??? ??? CPX SBC INC ??? INX SBC NOP ??? CPX SBC INC ???"
+    "BEQ SBC ??? ??? ??? SBC INC ??? SED SBC ??? ??? ??? SBC INC ???"
+}
+
+; Two lines for each row of `names`: opcodes $n0 to $n7, then $n8 to $nF.
+.list mode_rows {
+    M::imp,  M::indx, M::imp,  M::imp,  M::imp,  M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::acc,  M::imp,  M::imp,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+    M::abs,  M::indx, M::imp,  M::imp,  M::zp,   M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::acc,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+    M::imp,  M::indx, M::imp,  M::imp,  M::imp,  M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::acc,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+    M::imp,  M::indx, M::imp,  M::imp,  M::imp,  M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::acc,  M::imp,  M::ind,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+    M::imp,  M::indx, M::imp,  M::imp,  M::zp,   M::zp,   M::zp,   M::imp
+    M::imp,  M::imp,  M::imp,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::zpx,  M::zpx,  M::zpy,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::imp,  M::imp
+    M::imm,  M::indx, M::imm,  M::imp,  M::zp,   M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::imp,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::zpx,  M::zpx,  M::zpy,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::absx, M::absx, M::absy, M::imp
+    M::imm,  M::indx, M::imp,  M::imp,  M::zp,   M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::imp,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+    M::imm,  M::indx, M::imp,  M::imp,  M::zp,   M::zp,   M::zp,   M::imp
+    M::imp,  M::imm,  M::imp,  M::imp,  M::abs,  M::abs,  M::abs,  M::imp
+    M::rel,  M::indy, M::imp,  M::imp,  M::imp,  M::zpx,  M::zpx,  M::imp
+    M::imp,  M::absy, M::imp,  M::imp,  M::imp,  M::absx, M::absx, M::imp
+}
+
+.segment RODATA
+.data name_lo: .byte[256] {
+    .each names, row {
+        .repeat 16, column {
+            .lobyte(packed(.strsub(row, column * 4, 3)))
+        }
+    }
+}
+.data name_hi: .byte[256] {
+    .each names, row {
+        .repeat 16, column {
+            .hibyte(packed(.strsub(row, column * 4, 3)))
+        }
+    }
+}
+.data modes: .byte[256] { mode_rows }

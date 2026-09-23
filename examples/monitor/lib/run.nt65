@@ -1,0 +1,82 @@
+; The commands that run code and show what it left: G and R.
+.module monitor::run
+
+.use platform::putc
+.use monitor::{registers, Registers}
+.use monitor::text::{print, print_byte, print_word, space, newline}
+.use monitor::macros::mov16
+.use monitor::parse
+
+.export go, show
+
+.segment CODE
+; G [address]: calls `address`, or the PC in `registers`, with A, X, Y and the flags from
+; `registers`. Code that returns with RTS comes back here, and code that reaches a BRK comes
+; back through the platform to `monitor::broke`; either way the registers are shown.
+.proc go {
+    jsr parse::blanks
+    beq @call
+    jsr parse::number
+    jsr parse::expect_end
+    mov16!(registers::pc, parse::value)
+@call:
+    jsr call
+    php
+    sta registers::ac
+    stx registers::xr
+    sty registers::yr
+    pla
+    sta registers::sr
+    tsx
+    stx registers::sp
+    cld
+    .fallthrough show
+}
+
+; R: shows the registers.
+.proc show {
+    jsr print
+    .strz "  PC   AC XR YR SP NV-BDIZC"
+    jsr newline
+    jsr space
+    jsr space
+    ldx registers::pc+1
+    lda registers::pc
+    jsr print_word
+    ; A, X, Y and S in hex, which are the bytes from `ac` to `sp`, and the flags in binary.
+    ldy #0
+@byte:
+    jsr space
+    lda registers::ac,y
+    jsr print_byte
+    iny
+    cpy #Registers::sp - Registers::ac + 1
+    bne @byte
+    jsr space
+    ; The flags, bit 7 first.
+    lda registers::sr
+    ldy #8
+@flag:
+    asl a
+    pha
+    lda #'0'
+    adc #0
+    jsr putc
+    pla
+    dey
+    bne @flag
+    jmp newline
+}
+
+; Enters the code at the PC in `registers` with the registers it names. Its RTS returns
+; from here.
+.proc call {
+    lda registers::sr
+    pha
+    lda registers::ac
+    ldx registers::xr
+    ldy registers::yr
+    plp
+    jmp (registers::pc)
+    .next ?
+}

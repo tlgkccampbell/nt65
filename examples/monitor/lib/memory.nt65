@@ -1,0 +1,153 @@
+; The commands that read and write memory: M, : and F.
+.module monitor::memory
+
+.use platform::putc
+.use monitor::addr
+.use monitor::text::{print_byte, print_word, space, newline}
+.use monitor::macros::{mov16, add16, inc16}
+.use monitor::parse
+
+.export dump, write, fill, range, last
+
+BYTES_PER_LINE = 8
+LINES = 8                           ; what M shows when it is not told where to stop
+
+.segment BSS
+.data last: .word                   ; the last address a command reaches
+.data with: .byte                   ; what F fills with
+
+.segment CODE
+; M [from [to]]: shows memory from `from`, or from where the last M or D stopped, up to `to`,
+; or for eight lines.
+.proc dump {
+    jsr range
+    bcs @line
+    mov16!(last, addr)
+    add16!(last, {#LINES * BYTES_PER_LINE - 1})
+    bcc @line
+    mov16!(last, {#$FFFF})          ; the lines run past the top of memory: stop there
+@line:
+    jsr dump_line
+    bcs @done                       ; the line ended at the top of memory
+    lda last
+    cmp addr
+    lda last+1
+    sbc addr+1
+    bcs @line
+@done:
+    rts
+}
+
+; :address byte...: writes up to eight bytes from `address`. That is what one line of M
+; shows, so a line of M read back in writes what it shows; the characters beside the bytes
+; are not read.
+.proc write {
+    jsr parse::number
+    mov16!(addr, parse::value)
+    ldy #0
+@next:
+    jsr parse::blanks
+    beq @done
+    jsr parse::byte
+    sta (addr),y
+    iny
+    cpy #BYTES_PER_LINE
+    bne @next
+@done:
+    tya
+    clc
+    adc addr
+    sta addr
+    bcc @same_page
+    inc addr+1
+@same_page:
+    rts
+}
+
+; F from to byte: fills memory from `from` up to and including `to` with `byte`.
+.proc fill {
+    jsr parse::number
+    mov16!(addr, parse::value)
+    jsr parse::number
+    mov16!(last, parse::value)
+    jsr parse::byte
+    sta with
+    jsr parse::expect_end
+    lda last
+    cmp addr
+    lda last+1
+    sbc addr+1
+    bcc @backwards
+    ldy #0
+@next:
+    lda with
+    sta (addr),y
+    lda addr
+    cmp last
+    bne @on
+    lda addr+1
+    cmp last+1
+    beq @done
+@on:
+    inc16!(addr)
+    jmp @next
+@done:
+    rts
+@backwards:
+    jmp monitor::error
+}
+
+; Reads [from [to]]: `from`, if it is there, into `addr`, and `to` into `last`. Returns with
+; the carry set if there was a `to`.
+.proc range {
+    jsr parse::blanks
+    beq @open
+    jsr parse::number
+    mov16!(addr, parse::value)
+    jsr parse::blanks
+    beq @open
+    jsr parse::number
+    jsr parse::expect_end
+    mov16!(last, parse::value)
+    sec
+    rts
+@open:
+    clc
+    rts
+}
+
+; Shows eight bytes from `addr` in hex and as characters, and moves `addr` past them. Returns
+; with the carry set if that took it past the top of memory.
+.proc dump_line {
+    lda #':'
+    jsr putc
+    ldx addr+1
+    lda addr
+    jsr print_word
+    ldy #0
+@hex:
+    jsr space
+    lda (addr),y
+    jsr print_byte
+    iny
+    cpy #BYTES_PER_LINE
+    bne @hex
+    jsr space
+    ldy #0
+@character:
+    lda (addr),y
+    cmp #' '
+    bcc @unprintable
+    cmp #'Z' + 1
+    bcc @printable
+@unprintable:
+    lda #'.'
+@printable:
+    jsr putc
+    iny
+    cpy #BYTES_PER_LINE
+    bne @character
+    jsr newline
+    add16!(addr, {#BYTES_PER_LINE})
+    rts
+}

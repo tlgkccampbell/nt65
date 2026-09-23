@@ -1,0 +1,84 @@
+; What the monitor writes, in terms of the platform's `putc`.
+.module monitor::text
+
+.use platform::putc
+
+.export NEWLINE, print, print_byte, print_word, space, newline
+
+NEWLINE = $0D
+
+.segment ZEROPAGE
+.data text: .addr                   ; the text `print` is writing
+
+.segment CODE
+; Writes the text written after the call, up to its zero, and returns past the zero.
+.proc print: inline .strz, keeps x, y {
+    pla
+    sta text
+    pla
+    sta text+1
+    tya
+    pha
+    ldy #0
+    ; The return address is the call's last byte, so the text starts one past it.
+@next:
+    inc text
+    bne @read
+    inc text+1
+@read:
+    lda (text),y
+    beq @done
+    jsr putc
+    jmp @next
+@done:
+    pla
+    tay
+    ; RTS returns one past the address it pulls, which is one past the zero.
+    lda text+1
+    pha
+    lda text
+    pha
+    rts
+}
+
+; Writes A as two hex digits.
+.proc print_byte: keeps x, y {
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    jsr print_digit
+    pla
+    and #$0F
+    .fallthrough print_digit
+}
+
+; Writes the low four bits of A, which are all that is set, as a hex digit.
+.proc print_digit: keeps x, y {
+    cmp #10
+    bcc @decimal
+    adc #'A' - '9' - 2              ; the carry is set, and '0' is added below
+@decimal:
+    adc #'0'
+    jmp putc
+}
+
+; Writes the word whose high byte is in X and low byte in A, as four hex digits.
+.proc print_word: keeps x, y {
+    pha
+    txa
+    jsr print_byte
+    pla
+    jmp print_byte
+}
+
+.proc space: keeps x, y {
+    lda #' '
+    jmp putc
+}
+
+.proc newline: keeps x, y {
+    lda #NEWLINE
+    jmp putc
+}

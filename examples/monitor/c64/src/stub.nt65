@@ -1,0 +1,28 @@
+; What LOAD and RUN need: the PRG's load address, and the BASIC line `10 SYS2061`, whose
+; address is the first byte after the program.
+.module stub
+
+.cpu 6502
+
+LOAD = $0801                        ; where BASIC programs start
+ENTRY = LOAD + 12                   ; where `platform::start` is, after the 12 bytes of `basic`
+
+; The digit of n in the given place, in decimal.
+.func digit(n, place) = '0' + (n / place) .mod 10
+
+.segment LOADADDR
+.data load_address: .word LOAD
+
+.segment EXEHDR
+.data basic {
+    .word @end                      ; the next line
+    .word 10                        ; this line's number
+    .byte $9E                       ; SYS
+    .byte digit(ENTRY, 1000), digit(ENTRY, 100), digit(ENTRY, 10), digit(ENTRY, 1)
+    .byte 0                         ; the end of the line
+@end:
+    .word 0                         ; the end of the program
+}
+
+.assert .sizeof(basic) == ENTRY - LOAD, "`ENTRY` is out of step with the BASIC line"
+.assert platform::start == ENTRY, "`platform::start` must come straight after the BASIC line"
