@@ -274,6 +274,9 @@ public sealed class SymbolRequestsTests
             .proc clear {
                 rts
             }
+
+            ; Writes the character in A.
+            .proc CHROUT = $ffd2
             """);
         await client.NextDiagnosticsAsync(timeout);
 
@@ -310,6 +313,24 @@ public sealed class SymbolRequestsTests
             address    abs (2 bytes) in CODE
             ```
             """.ReplaceLineEndings("\n"), routine!.Contents.Value);
+
+        // A routine with no body has no cost to lead with, so its comment comes straight before
+        // the rule, with a blank line between: Markdown reads a line of text directly above
+        // `---` as a heading.
+        var bodiless = await client.HoverAsync(Uri, new Position(11, 6), timeout);
+        Assert.Equal("""
+            ```nt65
+            .proc CHROUT = $ffd2
+            ```
+
+            Writes the character in A.
+
+            ---
+            ```nt65-hover
+            value    $ffd2 (65490)
+            address  abs (2 bytes) in CODE
+            ```
+            """.ReplaceLineEndings("\n"), bodiless!.Contents.Value);
     }
 
     [Fact]
