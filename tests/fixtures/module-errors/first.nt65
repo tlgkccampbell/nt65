@@ -20,12 +20,12 @@ hidden = 2
 pal__ink = 2
 .export pal__ink        ;! error[export-name-taken]: `first::pal__ink` and `first::pal::ink` are both exported to the linker as `first__pal__ink`
 
-; A module's names come after it says which module it is, and it says so once.
-.module again           ;! error[module-declared-twice]: a file is one module, and names it once
+; A file names its module first, and names it only once.
+.module again           ;! error[module-declared-twice]: this file already has a `.module` line: a file is exactly one module
 
 ; An exported macro expands in the module that calls it, where it has to be able to reach
 ; everything it names.
-.export .macro poke(value) {        ;! error[macro-names-unexported]: `poke!` is exported but names `shadow`, which is not: a macro expands in the module that calls it, and what it names there has to be exported
+.export .macro poke(value) {        ;! error[macro-names-unexported]: `poke!` is exported but uses `shadow`, which is not exported: the macro expands in the caller's module, where `shadow` cannot be reached
     lda #value
     sta shadow
 }

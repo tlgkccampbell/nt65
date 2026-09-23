@@ -1,37 +1,37 @@
 {
   // The project file is read as data: a key it does not know, or a value of the wrong shape,
   // is reported and the rest of the file is still read. Comments are for these notes.
-  "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a processor nt65 knows: `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
-  "files": "*.nt65",      // ;! error[project-not-a-list]: `files` is a list of strings
-  "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a nt65.json key
-  "define": {},           // ;! error[project-key-unknown]: `define` is not a nt65.json key; `defines` is
+  "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a supported `cpu`: use `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
+  "files": "*.nt65",      // ;! error[project-not-a-list]: `files` must be a list of strings
+  "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a key of nt65.json
+  "define": {},           // ;! error[project-key-unknown]: `define` is not a key of nt65.json; did you mean `defines`?
   "defines": {
-    "SIZE": "twelve"      // ;! error[define-not-a-number]: `SIZE` is not a number, and a define is a number
+    "SIZE": "twelve"      // ;! error[define-not-a-number]: `SIZE`: a define's value must be a number
   },
   "diagnostics": {
-    "unused-symbols": "off",   // ;! error[diagnostic-name-unknown]: `unused-symbols` is not a diagnostic nt65 reports; `unused-symbol` is
-    "unused-symbol": "quiet",  // ;! error[diagnostic-severity-unknown]: `unused-symbol` is reported as "off", "warning" or "error"
-    "not-declared": "warning"  // ;! error[diagnostic-not-turned-down]: `not-declared` is an error, and a project may not turn an error down
+    "unused-symbols": "off",   // ;! error[diagnostic-name-unknown]: `unused-symbols` is not a diagnostic nt65 reports; did you mean `unused-symbol`?
+    "unused-symbol": "quiet",  // ;! error[diagnostic-severity-unknown]: the severity of `unused-symbol` must be "off", "warning" or "error"
+    "not-declared": "warning"  // ;! error[diagnostic-not-turned-down]: `not-declared` is an error, and a project cannot turn an error into a warning or off
   },
   "spaces": {
-    "spc": "sound"        // ;! error[project-space-holds-unknown]: space `spc` holds "code", for a space that runs this program's processor, or "data"
+    "spc": "sound"        // ;! error[project-space-holds-unknown]: space `spc` must be "code" or "data"
   },
   "segments": {
     "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment "VRAM" needs a `size` of "zp", "abs" or "far"
-    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: `dp` says which direct page a `zp` segment is reached through, and "SLOW" is not `zp`
-    "WIDE": { "size": "abs", "bank": 256 },    // ;! error[segment-attribute-out-of-range]: a bank is one byte
-    "CODE": { "size": "far" },                 // ;! error[segment-standard-size]: "CODE" is a standard segment, which is `abs`
-    "ODD":  { "size": "abs", "base": 1 },      // ;! error[project-segment-key-unknown]: segment "ODD": `base` is not a segment key: a segment has a `size`, a `dp`, a `bank`, `mirrors` and a `space`
+    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: segment "SLOW" is not `zp`, and only a `zp` segment takes a `dp`
+    "WIDE": { "size": "abs", "bank": 256 },    // ;! error[segment-attribute-out-of-range]: `bank` must be $00 to $ff: a bank is one byte
+    "CODE": { "size": "far" },                 // ;! error[segment-standard-size]: "CODE" is a standard segment and is always `abs`
+    "ODD":  { "size": "abs", "base": 1 },      // ;! error[project-segment-key-unknown]: segment "ODD" cannot set `base`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`
     "APU":  { "size": "abs", "space": "apu" }  // ;! error[space-undeclared]: space `apu` is not declared
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],
-    "$2180": ["$00"],     // ;! error[ranges-overlap]: `$2180` overlaps `$2100-$21ff`: an address is in one range at most
+    "$2180": ["$00"],     // ;! error[ranges-overlap]: `$2180` overlaps `$2100-$21ff`: an address can be in only one range
     "$21ff-$2100": [0],   // ;! error[range-invalid]: `$21ff-$2100` is not a range of absolute addresses, such as "$2100-$21ff"
     "$4200": ["$00-$1ff"] // ;! error[bank-invalid]: `$4200`: "$00-$1ff" is not a bank or a range of banks
   },
   "configurations": {
-    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast`: `cpu` is not a configuration key: a configuration has `defines`, `diagnostics` and `out`
-    "slow down": {}               // ;! error[configuration-name-invalid]: `slow down` is not a configuration name: one is letters, digits, `_` and `-`
+    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast` cannot set `cpu`: a configuration may set only `defines`, `diagnostics` and `out`
+    "slow down": {}               // ;! error[configuration-name-invalid]: `slow down` is not a valid configuration name: use only letters, digits, `_` and `-`
   }
 }

@@ -33,9 +33,9 @@ internal static class ExplainCommand
         {
             var nearest = Spelling.Nearest(name, Catalogue.All.Select(entry => entry.Id));
             error.WriteLine(nearest is null
-                ? $"nt65: `{name}` is not a diagnostic nt65 reports"
-                : $"nt65: `{name}` is not a diagnostic nt65 reports; `{nearest}` is");
-            error.WriteLine("nt65: `nt65 explain` lists them");
+                ? $"nt65: no diagnostic is named `{name}`"
+                : $"nt65: no diagnostic is named `{name}`; did you mean `{nearest}`?");
+            error.WriteLine("nt65: `nt65 explain` with no name lists every diagnostic");
             return 2;
         }
 

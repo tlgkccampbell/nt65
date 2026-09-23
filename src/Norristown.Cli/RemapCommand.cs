@@ -28,14 +28,14 @@ public static class RemapCommand
                     target = arguments[++i];
                     break;
                 case "--out":
-                    error.WriteLine("nt65: --out takes a value");
+                    error.WriteLine("nt65: `--out` needs a file to write");
                     return 2;
                 default:
                     if (arguments[i].StartsWith('-') || file is not null)
                     {
                         error.WriteLine(arguments[i].StartsWith('-')
                             ? $"nt65: `{arguments[i]}` is not an option"
-                            : "nt65: remap-dbg takes one debug file");
+                            : "nt65: `remap-dbg` takes one debug file, and was given more than one");
                         return 2;
                     }
                     file = arguments[i];
@@ -44,7 +44,7 @@ public static class RemapCommand
         }
         if (file is null)
         {
-            error.WriteLine("nt65: remap-dbg takes the debug file ld65 wrote");
+            error.WriteLine("nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`");
             return 2;
         }
 

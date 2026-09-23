@@ -3,13 +3,13 @@
 ; Two modules exporting under one linker name would be one symbol to the linker, so it is
 ; reported at the export that collides.
 .export other as "common"   ;! error[export-name-taken]: `second::other` and `first::shared` are both exported to the linker as `common`
-.export .use first::*       ;! error[reexport-star]: `.export .use` names what it re-exports: a `*` would make everything the other module exports, now and later, part of this one
+.export .use first::*       ;! error[reexport-star]: `.export .use` must name what it re-exports: `*` would re-export everything the other module exports, including names it adds later
 
 other  = 3
-DEBUG  = 0                  ;! error[define-redeclared]: `DEBUG` is a define, and a file may not declare one
+DEBUG  = 0                  ;! error[define-redeclared]: `DEBUG` is already a define, visible in every file: a file may not declare it again
 
 ; A name a `.use` brings in may not also be declared here, and two may not bring in one name.
-.use first::shared          ;! error[use-collides-with-declaration]: `shared` is declared in this module, and a `.use` may not bring in another: `as` brings it in under a name of its own
+.use first::shared          ;! error[use-collides-with-declaration]: `shared` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a different name
 .use first::WIDE
 .use first::WIDE            ;! error[use-brings-in-twice]: a `.use` already brings in `WIDE`
 .use first::nothing         ;! error[not-declared-in]: `nothing` is not declared in module `first`
@@ -22,7 +22,7 @@ shared = 4
 .proc use {
     lda #first::hidden      ;! error[not-exported]: `first::hidden` is not exported by module `first`
     lda #nowhere            ;! error[not-declared]: `nowhere` is not declared
-    lda #SMALL              ;! error[export-ambiguous]: `SMALL` is exported by both `first` and `third`, and a `.use` brings in everything each exports: `third::SMALL` says which
+    lda #SMALL              ;! error[export-ambiguous]: `SMALL` is ambiguous: modules `first` and `third` both export it, and both are brought in with `::*`; write `third::SMALL` to choose
     lda #first              ;! error[module-used-as-a-name]: `first` is a module: a name in it is written `first::name`
     .use first::SMALL       ;! error[use-misplaced]: `.use` belongs at the top level of a module
     rts

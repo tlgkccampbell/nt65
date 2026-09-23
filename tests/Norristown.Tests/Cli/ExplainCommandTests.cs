@@ -54,8 +54,8 @@ public sealed class ExplainCommandTests
 
         Assert.Equal(2, code);
         Assert.Empty(said);
-        Assert.Contains("`unused-symbols` is not a diagnostic nt65 reports; `unused-symbol` is", problems, StringComparison.Ordinal);
-        Assert.Contains("`nt65 explain` lists them", problems, StringComparison.Ordinal);
+        Assert.Contains("no diagnostic is named `unused-symbols`; did you mean `unused-symbol`?", problems, StringComparison.Ordinal);
+        Assert.Contains("`nt65 explain` with no name lists every diagnostic", problems, StringComparison.Ordinal);
     }
 
     [Fact]

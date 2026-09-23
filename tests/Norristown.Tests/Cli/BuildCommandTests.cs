@@ -167,7 +167,7 @@ public sealed class BuildCommandTests : IDisposable
         var (code, said) = Run(app, "build");
 
         Assert.Equal(2, code);
-        Assert.StartsWith("nt65.json:1:39: error: `flies` is not a nt65.json", said);
+        Assert.StartsWith("nt65.json:1:39: error: `flies` is not a key of nt65.json", said);
         Assert.Contains("nt65: no file matched the `files` globs in nt65.json", said);
         Assert.DoesNotContain("usage: nt65 build", said);
     }
@@ -337,7 +337,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal(1, wrong);
         Assert.Contains("`nowhere` is not declared", reported, StringComparison.Ordinal);
         Assert.StartsWith(
-            "; nt65: incomplete, because the program is wrong. line 4: `nowhere` is not declared\n",
+            "; nt65: this output is incomplete because the program has an error at line 4: `nowhere` is not declared\n",
             incomplete,
             StringComparison.Ordinal);
 

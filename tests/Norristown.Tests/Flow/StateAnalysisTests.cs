@@ -193,7 +193,7 @@ public sealed class StateAnalysisTests
                 rts
             }
             """;
-        Assert.Equal(["main.nt65:15: `jsr narrow` needs `i16`, and X and Y are 8-bit here"], Problems(Text));
+        Assert.Equal(["main.nt65:15: `jsr narrow` needs `i16`, but X and Y are 8-bit here"], Problems(Text));
         Assert.Equal(Width.Unknown, StateAt(Text, "nop").Processor.A);
     }
 
@@ -216,8 +216,8 @@ public sealed class StateAnalysisTests
 
         Assert.Equal(
             [
-                "main.nt65:7: `beq wide` is a tail call: `p` returns with `a8`, and A is 16-bit when `wide` returns",
-                "main.nt65:7: `beq wide` needs `a16`, and A is 8-bit here",
+                "main.nt65:7: `beq wide` is a tail call: `p` declares it returns with `a8`, but A is 16-bit when `wide` returns",
+                "main.nt65:7: `beq wide` needs `a16`, but A is 8-bit here",
             ],
             Problems(Text));
     }
@@ -229,7 +229,7 @@ public sealed class StateAnalysisTests
     [Fact]
     public void AJumpToTheRoutinesOwnEntryIsChecked()
     {
-        Assert.Equal(["main.nt65:3: `jmp p` needs `a8`, and A is 16-bit here"],
+        Assert.Equal(["main.nt65:3: `jmp p` needs `a8`, but A is 16-bit here"],
             Problems(".proc p: a8, i8 {\n    rep #$20\n    jmp p\n}\n"));
     }
 
@@ -300,7 +300,7 @@ public sealed class StateAnalysisTests
             }
             """;
 
-        Assert.Equal(["main.nt65:5: `.state a16`, and A is 8-bit here"], Problems(Text));
+        Assert.Equal(["main.nt65:5: `.state a16` does not match: A is 8-bit here"], Problems(Text));
     }
 
     /// <summary>
@@ -422,7 +422,7 @@ public sealed class StateAnalysisTests
     public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
     {
         Assert.Empty(Problems(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
-        Assert.Contains("main.nt65:5: `rts`: `p` returns with `dp = $2100`, and D is not known here",
+        Assert.Contains("main.nt65:5: `rts`: `p` declares it returns with `dp = $2100`, but D is not known here",
             Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
     }
 

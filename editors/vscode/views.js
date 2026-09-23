@@ -82,7 +82,7 @@ async function askForOutput(client, source) {
 async function showOutputBeside(client) {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== 'nt65') {
-    vscode.window.showInformationMessage('nt65: open an nt65 file to see what it becomes.');
+    vscode.window.showInformationMessage('nt65: open an nt65 file to see the ca65 source it compiles to.');
     return;
   }
   const source = editor.document.uri.toString();

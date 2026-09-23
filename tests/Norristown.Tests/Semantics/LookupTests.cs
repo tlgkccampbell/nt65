@@ -144,7 +144,7 @@ public sealed class LookupTests
             ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda other::SCREN\n    rts\n}\n"));
 
         var problem = Assert.Single(analysis.File("main.nt65").Diagnostics);
-        Assert.Equal("`SCREN` is not declared in module `other`; `SCREEN` is", problem.Message);
+        Assert.Equal("`SCREN` is not declared in module `other`; did you mean `SCREEN`?", problem.Message);
         Assert.Equal(new DiagnosticFix(FixKind.NearestName, "SCREEN"), problem.Fix);
     }
 

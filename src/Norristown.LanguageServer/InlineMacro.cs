@@ -39,8 +39,8 @@ internal static class InlineMacro
         if (macro.Tree != tree)
         {
             yield return Refused(title,
-                $"`{macro.Name}!` is declared in {Named(macro.Tree.Path)}, and its body's names are resolved "
-                + "there; written out here they would be resolved again");
+                $"`{macro.Name}!` is declared in {Named(macro.Tree.Path)}: its body's names are looked up in that file, "
+                + "and written out here they would be looked up in this one, where they may mean something else");
             yield break;
         }
         if (InABody(call))

@@ -11,7 +11,7 @@
 .proc wrong_target {
     lda #1
     bne @done
-    .next elsewhere     ;! error[next-not-the-branch-target]: `.next` after `bne @done` says the branch is always taken, so it names only where the branch goes, `@done`
+    .next elsewhere     ;! error[next-not-the-branch-target]: `.next` after `bne @done` can name only the branch's own target, `@done`, to say the branch is always taken
 @done:
     rts
 }
@@ -19,7 +19,7 @@
 .proc two_targets {
     lda #1
     bne @done
-    .next @done, elsewhere  ;! error[next-not-the-branch-target]: `.next` after `bne @done` says the branch is always taken, so it names only where the branch goes, `@done`
+    .next @done, elsewhere  ;! error[next-not-the-branch-target]: `.next` after `bne @done` can name only the branch's own target, `@done`, to say the branch is always taken
 @done:
     rts
 }
@@ -28,7 +28,7 @@
     lda #1
     bne @done
     .next @done
-@never:                 ;! warning[label-unreachable]: `@never` is never reached: nothing runs into it and nothing names it
+@never:                 ;! warning[label-unreachable]: `@never` is never reached: no code falls into it and nothing refers to it
     rts
 @done:
     rts

@@ -22,6 +22,6 @@ gfx::init               ;! error[expected-statement]: expected a label, a consta
     rts
 }
 
-label: .proc q {        ;! error[directive-after-label]: `.proc` may not follow a label;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: a label is only a position in code, and data is named by a declaration, `.data label: ...`
+label: .proc q {        ;! error[directive-after-label]: `.proc` may not follow a label;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: labels mark positions in code, and data is named by a declaration, `.data label: ...`
     rts
 }

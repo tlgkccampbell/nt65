@@ -10,9 +10,9 @@
 }
 
 .proc wrong: a16, i8 -> a8 {
-    jmp owner::owner::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a8`, and A is 16-bit here
+    jmp owner::owner::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a8`, but A is 16-bit here
 }
 
 .proc undeclared: a8, i8 {
-    jmp owner::owner::plain     ;! error[entry-not-declared]: `plain` is inside `owner`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
+    jmp owner::owner::plain     ;! error[entry-not-declared]: `plain` is inside routine `owner`: to jump into another routine, declare the label an entry point with a `.state` after it
 }

@@ -35,7 +35,7 @@
     sep #$20
 
     ; `per` reaches its target the way `brl` does, so what it pushes is a near address.
-    per sprite              ;! error[target-too-far]: `per` takes a near target, and this one is far
+    per sprite              ;! error[target-too-far]: `per` reaches only a near target, in the current bank, and this one is far
     pla
     pla
     rts
@@ -43,6 +43,6 @@
 
 ; An enum member is a constant number, so it cannot name an address.
 .enum Handler {
-    first = main            ;! error[enum-member-is-not-an-address]: `first` is an enum member, whose value is a constant, and this names an address
+    first = main            ;! error[enum-member-is-not-an-address]: `first` is an enum member, so its value must be a constant, and this is an address
     second
 }

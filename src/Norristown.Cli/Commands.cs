@@ -42,7 +42,7 @@ public static class Commands
             case ["lsp"]:
                 return LspCommand.Run(error);
             case ["lsp", var unexpected, ..]:
-                return Wrong(error, $"`lsp` takes nothing else, and was given `{unexpected}`");
+                return Wrong(error, $"`lsp` takes no arguments, but was given `{unexpected}`");
             case ["import-inc", .. var converted]:
                 return ImportIncCommand.Run(converted, Path.GetFullPath(directory), output, error);
 

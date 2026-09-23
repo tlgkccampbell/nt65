@@ -127,14 +127,14 @@ public sealed class MacroBindingTests
     }
 
     [Theory]
-    [InlineData(".export x", "`.export` belongs outside a macro body")]
-    [InlineData(".import x", "`.import` belongs outside a macro body")]
-    [InlineData(".cpu 6502", "`.cpu` belongs outside a macro body")]
-    [InlineData(".segment \"X\": zp", "a segment declaration belongs outside a macro body")]
-    [InlineData(".proc p {\n}", "`.proc` belongs outside a macro body")]
-    [InlineData(".proc p = $ffd2", "`.proc` belongs outside a macro body")]
-    [InlineData(".macro n() {\n}", "`.macro` belongs outside a macro body")]
-    [InlineData(".func f(a) = a", "`.func` belongs outside a macro body")]
+    [InlineData(".export x", "`.export` cannot be inside a macro body")]
+    [InlineData(".import x", "`.import` cannot be inside a macro body")]
+    [InlineData(".cpu 6502", "`.cpu` cannot be inside a macro body")]
+    [InlineData(".segment \"X\": zp", "a segment declaration cannot be inside a macro body")]
+    [InlineData(".proc p {\n}", "`.proc` cannot be inside a macro body")]
+    [InlineData(".proc p = $ffd2", "`.proc` cannot be inside a macro body")]
+    [InlineData(".macro n() {\n}", "`.macro` cannot be inside a macro body")]
+    [InlineData(".func f(a) = a", "`.func` cannot be inside a macro body")]
     public void AMacroBodyRefusesTheItemsThatWouldReachItsCaller(string item, string message)
     {
         var model = Analysis.Model(".module main\n.macro m() {\n" + item + "\n}\n");
@@ -171,7 +171,7 @@ public sealed class MacroBindingTests
     {
         var model = Analysis.Model(".module main\n.macro m(target: ident) {\ntarget:\n    nop\n}\n");
 
-        Assert.Equal(["3: `target` is an `ident` parameter, and a body may not declare the name it stands for"],
+        Assert.Equal(["3: `target` is an `ident` parameter, so the macro body may not declare it: that would declare the caller's name"],
             model.Problems());
     }
 
@@ -203,8 +203,7 @@ public sealed class MacroBindingTests
         var model = Analysis.Model(".module main\n.macro m(n: const, body: block) {\n    body\n    n\n}\n");
 
         Assert.Equal(
-            ["4: `n` is a macro parameter; a name written on its own splices a `block` parameter, "
-                + "and nothing else belongs on a line alone"],
+            ["4: `n` is a macro parameter, and only a `block` parameter may be written alone on a line"],
             model.Problems());
     }
 

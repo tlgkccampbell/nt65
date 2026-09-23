@@ -153,9 +153,9 @@ public sealed class CHeaderTests
 
         Assert.Equal(
             [
-                "m.nt65:2: warning: `m::clear` is exported to the linker as `m__clear`, which C cannot name, so the C header "
-                    + "leaves the routine out: cc65 puts `_` before a C name, so export it `as \"_clear\"`",
-                "m.nt65:7: warning: `player` holds `m::Hidden`, which is not exported, so the C header declares it as bytes",
+                "m.nt65:2: warning: the C header leaves out routine `m::clear`: its linker name `m__clear` has no leading `_`, "
+                    + "so C cannot name it; export it `as \"_clear\"`",
+                "m.nt65:7: warning: `player` has type `m::Hidden`, which is not exported, so the C header declares `player` as bytes",
             ],
             problems);
         Assert.Contains("extern unsigned char player[2];", header);

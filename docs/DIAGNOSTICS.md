@@ -27,19 +27,19 @@ siblings stand for what the diagnostic names at the place it is reported.
 
 ## Reading a line
 
-What a line is made of, and what is written where.
+Syntax: numbers, text, braces, and what may be written where on a line.
 
 ### `assert-level`
 
-> `{0}` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 can and otherwise at link time, so `.assert` takes only the condition and the message
+> nt65's `.assert` takes no level: remove `{0}`, since a failed assertion is always an error
 
-ca65's `.assert` takes a level because ca65 cannot always decide. nt65 can, and an assertion that fails is an error: it is checked as soon as the value is known, and otherwise left for the linker to check.
+ca65's `.assert` takes a level such as `warning` or `error`, because ca65 cannot always decide the condition itself. nt65 always reports a failed assertion as an error, checking it as soon as the value is known and otherwise leaving it for the linker. Write `.assert condition, "message"`; the fix removes the level.
 
 ### `block-brace-ends-the-line`
 
-> a block's `{{` ends the line that opens it: {0} goes on the next line, and `}}` on its own
+> a block's `{{` must end its line: move {0} and the rest to the next line, and put `}}` on a line of its own
 
-A block is written on more than one line, so that the shape of a file can be read from its indentation and its braces alone.
+A block always spans several lines: its opening `{` is the last thing on its line, its contents follow on lines of their own, and its closing `}` stands alone on its line. This keeps the structure of a file readable from its indentation and braces alone.
 
 ### `block-not-closed`
 
@@ -49,21 +49,21 @@ Blocks are read from the braces before anything else in a file is read, so an un
 
 ### `byte-operator-needs-parentheses`
 
-> unary `{0}` before `{1}` needs parentheses to show what `{2}` applies to
+> unary `{0}` binds tighter than `{1}`: write `({0}x) {1} y` or `{2}(x {1} y)` to say which is meant
 
-The byte operators bind tighter than anything, so `<label + 1` is `(<label) + 1`. Where that is not obviously what was meant, nt65 asks for the parentheses rather than guessing.
+The byte operators bind tighter than any binary operator, so `<label + 1` means `(<label) + 1`, the low byte plus one, not the low byte of `label + 1`. Because that is easy to misread, nt65 asks for parentheses rather than guessing.
 
 ### `ca65-block-end`
 
-> a block ends with `}}`, and `{0}` closes nothing
+> nt65 closes blocks with `}}`, not `{0}`
 
-Braces rather than end-keywords, so that a block's shape is readable and an nt65 file looks nothing like a ca65 one.
+nt65 closes every block with `}` rather than with an end directive such as `.endproc`, `.endscope` or `.endif`. Replace the directive with `}`; the fix does this.
 
 ### `ca65-spelling`
 
-> `{0}` is written `{1}`
+> ca65's `{0}` is `{1}` in nt65
 
-nt65 has the directive under another name. The fix writes the nt65 spelling.
+nt65 has this directive under a different name. The fix replaces it with the nt65 spelling.
 
 ### `ca65-tag`
 
@@ -85,9 +85,9 @@ A character literal is one value. Several characters are text, written in double
 
 ### `data-body-holds-values`
 
-> a data body holds values, and `{0}` is a directive: what the values are is the declaration's to say
+> `{0}` cannot appear in an array body, which holds only values: the element type goes on the declaration line
 
-What the values of a declaration are is the declaration line's to say. Its body holds only the values, so a directive in it would be saying it twice.
+The lines between an array's braces hold only its values, separated by commas. The element type, such as `.byte` or `.word`, is given once on the declaration line, so a directive in the body would give it a second time. Remove the directive and keep the values.
 
 ### `data-body-needs-a-count`
 
@@ -105,13 +105,13 @@ A body of values belongs to an array, and an array says how many elements it hol
 
 > {0}
 
-An array's values and a record's values are written in braces, so that where one declaration's values end is written down rather than read off the count.
+The values of an array (a declaration with a count, `[n]`) or of a record (`.type T`) are written in braces, as in `{ 1, 2 }`, so that where the values end is written down rather than worked out from the count.
 
 ### `digits-missing`
 
 > expected {0} digits after `{1}`{2}
 
-A `$` or a `%` says which base the digits after it are in, and there are none.
+`$` starts a hexadecimal number and `%` a binary one, so digits must follow directly, as in `$ff` or `%1010`. In nt65 `%` is only a binary prefix; the remainder operator is `.mod`.
 
 ### `directive-after-label`
 
@@ -127,33 +127,33 @@ The word begins with a `.` and is no directive nt65 has. Directives are a fixed 
 
 ### `elseif-misplaced`
 
-> `{0}` continues an `.if`, and belongs after its `}}`
+> `{0}` must follow the `}}` that closes the previous branch, on the same line
 
-A branch is continued on the line that closes the one before it, `} .else {`, so that the shape of the block is readable without matching braces by eye.
+Each branch of an `.if` is continued on the line that closes the one before it, `} .elseif condition {` or `} .else {`, so that the shape of the block is readable without matching braces by eye.
 
 ### `escape-hex-digits`
 
 > `\x` must be followed by two hexadecimal digits
 
-A `\xHH` escape writes one byte, and writes it in full, so that the text reads as the bytes it is.
+A `\xHH` escape gives one byte as exactly two hexadecimal digits, as in `\x0d` or `\xff`. Write a leading zero for a value below `$10`.
 
 ### `escape-unknown`
 
 > unknown escape `\{0}`
 
-The escapes are a fixed set, the same in a character literal and in a string. Every escape a literal cannot read is reported, since each is a separate thing to correct.
+The escapes are `\n`, `\r`, `\t`, `\0`, `\\`, `\"`, `\'` and `\xHH`, the same in a character literal and in a string. To write a backslash itself, use `\\`. Each unknown escape is reported separately, since each needs its own correction.
 
 ### `expected-address-size`
 
 > expected {0}
 
-How wide an address is has three spellings and no others: `zp`, `abs` and `far`. An import may also give a routine signature or an element type in place of a size.
+An address size is one of `zp` (one byte), `abs` (two bytes) or `far` (three bytes), and has no other spellings. An import may give a routine signature, `proc(...)`, or an element type such as `.byte`, in place of a size.
 
 ### `expected-brace`
 
 > expected {0}
 
-A block opens with `{` at the end of the line that opens it and closes with `}` on a line of its own, and one of the two is not written.
+A block opens with a `{` at the end of its first line and closes with a `}` on a line of its own; a braced value such as `{ 1, 2 }` opens and closes on one line. One of the two braces is missing here.
 
 ### `expected-bracket`
 
@@ -183,7 +183,7 @@ A `.multiproc` names the enum it walks and then the name each routine is named f
 
 > expected {0}
 
-A `.data` declaration says what its bytes are — a number type, an address type, a record type or an included file — and this one says nothing the language reads as one.
+A `.data` declaration or a typed import says what its bytes are: a number type such as `.byte` or `.word`, an address type such as `.addr`, or a record type, `.type T`; a `.data` declaration may also include a file with `.incbin`. What is written here is none of those.
 
 ### `expected-dot-dot`
 
@@ -193,7 +193,7 @@ A range is written from its lower end to its higher, with `..` between them.
 
 ### `expected-element-index`
 
-> expected the element: `name[i]` is the i-th of what `name` declares
+> expected an index between the brackets: `name[i]` is element `i` of `name`
 
 The brackets after a name pick one element of what it declares, and the brackets here are empty. A count is written on the declaration; an index is written on a use of it.
 
@@ -201,7 +201,7 @@ The brackets after a name pick one element of what it declares, and the brackets
 
 > expected {0}
 
-A constant, a member value, a setting, a default or a `.func` body is written after an `=`, and the line stops before it.
+This construct gives its value after an `=`: a record member's value, a `.charmap` entry, a segment attribute, a `.config` setting, a signature set's items or a `.func` body. The `=` is missing here; the message shows the expected form.
 
 ### `expected-expression`
 
@@ -213,13 +213,13 @@ An expression belongs here and the line has something that starts none: a stray 
 
 > expected {0}
 
-A `keeps` names the registers a routine hands back as it was entered with them, and names at least one.
+`keeps` lists the registers a routine returns with the same values they had on entry, for example `keeps x, y`. It must list at least one register.
 
 ### `expected-label`
 
 > expected {0}
 
-A `.next` names where flow goes, a `.fallthrough` the routine flow runs into, and a `.patch` the instruction being written into; each takes a label, and `.next` also takes `?` for a path that ends.
+`.next` names where execution continues, `.fallthrough` the routine that execution runs into, and `.patch` the instruction whose bytes are overwritten. Each takes a label; `.next` also takes `?`, which ends the path so that nothing beyond it is checked.
 
 ### `expected-member-value`
 
@@ -231,13 +231,13 @@ Each line of a multi-line record initializer gives one member a value.
 
 > expected {0}
 
-A declaration, a parameter, a path or a `.use` item has a place for a name here and the line does not write one. The message says which name is wanted; nt65 never invents one, so the line is read no further than the piece that is missing.
+A declaration, a parameter, a path or a `.use` item needs a name at this point, and the line does not have one. The message says which name is expected; add it. nt65 never makes up a name, so nothing after the missing one on the line is read.
 
 ### `expected-parameter-kind`
 
 > expected {0}
 
-A macro parameter says what it takes, and the words it may say are fixed. A parameter that says nothing takes an expression.
+A macro parameter may say what kind of argument it takes, with one of a fixed set of words: `expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`, or the name of an enum. A parameter that says nothing takes an expression.
 
 ### `expected-parenthesis`
 
@@ -255,7 +255,7 @@ A module's declaration may say whether another module places it, with `placed` o
 
 > expected {0}
 
-What a segment declaration may say beyond its address size is fixed: the direct page it is reached through, the bank it sits in, and the banks it is mirrored in.
+After its address size, a segment declaration may give only these attributes: `dp`, the direct page it is reached through; `bank`, the bank it is in; `mirrors`, the banks it is mirrored in; and `space`, the address space it is in.
 
 ### `expected-state-item`
 
@@ -267,7 +267,7 @@ A signature, a `.state` and an `.ensure` are made of processor-state items, and 
 
 > expected {0}
 
-A line is a label, a constant, an instruction, a directive or a macro call, and this one begins as none of them. What follows a label is narrower still: only what takes bytes.
+A line must be a label, a constant, an instruction, a directive or a macro call, and this one starts as none of them. After a label, the rest of the line may only be an instruction, a data directive or a macro call.
 
 ### `expected-text`
 
@@ -283,7 +283,7 @@ A message, or a linker name, is written in double quotes. nt65 has no bare-word 
 
 ### `import-holds-no-values`
 
-> an import of `{0}` says what its bytes are and holds none of them: the definition is in another object
+> an import describes its `{0}` data but cannot give it values: the bytes are defined in another object file
 
 An import declares what a symbol another object defines looks like, so that nt65 can size it and reach its members. The bytes themselves belong to whoever defines it.
 
@@ -297,19 +297,19 @@ A typed import describes storage another object holds, so it writes an element t
 
 > a module name is written without quotes: `.module hw::vic`
 
-A module name is a path of words, and is written as one.
+A module name is a path of plain names, such as `hw::vic`, written without quotes.
 
 ### `name-after-at`
 
 > expected a name after `@`
 
-A `@` begins a cheap local, which is a name private to the routine around it.
+A `@` starts a cheap local, a label private to the routine around it, and the name must follow it directly, as in `@loop`.
 
 ### `nesting-too-deep`
 
-> this nests more than {0} expressions deep, which is as far as nt65 reads
+> expression nested more than {0} levels deep: nt65 reads no further
 
-An expression nested past the limit is read no further. The limit is far beyond anything written by hand, and is there so that a half-typed line of brackets cannot take the process down with it.
+nt65 stops reading an expression nested deeper than this limit. The limit is far beyond anything written by hand; it is there so that a half-typed line of brackets cannot overflow the stack and crash the assembler or the editor's language server.
 
 ### `not-a-function`
 
@@ -321,19 +321,19 @@ The built-in functions are a fixed set. A function the program declares is a `.f
 
 > invalid {0} number `{1}`
 
-A number runs to the end of the word, so a digit that does not belong to the base is part of the number rather than the start of something else.
+A number is read to the end of the word, so every character in it must be a digit of its base: `0`-`9` for decimal, `0`-`9` and `a`-`f` after `$`, and `0` and `1` after `%`, with `_` allowed between digits. A character outside the base makes the whole number invalid rather than starting something new. Check for a typo or a missing `$`.
 
 ### `number-separator`
 
-> `{0}` has a `_` that separates no digits: a separator stands between two of them
+> `{0}` has a misplaced `_`: a digit separator needs a digit on each side
 
-A `_` in a number is there to group its digits, in any base, and groups nothing at either end of the number or beside another `_`.
+A `_` may group the digits of a number in any base, as in `$7f_ff`, `%1010_1010` or `1_000`. It must have a digit on each side, so it cannot start or end the number or stand next to another `_`.
 
 ### `operators-need-parentheses`
 
 > `{0}` and `{1}` need parentheses to show which applies first
 
-nt65 gives every operator a precedence, but refuses the three pairings a reader misjudges: a shift or bitwise operator beside a different operator, and logical operators mixed. Parentheses say which was meant.
+nt65 gives every operator a precedence, but refuses two combinations that readers often misjudge: a shift or bitwise operator with a different operator as its operand, and different logical operators mixed. Add parentheses to say which applies first; the fix can add them.
 
 ### `segment-name-quoted`
 
@@ -345,7 +345,7 @@ Segments are a table of their own and share no namespace with symbols, so a segm
 
 > `{0}` is not a processor-state item
 
-The items a signature, a `.state` or an `.ensure` may hold are a fixed set, and this word is not one of them. A word that is no item at all names a signature set instead.
+The items a signature, a `.state` or an `.ensure` may hold are a fixed set, such as `a8`, `i16`, `dp = 0` or `keeps x`. This word looks like an item, or is written in an item's form, but is not one; check its spelling. A plain word that is not an item is read as the name of a signature set.
 
 ### `stray-dot`
 
@@ -357,19 +357,19 @@ A `.` begins a directive or a built-in function, and a `..` a range. On its own 
 
 > unterminated {0}
 
-A literal is closed on the line it opens: nothing in nt65 runs past the end of a line.
+A string or character literal must close on the line where it opens; nt65 has no literals that span lines. Add the closing quote.
 
 ### `unexpected-character`
 
 > unexpected character `{0}`
 
-The character begins nothing the language has. Text and comments may hold anything; nothing else may.
+This character cannot start anything in nt65. Any character may appear inside a string, a character literal or a comment, but nowhere else.
 
 ### `unexpected-token`
 
 > unexpected {0}
 
-The line was read as far as it goes, and there is more written after it. Only the first thing wrong with a line is reported, so the tokens walked past afterwards are the same news.
+The statement was already complete before this token, so nt65 cannot tell what the rest of the line is for. Common causes are a missing comma or operator, or a comment without its `;`. Only the first unexpected token on a line is reported.
 
 ### `unmatched-brace`
 
@@ -379,9 +379,9 @@ A `}` closes a block, and there is no open one here.
 
 ### `unnamed-label`
 
-> an unnamed label is written `@name`: a cheap local, private to the routine around it
+> unnamed labels (`:`, `:+`, `:-`) are not supported: use a cheap local instead, `@name:`
 
-ca65's `:`, `:+` and `:-` are positional, which §3 refuses. A label private to the routine around it is written `@name`, and costs the same.
+ca65's unnamed labels are found by counting, so `:+` means the next `:`, and adding or removing one changes what the others refer to. nt65 has no unnamed labels. Use a cheap local, such as `@loop:`, and branch to `@loop`; it is private to the routine around it and costs nothing more in the output.
 
 ## Names
 
@@ -391,7 +391,7 @@ Declarations, scopes, modules and what a path reaches.
 
 > `{0}` is a cheap local and cannot be reached with `::`
 
-A cheap local is reachable only from inside the routine that declares it. That is the whole of what makes it cheap.
+A cheap local is private to the routine or scope that declares it, so no path can reach it from outside. Use an ordinary label if other code needs to refer to it.
 
 ### `cheap-local-outside-a-scope`
 
@@ -401,7 +401,7 @@ A `@name` is private to the routine or scope around it, so there has to be one f
 
 ### `declaration-in-a-block-argument`
 
-> `{0}` is declared in a block argument, which may declare only cheap locals: the macro it is given to may splice it in more than one place
+> `{0}` is declared in a block argument, which may declare only cheap locals: the macro may insert the block more than once
 
 A block argument may be spliced into a macro body in more than one place, and a declaration in it would then be declared more than once. A cheap local is renamed per expansion, so it is safe.
 
@@ -413,21 +413,21 @@ The name is not in scope in this file, and exactly one module in the program exp
 
 ### `define-redeclared`
 
-> `{0}` is a define, and a file may not declare one
+> `{0}` is already a define, visible in every file: a file may not declare it again
 
 A define is visible in every file as if every module had brought it in, so a declaration of the same name would shadow it in one file and not in another.
 
 ### `defined-asks-about-defines`
 
-> `{0}` is declared by the program, and `.defined` asks only about defines: a condition tests the build configuration, and a check on the program is an `.assert`
+> `.defined` tests only build defines, and `{0}` is declared by the program: to check the program, use `.assert`
 
-A condition tests the build configuration and nothing else, so `.defined` asks only about defines. A check on the program is an `.assert`, which the analysis can answer.
+Conditions are decided before the program is read, from the build configuration alone, so `.defined` of a name the program declares would be false whatever the program says. `.defined` therefore takes only defines. To check something about the program, use `.assert`, which the analysis can answer.
 
 ### `export-ambiguous`
 
-> `{0}` is exported by both `{1}` and `{2}`, and a `.use` brings in everything each exports: `{3}::{4}` says which
+> `{0}` is ambiguous: modules `{1}` and `{2}` both export it, and both are brought in with `::*`; write `{3}::{4}` to choose
 
-Two modules brought in with `.use` export the same name, so which one is meant would depend on the order the `.use` lines are read in. Writing the path says which.
+Two modules brought in with `.use module::*` export the same name, so which one is meant would depend on the order the `.use` lines are read in. Write the full path, or bring in the one you mean by name with `.use module::name`, which takes precedence over `::*`.
 
 ### `export-narrows-address-size`
 
@@ -437,9 +437,9 @@ Other modules reach the name at the size the export gives, and reaching a two-by
 
 ### `family-declares-too-much`
 
-> `{0}` here would declare one {1} per member, and everything inside it once for each: a family declares routines and data, so write one family per role, `note::{2}` and `stop::{3}`
+> `{0}` would declare one {1} per member, repeating everything inside it: a family declares only routines and data, so write one family per role, such as `note::{2}` and `stop::{3}`
 
-A family declares one name per member. A block that declared several would declare each of them once per member, which is a family per role written as one.
+A family declares one routine or data declaration per enum member. A scope or `.data` block named after the binding would repeat everything inside it once per member, which is really several families written as one. Write one family per role instead, each inside the scope for that role.
 
 ### `family-member-collides`
 
@@ -451,65 +451,65 @@ Each instance of a family takes the member's name, so a name already declared in
 
 > {0}
 
-A family declares one name per member of an enum into the scope around its `.each`, so it stands where those declarations belong and over something whose members have names.
+A family, a `.proc` or `.data` named after an `.each` binding, declares one name per enum member into the scope around the `.each`. So the `.each` must be where those declarations could be written directly, at file level or in a `.scope`, and must walk a named enum, whose member names become the declared names.
 
 ### `family-not-over-an-enum`
 
-> a family declares one routine per member of a named enum, and `{0}` {1}
+> a family needs a named enum to walk, and `{0}` {1}
 
 A family declares one routine or one data declaration per member of a named enum, and is named after the members, so the enum has to be one whose members have names.
 
 ### `ident-parameter-declared`
 
-> `{0}` is an `ident` parameter, and a body may not declare the name it stands for
+> `{0}` is an `ident` parameter, so the macro body may not declare it: that would declare the caller's name
 
-An `ident` parameter stands for a name the caller gives, so a body that declared that name would decide for the caller what its argument means.
+An `ident` parameter is replaced by a name the caller passes in, so declaring it in the macro body would declare that name in the caller's scope, deciding for the caller what its own argument means. Declare the name in the caller, or give the body's declaration a different name, such as a cheap local.
 
 ### `label-in-data`
 
 > `{0}` is a label in `.data`: a named member is `.data {1}: ...`, and a position is `@{2}:`
 
-Mixed data names its members with `.data`, and marks a position in it with a cheap local. A bare label would be neither.
+Inside mixed data (`.data name {`), a named member is declared with `.data member: ...`, which gives it a type and a size, and a position is marked with a cheap local, `@here:`. A plain label is not allowed there.
 
 ### `label-outside-a-routine`
 
-> `{0}` is a label outside a `.proc`: a label is only a position in code{1}
+> `{0}` is a label outside a `.proc`: labels mark positions in code{1}
 
-A label is a position in code, and code is inside a `.proc`. Data is named by the declaration that holds it.
+Labels belong inside a `.proc`, where they mark positions in code. Outside a routine, data is named by a `.data` declaration, such as `.data name: .byte 1, 2`; the fix can rewrite the line as one.
 
 ### `linker-name-is-an-instruction`
 
-> `{0}` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+> cannot export as `{0}`: ca65 reads it as an instruction, and an `as` name is written to the output unchanged
 
-An exported name goes into the output exactly as `as` gives it, and ca65 reads a line that starts with an instruction as an instruction. There is no spelling to fall back on, which is why this is an error where `mnemonic-name` is a warning.
+An `as` name is written into the output exactly as given, with no module in front, and ca65 reads a line that starts with an instruction name, for any CPU it supports, as an instruction, so it could never define this symbol. Choose another linker name. This is an error, where `mnemonic-name` is only a warning, because there is no other spelling to fall back on.
 
 ### `macro-misplaced`
 
 > a `.macro` belongs at file level or in a `.scope`, not inside {0}
 
-A macro is a declaration, and declarations of macros belong at file level or in a `.scope`. A routine holds code.
+A macro declared inside a routine could refer to that routine's cheap locals, and an expansion in another routine would then branch into them, out of sight of the flow analysis. Declare macros at file level or in a `.scope`.
 
 ### `mnemonic-name` — warning
 
 > `{0}` is an instruction on the {1}; as a name it is legal and easy to misread
 
-No mnemonic is reserved: a line that starts with one is an instruction unless a `:` or an `=` follows the first word, which is what makes this a declaration. ca65 cannot define a bare symbol spelled like an instruction, so nt65 writes a top-level one with its module in front, `main__lda`, exactly as it already writes an exported name. The program is right and so is the output; what is left is that a reader meets a word they know as an instruction. A team that wants the old strictness writes `"mnemonic-name": "error"` under `diagnostics` in nt65.json.
+No mnemonic is reserved: when a line's first word is followed by `:` or `=`, it declares that word as a name, even if it is spelled like an instruction. ca65 cannot define a bare symbol spelled like an instruction, so nt65 writes a top-level one with its module in front, `main__lda`, as it already does for exported names. The program and its output are correct; the warning is there because a reader sees an instruction. Rename the symbol, or set `"mnemonic-name"` to `"off"` or `"error"` under `diagnostics` in nt65.json.
 
 ### `module-declared-twice`
 
-> a file is one module, and names it once
+> this file already has a `.module` line: a file is exactly one module
 
 A file is one module. A large module is split into submodules, each its own file.
 
 ### `module-missing`
 
-> a file is a module, and says which first: `.module name`
+> this file has no `.module` line: start it with `.module name`
 
-A file is one module, and says which before anything else, so that what it declares has a path from the first line.
+Every file is one module and names it before anything else, with `.module name`, so that everything the file declares has a path such as `name::symbol`.
 
 ### `module-name-taken`
 
-> module `{0}` is already `{1}`: a module is one file, and a large one is split into submodules
+> module `{0}` is already declared by `{1}`: a module is one file, and a large one is split into submodules
 
 A module name is the path everything in it is reached by, and the name its output file is named after, so two files may not share one.
 
@@ -521,7 +521,7 @@ Output is named after the module, and on a file system that ignores case two suc
 
 ### `module-not-first`
 
-> `.module` comes first: the file's other items belong to the module it names
+> `.module` must come before everything else in the file
 
 Everything a file declares belongs to the module it names, so the name comes before the declarations.
 
@@ -547,13 +547,13 @@ A module is not a value and has no address. What is wanted is a name inside it.
 
 > `.multiproc` declares routines, and this one is inside {0}: a routine belongs at file level or in a `.scope`
 
-A family declares one routine per member of an enum, and routines are declared where routines belong.
+`.multiproc` declares one routine per member of an enum, so it follows the same placement rule as `.proc`: at file level or inside a `.scope`, not inside a routine, a `.data` block or a type.
 
 ### `name-alone-on-a-line`
 
-> `{0}` is {1}; a name written on its own splices a `block` parameter, and nothing else belongs on a line alone
+> `{0}` is {1}, and only a `block` parameter may be written alone on a line
 
-A name written on a line by itself splices a `block` parameter into a macro body. Everything else takes an operand, a `=`, a `:` or a `!`.
+A name on a line by itself inserts a macro's `block` parameter at that point. Any other name needs more on the line: `name:` declares a label, `name = value` a constant, and `name!` calls a macro.
 
 ### `name-already-declared`
 
@@ -569,9 +569,9 @@ A path reaches either a module or a name in one, so a module may not declare a n
 
 ### `not-a-macro`
 
-> `{0}` is {1}, and `!` calls a macro
+> `{0}` is {1}, not a macro: only a macro is called with `!`
 
-`!` calls a macro, and marks the line as one whose meaning is somewhere else. Nothing else is called that way.
+`!` after a name calls a macro, and marks the line as one whose code comes from somewhere else. Nothing else is called that way: a routine is called with `jsr` or `jsl`.
 
 ### `not-a-scope`
 
@@ -589,7 +589,7 @@ Nothing in scope here declares the name. Where a name one letter away is declare
 
 > `{0}` is not declared in {1}{2}
 
-The path names a scope, a module, a type or a routine that does not declare this last part. What a scope holds is a set, and it is read from the declaration rather than from what happens to be written before this line.
+The part before `::` names a module, a scope, a type or a routine, and it does not declare the name after it. Check the spelling, and whether the name is in a different scope. Order does not matter: every name a scope declares can be reached, wherever in the scope it is declared.
 
 ### `not-exported`
 
@@ -599,15 +599,15 @@ A module names what other modules may see, and this is not among it. The fix is 
 
 ### `place-misplaced`
 
-> a `.place` is written at file level, outside every block: which modules share a translation unit depends on no condition
+> `.place` must be at file level, outside every block: which modules are assembled together cannot depend on a condition
 
-Which modules make up one translation unit, and so one `.s`, is structure, read from the files alone. A `.place` stands at file level, in a `.segment` region or before any, and never under an `.if`, a scope, a routine, a segment block, a repetition or a macro body. Code one configuration wants is a module that is always placed, with its items under an `.if` of their own.
+Which modules make up one translation unit, and so one `.s` output file, is fixed by the files themselves. A `.place` goes at file level, in a `.segment` region or before any, and never inside an `.if`, a scope, a routine, a segment block, a repetition or a macro body. For code that only one configuration needs, place the module unconditionally and put its contents under an `.if`.
 
 ### `place-not-placeable`
 
-> module `{0}` stands alone, so it may not be placed: its declaration says whether it may, `.module {0}: placed`
+> module `{0}` is not marked as placeable: declare it `.module {0}: placed` so that another module can place it
 
-A module that says nothing in its declaration is its own translation unit with an output of its own. One another module places says so where it is declared, `placed` or `placeable`, so that it can be read correctly from its own file. The fix marks it `placed`.
+A module whose `.module` line says nothing is assembled on its own, into an output file of its own. A module that another module places has to say so on its own `.module` line, so that its file can be read correctly by itself: `placed` means it is only ever placed, and `placeable` means it may be placed or stand alone. The fix marks it `placed`.
 
 ### `placed-nowhere`
 
@@ -617,31 +617,31 @@ A module declared `placed` has no output of its own: its bytes are written where
 
 ### `placed-twice`
 
-> module `{0}` is already placed by `{1}`: a module's bytes stand in one place
+> module `{0}` is already placed by `{1}`: a module can be placed only once
 
-A placed module's bytes are written where its `.place` stands, which is one place. Code two programs share is a module each program places once.
+A placed module's bytes are written where its `.place` is, so a module can have only one. Code that two programs share is a module that each program places once.
 
 ### `placement-cycle`
 
-> a module may not place itself, and this `.place` would: {0}
+> this `.place` would make a module place itself: {0}
 
 A module and everything it places are laid out as one translation unit, in the order the `.place` lines say, which a cycle cannot be.
 
 ### `reexport-module`
 
-> `{0}` is a module, and `.export .use` re-exports a name in one
+> `{0}` is a module: `.export .use` re-exports names in a module, not the module itself
 
-A module is not a name a path can end at, so there is nothing to re-export.
+A path cannot end at a module, so there is nothing to re-export there. Re-export the names you want one by one, `.export .use module::name`.
 
 ### `reexport-needed`
 
-> `{0}` is declared in module `{1}`, and a module exports what it declares: `.export .use {2}` makes it part of this one
+> `{0}` is declared in module `{1}`, not this one: re-export it with `.export .use {2}`
 
-A name another module declares is not part of this one just because this one brought it in. `.export .use` says that it is.
+A module can export only what it declares itself. A name brought in with `.use` still belongs to the module that declares it; to make it part of this module's interface as well, re-export it with `.export .use`, which records where it came from.
 
 ### `reexport-star`
 
-> `.export .use` names what it re-exports: a `*` would make everything the other module exports, now and later, part of this one
+> `.export .use` must name what it re-exports: `*` would re-export everything the other module exports, including names it adds later
 
 A `.export .use` makes another module's names part of this module's interface. A `*` would make that interface whatever the other module exports later, which is not a promise this module can keep.
 
@@ -649,7 +649,7 @@ A `.export .use` makes another module's names part of this module's interface. A
 
 > `{0}` is a register name and cannot be used as a name
 
-The register names are reserved everywhere, because position cannot tell them apart from a symbol: `asl a` is a question about an operand. No mnemonic is reserved; the registers are.
+Register names are reserved everywhere, because a symbol with the same name could not be told apart from the register: `asl a` could mean the accumulator or a symbol called `a`. Mnemonics are not reserved; register names are. Rename the symbol.
 
 ### `segment-region-misplaced`
 
@@ -659,21 +659,21 @@ A `.segment NAME` region says where everything after it in the file goes, which 
 
 ### `signature-item-needs-65816`
 
-> `{0}` cannot hold on the {1}, whose registers are eight bits
+> `{0}` describes 65816 state, which the {1} does not have
 
 Widths, the emulation flag, the direct page and the data bank are the 65816's. Earlier processors have eight-bit registers and none of that state.
 
 ### `signature-missing`
 
-> `{0}` declares no processor state, and {1} has no body to check one against: say what a caller must hold to, or `?` where nothing is known
+> `{0}` is {1} with no processor-state signature: nt65 cannot see its body, so declare what it expects and leaves, or `?` if that is unknown
 
-On the 65816 a routine with no body is all the analysis has to go on at its callers, so it says what it takes and what it leaves. `?` says that nothing is known.
+On the 65816, register widths and other processor state matter at every call. A routine with no body, an extern proc or an imported routine, is all the analysis has to go on at its callers, so its signature has to say what state it expects and what it leaves, for example `.proc TOOLBOX = $E10000: a16, i16`. `?` says that nothing is known.
 
 ### `signature-set-name-is-an-item`
 
 > `{0}` is a signature item, and cannot name a signature set
 
-A signature set stands for the items it names, so its own name has to be one a signature would not read as an item.
+A signature set is a name for a list of processor-state items, and it is used in the same places as those items. Its own name therefore cannot be an item such as `a8`, or a signature that used it would be ambiguous. Choose another name.
 
 ### `unused-symbol` — warning
 
@@ -695,9 +695,9 @@ Two `.use` items that bring in the same name would leave which one meant undecid
 
 ### `use-collides-with-declaration`
 
-> `{0}` is declared in this module, and a `.use` may not bring in another: `as` brings it in under a name of its own
+> `{0}` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a different name
 
-A name brought in stands beside the names a file declares, and one name means one thing.
+Names brought in with `.use` share the file's namespace with its own declarations, so one name cannot mean both. Write `.use module::name as other` to bring it in under a different name.
 
 ### `use-misplaced`
 
@@ -717,63 +717,63 @@ Constants, expressions, built-in functions and the build configuration.
 
 ### `arithmetic-overflow`
 
-> {0} overflows the 64 bits nt65 computes in
+> {0} overflows nt65's 64-bit signed arithmetic
 
-Arithmetic is 64-bit and signed, and an operation that leaves those bits has no value: nothing wraps, because a wrapped number is one nobody wrote.
+nt65 computes in 64-bit signed arithmetic. An operation whose result does not fit in 64 bits is an error rather than wrapping around, because a wrapped result is almost never what was meant.
 
 ### `binding-not-over-an-enum`
 
-> `{0}` does not walk an enum, so it names no member: a path ends in a repetition's name only over an enum's members
+> `{0}` does not iterate over an enum, so it cannot end a path: only an `.each` over an enum names a member this way
 
-A path may end in a repetition's name only where that name stands for an enum member, which is what makes it a name of something.
+Inside `.each Enum, e`, a path such as `handlers::e` names the member of `handlers` that has the same name as the current enum member. When `.each` iterates over a `.list` or a list parameter, its variable stands for a value rather than a name, so it cannot be used at the end of a path.
 
 ### `builtin-arguments`
 
 > `{0}` takes {1}
 
-The built-in was given a different number of arguments from the one it takes.
+The built-in function was given the wrong number or kind of arguments. The message says what it takes.
 
 ### `charmap-has-no-entry`
 
-> `{0}` does not map `{1}`
+> charmap `{0}` has no entry for `{1}`
 
-A charmap is a complete mapping for the text it is applied to: a character it does not name has no byte.
+A charmap applied to text must map every character in it; nt65 does not fall back to ASCII for a character the charmap leaves out. Add an entry for the character, or remove it from the text.
 
 ### `condition-asks-about-the-program`
 
-> `{0}` asks about the program. A condition tests the build configuration, and a check on the program is an `.assert`
+> `{0}` asks about the program, which an `.if` condition cannot do: use `.assert` to check the program
 
-The measuring functions ask what the program is, and a condition decides what the program is. An `.assert` is the check that runs once it is decided.
+Conditions decide which parts of the source are assembled, so they are evaluated before the program exists and can only test the build configuration. Functions that measure or inspect the program, such as `.sizeof`, have no answer yet. Use `.assert`, which is evaluated once the program is complete.
 
 ### `condition-calls-a-function`
 
-> a condition may not call a function the program declares
+> an `.if` condition cannot call a `.func`
 
-A `.func` is a declaration, and which declarations exist is what the conditions are deciding.
+Conditions decide which declarations exist, and a `.func` is one of those declarations, so a condition cannot depend on it. Use a define or a `.config` setting, or write the expression out in the condition.
 
 ### `condition-is-text`
 
-> a condition is a number, and this is text
+> an `.if` condition must be a number, not text
 
-A condition decides which branch the build takes, which is a number being zero or not.
+An `.if` or `.elseif` condition is true when its value is nonzero, so it must evaluate to a number.
 
 ### `condition-names-the-program`
 
-> `{0}` is not a define or a `.config`. A condition tests the build configuration, and a check on the program is an `.assert`
+> `{0}` is not a define or a `.config` setting: an `.if` condition can only test the build configuration; use `.assert` to check the program
 
-Which declarations a program has follows from which branches the build takes, so a condition may not depend on the program: it would be answering a question it is deciding. An `.assert` is the check on the program.
+Conditions are evaluated first, to decide which parts of the source are assembled, so they can only use defines (from the project file or the command line) and `.config` settings. Labels, constants and other names the program declares are not known at that point, since which of them exist depends on the conditions. To check something about the program, use `.assert`, which is evaluated once the program is complete.
 
 ### `config-is-text`
 
-> a `.config` is a number, and this is text
+> a `.config` value must be a number, not text
 
-A setting is a number, so that a build may give it one.
+A setting is a number, so that the project file or the command line can override it.
 
 ### `config-misplaced`
 
-> a `.config` is written at file level, outside every block: which settings a program has depends on no condition
+> `.config` must be at file level, outside every block
 
-A `.config` is part of the module's interface: which settings a program has is what a build sets, and cannot itself depend on a condition.
+A `.config` declares a setting that the build can give a value. Which settings a module has cannot depend on a condition or be nested inside another declaration, so `.config` is written at the top level of the file.
 
 ### `countof-has-no-elements`
 
@@ -783,45 +783,45 @@ A `.config` is part of the module's interface: which settings a program has is w
 
 ### `cpu-disagrees`
 
-> this program is built for the {0}, so `.cpu {1}` disagrees
+> `.cpu {1}` conflicts with the processor this program is built for, the {0}
 
-A program is built for one processor. Where the project or the command line says which, a `.cpu` in a file says the same or says nothing.
+A program is built for one processor. When the project file, the command line or another file sets it, a `.cpu` in a source file must name the same processor. Change or remove the `.cpu`.
 
 ### `cpu-under-a-condition`
 
-> `.cpu` states the program's processor, which a condition may test, so it may not be written under an `.if`
+> `.cpu` cannot be inside an `.if`: conditions can test the processor, so it must be set first
 
-A condition may test the processor, so the processor is settled before any condition is answered.
+Conditions can test the processor with `.target` and `.has`, so the processor has to be known before any condition is evaluated. Write `.cpu` outside every `.if`, or set the processor in the project file or on the command line.
 
 ### `cycles-needs-a-position`
 
-> `{0}` is {1}, and a cycle span runs from one position in code to another
+> `{0}` is {1}, not a position in code: a cycle count runs from one label or routine name to another
 
-`.mincycles` and `.maxcycles` count what one pass from one position to another costs, so each end is a label or a routine's own name.
+`.mincycles(from, to)` and `.maxcycles(from, to)` count the cycles one pass takes from one point in the code to another, so each argument must be a label or a routine's name.
 
 ### `cycles-span-has-no-bound`
 
-> `{0}` has no bound over this span: it holds {1}
+> `{0}` cannot count the cycles between these positions: {1}
 
-A sum along a run of instructions bounds one pass only where the run is one pass. A call takes as long as the routine it names, and a loop takes its body as many times as it turns, so neither may be in the span.
+`.mincycles` and `.maxcycles` add up the cycles of the instructions between two positions, which gives a true count only when that code runs straight through once. A call takes as long as the routine it calls, a loop repeats its body an unknown number of times, and a jump nt65 cannot follow could go anywhere, so none of these may be inside the span. Both positions must also be in the same routine and the same segment block, with the start before the end.
 
 ### `declaration-in-a-repetition`
 
-> {0} belongs outside a repetition: {1}
+> {0} cannot be inside a `.repeat` or `.each` body: {1}
 
-A repetition writes its body out once per turn. Anything that names one symbol, or that is program-wide, would be written once per turn along with it.
+A `.repeat` or `.each` body is written out once per iteration. Exports, imports, routines, segments and definitions each name one thing for the whole program, so declaring them again on every iteration makes no sense. Move the statement outside the body.
 
 ### `defined-in-terms-of-itself`
 
 > `{0}` is defined in terms of itself
 
-Working the value out would need the value. The cycle is reported once, at one of the declarations in it.
+The value depends on itself, directly or through other names, so it can never be worked out. Break the cycle by defining one of the names without referring back to the others. The cycle is reported once, at one of its declarations, and the other names in it are shown as related locations.
 
 ### `division-by-zero`
 
 > division by zero
 
-nt65 computes while it builds, so a division by zero has no value to write out.
+nt65 evaluates constant expressions while it builds, and a division by zero has no value to write to the output. Check the divisor.
 
 ### `each-not-over-a-list`
 
@@ -831,9 +831,9 @@ nt65 computes while it builds, so a division by zero has no value to write out.
 
 ### `element-index-not-constant`
 
-> an element index is a constant: an index worked out as the program runs is what `{0},x` is for
+> an element index must be a constant: to index at run time, use indexed addressing such as `{0},x`
 
-Which element `[i]` names is decided while nt65 builds, because it becomes an address in the output. An index worked out as the program runs is what indexed addressing is for.
+Which element `[i]` selects is decided while nt65 builds, because it becomes a fixed address in the output. To choose an element while the program runs, use indexed addressing with the X or Y register.
 
 ### `element-index-out-of-range`
 
@@ -843,21 +843,21 @@ The declaration says how many elements it holds, and this index is not one of th
 
 ### `else-without-if`
 
-> `{0}` continues an `.if`, and there is none to continue
+> `{0}` has no `.if` before it
 
-An `.elseif` or an `.else` continues an `.if`, and there is no open one here.
+An `.elseif` or an `.else` follows the block of an `.if` or `.elseif`, and there is none open here. Check for a missing `.if` or a misplaced closing brace.
 
 ### `enum-member-is-not-an-address`
 
-> `{0}` is an enum member, whose value is a constant, and this names an address
+> `{0}` is an enum member, so its value must be a constant, and this is an address
 
-An enum member is a constant. Where an address is wanted, what was meant is usually a family instance named after the member.
+An enum member is a number, and a member with no value counts on from the one before, so a member cannot be set to an address. Where an address was meant, use a constant or an address alias outside the enum, or refer to the routine or data declared for that member.
 
 ### `family-member-missing`
 
-> `{0}` has no `{1}`, which `{2}` stands for on this turn
+> `{0}` has no member `{1}`, which `{2}` names on this iteration
 
-On this turn the repetition's name stands for a member the container does not have.
+Inside `.each Enum, e`, a path `container::e` names the member of `container` with the same name as the current enum member. `container` has no member of that name; every enum member needs a matching declaration inside it.
 
 ### `function-argument-count`
 
@@ -869,61 +869,61 @@ A `.func` takes exactly the parameters it declares. There are no defaults and no
 
 > `.has` takes a mnemonic, such as `.has(phx)`
 
-`.has` asks whether the processor has an instruction, whichever it is, which is what a program that runs on more than one asks rather than listing the processors that have it.
+`.has(mnemonic)` asks whether the processor the program is built for has an instruction. Testing for the instruction, rather than listing the processors that have it, keeps code that targets several processors correct.
 
 ### `incbin-unreadable`
 
-> `{0}` cannot be read
+> cannot read `{0}` for `.incbin`
 
-How many bytes an `.incbin` takes is read from the file beside the source that names it, and the file is not there or cannot be read. ca65 would read it again at assembly time.
+nt65 reads an `.incbin` file to learn how many bytes it takes. The path is relative to the source file that names it, and there the file is missing or cannot be read. ca65 reads the file again when it assembles the output.
 
 ### `measures-a-declaration`
 
-> `{0}` measures a declaration, and `{1}` is a place in one
+> `{0}` takes a whole declaration, not an element of one like `{1}`
 
-The measuring functions take a whole declaration. A position inside one is not something with a size.
+The measuring functions (`.sizeof`, `.countof`, `.endof`, `.spanof`) take the name of a whole declaration. An indexed element such as `table[2]` is a position inside one and has no size of its own; measure the element type instead, or the whole declaration.
 
 ### `member-count-not-a-number`
 
-> `{0}` is a member, whose count is a number: `{1}[n]`
+> `{0}` needs an element count: write `{1}[n]`
 
-How many elements a member holds is part of the type, and is written as a number.
+How many elements a member holds is part of its type, so the count must be written as a number. `[]`, which counts the values given, has nothing to count in a `.struct`.
 
 ### `member-has-no-value`
 
-> `{0}` is a member, which reserves room and holds no value: several are `{1}[n]`
+> `{0}` is a struct member and cannot have a value: for several `{1}` elements, write `{1}[n]`
 
-A `.res` member reserves room and holds nothing, so there is no value to read from it. Several values of one type are a counted member.
+A `.struct` or `.union` member only reserves room at an offset and holds no data, so a value written after its type is an error. `colors: .word 16` would reserve one word, not sixteen; several elements of one type are written as a count, `colors: .word[16]`.
 
 ### `member-reserves-nothing`
 
-> `{0}` reserves no room a member may take
+> `{0}` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
 
-The member takes no room, so nothing can be laid out in it.
+A `.struct` member only reserves room at its offset, so it is declared with an element type or with `.res`. A directive that writes data, such as `.strz`, reserves nothing a member can use.
 
 ### `not-indexable`
 
-> `{0}` is {1}
+> `{0}` cannot be indexed with `[i]`: it is {1}
 
-`[i]` picks the i-th element of a counted data declaration. Anything else has no elements to pick from.
+`[i]` selects the i-th element of a data declaration that holds a counted list of elements, such as `.byte[8]` or `.type Point[4]`. Anything else, including mixed data, has no elements to select.
 
 ### `not-measurable`
 
 > `{0}` is {1}: `{2}` measures a `.data` declaration, a routine or a type
 
-Only something that takes bytes, or a type that says how many bytes it takes, can be measured.
+The measuring functions take something that occupies bytes, such as a `.data` declaration or a routine, or a type, which says how many bytes it takes. A label is only a position and a scope only groups names, so neither has a size. An import can be measured once it states its type, as in `.import name: .byte[n]`.
 
 ### `nothing-to-measure`
 
 > `{0}` is {1} and takes no bytes of its own, so `{2}` has nothing to measure
 
-What is named takes no bytes of its own, so there is nothing for the measurement to be of.
+`.endof` and `.spanof` measure something that takes bytes in the output, such as a data declaration or a routine. The name given refers to something that takes none, such as a constant, so there is nothing to measure.
 
 ### `number-too-wide`
 
-> {0} does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+> {0} does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
 
-nt65 computes in 64 signed bits and ca65 in 32, so a value that reaches the output has to fit ca65's. It is checked where it is declared rather than again at every name of it.
+nt65 computes in 64-bit signed arithmetic, but ca65 computes in 32 bits, so every value that reaches the output must fit ca65's range. The check is made where the value is declared, not again at every place it is used.
 
 ### `operator-on-text`
 
@@ -939,81 +939,81 @@ A repetition runs a number of turns, and a negative number of turns is not one.
 
 ### `repeat-count-not-constant`
 
-> a `.repeat` count is a constant, and this is not one
+> a `.repeat` count must be a constant
 
-How many times a body is written out decides what the program holds, so it is known while nt65 builds.
+How many times the body is written out decides what the program contains, so the count has to be known while nt65 builds.
 
 ### `scope-has-no-address`
 
-> `{0}` is a scope, which has no address: a routine or data inside it does
+> `{0}` is a scope and has no address: name a routine or data inside it instead
 
-A `.scope` is a name for other names, and takes no bytes of its own. A routine or a declaration inside it has an address.
+A `.scope` only groups names and takes no bytes of its own, so there is no address to use. Name a routine or a declaration inside it, such as `scope::name`.
 
 ### `select-arguments`
 
 > `.select` takes a condition and the two values it chooses between: `.select(c, a, b)`
 
-`.select` is the one branch an expression may take: a condition and the two values.
+`.select(c, a, b)` is `a` when `c` is nonzero and `b` otherwise, so it takes exactly three arguments.
 
 ### `select-condition-is-text`
 
-> a `.select` condition is a number, and this is text
+> a `.select` condition must be a number, not text
 
-A `.select` chooses on a number being zero or not.
+`.select(c, a, b)` chooses `a` when `c` is nonzero and `b` otherwise, so `c` must evaluate to a number.
 
 ### `select-condition-not-constant`
 
-> a `.select` condition is a constant, and this is not one
+> a `.select` condition must be a constant
 
-Which of the two values a `.select` is depends on the condition, so the condition has to be known while nt65 builds.
+Which of the two values a `.select` gives depends on its condition, so the condition has to be known while nt65 builds, not only at link time or at run time.
 
 ### `setting-not-exported`
 
-> `{0}` is not exported by module `{1}`, so the build cannot set it: a setting the module keeps to itself is not part of its configuration
+> `{0}` is not exported by module `{1}`, so the build cannot set it
 
-A `.config` the module keeps to itself is not part of its configuration, so a build has no say in it.
+Only a `.config` that its module exports can be set from the project file or the command line; one the module keeps private always has the value it declares. Export the setting to let the build change it.
 
 ### `setting-unknown`
 
-> `{0}` names no `.config`: the build sets a setting a module declares and exports
+> `{0}` is not a `.config` setting of that module: the build can only set a setting a module declares and exports
 
-A name with a module's path in the build configuration sets that module's `.config`, and the module declares none by that name.
+A define whose name has a module path, in the project file or on the command line, sets that module's `.config`. The module declares no `.config` by that name; check the spelling and the module path.
 
 ### `shift-count-out-of-range`
 
-> a shift counts 0 to 63 places, and this one counts {0}
+> shift count {0} is out of range: a shift moves 0 to 63 places
 
-A shift moves a 64-bit value by a number of places it has.
+Values are 64 bits wide, so `<<` and `>>` shift by 0 to 63 places. A count outside that range, including a negative one, is an error rather than being reduced or clamped.
 
 ### `sizeof-depends-on-alignment`
 
-> nt65 cannot say how many bytes `{0}` takes: an `.align` in it depends on where it lands, and `.spanof({1})` measures it in the output
+> cannot compute `.sizeof({0})`: its `.align` padding depends on where it is placed; `.spanof({1})` gives its size at link time
 
-An `.align` pads by however much it takes to reach the boundary, which the linker decides. `.spanof` asks the linker instead, and is a link-time value.
+An `.align` inside a declaration pads to the next boundary, and how much padding that takes depends on where the linker places it. So the declaration's size is not a constant. `.spanof` asks the linker for the size instead, which makes it a link-time value.
 
 ### `sizeof-depends-on-expansion`
 
-> nt65 cannot say how many bytes `{0}` takes: a macro call in it writes its bytes only when it is expanded, which is after every constant has its value, and `.spanof({1})` measures it in the output
+> cannot compute `.sizeof({0})`: a macro call inside it is expanded only after constants are known; `.spanof({1})` gives its size at link time
 
-Constants and shapes are worked out before any macro is expanded, so nothing a constant depends on waits for an expansion. What a macro call in a data declaration writes is known only once it is expanded, so the declaration's size is not a constant. `.spanof` asks the linker instead, and is a link-time value.
+Constants and data sizes are worked out before any macro is expanded, and how many bytes a macro call in a data declaration writes is known only once it is expanded. So the declaration's size is not a constant. `.spanof` asks the linker for the size instead, which makes it a link-time value.
 
 ### `sqrt-of-a-negative`
 
-> `.sqrt` has no answer for {0}: no whole number squared is negative
+> `.sqrt({0})` has no result: the argument cannot be negative
 
-`.sqrt(n)` is the largest whole number whose square is at most n, which a negative number has none of.
+`.sqrt(n)` is the largest whole number whose square is at most n. No number has a negative square, so n must be 0 or more.
 
 ### `strcat-not-a-byte`
 
-> `.strcat` joins a number as one byte, and {0} is not 0 to 255
+> `.strcat` adds a number as a single byte, and {0} is not in the range 0 to 255
 
-A text is bytes, so a number `.strcat` joins is the byte it is, `$80 | 'X'` among them. A number no byte holds would be cut to one nobody wrote.
+`.strcat` joins texts, and a number among its arguments is added as one byte, as in `.strcat("A", $80 | 'X')`. A number outside 0 to 255 does not fit in a byte, and nt65 does not truncate it. Mask it with `& $ff`, or use `<` for its low byte, if that is what was meant.
 
 ### `strsub-out-of-range`
 
-> `.strsub` asks for {0}, and the text is {1}
+> `.strsub` reaches outside the text: it asks for {0}, and the text is {1}
 
-`.strsub(s, start, count)` is `count` bytes of `s` from `start`, counting from 0. A start or a count that reaches outside the text would be a part nobody wrote, so it is an error rather than a shorter text.
+`.strsub(s, start, count)` is the `count` bytes of `s` starting at byte `start`, counting from 0. The whole range must lie inside the text; nt65 reports an error rather than returning a shorter result.
 
 ### `target-argument`
 
@@ -1023,9 +1023,9 @@ A text is bytes, so a number `.strcat` joins is the byte it is, `$80 | 'X'` amon
 
 ### `turn-or-scale-out-of-range`
 
-> `{0}` takes a turn of 1 to {1} and a scale of at most that either way
+> `{0}` needs a turn from 1 to {1} and a scale from -{1} to {1}
 
-A whole turn is however many units the table counts it in, and the scale is what the answer is measured in. Both are bounded because a value the output carries fits ca65's 32 bits anyway.
+In `.sin(angle, turn, scale)` and `.cos(angle, turn, scale)`, `turn` is how many angle units make a full circle and `scale` is the value the result has at 1.0. Both are limited to 32-bit values, because anything written to the ca65 output has to fit in 32 bits anyway.
 
 ## Macros
 
@@ -1033,9 +1033,9 @@ Macro declarations, calls, arguments and expansion.
 
 ### `argument-after-a-named-one`
 
-> a positional argument comes before the named ones
+> a positional argument cannot follow a named one
 
-Positional arguments bind in order, so they come before the named ones, as in every language that has both.
+Positional arguments are matched to parameters in order, so they must all come before any named argument. Move this argument before the named ones, or give it by name.
 
 ### `argument-count`
 
@@ -1045,21 +1045,21 @@ The call gives more positional arguments than the macro has parameters to bind t
 
 ### `argument-given-twice`
 
-> `{0}` is given twice
+> parameter `{0}` is given twice
 
-Each parameter takes one argument, positionally or by name, and not both.
+Each parameter takes one argument, either by position or by name, not both.
 
 ### `argument-missing`
 
-> `{0}` is not given {1}
+> `{0}` needs an argument for {1}
 
-A parameter with no default is given at every call.
+A parameter with no default must be given an argument at every call, by position or by name.
 
 ### `block-argument-in-parentheses`
 
-> `{0}` takes a block, which is written after the parentheses
+> `{0}` is a `block` parameter: write its block after the parentheses, not inside them
 
-A block is written after the parentheses, where it reads as the block it is.
+A block argument is written after the call's parentheses, as `name!(...) { ... }`, where it reads like any other block of code.
 
 ### `block-argument-unexpected`
 
@@ -1069,15 +1069,15 @@ The macro declares no `block` parameter, so there is nowhere for the block to go
 
 ### `block-changes-state`
 
-> the block given to `{0}!` has to leave the state as it found it: it starts with `{1}` and ends with `{2}`
+> the block given to `{0}!` must leave the processor state as it found it: it starts with `{1}` and ends with `{2}`
 
-A macro that takes a block writes its own code around it, and has no way to know what the block did to the processor unless the block leaves it as it found it.
+A macro that takes a block writes its own code around the block, and that code assumes the register widths and mode are the same after the block as before it. Restore them at the end of the block.
 
 ### `block-continues-nothing`
 
-> this block continues no macro call
+> this block argument does not follow a macro call
 
-A `} name {` closes one block argument and opens the next, and there is no call above it for it to belong to.
+`} name {` closes one block argument of a macro call and opens the next. There is no macro call before it for the block to belong to.
 
 ### `block-parameter-unknown`
 
@@ -1089,7 +1089,7 @@ A block argument after the parentheses names a `block` parameter the macro decla
 
 > `{0}` is never `{1}`, so this comparison {2}: {3}
 
-A word a condition compares with `.mode(p)`, or with a `one(...)` parameter, is never looked up, so a misspelt word, or one the parameter can never be, is no error of its own: the branch is quietly never taken, or always taken. The modes are the ones `.mode` gives, which for an `operand(...)` that lists its modes are those it lists, with `zp`, `zpx` and `zpy` as `abs`, `absx` and `absy`.
+A word compared with `.mode(p)` or with a `one(...)` parameter is not looked up, so a misspelt word, or one the parameter can never be, is not an error by itself: the comparison just always gives the same answer, and the branch is silently never or always taken. The words `.mode` can give are listed in the message; for an `operand(...)` parameter that lists its modes, only those are possible, with `zp`, `zpx` and `zpy` reported as `abs`, `absx` and `absy`.
 
 ### `const-argument-out-of-range`
 
@@ -1099,9 +1099,9 @@ A `const(low..high)` parameter says the range it takes, so a call outside it is 
 
 ### `declaration-in-a-macro-body`
 
-> {0} belongs outside a macro body: {1}
+> {0} cannot be inside a macro body: {1}
 
-A macro body is written out at each call, in the module that calls it. Each of these would either declare a name in the caller or make something program-wide depend on how many times the macro is called.
+A macro body is written out at each call, in the module that calls it. These statements would either declare a name in the caller or make something that exists once for the whole program depend on how many times the macro is called. Move the statement outside the macro.
 
 ### `enum-argument-not-a-member`
 
@@ -1117,9 +1117,9 @@ Expansion is bounded, and the bound is far beyond any program written by hand. R
 
 ### `expression-argument-braced`
 
-> `{0}` takes an expression, and a braced argument is a whole operand
+> `{0}` takes an expression, so its argument cannot be in braces: braces pass a whole operand
 
-Braces pass a whole operand. A parameter that takes an expression takes it unbraced.
+Braces pass a whole operand, with its addressing mode, to an `operand` parameter. A parameter that takes an expression takes it without braces.
 
 ### `ident-argument-not-a-name`
 
@@ -1129,15 +1129,15 @@ An `ident` parameter stands for a name the body declares or writes, so the argum
 
 ### `macro-names-unexported`
 
-> `{0}!` is exported but names `{1}`, which is not: a macro expands in the module that calls it, and what it names there has to be exported
+> `{0}!` is exported but uses `{1}`, which is not exported: the macro expands in the caller's module, where `{1}` cannot be reached
 
-A macro expands in the module that calls it, so every name in its body has to be reachable from there.
+An exported macro expands in the module that calls it, so every name its body uses must be reachable from there. Export the name it uses, or stop exporting the macro.
 
 ### `macro-recursive`
 
-> `{0}` calls itself{1}, and every expansion has to be bounded
+> `{0}` calls itself{1}: a macro cannot be recursive
 
-Every expansion is bounded, and a depth limit is not a bound: a macro that calls itself, however far around, has none. A `list` parameter or an `.each` does what walking an argument list did.
+Every macro expansion must be finite, and nt65 does not use a depth limit to stop one, so a macro may not call itself, directly or through other macros. To handle a variable number of arguments, use a `list` parameter with `.each` instead of recursion.
 
 ### `operand-argument-mode`
 
@@ -1147,9 +1147,9 @@ An `operand(...)` parameter lists the addressing modes it takes, as `.mode` name
 
 ### `operand-argument-parenthesized`
 
-> `{0}` takes an operand, and `{1}` reads as an expression in parentheses. Brace it to pass indirect addressing
+> `{0}` takes an operand, and `{1}` is read as an expression in parentheses: put it in braces to pass indirect addressing
 
-An unbraced `(ptr)` is an expression in parentheses, as it is everywhere else. Braces pass a whole operand, indirection and index included.
+Without braces, `(ptr)` is an expression in parentheses, as it is everywhere else. To pass a whole operand, including indirection and an index register, put it in braces, as in `load!({(ptr),y})`.
 
 ### `operand-mode-unknown`
 
@@ -1189,15 +1189,15 @@ A named argument names a parameter the macro declares.
 
 ### `repeat-too-many`
 
-> this repetition runs {0} times, and {1} turns is as far as nt65 goes
+> this repetition runs {0} times, more than the limit of {1}
 
-A repetition writes its body out once per turn, and the bound on the turns is the bound on how much one line may become.
+nt65 limits how many times a `.repeat` or `.each` body can be written out, which bounds how much one line of source can expand to. The limit is far beyond anything written by hand; reaching it usually means the count is wrong.
 
 ### `word-argument-ambiguous`
 
-> `{0}` takes one of {1}, and `{2}` may also be {3}
+> `{0}` takes only {1}, but `{2}` can also be {3}
 
-The word given is also one of the words another `one(...)` in the same call would accept, so which parameter it binds to would depend on the order they are read in.
+The argument is a `one(...)` parameter of the enclosing macro, passed on. Which word it holds is known only when that macro is called, so every word it allows must be one this parameter accepts. Narrow the enclosing parameter's list, or add the missing words to this one.
 
 ### `word-argument-not-listed`
 
@@ -1213,13 +1213,13 @@ Declarations, records, arrays, text and padding.
 
 > `{0}` is {1} address, and {2}: {3}
 
-The address is wider than the slot it is written into, so ca65 would refuse the fragment with a range error. The fix names the part of it the slot has room for.
+The address is wider than the place it is written into, and ca65 would stop with a range error. Write the part of the address that fits, as the message suggests.
 
 ### `address-negative`
 
-> {0} is negative, and an address is not
+> an address cannot be negative, but this one is {0}
 
-An address is where something is, and nothing is before the start of memory.
+`.addr` and `.faraddr` hold addresses, which are never negative.
 
 ### `align-boundary-not-constant`
 
@@ -1229,33 +1229,33 @@ Where the padding ends is worked out from the boundary, so the boundary is known
 
 ### `align-boundary-not-power-of-two`
 
-> an `.align` boundary must be a power of two, not {0}
+> an `.align` boundary must be a power of two from 1 to $10000, not {0}
 
-ld65 aligns on powers of two, and a boundary that is not one cannot be asked of it.
+ld65 aligns only on powers of two, and nt65 accepts boundaries up to $10000.
 
 ### `align-not-a-declaration`
 
-> `.align` is only padding, and has no name: it goes between declarations
+> `.align` cannot be a named declaration: write it between declarations
 
-An `.align` is padding between declarations, and has nothing of its own to name.
+An `.align` is padding that positions the next declaration. It has no content of its own to name, so it is written on its own between declarations.
 
 ### `charmap-value-not-a-byte`
 
-> `{0}` is not a byte; a charmap maps text to bytes
+> a charmap maps a character of this text to {0}, which is not a byte: a charmap value must be 0 to 255
 
-A charmap maps text to bytes, so each value it gives is one byte.
+A charmap maps each character to one byte, so every value it gives must be 0 to 255. Correct the charmap entry.
 
 ### `element-count-empty`
 
-> `[]` counts the values given, and there are none: `{0}[n]` holds n
+> `[]` takes its count from the values given, and there are none: write `{0}[n]` to reserve n elements
 
-`[]` means as many elements as the values given, and no values are given. A declaration that reserves room says how much.
+`[]` means as many elements as there are values, and no values are given. To reserve room without giving values, write the count, as in `.byte[16]`; the elements are filled with zeros.
 
 ### `element-count-mismatch`
 
-> this array holds {0} {1}, and its values come to {2}
+> this array is declared with {0} {1}, but {2} given
 
-A declaration with a count holds exactly that many elements: nt65 does not pad the rest or drop the extra. `[]` counts the values given.
+A declaration with a count holds exactly that many elements: nt65 neither pads missing values nor drops extra ones. Correct the count, or write `[]` to take the count from the values.
 
 ### `element-count-negative`
 
@@ -1265,15 +1265,15 @@ A count is how many elements the declaration holds, and a negative number of the
 
 ### `element-count-not-constant`
 
-> an array's count is a constant
+> an array's element count must be a constant
 
-How many elements a declaration holds decides how many bytes it takes, which is decided while nt65 builds.
+How many elements a declaration holds decides how many bytes it takes, so the count has to be known while nt65 builds.
 
 ### `element-is-one-value`
 
-> each element of `{0}` is one `{1}`
+> each element of `{0}` is a single `{1}` value, not a braced record or list
 
-The member holds elements of a plain type, and each of them is one value rather than a record or a list.
+The member holds elements of a plain type, and each of them is one value. Remove the braces around the element.
 
 ### `element-not-a-record`
 
@@ -1283,9 +1283,9 @@ Each element of an array of records is written as a record, so that which member
 
 ### `element-not-a-value`
 
-> a `{0}` element is one value, and braces hold a record or a list
+> a `{0}` element is a single value, not a braced record or list
 
-Braces hold a record or a list, and this element is one value.
+Braces hold a record or a list, and an element of this type is one plain value. Remove the braces.
 
 ### `far-address-in-word`
 
@@ -1303,7 +1303,7 @@ A member holds exactly as many elements as its type says.
 
 > `{0}` is given a value twice: a member is named at most once
 
-Each member takes one value, so which one it is does not depend on the order they are read in.
+A record initializer gives each member at most one value. Remove the duplicate.
 
 ### `member-needs-a-list`
 
@@ -1313,9 +1313,9 @@ The member holds several elements, so its value is a braced list of them.
 
 ### `member-needs-a-record`
 
-> `{0}` is a `{1}`, which takes a braced list of its members
+> `{0}` is a `{1}` record, so its value is written in braces: `{{ member = value }}`
 
-The member is itself a record, so its value is written as one.
+The member is itself a record, so its value is written as one, naming its members.
 
 ### `member-not-text`
 
@@ -1325,15 +1325,15 @@ A member of a plain type holds one value. Room for text is reserved with `.res`,
 
 ### `member-takes-one-value`
 
-> `{0}` is not a record or an array, and takes one value
+> `{0}` holds a single value, so it cannot be given a braced record or list
 
-The member is one value of a plain type, so braces around it would be a record or a list it is not.
+The member is one value of a plain type. Braces would make its value a record or a list, which it is not; remove them.
 
 ### `member-text-too-long`
 
-> `{0}` has room for {1} bytes, and this is {2}
+> `{0}` has room for {1} bytes, and this text is {2} bytes
 
-Text goes into the room the member reserves, and there is not enough of it.
+Text given to a member must fit in the room the member reserves. Shorten the text or reserve more room.
 
 ### `member-unknown`
 
@@ -1349,15 +1349,15 @@ How much room is reserved decides where everything after it goes, so it is decid
 
 ### `res-count-out-of-range`
 
-> a `.res` count is between 0 and $ffff, not {0}: that is what ca65 reserves in one directive
+> a `.res` count must be between 0 and $ffff, not {0}
 
-One `.res` in the output reserves what ca65 reserves in one directive. More room than that is more than one declaration.
+`.res` is passed straight to ca65, which reserves at most $ffff bytes in one directive. To reserve more, use several `.res`, or a declaration with a type, such as `.byte[n]`, which nt65 writes out as several directives.
 
 ### `res-not-a-declaration`
 
-> `.res` is only padding: data is declared with its type, `.byte[n]`, and holds zeros where it gives no values
+> a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
 
-A `.res` reserves room inside a declaration. A declaration of its own says what its bytes are, and reserves the room it does not fill.
+In nt65, `.res` is only padding inside a declaration. A named declaration says what its bytes are with a type: `buf: .res 16` in ca65 becomes `.data buf: .byte[16]`, which reserves the same room.
 
 ### `strz-not-text`
 
@@ -1395,123 +1395,123 @@ Segments, where a declaration sits and how wide an address is.
 
 ### `code-in-a-data-space`
 
-> "{0}" is in space `{1}`, which holds data: another processor's code is written there as data and macro calls
+> segment "{0}" is in space `{1}`, which holds data, not code for this processor: write another processor's code there as data or macro calls
 
-A space that holds data is another processor's memory, whose code nt65 does not read as instructions of this program's processor. Its code is data and macro calls, and a space that runs this program's processor says `code`.
+An address space declared as `"data"` in the project's `spaces` is another processor's memory, such as a sound CPU's RAM. nt65 does not assemble that processor's instructions, so its code is written as data, or through macros that write the bytes. A space whose code this program's processor runs is declared as `"code"`.
 
 ### `far-needs-65816`
 
-> {0}: a `far` address needs the 65816
+> {0} is declared `far`, and a far address needs the 65816
 
-A far address is a bank and an offset, which only the 65816 has. ca65 refuses `far` on every earlier processor, so nt65 says so where it is written rather than writing output ca65 rejects.
+A far address is a 24-bit bank and offset, which only the 65816 has. ca65 rejects `far` on every other processor, so nt65 reports it where it is written rather than writing output ca65 would reject. Declare the segment or import `abs` or `zp`, or build for the 65816.
 
 ### `instruction-in-data`
 
-> {0} in a `.proc`, and `.data` holds only data
+> {0} in a `.proc`, not in a `.data` declaration
 
-A `.data` declaration holds bytes. Code goes in a routine, where the analysis can follow it.
+A `.data` declaration holds only data. Instructions go in a routine (`.proc`), where the flow analysis can follow them. Opcodes written out by hand belong in data as `.byte` values.
 
 ### `instruction-outside-a-routine`
 
-> {0} in a `.proc`: code outside one is reached by nothing nt65 can follow
+> {0} in a `.proc`: nt65 follows and checks code only inside routines
 
-Flow analysis follows routines, so code that is in none is code nothing can be said about.
+Flow analysis works routine by routine, so code outside a `.proc` could never be followed or checked. Put the code in a `.proc`, or, if the bytes are data, declare them with `.data`.
 
 ### `operand-in-another-space`
 
-> {0} is in "{1}", in {2}, and this code is in {3}: here it is a value, for an immediate or for data
+> {0} is in segment "{1}" of {2}, and this code runs in {3}: here it can only be used as an immediate value or in data
 
-An operand that reaches memory reaches this processor's, where a name in another address space is only a number. Its value may be taken as an immediate or put in data, and the copy the host holds is reached through `.loadof`.
+An operand that reads or writes memory reaches this processor's memory, where a name from another address space is only a number. Take its value as an immediate (`#<name`) or put it in data. To reach the bytes as this processor holds them, before they are sent across, use `.loadof`.
 
 ### `outside-every-segment`
 
-> {0} is outside every segment: a `.segment NAME` region or block places it
+> {0} is not in any segment: put a `.segment NAME` line above it, or place it in a `.segment NAME` block
 
-Bytes go in a segment, and the linker decides where each segment goes. Nothing is placed by being written first.
+Every byte goes in a segment, and the linker decides where each segment goes. Unlike ca65, which starts in `CODE`, nt65 has no default segment, and nothing is placed just by being written first. Put a `.segment` line, such as `.segment CODE`, above it.
 
 ### `padding-outside-a-routine`
 
-> `{0}` outside a `.proc` belongs to a `.data` declaration{1}
+> `{0}` outside a `.proc` must be part of a `.data` declaration{1}
 
-A `.res` or an `.align` reserves room inside something. Outside a routine that something is a `.data` declaration.
+Outside a routine, every byte belongs to a named `.data` declaration, such as `.data table: .byte 1, 2, 3`, which gives the bytes a name and a size. Only an unnamed `.res` or `.align` may stand on its own, as padding between declarations.
 
 ### `segment-attribute-not-constant`
 
-> `{0}` needs a constant
+> `{0}` must be a constant
 
-Where a segment sits decides how every reference to what is in it is checked, so it is a number known while nt65 builds.
+A segment's `dp` and `bank` decide how every reference into the segment is checked and encoded, so they must be numbers nt65 can work out while it builds, not addresses the linker decides.
 
 ### `segment-attribute-out-of-range`
 
 > {0}
 
-The direct page is a sixteen-bit address and a bank is one byte.
+The direct page is a 16-bit address, from $0000 to $ffff, and a bank is one byte, from $00 to $ff.
 
 ### `segment-attribute-twice`
 
-> segment "{0}" already gives its `{1}`
+> segment "{0}" already has a `{1}`
 
-Each of a segment's attributes is one answer, so it is given once.
+Each of a segment's attributes (`dp`, `bank`, `mirrors`, `space`) takes one value, so it is given once. List every mirrored bank in a single `mirrors = [...]`.
 
 ### `segment-block-redundant`
 
-> this block names "{0}", the segment it is already in, so its contents would stay inline where fall-through reaches them
+> this block names "{0}", the segment it is already in, so it moves nothing: its contents stay inline, where execution falls into them
 
-A block that names the segment it is already in moves nothing. Its contents stay where fall-through reaches them, which is what the block was probably meant to prevent.
+A nested segment block moves its contents out of line into another segment, so that execution does not fall through into them. A block that names the segment it is already in moves nothing, and its contents stay where the code above runs into them. Name a different segment, or remove the block.
 
 ### `segment-declared-twice`
 
 > segment "{0}" is already declared
 
-A segment is declared once across the whole program, so that every file reaches it the same way.
+A segment is declared, with its size, once for the whole program, in one file or in the project, so that every file reaches it the same way. After that, `.segment NAME` with no size just switches to it. Remove the size from this line, or remove one of the declarations.
 
 ### `segment-dp-not-zp`
 
-> `dp` says which direct page a `zp` segment is reached through, and "{0}" is not `zp`
+> segment "{0}" is not `zp`, and only a `zp` segment takes a `dp`
 
-Only a `zp` segment is reached through the direct page, so only a `zp` segment has one to name.
+`dp` gives the direct-page base (the 65816's D register) that a `zp` segment's symbols are reached through. Symbols in any other segment are reached by absolute or long addresses, so `dp` means nothing there. Declare the segment `zp`, or remove the `dp`.
 
 ### `segment-mirror-invalid`
 
-> a mirror is a constant bank, or a range of banks from the lower to the higher, such as `$00..$3f`
+> each mirror must be a constant bank, or a range of banks written lower first, such as `$00..$3f`
 
-A mirror is a bank, or a range written from the lower bank to the higher.
+`mirrors = [...]` lists the other banks in which the segment's home bank also appears. Each item is a constant bank from $00 to $ff, or a range of them written with the lower bank first, such as `$00..$3f`.
 
 ### `segment-mirrors-need-a-bank`
 
-> segment "{0}" gives `mirrors` and no `bank`: a mirror shows a segment's home bank in another bank
+> segment "{0}" has `mirrors` but no `bank`: mirrors repeat a home bank, so give the segment a `bank`
 
-A mirror shows a segment's home bank in another bank, so there has to be a home bank for it to show.
+`mirrors` lists other banks where the segment's home bank also appears, so the segment needs a home bank, given with `bank = ...`.
 
 ### `segment-standard-size`
 
-> "{0}" is a standard segment, which is `{1}`
+> "{0}" is a standard segment and is always `{1}`
 
-A standard segment may be declared once, to give it a direct page, a bank or mirrors, and keeps the size it is predeclared with, which is the one ca65 gives it in every object.
+The standard segments `CODE`, `RODATA`, `DATA`, `BSS` and `ZEROPAGE` are predeclared with the size ca65 gives them in every object file. One may be declared once more to give it a direct page, a bank or mirrors, but only at that size. Use a segment of your own for a different size.
 
 ### `segment-undeclared`
 
 > segment "{0}" is not declared
 
-Every segment is declared once, by a file or by the project, with the address size it is reached at. Nothing places bytes in an undeclared one.
+Every segment is declared once, either in a source file (`.segment NAME: abs`) or in the project file's `segments`, with the address size it is reached at. nt65 does not create a segment just because a line names it. Declare the segment, or check the spelling of its name.
 
 ### `space-not-a-name`
 
-> a segment's `space` is the name of an address space
+> `space` takes the name of an address space
 
-`space = spc` puts the segment in the space `spc`; there is nothing to work out, so it is a name.
+`space = spc` puts the segment in the address space `spc`, which the project's `spaces` declares. It is a plain name, not a number or an expression; in the project file it is a non-empty string.
 
 ### `space-undeclared`
 
 > space `{0}` is not declared
 
-A segment's `space` names an address space the project's `spaces` declares, with whether it runs this program's processor.
+A segment's `space` names an address space declared in the project file's `spaces`, where each space is `"code"` (this program's processor runs it) or `"data"` (another processor's memory). Declare the space there, or check the spelling.
 
 ### `transfer-to-another-space`
 
-> `{0}` goes to {1}, which is in "{2}", in {3}, and this code is in {4}: another processor runs it
+> `{0}` targets {1}, in segment "{2}" of {3}, but this code runs in {4}: that code belongs to another processor
 
-A name in another address space is a value to this code, such as the address the other processor starts at. A jump, a branch or a call to it would go to the same number in this processor's memory.
+Each address space is a different processor's memory. To this code, a name in another space is only a number, such as the address the other processor starts at. A jump, branch or call to it would go to that number in this processor's memory, which is something else. Use the value as an immediate or in data instead, for example to send it to the other processor.
 
 ## Instructions
 
@@ -1521,79 +1521,79 @@ Mnemonics, operands, addressing modes and branch range.
 
 > `{0}` cannot reach a {1} address on the {2}
 
-The address is wider than anything this instruction can reach on this processor.
+No form of this instruction on this processor takes an address as wide as this operand, such as a far address on a processor without long addressing. Move what it names to a segment the instruction can reach, or reach it another way.
 
 ### `addressing-mode-missing`
 
-> `{0}` has no {1} form of this operand on the {2}
+> `{0}` has no {1} form of this operand on the {2}: remove the address-size prefix
 
-The instruction has no form of this shape on this processor.
+An address-size prefix (`z:`, `a:`, `f:`) asks for one particular form of the instruction, and on this processor the instruction has no form of that width for this operand. nt65 does not silently drop a prefix it cannot honour. Remove the prefix, or write the operand in a shape that has that form.
 
 ### `addressing-mode-too-narrow`
 
 > `{0}` has only a {1} form of this operand, and `{2}` is {3}
 
-The only form of this shape reaches a narrower address than the operand names.
+This operand shape exists only in a narrower form: `(ptr),y`, for example, takes a zero-page pointer. The address named is wider, so it would be cut down to its low byte. Put what it names in a `zp` segment, or use a different addressing mode.
 
 ### `assertion-failed`
 
 > {0}
 
-The condition is false, and nt65 knew enough to answer it. An assertion nt65 cannot answer is left for the linker.
+The `.assert` condition is false. nt65 checks an assertion as soon as it can evaluate the condition; one that depends on final addresses is passed on for the linker to check.
 
 ### `branch-operand-not-taken`
 
-> `{0}` branches to a near target, and does not take this operand
+> `{0}` takes only a target address as its operand
 
-A branch reaches a label near it, and takes only a label.
+A long branch such as `jeq` or `jne` takes one target address, as a short branch does, and has no other addressing mode.
 
 ### `branch-out-of-reach`
 
 > `{0}` would branch {1} bytes, and a branch reaches only -128 to 127{2}
 
-A branch is one signed byte from the instruction after it. Reaching further is a branch over a jump, which the fix writes.
+A branch stores its target as one signed byte counted from the instruction after it, so it reaches 128 bytes back or 127 forward. Reverse the condition and branch over a `jmp`, or use the long branch (`jeq`, `jne` and so on), which nt65 writes as the short branch where it reaches and as a branch over a `jmp` where it does not.
 
 ### `config-refused`
 
 > {0}
 
-The file says it will not be built in this configuration, and is not.
+The build reached an `.error` directive, usually inside an `.if` that rejects a configuration the file does not support. The message is the file's own text.
 
 ### `config-warned` — warning
 
 > {0}
 
-The file builds in this configuration and has something to say about it.
+The build reached a `.warning` directive. The message is the file's own text, and the build carries on.
 
 ### `direct-page-form-missing`
 
-> `d:` makes a direct operand, and `{0}` has no direct form of this operand
+> `{0}` has no direct-page form of this operand, which `d:` asks for
 
-`d:` asks for the one-byte form, and the instruction has none of this shape.
+`d:` asks for the one-byte direct-page form of the instruction, and the instruction has no such form with this operand; `lda` has no `dp,y` form, for example. Remove the `d:`, or use an addressing mode that has a direct-page form.
 
 ### `direct-page-needs-65816`
 
-> `d:` reaches an address through the 65816's direct page, and this program is built for the {0}
+> `d:` needs the 65816, and this program is built for the {0}: use `z:` for a zero-page address
 
-The direct page moves, which is the 65816's. On earlier processors the zero page is fixed and `z:` says so.
+`d:` marks an address reached through the 65816's direct page, which can be moved with the D register. Earlier processors have a fixed zero page, which `z:` asks for.
 
 ### `direct-page-only`
 
-> `{0}` is in "{1}", reached through the direct page at {2}, and is only a direct operand: as {3} operand it would reach its offset in the data bank
+> `{0}` is in "{1}", reached through the direct page at {2}, so it works only as a direct-page operand: as {3} operand it would address its offset in the data bank instead
 
-The segment is reached through the direct page, so the symbol is an offset into it. Reached any other way, that offset would be an address in the data bank.
+A symbol in a `zp` segment with a nonzero `dp` is an offset from the direct page. As a direct-page operand it reaches the direct page plus that offset. As an absolute or long operand, whether forced with a prefix or because the instruction has no direct-page form with this index (`lda dp,y`, for example), it would reach the same offset in the data bank, a different address. Use a direct-page addressing mode.
 
 ### `direct-page-prefix-on-symbol`
 
-> `d:` is for a constant address: a symbol reaches the direct page through a `zp` segment
+> `d:` takes only a constant address: to reach a symbol through the direct page, declare it in a `zp` segment
 
-Where a symbol is reached from is the segment's to say, so that moving a declaration between segments does not mean editing every line that names it.
+Whether a symbol is reached through the direct page is decided by its segment: symbols in a `zp` segment are, with the segment's `dp` as the base. That way, moving a declaration between segments does not mean editing every line that uses it. `d:` is for a literal address, such as `d:$05`.
 
 ### `immediate-too-wide`
 
-> {0}, and {1} does not fit
+> {1} does not fit: {0}
 
-The value does not fit the bytes the immediate has. On the 65816 how many bytes that is comes from the register width at this point.
+An immediate is one byte, or, on the 65816, two bytes when the register it goes to is 16-bit at this point, as the analysis tracks it from `rep`, `sep` and the routine's signature. Use a value that fits, take one byte of it with `<` or `>`, or widen the register.
 
 ### `instruction-not-on-cpu`
 
@@ -1603,495 +1603,495 @@ The program is built for one processor, and this instruction is not in its set. 
 
 ### `operand-has-no-next-byte`
 
-> {0} needs an operand with a next byte, and `{1}` is `{2}` here
+> {0} needs a later byte of `{1}`, and `{1}` is a `{2}` operand here, which has none
 
-The instruction reads the byte after its operand, so the operand has to be one a next byte follows: a macro argument that arrived as something else cannot stand there.
+In a macro body, `p + n` or `.byteof` on an operand parameter addresses a byte after the one the argument names, which works only when the argument is a plain address, indexed or not. An immediate, the accumulator, an indirect operand or a stack-relative one has no later byte to address. Pass a plain address at this call, or change the macro body.
 
 ### `operand-is-text`
 
-> `{0}` is text, and an operand is a number or an address
+> `{0}` is a string, and an instruction's operand must be a number or an address
 
-An operand is a number or an address. Text is a sequence of bytes, which a data declaration writes.
+An instruction's operand is a number or an address. A string is a sequence of bytes, which a data directive writes into a `.data` declaration.
 
 ### `operand-missing`
 
 > `{0}` needs an operand
 
-The instruction has no form that takes nothing.
+This instruction has no form without an operand, so it needs one.
 
 ### `operand-not-taken`
 
 > `{0}` does not take this operand on the {1}
 
-The instruction exists on this processor, and not with an operand written this way.
+The instruction exists on this processor, but not with this addressing mode; for example, `lda (ptr)` without `,y` needs a 65C02. Check the operand, or the processor the program is built for.
 
 ### `target-too-far`
 
-> `{0}` takes a near target, and this one is far
+> `{0}` reaches only a near target, in the current bank, and this one is far
 
-The instruction reaches within the bank, and the target is in another one.
+`jmp`, `jsr`, the branches and `per` reach an address within the current bank, and this target is in another bank. On the 65816 use the long form: `jml` instead of `jmp`, or `jsl` instead of `jsr` for a routine that returns with `rtl`.
 
 ### `target-too-near`
 
-> `{0}` takes a far target, and this one is {1}: `{2}` reaches it
+> `{0}` is for a far target, and this one is {1}: use `{2}`
 
-The instruction takes a three-byte target, and a shorter one reaches this target and costs less.
+`jml` and `jsl` take a three-byte address and are for targets in another bank. This target is in reach of the shorter form, which is smaller and faster. A constant address is taken as written, so `jml $008000` is allowed.
 
 ### `transfer-prefix`
 
-> `{0}` transfers control, and a control transfer is not sized by a prefix
+> `{0}` does not take an address-size prefix: a jump, branch or call is sized by its target
 
-An address-size prefix chooses how wide an operand is read. Which form a jump or a call takes is decided by the target it names.
+An address-size prefix (`z:`, `a:`, `f:`) chooses how wide an operand is read. A jump, branch or call is sized by its target and its mnemonic instead: `jmp` or `jml`, `jsr` or `jsl`. Remove the prefix, and use the mnemonic for the distance you mean.
 
 ## Control flow
 
-Where flow goes, and what the analysis needs written beside it.
+Where execution goes, and the annotations the analysis needs where it cannot see.
 
 ### `annotation-about-nothing`
 
-> `{0}` is about the statement above it, and there is none here
+> `{0}` applies to the statement above it, and there is none
 
-An annotation stands between the statement it is about and whatever follows, which is what makes it readable without looking for what it attaches to.
+An annotation such as `.next` or `.patch` is written directly after the statement it describes, so it reads next to it. Here there is no statement above it to apply to. Move it to just below the statement it is about.
 
 ### `code-label-as-data`
 
-> `{0}` labels code and is used here as data, so flow may reach it where the analysis cannot see: a `.state` after the label says what the state is there, or a `.next` in `{1}` naming it carries the state to it
+> the address of code label `{0}` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `{1}`
 
-The address of an instruction is taken and used as a value, so flow may reach that instruction somewhere the analysis cannot see.
+Taking the address of an instruction, in a table, a `pea` or an immediate, means something may later jump to it indirectly, where the analysis cannot follow. Declare the label an entry point with a `.state` after it, or name it in a `.next` on the indirect jump in its own routine, so the analysis follows flow to it.
 
 ### `code-unreachable` — warning
 
-> this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
+> this code is never reached: execution does not fall into a nested segment block, so start it with a label that is jumped to, named by a `.next`, or declared by a `.state`
 
-Nothing runs into the code and nothing names it, so it is written out and never entered.
+A nested segment block's bytes are placed in another segment, away from the code around them, so execution never falls into them from above. Code at the start of the block is reached only through a label: one something branches, jumps or calls to, one a `.next` names, or one a `.state` declares as an entry point. Without one, the code is assembled but never runs.
 
 ### `computed-jump-unchecked`
 
-> {0} goes to a computed address, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path where it is not an instruction boundary
+> {0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` to end the path
 
-The target is worked out rather than named, so the analysis has no label to carry the state to.
+The target is an expression rather than a label, so the analysis has no label at which to carry on. A `.next` after the jump names the labels it may reach. Where the target is not the start of an instruction, such as a jump into the middle of one, write `.next ?` to end the path there.
 
 ### `entry-not-declared`
 
-> `{0}` is inside `{1}`, and a jump into another routine needs the label declared: a `.state` after it says what the state is there
+> `{0}` is inside routine `{1}`: to jump into another routine, declare the label an entry point with a `.state` after it
 
-A jump into the middle of another routine arrives where that routine's own analysis never sees it. A `.state` after the label declares what is true there, and both sides are then checked against it.
+A jump into the middle of another routine arrives where that routine's own analysis never sees it. A `.state` directly after the label declares it an entry point and what the processor state is there, and both the jump and the routine are then checked against it.
 
 ### `exported-entry-not-declared`
 
-> `{0}` is inside `{1}`, and exporting it lets other modules jump into the routine: a `.state` after the label says what the state is there
+> `{0}` is inside routine `{1}`, and exporting it lets other modules jump into it: declare it an entry point with a `.state` after the label
 
-An exported label inside a routine is a door other modules may come through, and this module's analysis never sees them arrive.
+An exported label inside a routine lets other modules jump into the middle of it, and this module's analysis never sees those jumps arrive. A `.state` after the label declares it an entry point and what the processor state is there, so the routine is checked from it.
 
 ### `fallthrough-misplaced`
 
-> `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+> `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
 
-A `.fallthrough` is about the end of a routine's body rather than about the statement above it, so it stands last in the body of a `.proc`, or last in a branch of an `.if` chain that is itself last in the body, to any depth: conditions are settled before analysis, so in each configuration at most one remains, and it is last. It is not in a macro body, a block argument or a repetition, and nothing follows it or the chain it ends.
+`.fallthrough NAME` says that every path reaching the end of the routine runs on into routine NAME, so it is about the end of the body, not the statement above it. It stands last in a `.proc` body, or last in a branch of an `.if` chain that is itself last in the body, to any depth; conditions are settled before analysis, so in each build at most one remains, and it is last. It may not appear in a macro body, a block argument or a repetition, and nothing may follow it or the chain it ends.
 
 ### `fallthrough-not-a-routine`
 
-> `{0}` is {1}, and `.fallthrough` names the routine flow runs into
+> `{0}` is {1}, not a routine: `.fallthrough` names the routine execution runs into
 
-A routine runs into another routine's first byte, and what is named here is not a routine.
+`.fallthrough` says this routine runs on into the first byte of another routine, so it must name a `.proc`.
 
 ### `fallthrough-not-adjacent`
 
-> `.fallthrough {0}` says flow runs on into `{0}`, and it does not start where this routine ends: a routine runs into the one written directly after it
+> `{0}` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
 
-A routine runs on into the one written directly after it in the same segment: the next thing the file writes to that segment, whatever regions of other segments stand between in the text, as ca65 lays the bytes out. Naming any other routine would be saying something the bytes do not do.
+A routine that reaches its end runs on into whatever comes next in its segment: the next thing the file writes to that segment, even when regions of other segments come between in the text, as ca65 lays the bytes out. `.fallthrough` must name that routine; naming any other would claim something the bytes do not do. Move the routines so the named one comes directly after, or end this one with a `jmp`.
 
 ### `fallthrough-not-placed`
 
-> `.fallthrough {0}` says flow runs on into `{0}`, which is in module `{1}`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+> `{0}` is in module `{1}`, and the two modules are separate translation units, whose order only the linker knows: use `.place` to lay one out inside the other
 
-Across translation units the order of the bytes is the link's, which nt65 does not know. Where one module places the other, both are laid out in one `.s`, and a routine running into another module's is checked there as it is within a file.
+Across translation units the order of the bytes is decided at link time, which nt65 does not see, so it cannot check that one routine runs into another. Where one module places the other with `.place` (the other declared `placed`), both are laid out in one output file, and running into the other module's routine is checked as it is within a file.
 
 ### `fallthrough-other-segment`
 
-> `.fallthrough {0}` runs on in segment "{1}", and `{0}` is in segment "{2}": a routine runs only into what its own segment holds next
+> `{0}` is in segment "{2}", and this routine ends in "{1}": a routine can only run into what comes next in its own segment
 
-A segment's bytes are laid down in the order they are written, whatever other segments are written between them, so the end of a routine is followed by what its own segment holds next. Across a `.place` that is the placed module's first routine in the segment the placing file is in, or what that file writes next in it.
+A segment's bytes are laid out in the order they are written, whatever other segments are written in between, so the end of a routine is followed by the next thing in its own segment. A routine in another segment cannot be what it runs into. Across a `.place`, what comes next is the placed module's first routine in this segment, or what the placing file writes next in it.
 
 ### `handler-called`
 
-> `{0}` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back
+> `{0}` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the caller
 
-An interrupt handler is entered by the processor and left with `rti`, which pulls the flags as well as the address. A call to one would not come back.
+The processor enters an interrupt handler by pushing the return address and the status flags, and the handler leaves with `rti`, which pulls both. A call pushes only the return address, so the `rti` would pull the wrong bytes and not return to the caller.
 
 ### `handler-returns-not-rti`
 
-> `{0}` is an interrupt handler, and leaves by `rti` rather than `{1}`
+> `{0}` is an interrupt handler and must return with `rti`, not `{1}`
 
-The processor pushed the flags when it entered, and only `rti` pulls them.
+The processor pushed the status flags when it entered the handler, and only `rti` pulls them. An `rts` or `rtl` would leave the flags on the stack and return to the wrong address.
 
 ### `indirect-call-unchecked`
 
-> {0} calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+> {0} is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call
 
-The call goes wherever the operand points, which the analysis cannot read. A `.next` names the routines it may reach, and they are then checked as calls.
+The call goes to an address read at run time, so the analysis cannot tell which routine it reaches or check the call. Write a `.next` after it naming the routines it may call, or the table that holds them; each is then checked as a call.
 
 ### `indirect-jump-unchecked`
 
-> {0} goes where its operand points, which the analysis cannot see: `.next` names the labels it reaches, or `.next ?` ends the path
+> {0} is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` to end the path
 
-The jump goes wherever the operand points. A `.next` names the labels it may reach, or `.next ?` says the path ends here and checks nothing beyond it.
+The jump goes to an address read at run time. A `.next` after it names the labels it may reach, or the jump table that holds them, and the analysis carries on at each. `.next ?` says the path ends here, and nothing beyond it is checked.
 
 ### `inline-count-not-constant`
 
-> `{0}` returns past `{1}`, which needs a constant count of bytes
+> `{0}` has `{1}`, and the byte count it gives must be a constant
 
-How far the routine returns past its call decides where flow carries on, so it is a number known while nt65 builds.
+How many bytes the routine skips after each call decides where flow carries on, so the count in `inline N` must be a number nt65 knows while it builds, and not negative.
 
 ### `inline-data-missing`
 
-> `{0}` returns past {1} written after each call, and {2}
+> `{0}` expects {1} written after each call, and {2}
 
-The routine's signature says each call is followed by data, which the routine returns past. This call is not followed by it.
+The routine's `inline` signature item says each call is followed by data, which the routine reads and returns past. This call is not followed by that data, so the routine would skip over the wrong bytes. Write the data directly after the call, in the same segment and with no label between.
 
 ### `jump-into-data`
 
-> `{0}` labels data, and this jumps to it: the label needs a `.state` after it saying what the state is there, and the data a `.next` saying where flow goes
+> `{0}` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data saying where flow goes
 
-The label stands on data, and the processor would execute it. The label needs a `.state` and the data a `.next`.
+The label marks data, so the processor would run those bytes as code. A `.state` after the label declares it an entry point and what the processor state is there, and a `.next` after the data says where flow goes from there.
 
 ### `jump-target-not-a-label`
 
-> {0} goes to `{1}`, {2} rather than a label, which the analysis cannot follow: `.next` names the labels it reaches, or `.next ?` ends the path
+> {0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: add a `.next` naming the labels it reaches, or `.next ?` to end the path
 
-A jump goes to a place in code. What is named here is something else, so the analysis cannot follow the path.
+A jump or branch normally names a label in code. This one names something else, such as a constant, so the analysis cannot tell where flow goes. A `.next` after it names the labels it reaches, or `.next ?` ends the path.
 
 ### `keeps-broken`
 
-> `{0}` promises `keeps {1}`, and {2} {3} not what the routine was entered with here{4}
+> `{0}` promises `keeps {1}`, but {2} {3} not the same as on entry here{4}
 
-The routine promises to hand a register back as it was entered with it, and on this path it does not. Callers are checked on that promise.
+The routine's signature says it keeps these registers: every path that leaves it returns them holding the value they had on entry, and callers rely on that. On this path the analysis sees a register changed and not restored. Save and restore it, for example with `pha` and `pla`, or, where it is restored in a way the analysis cannot see, write `.state keeps REG` at that point.
 
 ### `keeps-redundant` — warning
 
-> `{0}` says nothing here: {1} is already what the routine was entered with
+> `{0}` is redundant here: {1} already holds its value from entry
 
-The register is already what the routine was entered with, so saying so again says nothing.
+The analysis already knows the register holds the value it had when the routine was entered, so the `.state keeps` adds nothing. Remove it.
 
 ### `label-unreachable` — warning
 
-> `{0}` is never reached: nothing runs into it and nothing names it
+> `{0}` is never reached: no code falls into it and nothing refers to it
 
-Nothing falls into the label and nothing branches, jumps or calls to it.
+The code above the label does not fall through into it, and nothing branches, jumps or calls to it or takes its address. If it is reached in a way nt65 cannot see, write a `.state` after the label to declare it an entry point; otherwise the code is dead and can be removed.
 
 ### `next-not-the-branch-target`
 
-> `.next` after {0} says the branch is always taken, so it names only where the branch goes, `{1}`
+> `.next` after {0} can name only the branch's own target, `{1}`, to say the branch is always taken
 
-A conditional branch that is always taken, because the flags are known where it stands, says so with a `.next` naming its own target: the path no longer runs on past it, and the target is where it goes. Naming anything else would say the branch goes somewhere its operand does not. `.next ?` ends the path there instead.
+Under a conditional branch, a `.next` says the branch is always taken, because the flags are known there, so flow never continues past it. It must then name exactly the branch's own target; naming anything else would claim the branch goes somewhere its operand does not. To end the path there instead, write `.next ?`.
 
 ### `next-successors-known`
 
-> `.next` names where flow goes after a statement nt65 cannot follow, and {0} {1}{2}
+> `.next` is not allowed here: nt65 already knows that {0} {1}{2}
 
-A `.next` stands under an indirect jump or call, a return used as a jump, a jump to a computed address, or data that flow runs into: statements whose successors nt65 cannot read for itself, and under a conditional branch it names the branch's own target, to say it is always taken. After any other statement it already knows where flow goes, and a `.next` could only contradict that. A routine that runs into the one written after it says so with `.fallthrough`, and `.next ?` may end a path after any statement.
+`.next` tells nt65 where flow goes after a statement it cannot follow by itself: an indirect jump or call, an `rts` or `rtl` used as a jump, a jump to a computed address, or data that execution falls into. After a conditional branch it may name the branch's own target, to say the branch is always taken. After any other statement nt65 already knows where flow goes, and a `.next` could only contradict it. To say a routine runs into the one written after it, use `.fallthrough`; `.next ?` may end a path after any statement.
 
 ### `next-table-has-no-labels`
 
-> `{0}` holds no code labels, and `.next` reads the labels a table holds
+> table `{0}` holds no code labels for `.next` to follow
 
-A `.next` may name a table of addresses, and flow then goes to each label the table holds. This one holds none.
+A `.next` may name a table of addresses, and flow then goes to each code label the table holds. This table holds none, so it says nothing about where flow goes. Name the labels directly, or fill the table with code labels.
 
 ### `next-target-not-a-table`
 
-> `{0}` is not a table of addresses: `.next` reads the labels a table declared as `.addr` or `.faraddr` holds
+> `{0}` is not a table of addresses: `.next` can name data only when it is declared with `.addr` or `.faraddr`
 
-A `.next` that names data reads the labels the data holds, so the data has to be addresses.
+A `.next` that names data follows the code labels the data holds, so the data must be a table of addresses, declared with `.addr` or `.faraddr`.
 
 ### `next-target-not-code`
 
-> `{0}` is {1}, and `{2}` names somewhere code is
+> `{0}` is {1}, and `{2}` must name a code label, a routine, or a table of them
 
-A `.next` names places flow reaches, and what is named here is not one.
+`.next` and `.patch` name places in code: a label, a routine, or a list or table of addresses holding them. What is named here is not somewhere flow can go.
 
 ### `noreturn-returns`
 
-> `{0}` never returns, as its `noreturn` says, and `{1}` returns
+> `{0}` is declared `noreturn`, but `{1}` returns from it
 
-The routine says it never returns, and its callers are checked on that promise.
+The routine's signature says it never returns, and its callers are checked on that promise: nothing after a call to it is expected to run. Leave it some other way, such as a `jmp`, or remove `noreturn` from its signature.
 
 ### `pushed-return-unchecked`
 
-> `{0}` here returns to an address this block pushed, which makes it a jump: `.next` names where it goes
+> `{0}` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it goes
 
-The block pushes an address and returns to it, which is a jump written as a return. A `.next` says where it goes.
+The block pushes an address and then returns to it, the RTS trick, so the return is a jump in disguise and nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.
 
 ### `routine-runs-off-the-end` — warning
 
-> `{0}` runs off {1} into whatever {2}: {3}, or `.next ?` ends the path
+> `{0}` runs off {1} into whatever {2}: {3}, or write `.next ?` to end the path
 
-The routine ends without transferring control, so flow carries on into whatever the linker puts after it. Where that was meant, a `.fallthrough` as the last line of the body names the routine it runs into, which is then checked to start there and checked as a tail call.
+The routine's last instruction does not return, jump or branch away, so execution carries on into whatever the linker puts after it. Usually an `rts`, `rtl` or `jmp` is missing. Where running on was meant, end the body with `.fallthrough NAME`, naming the routine it runs into; nt65 checks that NAME starts where this routine ends, and checks it as a tail call. `.next ?` ends the path without claiming anything.
 
 ### `runs-into-data`
 
-> the instruction above runs into this data. `.next` on it says where flow goes instead
+> the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead
 
-The bytes after the instruction are data, and the processor would execute them. A `.next` says where flow goes instead; after a conditional branch that is always taken, one naming the branch's target says so.
+Execution falls from the instruction above into these bytes, so the processor would run them as code, as in the `.byte $2c` skip trick or an opcode written out as bytes. nt65 cannot follow flow through data, so write a `.next` after the data naming where flow really goes. If the instruction above is a conditional branch that is always taken, put a `.next` naming its target under the branch instead.
 
 ### `self-modifying-unchecked`
 
-> {0} writes into the instruction at `{1}`: `.patch {2}` acknowledges it
+> {0} modifies the instruction at `{1}`: add `.patch {2}` after it to mark the self-modifying code
 
-The store writes into an instruction. A `.patch` says so, and is what tells a reader that the instruction is not what it looks like.
+The store writes into an instruction's bytes, so that instruction does not do what its text says. A `.patch` naming the instruction's label, written after the store, acknowledges it and tells a reader that the instruction is changed at run time.
 
 ### `tail-call-distance-mismatch`
 
-> {0} is a tail call, and `{1}` is {2} while `{3}` is {4}: it would return to the caller the wrong way
+> {0} is a tail call, but `{1}` is {2} and `{3}` is {4}, so `{1}` would return the wrong way to `{3}`'s caller
 
-A tail call leaves the return to the callee, so the callee has to return the way this routine's caller expects.
+In a tail call the callee returns directly to this routine's caller. A near routine returns with `rts` and a far one with `rtl`, so the callee must be the same distance as this routine, or the caller would get the wrong kind of return. Call it with `jsr` or `jsl` and return normally instead.
 
 ### `tail-call-to-handler`
 
-> {0} is a tail call, and `{1}` is an interrupt handler, which leaves by `rti`: only a routine that never returns, or another interrupt handler, may jump to one
+> {0} is a tail call into interrupt handler `{1}`, whose `rti` would not return to this routine's caller: only a `noreturn` routine or another interrupt handler may jump to one
 
-A tail call leaves the return to the callee, and an interrupt handler returns with `rti`, which pulls flags nobody pushed.
+A tail call is a jump that leaves the callee to return to this routine's caller. An interrupt handler returns with `rti`, which pulls the status flags as well as the address, and nothing pushed them, so it would not return properly. Call the handler's code some other way, or jump to it only from another handler or a `noreturn` routine.
 
 ## Processor state
 
-The 65816's widths, mode, direct page, bank, stack and signatures.
+65816 register widths, emulation mode, direct page, data bank, stack frames, calls and returns.
 
 ### `args-not-pushed`
 
-> `{0}` takes `args {1}`, pushed before the call, and {2}
+> `{0}` declares `args {1}`, bytes the caller pushes before the call, but {2}
 
-The routine's signature says how many bytes the caller pushes before the call, and it pulls exactly that many.
+`args n` in a routine's signature says the caller pushes n bytes of arguments before calling it, and the routine reads or pulls exactly that many. At this call fewer bytes are on the stack than that, counting what the calling routine has pushed since its entry. Push the arguments before the call.
 
 ### `asserted-item-not-restored`
 
-> {0}`{1}` says `{2}`, so {3} must be {4}, and {5} it may not be
+> {0}`{1}` says `{2}`, so {3} must be {4}, but {5} it may not be
 
-A `*` on a signature item says the routine leaves that part of the state as it found it, whatever it was. On this path it does not.
+A `*` item in a signature, such as `a*` or `dp*`, says the routine returns that part of the processor state exactly as it found it on entry, whatever it was. On this path the routine may have changed it without restoring it. Restore it before returning, for example with `php` and `plp` around a width change, or by saving and restoring D or B.
 
 ### `bank-mismatch`
 
-> `{0}` is in "{1}", which is {2}, and B is {3} here
+> `{0}` is in segment "{1}", which is {2}, but B is {3} here
 
-The segment says which bank its bytes are in, and B holds another here, so an absolute operand would read the same offset in the wrong bank.
+A segment in the project file can declare the bank its contents are in. An absolute operand is read from the bank in the data bank register B, so with B holding another bank it would reach the same address in the wrong bank. Set B first (for example with `plb`), declare it with `.state dbr = ...`, or use a long operand such as `f:`.
 
 ### `call-distance-mismatch`
 
-> `{0}` is {1}, and is called with `{2}`
+> `{0}` is {1}, so call it with `{2}`
 
-`jsr` pushes two bytes and `jsl` three, and the routine returns with whichever matches. Mixing them unbalances the stack.
+A near routine is called with `jsr`, which pushes a two-byte return address, and returns with `rts`; a far routine is called with `jsl`, which also pushes the program bank, and returns with `rtl`. Calling it the other way leaves the stack unbalanced when it returns. Use the instruction the message names, or change `near` or `far` in the routine's signature.
 
 ### `call-state-mismatch`
 
-> {0} needs `{1}`, and {2}
+> {0} needs `{1}`, but {2}
 
-The callee's signature says what it needs on entry, and the analysis finds something else here. That is what a signature is for: the caller is checked against it, not against the body.
+Every call is checked against the entry state in the called routine's signature, not against its body. Here the state at the call differs from what that signature requires. Change the state before the call, for example with `.ensure a16`, or correct the callee's signature if it is wrong.
 
 ### `call-target-not-a-routine`
 
-> `{0}` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+> `{0}` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
 
-What is named has no signature, so there is nothing to check the call against.
+On the 65816 every call is checked against the called routine's signature. What this call names has no signature, so there is nothing to check it against. Call a `.proc`, an extern proc or a `proc(...)` import instead.
 
 ### `call-target-unknown`
 
-> `{0}` needs a routine to call: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+> `{0}` must call a named routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
 
-On the 65816 a call is checked against the signature of what it calls, so what it calls has to be something with one.
+On the 65816 every call is checked against the called routine's signature, which says what register widths, mode, D and B it expects. A call to a bare address, or to anything else without a signature, cannot be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` import.
 
 ### `direct-page-mismatch`
 
-> `{0}` is in "{1}", which is reached through the direct page at {2}, and D is {3} here
+> `{0}` is in segment "{1}", which expects the direct page at {2}, but D is {3} here
 
-The segment says which direct page its bytes are reached through, and D holds another value here. The one-byte operand would read somewhere else entirely.
+A segment in the project file can declare `dp`, the value D must hold for its variables to be reached with one-byte direct-page operands. Here D holds another value, so the operand would reach a different address. Set D before this line, or declare its value with `.state dp = ...` or `dp = ...` in the routine's signature.
 
 ### `direct-page-out-of-reach`
 
-> {0} at {1}, which reaches only {2} to {3}
+> {0} at {1}, which covers only {2} to {3}
 
-The direct page is 256 bytes from D, and the address is outside it.
+A direct-page operand is a one-byte offset from D, so it reaches only the 256 bytes from D to D+$ff, and this address is outside them. Change D, or use an absolute operand.
 
 ### `direct-page-unknown`
 
 > {0}, and {1}
 
-A direct-page operand is an offset from D, so D has to be known for the line to mean anything fixed. A `.state dp = ...` says what it is.
+A `d:` operand is an offset from the direct page register D, so nt65 needs D's value to know which address it reaches. Declare it with `.state dp = ...` at this point, or with `dp = ...` in the routine's signature.
 
 ### `ensure-item-not-a-width`
 
-> `.ensure` makes widths hold, and takes `a8`, `a16`, `i8` and `i16`: `{0}` is not one of them
+> `.ensure` takes only `a8`, `a16`, `i8` and `i16`, not `{0}`
 
-An `.ensure` makes something true by writing the instruction that makes it true, and widths are the only part of the state that works for. Everything else is asserted with `.state`.
+`.ensure` writes the `rep` or `sep` that makes a register width true, and widths are the only part of the processor state it can set that way. To declare anything else at a point, such as the mode, D or B, use `.state`.
 
 ### `ensure-needs-native`
 
 > `.ensure {0}` needs native mode, and {1}
 
-An `.ensure` writes a `rep` or a `sep` to make a width hold, and the width bits only have an effect in native mode.
+`.ensure a16` and `.ensure i16` write a `rep`, and 16-bit widths exist only in native mode: in emulation mode A, X and Y stay 8-bit whatever `rep` does. Switch to native mode (`clc` then `xce`) before the `.ensure`, or, where the analysis cannot see the mode, declare it with `native` in the routine's signature or a `.state native`.
 
 ### `frame-depth-unknown`
 
-> `{0}` is counted from the stack pointer, and how much is pushed is not known here{1}
+> `{0}` is an offset from the stack pointer, but how many bytes are pushed here is not known{1}
 
-A frame member is an offset from the stack pointer, so how much is pushed has to be known.
+A frame member becomes an `n,s` operand whose offset counts every byte pushed since the `.frame`. Where the paths reaching this line push different amounts, or something the analysis cannot follow moved the stack pointer, the offset cannot be worked out. Make every path push the same bytes, or write the `.frame` again after the point where the stack changes.
 
 ### `frame-gone`
 
-> `{0}` is in `{1}`, which is no longer on the stack here
+> `{0}` is in frame `{1}`, which has been pulled off the stack here
 
-The bytes the frame was laid out over have been pulled, so its members name nothing.
+The bytes the frame covered have been pulled off the stack by this point, so its members no longer name anything. Use the member before those pulls, or write a new `.frame` for what is on the stack now.
 
 ### `frame-member-not-stack-relative`
 
-> `{0}` is a place on the stack, and is named only on its own as a stack-relative operand: `{1},s`
+> `{0}` is a stack slot, usable only on its own as a stack-relative operand: `{1},s`
 
-A frame member is a place on the stack, not an address: it is reached with `,s` and nothing else.
+A frame member is an offset from the stack pointer, not an address, so it can only be the whole operand of a stack-relative instruction, as in `lda locals::count,s` or `lda (locals::ptr,s),y`. It cannot be used in an expression or with another addressing mode.
 
 ### `frame-not-a-record`
 
-> `.frame {0}` is laid out as a struct or a union, whose size says how many bytes it names
+> `.frame {0}` needs a struct or union type: its size says how many stack bytes the frame covers
 
-A `.frame` lays the top of the stack out as a struct or a union, whose size says how many bytes it covers.
+`.frame name: T` lays out the top of the stack as the struct or union T, and T's size says how many bytes the frame covers. Anything else has no members or size to lay out. Give the frame a struct or union type.
 
 ### `frame-past-the-stack`
 
-> `{0}` is {1} bytes, and only {2} are pushed here
+> frame `{0}` is {1} bytes, but only {2} bytes are pushed here
 
-The frame covers more bytes than this path has pushed, so its members would name what is under the stack pointer.
+A `.frame` names bytes on top of the stack, so it can cover at most what this routine has pushed so far. This one covers more, so its last members would name the return address or the caller's bytes. Push the frame's bytes before the `.frame`, or use a smaller type.
 
 ### `immediate-in-emulation`
 
-> `{0} #` would be 16 bits in emulation mode, where both widths are 8
+> `{0} #` has a 16-bit width here, but the processor is in emulation mode, where A, X and Y are always 8-bit
 
-In emulation mode both widths are eight bits, whatever the width bits say, so a sixteen-bit immediate could never be written here.
+In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags say, so an immediate is always one byte. The analysis finds a 16-bit width and emulation mode on the same path, which cannot both be true. Check the signature or `.state` that declared the 16-bit width, or the `xce` that entered emulation mode.
 
 ### `jump-across-banks`
 
-> `{0}` is near and in another bank, and would return with `rts` in its own bank to `{1}`'s caller: only a routine that never returns, or an interrupt handler, enters another bank this way
+> `{0}` is near and in another bank: after this `jml` its `rts` would return inside its own bank, not to `{1}`'s caller
 
-The jump leaves the bank, and the target returns with `rts`, which comes back inside its own bank. Only a routine that never returns may cross this way.
+A `jml` to a near routine in another bank changes the program bank, and the routine's `rts` pulls only a two-byte address, so it returns within the bank it is in, not to the caller of the routine that jumped. This is valid only when nothing returns through the jump: the jumping routine is `noreturn` or an interrupt handler, or the target is `noreturn`. Otherwise make the target `far` and end it with `rtl`, or place it in this bank.
 
 ### `jump-distance-mismatch`
 
-> `{0}` is {1}: a jump to it is `{2} {3}`
+> `{0}` is {1}: jump to it with `{2} {3}`
 
-`jmp` stays in the bank and `jml` names one. Which is right follows from where the target is.
+`jmp` stays in the current bank, and `jml` also sets the program bank. A far routine is reached with `jml`, and a near one in the same bank with `jmp`.
 
 ### `jump-leaves-bank`
 
-> `{0}` stays in bank {1}, and `{2}` is in "{3}", in bank {4}: {5}
+> `{0}` cannot leave bank {1}, and `{2}` is in segment "{3}" in bank {4}: {5}
 
-The instruction keeps the bank it is in, and the target is in another one.
+`jsr`, `jmp` and the branches change only the 16-bit address and keep the program bank, so they cannot reach code in a segment that the project places in another bank. Use `jsl` or `jml`, which set the bank too; a conditional branch has no long form, so branch on the opposite condition around a `jml` to the target.
 
 ### `mirror-bank-mismatch`
 
-> `{0}` is in "{1}", {2}, and this reaches it in bank {3}
+> `{0}` is in segment "{1}", {2}, but this reaches it through bank {3}
 
-The segment is mirrored in some banks, and this reaches it from one it is not in.
+The segment's `bank` and `mirrors` in the project file say which banks its contents appear in. This long address names the routine in a bank that is neither, so it would land somewhere else. Use an address in the segment's bank or in one of its mirrors.
 
 ### `range-bank-mismatch`
 
-> {0} is reached only from banks {1}, and B is {2} here
+> {0} is reachable only from banks {1}, but B is {2} here
 
-The project says which banks an absolute address in this range is reachable from, for hardware that is mirrored in some banks only.
+The project file's `ranges` say which banks each absolute address can be reached from, for hardware that is mirrored only in some banks. Here the data bank register B may hold a bank outside that set, so the operand would reach something else. Set B to one of the listed banks, or use a long operand.
 
 ### `relative-call-extra-phk`
 
-> `{0}` is near, and a relative call to it pushes no bank: the `phk` is one byte too many
+> `{0}` is near: remove the `phk` from this relative call
 
-A near routine returns with `rts`, which pulls two bytes. The pushed bank would be left on the stack.
+A near routine returns with `rts`, which pulls only the two-byte return address that `per` pushed. The byte `phk` pushed would be left on the stack. Remove the `phk`, or make the routine `far`.
 
 ### `relative-call-needs-phk`
 
-> `{0}` is far, and a relative call to it pushes the bank with `phk` before the `per`
+> `{0}` is far: push the bank with `phk` before the `per` of this relative call
 
-A `per` pushes a sixteen-bit return address. A far routine returns with `rtl`, which pulls a bank as well, so the bank is pushed first.
+A relative call is written as a `per` that pushes the return address, then a branch to the routine. `per` pushes only 16 bits, but a far routine returns with `rtl`, which pulls three bytes: the address and the bank. Put a `phk` before the `per` so the bank is on the stack.
 
 ### `return-distance-mismatch`
 
-> `{0}` is {1}, and returns with `{2}`
+> `{0}` is {1}, so it returns with `{2}`
 
-A far routine is called with `jsl` and returns with `rtl`; a near one with `jsr` and `rts`. The routine's own declaration says which it is.
+A far routine is called with `jsl` and returns with `rtl`; a near one is called with `jsr` and returns with `rts`. Returning the other way pulls the wrong number of bytes off the stack. Use the instruction the message names, or change `near` or `far` in the routine's signature.
 
 ### `return-state-mismatch`
 
-> {0}`{1}` returns {2}, and {3}
+> {0}`{1}` declares it returns {2}, but {3}
 
-The callee's signature says what is true when it returns, and the analysis finds something else on the line after the call.
+A routine's signature says what state it returns in: the state after `->`, or its entry state when there is no `->`. Callers rely on it. On this path the state at the return, or for a tail call the state when the routine jumped to returns, is different. Restore the state before returning, or correct the signature.
 
 ### `state-item-not-a-point`
 
-> `{0}` describes a routine rather than a point in it, and belongs in a signature
+> `{0}` describes a whole routine, not one point in it: write it in the routine's signature, not in `.state`
 
-A `.state` says what is true at one point. What a routine takes, keeps or returns describes the routine, and belongs in its signature.
+A `.state` declares the processor state at one line: register widths, mode, D and B. Items that describe the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, a signature set, or a `*` item meaning unchanged since entry, belong in the signature after the routine's name.
 
 ### `state-mode-mismatch`
 
-> `.state {0}`, and the processor is in {1} mode here
+> `.state {0}` does not match: the processor is in {1} mode here
 
-The `.state` declares which mode the processor is in, and the analysis finds the other one on a path that reaches here.
+A `.state` declares what is true at a point, and the analysis checks it against every path that reaches that point. On at least one of them the processor is in the other mode. Fix the code on that path, or correct the `.state`.
 
 ### `state-outside-a-routine`
 
-> `{0}` describes a point in a routine, and this is outside any `.proc`
+> `{0}` is only allowed inside a `.proc`: it describes a point in a routine's code
 
-A `.state` and an `.ensure` describe a point in code, and code is inside a `.proc`.
+`.state`, `.ensure` and `.frame` describe or change the processor state or the stack at one point in a routine's code, and the analysis follows that state only inside a `.proc`. Move the directive into the routine it belongs to.
 
 ### `state-value-mismatch`
 
-> `.state {0}`, and {1} is {2} here
+> `.state {0}` does not match: {1} is {2} here
 
-The `.state` declares what the direct page or the data bank is, and the analysis finds another value on a path that reaches here.
+A `.state` declares what is true at a point, and the analysis checks it against every path that reaches that point. On at least one of them the direct page register D, or the data bank register B, holds a different value. Fix the code on that path, or correct the `.state`.
 
 ### `state-value-not-constant`
 
-> `.state {0}` needs a constant: the analysis follows {1} by value
+> `.state {0}` needs a constant, because the analysis tracks {1} as an exact value
 
-The analysis follows the direct page and the data bank by value, so a declaration of one is a number known while nt65 builds.
+The analysis tracks the direct page register D and the data bank register B as exact values, to check each direct-page and absolute operand against them. So the value in `.state dp = ...` or `.state dbr = ...` must be a constant expression that nt65 can evaluate while it builds.
 
 ### `state-value-out-of-range`
 
 > `.state {0}` is out of range: {1}
 
-The direct page is a sixteen-bit address and the data bank is one byte.
+The direct page register D holds a 16-bit address, $0000 to $ffff, and the data bank register B holds one byte, $00 to $ff.
 
 ### `state-width-mismatch`
 
-> `.state {0}`, and {1} {2} {3} here
+> `.state {0}` does not match: {1} {2} {3} here
 
-The `.state` declares a register width, and the analysis finds another on a path that reaches here.
+A `.state` declares what is true at a point, and the analysis checks it against every path that reaches that point. On at least one of them the register has the other width. Fix the code on that path, for example with `.ensure`, or correct the `.state`.
 
 ### `width-in-emulation`
 
-> {0} cannot hold in emulation mode, where both widths are 8 bits
+> {0} is impossible in emulation mode, where A, X and Y are always 8-bit
 
-Emulation mode forces both widths to eight bits, so a declaration of sixteen cannot hold.
+In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags say, so a `.state` or signature that declares `emu` together with `a16` or `i16` describes a state the processor cannot be in. Declare `a8` and `i8`, or leave the widths out: `emu` already implies them.
 
 ### `width-unknown`
 
 > `{0} #` needs the width of {1}, and {2}
 
-How many bytes a 65816 immediate takes is the register's width at that point, and no path reaching here settles it. A `.state` after the label, or a signature on the routine, says what it is.
+On the 65816 an immediate operand such as `lda #` or `ldx #` is one byte or two depending on the M or X flag, so nt65 has to know how wide A, or X and Y, is on that line. Here it does not: the paths that reach the line disagree, something the analysis cannot follow changed the flags, the routine's signature says `a*` or `i*`, or no path reaches the line at all. Put `.ensure a8`, `a16`, `i8` or `i16` before the line to set the width, write a `.state` after a label to declare it, or give the width in the routine's signature.
 
 ## Output
 
-Names that meet in the ca65, and the C header.
+Names that clash in the ca65 output, and the C header.
 
 ### `c-header-name-left-out` — warning
 
-> `{0}` is exported to the linker as `{1}`, which C cannot name, so the C header leaves the {2} out: cc65 puts `_` before a C name, so export it `as "_{3}"`
+> the C header leaves out {2} `{0}`: its linker name `{1}` has no leading `_`, so C cannot name it; export it `as "_{3}"`
 
-cc65 puts an underscore before a C name, so an exported symbol is reachable from C only when its linker name starts with one.
+cc65 puts an underscore in front of every C name, so C code can refer to an assembly symbol only when its linker name starts with `_`. Export it under a name that does, with `as "_name"`, or turn this warning off in the project's `diagnostics` if C does not need it.
 
 ### `c-header-untyped` — warning
 
-> `{0}` holds `{1}`, which is not exported, so the C header declares it as bytes
+> `{0}` has type `{1}`, which is not exported, so the C header declares `{0}` as bytes
 
-The C header declares what the program exports. A type it names that is not exported has no C declaration to refer to, so the name is declared as bytes.
+The C header declares only exported types. This exported data has a struct or union type that is not exported, so the header cannot name it and declares the data as an `unsigned char` array of the same size. Export the type to give the data its C type.
 
 ### `cannot-be-written`
 
-> `{0}` cannot be written out, and nothing said why: this is a bug in nt65
+> `{0}` cannot be translated to ca65, and no other error explains why: this is a bug in nt65
 
-Every construct the analysis accepts has a spelling in ca65. Reaching this means one does not, and nothing said so earlier: it is a bug in nt65 rather than in the program.
+Everything nt65 accepts should have a ca65 translation, and anything it cannot translate should have been reported as an error first. Reaching this means neither happened, which is a bug in nt65 rather than in the program. Please report it with the line that triggers it.
 
 ### `export-name-taken`
 
@@ -2107,9 +2107,9 @@ The build configuration does not take this branch, so its lines are parsed and n
 
 ### `output-name-collision`
 
-> `{0}` and {1} both become `{2}` in the output
+> `{0}` and {1} both become `{2}` in the ca65 output
 
-Two nt65 names become one ca65 symbol, so the output would define it twice. The generated spellings are nt65's, and a name that collides is renamed.
+nt65 writes ca65 source, and flattens its scoped names into ca65 symbols. These two different names flatten to the same ca65 symbol, so the output would define it twice. Rename one of them.
 
 ## The project file
 
@@ -2119,49 +2119,49 @@ Two nt65 names become one ca65 symbol, so the output would define it twice. The 
 
 > `{0}`: {1} is not a bank or a range of banks
 
-A bank is a byte, and a range of banks is two with a `-` between them.
+A bank is one byte, $00 to $ff, and a range of banks is two of them with a `-` between them, lowest first.
 
 ### `banks-not-a-list`
 
-> `{0}` is a list of banks, such as ["$00-$3f", "$80-$bf"]
+> `{0}` must be a list of banks, such as ["$00-$3f", "$80-$bf"]
 
-Banks are written as a list, each item one bank or a range of them.
+Banks are written as a JSON array. Each item is one bank, as a number or a string, or a string holding a range of banks such as "$00-$3f".
 
 ### `configuration-key-unknown`
 
-> configuration `{0}`: `{1}` is not a configuration key: a configuration has `defines`, `diagnostics` and `out`
+> configuration `{0}` cannot set `{1}`: a configuration may set only `defines`, `diagnostics` and `out`
 
-What a named configuration may change is a fixed, small set: the defines it gives over the project's, and where its output goes.
+A named configuration changes only a few things about a build: its defines, its diagnostic severities and its output directory. Everything else, such as `cpu`, `files` and `segments`, is set once for the whole project.
 
 ### `configuration-name-invalid`
 
-> `{0}` is not a configuration name: one is letters, digits, `_` and `-`
+> `{0}` is not a valid configuration name: use only letters, digits, `_` and `-`
 
-A configuration is chosen by name on the command line, so its name is written without quoting.
+A configuration is chosen by name with `--config` on the command line, so its name is limited to characters that need no quoting.
 
 ### `configuration-not-an-object`
 
-> configuration `{0}` is an object with `defines`, `diagnostics` and `out`
+> configuration `{0}` must be an object, with any of `defines`, `diagnostics` and `out`
 
-A configuration gives defines over the project's and an output directory in place of it.
+A named configuration is a JSON object that changes the project's `defines`, `diagnostics` and `out` for builds that choose it with `--config`: its defines and diagnostic severities take precedence over the project's, and its `out` replaces the project's.
 
 ### `configuration-unknown`
 
 > `{0}` is not a configuration: {1}
 
-The name given to `--config` is not one the project file declares. The project's own settings build.
+The name given to `--config` has to be one of the configurations declared under `configurations` in the project file. Check the spelling against the names listed.
 
 ### `define-name-invalid`
 
-> `{0}` is not a name
+> `{0}` is not a valid define name: use letters, digits and `_`, optionally after a module path such as `hw::`
 
-A define is named as a constant is, or with a module's path in front of it to set that module's `.config`.
+A define is named as a constant is: a letter or `_` followed by letters, digits and `_`. It may have a module's path in front of it, as in `hw::SOUND`, to set that module's `.config`.
 
 ### `define-not-a-number`
 
-> `{0}` is not a number, and a define is a number
+> `{0}`: a define's value must be a number
 
-A define is a constant visible in every file, and constants are numbers. A JSON number or a string in nt65 number syntax both read.
+A define is a constant visible in every file, and constants are numbers. In the project file give a JSON number or a string in nt65 number syntax, such as "$20"; on the command line, `-D NAME=value` takes the same syntax, and `-D NAME` alone sets it to 1.
 
 ### `diagnostic-name-unknown`
 
@@ -2171,157 +2171,157 @@ The names are a fixed set, so a typo is a mistake rather than a line that quietl
 
 ### `diagnostic-not-turned-down`
 
-> `{0}` is an error, and a project may not turn an error down
+> `{0}` is an error, and a project cannot turn an error into a warning or off
 
-A warning is a matter of taste and an error is a program nt65 refuses to translate. Turning one down would not make the output right; it would only stop nt65 saying so.
+A warning points at something that may be intended; an error means nt65 cannot produce correct output for the program. Lowering an error would not make the output right, only hide the problem, so `diagnostics` can change only warnings.
 
 ### `diagnostic-severity-unknown`
 
-> `{0}` is reported as "off", "warning" or "error"
+> the severity of `{0}` must be "off", "warning" or "error"
 
-A project says how much a diagnostic matters to it, and there are three answers.
+Under `diagnostics`, each diagnostic's name maps to one of three severities: "off" to silence it, "warning" to report it without failing the build, or "error" to fail the build.
 
 ### `project-cpu-unknown`
 
-> `{0}` is not a processor nt65 knows: {1}
+> `{0}` is not a supported `cpu`: use {1}
 
-The processors nt65 knows are a fixed set, spelled as the project file spells them.
+`cpu` names the processor the program is written for, spelt exactly as one of the listed names.
 
 ### `project-json-invalid`
 
 > {0}
 
-The file is not JSON. Comments and trailing commas are allowed; everything else is JSON as it is written everywhere.
+The project file is not valid JSON. Comments and trailing commas are allowed; otherwise it follows standard JSON syntax. The message gives the parser's reason, and the position points at where it stopped.
 
 ### `project-key-unknown`
 
-> `{0}` is not a {1} key{2}
+> `{0}` is not a key of {1}{2}
 
-The keys are a fixed set, so a typo is a mistake rather than a setting that quietly does nothing. `$schema` is accepted and read for nothing.
+The project file accepts a fixed set of keys: `cpu`, `files`, `out`, `defines`, `diagnostics`, `spaces`, `segments`, `ranges` and `configurations`, plus `$schema`, which is accepted and ignored. An unknown key is an error, so that a misspelt setting does not silently do nothing.
 
 ### `project-not-a-list`
 
-> `{0}` is a list of strings
+> `{0}` must be a list of strings
 
-The key takes a list of strings: the globs that name a program's sources, each written from the project root.
+`files` takes a JSON array of strings: glob patterns, relative to the project root, that name the program's source files.
 
 ### `project-not-a-string`
 
-> `{0}` is a string
+> `{0}` must be a string
 
-The key takes a string, such as the directory the build writes its output into.
+This key takes a JSON string: `cpu` a processor name, `out` the directory the build writes its output into.
 
 ### `project-not-an-object`
 
-> {0} holds one object
+> {0} must hold one JSON object
 
-The project file is one object, whose keys say what the program is built from and how.
+The top level of the project file is one JSON object, whose keys say what the program is built from and how.
 
 ### `project-segment-key-unknown`
 
-> segment "{0}": `{1}` is not a segment key: a segment has a `size`, a `dp`, a `bank`, `mirrors` and a `space`
+> segment "{0}" cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`
 
-What a segment may say is a fixed set: how wide an address in it is, and where it sits.
+A segment's entry says how wide its addresses are (`size`), which direct page and banks its contents are reached through (`dp`, `bank`, `mirrors`), and which address space it is in (`space`). Any other key is an error, so that a misspelt one does not silently do nothing.
 
 ### `project-segment-not-an-object`
 
-> segment "{0}" is an object with a `size`
+> segment "{0}" must be an object with a `size`
 
-A segment is an object saying how wide an address in it is, and where it sits.
+Each entry under `segments` is an object describing that segment: its address `size`, which is required, and optionally `dp`, `bank`, `mirrors` and `space`.
 
 ### `project-segment-size-missing`
 
 > segment "{0}" needs a `size` of "zp", "abs" or "far"
 
-How wide an address in a segment is decides how every reference to what is in it is written, so every segment says it.
+A segment's `size` is how wide addresses in it are: "zp" for one-byte zero-page addresses, "abs" for two-byte absolute ones, and "far" for three-byte long ones. It decides how every reference to the segment's contents is assembled, so every segment has to give one.
 
 ### `project-space-holds-unknown`
 
-> space `{0}` holds "code", for a space that runs this program's processor, or "data"
+> space `{0}` must be "code" or "data"
 
-A space says whether its code is this program's processor's, which nt65 checks, or data and macro calls, which is what another processor's code is to nt65.
+Each entry under `spaces` names an address space and says what it holds. "code" means the space runs this program's processor, and nt65 checks its code; "data" means anything else, including code for another processor, which nt65 treats as data and macro calls.
 
 ### `project-value-not-an-object`
 
-> `{0}` is an object
+> `{0}` must be an object
 
-The key takes an object, whose own keys are what it is a table of.
+This key takes a JSON object whose own keys are its entries: define names, diagnostic names, configuration names, segment names, space names or address ranges.
 
 ### `range-invalid`
 
 > `{0}` is not a range of absolute addresses, such as "$2100-$21ff"
 
-A range key is one absolute address, or two with a `-` between them.
+A key under `ranges` is one absolute address, or two with a `-` between them, lowest first, each from $0000 to $ffff.
 
 ### `ranges-overlap`
 
-> `{0}` overlaps `{1}-{2}`: an address is in one range at most
+> `{0}` overlaps `{1}-{2}`: an address can be in only one range
 
-Which banks an address is reachable from is one answer, so the ranges do not overlap.
+Each range says which banks its addresses can be reached from, so an address in two ranges would have two answers. Change the ranges so they do not overlap.
 
 ## Signatures
 
-What a routine or a macro declares about itself, and what a set may hold.
+What a routine or macro signature may declare, and what a signature set may hold.
 
 ### `alias-distance-mismatch`
 
-> `{0}` is declared {1}, and `{2}` is {3}
+> `{0}` is declared {1}, but `{2}`, the routine it names, is {3}
 
-Another name for a routine is reached the same way the routine is, because it is the same bytes.
+`.proc name = routine: ...` declares another name for an existing routine. It is the same code, so it is called and returns the same way: a near routine with `jsr` and `rts`, a far one with `jsl` and `rtl`. Give the alias the routine's own `near` or `far`, or leave its signature out to take the routine's.
 
 ### `alias-signature-mismatch`
 
-> `{0}` is declared `{1}`, and `{2}` is `{3}`: another name for a routine declares what the routine does
+> `{0}` is declared `{1}`, but `{2}`, the routine it names, is `{3}`: another name for a routine must declare the same signature
 
-Callers are checked against the signature on the name they write, so two names for one routine that declare different things would check the same code two ways.
+Calls through another name for a routine are checked against the signature on that name, so a name that declares something different from the routine would check the same code two different ways. Give it the routine's signature, or leave its signature out to take the routine's.
 
 ### `args-not-constant`
 
-> `{0}` needs a constant: it counts the bytes the caller pushes
+> `{0}` needs a constant: the byte count has to be known while nt65 builds
 
-How many bytes the caller pushes decides where the routine finds them, so it is a number known while nt65 builds.
+`args n` says how many bytes the caller pushes before the call. The analysis uses it to check every call and to work out where the routine finds its arguments on the stack, so n has to be a constant expression that nt65 can evaluate while it builds.
 
 ### `args-out-of-range`
 
-> `{0}` is out of range: it counts the bytes the caller pushes
+> `{0}` is out of range: the byte count must be from 0 to $ffff
 
-The bytes a caller pushes are on the stack, which is 256 bytes deep on the 6502 and one bank on the 65816.
+`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the most the 65816's stack can hold.
 
 ### `distance-disagrees`
 
-> `{0}` disagrees with `{1}`: a routine is called one way
+> `{0}` contradicts the earlier `{1}`: a routine is either near or far
 
-A routine is reached one way, so its signature says near or far once.
+A near routine is called with `jsr` and returns with `rts`; a far one is called with `jsl` and returns with `rtl`. A routine is one or the other, so its signature says `near` or `far` once. Remove one of them.
 
 ### `handler-assumes-state`
 
-> `{0}`: an interrupt handler is entered from anywhere, and assumes nothing but its mode: `interrupt, native` or `interrupt, emu`
+> `{0}`: an interrupt handler can be entered at any instruction, so its signature can give only the mode: `interrupt, native` or `interrupt, emu`
 
-An interrupt arrives between any two instructions, so nothing about the state at the handler is the caller's to promise. The mode is the one thing the processor itself decides.
+An interrupt can arrive between any two instructions, so a handler cannot assume anything about the register widths, D or B; it has to set what it needs itself. Only the mode is known on entry, because the processor takes native-mode and emulation-mode interrupts through different vectors. Remove the item and set the state inside the handler.
 
 ### `handler-declares-an-exit`
 
-> an interrupt handler leaves by `rti`, and declares nothing after `->`
+> an interrupt handler cannot declare a state after `->`: it leaves with `rti`, which restores the interrupted state
 
-The processor restores what it saved, and there is no caller to read anything after the handler.
+What follows `->` is the state a routine returns in, for its caller to rely on. An interrupt handler leaves with `rti`, which restores the status register and return address the interrupt pushed, so nothing reads the state the handler leaves. Remove the `->` and what follows it.
 
 ### `handler-distance`
 
-> `{0}` describes how a routine is called, and an interrupt handler is entered by the processor, which makes it neither near nor far
+> `{0}` describes how a routine is called, and an interrupt handler is never called: the processor enters it and `rti` leaves it
 
-Near and far say how a routine is called and returned from. The processor enters a handler and `rti` leaves it, which is neither.
+`near`, `far`, `inline` and `args` describe how a caller calls a routine and how it returns. An interrupt handler has no caller: the processor enters it through a vector, and `rti` leaves it. Remove the item.
 
 ### `handler-keeps`
 
-> `{0}`: an interrupt handler says which mode it is entered in, or nothing
+> `{0}` does not apply to an interrupt handler: give the mode it is entered in, `native` or `emu`, or nothing
 
-There is no caller for the handler to hand anything back to: the processor entered it, and `rti` leaves it.
+A `*` item says a routine hands a part of the state back to its caller as it found it. An interrupt handler has no caller: the processor enters it and `rti` leaves it. Give the mode the handler is entered in with `native` or `emu`, or leave the mode out.
 
 ### `handler-noreturn`
 
-> `{0}`: an interrupt handler leaves by `rti`, and never returns to a caller in any case
+> `{0}` does not apply to an interrupt handler, which leaves with `rti` and has no caller to return to
 
-`noreturn` is about a routine that never comes back to its caller, and a handler has none.
+`noreturn` says a routine never comes back to its caller. An interrupt handler has no caller: the processor enters it, and `rti` resumes the interrupted code. Remove `noreturn`.
 
 ### `item-belongs-at-entry`
 
@@ -2331,78 +2331,78 @@ What a routine is and how it is called are true of it from entry to exit, so the
 
 ### `macro-distance`
 
-> `{0}` describes how a routine is called, and a macro is expanded
+> `{0}` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place
 
-A macro is not called and does not return: it is written out where it stands.
+A macro is not called and does not return: its body is written out where it is used. `near`, `far`, `inline`, `args` and `interrupt` describe how a routine is called, entered or left, so they do not apply to it. Remove the item.
 
 ### `macro-keeps`
 
-> `{0}` is about a routine from entry to exit, and a macro is expanded into one: what its body keeps is part of what that routine keeps
+> `{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature says what it keeps
 
-A macro is expanded into a routine, so what its body keeps is part of what that routine keeps, and the routine is what declares it.
+A macro's body is expanded into a routine, so what it saves and restores is part of what that routine keeps, and `keeps` belongs in the routine's signature. Remove it from the macro's.
 
 ### `macro-noreturn`
 
-> `noreturn` says a routine never returns, and a macro is expanded, ending where its body does
+> `noreturn` does not apply to a macro: a macro is expanded in place, not called
 
-A macro is expanded where it is called, and what follows the expansion is the routine’s.
+A macro is expanded where it is used, and whatever follows the expansion belongs to the routine it is in. `noreturn` describes routines that never return to a caller. Remove it from the macro's signature.
 
 ### `noreturn-declares-an-exit`
 
-> a routine that says `noreturn` never returns, and declares nothing after `->`
+> a `noreturn` routine never returns, so it cannot declare a state after `->`
 
-What a routine leaves is what a caller reads after the call, and there is no after.
+What follows `->` in a signature is the state a routine returns in, for the caller to rely on after the call. A `noreturn` routine never returns, so there is nothing to declare. Remove the `->` and what follows it.
 
 ### `signature-item-twice`
 
 > `{0}` and `{1}` both describe the same part of the state
 
-Each part of the processor state is declared once, so what the signature says does not depend on the order its items are read in.
+Each part of the processor state is declared once in a signature, so what it says does not depend on the order its items are read in. Keep one of the two items.
 
 ### `signature-set-not-a-set`
 
-> `{0}` is {1}, and a name among a signature's items is a signature set
+> `{0}` is {1}, not a signature set: a bare name among a signature's items has to name a `.signature` set
 
-A bare name among a signature’s items is a `.signature` set; anything else in a signature is written as an item.
+A bare name among a signature's items refers to a set declared with `.signature`, whose items it brings in. Anything else in a signature is written as an item, such as `a16` or `dbr = $7e`.
 
 ### `signature-set-not-first`
 
-> `{0}` is a signature set, and comes first in its list: the items after it change what it gives
+> signature set `{0}` must come first in its list: the items after it change what it gives
 
-A set stands for its items, and the items written after it change what it gives, so the set comes first and the rest read as changes to it.
+A signature set supplies a group of items, and the items written after it adjust or override them. So the set comes first in its list, and the rest read as changes to it.
 
 ### `signature-set-self-reference`
 
-> `{0}` names `{1}`, which stands for `{2}` again: a signature set cannot stand for itself
+> signature set `{0}` names `{1}`, which leads back to `{2}`: a set cannot include itself
 
-A signature set stands for the items it names, so naming itself would stand for itself.
+A signature set is replaced by the items it names. If it names itself, directly or through other sets, that replacement never ends. Remove the reference that closes the loop.
 
 ### `signature-value-not-constant`
 
-> `{0}` needs a constant: the analysis follows D and B by value
+> `{0}` needs a constant, because the analysis tracks D and B as exact values
 
-The analysis follows the direct page and the data bank by value, and checks every call against them, so a signature that names one names a number.
+The analysis tracks the direct page register D and the data bank register B as exact values, and checks every call against the values in the callee's signature. So `dp = ...` or `dbr = ...` in a signature has to be a constant expression that nt65 can evaluate while it builds.
 
 ### `signature-value-out-of-range`
 
 > `{0}` is out of range: {1}
 
-The direct page is a sixteen-bit address and the data bank is one byte.
+The direct page register D holds a 16-bit address, $0000 to $ffff, and the data bank register B holds one byte, $00 to $ff.
 
 ### `state-banks-invalid`
 
-> `{0}` is not a set of banks: each is a constant bank, or a range from the lower to the higher, such as `$00..$3f`
+> `{0}` is not a valid set of banks: each item is a constant bank, or a range written low to high, such as `$00..$3f`
 
-A set of banks is written as `mirrors` writes one, and names at least one bank.
+A set of banks is written in square brackets, as in `dbr = [$00..$3f, $80..$bf]`. Each item is a constant bank number or a range `low..high`, and the set names at least one bank.
 
 ### `state-banks-not-dbr`
 
-> `{0}`: a set of banks is for `dbr`, and the direct page is one address
+> `{0}`: only `dbr` can be given a set of banks; `dp` takes one address
 
-A routine that sets no data bank of its own runs in whichever bank can see what it reaches, so B may be given as a set of banks. The direct page is where every direct operand lands, and is one value.
+A routine that does not set B itself can run with any of several data banks that reach the same memory, so `dbr = [...]` may list a set of banks. D decides where every direct-page operand lands, so `dp` has to be a single value.
 
 ### `unchanged-needs-entry`
 
-> `{0}` after `->` needs `{1}` at entry too: a routine hands back unchanged only what it assumed nothing about
+> `{0}` after `->` needs `{1}` before it too: a routine can promise to return a part unchanged only if it assumes nothing about it on entry
 
-A `*` after the arrow says the routine hands the part back as it found it, which is a promise only a routine that assumed nothing about it can keep.
+A `*` after the arrow promises that the routine returns that part of the state as its caller left it. That promise only means something when the entry also says `*`, accepting whatever the caller has. If the entry gives a value, write that value after the arrow instead.

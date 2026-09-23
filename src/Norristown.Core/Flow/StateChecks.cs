@@ -292,7 +292,12 @@ internal sealed class StateChecks
             if (declared == Width.Unchanged && here != Width.Unchanged)
             {
                 Report(step, Catalogue.AssertedItemNotRestored.Says(
-                    lead, name, $"{item}*", register, "as wide as it was on entry", where));
+                    lead,
+                    name,
+                    $"{item}*",
+                    register,
+                    register == "A" ? "as wide as it was on entry" : "as wide as they were on entry",
+                    where));
             }
             else if (IsKnown(declared) && declared != here)
             {
@@ -581,9 +586,9 @@ internal sealed class StateChecks
         // is a `jml` the opposite branch skips.
         var reaches = mnemonic switch
         {
-            "jsr" => "`jsl` reaches it",
-            "jmp" or "bra" or "brl" => "`jml` reaches it",
-            _ => "no branch leaves the bank: branching the other way over a `jml` to it does",
+            "jsr" => "use `jsl`",
+            "jmp" or "bra" or "brl" => "use `jml`",
+            _ => "a branch cannot leave its bank, so branch the other way around a `jml` to it",
         };
         Report(step, Catalogue.JumpLeavesBank.Says(
             mnemonic,

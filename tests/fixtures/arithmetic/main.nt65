@@ -16,24 +16,24 @@
 
 ; An expression that leaves 64 bits has no value, and says so. None of these is declared,
 ; so what refuses them is the width nt65 computes in rather than the width ca65 holds.
-.assert $7fffffffffffffff + 1 == 0, "no wrap" ;! error[arithmetic-overflow]: $7fffffffffffffff + 1 overflows the 64 bits nt65 computes in
-.assert (0 - $7fffffffffffffff) - 2 == 0, "nor down" ;! error[arithmetic-overflow]: -9223372036854775807 - 2 overflows the 64 bits nt65 computes in
-.assert $ffffffff * $ffffffff == 0, "nor a product" ;! error[arithmetic-overflow]: $ffffffff * $ffffffff overflows the 64 bits nt65 computes in
-.assert 1 << 63 == 0, "nor a shift"     ;! error[arithmetic-overflow]: 1 << 63 overflows the 64 bits nt65 computes in
-.assert -(0 - $7fffffffffffffff - 1) == 0, "no positive" ;! error[arithmetic-overflow]: negating -9223372036854775808 overflows the 64 bits nt65 computes in
-.assert (0 - $7fffffffffffffff - 1) / -1 == 0, "nor a quotient" ;! error[arithmetic-overflow]: -9223372036854775808 / -1 overflows the 64 bits nt65 computes in
+.assert $7fffffffffffffff + 1 == 0, "no wrap" ;! error[arithmetic-overflow]: $7fffffffffffffff + 1 overflows nt65's 64-bit signed arithmetic
+.assert (0 - $7fffffffffffffff) - 2 == 0, "nor down" ;! error[arithmetic-overflow]: -9223372036854775807 - 2 overflows nt65's 64-bit signed arithmetic
+.assert $ffffffff * $ffffffff == 0, "nor a product" ;! error[arithmetic-overflow]: $ffffffff * $ffffffff overflows nt65's 64-bit signed arithmetic
+.assert 1 << 63 == 0, "nor a shift"     ;! error[arithmetic-overflow]: 1 << 63 overflows nt65's 64-bit signed arithmetic
+.assert -(0 - $7fffffffffffffff - 1) == 0, "no positive" ;! error[arithmetic-overflow]: negating -9223372036854775808 overflows nt65's 64-bit signed arithmetic
+.assert (0 - $7fffffffffffffff - 1) / -1 == 0, "nor a quotient" ;! error[arithmetic-overflow]: -9223372036854775808 / -1 overflows nt65's 64-bit signed arithmetic
 
 ; A shift counts places, and only the places a 64-bit value has.
-.assert 1 << 70 == 0, "no bit 70"       ;! error[shift-count-out-of-range]: a shift counts 0 to 63 places, and this one counts 70
-.assert 1 >> -1 == 0, "no count below 0" ;! error[shift-count-out-of-range]: a shift counts 0 to 63 places, and this one counts -1
+.assert 1 << 70 == 0, "no bit 70"       ;! error[shift-count-out-of-range]: shift count 70 is out of range: a shift moves 0 to 63 places
+.assert 1 >> -1 == 0, "no count below 0" ;! error[shift-count-out-of-range]: shift count -1 is out of range: a shift moves 0 to 63 places
 
 ; What is declared reaches the output, and ca65 has 32 bits for it — for the value, and
 ; for every step of the expression it is written with, which ca65 works out again.
-BIG    = $7fffffffffffffff          ;! error[number-too-wide]: $7fffffffffffffff does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
-SUM    = $ffffffff + 1              ;! error[number-too-wide]: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
-STEP   = ($ffffffff + 1) / 2        ;! error[number-too-wide]: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
-ROOM   = (1 << 40) >> 20            ;! error[number-too-wide]: $10000000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
-LOWEST = 0 - $80000001              ;! error[number-too-wide]: -2147483649 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+BIG    = $7fffffffffffffff          ;! error[number-too-wide]: $7fffffffffffffff does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+SUM    = $ffffffff + 1              ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+STEP   = ($ffffffff + 1) / 2        ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+ROOM   = (1 << 40) >> 20            ;! error[number-too-wide]: $10000000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+LOWEST = 0 - $80000001              ;! error[number-too-wide]: -2147483649 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
 
 ; The edges of what ca65 holds are values like any other.
 LIMIT  = $ffffffff
@@ -41,7 +41,7 @@ FLOOR  = 0 - $80000000
 
 .enum Counted {
     near = $ffffffff
-    far                             ;! error[number-too-wide]: $100000000 does not fit the 32 bits ca65 computes in: a value the output carries is at least -$80000000 and at most $ffffffff
+    far                             ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
 }
 
 .export LIMIT, FLOOR, Counted

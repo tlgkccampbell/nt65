@@ -8,7 +8,7 @@
 .segment ZEROPAGE
 .data ptr: .word
 
-.segment FAR: far    ;! error[far-needs-65816]: segment "FAR": a `far` address needs the 65816
+.segment FAR: far    ;! error[far-needs-65816]: segment "FAR" is declared `far`, and a far address needs the 65816
 .segment FAR
 .data away: .byte
 
@@ -20,9 +20,9 @@
     lda 3,s                 ;! error[operand-not-taken]: `lda` does not take this operand on the 6502
     lda away                ;! error[address-size-unreachable]: `lda` cannot reach a far address on the 6502
     jmp (ptr,x)             ;! error[operand-not-taken]: `jmp` does not take this operand on the 6502
-    jmp a:reaching          ;! error[transfer-prefix]: `jmp` transfers control, and a control transfer is not sized by a prefix
-    jsr away                ;! error[target-too-far]: `jsr` takes a near target, and this one is far
-    lda #$1234              ;! error[immediate-too-wide]: an immediate is one byte, and $1234 does not fit
+    jmp a:reaching          ;! error[transfer-prefix]: `jmp` does not take an address-size prefix: a jump, branch or call is sized by its target
+    jsr away                ;! error[target-too-far]: `jsr` reaches only a near target, in the current bank, and this one is far
+    lda #$1234              ;! error[immediate-too-wide]: $1234 does not fit: an immediate is one byte
     stz z:ptr               ;! error[instruction-not-on-cpu]: `stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
     bra @out                ;! error[instruction-not-on-cpu]: `bra` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
     bbr0 ptr, @out          ;! error[instruction-not-on-cpu]: `bbr0` is not available on the 6502, and is on the r65c02 and 65c02
@@ -32,9 +32,9 @@
     ; An undocumented opcode says what it is, rather than reading as a name nobody declared.
     lax z:ptr               ;! error[instruction-not-on-cpu]: `lax` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
     jam                     ;! error[instruction-not-on-cpu]: `jam` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
-    jeq a:@out              ;! error[transfer-prefix]: `jeq` transfers control, and a control transfer is not sized by a prefix
-    lda z:(ptr),y           ;! error[addressing-mode-missing]: `lda` has no direct-page form of this operand on the 6502
-    lda d:$05               ;! error[direct-page-needs-65816]: `d:` reaches an address through the 65816's direct page, and this program is built for the 6502
+    jeq a:@out              ;! error[transfer-prefix]: `jeq` does not take an address-size prefix: a jump, branch or call is sized by its target
+    lda z:(ptr),y           ;! error[addressing-mode-missing]: `lda` has no direct-page form of this operand on the 6502: remove the address-size prefix
+    lda d:$05               ;! error[direct-page-needs-65816]: `d:` needs the 65816, and this program is built for the 6502: use `z:` for a zero-page address
 @out:
     rts
 }

@@ -34,8 +34,8 @@ public sealed class AssertionTests
 
         Assert.Equal(
             ["main.nt65:2: only a warning",
-             "main.nt65:2: `warning` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 "
-                + "can and otherwise at link time, so `.assert` takes only the condition and the message"],
+             "main.nt65:2: nt65's `.assert` takes no level: remove `warning`, since a failed assertion is always an "
+                + "error"],
             program.Problems());
     }
 

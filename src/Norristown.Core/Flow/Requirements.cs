@@ -268,9 +268,9 @@ internal sealed class Requirements
         var message = own
             ? Catalogue.RoutineRunsOffTheEnd.Says(
                 routine, "its end", "is written after it",
-                "a `.fallthrough` naming the routine it runs into says so")
+                "add a `.fallthrough` naming the routine it runs into")
             : Catalogue.RoutineRunsOffTheEnd.Says(
-                routine, "the end of a segment block", "that segment holds next", "a `.next` says where flow goes");
+                routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");
 
         // Where the routine written next is known, the fix names it; anywhere else the fix is
         // a `.next ?`, which ends the path without claiming anything about what comes next.

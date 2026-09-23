@@ -67,8 +67,8 @@ internal static class MovedFiles
                 {
                     if (!SourceGlobs.Matches(project.Root, glob, to))
                     {
-                        said.Add($"nt65: `{glob}` in {Shown(project.File)} no longer names "
-                            + $"{Shown(to)}. Which glob should cover it is yours to say, so nothing was changed.");
+                        said.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
+                            + "The glob was left unchanged: edit `files` by hand if the moved file should still be built.");
                     }
                     continue;
                 }

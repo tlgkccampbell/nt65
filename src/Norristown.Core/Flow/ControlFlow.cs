@@ -943,7 +943,7 @@ public sealed class ControlFlow
             diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
                 Catalogue.NextSuccessorsKnown.Says(
                     $"`{unit.Step.Statement.GetText().Trim()}`", does,
-                    ends ? ": a routine that runs into the one after it says so with `.fallthrough`" : ""))
+                    ends ? "; to say this routine runs into the one after it, use `.fallthrough`" : ""))
             {
                 Fix = rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null,
             });
@@ -979,7 +979,7 @@ public sealed class ControlFlow
         var mode = layout.Of(statement, unit.Step.On)?.Mode;
         var transfer = Transfers.Of(statement, mode);
         if (transfer == Transfer.Through)
-            return "runs on into what follows it";
+            return "continues with the next statement";
         if (transfer is not (Transfer.Branch or Transfer.Jump or Transfer.Call)
             || Targets.Of(model, Transfers.TargetOf(statement, mode), unit.Step.On) is not { Symbol.IsAddress: true } target)
         {
@@ -990,7 +990,7 @@ public sealed class ControlFlow
         {
             Transfer.Call => $"calls `{named}` and comes back",
             Transfer.Jump => $"goes to `{named}`",
-            _ => $"goes to `{named}` or on into what follows it",
+            _ => $"goes to `{named}` or continues with the next statement",
         };
     }
 

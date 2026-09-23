@@ -79,7 +79,7 @@ public static class LineMap
                 case "version" when fields.Count == 1 && Number(fields[0]) is { } version:
                     if (version != Version)
                     {
-                        problem = $"it is a version {version} line map, and this nt65 reads version {Version}";
+                        problem = $"it is a version {version} line map, but this nt65 reads only version {Version}: build again with this nt65 to rewrite it";
                         return null;
                     }
                     seenVersion = true;
@@ -88,7 +88,7 @@ public static class LineMap
                         && Quoted(fields[1]) is { } path && Number(fields[2]) is { } size:
                     if (id != sources.Count)
                     {
-                        problem = $"`file {id}` is out of order: the next one is {sources.Count}";
+                        problem = $"its `file` records are out of order: found `file {id}` where `file {sources.Count}` was expected";
                         return null;
                     }
                     sources.Add((path, size));

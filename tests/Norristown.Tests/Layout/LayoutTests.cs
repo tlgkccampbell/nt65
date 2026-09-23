@@ -96,8 +96,8 @@ public sealed class LayoutTests
     [InlineData("lda (ptr)", "`lda` does not take this operand on the 6502")]
     [InlineData("lda 3,s", "`lda` does not take this operand on the 6502")]
     [InlineData("stx ptr,x", "`stx` does not take this operand on the 6502")]
-    [InlineData("lda #$1234", "an immediate is one byte, and $1234 does not fit")]
-    [InlineData("jmp a:here", "`jmp` transfers control, and a control transfer is not sized by a prefix")]
+    [InlineData("lda #$1234", "$1234 does not fit: an immediate is one byte")]
+    [InlineData("jmp a:here", "`jmp` does not take an address-size prefix: a jump, branch or call is sized by its target")]
     [InlineData(".res ptr", "a `.res` count must be a constant")]
     [InlineData(".byte 300", "$012c does not fit in this directive")]
     public void WhatTheCpuMakesWrongIsReported(string line, string message)
@@ -165,7 +165,7 @@ public sealed class LayoutTests
         var model = SemanticModel.Create(tree, SegmentTable.Build([tree], []));
 
         var layout = CodeLayout.Create(model, Cpu.Mos6502);
-        Assert.Equal("`jsr` takes a near target, and this one is far",
+        Assert.Equal("`jsr` reaches only a near target, in the current bank, and this one is far",
             Assert.Single(layout.Diagnostics).Message);
     }
 

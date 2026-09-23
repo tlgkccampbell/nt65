@@ -73,8 +73,8 @@ public sealed class RequirementsTests
 
         var only = Assert.Single(analysis.Diagnostics);
         Assert.Equal(Severity.Warning, only.Severity);
-        Assert.Equal("`first` runs off its end into whatever is written after it: a `.fallthrough` naming the routine "
-            + "it runs into says so, or `.next ?` ends the path", only.Message);
+        Assert.Equal("`first` runs off its end into whatever is written after it: add a `.fallthrough` naming the routine "
+            + "it runs into, or write `.next ?` to end the path", only.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", only.Fix?.At), only.Fix);
         Assert.Equal(6, only.Fix?.At?.Line);
     }
@@ -134,8 +134,8 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:8: `print` returns past one `.strz` written after each call, and none follows this one",
-                "main.nt65:9: the instruction above runs into this data. `.next` on it says where flow goes instead",
+                "main.nt65:8: `print` expects one `.strz` written after each call, and none follows this one",
+                "main.nt65:9: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead",
             ],
             Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
     }
@@ -234,8 +234,8 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:13: `jsr wide` needs `a8`, and A is 16-bit here",
-                "main.nt65:13: `jsr wider` needs `a8`, and A is 16-bit here",
+                "main.nt65:13: `jsr wide` needs `a8`, but A is 16-bit here",
+                "main.nt65:13: `jsr wider` needs `a8`, but A is 16-bit here",
             ],
             analysis.Problems());
         Assert.Equal("a16, i?, native", StateAt(analysis, "tax").Processor.ToString());
@@ -287,7 +287,7 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             ["main.nt65:8: `p` runs off the end of a segment block into whatever that segment holds next: "
-                + "a `.next` says where flow goes, or `.next ?` ends the path"],
+                + "add a `.next` saying where flow goes, or write `.next ?` to end the path"],
             Program(Text).Problems());
     }
 
@@ -337,7 +337,7 @@ public sealed class RequirementsTests
             """;
 
         Assert.Equal(
-            ["main.nt65:12: `jmp inner` leaves `p`: `p` returns with `i8`, and X and Y are 16-bit "
+            ["main.nt65:12: `jmp inner` leaves `p`: `p` declares it returns with `i8`, but X and Y are 16-bit "
                 + "when `owner` returns"],
             Program(Text).Problems());
     }

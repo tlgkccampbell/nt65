@@ -135,7 +135,7 @@ public sealed class DebugFileRemapTests
     public void AMapThatCannotBeReadIsReported()
     {
         Assert.Null(DebugFile.Remap(Linked, _ => "version 9\n", out var problem));
-        Assert.Contains("the line map beside main.s cannot be read", problem);
+        Assert.Contains("cannot read main.s.lines, the line map nt65 wrote for main.s", problem);
     }
 
     private static string Remapped(string text)

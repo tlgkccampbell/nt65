@@ -202,7 +202,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    rts\n@gone:\n    nop\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:5: `@gone` is never reached: nothing runs into it and nothing names it"],
+            ["main.nt65:5: `@gone` is never reached: no code falls into it and nothing refers to it"],
             problems);
     }
 
@@ -228,7 +228,7 @@ public sealed class FlowTests
     [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\nN = 5\n", ".patch")]
     public void AnAnnotationThatNamesSomethingThatIsNotCodeIsReported(string text, string directive)
     {
-        Assert.Contains($"`N` is a constant, and `{directive}` names somewhere code is",
+        Assert.Contains($"`N` is a constant, and `{directive}` must name a code label, a routine, or a table of them",
             string.Join("\n", Problems(text)), StringComparison.Ordinal);
     }
 
@@ -238,7 +238,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    lda #1\n    .byte $2c\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:5: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:5: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead"],
             problems);
     }
 
@@ -282,7 +282,7 @@ public sealed class FlowTests
             ".proc set {\n    beq @two\n    lda #1\n    .byte $2c\n@two:\n    lda #2\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:6: the instruction above runs into this data. `.next` on it says where flow goes instead"],
+            ["main.nt65:6: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead"],
             problems);
     }
 
@@ -329,9 +329,9 @@ public sealed class FlowTests
 
         Assert.Equal(
             [
-                "main.nt65:4: `irq` is an interrupt handler, and leaves by `rti` rather than `rts`",
-                "main.nt65:7: `stop` never returns, as its `noreturn` says, and `rts` returns",
-                "main.nt65:10: `irq` is an interrupt handler, which the processor enters and `rti` leaves: a call to it would not come back",
+                "main.nt65:4: `irq` is an interrupt handler and must return with `rti`, not `rts`",
+                "main.nt65:7: `stop` is declared `noreturn`, but `rts` returns from it",
+                "main.nt65:10: `irq` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the caller",
             ],
             problems);
     }

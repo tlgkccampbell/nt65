@@ -101,7 +101,7 @@ public sealed class AnnotationTests
     {
         var model = Analysis.Model(text);
 
-        Assert.Contains($"`{directive}` is about the statement above it, and there is none here",
+        Assert.Contains($"`{directive}` applies to the statement above it, and there is none",
             string.Join("\n", model.Problems()), StringComparison.Ordinal);
     }
 

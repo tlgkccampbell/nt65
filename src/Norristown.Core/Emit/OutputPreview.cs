@@ -87,9 +87,9 @@ public sealed record OutputPreview(
         var where = first.Span.File == path
             ? string.Create(CultureInfo.InvariantCulture, $"line {first.Span.Line}")
             : string.Create(CultureInfo.InvariantCulture, $"{first.Span.File} line {first.Span.Line}");
-        var rest = errors.Count == 1
-            ? ""
-            : string.Create(CultureInfo.InvariantCulture, $", and {errors.Count - 1} more");
-        return $"nt65: incomplete, because the program is wrong. {where}: {first.Message}{rest}";
+        var count = errors.Count == 1
+            ? "an error"
+            : string.Create(CultureInfo.InvariantCulture, $"{errors.Count} errors, including one");
+        return $"nt65: this output is incomplete because the program has {count} at {where}: {first.Message}";
     }
 }

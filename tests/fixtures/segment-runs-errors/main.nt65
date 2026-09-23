@@ -8,7 +8,7 @@
 
 .segment CODE
 .proc near {
-    beq far                         ;! error[branch-out-of-reach]: `beq` would branch 201 bytes, and a branch reaches only -128 to 127. `jeq` reaches any near target
+    beq far                         ;! error[branch-out-of-reach]: `beq` would branch 201 bytes, and a branch reaches only -128 to 127: use `jeq`, which reaches any near target
     rts
 }
 

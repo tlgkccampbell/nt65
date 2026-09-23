@@ -15,21 +15,21 @@
 
 .segment CODE
 .proc misplaced: a8 {
-    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
     rts
 }
 
 .proc under_an_if: a8 {
     lda #0
     .if 1 {
-        .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+        .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
     }
     rts
 }
 
 .proc not_adjacent: a8 {
     lda #1
-    .fallthrough second ;! error[fallthrough-not-adjacent]: `.fallthrough second` says flow runs on into `second`, and it does not start where this routine ends: a routine runs into the one written directly after it
+    .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
 }
 
 .proc first: a8 {
@@ -38,7 +38,7 @@
 
 .proc second: a8 {
     lda #2
-    .fallthrough other_segment  ;! error[fallthrough-other-segment]: `.fallthrough other_segment` runs on in segment "CODE", and `other_segment` is in segment "BANKED": a routine runs only into what its own segment holds next
+    .fallthrough other_segment  ;! error[fallthrough-other-segment]: `other_segment` is in segment "BANKED", and this routine ends in "CODE": a routine can only run into what comes next in its own segment
 }
 
 .segment BANKED
@@ -49,30 +49,30 @@
 .segment CODE
 .proc not_a_routine: a8 {
     lda #3
-    .fallthrough value  ;! error[fallthrough-not-a-routine]: `value` is a data declaration, and `.fallthrough` names the routine flow runs into
+    .fallthrough value  ;! error[fallthrough-not-a-routine]: `value` is a data declaration, not a routine: `.fallthrough` names the routine execution runs into
 }
 
 ; A macro body is not a routine's body, whichever routine calls the macro.
 .macro runs_on() {
-    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+    .fallthrough first  ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
 }
 
 ; A `.next` ending the body where nt65 already knows where flow goes: after an ordinary
 ; instruction or a direct call, the error says to write `.fallthrough` instead.
 .proc after_lda: a8 {
     lda #4
-    .next after_call    ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `lda #4` runs on into what follows it: a routine that runs into the one after it says so with `.fallthrough`
+    .next after_call    ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `lda #4` continues with the next statement; to say this routine runs into the one after it, use `.fallthrough`
 }
 
 .proc after_call: a8 {
     jsr first
-    .next in_the_middle ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `jsr first` calls `first` and comes back: a routine that runs into the one after it says so with `.fallthrough`
+    .next in_the_middle ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jsr first` calls `first` and comes back; to say this routine runs into the one after it, use `.fallthrough`
 }
 
 ; A `.next` in the middle of a body says nothing that is not already known either.
 .proc in_the_middle: a8 {
     jmp @out
-    .next @out          ;! error[next-successors-known]: `.next` names where flow goes after a statement nt65 cannot follow, and `jmp @out` goes to `@out`
+    .next @out          ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jmp @out` goes to `@out`
 @out:
     rts
 }
@@ -80,7 +80,7 @@
 ; A fall-through is a tail call: the next routine is entered with A 8 bits wide where it wants 16.
 .proc narrows: a8 {
     lda #5
-    .fallthrough wants_wide ;! error[call-state-mismatch]: `.fallthrough wants_wide` needs `a16`, and A is 8-bit here;! error[return-state-mismatch]: `.fallthrough wants_wide` is a tail call: `narrows` returns with `a8`, and A is 16-bit when `wants_wide` returns
+    .fallthrough wants_wide ;! error[call-state-mismatch]: `.fallthrough wants_wide` needs `a16`, but A is 8-bit here;! error[return-state-mismatch]: `.fallthrough wants_wide` is a tail call: `narrows` declares it returns with `a8`, but A is 16-bit when `wants_wide` returns
 }
 
 .proc wants_wide: a16 {
@@ -91,7 +91,7 @@
 ; body and the `.fallthrough` is the branch's own last line.
 .proc chain_then_more: a8 {
     .if 1 {
-        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
     } .else {
         rts
     }
@@ -102,7 +102,7 @@
 
 .proc not_last_in_branch: a8 {
     .if 1 {
-        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
         lda #6
     }
     rts
@@ -110,7 +110,7 @@
 
 .proc in_a_repetition: a8 {
     .repeat 1 {
-        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` is the last line of a routine's body, as the configuration resolves it, where it names the routine every path reaching the end runs into
+        .fallthrough wants_wide ;! error[fallthrough-misplaced]: `.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved
     }
     rts
 }
@@ -120,7 +120,7 @@
 .proc taken_not_adjacent: a8 {
     lda #7
     .if 1 {
-        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `.fallthrough narrows` says flow runs on into `narrows`, and it does not start where this routine ends: a routine runs into the one written directly after it
+        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
     } .else {
         .fallthrough no_such_routine
     }

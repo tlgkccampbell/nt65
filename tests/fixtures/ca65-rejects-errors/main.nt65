@@ -17,12 +17,12 @@ TEXT = "hello"
 .data values {
     .byte TEXT
     .byte .strlen(TEXT)
-    .addr things            ;! error[scope-has-no-address]: `things` is a scope, which has no address: a routine or data inside it does
+    .addr things            ;! error[scope-has-no-address]: `things` is a scope and has no address: name a routine or data inside it instead
 }
 
 .segment CODE
 .proc main: a8, i16 {
-    lda things              ;! error[scope-has-no-address]: `things` is a scope, which has no address: a routine or data inside it does
+    lda things              ;! error[scope-has-no-address]: `things` is a scope and has no address: name a routine or data inside it instead
     pei (buffer)            ;! error[addressing-mode-too-narrow]: `pei` has only a direct-page form of this operand, and `buffer` is absolute
     lda (buffer),y          ;! error[addressing-mode-too-narrow]: `lda` has only a direct-page form of this operand, and `buffer` is absolute
     ldx #.sizeof(@table)    ;! error[not-measurable]: `@table` is a label, which is only a position: `.sizeof` measures a `.data` declaration, a routine or a type
@@ -33,7 +33,7 @@ TEXT = "hello"
 
 ; A nested segment block naming the segment it is already in would leave its contents inline.
 .proc hold: a8, i8 {
-    .segment CODE {                     ;! error[segment-block-redundant]: this block names "CODE", the segment it is already in, so its contents would stay inline where fall-through reaches them
+    .segment CODE {                     ;! error[segment-block-redundant]: this block names "CODE", the segment it is already in, so it moves nothing: its contents stay inline, where execution falls into them
     @inline:
         .state native, a8, i8
         rts

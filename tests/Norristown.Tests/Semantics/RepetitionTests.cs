@@ -111,7 +111,7 @@ public sealed class RepetitionTests
 
     /// <summary>A count nt65 cannot work out, a negative count, and an <c>.each</c> over something that is neither a list nor an enum.</summary>
     [Theory]
-    [InlineData(".data here: .byte 0\n.data t: .byte[] {\n.repeat here, i {\n    i\n}\n}\n", "a `.repeat` count is a constant, and this is not one")]
+    [InlineData(".data here: .byte 0\n.data t: .byte[] {\n.repeat here, i {\n    i\n}\n}\n", "a `.repeat` count must be a constant")]
     [InlineData("SIZE = -1\n.data t: .byte[] {\n.repeat SIZE, i {\n    i\n}\n}\n", "a `.repeat` count cannot be negative, and this one is -1")]
     [InlineData("SIZE = 4\n.data t: .byte[] {\n.each SIZE, h {\n    h\n}\n}\n", "`.each` walks a list or an enum, and this is neither")]
     public void WhatIsWrongWithARepetitionIsReported(string text, string message)

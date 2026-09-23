@@ -59,8 +59,8 @@ public sealed class AddressSizeTests
 
         Assert.Equal(
             [
-                "main.nt65:3: `main` is outside every segment: a `.segment NAME` region or block places it",
-                "main.nt65:6: `table` is outside every segment: a `.segment NAME` region or block places it",
+                "main.nt65:3: `main` is not in any segment: put a `.segment NAME` line above it, or place it in a `.segment NAME` block",
+                "main.nt65:6: `table` is not in any segment: put a `.segment NAME` line above it, or place it in a `.segment NAME` block",
             ],
             program.Problems());
     }

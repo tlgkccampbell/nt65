@@ -79,8 +79,8 @@ public sealed class MacroModuleTests
             ("main.nt65", ".module main\n.use lib::show\n.segment CODE\n.export .proc main {\n    show!()\n    rts\n}\n"));
 
         Assert.Equal(
-            ["lib.nt65:6: `show!` is exported but names `PRIVATE`, which is not: a macro expands in the module "
-                + "that calls it, and what it names there has to be exported"],
+            ["lib.nt65:6: `show!` is exported but uses `PRIVATE`, which is not exported: the macro expands in the "
+                + "caller's module, where `PRIVATE` cannot be reached"],
             program.Problems());
     }
 

@@ -74,7 +74,7 @@ public sealed class LineMapTests
     [Theory]
     [InlineData("file 0, \"main.nt65\", 12\n", "no `version` record")]
     [InlineData("version 2\nfile 0, \"main.nt65\", 12\n", "version 2 line map")]
-    [InlineData("version 1\nfile 1, \"main.nt65\", 12\n", "`file 1` is out of order")]
+    [InlineData("version 1\nfile 1, \"main.nt65\", 12\n", "found `file 1` where `file 0` was expected")]
     [InlineData("version 1\nline 3, 0, 4\n", "no `file` record declares")]
     [InlineData("version 1\nwhat 3\n", "is not a line map record")]
     [InlineData("version 1\nfile 0, main.nt65, 12\n", "is not a line map record")]

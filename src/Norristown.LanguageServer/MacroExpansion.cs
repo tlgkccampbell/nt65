@@ -276,7 +276,7 @@ internal sealed class MacroExpansion
     {
         if (model.SymbolAt(splice.Name) is not { Parameter: { IsBlock: true } parameter })
         {
-            Refuse($"`{splice.Name.Text}` is a name this expansion cannot work out");
+            Refuse($"`{splice.Name.Text}` is not a `block` parameter of this macro");
             return;
         }
 
@@ -301,12 +301,12 @@ internal sealed class MacroExpansion
         {
             if (model.MacroAt(call) is not { Definition: BlockSyntax definition })
             {
-                Refuse($"`{call.Name.Text}!` names no macro this program has");
+                Refuse($"no macro named `{call.Name.Text}!` is declared in this program");
                 return;
             }
             if (Expansion.Expanding(at, definition))
             {
-                Refuse($"`{call.Name.Text}!` reaches itself");
+                Refuse($"`{call.Name.Text}!` calls itself, directly or through another macro, so its expansion never ends");
                 return;
             }
 
@@ -401,7 +401,7 @@ internal sealed class MacroExpansion
             if (Given(parameter, name, at) is { } written)
                 edits[name.Span.Start] = (name.Span.End, written);
             else
-                Refuse($"`{parameter.Name}` is a name this expansion cannot write out");
+                Refuse($"the argument for `{parameter.Name}` cannot be written out as text here");
         }
 
         var built = new StringBuilder();

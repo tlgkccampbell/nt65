@@ -142,8 +142,8 @@ public sealed class RegisterKeepsTests
     public void ABodyThatBreaksItsPromiseIsTold()
     {
         Assert.Equal(
-            ["main.nt65:3: `p` promises `keeps x`, and X is not what the routine was entered with here: "
-                + "restore it before returning, or a `.state keeps x` where the value comes back says so"],
+            ["main.nt65:3: `p` promises `keeps x`, but X is not the same as on entry here: "
+                + "restore it before returning, or add `.state keeps x` at the point where the entry value is back"],
             Problems(".proc p: keeps x {\n    ldx #1\n    rts\n}\n"));
     }
 
@@ -166,8 +166,8 @@ public sealed class RegisterKeepsTests
         var saved = ".segment BSS\n.data xsave: .byte\n.segment CODE\n";
 
         Assert.Equal(
-            ["main.nt65:8: `p` promises `keeps x`, and X is not what the routine was entered with here: "
-                + "restore it before returning, or a `.state keeps x` where the value comes back says so"],
+            ["main.nt65:8: `p` promises `keeps x`, but X is not the same as on entry here: "
+                + "restore it before returning, or add `.state keeps x` at the point where the entry value is back"],
             Problems(saved + ".proc p: keeps x {\n    stx xsave\n    ldx #1\n    ldx xsave\n    rts\n}\n"));
         Assert.Empty(Problems(
             saved + ".proc p: keeps x {\n    stx xsave\n    ldx #1\n    ldx xsave\n    .state keeps x\n    rts\n}\n"));
@@ -181,7 +181,7 @@ public sealed class RegisterKeepsTests
     public void ARedundantStateKeepsIsSaidToSayNothing()
     {
         Assert.Equal(
-            ["main.nt65:3: `keeps x` says nothing here: X is already what the routine was entered with"],
+            ["main.nt65:3: `keeps x` is redundant here: X already holds its value from entry"],
             Problems(".proc p {\n    lda #1\n    .state keeps x\n    rts\n}\n"));
     }
 
@@ -193,8 +193,8 @@ public sealed class RegisterKeepsTests
     public void AnInterruptHandlerIsCheckedAtItsRti()
     {
         Assert.Equal(
-            ["main.nt65:3: `p` promises `keeps a`, and A is not what the routine was entered with here: "
-                + "restore it before returning, or a `.state keeps a` where the value comes back says so"],
+            ["main.nt65:3: `p` promises `keeps a`, but A is not the same as on entry here: "
+                + "restore it before returning, or add `.state keeps a` at the point where the entry value is back"],
             Problems(".proc p: interrupt, keeps a {\n    lda #1\n    rti\n}\n"));
     }
 
@@ -246,11 +246,11 @@ public sealed class RegisterKeepsTests
         // never reached. A `.state` holding only `keeps` does not, and the label is reported.
         Assert.Empty(Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:3: `@entry` is never reached: nothing runs into it and nothing names it"],
+            ["main.nt65:3: `@entry` is never reached: no code falls into it and nothing refers to it"],
             Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state keeps x\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:1: `rom` declares no processor state, and an extern proc has no body to check one "
-                + "against: say what a caller must hold to, or `?` where nothing is known"],
+            ["main.nt65:1: `rom` is an extern proc with no processor-state signature: nt65 cannot see its body, "
+                + "so declare what it expects and leaves, or `?` if that is unknown"],
             Wide(".proc rom = $FFD2: keeps x\n"));
     }
 
@@ -263,8 +263,8 @@ public sealed class RegisterKeepsTests
     {
         Assert.Empty(Wide(".proc p: a8, keeps a {\n    pha\n    lda #1\n    pla\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:5: `p` promises `keeps a`, and A is not what the routine was entered with here: "
-                + "restore it before returning, or a `.state keeps a` where the value comes back says so"],
+            ["main.nt65:5: `p` promises `keeps a`, but A is not the same as on entry here: "
+                + "restore it before returning, or add `.state keeps a` at the point where the entry value is back"],
             Wide(".proc p: a8, keeps a -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
     }
 

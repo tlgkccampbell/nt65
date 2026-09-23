@@ -92,7 +92,7 @@ public sealed class ViewRequestsTests
         Assert.NotNull(output);
         Assert.Equal(2, output.Version);
         Assert.Equal(
-            "nt65: incomplete, because the program is wrong. line 16: `MISSING` is not declared",
+            "nt65: this output is incomplete because the program has an error at line 16: `MISSING` is not declared",
             output.Note);
         Assert.StartsWith($"; {output.Note}\n", output.Text, StringComparison.Ordinal);
     }

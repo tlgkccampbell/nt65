@@ -13,8 +13,8 @@ lda = 5                     ;! warning[mnemonic-name]: `lda` is an instruction o
 ; and ca65 defines no symbol spelled like one of its own instructions — on any CPU, since
 ; the name is what a module built for another one would link against.
 PALETTE = 3
-.export PALETTE as "lda"    ;! error[linker-name-is-an-instruction]: `lda` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
-.export SIZE as "swa"       ;! error[linker-name-is-an-instruction]: `swa` is an instruction to ca65, which cannot define a symbol spelled like one: an exported name is written into the output exactly as `as` gives it
+.export PALETTE as "lda"    ;! error[linker-name-is-an-instruction]: cannot export as `lda`: ca65 reads it as an instruction, and an `as` name is written to the output unchanged
+.export SIZE as "swa"       ;! error[linker-name-is-an-instruction]: cannot export as `swa`: ca65 reads it as an instruction, and an `as` name is written to the output unchanged
 
 .segment CODE
 .data x: .byte 0                 ;! error[register-name]: `x` is a register name and cannot be used as a name
@@ -43,10 +43,10 @@ PALETTE = 3
 .proc spelling {
     COUNTER = 0
     ldx #COUNTER
-    lda #COUNTR             ;! error[not-declared]: `COUNTR` is not declared; `COUNTER` is
+    lda #COUNTR             ;! error[not-declared]: `COUNTR` is not declared; did you mean `COUNTER`?
 @loop:
     dex
-    bne @lop                ;! error[not-declared]: `@lop` is not declared; `@loop` is
+    bne @lop                ;! error[not-declared]: `@lop` is not declared; did you mean `@loop`?
     rts
 }
 

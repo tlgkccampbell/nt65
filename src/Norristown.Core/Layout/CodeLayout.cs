@@ -181,13 +181,13 @@ public sealed partial class CodeLayout
             return default;
         }
         if (At(from) is not { } start)
-            return new CycleSpan(null, $"nothing places `{from.DisplayName}`");
+            return new CycleSpan(null, $"`{from.DisplayName}` is not in any laid-out code");
         if (At(to) is not { } end)
-            return new CycleSpan(null, $"nothing places `{to.DisplayName}`");
+            return new CycleSpan(null, $"`{to.DisplayName}` is not in any laid-out code");
         if (counted[start].Routine is not { } routine || counted[end].Routine != routine)
-            return new CycleSpan(null, "the two are not positions in one routine");
+            return new CycleSpan(null, "the two positions are in different routines");
         if (counted[start].Stream != counted[end].Stream)
-            return new CycleSpan(null, "the two are not in one stream of bytes");
+            return new CycleSpan(null, "the two positions are in different segment blocks");
         if (end < start)
             return new CycleSpan(null, $"`{to.DisplayName}` comes before `{from.DisplayName}`");
 
@@ -201,11 +201,11 @@ public sealed partial class CodeLayout
                 continue;
             var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
             if (Instructions.Facts(mnemonic).Calls)
-                return new CycleSpan(null, $"a call, `{mnemonic}`, which takes as long as what it calls");
+                return new CycleSpan(null, $"the span contains a call, `{mnemonic}`, whose time depends on the routine it calls");
             if (Backwards(instruction, step, start, i) is { } loop)
                 return new CycleSpan(null, loop);
             if (Of(step.Statement, step.On)?.Cycles is not { } cycles)
-                return new CycleSpan(null, $"`{mnemonic}`, which nt65 has no count for");
+                return new CycleSpan(null, $"nt65 has no cycle count for `{mnemonic}`");
             total += cycles;
         }
         return new CycleSpan(most ? total.Most : total.Least, null);
@@ -225,11 +225,11 @@ public sealed partial class CodeLayout
             return null;
         var mnemonic = instruction.Mnemonic.Text.ToLowerInvariant();
         if (transfer == Transfer.Elsewhere)
-            return $"`{mnemonic}`, whose target nt65 cannot follow";
+            return $"the span contains `{mnemonic}`, whose target nt65 cannot follow";
         if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is not { } target)
             return null;
         return At(target.Symbol) is { } landing && landing >= start && landing <= i
-            ? $"a loop: `{mnemonic}` goes back to `{target.Symbol.DisplayName}`"
+            ? $"the span contains a loop: `{mnemonic}` goes back to `{target.Symbol.DisplayName}`"
             : null;
     }
 

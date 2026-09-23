@@ -189,7 +189,7 @@ public sealed partial class CodeLayout
             var mnemonic = branch.Statement.Mnemonic.Text;
             var longer = "j" + mnemonic[1..];
             var reaches = SyntaxFacts.LongBranches.Contains(longer);
-            var fix = reaches ? $". `{longer}` reaches any near target" : "";
+            var fix = reaches ? $": use `{longer}`, which reaches any near target" : "";
             ReportOnLine(branch.Target, branch.On,
                 Catalogue.BranchOutOfReach.Says(mnemonic, reach, fix),
 

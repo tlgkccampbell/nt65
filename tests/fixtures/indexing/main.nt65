@@ -50,7 +50,7 @@
 
     lda actors[1]::hp
     .repeat 8, i {
-        lda actors[i]::hp           ; a turn's name is a constant, so it indexes as one
+        lda actors[i]::hp           ; the repetition binding is a constant, so it can index
     }
     rts
 }

@@ -46,15 +46,15 @@ public sealed class ProjectFileTests
 
     /// <summary>A value of the wrong shape is reported where it is written, and the rest is still read.</summary>
     [Theory]
-    [InlineData("""{ "cpu": 6502 }""", "`cpu` is a string")]
-    [InlineData("""{ "cpu": "z80" }""", "`z80` is not a processor nt65 knows: `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
-    [InlineData("""{ "files": "main.nt65" }""", "`files` is a list of strings")]
-    [InlineData("""{ "defines": [] }""", "`defines` is an object")]
-    [InlineData("""{ "defines": { "N": true } }""", "`N` is not a number, and a define is a number")]
-    [InlineData("""{ "defines": { "2N": 1 } }""", "`2N` is not a name")]
-    [InlineData("""{ "segments": { "X": "zp" } }""", "segment \"X\" is an object with a `size`")]
+    [InlineData("""{ "cpu": 6502 }""", "`cpu` must be a string")]
+    [InlineData("""{ "cpu": "z80" }""", "`z80` is not a supported `cpu`: use `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
+    [InlineData("""{ "files": "main.nt65" }""", "`files` must be a list of strings")]
+    [InlineData("""{ "defines": [] }""", "`defines` must be an object")]
+    [InlineData("""{ "defines": { "N": true } }""", "`N`: a define's value must be a number")]
+    [InlineData("""{ "defines": { "2N": 1 } }""", "`2N` is not a valid define name: use letters, digits and `_`, optionally after a module path such as `hw::`")]
+    [InlineData("""{ "segments": { "X": "zp" } }""", "segment \"X\" must be an object with a `size`")]
     [InlineData("""{ "segments": { "X": {} } }""", "segment \"X\" needs a `size` of \"zp\", \"abs\" or \"far\"")]
-    [InlineData("""{ "nope": 1 }""", "`nope` is not a nt65.json key")]
+    [InlineData("""{ "nope": 1 }""", "`nope` is not a key of nt65.json")]
     public void WhatIsWrongWithTheFileIsReported(string text, string message)
     {
         Assert.Equal(message, Assert.Single(Read(text).Diagnostics).Message);
@@ -143,8 +143,8 @@ public sealed class ProjectFileTests
             """);
 
         Assert.Equal(
-            [(4, "`N` is not a number, and a define is a number"),
-                (4, "configuration `a`: `cpu` is not a configuration key: a configuration has `defines`, "
+            [(4, "`N`: a define's value must be a number"),
+                (4, "configuration `a` cannot set `cpu`: a configuration may set only `defines`, "
                     + "`diagnostics` and `out`")],
             project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
     }
@@ -168,8 +168,8 @@ public sealed class ProjectFileTests
     }
 
     [Theory]
-    [InlineData("DEBUG=yes", "`yes` is not a number, and a define is a number")]
-    [InlineData("2DEBUG=1", "`2DEBUG` is not a name")]
+    [InlineData("DEBUG=yes", "`yes`: a define's value must be a number")]
+    [InlineData("2DEBUG=1", "`2DEBUG` is not a valid define name: use letters, digits and `_`, optionally after a module path such as `hw::`")]
     public void ADefinitionThatIsNotOneIsReported(string argument, string message)
     {
         var problems = new List<Diagnostic>();
@@ -238,11 +238,11 @@ public sealed class ProjectFileTests
 
     [Theory]
     [InlineData("""{ "diagnostics": { "unused-symbols": "off" } }""",
-        "`unused-symbols` is not a diagnostic nt65 reports; `unused-symbol` is")]
+        "`unused-symbols` is not a diagnostic nt65 reports; did you mean `unused-symbol`?")]
     [InlineData("""{ "diagnostics": { "unused-symbol": "quiet" } }""",
-        "`unused-symbol` is reported as \"off\", \"warning\" or \"error\"")]
+        "the severity of `unused-symbol` must be \"off\", \"warning\" or \"error\"")]
     [InlineData("""{ "diagnostics": { "not-declared": "off" } }""",
-        "`not-declared` is an error, and a project may not turn an error down")]
+        "`not-declared` is an error, and a project cannot turn an error into a warning or off")]
     public void WhatIsWrongWithADiagnosticsEntryIsReported(string text, string message)
     {
         var project = Read(text);

@@ -105,7 +105,7 @@ public sealed record CommandLine(
             switch (argument)
             {
                 case "--project" or "--config" or "--out" or "--depfile" or "--c-header" or "-D" when value is null:
-                    problem = argument == "-D" ? "-D takes NAME or NAME=value" : $"{argument} takes a value";
+                    problem = argument == "-D" ? "`-D` needs NAME or NAME=value after it" : $"`{argument}` needs a value after it";
                     return null;
                 case "--project":
                     project = value;
@@ -142,7 +142,9 @@ public sealed record CommandLine(
                 case "--cpu":
                     if (value is null || CpuNames.Parse(value) is not { } named)
                     {
-                        problem = $"--cpu takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}";
+                        problem = value is null
+                            ? $"`--cpu` needs a processor: {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}"
+                            : $"`{value}` is not a processor nt65 knows; `--cpu` takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}";
                         return null;
                     }
                     cpu = named;

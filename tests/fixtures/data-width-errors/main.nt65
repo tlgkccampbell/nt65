@@ -19,15 +19,15 @@ TEXT = "AB"
 .data short:   .strz "A\0B"            ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
 .data bytes:   .byte 256, -129         ;! error[value-too-wide]: $0100 does not fit in this directive;! error[value-too-wide]: -129 does not fit in this directive
 .data longs:   .long $1000000          ;! error[value-too-wide]: $01000000 does not fit in this directive
-.data address: .addr -1                ;! error[address-negative]: -1 is negative, and an address is not
-.data far:     .faraddr -2             ;! error[address-negative]: -2 is negative, and an address is not
+.data address: .addr -1                ;! error[address-negative]: an address cannot be negative, but this one is -1
+.data far:     .faraddr -2             ;! error[address-negative]: an address cannot be negative, but this one is -2
 .data joined:  .byte TEXT + 1          ;! error[operator-on-text]: `+` cannot be used on a string
-.data old:     .asciiz "hi"            ;! error[ca65-spelling]: `.asciiz` is written `.strz`
+.data old:     .asciiz "hi"            ;! error[ca65-spelling]: ca65's `.asciiz` is `.strz` in nt65
 
 .segment CODE
 .proc main: a8 {
-    lda #TEXT                           ;! error[operand-is-text]: `TEXT` is text, and an operand is a number or an address
-    lda #-129                           ;! error[immediate-too-wide]: an immediate is one byte, and -129 does not fit
-    .assert 1 == 1, warning, "fine"     ;! error[assert-level]: `warning` is ca65's: an nt65 assertion that fails is always an error, checked as soon as nt65 can and otherwise at link time, so `.assert` takes only the condition and the message
+    lda #TEXT                           ;! error[operand-is-text]: `TEXT` is a string, and an instruction's operand must be a number or an address
+    lda #-129                           ;! error[immediate-too-wide]: -129 does not fit: an immediate is one byte
+    .assert 1 == 1, warning, "fine"     ;! error[assert-level]: nt65's `.assert` takes no level: remove `warning`, since a failed assertion is always an error
     rts
 }

@@ -146,19 +146,19 @@ public static class Repetitions
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
-            ("an export or an import", "it names one symbol, and a repetition's body is written out once per turn"),
+            ("an export or an import", "it names one symbol, and the body is written out once per iteration"),
         CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
         SegmentDeclarationSyntax =>
             ("a segment declaration",
-                "a segment is declared exactly once for the program, and this one would be declared once per turn"),
+                "a segment is declared exactly once for the program, and this one would be declared once per iteration"),
         MultiProcDeclarationSyntax =>
             ("`.multiproc`",
-                "it declares one routine per member of an enum, and this one would declare them again on every turn"),
+                "it declares one routine per member of an enum, and this one would declare them again on every iteration"),
         ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
             ("`.proc`", "a routine's name and signature are part of the file's interface, and this one would be "
-                + "a different routine on every turn"),
+                + "a different routine on every iteration"),
         MacroDeclarationSyntax or FuncDeclarationSyntax or SignatureDeclarationSyntax =>
-            ("a definition", "it would be a different one on every turn, and nothing outside the body could name "
+            ("a definition", "it would be a different one on every iteration, and nothing outside the body could name "
                 + "any of them"),
         _ => null,
     };

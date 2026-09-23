@@ -159,7 +159,7 @@ internal sealed partial record FixtureCase(
         return outputs;
     }
 
-    /// <summary>What the inline <c>;!</c> comments say the program is told.</summary>
+    /// <summary>The diagnostics the inline <c>;!</c> comments say the program should report.</summary>
     public List<Expectation> ExpectedDiagnostics() =>
         [.. Annotated().SelectMany(ParseInlineDiagnostics)];
 

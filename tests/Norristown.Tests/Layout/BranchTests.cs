@@ -76,8 +76,8 @@ public sealed class BranchTests
             ("main.nt65", $".module main\n.segment CODE\n.proc p {{\n    beq @out\n    {Nops(128)}@out:\n    rts\n}}\n"));
 
         Assert.Equal(
-            ["main.nt65:4: `beq` would branch 128 bytes, and a branch reaches only -128 to 127. "
-                + "`jeq` reaches any near target"],
+            ["main.nt65:4: `beq` would branch 128 bytes, and a branch reaches only -128 to 127: "
+                + "use `jeq`, which reaches any near target"],
             program.Problems());
     }
 

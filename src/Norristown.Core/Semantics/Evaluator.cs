@@ -626,8 +626,8 @@ internal sealed partial class Evaluator
                 Report(index, Catalogue.NotIndexable.Says(
                     symbol.DisplayName,
                     symbol is { Kind: SymbolKind.Data, Data: null }
-                        ? "mixed data, which has bytes and no elements"
-                        : $"{symbol.KindPhrase}, and `[i]` reaches an element of data"));
+                        ? "mixed data, which has no elements"
+                        : $"{symbol.KindPhrase}, not an array"));
                 return null;
             }
 
@@ -654,9 +654,9 @@ internal sealed partial class Evaluator
             if (at < 0 || at >= count)
             {
                 Report(written, Catalogue.ElementIndexOutOfRange.Says(at < 0
-                    ? $"an element index is never negative, and this one is {at}"
-                    : $"`{symbol.DisplayName}` holds {count} {(count == 1 ? "element" : "elements")}, "
-                        + $"and the last of them is {count - 1}"));
+                    ? $"element index {at} is negative; indexes start at 0"
+                    : $"index {at} is past the end of `{symbol.DisplayName}`: it holds {count} "
+                        + $"{(count == 1 ? "element" : "elements")}, so the last index is {count - 1}"));
                 return null;
             }
             offset += at * stride;

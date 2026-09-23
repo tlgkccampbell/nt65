@@ -18,4 +18,4 @@
 
 .segment ZP2: zp          ;! error[segment-declared-twice]: segment "ZP2" is already declared
 .segment ZEROPAGE: zp     ;! error[segment-declared-twice]: segment "ZEROPAGE" is already declared
-.segment RODATA: zp       ;! error[segment-standard-size]: "RODATA" is a standard segment, which is `abs`
+.segment RODATA: zp       ;! error[segment-standard-size]: "RODATA" is a standard segment and is always `abs`

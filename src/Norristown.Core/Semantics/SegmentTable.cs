@@ -129,7 +129,7 @@ public sealed class SegmentTable
         else if (value < 0 || value > (word == "dp" ? 0xffff : 0xff))
         {
             problem = Catalogue.SegmentAttributeOutOfRange.Says(
-                word == "dp" ? "the direct page is a 16-bit address" : "a bank is one byte");
+                word == "dp" ? "`dp` must be $0000 to $ffff: the direct page is a 16-bit address" : "`bank` must be $00 to $ff: a bank is one byte");
         }
         if (problem is not { } said)
             return value;

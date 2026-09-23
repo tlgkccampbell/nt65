@@ -7,8 +7,8 @@
 .import lost: abs in NOWHERE            ;! error[segment-undeclared]: segment "NOWHERE" is not declared
 
 .segment WHERE: abs, space = nowhere    ;! error[space-undeclared]: space `nowhere` is not declared
-.segment TWICE: abs, space = spc, space = spc   ;! error[segment-attribute-twice]: segment "TWICE" already gives its `space`
-.segment ODD: abs, space = 3            ;! error[space-not-a-name]: a segment's `space` is the name of an address space
+.segment TWICE: abs, space = spc, space = spc   ;! error[segment-attribute-twice]: segment "TWICE" already has a `space`
+.segment ODD: abs, space = 3            ;! error[space-not-a-name]: `space` takes the name of an address space
 
 .segment SPCIMAGE
 .data image {
@@ -19,7 +19,7 @@
 
 ; A space that holds data holds no instructions.
 .proc on_spc: a8, i8 {
-    nop                                 ;! error[code-in-a-data-space]: "SPCIMAGE" is in space `spc`, which holds data: another processor's code is written there as data and macro calls
+    nop                                 ;! error[code-in-a-data-space]: segment "SPCIMAGE" is in space `spc`, which holds data, not code for this processor: write another processor's code there as data or macro calls
     rts
 }
 
@@ -31,9 +31,9 @@
 ; The host may not go to another space's code, nor reach its memory.
 .segment CODE
 .proc host: a8, i8 {
-    jsr spc_entry                       ;! error[transfer-to-another-space]: `jsr` goes to `spc_entry`, which is in "SPCIMAGE", in space `spc`, and this code is in the host's space: another processor runs it
-    jsr drive_main                      ;! error[transfer-to-another-space]: `jsr` goes to `drive_main`, which is in "DRIVE", in space `drive`, and this code is in the host's space: another processor runs it
-    lda image::main                     ;! error[operand-in-another-space]: `image::main` is in "SPCIMAGE", in space `spc`, and this code is in the host's space: here it is a value, for an immediate or for data
+    jsr spc_entry                       ;! error[transfer-to-another-space]: `jsr` targets `spc_entry`, in segment "SPCIMAGE" of space `spc`, but this code runs in the host's space: that code belongs to another processor
+    jsr drive_main                      ;! error[transfer-to-another-space]: `jsr` targets `drive_main`, in segment "DRIVE" of space `drive`, but this code runs in the host's space: that code belongs to another processor
+    lda image::main                     ;! error[operand-in-another-space]: `image::main` is in segment "SPCIMAGE" of space `spc`, and this code runs in the host's space: here it can only be used as an immediate value or in data
     lda #<.loadof(NOSEG)                ;! error[segment-undeclared]: segment "NOSEG" is not declared
     rts
 }

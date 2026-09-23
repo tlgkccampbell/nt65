@@ -66,9 +66,9 @@ WIDE = 1
     .lobytes first, second, third
     .hibytes first, second, third
     .bankbytes first, second, third
-    .type Player                    ; .sizeof(Player) bytes (§6.3)
-    .type Player { hp = 5 }         ; a record with values (§6.3)
-    .addr handlers                  ; a list's items (§6.4)
+    .type Player                    ; .sizeof(Player) bytes
+    .type Player { hp = 5 }         ; a record with values
+    .addr handlers                  ; a list's items
 }
 
 .charmap screen {

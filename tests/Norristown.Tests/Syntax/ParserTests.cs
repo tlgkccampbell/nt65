@@ -44,9 +44,9 @@ public sealed class ParserTests
     [InlineData("p || q && r", "`||` and `&&` need parentheses to show which applies first")]
     [InlineData("p && q ^^ r", "`^^` and `&&` need parentheses to show which applies first")]
     // A byte operator that reads as if it applied to the whole expression.
-    [InlineData("<label + 1", "unary `<` before `+` needs parentheses to show what `<` applies to")]
-    [InlineData(">label * 2", "unary `>` before `*` needs parentheses to show what `>` applies to")]
-    [InlineData("1 + <label + 2", "unary `<` before `+` needs parentheses to show what `<` applies to")]
+    [InlineData("<label + 1", "unary `<` binds tighter than `+`: write `(<x) + y` or `<(x + y)` to say which is meant")]
+    [InlineData(">label * 2", "unary `>` binds tighter than `*`: write `(>x) * y` or `>(x * y)` to say which is meant")]
+    [InlineData("1 + <label + 2", "unary `<` binds tighter than `+`: write `(<x) + y` or `<(x + y)` to say which is meant")]
     public void ParenthesesAreRequiredWhereTheOrderIsEasyToMisread(string expression, string message) =>
         Assert.Equal([message], Errors(".word " + expression));
 
@@ -186,7 +186,7 @@ public sealed class ParserTests
     [Theory]
     [InlineData(".proc {", "expected a routine name")]
     [InlineData(".proc p", "expected `{`, or `= address` for a routine with no body")]
-    [InlineData(".proc p: 5 {", "expected a processor-state item")]
+    [InlineData(".proc p: 5 {", "expected a processor-state item, such as `a8`, `i16` or `dp = 0`")]
     [InlineData(".proc p: a9 {", "`a9` is not a processor-state item")]
     [InlineData(".proc p: near = 1 {", "`near` is not a processor-state item")]
     [InlineData(".scope gfx", "expected `{`")]
@@ -194,7 +194,7 @@ public sealed class ParserTests
     [InlineData(".segment X: word", "expected `zp`, `abs` or `far`")]
     [InlineData(".segment {", "expected a segment name")]
     [InlineData(".segment X: zp, page = 1", "expected `dp`, `bank`, `mirrors` or `space`")]
-    [InlineData(".rodata {", "`.rodata` is written `.segment RODATA`")]
+    [InlineData(".rodata {", "ca65's `.rodata` is `.segment RODATA` in nt65")]
     [InlineData(".tag Point", "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`")]
     [InlineData(".data {", "`.data` declares data, and needs a name: the segment is written `.segment DATA`")]
     [InlineData(".data x .byte", "expected `:` and what the data is, or `{` for mixed data")]
@@ -214,7 +214,7 @@ public sealed class ParserTests
     [InlineData(".import x: .incbin \"a.bin\"",
         "`.incbin` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`")]
     [InlineData(".import x: .byte 1, 2",
-        "an import of `.byte` says what its bytes are and holds none of them: the definition is in another object")]
+        "an import describes its `.byte` data but cannot give it values: the bytes are defined in another object file")]
     [InlineData(".export", "expected a name to export")]
     [InlineData("lda #1 junk", "unexpected `junk`")]
     [InlineData("label: .proc p {", "`.proc` may not follow a label")]
@@ -234,7 +234,7 @@ public sealed class ParserTests
     [InlineData(".each handlers, h", "expected `{`")]
     [InlineData(".assert 1 == 1, 3", "expected the message, in quotes")]
     [InlineData(".error nope", "expected the message, in quotes")]
-    [InlineData(".else {", "`.else` continues an `.if`, and belongs after its `}`")]
+    [InlineData(".else {", "`.else` must follow the `}` that closes the previous branch, on the same line")]
     public void UnreadableLinesAreReportedOnce(string line, string message) => Assert.Equal([message], Errors(line));
 
     /// <summary>A <c>}</c> alone, and the lines that continue a construct after it.</summary>
@@ -334,7 +334,7 @@ public sealed class ParserTests
             + (closed ? string.Concat(Enumerable.Repeat(close, depth)) : "") + "\n";
         var tree = SyntaxTree.Parse("test.nt65", line);
         var diagnostic = Assert.Single(tree.Diagnostics);
-        Assert.Equal("this nests more than 100 expressions deep, which is as far as nt65 reads", diagnostic.Message);
+        Assert.Equal("expression nested more than 100 levels deep: nt65 reads no further", diagnostic.Message);
         Assert.Equal(line, tree.Root.ToFullString());
     }
 

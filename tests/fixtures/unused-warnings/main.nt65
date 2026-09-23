@@ -40,8 +40,8 @@ DEPTH = 3
 @unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used: nothing names it, and it is not exported
     ldx #0
     rts
-    ; Never reached is said once, and says more.
-@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: nothing runs into it and nothing names it
+    ; An unreachable label is reported once, as unreachable, which says more than unused.
+@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: no code falls into it and nothing refers to it
     rts
     ; An entry point nt65 cannot see the callers of declares its state, and is not reported.
 @hook:
@@ -78,7 +78,7 @@ DEPTH = 3
 .segment CODE
 .proc detour: a8, i8 {
     .segment RODATA {
-        nop                     ;! warning[code-unreachable]: this code is never reached: fall-through does not enter a nested segment block, so code there starts at a label a `.next` names or a `.state` declares
+        nop                     ;! warning[code-unreachable]: this code is never reached: execution does not fall into a nested segment block, so start it with a label that is jumped to, named by a `.next`, or declared by a `.state`
         rts
     }
     rts

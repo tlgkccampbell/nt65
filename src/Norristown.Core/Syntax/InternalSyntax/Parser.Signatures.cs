@@ -41,7 +41,7 @@ internal sealed partial class Parser
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {
-            Report(Catalogue.ExpectedStateItem.Says("a processor-state item"));
+            Report(Catalogue.ExpectedStateItem.Says("a processor-state item, such as `a8`, `i16` or `dp = 0`"));
             return null;
         }
 

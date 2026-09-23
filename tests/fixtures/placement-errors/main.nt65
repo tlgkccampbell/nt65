@@ -4,38 +4,38 @@
 .segment CODE
 .export .proc first {
     lda #1
-    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `.fallthrough second` says flow runs on into `second`, and it does not start where this routine ends: a routine runs into the one written directly after it
+    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
 }
 
 .place inner
 
 .export .proc third {
     lda #3
-    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `.fallthrough fourth` says flow runs on into `fourth`, and it does not start where this routine ends: a routine runs into the one written directly after it
+    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `fourth` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
 }
 
 .place middle                       ; its bytes go between `third` and `fourth`
 
 .export .proc fourth {
     lda #4
-    .fallthrough alone::entry       ;! error[fallthrough-not-placed]: `.fallthrough entry` says flow runs on into `entry`, which is in module `alone`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+    .fallthrough alone::entry       ;! error[fallthrough-not-placed]: `entry` is in module `alone`, and the two modules are separate translation units, whose order only the linker knows: use `.place` to lay one out inside the other
 }
 
 .export .proc fifth {
     lda #5
-    .fallthrough spare::go          ;! error[fallthrough-not-placed]: `.fallthrough go` says flow runs on into `go`, which is in module `spare`, and the two are not one translation unit: `.place` lays one module's bytes out where the other's run into them
+    .fallthrough spare::go          ;! error[fallthrough-not-placed]: `go` is in module `spare`, and the two modules are separate translation units, whose order only the linker knows: use `.place` to lay one out inside the other
 }
 
 .if FAST {
-    .place stray                    ;! error[place-misplaced]: a `.place` is written at file level, outside every block: which modules share a translation unit depends on no condition
+    .place stray                    ;! error[place-misplaced]: `.place` must be at file level, outside every block: which modules are assembled together cannot depend on a condition
 }
 
 .scope inside {
-    .place stray                    ;! error[place-misplaced]: a `.place` is written at file level, outside every block: which modules share a translation unit depends on no condition
+    .place stray                    ;! error[place-misplaced]: `.place` must be at file level, outside every block: which modules are assembled together cannot depend on a condition
 }
 
 .place nowhere                      ;! error[module-unknown]: no module `nowhere` is in this build
-.place alone                        ;! error[place-not-placeable]: module `alone` stands alone, so it may not be placed: its declaration says whether it may, `.module alone: placed`
+.place alone                        ;! error[place-not-placeable]: module `alone` is not marked as placeable: declare it `.module alone: placed` so that another module can place it
 .place twice
 
 .export .proc sixth {

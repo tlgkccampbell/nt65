@@ -71,9 +71,9 @@ public sealed class RemapCommandTests : IDisposable
     /// <summary>Each failure is reported, naming the file it concerns where there is one.</summary>
     [Theory]
     [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, 1, "nowhere.dbg: error: file not found")]
-    [InlineData(new[] { "remap-dbg" }, 2, "nt65: remap-dbg takes the debug file ld65 wrote")]
-    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, 2, "nt65: remap-dbg takes one debug file")]
-    [InlineData(new[] { "remap-dbg", "--out" }, 2, "nt65: --out takes a value")]
+    [InlineData(new[] { "remap-dbg" }, 2, "nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`")]
+    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, 2, "nt65: `remap-dbg` takes one debug file, and was given more than one")]
+    [InlineData(new[] { "remap-dbg", "--out" }, 2, "nt65: `--out` needs a file to write")]
     [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, 2, "nt65: `--bogus` is not an option")]
     public void WhatItCannotDoItSays(string[] arguments, int expected, string said)
     {

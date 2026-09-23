@@ -62,8 +62,8 @@ public sealed class MacroCallTests
         var model = Analysis.Model(Set16 + "ptr = $10\n\n    set16!((ptr), 0)\n");
 
         Assert.Equal(
-            ["10: `dest` takes an operand, and `(ptr)` reads as an expression in parentheses. "
-                + "Brace it to pass indirect addressing"],
+            ["10: `dest` takes an operand, and `(ptr)` is read as an expression in parentheses: "
+                + "put it in braces to pass indirect addressing"],
             model.Problems());
     }
 
@@ -90,10 +90,10 @@ public sealed class MacroCallTests
 
     [Theory]
     [InlineData("note!(C4, 8, 9)", "`note` takes 1 to 2 arguments, and this call gives more")]
-    [InlineData("note!()", "`note` is not given `pitch`")]
+    [InlineData("note!()", "`note` needs an argument for `pitch`")]
     [InlineData("note!(C4, tempo = 1)", "`note` has no parameter called `tempo`")]
-    [InlineData("note!(C4, pitch = 1)", "`pitch` is given twice")]
-    [InlineData("note!(pitch = 1, C4)", "a positional argument comes before the named ones")]
+    [InlineData("note!(C4, pitch = 1)", "parameter `pitch` is given twice")]
+    [InlineData("note!(pitch = 1, C4)", "a positional argument cannot follow a named one")]
     public void ACallIsCheckedAgainstTheParameters(string call, string message)
     {
         var model = Analysis.Model("""
@@ -152,7 +152,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model(".module main\nSIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
 
-        Assert.Equal(["5: `SIZE` is a constant, and `!` calls a macro"], model.Problems());
+        Assert.Equal(["5: `SIZE` is a constant, not a macro: only a macro is called with `!`"], model.Problems());
     }
 
     [Fact]
@@ -257,7 +257,7 @@ public sealed class MacroCallTests
 
         Assert.Equal(
             ["8: `HERE` is declared in a block argument, which may declare only cheap locals: "
-                + "the macro it is given to may splice it in more than one place"],
+                + "the macro may insert the block more than once"],
             model.Problems());
     }
 
@@ -266,7 +266,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model(".module main\n.macro m(n) {\n    m!(n)\n}\n");
 
-        Assert.Equal(["3: `m` calls itself, and every expansion has to be bounded"], model.Problems());
+        Assert.Equal(["3: `m` calls itself: a macro cannot be recursive"], model.Problems());
     }
 
     [Fact]
@@ -283,7 +283,7 @@ public sealed class MacroCallTests
             }
             """);
 
-        Assert.Equal(["7: `ping` calls itself through `pong`, and every expansion has to be bounded"],
+        Assert.Equal(["7: `ping` calls itself through `pong`: a macro cannot be recursive"],
             model.Problems());
     }
 
@@ -311,7 +311,7 @@ public sealed class MacroCallTests
             }
             """));
 
-        Assert.Equal(["main.nt65:7: `ping` calls itself through `pong`, and every expansion has to be bounded"],
+        Assert.Equal(["main.nt65:7: `ping` calls itself through `pong`: a macro cannot be recursive"],
             analysis.Problems());
     }
 

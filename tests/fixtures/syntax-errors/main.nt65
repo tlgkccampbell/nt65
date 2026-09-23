@@ -11,10 +11,10 @@
     lda #'\xZZ'         ;! error[escape-hex-digits]: `\x` must be followed by two hexadecimal digits
     lda #'\q'           ;! error[escape-unknown]: unknown escape `\q`
 
-    ; `_` separates the digits of a number; it is not one, so it stands between two.
-    lda #$_ff           ;! error[number-separator]: `$_ff` has a `_` that separates no digits: a separator stands between two of them
-    lda #%1010_         ;! error[number-separator]: `%1010_` has a `_` that separates no digits: a separator stands between two of them
-    lda #1__0           ;! error[number-separator]: `1__0` has a `_` that separates no digits: a separator stands between two of them
+    ; `_` separates the digits of a number and is not a digit itself, so it stands between two.
+    lda #$_ff           ;! error[number-separator]: `$_ff` has a misplaced `_`: a digit separator needs a digit on each side
+    lda #%1010_         ;! error[number-separator]: `%1010_` has a misplaced `_`: a digit separator needs a digit on each side
+    lda #1__0           ;! error[number-separator]: `1__0` has a misplaced `_`: a digit separator needs a digit on each side
     m!({                ;! error[expected-expression]: expected an expression;! error[not-declared]: `m` is not declared
     rts
 }

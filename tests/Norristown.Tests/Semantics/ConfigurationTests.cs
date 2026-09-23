@@ -152,10 +152,10 @@ public sealed class ConfigurationTests
 
     /// <summary>A condition tests the configuration; a check on the program is an assertion.</summary>
     [Theory]
-    [InlineData(".if SIZE > 2 {", "`SIZE` is not a define or a `.config`. A condition tests the build configuration, "
-        + "and a check on the program is an `.assert`")]
-    [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program. A condition tests the "
-        + "build configuration, and a check on the program is an `.assert`")]
+    [InlineData(".if SIZE > 2 {", "`SIZE` is not a define or a `.config` setting: an `.if` condition can "
+        + "only test the build configuration; use `.assert` to check the program")]
+    [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program, which an `.if` "
+        + "condition cannot do: use `.assert` to check the program")]
     public void AConditionThatNamesTheProgramSaysToUseAnAssert(string opener, string message)
     {
         var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
@@ -206,8 +206,8 @@ public sealed class ConfigurationTests
         var program = Built(".if 1 {\n.cpu 65c02\n}\n");
 
         Assert.Equal(
-            ["main.nt65:3: `.cpu` states the program's processor, which a condition may test, "
-                + "so it may not be written under an `.if`"],
+            ["main.nt65:3: `.cpu` cannot be inside an `.if`: conditions can test the processor, "
+                + "so it must be set first"],
             program.Problems());
     }
 
@@ -217,7 +217,7 @@ public sealed class ConfigurationTests
     {
         var program = Built(".scope gfx {\n} .else {\n}\n");
 
-        Assert.Equal(["main.nt65:3: `.else` continues an `.if`, and there is none to continue"],
+        Assert.Equal(["main.nt65:3: `.else` has no `.if` before it"],
             program.Problems());
     }
 

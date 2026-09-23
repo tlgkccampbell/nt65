@@ -4,10 +4,10 @@
 .cpu 6502
 
 .segment RODATA
-.data past:     .byte .strsub("HELLO", 3, 3)    ;! error[strsub-out-of-range]: `.strsub` asks for 3 bytes from 3, and the text is 5 bytes long
-.data before:   .byte .strsub("HELLO", -1, 1)   ;! error[strsub-out-of-range]: `.strsub` asks for 1 byte from -1, and the text is 5 bytes long
-.data wide:     .byte .strcat("A", 256)         ;! error[strcat-not-a-byte]: `.strcat` joins a number as one byte, and $0100 is not 0 to 255
-.data negative: .byte .strcat(-1, "A")          ;! error[strcat-not-a-byte]: `.strcat` joins a number as one byte, and -1 is not 0 to 255
+.data past:     .byte .strsub("HELLO", 3, 3)    ;! error[strsub-out-of-range]: `.strsub` reaches outside the text: it asks for 3 bytes from 3, and the text is 5 bytes long
+.data before:   .byte .strsub("HELLO", -1, 1)   ;! error[strsub-out-of-range]: `.strsub` reaches outside the text: it asks for 1 byte from -1, and the text is 5 bytes long
+.data wide:     .byte .strcat("A", 256)         ;! error[strcat-not-a-byte]: `.strcat` adds a number as a single byte, and $0100 is not in the range 0 to 255
+.data negative: .byte .strcat(-1, "A")          ;! error[strcat-not-a-byte]: `.strcat` adds a number as a single byte, and -1 is not in the range 0 to 255
 .data ended:    .strz .strcat("A", 0, "B")      ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
 .data number:   .byte .strsub(5, 0, 1)          ;! error[builtin-arguments]: `.strsub` takes `.strsub(text, start, count)`: a text and two numbers
 .data nothing:  .byte .strcat()                 ;! error[builtin-arguments]: `.strcat` takes `.strcat(part, ...)`: at least one text or number

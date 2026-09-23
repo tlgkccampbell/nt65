@@ -115,7 +115,7 @@ public sealed class ProjectsTests : IDisposable
 
         var published = await NextForAsync(client, "nt65.json", timeout);
 
-        Assert.Equal("`define` is not a nt65.json key; `defines` is",
+        Assert.Equal("`define` is not a key of nt65.json; did you mean `defines`?",
             Assert.Single(published.Diagnostics).Message);
         Assert.Null(published.Version);
     }

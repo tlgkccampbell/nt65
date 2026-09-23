@@ -434,17 +434,17 @@ internal sealed partial class Binder
         if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
             return null;
         DiagnosticMessage? why = kind == BlockKind.Repeat
-            ? Catalogue.FamilyMisplaced.Says("a `.repeat` counts its turns, and a count is no name: a family is an "
-                + "`.each` over a named enum, whose members are the names it declares")
+            ? Catalogue.FamilyMisplaced.Says("a family must be in an `.each` over a named enum, because each routine it "
+                + "declares is named after one of the enum's members; a `.repeat` only counts, so it gives no names")
             : around.Kind == ScopeKind.Repetition
-                ? Catalogue.FamilyMisplaced.Says("a family declares into the scope around its `.each`, and this one "
-                    + "is inside another repetition, where every name is a different one on every turn")
+                ? Catalogue.FamilyMisplaced.Says("a family cannot be inside another `.repeat` or `.each`: it declares its "
+                    + "routines into the scope around its `.each`, and inside a repetition that scope is a new one on every pass")
                 : Placement is ScopeKind.File
                     ? (DiagnosticMessage?)null
                     : Catalogue.FamilyMisplaced.Says(
-                        "a family declares one routine per member into the scope around its `.each`, and this one is "
+                        "a family declares one routine or data declaration per member into the scope around its `.each`, and this one is "
                         + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
-                            ? "a body declares nothing in its caller"
+                            ? "names declared there cannot reach the caller's scope"
                             : "a routine belongs at file level or in a `.scope`"));
         return new Repeated(block, (opener as RepetitionDirectiveSyntax)?.Expression, binding, around, segment, why);
     }
@@ -604,7 +604,7 @@ internal sealed partial class Binder
         if (found is not { Kind: SymbolKind.Enum, Body: { } members })
         {
             Report(walked?.Span ?? at, Catalogue.FamilyNotOverAnEnum.Says(
-                written, found is null ? "names none" : $"is {Named(found)}"));
+                written, found is null ? "is not declared" : $"is {Named(found)}"));
             return;
         }
 

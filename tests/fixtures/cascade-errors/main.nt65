@@ -36,11 +36,11 @@
     lda #lib::thrice(1)
 
     ; A call through a pointer with no `.next` leaves the state as it was.
-    jsr (table,x)           ;! error[indirect-call-unchecked]: `jsr (table,x)` calls where its operand points, which the analysis cannot see: `.next` names the routines it calls
+    jsr (table,x)           ;! error[indirect-call-unchecked]: `jsr (table,x)` is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call
 
     ; An instruction that needs an operand, and a far jump to a near routine.
     jsr                     ;! error[operand-missing]: `jsr` needs an operand
-    jml near_one            ;! error[jump-distance-mismatch]: `near_one` is near: a jump to it is `jmp near_one`
+    jml near_one            ;! error[jump-distance-mismatch]: `near_one` is near: jump to it with `jmp near_one`
     table:
     .addr near_one
 }
@@ -48,22 +48,22 @@
 ; What a paste from ca65 leaves behind: each of these is one decision to make, and each is
 ; reported once rather than once per token the reader of the line then trips over.
 .proc pasted: a8, i16 {
-    :                           ;! error[unnamed-label]: an unnamed label is written `@name`: a cheap local, private to the routine around it
+    :                           ;! error[unnamed-label]: unnamed labels (`:`, `:+`, `:-`) are not supported: use a cheap local instead, `@name:`
     lda #1
-    bne :+                  ;! error[unnamed-label]: an unnamed label is written `@name`: a cheap local, private to the routine around it
+    bne :+                  ;! error[unnamed-label]: unnamed labels (`:`, `:+`, `:-`) are not supported: use a cheap local instead, `@name:`
     nop
     rts
 }
 
-; Instructions outside a routine are one paste, said once and counted.
-lda #1                  ;! error[instruction-outside-a-routine]: these 3 instructions belong in a `.proc`: code outside one is reached by nothing nt65 can follow
+; Consecutive instructions outside a routine are one paste, reported once with their count.
+lda #1                  ;! error[instruction-outside-a-routine]: these 3 instructions belong in a `.proc`: nt65 follows and checks code only inside routines
 sta $10
 rts
 
 ; Text after a block's `{` on the same line is reported as belonging on the next line,
 ; rather than as an unexpected token where the opener ended.
 .segment RODATA
-.data inline { .byte 1 }    ;! error[block-brace-ends-the-line]: a block's `{` ends the line that opens it: `.byte` goes on the next line, and `}` on its own
+.data inline { .byte 1 }    ;! error[block-brace-ends-the-line]: a block's `{` must end its line: move `.byte` and the rest to the next line, and put `}` on a line of its own
 
 .segment CODE
 ; A 16-bit value in an immediate of unknown width is one mistake, not two.

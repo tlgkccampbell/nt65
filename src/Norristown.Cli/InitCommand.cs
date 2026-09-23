@@ -45,7 +45,9 @@ public static class InitCommand
                     var value = i + 1 < arguments.Count ? arguments[++i] : null;
                     if (value is null || CpuNames.Parse(value) is not { } named)
                     {
-                        error.WriteLine($"nt65: --cpu takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}");
+                        error.WriteLine(value is null
+                            ? $"nt65: `--cpu` needs a processor: {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}"
+                            : $"nt65: `{value}` is not a processor nt65 knows; `--cpu` takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}");
                         error.WriteLine(CommandLine.SeeHelp);
                         return 2;
                     }
@@ -56,7 +58,7 @@ public static class InitCommand
                     {
                         error.WriteLine(arguments[i].StartsWith('-')
                             ? $"nt65: `{arguments[i]}` is not an option"
-                            : "nt65: init takes one directory");
+                            : "nt65: `init` takes at most one directory");
                         error.WriteLine(CommandLine.SeeHelp);
                         return 2;
                     }

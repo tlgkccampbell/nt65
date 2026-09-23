@@ -37,29 +37,29 @@
 
 ; A return has to reach the state the signature declares, and leave the way it is called.
 .proc wrong_exit: a8 -> a16 {
-    rts                     ;! error[return-state-mismatch]: `rts`: `wrong_exit` returns with `a16`, and A is 8-bit here
+    rts                     ;! error[return-state-mismatch]: `rts`: `wrong_exit` declares it returns with `a16`, but A is 8-bit here
 }
 
 .proc wrong_return: far {
-    rts                     ;! error[return-distance-mismatch]: `wrong_return` is far, and returns with `rtl`
+    rts                     ;! error[return-distance-mismatch]: `wrong_return` is far, so it returns with `rtl`
 }
 
 .proc changed: a* {
     rep #$20
-    rts                     ;! error[asserted-item-not-restored]: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, and here it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, but here it may not be
 }
 
 ; A call has to meet the routine's entry, and use the instruction its distance calls for.
 .proc wrong_entry: a16, i8 -> a8, i16 {
-    jsr printf              ;! error[call-state-mismatch]: `jsr printf` needs `a8`, and A is 16-bit here;! error[call-state-mismatch]: `jsr printf` needs `i16`, and X and Y are 8-bit here
+    jsr printf              ;! error[call-state-mismatch]: `jsr printf` needs `a8`, but A is 16-bit here;! error[call-state-mismatch]: `jsr printf` needs `i16`, but X and Y are 8-bit here
     rts
 }
 
 .proc calls: a8, i8 {
-    jsr far_away            ;! error[call-distance-mismatch]: `far_away` is far, and is called with `jsl`
-    jsl calls               ;! error[call-distance-mismatch]: `calls` is near, and is called with `jsr`
-    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
-    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816 a call's target is a proc, an extern proc or a `proc(...)` import, whose signature says what state it takes
+    jsr far_away            ;! error[call-distance-mismatch]: `far_away` is far, so call it with `jsl`
+    jsl calls               ;! error[call-distance-mismatch]: `calls` is near, so call it with `jsr`
+    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
+    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
     rts
 @inside:
     rts
@@ -67,20 +67,20 @@
 
 ; A tail call's return is this routine's return, so it must reach this routine's exit state.
 .proc tail: a16, i8 -> a8 {
-    jmp wrong_entry         ;! error[return-state-mismatch]: `jmp wrong_entry` is a tail call: `tail` returns with `i8`, and X and Y are 16-bit when `wrong_entry` returns
+    jmp wrong_entry         ;! error[return-state-mismatch]: `jmp wrong_entry` is a tail call: `tail` declares it returns with `i8`, but X and Y are 16-bit when `wrong_entry` returns
 }
 
 ; An assertion that disagrees with what is known.
 .proc asserted: a8 {
-    .state a16              ;! error[state-width-mismatch]: `.state a16`, and A is 8-bit here
-    .state near             ;! error[state-item-not-a-point]: `near` describes a routine rather than a point in it, and belongs in a signature
-    rts                     ;! error[return-state-mismatch]: `rts`: `asserted` returns with `a8`, and A is 16-bit here
+    .state a16              ;! error[state-width-mismatch]: `.state a16` does not match: A is 8-bit here
+    .state near             ;! error[state-item-not-a-point]: `near` describes a whole routine, not one point in it: write it in the routine's signature, not in `.state`
+    rts                     ;! error[return-state-mismatch]: `rts`: `asserted` declares it returns with `a8`, but A is 16-bit here
 }
 
 ; A label nothing reaches has no state to size an immediate with.
 .proc orphan: a8, i8 {
     rts
-@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: nothing runs into it and nothing names it
+@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: no code falls into it and nothing refers to it
     lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
     rts
 }
@@ -90,20 +90,20 @@
     rts
 }
 
-.proc handed_back: a8 -> a* {   ;! error[unchanged-needs-entry]: `a*` after `->` needs `a*` at entry too: a routine hands back unchanged only what it assumed nothing about
+.proc handed_back: a8 -> a* {   ;! error[unchanged-needs-entry]: `a*` after `->` needs `a*` before it too: a routine can promise to return a part unchanged only if it assumes nothing about it on entry
     rts
 }
 
-.proc pinned: emu, a16 {    ;! error[width-in-emulation]: `a16` cannot hold in emulation mode, where both widths are 8 bits
+.proc pinned: emu, a16 {    ;! error[width-in-emulation]: `a16` is impossible in emulation mode, where A, X and Y are always 8-bit
     rts
 }
 
 ; Outside a routine there is no processor state.
-.state a8               ;! error[state-outside-a-routine]: `.state` describes a point in a routine, and this is outside any `.proc`
+.state a8               ;! error[state-outside-a-routine]: `.state` is only allowed inside a `.proc`: it describes a point in a routine's code
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.
 .proc long_to_near: a8, i8 {
-    jml @near               ;! error[target-too-near]: `jml` takes a far target, and this one is absolute: `jmp` reaches it
+    jml @near               ;! error[target-too-near]: `jml` is for a far target, and this one is absolute: use `jmp`
 @near:
     jml $008000
     .next ?                 ; a constant address is somewhere the analysis does not follow
@@ -115,8 +115,8 @@
     rts
 }
 
-.proc worker_long = worker: a8, i16, far        ;! error[alias-distance-mismatch]: `worker_long` is declared far, and `worker` is near
-.proc worker_wide = worker: a16, i16            ;! error[alias-signature-mismatch]: `worker_wide` is declared `a16, i16, native, near`, and `worker` is `a8, i16, native, near`: another name for a routine declares what the routine does
+.proc worker_long = worker: a8, i16, far        ;! error[alias-distance-mismatch]: `worker_long` is declared far, but `worker`, the routine it names, is near
+.proc worker_wide = worker: a16, i16            ;! error[alias-signature-mismatch]: `worker_wide` is declared `a16, i16, native, near`, but `worker`, the routine it names, is `a8, i16, native, near`: another name for a routine must declare the same signature
 .proc worker_same = worker: a8, i16
 
 ; What made a width unknown is named where the width is needed.

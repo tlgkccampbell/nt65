@@ -48,7 +48,7 @@ public static class BuildCommand
         // `--stdout` prints the output of one file, so it needs exactly one file named.
         if (command.Stdout && command.Files.Count != 1)
         {
-            error.WriteLine("nt65: --stdout writes one file's output, so it takes one file");
+            error.WriteLine("nt65: `--stdout` prints one file's output, so name exactly one file");
             error.WriteLine(CommandLine.SeeHelp);
             return new BuildResult(2, root, watched);
         }

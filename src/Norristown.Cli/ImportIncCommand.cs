@@ -50,7 +50,7 @@ public static class ImportIncCommand
                     if (argument.StartsWith('-'))
                         return Wrong(error, $"`{argument}` is not an option");
                     if (source is not null)
-                        return Wrong(error, "import-inc converts one file");
+                        return Wrong(error, "`import-inc` converts one file at a time, and was given more than one");
                     source = Path.GetFullPath(argument, directory);
                     break;
             }
@@ -233,9 +233,10 @@ public static class ImportIncCommand
         if (code.Length == 0)
             return "nothing but a comment on the line";
         if (code.StartsWith('.'))
-            return $"`{code.Split(' ', '\t')[0]}` is a ca65 directive, and nt65 has no such line";
+            return $"`{code.Split(' ', '\t')[0]}` is a ca65 directive; `import-inc` converts only `NAME = value` constants";
         return code.Contains('=', StringComparison.Ordinal)
-            ? "nt65 does not read the expression: check the spelling and the parentheses it asks for"
+            ? "nt65 cannot parse this definition: it may use ca65-only syntax (such as `.LOBYTE`, `.SHL` or a local label), "
+                + "or need parentheses that nt65 requires to make the order of operations explicit"
             : "the line defines no constant";
     }
 

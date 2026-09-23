@@ -139,7 +139,7 @@ public static class ProjectFile
     private static DiagnosticMessage Unknown(string key)
     {
         var nearest = Spelling.Nearest(key, known);
-        return Catalogue.ProjectKeyUnknown.Says(key, Name, nearest is null ? "" : $"; `{nearest}` is");
+        return Catalogue.ProjectKeyUnknown.Says(key, Name, nearest is null ? "" : $"; did you mean `{nearest}`?");
     }
 
     /// <summary>A JSON number, or a string in nt65's number syntax.</summary>
@@ -223,7 +223,7 @@ public static class ProjectFile
                     Report(
                         property.Name,
                         Catalogue.DiagnosticNameUnknown.Says(
-                            property.Name, nearest is null ? "" : $"; `{nearest}` is"),
+                            property.Name, nearest is null ? "" : $"; did you mean `{nearest}`?"),
                         within);
                     continue;
                 }

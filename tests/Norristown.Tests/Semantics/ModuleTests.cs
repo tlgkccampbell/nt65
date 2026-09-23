@@ -184,7 +184,7 @@ public sealed class ModuleTests
         var program = Analysis.Program(project, ("main.nt65", ".module main\nDEBUG = 2\n"));
 
         Assert.Equal(
-            ["main.nt65:2: `DEBUG` is a define, and a file may not declare one"],
+            ["main.nt65:2: `DEBUG` is already a define, visible in every file: a file may not declare it again"],
             program.Problems());
     }
 

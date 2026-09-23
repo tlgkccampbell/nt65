@@ -290,7 +290,7 @@ public static class DataLengths
                 foreach (var value in bytes)
                 {
                     if (value is < 0 or > 255)
-                        Report(operand, model, diagnostics, on, Catalogue.CharmapValueNotAByte.Says((char)value));
+                        Report(operand, model, diagnostics, on, Catalogue.CharmapValueNotAByte.Says(Value.Of(value)));
                 }
                 continue;
             }

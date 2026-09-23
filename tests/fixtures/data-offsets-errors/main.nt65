@@ -45,6 +45,6 @@ ERR_SYNTAX = expanded::SYNTAX - expanded
     ldx #ERR_NOFOR
     ldx #AFTER_ALIGN                ;! error[address-does-not-fit]: `AFTER_ALIGN` is an absolute address, and an immediate is one byte: `<AFTER_ALIGN` is its low byte
     ldx #ERR_SYNTAX                 ;! error[address-does-not-fit]: `ERR_SYNTAX` is an absolute address, and an immediate is one byte: `<ERR_SYNTAX` is its low byte
-    lda #.sizeof(expanded)          ;! error[sizeof-depends-on-expansion]: nt65 cannot say how many bytes `expanded` takes: a macro call in it writes its bytes only when it is expanded, which is after every constant has its value, and `.spanof(expanded)` measures it in the output
+    lda #.sizeof(expanded)          ;! error[sizeof-depends-on-expansion]: cannot compute `.sizeof(expanded)`: a macro call inside it is expanded only after constants are known; `.spanof(expanded)` gives its size at link time
     rts
 }

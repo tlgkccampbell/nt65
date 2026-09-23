@@ -59,7 +59,7 @@ public sealed class MovedFileTests : IDisposable
 
         var said = await client.NextShowMessageAsync(timeout);
         Assert.Equal(MessageType.Warning, said.Type);
-        Assert.Contains("`gfx/*.nt65` in nt65.json no longer names sprite.nt65", said.Message, StringComparison.Ordinal);
+        Assert.Contains("`gfx/*.nt65` in nt65.json does not match sprite.nt65, the file's new path", said.Message, StringComparison.Ordinal);
 
         // The binary moves instead: the file that includes it names it where it now is.
         var binary = await RenameAsync(client, timeout, ("data/tiles.bin", "data/art/tiles.bin"));

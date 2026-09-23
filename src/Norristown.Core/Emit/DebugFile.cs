@@ -40,7 +40,7 @@ public static class DebugFile
         var records = text.Split('\n').Select(Record.Parse).ToList();
         if (!records.Any(record => record.Line.TrimEnd('\r') == Version))
         {
-            problem = "it is not a version 2.0 ld65 debug file";
+            problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
             return null;
         }
 
@@ -65,7 +65,7 @@ public static class DebugFile
                 continue;
             if (LineMap.Read(beside, out var wrong) is not { } lines)
             {
-                problem = $"the line map beside {path} cannot be read: {wrong}";
+                problem = $"cannot read {path}{LineMap.Extension}, the line map nt65 wrote for {path}: {wrong}";
                 return null;
             }
 

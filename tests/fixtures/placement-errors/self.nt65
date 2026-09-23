@@ -1,3 +1,3 @@
 .module self: placed
 
-.place self                         ;! error[placement-cycle]: a module may not place itself, and this `.place` would: `self` places `self`
+.place self                         ;! error[placement-cycle]: this `.place` would make a module place itself: `self` places `self`

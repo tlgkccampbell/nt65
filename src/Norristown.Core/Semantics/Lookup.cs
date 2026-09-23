@@ -107,7 +107,7 @@ internal static class Lookup
     /// A near miss as a message writes it, <c>; `count` is</c>, or nothing at all when the
     /// name is nothing like anything declared there.
     /// </summary>
-    public static string Suggesting(string? near) => near is null ? "" : $"; `{near}` is";
+    public static string Suggesting(string? near) => near is null ? "" : $"; did you mean `{near}`?";
 
     /// <summary>
     /// The scope that <c>::</c> after a symbol looks in: its own scope, or the scope of the type
