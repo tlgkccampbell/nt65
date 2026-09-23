@@ -6,8 +6,8 @@ namespace Norristown.Flow;
 /// <summary>
 /// What a routine costs with what it calls in it. A call costs the call itself and then
 /// whatever the routine it names costs, so the two compose wherever nt65 can name the callee
-/// and has its body; a tail jump composes the same way, because control comes back from it to
-/// this routine's caller.
+/// and has its body; a tail jump and a <c>.fallthrough</c> into another routine compose the same
+/// way, because control comes back from either to this routine's caller.
 /// <para>
 /// A call to a routine with no body, one through a pointer, and a routine that can reach
 /// itself leave the total unknown. Saying so is the point: a total that quietly left a callee
@@ -33,9 +33,10 @@ public static class CallCosts
 
     /// <summary>
     /// Which routines control ever returns from. An exit from a routine is a reached block with
-    /// no successor inside it: a return, a tail jump, or a call to a routine that never returns.
-    /// A routine returns when any of its exits does: a return always does, a tail jump does
-    /// only when the routine it jumps to returns, and a call that never returns does not.
+    /// no successor inside it: a return, a tail jump, a <c>.fallthrough</c> into another routine,
+    /// or a call to a routine that never returns. A routine returns when any of its exits does:
+    /// a return always does, a tail jump or a fall-through does only when the routine it goes on
+    /// into returns, and a call that never returns does not.
     /// <para>
     /// A routine is assumed not to return until something shows that it does, and the set is
     /// recomputed until it stops changing, so a chain of tail jumps that ends in an infinite
@@ -71,7 +72,7 @@ public static class CallCosts
         {
             if (!block.IsReached || block.Successors.Any(edge => edge.Kind != EdgeKind.Call))
                 continue;
-            var handsOff = block.Calls.Any(callee =>
+            var handsOff = Onward(block).Any(callee =>
                 regions.ContainsKey(Named(callee)) && !found.Contains(Named(callee)));
             if (!handsOff)
                 return true;
@@ -123,7 +124,7 @@ public static class CallCosts
 
             // A call inside a counted loop is made once per iteration, so its cost is counted
             // as many times as the loop runs.
-            foreach (var callee in block.Calls)
+            foreach (var callee in Onward(block))
             {
                 var name = Named(callee);
                 if (!regions.TryGetValue(name, out var called))
@@ -144,5 +145,12 @@ public static class CallCosts
 
     /// <summary>Whether a routine calls at all, which is what makes a total differ from its own cost.</summary>
     private static bool Calls(FlowRegion region) =>
-        region.Blocks.Any(block => block.Calls.Count > 0 || block.CallsUnknown);
+        region.Blocks.Any(block => Onward(block).Any() || block.CallsUnknown);
+
+    /// <summary>
+    /// The routines a block hands control to and whose cost is then part of this one's: those
+    /// it calls or tail-jumps to, and the one its <c>.fallthrough</c> runs on into.
+    /// </summary>
+    private static IEnumerable<Symbol> Onward(BasicBlock block) =>
+        block.RunsInto is { } into ? block.Calls.Append(into) : block.Calls;
 }

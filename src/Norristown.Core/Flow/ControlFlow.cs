@@ -273,10 +273,11 @@ public sealed class ControlFlow
     /// <summary>
     /// Whether a routine calls anything, which its own cycle count does not follow into: here
     /// a call counts only the call instruction, and what the called routine takes is that
-    /// routine's own count.
+    /// routine's own count. A <c>.fallthrough</c> into another routine is the same, since the
+    /// count stops where that routine starts.
     /// </summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
-        blocks.Any(block => block.Calls.Count > 0 || block.CallsUnknown);
+        blocks.Any(block => block.Calls.Count > 0 || block.RunsInto is not null || block.CallsUnknown);
 
     /// <summary>The call a branch makes, for a branch written as a relative call; null for every other statement.</summary>
     internal RelativeCall? RelativeCallAt(Step step) =>

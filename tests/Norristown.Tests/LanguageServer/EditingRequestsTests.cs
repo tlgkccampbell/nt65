@@ -400,7 +400,8 @@ public sealed class EditingRequestsTests
 
     /// <summary>
     /// What a routine costs including what it calls, worked out through the call graph: a call
-    /// costs the call instruction plus the callee, as does a tail jump. A routine that calls
+    /// costs the call instruction plus the callee, as does a tail jump or a <c>.fallthrough</c> into
+    /// another routine. A routine that calls
     /// itself, calls a routine with no body, or calls through a pointer gets no total.
     /// </summary>
     [Fact]
@@ -412,6 +413,10 @@ public sealed class EditingRequestsTests
             .cpu 65c02
             .segment CODE
             .proc CHROUT = $ffd2
+            .proc into_leaf {
+                inx
+                .fallthrough leaf
+            }
             .proc leaf {
                 lda #0
                 rts
@@ -443,6 +448,10 @@ public sealed class EditingRequestsTests
             @die:
                 jmp endless
             }
+            .proc into_endless: noreturn {
+                inx
+                .fallthrough endless
+            }
             .proc endless {
             @turn:
                 jmp @turn
@@ -462,6 +471,7 @@ public sealed class EditingRequestsTests
 
         Assert.Equal(
             [
+                "2 cycles, 10 cycles with calls",
                 "8 cycles",
                 "18 cycles, 34 cycles with calls",
                 "12 cycles, 46 cycles with calls",
@@ -474,6 +484,9 @@ public sealed class EditingRequestsTests
 
                 // One of its paths returns, so it is not marked as never returning.
                 "8-13 cycles",
+
+                // It runs on into a routine that never returns, so it never returns either.
+                "2 cycles, then never returns",
                 "never returns",
                 "12 cycles, not counting calls",
             ],
