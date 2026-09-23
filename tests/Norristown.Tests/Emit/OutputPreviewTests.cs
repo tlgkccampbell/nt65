@@ -42,6 +42,22 @@ public sealed class OutputPreviewTests
     }
 
     /// <summary>
+    /// A module a build writes no file for is shown as a line saying so, rather than as the
+    /// header of a file that is not there.
+    /// </summary>
+    [Fact]
+    public void AModuleThatWritesNothingIsShownAsNoFile()
+    {
+        var analysis = Compiler.Analyze(
+            [new SourceFile("text.nt65", ".module text\n.export .charmap screen {\n    'A'..'Z' = $01\n}\n")],
+            Norristown.Project.ProjectSettings.None);
+        var preview = OutputPreview.Of(analysis, Norristown.Project.ProjectSettings.None, "text.nt65");
+        Assert.NotNull(preview);
+        Assert.StartsWith("; No file:", preview.Text, StringComparison.Ordinal);
+        Assert.Equal([0], preview.SourceLines);
+    }
+
+    /// <summary>
     /// A file with errors shows what could be written, under a first line saying that it is
     /// incomplete and why: how many errors the program has, then the first error's line and
     /// message.

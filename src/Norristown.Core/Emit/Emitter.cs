@@ -67,6 +67,9 @@ public sealed class Emitter
     // a run of named data lines and folding a run of equal bytes into a `.res` cannot be done
     // on lines that are already text.
     private readonly List<EmittedLine> lines = [];
+
+    // The header's last line, after which a file that writes anything has more.
+    private EmittedLine? headerEnd;
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
@@ -148,6 +151,7 @@ public sealed class Emitter
         emitter.Filled();
         return new OutputFile(path, emitter.Written(), [.. emitter.lines.Select(line => line.Bytes)])
         {
+            IsEmpty = emitter.WritesNothing(),
             Source = model.Tree.Path,
             SourceSize = SizeOf(model),
             LineSources = [.. emitter.lines.Select(line => line.Source)],
@@ -206,6 +210,7 @@ public sealed class Emitter
         }
         return new OutputFile(path, first.Written(), [.. lines.Select(line => line.Bytes)])
         {
+            IsEmpty = first.WritesNothing(),
             Source = root.Tree.Path,
             SourceSize = SizeOf(root),
             LineSources = [.. lines.Select(line => line.Source)],
@@ -340,7 +345,16 @@ public sealed class Emitter
         Line(".feature leading_dot_in_identifiers -, line_continuations -, long_jsr_jmp_rts -");
         Line(".feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -");
         Line(".feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -");
+        headerEnd = lines[^1];
     }
+
+    /// <summary>
+    /// Whether the file holds nothing but its header: no export, import, byte, label or
+    /// assertion, which is so of a module that declares only what crosses modules by value.
+    /// </summary>
+    private bool WritesNothing() =>
+        lines.SkipWhile(line => !ReferenceEquals(line, headerEnd)).Skip(1)
+            .All(line => line is { Text: "", Label: null, Comment: null });
 
     /// <summary>
     /// Every export, under its linker name and with the address size nt65 gives it, hoisted

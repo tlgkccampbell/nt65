@@ -530,9 +530,10 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
 - `out`: where the output goes, the project root when there is none. A module's output is
   named after it, `.module gfx::sprite` in `out/gfx/sprite.s`, wherever its source is, so
   moving a source does not move its output. A module another places has none of its own: it
-  is in the output of the module at the root of its translation unit (§12). nt65 records what it wrote in
-  `out/.nt65-outputs`, and a later build deletes the output of a module that has gone from the
-  program; it deletes nothing the record does not name.
+  is in the output of the module at the root of its translation unit (§12), and a module with
+  nothing to write has none at all (§13). nt65 records what it wrote in `out/.nt65-outputs`,
+  and a later build deletes the output of a module that has gone from the program or no
+  longer writes anything; it deletes nothing the record does not name.
 - `defines`: the build configuration. Each define is a constant visible in every file,
   as if every module had brought it in, and defines are the only symbols an `.if` condition
   may test (§10). `-D NAME=value` on the command line adds a define or overrides one
@@ -3200,7 +3201,10 @@ unit of several modules (§12) is one `.s`, named after its root, with each plac
 items written where its `.place` stands and a comment naming the module and its source above
 and below them. A reference between two modules of one unit needs no import: the name is
 defined in the same file. An export is written as it would be anyway, since code outside
-nt65 may name it. The output is
+nt65 may name it. A module whose `.s` would hold only its header produces none. That is a
+module that writes no bytes, labels, exports, imports or assertions, such as one declaring
+only charmaps, functions, lists or macros, which cross modules by value. An empty object
+would be one more thing to assemble and link, for nothing. The output is
 readable ca65 with a header comment and source spellings preserved where possible: it is the
 program and nothing else, with everything a debugger needs in the map.
 

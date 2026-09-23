@@ -63,7 +63,13 @@ public static class Compiler
             if (model.Tree == analysis.Defines || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
-            var output = Written(analysis, project, i, measured, diagnostics) with
+            var written = Written(analysis, project, i, measured, diagnostics);
+
+            // A file that would hold only its header is left out, because an empty object file
+            // is one more thing to assemble and link for nothing.
+            if (written.IsEmpty)
+                continue;
+            var output = written with
             {
                 Dependencies = [.. members
                     .SelectMany(member => analysis.ModelFor(member.Path) is { } file ? Dependencies(analysis.Program, file, direct) : [])

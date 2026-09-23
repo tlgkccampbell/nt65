@@ -63,10 +63,12 @@ public sealed partial class OracleTests
             Assert.Contains(outputs, o => o.Output.LineBytes.Any(bytes => bytes > 0));
 
         // Every fixture with no errors of its own must reach the assembler; one that quietly
-        // produced nothing would be checked by nobody.
+        // produced nothing would be checked by nobody. A fixture that expects no output, as one
+        // whose modules have nothing to write does, is checked for that by the fixture runner.
         var written = outputs.Select(o => o.Fixture.Name).ToHashSet(StringComparer.Ordinal);
         var missing = fixtures
-            .Where(f => f.ExpectedDiagnostics().Count == 0 && f.Sources.Count > 0 && !written.Contains(f.Name))
+            .Where(f => f.ExpectedDiagnostics().Count == 0 && f.Sources.Count > 0 && f.ExpectedOutputs().Count > 0
+                && !written.Contains(f.Name))
             .Select(f => f.Name)
             .ToList();
         Assert.True(missing.Count == 0, $"produced no output, so nothing checked it: {string.Join(", ", missing)}");

@@ -19,6 +19,13 @@ public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> Lin
     /// </summary>
     public IReadOnlyList<string> Dependencies { get; init; } = [];
 
+    /// <summary>
+    /// Whether the file holds nothing but its header, as the ca65 of a module that declares only
+    /// charmaps, functions, lists, macros and the like, which cross modules by value. A build
+    /// writes no file for it, since there would be nothing in it to assemble or link.
+    /// </summary>
+    public bool IsEmpty { get; init; }
+
     /// <summary>What it is: the ca65 of a module, or the line map beside it.</summary>
     public OutputKind Kind { get; init; } = OutputKind.Ca65;
 

@@ -1,2 +1,2 @@
-; A file with nothing but a comment compiles without diagnostics.
+; A file with nothing but a comment compiles without diagnostics, and writes no file.
 .module main

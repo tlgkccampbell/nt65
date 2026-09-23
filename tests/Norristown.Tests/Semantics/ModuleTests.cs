@@ -206,7 +206,7 @@ public sealed class ModuleTests
     /// <summary>
     /// A re-exported import is used by other modules as if they had declared it: each imports it
     /// under its own name and asserts its value, and the module that declares it and uses it nowhere
-    /// writes nothing for it.
+    /// writes nothing for it, and so no file at all.
     /// </summary>
     [Fact]
     public void AReexportedImportIsImportedWhereItIsUsed()
@@ -218,8 +218,24 @@ public sealed class ModuleTests
         Assert.Contains(".import BORDER: abs\n", outputs["main.s"]);
         Assert.Contains(".importzp tick\n", outputs["main.s"]);
         Assert.Contains(".assert BORDER = $d020, lderror,", outputs["main.s"]);
-        Assert.DoesNotContain(".import", outputs["hw.s"]);
-        Assert.DoesNotContain(".export", outputs["hw.s"]);
+        Assert.False(outputs.ContainsKey("hw.s"));
+    }
+
+    /// <summary>
+    /// A module whose output would be only the header writes no file: what it declares crosses
+    /// modules by value. One that exports a constant writes the export, for ca65 code to link to.
+    /// </summary>
+    [Fact]
+    public void AModuleThatWritesNothingHasNoFile()
+    {
+        var outputs = Analysis.Outputs(
+            ("text.nt65", ".module text\n.export .charmap screen {\n    'A'..'Z' = $01\n}\n.export .func twice(n) = n * 2\n"),
+            ("hw.nt65", ".module hw\n.export BORDER\nBORDER = $d020\n"),
+            ("main.nt65", ".module main\n.use text::{screen, twice}\n.segment RODATA\n.data title: .byte screen(\"HI\"), twice(2)\n"));
+
+        Assert.False(outputs.ContainsKey("text.s"));
+        Assert.Contains(".export hw__BORDER", outputs["hw.s"]);
+        Assert.Contains("main.s", outputs.Keys);
     }
 
     /// <summary>

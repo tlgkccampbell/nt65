@@ -31,6 +31,9 @@ namespace Norristown.Emit;
 public sealed record OutputPreview(
     string Path, string Source, string Text, IReadOnlyList<int> SourceLines, string? Note)
 {
+    /// <summary>What is shown for a module a build writes no file for.</summary>
+    private const string Nothing = "; No file: nothing this module declares reaches ca65, so a build writes none.\n";
+
     /// <summary>
     /// The output for one file of <paramref name="analysis"/>, or null when the program has no
     /// such file. <paramref name="project"/> is what it is built as, whose <c>out</c> names
@@ -40,7 +43,10 @@ public sealed record OutputPreview(
     {
         if (Compiler.EmitFile(analysis, project, path) is not { } output)
             return null;
-        var (text, lines) = PartOf(output, path);
+
+        // A build writes no file for a module that writes nothing past the header, and says so
+        // rather than showing the header of a file that is not there.
+        var (text, lines) = output.IsEmpty ? (Nothing, new[] { 0 }) : PartOf(output, path);
         var note = Incomplete(analysis, path);
         return note is null
             ? new OutputPreview(output.Path, path, text, lines, null)

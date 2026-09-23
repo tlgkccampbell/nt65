@@ -2,8 +2,8 @@ namespace Norristown;
 
 /// <summary>The result of compiling a program: the files to write, and everything to report.</summary>
 /// <param name="Outputs">
-/// One ca65 file per input file, each followed by the line map beside it, for a file that has
-/// one (<see cref="Emit.LineMap"/>).
+/// One ca65 file per input file that writes anything (<see cref="OutputFile.IsEmpty"/>), each
+/// followed by the line map beside it, for a file that has one (<see cref="Emit.LineMap"/>).
 /// </param>
 /// <param name="Diagnostics">Errors, warnings and information, ordered by file, line and column.</param>
 public sealed record Compilation(IReadOnlyList<OutputFile> Outputs, IReadOnlyList<Diagnostic> Diagnostics)
