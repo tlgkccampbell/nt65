@@ -47,6 +47,22 @@
       "autoAttachChildProcesses": false
     },
     {
+      // The same, opening the monitor example. Its folder holds no project of its own: the
+      // server finds each platform's nt65.json beneath it, and the library with them.
+      "name": "nt65 extension: monitor example",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "${workspaceFolder}/examples/monitor"
+      ],
+      "preLaunchTask": "build",
+      "outFiles": ["${workspaceFolder}/editors/vscode/*.js"],
+      "resolveSourceMapLocations": ["${workspaceFolder}/editors/vscode/*.js"],
+      "autoAttachChildProcesses": false
+    },
+    {
       // The server runs as a child of the Extension Development Host, so it is attached
       // to rather than launched: pick Norristown.LanguageServer from the list. Needs the
       // C# extension.
