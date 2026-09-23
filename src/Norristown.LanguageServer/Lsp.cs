@@ -128,11 +128,29 @@ internal static class Lsp
     public static Protocol.Hover? ToHover(ProgramAnalysis analysis, SemanticModel model, int position)
     {
         var flow = analysis.FlowFor(model.Tree.Path);
-        return model.ReferenceAt(position) is { } reference
+        return (model.ReferenceAt(position) ?? InstanceAt(model, position)) is { } reference
             ? ToName(analysis, model, reference)
             : ToPlaced(analysis, model, position) ?? ToComparedWord(model, position)
                 ?? ToParameterKind(analysis, model, position) ?? ToScope(model, flow, position)
                 ?? ToTiming(analysis, model, flow, position);
+    }
+
+    /// <summary>
+    /// The name of a family's <c>.proc</c> inside an <c>.each</c>, as the declaration of the
+    /// binding it is written with: the name declares every instance, so what it answers is what
+    /// the <c>.multiproc</c> form answers on its binding. Null anywhere else.
+    /// </summary>
+    private static SymbolReference? InstanceAt(SemanticModel model, int position)
+    {
+        foreach (var family in model.Families)
+        {
+            if (family.Instances.FirstOrDefault(instance => instance.Tree == model.Tree) is { } instance
+                && position >= instance.NameSpan.Start && position <= instance.NameSpan.End)
+            {
+                return new SymbolReference(family.Binding, instance.NameSpan, IsDeclaration: true);
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -321,7 +339,8 @@ internal static class Lsp
             // A reader hovers a macro to see what the call expands to, so that row leads; it is
             // listed even where the row is not written, as at the declaration.
             SymbolKind.Macro => ["expands to"],
-            SymbolKind.Binding => ["declares"],
+            // A family's binding is where its routines' costs are shown, since they get no lens.
+            SymbolKind.Binding => ["declares", "cost", "excluding", "preserves"],
             SymbolKind.MacroParameter => ["mode", "takes"],
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
                 or SymbolKind.Label or SymbolKind.ImportedAddress or SymbolKind.AddressAlias => ["address", "size"],
@@ -409,15 +428,22 @@ internal static class Lsp
     /// <summary>
     /// Adds the cost and preserved-register rows for a routine, wherever its name is written. A
     /// code lens shows the same above the declaration, but an editor can be told to hide lenses,
-    /// and a lens is nowhere near a call anyway. The control flow used is the declaring file's,
-    /// since a call from another file is not part of it.
+    /// and a lens is nowhere near a call anyway, and a family's routines get no lens at all, so
+    /// for the name a family binds these are the rows of each of its instances. The control
+    /// flow used is the declaring file's, since a call from another file is not part of it.
     /// </summary>
     private static void Routine(Card card, ProgramAnalysis analysis, Symbol symbol)
     {
         if (analysis.FlowFor(symbol.Tree.Path) is not { } flow)
             return;
+        var spans = (analysis.ModelFor(symbol.Tree.Path)?.Families ?? [])
+            .Where(family => family.Binding.Tree == symbol.Tree && family.Binding.NameSpan == symbol.NameSpan)
+            .SelectMany(family => family.Instances)
+            .Select(instance => instance.NameSpan)
+            .Append(symbol.NameSpan)
+            .ToHashSet();
         var found = flow.Regions
-            .Where(region => region.Routine.Tree == symbol.Tree && region.Routine.NameSpan == symbol.NameSpan)
+            .Where(region => region.Routine.Tree == symbol.Tree && spans.Contains(region.Routine.NameSpan))
             .Select(region => (
                 region.Routine.Name,
                 Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns", false),

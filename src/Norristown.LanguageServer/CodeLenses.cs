@@ -1,6 +1,7 @@
 using Norristown.Flow;
 using Norristown.Layout;
 using Norristown.Processor;
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
@@ -14,49 +15,39 @@ namespace Norristown.LanguageServer;
 /// Cost and preserved registers are separate lenses rather than one line, because they answer
 /// different questions and a reader looking for one should not have to read past the other.
 /// </para>
+/// <para>
+/// The routines a family declares get no lenses. Every instance is declared on the family's
+/// one line, so their lenses would all land on it, one per instance, and make a line too long
+/// to read. The hover on that line gives each instance's cost and registers instead.
+/// </para>
 /// </summary>
 internal static class CodeLenses
 {
     /// <summary>The lenses for <paramref name="tree"/>, in position order.</summary>
-    public static IReadOnlyList<Protocol.CodeLens> In(SyntaxTree tree, ControlFlow? flow)
+    public static IReadOnlyList<Protocol.CodeLens> In(
+        SyntaxTree tree, IReadOnlyList<Family> families, ControlFlow? flow)
     {
-        var found = new List<(TextSpan At, int Kind, string Routine, string Text)>();
+        var instances = families
+            .SelectMany(family => family.Instances)
+            .Where(instance => instance.Tree == tree)
+            .Select(instance => instance.NameSpan)
+            .ToHashSet();
+        var lenses = new List<(int At, int Kind, Protocol.CodeLens Lens)>();
         foreach (var region in flow?.Regions ?? [])
         {
-            if (region.Routine.Tree != tree)
+            if (region.Routine.Tree != tree || instances.Contains(region.Routine.NameSpan))
                 continue;
             if (Spell(region.Cost, region.Total, "never returns", true) is { } cost)
-                found.Add((region.Routine.NameSpan, 0, region.Routine.Name, cost));
+                Add(region.Routine.NameSpan, 0, cost);
             if (Kept(region) is { } kept)
-                found.Add((region.Routine.NameSpan, 1, region.Routine.Name, kept));
+                Add(region.Routine.NameSpan, 1, kept);
             foreach (var scope in region.Scopes)
             {
                 if (Spell(scope.Cost, null, null, true) is { } inline)
-                    found.Add((scope.Opener, 0, region.Routine.Name, inline));
+                    Add(scope.Opener, 0, inline);
             }
             foreach (var scope in region.ScopeRegisters)
-            {
-                if (Spell(scope.Kept, scope.Complete) is { } inline)
-                    found.Add((scope.Opener, 1, region.Routine.Name, inline));
-            }
-        }
-
-        // Every instance of a family (the routines a repetition declares) is declared on one
-        // line, so all their lenses land on that line. Where every instance has the same text,
-        // the line shows it once; where they differ, each lens is prefixed with its instance's
-        // name. Cost and register lenses are grouped separately, so instances differing in one
-        // kind does not force instance names onto the other.
-        var lenses = new List<(int At, int Kind, Protocol.CodeLens Lens)>();
-        foreach (var at in found.GroupBy(lens => (lens.At, lens.Kind)))
-        {
-            var texts = at.Select(lens => lens.Text).Distinct(StringComparer.Ordinal).ToList();
-            if (texts.Count == 1)
-                Add(at.Key.At, at.Key.Kind, texts[0]);
-            else
-            {
-                foreach (var lens in at)
-                    Add(at.Key.At, at.Key.Kind, $"{lens.Routine}: {lens.Text}");
-            }
+                Add(scope.Opener, 1, Spell(scope.Kept, scope.Complete));
         }
 
         void Add(TextSpan at, int kind, string text) =>

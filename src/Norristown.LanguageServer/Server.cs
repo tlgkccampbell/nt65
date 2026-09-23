@@ -506,7 +506,8 @@ internal sealed class Server
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return [];
         var path = document.Tree.Path;
-        return LanguageServer.CodeLenses.In(document.Tree, workspace.AnalysisFor(path).FlowFor(path));
+        var analysis = workspace.AnalysisFor(path);
+        return LanguageServer.CodeLenses.In(document.Tree, analysis.ModelFor(path)?.Families ?? [], analysis.FlowFor(path));
     }
 
     [JsonRpcMethod("textDocument/documentLink")]

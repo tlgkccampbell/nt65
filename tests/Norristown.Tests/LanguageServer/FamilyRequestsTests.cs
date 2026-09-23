@@ -8,7 +8,8 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>
 /// What an editor gets through an instance of a routine family, written both in the compact
 /// <c>.multiproc</c> form and in the long <c>.each</c> form: where an instance is declared, what
-/// renaming it changes, and what completion offers after the scope it is in. None of this
+/// renaming it changes, what completion offers after the scope it is in, and where its cost is
+/// shown. None of this
 /// expands the family; it all comes from what the binder records about it.
 /// </summary>
 public sealed class FamilyRequestsTests
@@ -101,6 +102,41 @@ public sealed class FamilyRequestsTests
 
         var labels = items.Select(item => item.Label).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(["pulse1", "pulse2", "triangle"], labels.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// The instances of a family are all declared on its one line, so it gets no lenses, which
+    /// would crowd it with one per instance; the hover there gives each instance's cost.
+    /// </summary>
+    [Fact]
+    public async Task AFamilyGetsNoLensesAndItsHoverGivesTheCost()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(Uri)), timeout);
+        var folded = await client.HoverAsync(Uri, new Position(9, 24), timeout);
+        var written = await client.HoverAsync(Uri, new Position(16, 14), timeout);
+
+        // Only `main`, on line 22, has lenses. The hover is the same in either form, on the
+        // `.multiproc`'s binding on line 9 and on the name of the `.each`'s `.proc` on line 16.
+        Assert.Equal([22], lenses.Select(lens => lens.Range.Start.Line).Distinct());
+        foreach (var (hover, scope) in new[] { (folded, "play"), (written, "stop") })
+        {
+            Assert.Equal($"""
+                ```nt65
+                repetition binding ch
+                ```
+
+                ```nt65-hover
+                private to  {scope}
+                cost        6 cycles
+                preserves   A, X, Y, C
+                declares    {scope}::pulse1, {scope}::pulse2, {scope}::triangle
+                ```
+                """.ReplaceLineEndings("\n"), hover?.Contents.Value);
+        }
     }
 
     private static async Task<TestClient> OpenAsync(CancellationToken cancellation, string? text = null)

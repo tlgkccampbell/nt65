@@ -95,7 +95,7 @@ public sealed class BrokenSourceTests
         Answer("document symbols", () => Lsp.ToSymbols(tree));
         Answer("folding ranges", () => Lsp.ToFoldingRanges(tree));
         Answer("formatting", () => Lsp.ToFormatting(tree, 0, tree.LineCount - 1));
-        Answer("code lenses", () => CodeLenses.In(tree, analysis.FlowFor(tree.Path)));
+        Answer("code lenses", () => CodeLenses.In(tree, model.Families, analysis.FlowFor(tree.Path)));
         Answer("document links", () => DocumentLinks.In(model));
         Answer("semantic tokens", () => NameHighlighting.In(model));
     }
