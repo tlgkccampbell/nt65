@@ -328,7 +328,7 @@ public sealed class SymbolRequestsTests
             ---
             ```nt65-hover
             value    $ffd2 (65490)
-            address  abs (2 bytes) in CODE
+            address  abs (2 bytes)
             ```
             """.ReplaceLineEndings("\n"), bodiless!.Contents.Value);
     }

@@ -305,10 +305,12 @@ internal static class Lsp
             card.Row("size", $"{room} byte{(room == 1 ? "" : "s")}"
                 + (symbol.Count is > 1 and { } count && symbol.Kind != SymbolKind.Member ? $" x {count}" : ""));
         }
+        // The segment is where the bytes are laid out. A name given its address with `=`, such as
+        // a routine in ROM, has no bytes here, so the segment its line sits in says nothing.
         if (symbol.AddressSize is { } size)
         {
             card.Row("address", $"{Spell(size)} ({(int)size} byte{((int)size == 1 ? "" : "s")})"
-                + (symbol.IsAddress && symbol.Segment is { } segment ? $" in {segment}" : ""));
+                + (symbol is { IsAddress: true, ValueExpression: null, Segment: { } segment } ? $" in {segment}" : ""));
         }
         Declares(card, model, reference);
         Written(card, analysis, symbol);
