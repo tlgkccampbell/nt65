@@ -511,6 +511,35 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
+    /// The text after a call to a routine that returns past it is never run, so it costs nothing
+    /// and the routine still has a count, rather than none and no reason for it.
+    /// </summary>
+    [Fact]
+    public async Task InlineDataAfterACallTakesNoTime()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 6502
+            .import print: proc(inline .strz)
+            .segment CODE
+            .proc greet {
+                jsr print
+                .strz "hi"
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(["12 cycles, not counting calls"], Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
     /// An inline <c>.scope</c> is part of its routine, and its lens gives what one pass through
     /// the scope costs; a <c>.scope</c> at file level holds declarations and no code, and gets
     /// no lens.

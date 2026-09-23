@@ -24,6 +24,10 @@ public sealed class ControlFlow
     private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations = [];
     private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls = [];
     private readonly HashSet<(int Position, Expansion? On)> returnAddresses = [];
+
+    // The data after each call to a routine that returns past it. The processor never runs it,
+    // so it costs nothing, rather than leaving its block without a count.
+    private readonly HashSet<(int Position, Expansion? On)> skipped = [];
     private readonly List<RunningOn> runningOn = [];
 
     // Whether the file places another module or may be placed itself. In such a file a
@@ -74,6 +78,7 @@ public sealed class ControlFlow
             var routine = run.Key!;
             var units = flow.Units([.. run.GroupBy(step => step.Stream).SelectMany(stream => stream)]);
             flow.FindRelativeCalls(units);
+            var inlineData = flow.CheckInlineData(units, diagnostics);
             var blocks = flow.Blocks(units);
 
             // The routine is entered at the label of its own name.
@@ -91,7 +96,7 @@ public sealed class ControlFlow
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
             flow.CheckUnreachableLabels(region, diagnostics);
-            flow.CheckDataReachedByFallingThrough(units, flow.CheckInlineData(units, diagnostics), diagnostics);
+            flow.CheckDataReachedByFallingThrough(units, inlineData, diagnostics);
             flow.CheckNextIsNeeded(units, diagnostics);
             flow.CheckFallthrough(units, diagnostics);
             flow.CheckReturnsAndCalls(routine, units, diagnostics);
@@ -487,7 +492,7 @@ public sealed class ControlFlow
         var total = new CycleCount(0);
         foreach (var step in block.Steps)
         {
-            if (TakesNoTime(step))
+            if (TakesNoTime(step) || skipped.Contains((step.Statement.Position, step.On)))
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
             {
@@ -789,7 +794,7 @@ public sealed class ControlFlow
     /// </summary>
     private HashSet<Unit> CheckInlineData(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
-        var skipped = new HashSet<Unit>();
+        var found = new HashSet<Unit>();
         for (var i = 0; i < units.Count; i++)
         {
             if (CalledAt(units[i]) is not { Signature.Inline: { } inline } routine)
@@ -804,7 +809,7 @@ public sealed class ControlFlow
                     && units[i + 1].Step.Statement is DataDirectiveSyntax text
                     && text.Directive.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
                 {
-                    skipped.Add(units[i + 1]);
+                    Skip(units[i + 1]);
                 }
                 else
                 {
@@ -829,7 +834,7 @@ public sealed class ControlFlow
                     || units[j].Step.Statement is not (DataDirectiveSyntax or DataValuesSyntax))
                     break;
                 taken += layout.Of(units[j].Step.Statement, units[j].Step.On)?.Length ?? 0;
-                skipped.Add(units[j]);
+                Skip(units[j]);
             }
             if (taken != bytes)
             {
@@ -839,7 +844,13 @@ public sealed class ControlFlow
                     taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
             }
         }
-        return skipped;
+        return found;
+
+        void Skip(Unit unit)
+        {
+            found.Add(unit);
+            skipped.Add((unit.Step.Statement.Position, unit.Step.On));
+        }
 
         void Report(SyntaxNode node, DiagnosticMessage message) =>
             diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
