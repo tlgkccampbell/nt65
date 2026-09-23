@@ -139,6 +139,47 @@ public sealed class FamilyRequestsTests
         }
     }
 
+    /// <summary>
+    /// A call names one instance, so its hover gives that instance's cost alone; the family's
+    /// binding is where every instance's cost is given.
+    /// </summary>
+    [Fact]
+    public async Task AnInstanceNamedAtACallHoversWithItsOwnCost()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        await using var client = await OpenAsync(timeout, """
+            .module main
+            .enum Channel {
+                pulse1
+                triangle
+            }
+
+            .segment CODE
+            .scope play {
+                .multiproc Channel, ch {
+                    .if ch == Channel::triangle {
+                        nop
+                    }
+                    rts
+                }
+            }
+
+            .export .proc main {
+                jsr play::triangle
+                rts
+            }
+            """);
+        await client.NextDiagnosticsAsync(timeout);
+
+        var call = await client.HoverAsync(Uri, new Position(17, 14), timeout);
+        var binding = await client.HoverAsync(Uri, new Position(8, 24), timeout);
+
+        Assert.Contains("cost       8 cycles\n", call?.Contents.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("pulse1", call?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("pulse1: 6 cycles", binding?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("triangle: 8 cycles", binding?.Contents.Value, StringComparison.Ordinal);
+    }
+
     private static async Task<TestClient> OpenAsync(CancellationToken cancellation, string? text = null)
     {
         var client = await TestClient.StartAsync(cancellation);

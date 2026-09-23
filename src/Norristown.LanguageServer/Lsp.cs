@@ -438,14 +438,18 @@ internal static class Lsp
     {
         if (analysis.FlowFor(symbol.Tree.Path) is not { } flow)
             return;
-        var spans = (analysis.ModelFor(symbol.Tree.Path)?.Families ?? [])
-            .Where(family => family.Binding.Tree == symbol.Tree && family.Binding.NameSpan == symbol.NameSpan)
-            .SelectMany(family => family.Instances)
-            .Select(instance => instance.NameSpan)
-            .Append(symbol.NameSpan)
-            .ToHashSet();
+        // Routines are matched by name, not by where the name is written: every instance of a
+        // family is declared at the one binding, so a position would match them all, where one
+        // instance named at a call means that instance alone.
+        var names = symbol.Kind == SymbolKind.Binding
+            ? (analysis.ModelFor(symbol.Tree.Path)?.Families ?? [])
+                .Where(family => family.Binding.Tree == symbol.Tree && family.Binding.NameSpan == symbol.NameSpan)
+                .SelectMany(family => family.Instances)
+                .Select(instance => instance.FlatName)
+                .ToHashSet(StringComparer.Ordinal)
+            : [symbol.FlatName];
         var found = flow.Regions
-            .Where(region => region.Routine.Tree == symbol.Tree && spans.Contains(region.Routine.NameSpan))
+            .Where(region => region.Routine.Tree == symbol.Tree && names.Contains(region.Routine.FlatName))
             .Select(region => (
                 region.Routine.Name,
                 Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns", false),
