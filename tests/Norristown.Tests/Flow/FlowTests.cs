@@ -337,6 +337,24 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that a loop is counted only when nothing but the decrements just before its
+    /// branch writes the counter, even when another write comes from the same macro line.
+    /// Two expansions of one macro share a source position, so the decrement from the first
+    /// expansion must not pass for the one from the second.
+    /// </summary>
+    [Theory]
+    [InlineData("    step!()\n", true)]
+    [InlineData("    step!()\n    step!()\n", true)]
+    [InlineData("    step!()\n    nop\n    step!()\n", false)]
+    public void AnotherExpansionOfTheDecrementStopsTheLoopBeingCounted(string body, bool counted)
+    {
+        var region = Region(
+            ".macro step() {\n    dex\n}\n.proc p {\n    ldx #4\n@loop:\n" + body + "    bne @loop\n    rts\n}\n");
+
+        Assert.Equal(counted, region.Cost.Most is not null);
+    }
+
+    /// <summary>
     /// The problems reported for <paramref name="text"/>, compiled after two lines that declare
     /// the module and select the code segment.
     /// </summary>
