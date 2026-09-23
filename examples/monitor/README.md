@@ -30,6 +30,7 @@ Numbers are hex, of one to four digits.
 | `G [address]` | calls `address`, or the PC shown by `R`, with the registers `R` shows; the code comes back to the monitor with `RTS` or `BRK` |
 | `R` | shows the registers, as a `BRK` or the last `G` left them |
 | `X` | leaves the monitor |
+| `?` | lists the commands |
 
 A line of `M` is itself a `:` command. On the C64, move the cursor up to one, change a byte and
 press RETURN, and the byte is written; the characters beside the bytes are not read.
@@ -64,7 +65,7 @@ The label file gives VICE's own monitor the program's names, so `d monitor__main
 disassembles the monitor's entry.
 
 `./test.ps1` runs the sessions in `tests/c64` in VICE, all at once, and checks the screen each
-leaves; the four take about a second. A session is the screen as it should be. The lines that
+leaves; the five take about a second. A session is the screen as it should be. The lines that
 start with the prompt, `.`, are what is typed; the rest is what the monitor answers. So a new
 session is written by typing its commands, each on a line of its own after a `.`, and running
 `./test.ps1 -Update -Session name` to fill in the answers, which are then read and checked by
@@ -90,8 +91,8 @@ editor a library file shows as part of the first platform's program.
 
 ### The library
 
-- `lib/monitor.nt65`: the command loop, the table of commands, the registers of the program
-  being debugged, and what a platform must supply, in the comment at its top.
+- `lib/monitor.nt65`: the command loop, the table of commands and `?`, the registers of the
+  program being debugged, and what a platform must supply, in the comment at its top.
 - `lib/parse.nt65`: the line the platform reads, and reading hex numbers from it.
 - `lib/text.nt65`: writing text, hex and new lines, in terms of the platform's `putc`.
 - `lib/memory.nt65`: `M`, `:` and `F`.

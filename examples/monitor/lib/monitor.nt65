@@ -41,10 +41,11 @@
     run::go                         ; G [address]
     run::show                       ; R
     platform::exit                  ; X
+    help                            ; ?
 }
 
 .segment RODATA
-.data letters:  .byte "M:FDGRX"
+.data letters:  .byte "M:FDGRX?"
 .data handlers: .addr commands
 
 .assert .sizeof(letters) == .countof(commands), "every command needs a letter"
@@ -113,6 +114,38 @@
     .segment BSS {
     @vector: .res 2
     }
+}
+
+; ?: lists the commands. Each line stays inside the narrowest screen a platform has, the C64's
+; forty columns, so none wraps.
+.proc help {
+    jsr print
+    .strz "NUMBERS ARE HEX"
+    jsr newline
+    jsr print
+    .strz "M [FROM [TO]]   SHOW MEMORY"
+    jsr newline
+    jsr print
+    .strz ":ADDR BYTE...   WRITE BYTES"
+    jsr newline
+    jsr print
+    .strz "F FROM TO BYTE  FILL MEMORY"
+    jsr newline
+    jsr print
+    .strz "D [FROM [TO]]   DISASSEMBLE"
+    jsr newline
+    jsr print
+    .strz "G [ADDR]        RUN CODE"
+    jsr newline
+    jsr print
+    .strz "R               SHOW REGISTERS"
+    jsr newline
+    jsr print
+    .strz "X               LEAVE THE MONITOR"
+    jsr newline
+    jsr print
+    .strz "?               SHOW THIS LIST"
+    jmp newline
 }
 
 ; A command found something it cannot read: say so, and read the next one.
