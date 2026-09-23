@@ -93,7 +93,7 @@ public sealed class InitCommandTests : IDisposable
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
         var code = Commands.Run(arguments, directory, output, error,
-            cancellation: TestContext.Current.CancellationToken);
+            cancellation: TestTimeout.Token());
         return (code, output.ToString() + error.ToString());
     }
 

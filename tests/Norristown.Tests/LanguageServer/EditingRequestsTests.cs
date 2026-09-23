@@ -188,7 +188,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task AnnouncesWhatTheEditingLayerCanDo()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         var capabilities = client.Initialized.Capabilities;
@@ -205,7 +205,7 @@ public sealed class EditingRequestsTests
     [MemberData(nameof(Completions))]
     public async Task CompletionOffersWhatMayBeWrittenThere(string where, string line, string[] offered, string[] notOffered)
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Place(where, line);
         await using var client = await OpenAsync(text, timeout);
 
@@ -221,7 +221,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ACompletionReplacesWhatIsTypedAndWritesWhatTheItemNeeds()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Place("body", "    poke!(val|");
         await using var client = await OpenAsync(text, timeout);
 
@@ -242,7 +242,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task AnInstructionThatTakesAnOperandLeadsOnToIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Place("body", "|");
         await using var client = await OpenAsync(text, timeout);
 
@@ -269,7 +269,7 @@ public sealed class EditingRequestsTests
     [InlineData("    mvn |", new[] { "#" }, new[] { "main", "z:", "a:" })]
     public async Task AnOperandOffersTheFormsTheCpuHas(string line, string[] offered, string[] notOffered)
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Caret("""
             .module main
             .cpu 65816
@@ -306,7 +306,7 @@ public sealed class EditingRequestsTests
     [MemberData(nameof(Calls))]
     public async Task SignatureHelpSaysWhatTheCallTakes(string where, string line, string signature, int active)
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Place(where, line);
         await using var client = await OpenAsync(text, timeout);
 
@@ -322,7 +322,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task SignatureHelpIsNothingOutsideACall()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, position) = Place("body", "    lda (vic::BORDER),y|");
         await using var client = await OpenAsync(text, timeout);
 
@@ -338,7 +338,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensAboveEachRoutineSaysWhatOnePassThroughItCosts()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -408,7 +408,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 65c02
@@ -533,7 +533,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task TheHoverSaysWhyEachThingACostWithCallsLeavesOutIsLeftOut()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 65816
@@ -581,7 +581,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensSaysWhyARoutineWithABlockMoveHasNoCount()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 65816
@@ -610,7 +610,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task InlineDataAfterACallTakesNoTime()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 6502
@@ -640,7 +640,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineCosts()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -678,7 +678,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensSaysWhichRegistersARoutineHandsBack()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -724,7 +724,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALoopCountingARegisterDownFromAnImmediateIsCounted()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -840,7 +840,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task WorkspaceSymbolsFindDeclarationsByTheirLetters()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (text, _) = Place("body", "");
         await using var client = await OpenAsync(text, timeout);
 
@@ -864,7 +864,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutinePreserves()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -901,7 +901,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverOnARoutineAndOnAScopeSaysWhatItPreserves()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -938,7 +938,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverSaysWhatTheRegistersHoldAtTheLine()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -977,7 +977,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverSpellsOutWhatTwoPathsLeaveInARegister()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -1010,7 +1010,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverListsWhatTheRoutineHasPushed()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -1042,7 +1042,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverSaysSoWhereTheStackIsNotKnown()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -1068,7 +1068,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverCountsThePushesItDoesNotList()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .segment CODE
@@ -1100,7 +1100,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverReadsAFrameAsOnePush()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 65816
@@ -1134,7 +1134,7 @@ public sealed class EditingRequestsTests
     [Fact]
     public async Task HoverNamesA65816PushAndSaysHowWideItWas()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Source = """
             .module main
             .cpu 65816

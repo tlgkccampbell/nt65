@@ -42,7 +42,7 @@ public sealed class CancellationTests
             SyntaxTree.Parse("a.nt65", ".module a\nCOUNT = 1\n"),
             SyntaxTree.Parse("b.nt65", ".module b\nCOUNT = 2\n"),
         ];
-        Assert.Equal(2, WorkspaceSymbols.Matching(files, "count", TestContext.Current.CancellationToken).Count);
+        Assert.Equal(2, WorkspaceSymbols.Matching(files, "count", TestTimeout.Token()).Count);
 
         given.Cancel();
         Assert.Throws<OperationCanceledException>(() => WorkspaceSymbols.Matching(files, "count", given.Token));
@@ -56,7 +56,7 @@ public sealed class CancellationTests
     [Fact]
     public async Task ACancelFromTheClientTripsTheHandlersToken()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var (clientStream, serverStream) = FullDuplexStream.CreatePair();
         var waiting = new Waiting();
         using var framing = new Framing(serverStream, serverStream, Server.CreateFormatter());

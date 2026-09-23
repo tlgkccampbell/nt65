@@ -90,7 +90,7 @@ public sealed class ExtensionTests : IDisposable
 
         var error = new StringWriter { NewLine = "\n" };
         Assert.Equal(1, Commands.Run(["build"], root.FullName, new StringWriter { NewLine = "\n" }, error,
-            cancellation: TestContext.Current.CancellationToken));
+            cancellation: TestTimeout.Token()));
 
         var said = error.ToString().ReplaceLineEndings("\n").Split('\n').Where(line => line.Length > 0).ToList();
         var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));

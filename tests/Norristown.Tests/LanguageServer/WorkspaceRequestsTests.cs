@@ -42,7 +42,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task DefinitionCrossesIntoTheModuleThatDeclaresTheName()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `clear` on `jsr clear`, declared by gfx.nt65.
@@ -57,7 +57,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task HoverNamesTheModuleANameComesFrom()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(MainUri, new Position(4, 8), timeout);
@@ -79,7 +79,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task ReferencesSpanEveryModuleThatNamesTheSymbol()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // From the declaration in gfx.nt65: the `.export`, the `.proc`, and in main the `.use`
@@ -93,7 +93,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task RenamingAnExportedNameEditsEveryModule()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var edit = await client.RenameAsync(MainUri, new Position(4, 8), "wipe", timeout);
@@ -112,7 +112,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task ARenameKeepsAnAliasApartFromTheNameItStandsFor()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(GfxUri, Gfx);
         await client.NextDiagnosticsAsync(timeout);
@@ -135,7 +135,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task NamingSomethingUnexportedIsReported()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(GfxUri, Gfx);
         await client.NextDiagnosticsAsync(timeout);
@@ -153,7 +153,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task AnEditInOneModuleChangesWhatIsWrongWithAnother()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `.export clear, SCREEN` becomes `.export SCREEN`.
@@ -173,7 +173,7 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task NamesStillCrossModulesAfterAnEditOnlyOneFileWasAnalyzedFor()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // A comment line above `.proc clear`, which moves it down a line. Nothing about
@@ -206,7 +206,7 @@ public sealed class WorkspaceRequestsTests
                 rts
             }
             """;
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Sys, User, timeout);
 
         var definition = await client.DefinitionAsync(MainUri, new Position(3, 13), timeout);

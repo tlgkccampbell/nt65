@@ -50,7 +50,7 @@ public sealed class PublishingTests
     [Fact]
     public async Task TheEditedFileHearsAtOnceAndTheRestOnceTheTypingStops()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout);
 
@@ -77,7 +77,7 @@ public sealed class PublishingTests
     [Fact]
     public async Task ARunOfKeystrokesNeverGoesBackAndNeverEmptiesAFileThatIsStillThere()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout);
 
@@ -114,7 +114,7 @@ public sealed class PublishingTests
     [Fact]
     public async Task OnlyAnEditThatReachesPastItsOwnFileAsksForAnythingToBeFetchedAgain()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout, refreshesTokens: true);
 

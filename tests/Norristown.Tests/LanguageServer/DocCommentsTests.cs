@@ -39,7 +39,7 @@ public sealed class DocCommentsTests
     [Fact]
     public async Task HoverShowsTheCommentAboveTheDeclaration()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);
 
         // On `clear` where it is declared, and on the `jsr clear` that calls it.
@@ -56,7 +56,7 @@ public sealed class DocCommentsTests
     [Fact]
     public async Task ABlankLineOrALineOfCodeEndsTheComment()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(12, 6), timeout);
@@ -70,7 +70,7 @@ public sealed class DocCommentsTests
     [Fact]
     public async Task AFamilysInstancesShowTheFamilysComment()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync("""
             .module main
             .enum Channel {
@@ -109,7 +109,7 @@ public sealed class DocCommentsTests
     [Fact]
     public async Task ACompletionCarriesTheComment()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);
 
         // A fresh line inside `scroll`, where a name may be written.

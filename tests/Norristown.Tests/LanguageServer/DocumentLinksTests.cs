@@ -14,7 +14,7 @@ public sealed class DocumentLinksTests
     [Fact]
     public async Task EachIncbinPathLinksToTheFileBesideIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync("""
             .module main
             .segment RODATA
@@ -39,7 +39,7 @@ public sealed class DocumentLinksTests
     [Fact]
     public async Task ANameIsNotALink()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync("""
             .module main
             ART = "art/tiles.bin"

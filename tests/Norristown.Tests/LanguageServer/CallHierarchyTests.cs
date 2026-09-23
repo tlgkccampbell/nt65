@@ -45,7 +45,7 @@ public sealed class CallHierarchyTests
     [Fact]
     public async Task APathToARoutineStartsAHierarchyAtWhereItIsDeclared()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `jsr gfx::clear` in main.nt65, on the `clear`.
@@ -67,7 +67,7 @@ public sealed class CallHierarchyTests
     [Fact]
     public async Task ANameThatIsNoRoutineStartsNothing()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // The `.module` name on line 1 of main.nt65.
@@ -82,7 +82,7 @@ public sealed class CallHierarchyTests
     [Fact]
     public async Task IncomingCallsAreEveryCallerAcrossTheProgram()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
         var item = Assert.Single(await PrepareAsync(client, MainUri, new Position(4, 13), timeout));
 
@@ -99,7 +99,7 @@ public sealed class CallHierarchyTests
     [Fact]
     public async Task OutgoingCallsAreWhatTheRoutineItselfCalls()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
         var clear = Assert.Single(await PrepareAsync(client, MainUri, new Position(4, 13), timeout));
         var main = Assert.Single(await PrepareAsync(client, MainUri, new Position(3, 6), timeout));

@@ -27,7 +27,7 @@ public sealed class SelectionRangesTests
     [Fact]
     public async Task ACaretGrowsThroughTheTree()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);

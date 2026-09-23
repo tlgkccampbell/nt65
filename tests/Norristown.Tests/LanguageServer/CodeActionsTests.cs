@@ -70,7 +70,7 @@ public sealed class CodeActionsTests
     [MemberData(nameof(Fixes))]
     public async Task AFixWritesWhatTheDiagnosticNames(string title, string body, string fixedBody)
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(MainUri, Header + body);
         await client.NextDiagnosticsAsync(timeout);
@@ -90,7 +90,7 @@ public sealed class CodeActionsTests
     [Fact]
     public async Task TheMissingExportOrUseIsWrittenWhereItBelongs()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Gfx = ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Main = ".module main\n.use gfx::fill as paint\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    jsr fill\n    rts\n}\n";
         await using var client = await TestClient.StartAsync(timeout);
@@ -111,7 +111,7 @@ public sealed class CodeActionsTests
     [Fact]
     public async Task ADiagnosticWithNoFixOffersNothing()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         // On the 6502 an immediate has only one width, so the only diagnostic on the half-written

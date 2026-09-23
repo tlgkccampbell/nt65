@@ -51,7 +51,7 @@ public sealed class CompletionStructureTests
     [Fact]
     public async Task ABlockOpenerIsWrittenAsTheBlock()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var items = await CompletionAsync(client, new Position(5, 0), timeout);
@@ -73,7 +73,7 @@ public sealed class CompletionStructureTests
     [Fact]
     public async Task AClientWithoutStopsGetsThePlainWord()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(new { }, timeout);
         await client.OpenAsync(Uri, Source);
         await client.NextDiagnosticsAsync(Uri, timeout);
@@ -92,7 +92,7 @@ public sealed class CompletionStructureTests
     [Fact]
     public async Task TheListIsOrderedByNearness()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // Where a name goes: the labels of the routine the caret is in, then the file's names,

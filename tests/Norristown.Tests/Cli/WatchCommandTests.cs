@@ -26,7 +26,7 @@ public sealed class WatchCommandTests : IDisposable
     [Fact]
     public async Task ItBuildsAgainWheneverTheProgramChanges()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
         Write("src/main.nt65", Good);
 
@@ -62,7 +62,7 @@ public sealed class WatchCommandTests : IDisposable
     [Fact]
     public async Task AWrongCommandLineComesStraightBack()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var said = new Lines();
 
         var code = await Task.Run(

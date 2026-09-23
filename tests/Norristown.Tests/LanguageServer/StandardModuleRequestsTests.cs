@@ -21,7 +21,7 @@ public sealed class StandardModuleRequestsTests
     [Fact]
     public async Task ADefinitionLeadsToTheModulesOwnText()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
         await client.NextDiagnosticsAsync(timeout);
@@ -43,7 +43,7 @@ public sealed class StandardModuleRequestsTests
     [Fact]
     public async Task ItsNamesAreNotTheProgramsToRename()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
         await client.NextDiagnosticsAsync(timeout);

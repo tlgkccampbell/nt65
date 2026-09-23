@@ -54,7 +54,7 @@ public sealed class SemanticTokensTests
     [Fact]
     public async Task AnnouncesTheLegend()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         var provider = client.Initialized.Capabilities.SemanticTokensProvider;
@@ -72,7 +72,7 @@ public sealed class SemanticTokensTests
     [Fact]
     public async Task EachNameIsClassifiedByWhatItRefersTo()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -123,7 +123,7 @@ public sealed class SemanticTokensTests
     [Fact]
     public async Task AChangeAsksTheClientToFetchTokensAgain()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(null, null, timeout, refreshesTokens: true);
         await client.OpenAsync(Uri, Source);
         await client.NextTokensRefreshAsync(timeout);
@@ -136,7 +136,7 @@ public sealed class SemanticTokensTests
     [Fact]
     public async Task ALongFileIsAskedAboutAScreenfulAndAChangeAtATime()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);

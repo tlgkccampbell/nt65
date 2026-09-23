@@ -18,7 +18,7 @@ public sealed class ServerTests
     [Fact]
     public async Task InitializesLogsTheConnectionAndExits()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         Assert.Equal("Norristown Assembler", client.Initialized.ServerInfo.Name);
@@ -32,7 +32,7 @@ public sealed class ServerTests
     [Fact]
     public async Task AnnouncesWhatTheSyntaxLayerCanDo()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         var capabilities = client.Initialized.Capabilities;
@@ -45,7 +45,7 @@ public sealed class ServerTests
     [Fact]
     public async Task OpeningADocumentPublishesItsSyntaxDiagnostics()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Broken);
 
@@ -64,7 +64,7 @@ public sealed class ServerTests
     [Fact]
     public async Task EditingAwayAnErrorClearsIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Broken);
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -81,7 +81,7 @@ public sealed class ServerTests
     [Fact]
     public async Task ClosingADocumentClearsItsDiagnostics()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Broken);
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -95,7 +95,7 @@ public sealed class ServerTests
     [Fact]
     public async Task OutlineAndFoldingComeFromTheOpenDocument()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n");
         await client.NextDiagnosticsAsync(timeout);
@@ -116,7 +116,7 @@ public sealed class ServerTests
     [Fact]
     public async Task ADocumentThatIsNotOpenHasNoOutline()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         Assert.Empty(await client.SymbolsAsync(Uri, timeout));
@@ -127,7 +127,7 @@ public sealed class ServerTests
     [Fact]
     public async Task ChangesInOneNotificationApplyInOrder()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Fixed);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);

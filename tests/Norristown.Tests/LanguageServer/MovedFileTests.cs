@@ -22,7 +22,7 @@ public sealed class MovedFileTests : IDisposable
     [Fact]
     public async Task WhatMovesWithAFileIsWrittenAndWhatCannotBeIsSaid()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("nt65.json", """
             {
               // The sources, one of them named outright.
@@ -73,7 +73,7 @@ public sealed class MovedFileTests : IDisposable
     [Fact]
     public async Task AClientThatDoesNotAskIsNotRegisteredFor()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var quiet = await TestClient.StartAsync(new { }, timeout);
         Assert.Null(quiet.Initialized.Capabilities.Workspace);
 

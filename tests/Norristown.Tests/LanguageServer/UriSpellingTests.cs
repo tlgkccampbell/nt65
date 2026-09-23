@@ -43,7 +43,7 @@ public sealed class UriSpellingTests
     [Fact]
     public async Task EveryAnswerSpellsAFileTheWayTheClientDid()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout);
         await client.OpenAsync(GfxUri, Gfx);
         await client.OpenAsync(MainUri, Main);

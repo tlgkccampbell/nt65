@@ -16,7 +16,7 @@ public sealed class DiagnosticsPageTests
         var error = new StringWriter { NewLine = "\n" };
         var code = Commands.Run(
             ["explain", "--markdown"], Directory.GetCurrentDirectory(), output, error,
-            cancellation: TestContext.Current.CancellationToken);
+            cancellation: TestTimeout.Token());
 
         Assert.Equal(0, code);
         Assert.Empty(error.ToString());

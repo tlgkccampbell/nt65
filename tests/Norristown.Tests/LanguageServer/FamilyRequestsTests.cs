@@ -57,7 +57,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task DefinitionGoesToTheFamilysLine()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `play::triangle` on line 23, and the `ch` of the `.multiproc` on line 9.
@@ -77,7 +77,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task RenamingAnInstanceRenamesTheMember()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var edit = await client.RenameAsync(Uri, new Position(23, 14), "noise", timeout);
@@ -93,7 +93,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task CompletionAfterAScopeOffersTheInstances()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout, Source.Replace(
             "    jsr play::triangle", "    jsr play::", StringComparison.Ordinal));
 
@@ -111,7 +111,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task AFamilyGetsNoLensesAndItsHoverGivesTheCost()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
@@ -146,7 +146,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task AnInstanceNamedAtACallHoversWithItsOwnCost()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout, """
             .module main
             .enum Channel {

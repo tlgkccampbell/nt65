@@ -117,7 +117,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task WhatTheDefaultsShow()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await StartAsync(null, timeout);
 
         Assert.Equal(
@@ -150,7 +150,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task AHintSaysWhatItMeansWhenItIsPointedAt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await StartAsync(null, timeout);
 
         var hints = await client.InlayHintsAsync(Uri, 0, 200, timeout);
@@ -175,7 +175,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task ACountIsOffUntilItIsAskedFor()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(
             TestClient.Capable(refreshesHints: true), timeout);
         await client.OpenAsync(Uri, Source);
@@ -206,7 +206,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task EverythingOffIsNothingDrawn()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await StartAsync(
             new
             {
@@ -225,7 +225,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task OnlyTheLinesAskedAboutAreWorkedOut()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await StartAsync(null, timeout);
 
         var hints = await client.InlayHintsAsync(Uri, 36, 38, timeout);
@@ -240,7 +240,7 @@ public sealed class InlayHintsTests
     [Fact]
     public async Task TheExampleWithTheDefaultsStillLooksLikeTheFile()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         var folder = Repo.Path("examples", "lorom-template");
         var file = Path.Combine(folder, "src", "main.nt65");
         var text = File.ReadAllText(file).ReplaceLineEndings("\n");

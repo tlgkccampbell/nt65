@@ -47,7 +47,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task AnnouncesWhatTheNameLayerCanDo()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         var capabilities = client.Initialized.Capabilities;
@@ -62,7 +62,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverDescribesALabelAndAConstant()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var label = await client.HoverAsync(Uri, new Position(2, 6), timeout);
@@ -88,7 +88,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverSaysWhatTheOutputCallsANameCa65WouldMisread()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(
             Uri, ".module main\n.cpu 6502\n.segment CODE\n.data lda: .byte 0\n.data plain: .byte 0\n");
@@ -110,7 +110,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverGivesTheValueOfADistanceInsideADeclaration()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(
             Uri,
@@ -132,7 +132,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverGivesTheTextACallIsWorth()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(
             Uri,
@@ -156,7 +156,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverPutsTheDecimalBesideAHexadecimalValue()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\nWIDE = $0400\nSMALL = 4\n");
         await client.NextDiagnosticsAsync(timeout);
@@ -172,7 +172,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverQualifiesAScopedName()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(8, 11), timeout);
@@ -189,7 +189,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnACallSaysWhatTheRoutineCostsAndKeeps()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(18, 13), timeout);
@@ -206,7 +206,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnALayoutShowsOffsetsAndSizes()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, """
             .module main
@@ -245,7 +245,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnACheapLocalSaysWhereItLives()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(11, 4), timeout);
@@ -262,7 +262,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverLeadsWithWhatThatKindOfNameIsAskedAbout()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, """
             .module main
@@ -334,7 +334,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnSomethingThatIsNeitherANameNorAnInstructionSaysNothing()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         Assert.Null(await client.HoverAsync(Uri, new Position(14, 4), timeout));
@@ -348,7 +348,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnAnInstructionShowsWhatItCosts()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(9, 8), timeout);
@@ -364,7 +364,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnABranchShowsTheWholeInterval()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(12, 8), timeout);
@@ -379,7 +379,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnA65816InstructionShowsTheStateReachingIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a16, i8 {\n    php\n    lda #$1234\n    plp\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -397,7 +397,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverNamesTheInstructionOnTheHeadline()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var load = await client.HoverAsync(Uri, new Position(9, 8), timeout);
@@ -422,7 +422,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverListsTheFlagsAnInstructionWrites()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(
             Uri, ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    adc #2\n    sta $10\n    rts\n}\n");
@@ -453,7 +453,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverSaysWhyACountIsAnInterval()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         const string Indexed = """
             .module main
             .segment CODE
@@ -502,7 +502,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HoverOnAnEnsureShowsWhatItWrites()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8 -> a16, i8 {\n    .ensure a16, i8\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -515,7 +515,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task DefinitionGoesToTheDeclaration()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `ptr` used on the `lda ptr` line, declared on line 2.
@@ -529,7 +529,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task DefinitionFollowsEachPartOfAPath()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var scope = await client.DefinitionAsync(Uri, new Position(18, 8), timeout);
@@ -542,7 +542,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ReferencesFindEveryUse()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var all = await client.ReferencesAsync(Uri, new Position(2, 6), includeDeclaration: true, timeout);
@@ -556,7 +556,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ReferencesToACheapLocalStayInItsProc()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var all = await client.ReferencesAsync(Uri, new Position(11, 4), includeDeclaration: true, timeout);
@@ -566,7 +566,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task HighlightsMarkTheDeclarationAsAWrite()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var highlights = await client.HighlightsAsync(Uri, new Position(19, 8), timeout);
@@ -578,7 +578,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task RenameRewritesEveryOccurrence()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // What a rename replaces is the name under the caret, which is what the client shows
@@ -597,7 +597,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ACheapLocalIsRenamedWithItsAt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var edit = await client.RenameAsync(Uri, new Position(11, 4), "@again", timeout);
@@ -615,7 +615,7 @@ public sealed class SymbolRequestsTests
     [InlineData("SCREEN", "is already declared in this scope")]
     public async Task ARenameThatWouldNotCompileIsRefused(string newName, string reason)
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
@@ -627,7 +627,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task AnEditChangesWhatANameMeans()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\nCOUNT = 1\n.segment CODE\n.export .proc main {\n    lda #COUNT\n    rts\n}\n");
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -652,7 +652,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ABranchTheBuildLeavesOutIsPublishedAsFaded()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\n.if 0 {\nBROKEN = nowhere\n}\nON = 1\n.export ON\n");
 
@@ -668,7 +668,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ADuplicateCarriesRelatedInformation()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, ".module main\nSIZE = 1\nSIZE = 2\n");
 
@@ -682,7 +682,7 @@ public sealed class SymbolRequestsTests
     [Fact]
     public async Task ADocumentThatIsNotOpenAnswersEmpty()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         Assert.Null(await client.HoverAsync(Uri, new Position(1, 0), timeout));

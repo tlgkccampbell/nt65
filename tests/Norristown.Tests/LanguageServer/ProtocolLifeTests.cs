@@ -19,7 +19,7 @@ public sealed class ProtocolLifeTests
     [Fact]
     public async Task TheRealServerAnswersAWholeLifeAndThenLeaves()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         using var server = StdioServer.Start();
 
         // Before `initialize`, a request is refused and the server is still there to say so.
@@ -100,7 +100,7 @@ public sealed class ProtocolLifeTests
     [Fact]
     public async Task LeavingWithoutShuttingDownFailsAndTheServerFollowsTheEditorOut()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         using var editor = StdioServer.Start();
         using var server = StdioServer.Start();
         await server.SendAsync(

@@ -23,7 +23,7 @@ public sealed class ProjectsTests : IDisposable
     [Fact]
     public async Task EachProjectBeneathTheFolderIsItsOwnProgram()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("games/snake/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         Write("games/snake/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
         Write("games/snake/main.nt65", Caller);
@@ -46,7 +46,7 @@ public sealed class ProjectsTests : IDisposable
     [Fact]
     public async Task AFolderWithAnEscapedDriveFindsItsProject()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
         Write("src/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
         Write("src/main.nt65", Caller);
@@ -69,7 +69,7 @@ public sealed class ProjectsTests : IDisposable
     [Fact]
     public async Task WhatAProgramReadsChangingOnDiskIsPublishedAgain()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("nt65.json", """{ "cpu": "6502", "files": ["main.nt65"] }""");
         Write("gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
         Write("tiles.bin", "1234");
@@ -108,7 +108,7 @@ public sealed class ProjectsTests : IDisposable
     [Fact]
     public async Task WhatIsWrongWithTheProjectFileIsPublishedForIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "define": {} }""");
         Write("main.nt65", ".module main\n");
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
@@ -128,7 +128,7 @@ public sealed class ProjectsTests : IDisposable
     [Fact]
     public async Task TheChosenConfigurationDecidesWhatIsDimmed()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("app/nt65.json", """
             { "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 },
               "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }

@@ -103,7 +103,7 @@ public sealed class RemapCommandTests : IDisposable
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };
         var code = Commands.Run(arguments, root.FullName, output, error,
-            cancellation: TestContext.Current.CancellationToken);
+            cancellation: TestTimeout.Token());
         return (code, output.ToString() + error.ToString());
     }
 

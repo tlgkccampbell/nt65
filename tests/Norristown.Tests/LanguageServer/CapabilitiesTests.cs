@@ -72,7 +72,7 @@ public sealed class CapabilitiesTests : IDisposable
     [Fact]
     public async Task AClientThatDeclaresNothingGetsThePlainAnswers()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(new { }, timeout);
         await client.OpenAsync(Uri, Main);
         await client.NextDiagnosticsAsync(Uri, timeout);
@@ -102,7 +102,7 @@ public sealed class CapabilitiesTests : IDisposable
     [Fact]
     public async Task AClientThatTakesThemGetsATreeAndAnEditAgainstARevision()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout);
         await client.OpenAsync(Uri, Main);
         await client.NextDiagnosticsAsync(Uri, timeout);
@@ -132,7 +132,7 @@ public sealed class CapabilitiesTests : IDisposable
     [Fact]
     public async Task AFolderAddedToTheWorkspaceBringsItsProjects()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         Write("opened/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         Write("later/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         Write("later/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");

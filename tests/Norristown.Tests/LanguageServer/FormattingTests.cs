@@ -29,7 +29,7 @@ public sealed class FormattingTests
     [Fact]
     public async Task FormattingAFileMovesEveryLineThatIsInTheWrongPlace()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Crooked, timeout);
 
         var edits = await client.RequestAsync<IReadOnlyList<TextEdit>>("textDocument/formatting",
@@ -61,7 +61,7 @@ public sealed class FormattingTests
     [Fact]
     public async Task FormattingASelectionMovesOnlyWhatIsSelected()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Crooked, timeout);
 
         var edits = await client.RequestAsync<IReadOnlyList<TextEdit>>("textDocument/rangeFormatting",
@@ -83,7 +83,7 @@ public sealed class FormattingTests
     [Fact]
     public async Task AFileThatDoesNotCompileStillFormats()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync("""
             .module main
             .segment CODE
@@ -103,7 +103,7 @@ public sealed class FormattingTests
     [Fact]
     public async Task AFileTheServerDoesNotHaveIsNoEdits()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
 
         Assert.Empty(await client.RequestAsync<IReadOnlyList<TextEdit>>("textDocument/formatting",

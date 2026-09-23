@@ -58,7 +58,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task AFileOfMacrosHasNothingWrongWithIt()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Source);
 
@@ -69,7 +69,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task DefinitionFromInsideABodyReachesTheFile()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `value` in `lda #<value` is the parameter the header declares.
@@ -87,7 +87,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task ReferencesToAParameterStayInItsBody()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var uses = await client.ReferencesAsync(Uri, new Position(3, 29), includeDeclaration: false, timeout);
@@ -98,7 +98,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task RenamingAParameterRewritesTheBody()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var edit = await client.RenameAsync(Uri, new Position(3, 29), "amount", timeout);
@@ -113,7 +113,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task RenamingALabelUsedInABlockArgumentWorks()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         // `@target:` is declared on line 19 and used on line 22, inside the block.
@@ -132,7 +132,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task ABodysLabelIsNotTheCallers()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var inTheBody = await client.ReferencesAsync(Uri, new Position(12, 0), includeDeclaration: true, timeout);
@@ -144,7 +144,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task HoverOnACallDescribesTheMacro()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var hover = await client.HoverAsync(Uri, new Position(20, 4), timeout);
@@ -184,7 +184,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task HoverSaysWhatAParameterTakes()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Typed);
         await client.NextDiagnosticsAsync(timeout);
@@ -216,7 +216,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task HoverOnAComparedWordSaysWhatItIs()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Typed);
         await client.NextDiagnosticsAsync(timeout);
@@ -242,7 +242,7 @@ public sealed class MacroRequestsTests
     [Fact]
     public async Task AMemberPassedByItsBareNameIsTheMember()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Typed);
 

@@ -44,7 +44,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task TheOutputIsTheCa65WithTheLinesItCameFrom()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var output = await OutputAsync(client, timeout);
@@ -74,7 +74,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task TheOutputFollowsTheEditorAndSaysWhenItIsIncomplete()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
         Assert.NotNull(await OutputAsync(client, timeout));
 
@@ -104,7 +104,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task ACallIsWrittenOutAsNt65()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var expansion = await client.RequestAsync<ExpansionResult?>("nt65/expansion",
@@ -135,7 +135,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task ALongExpansionIsSummarisedAndLinkedTo()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, """
             .module main
@@ -175,7 +175,7 @@ public sealed class ViewRequestsTests
     public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorSpellsTheFile()
     {
         const string escaped = "file:///c%3A/work/main.nt65";
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(escaped, """
             .module main
@@ -212,7 +212,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task ACallIsInlinedWhereThatChangesNothingButTheText()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var actions = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
@@ -237,7 +237,7 @@ public sealed class ViewRequestsTests
     [Fact]
     public async Task ACallInsideABodyIsRefusedWithTheReason()
     {
-        var timeout = TestContext.Current.CancellationToken;
+        var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, """
             .module main
