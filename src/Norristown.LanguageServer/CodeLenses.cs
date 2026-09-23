@@ -25,13 +25,13 @@ internal static class CodeLenses
         {
             if (region.Routine.Tree != tree)
                 continue;
-            if (Spell(region.Cost, region.Total, "never returns") is { } cost)
+            if (Spell(region.Cost, region.Total, "never returns", true) is { } cost)
                 found.Add((region.Routine.NameSpan, 0, region.Routine.Name, cost));
             if (Kept(region) is { } kept)
                 found.Add((region.Routine.NameSpan, 1, region.Routine.Name, kept));
             foreach (var scope in region.Scopes)
             {
-                if (Spell(scope.Cost, null, null) is { } inline)
+                if (Spell(scope.Cost, null, null, true) is { } inline)
                     found.Add((scope.Opener, 0, region.Routine.Name, inline));
             }
             foreach (var scope in region.ScopeRegisters)
@@ -67,15 +67,16 @@ internal static class CodeLenses
     /// <summary>
     /// A routine's cost as the lens shows it: a cycle interval when the longest path is bounded,
     /// or the minimum followed by <c>+</c> when it is not, with <c>, loops</c> when the routine
-    /// loops; then the cost including its calls, or <c>not counting calls</c> when nt65 cannot
-    /// follow one of them. <paramref name="endless"/> is the text to show when no path leaves
-    /// the routine at all.
+    /// loops; then the cost including its calls, and what that leaves out because nt65 cannot
+    /// count it. <paramref name="endless"/> is the text to show when no path leaves the routine
+    /// at all.
     /// <para>
     /// The hover shows the cost too, at the declaration and at every call, and calls this so
-    /// that the two agree word for word.
+    /// that the two agree word for word. It lists what is left out on rows of its own, with
+    /// why, so it asks for the cost without <paramref name="excluding"/>.
     /// </para>
     /// </summary>
-    internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless)
+    internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless, bool excluding)
     {
         // A routine that no path leaves has no complete pass to cost. Say so, rather than show
         // nothing and look as though the lens failed.
@@ -90,19 +91,36 @@ internal static class CodeLenses
             count += ", loops";
         if (!cost.Calls)
             return count;
+
+        // An inline scope has no cost with its calls, and a routine has none where its own
+        // instructions have no count.
         if (total is not { Least: { } with })
-            return $"{count}, not counting calls";
+            return $"{count}, excluding calls";
 
         // Where a routine passes control to one that never returns, the count covers only the
         // path up to that point, so the lens says so explicitly.
         var ending = total.Value.Ends ? "" : ", then never returns";
+        var excluded = total.Value.Excluded ?? [];
 
         // When the calls add nothing to the count, show the number once rather than repeating
-        // it as the with-calls figure.
-        return with == cost.Least && total.Value.Most == cost.Most
-            ? count + ending
-            : $"{count}, {Count(with, total.Value.Most)} with calls{ending}";
+        // it as the with-calls figure. The figure with calls is only a number, since the
+        // count beside it already says what it counts.
+        if (with == cost.Least && total.Value.Most == cost.Most && excluded.Count == 0)
+            return count + ending;
+        var left = excluding && excluded.Count > 0 ? $", excluding {Named(excluded)}" : "";
+        return $"{count}, {Number(with, total.Value.Most)} with calls{left}{ending}";
     }
+
+    /// <summary>
+    /// What a cost with calls leaves out, as the lens names it: two at most, then how many
+    /// more, since a lens shares its line and the hover lists them all.
+    /// </summary>
+    private static string Named(IReadOnlyList<Exclusion> excluded) => excluded.Count switch
+    {
+        1 => excluded[0].What,
+        2 => $"{excluded[0].What} and {excluded[1].What}",
+        _ => $"{excluded[0].What}, {excluded[1].What} and {excluded.Count - 2} more",
+    };
 
     /// <summary>
     /// Which registers a routine returns holding the values it was entered with, or null when
@@ -122,4 +140,8 @@ internal static class CodeLenses
     /// <summary>A cycle count as shown: an interval, or the minimum and a <c>+</c> when there is no maximum.</summary>
     private static string Count(int least, int? most) =>
         most is { } bound ? Lsp.Spell(new CycleCount(least, bound)) : $"{least}+ cycles";
+
+    /// <summary>The same count without the word <c>cycles</c>.</summary>
+    private static string Number(int least, int? most) =>
+        most is { } bound ? new CycleCount(least, bound).ToString() : $"{least}+";
 }

@@ -59,7 +59,7 @@ internal static class Lsp
 
     /// <summary>The rows that lead an inline <c>.scope</c>'s hover, which are the only rows it has.</summary>
     private static readonly IReadOnlySet<string> ScopeAsked =
-        new HashSet<string>(["cost", "preserves"], StringComparer.Ordinal);
+        new HashSet<string>(["cost", "excluding", "preserves"], StringComparer.Ordinal);
 
     /// <summary>
     /// Everything wrong with one file, and the branches this build leaves out. An omitted
@@ -314,7 +314,7 @@ internal static class Lsp
         var kind = symbol.Kind switch
         {
             SymbolKind.Member => new[] { "offset" },
-            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "preserves"],
+            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "excluding", "preserves"],
 
             // At a call, a reader hovers a function to see the value of the call.
             SymbolKind.Func => ["value"],
@@ -420,10 +420,17 @@ internal static class Lsp
             .Where(region => region.Routine.Tree == symbol.Tree && region.Routine.NameSpan == symbol.NameSpan)
             .Select(region => (
                 region.Routine.Name,
-                Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns"),
+                Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns", false),
+                Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
                 Kept: region.Total.Ends ? Spell(region.Registers.Kept, region.Registers.Complete) : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
+
+        // What the cost with calls leaves out, each once however many instances leave it out,
+        // with why, which the lens has no room for.
+        var excluded = found.SelectMany(region => region.Excluded).DistinctBy(exclusion => exclusion.What).ToList();
+        for (var i = 0; i < excluded.Count; i++)
+            card.Row(i == 0 ? "excluding" : "", $"{excluded[i].What}: {excluded[i].Why}");
         Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
     }
 
@@ -478,7 +485,7 @@ internal static class Lsp
                 var card = new Card(
                     Written(model.Tree.Text[scope.Opener.Start..scope.Opener.End]), ScopeAsked);
                 var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
-                card.Row("cost", CodeLenses.Spell(cost, null, null));
+                card.Row("cost", CodeLenses.Spell(cost, null, null, false));
                 card.Row("preserves", Spell(scope.Kept, scope.Complete));
                 return new Protocol.Hover(
                     Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, scope.Opener));

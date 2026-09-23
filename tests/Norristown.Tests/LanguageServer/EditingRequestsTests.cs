@@ -387,7 +387,7 @@ public sealed class EditingRequestsTests
                 (2, "11 cycles"),
                 (7, "11-15 cycles"),
                 (14, "11+ cycles, loops"),
-                (20, "12 cycles, 23 cycles with calls"),
+                (20, "12 cycles, 23 with calls"),
 
                 // No path leaves it, so there is no pass through it to put a cost on.
                 (24, "never returns"),
@@ -401,8 +401,9 @@ public sealed class EditingRequestsTests
     /// <summary>
     /// What a routine costs including what it calls, worked out through the call graph: a call
     /// costs the call instruction plus the callee, as does a tail jump or a <c>.fallthrough</c> into
-    /// another routine. A routine that calls
-    /// itself, calls a routine with no body, or calls through a pointer gets no total.
+    /// another routine. What nt65 cannot count — a routine with no body, a call to an address
+    /// no routine is declared at, a routine calling itself — is left out and named, and the rest is still counted,
+    /// as a fewest with no most. The lens names two at most, then says how many more.
     /// </summary>
     [Fact]
     public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
@@ -413,6 +414,7 @@ public sealed class EditingRequestsTests
             .cpu 65c02
             .segment CODE
             .proc CHROUT = $ffd2
+            .proc RESET = $fffc: noreturn
             .proc into_leaf {
                 inx
                 .fallthrough leaf
@@ -460,6 +462,26 @@ public sealed class EditingRequestsTests
                 jsr CHROUT
                 rts
             }
+            .proc through {
+                jsr $1234
+                rts
+            }
+            .proc two {
+                jsr external
+                jmp through
+            }
+            .proc three {
+                jsr external
+                jsr recurse
+                jmp through
+            }
+            .proc quit: noreturn {
+                jmp RESET
+            }
+            .proc bail: noreturn {
+                jsr CHROUT
+                jmp RESET
+            }
             .data vector: .addr leaf
             """;
         await using var client = await TestClient.StartAsync(timeout);
@@ -471,16 +493,16 @@ public sealed class EditingRequestsTests
 
         Assert.Equal(
             [
-                "2 cycles, 10 cycles with calls",
+                "2 cycles, 10 with calls",
                 "8 cycles",
-                "18 cycles, 34 cycles with calls",
-                "12 cycles, 46 cycles with calls",
-                "3 cycles, 11 cycles with calls",
-                "12 cycles, not counting calls",
+                "18 cycles, 34 with calls",
+                "12 cycles, 46 with calls",
+                "3 cycles, 11 with calls",
+                "12 cycles, 12+ with calls, excluding recursion",
 
                 // It jumps to a routine that never returns, so the count is the cost of getting
                 // there, and the jump is not treated as a call the count could not follow.
-                "9 cycles, 17 cycles with calls, then never returns",
+                "9 cycles, 17 with calls, then never returns",
 
                 // One of its paths returns, so it is not marked as never returning.
                 "8-13 cycles",
@@ -488,9 +510,67 @@ public sealed class EditingRequestsTests
                 // It runs on into a routine that never returns, so it never returns either.
                 "2 cycles, then never returns",
                 "never returns",
-                "12 cycles, not counting calls",
+
+                // What is left out is named however many calls away it is, and once however
+                // many paths reach it.
+                "12 cycles, 12+ with calls, excluding CHROUT",
+                "12 cycles, 12+ with calls, excluding jsr $1234",
+                "9 cycles, 33+ with calls, excluding CHROUT and jsr $1234",
+                "15 cycles, 51+ with calls, excluding CHROUT, recursion and 1 more",
+
+                // A routine with no body that is declared never to return ends the pass, as one
+                // with a body does, and is not something the count leaves out.
+                "3 cycles, then never returns",
+                "9 cycles, 9+ with calls, excluding CHROUT, then never returns",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
+    /// The lens only has room to name what a cost with calls leaves out; the hover lists each
+    /// thing with why nt65 cannot count it.
+    /// </summary>
+    [Fact]
+    public async Task TheHoverSaysWhyEachThingACostWithCallsLeavesOutIsLeftOut()
+    {
+        var timeout = TestContext.Current.CancellationToken;
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc CHROUT = $ffd2
+            .proc copy: a16, i16 {
+                jsr move
+                jsr CHROUT
+                rts
+            }
+            .proc move: a16, i16 {
+                mvn #$7e, #$7e
+                rts
+            }
+            """;
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(MainUri, Source.ReplaceLineEndings("\n"));
+        await client.NextDiagnosticsAsync(timeout);
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var hover = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
+
+        Assert.Equal(
+            [
+                "18 cycles, 18+ with calls, excluding move and CHROUT",
+                "not counted: a block move takes 7 cycles a byte, and how many is in A",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+        Assert.Contains(
+            """
+            cost       18 cycles, 18+ with calls
+            excluding  move: a block move takes 7 cycles a byte, and how many is in A
+                       CHROUT: no code in the program
+            """.ReplaceLineEndings("\n"),
+            hover?.Contents.Value,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -549,7 +629,7 @@ public sealed class EditingRequestsTests
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
-        Assert.Equal(["12 cycles, not counting calls"], Costs(lenses).Select(lens => lens.Command.Title));
+        Assert.Equal(["12 cycles, 12+ with calls, excluding print"], Costs(lenses).Select(lens => lens.Command.Title));
     }
 
     /// <summary>
@@ -741,7 +821,7 @@ public sealed class EditingRequestsTests
 
                 // The call splits the loop body into two blocks, and the loop is still counted;
                 // the call is made once per turn, so the callee's cost is counted four times.
-                "51-54 cycles, 75-78 cycles with calls",
+                "51-54 cycles, 75-78 with calls",
                 "6 cycles",
 
                 // Two `dex` a turn step through an array of words: `ldx #4` is three turns of `bpl`.

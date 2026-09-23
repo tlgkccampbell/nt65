@@ -21,8 +21,14 @@ namespace Norristown.Flow;
 /// only the running program decides: a block move, whose length is in A. Null wherever the
 /// count is known, and wherever the uncounted line has already been reported.
 /// </param>
+/// <param name="Excluded">
+/// For a cost with calls, what it leaves out because nt65 cannot count it, in the order the
+/// routine reaches each; the cost is then a fewest, with no most. Empty or null where nothing
+/// is left out.
+/// </param>
 public readonly record struct RoutineCost(
-    int? Least, int? Most, bool Calls, bool Ends, string? Uncounted = null)
+    int? Least, int? Most, bool Calls, bool Ends, string? Uncounted = null,
+    IReadOnlyList<Exclusion>? Excluded = null)
 {
     /// <summary>Whether nt65 has a count for every instruction a path through it runs.</summary>
     public bool IsKnown => Least is not null;

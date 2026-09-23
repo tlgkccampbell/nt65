@@ -10,8 +10,9 @@ namespace Norristown.Flow;
 /// way, because control comes back from either to this routine's caller.
 /// <para>
 /// A call to a routine with no body, one through a pointer, and a routine that can reach
-/// itself leave the total unknown. Saying so is the point: a total that quietly left a callee
-/// out would read as a bound and not be one.
+/// itself cannot be counted. The total counts everything else, which makes it a fewest with no
+/// most, and names each thing it leaves out. Naming them is the point: a total that quietly
+/// left a callee out would read as a bound and not be one.
 /// </para>
 /// </summary>
 public static class CallCosts
@@ -42,7 +43,8 @@ public static class CallCosts
     /// recomputed until it stops changing, so a chain of tail jumps that ends in an infinite
     /// loop is found however long the chain is. A call nt65 cannot identify, and one to a
     /// routine with no body, are assumed to return, since saying they do not would be a claim
-    /// about code that is not here.
+    /// about code that is not here; unless the routine is declared <c>noreturn</c>, which is
+    /// that claim, made by the program.
     /// </para>
     /// </summary>
     private static HashSet<(string Path, string Name)> Returning(Dictionary<(string Path, string Name), FlowRegion> regions)
@@ -72,8 +74,9 @@ public static class CallCosts
         {
             if (!block.IsReached || block.Successors.Any(edge => edge.Kind != EdgeKind.Call))
                 continue;
-            var handsOff = Onward(block).Any(callee =>
-                regions.ContainsKey(Named(callee)) && !found.Contains(Named(callee)));
+            var handsOff = Onward(block).Any(callee => regions.ContainsKey(Named(callee))
+                ? !found.Contains(Named(callee))
+                : callee.Signature is { NeverReturns: true });
             if (!handsOff)
                 return true;
         }
@@ -103,24 +106,36 @@ public static class CallCosts
         var name = Named(region.Routine);
         if (totals.TryGetValue(name, out var found))
             return found;
-        if (!walking.Add(name))
-            return new RoutineCost(null, null, true, true);
+        walking.Add(name);
 
         // The fewest and the most are worked out separately, because a callee that loops has a
-        // fewest but no most, and its caller then has a fewest but no most too.
+        // fewest but no most, and its caller then has a fewest but no most too. What is left
+        // out is gathered on the way to the fewest, which weighs every block a path reaches; a
+        // most that leaves anything out would not be one, so there is then no most.
+        var excluded = new List<Exclusion>();
         var (least, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
         var most = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Most;
         walking.Remove(name);
         var cost = new RoutineCost(
-            least, most, Calls(region), ends && returns.Contains(name), region.Cost.Uncounted);
+            least, excluded.Count > 0 ? null : most, Calls(region), ends && returns.Contains(name),
+            region.Cost.Uncounted, excluded);
         totals[name] = cost;
         return cost;
 
         CycleCount? Weighed(BasicBlock block, bool fewest)
         {
-            if (Paths.Costing(block) is not { } own || block.CallsUnknown)
+            if (Paths.Costing(block) is not { } own)
                 return null;
             var with = fewest ? own.Least : own.Most;
+
+            // Where the call goes is not known, so all it costs is the call instruction itself.
+            if (block.CallsUnknown)
+            {
+                if (!fewest)
+                    return null;
+                Exclude(new Exclusion(
+                    block.Steps[^1].Statement.GetText().Trim(), "nt65 cannot tell where it goes"));
+            }
 
             // A call inside a counted loop is made once per iteration, so its cost is counted
             // as many times as the loop runs.
@@ -128,18 +143,58 @@ public static class CallCosts
             {
                 var name = Named(callee);
                 if (!regions.TryGetValue(name, out var called))
-                    return null;
+                {
+                    // One declared never to return ends the pass like any other.
+                    if (callee.Signature is { NeverReturns: true })
+                        continue;
+                    if (!fewest)
+                        return null;
+                    Exclude(new Exclusion(callee.QualifiedName, "no code in the program"));
+                    continue;
+                }
 
                 // Control does not come back from a routine that never returns, so the pass
                 // ends where it is called and what it does is no part of this one.
                 if (!returns.Contains(name))
                     continue;
+
+                // A routine that can reach itself goes round as many times as the program
+                // decides, so each time round is left out.
+                if (walking.Contains(name))
+                {
+                    if (!fewest)
+                        return null;
+                    Exclude(new Exclusion("recursion", $"{callee.QualifiedName} can call itself"));
+                    continue;
+                }
                 var total = Total(called, regions, returns, totals, walking);
-                if ((fewest ? total.Least : total.Most) is not { } cycles)
-                    return null;
-                with += cycles * (block.Turns ?? 1);
+                if (!fewest)
+                {
+                    if (total.Most is not { } longest)
+                        return null;
+                    with += longest * (block.Turns ?? 1);
+                    continue;
+                }
+
+                // A callee with no count of its own is left out whole; one whose calls leave
+                // something out counts the rest, and what it leaves out, this one does too.
+                if (total.Least is not { } shortest)
+                {
+                    Exclude(new Exclusion(callee.QualifiedName, called.Cost.Uncounted ?? "it has no count"));
+                    continue;
+                }
+                with += shortest * (block.Turns ?? 1);
+                foreach (var exclusion in total.Excluded ?? [])
+                    Exclude(exclusion);
             }
             return new CycleCount(with);
+        }
+
+        // The fewest weighs a block more than once, so each thing is kept only the first time.
+        void Exclude(Exclusion exclusion)
+        {
+            if (!excluded.Any(known => known.What == exclusion.What))
+                excluded.Add(exclusion);
         }
     }
 
