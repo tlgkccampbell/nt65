@@ -590,7 +590,6 @@ internal sealed partial class Binder
         used.Clear();
         broughtAt.Clear();
         globs.Clear();
-        reexports.Clear();
         program = ProgramSymbols.Empty;
     }
 

@@ -77,6 +77,22 @@ public sealed class FamilyTests
         Assert.Contains("triangle__again:", main, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Declaring a family does not cost the module its re-exports. Declaring the instances
+    /// reads the module's <c>.use</c> directives once against an unfinished program and then
+    /// discards what that read found, and the re-exports must survive the discard.
+    /// </summary>
+    [Fact]
+    public void AModuleThatDeclaresAFamilyStillReexports()
+    {
+        var program = Analysis.Program(
+            ("vic.nt65", ".module vic\n.export BORDER\nBORDER = $d020\n"),
+            ("hw.nt65", ".module hw\n.export .use vic::BORDER\n.enum Channel {\n    a\n    b\n}\n.segment CODE\n.export .multiproc Channel, ch {\n    rts\n}\n"),
+            ("main.nt65", ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    sta BORDER\n    rts\n}\n"));
+
+        Assert.Empty(program.Problems());
+    }
+
     private static string Output(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
 
     /// <summary>The output without the comments, which name where each line came from.</summary>
