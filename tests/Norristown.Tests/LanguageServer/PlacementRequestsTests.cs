@@ -26,7 +26,8 @@ public sealed class PlacementRequestsTests
     [Fact]
     public void ThePathAPlaceWritesNamesTheModule()
     {
-        var (analysis, model) = Analyzed(Main, ".module part: placed\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n");
+        const string Part = ".module part: placed\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Main, Part);
         var at = Main.IndexOf("part", StringComparison.Ordinal) + 1;
 
         var hover = Lsp.ToHover(analysis, model, at);
@@ -39,7 +40,7 @@ public sealed class PlacementRequestsTests
         var definition = Lsp.ToPlacedDefinition(analysis, model, at);
         Assert.NotNull(definition);
         Assert.EndsWith("part.nt65", definition.Uri, StringComparison.Ordinal);
-        Assert.Equal(new Range(new Position(0, 8), new Position(0, 12)), definition.Range);
+        Assert.Equal(Locate.Span(Part, ".module |part"), definition.Range);
     }
 
     /// <summary>The path is coloured as a module, which the grammar alone cannot tell from any other name.</summary>

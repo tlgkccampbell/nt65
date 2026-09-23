@@ -70,8 +70,8 @@ public sealed class ServerTests
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         // Insert `1` at the end of 0-based line 4, which is where the operand is missing.
-        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(4, 9), new Position(4, 9)), "1"));
+        var operand = Locate.At(Broken, "lda #|\n");
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(operand, operand), "1"));
 
         var published = await client.NextDiagnosticsAsync(timeout);
         Assert.Equal(2, published.Version);
@@ -96,12 +96,13 @@ public sealed class ServerTests
     public async Task OutlineAndFoldingComeFromTheOpenDocument()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.OpenedAsync(timeout, (Uri, ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n"));
+        const string Text = ".module main\n.scope gfx {\n.proc init {\nrts\n}\nCOUNT = 4\n}\n";
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
 
         var scope = Assert.Single(await client.SymbolsAsync(Uri, timeout));
         Assert.Equal("gfx", scope.Name);
         Assert.Equal(SymbolKind.Namespace, scope.Kind);
-        Assert.Equal(new Position(1, 7), scope.SelectionRange.Start);
+        Assert.Equal(Locate.At(Text, ".scope |gfx"), scope.SelectionRange.Start);
         Assert.NotNull(scope.Children);
         Assert.Equal(["init", "COUNT"], scope.Children.Select(child => child.Name));
         Assert.Equal([SymbolKind.Function, SymbolKind.Constant], scope.Children.Select(child => child.Kind));
@@ -132,9 +133,10 @@ public sealed class ServerTests
 
         // The second edit is past the end of what the first one wrote, so it is only where it
         // is meant to be once the first has been applied.
+        var calling = Locate.At(Fixed.Replace("rts", "jsr reset"), "jsr reset|");
         await client.ChangeAsync(Uri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(5, 4), new Position(5, 7)), "jsr reset"),
-            new TextDocumentContentChangeEvent(new Range(new Position(5, 13), new Position(5, 13)), "\n    rts"));
+            new TextDocumentContentChangeEvent(Locate.Span(Fixed, "rts"), "jsr reset"),
+            new TextDocumentContentChangeEvent(new Range(calling, calling), "\n    rts"));
 
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         var segment = Assert.Single(await client.SymbolsAsync(Uri, timeout));

@@ -49,14 +49,14 @@ public sealed class CallHierarchyTests
         await using var client = await OpenAsync(timeout);
 
         // `jsr gfx::clear` in main.nt65, on the `clear`.
-        var items = await PrepareAsync(client, MainUri, new Position(4, 13), timeout);
+        var items = await PrepareAsync(client, MainUri, Locate.At(Main, "jsr gfx::|clear"), timeout);
 
         var item = Assert.Single(items);
         Assert.Equal("clear", item.Name);
         Assert.Equal(SymbolKind.Function, item.Kind);
         Assert.Equal(GfxUri, item.Uri);
         Assert.Equal("gfx::clear", item.Detail);
-        Assert.Equal(new Position(3, 6), item.SelectionRange.Start);
+        Assert.Equal(Locate.At(Gfx, ".proc |clear"), item.SelectionRange.Start);
 
         // The whole declaration is what the client reveals, not just the name.
         Assert.Equal(3, item.Range.Start.Line);
@@ -71,7 +71,7 @@ public sealed class CallHierarchyTests
         await using var client = await OpenAsync(timeout);
 
         // The `.module` name on line 1 of main.nt65.
-        Assert.Empty(await PrepareAsync(client, MainUri, new Position(0, 9), timeout));
+        Assert.Empty(await PrepareAsync(client, MainUri, Locate.At(Main, ".module m|ain"), timeout));
     }
 
     /// <summary>
@@ -84,7 +84,7 @@ public sealed class CallHierarchyTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
-        var item = Assert.Single(await PrepareAsync(client, MainUri, new Position(4, 13), timeout));
+        var item = Assert.Single(await PrepareAsync(client, MainUri, Locate.At(Main, "jsr gfx::|clear"), timeout));
 
         var callers = await client.RequestAsync<IReadOnlyList<CallHierarchyIncomingCall>>(
             "callHierarchy/incomingCalls", new { item }, timeout);
@@ -101,8 +101,8 @@ public sealed class CallHierarchyTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
-        var clear = Assert.Single(await PrepareAsync(client, MainUri, new Position(4, 13), timeout));
-        var main = Assert.Single(await PrepareAsync(client, MainUri, new Position(3, 6), timeout));
+        var clear = Assert.Single(await PrepareAsync(client, MainUri, Locate.At(Main, "jsr gfx::|clear"), timeout));
+        var main = Assert.Single(await PrepareAsync(client, MainUri, Locate.At(Main, ".proc |main"), timeout));
 
         var inClear = await client.RequestAsync<IReadOnlyList<CallHierarchyOutgoingCall>>(
             "callHierarchy/outgoingCalls", new { item = clear }, timeout);

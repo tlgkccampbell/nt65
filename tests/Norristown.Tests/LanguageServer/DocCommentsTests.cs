@@ -43,8 +43,8 @@ public sealed class DocCommentsTests
         await using var client = await OpenAsync(Source, timeout);
 
         // On `clear` where it is declared, and on the `jsr clear` that calls it.
-        var declaration = await client.HoverAsync(Uri, new Position(5, 6), timeout);
-        var use = await client.HoverAsync(Uri, new Position(13, 8), timeout);
+        var declaration = await client.HoverAsync(Uri, Locate.At(Source, ".proc |clear"), timeout);
+        var use = await client.HoverAsync(Uri, Locate.At(Source, "jsr |clear"), timeout);
 
         Assert.NotNull(declaration);
         Assert.Contains("Clears the screen.\nThe border is left alone.", declaration.Contents.Value);
@@ -59,7 +59,7 @@ public sealed class DocCommentsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(12, 6), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Source, ".proc |scroll"), timeout);
 
         Assert.NotNull(hover);
         Assert.DoesNotContain("Not this one's", hover.Contents.Value);
@@ -71,7 +71,7 @@ public sealed class DocCommentsTests
     public async Task AFamilysInstancesShowTheFamilysComment()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await OpenAsync("""
+        const string Text = """
             .module main
             .enum Channel {
                 pulse1
@@ -92,9 +92,10 @@ public sealed class DocCommentsTests
             }
 
             .export main
-            """, timeout);
+            """;
+        await using var client = await OpenAsync(Text, timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(15, 14), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Text, "jsr play::|pulse2"), timeout);
 
         Assert.NotNull(hover);
         Assert.Contains("routine play::pulse2", hover.Contents.Value, StringComparison.Ordinal);
@@ -113,10 +114,11 @@ public sealed class DocCommentsTests
         await using var client = await OpenAsync(Source, timeout);
 
         // A fresh line inside `scroll`, where a name may be written.
-        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(13, 0), new Position(13, 0)), "    lda cl\n"));
+        var at = Locate.At(Source, "    jsr clear");
+        var edited = Source.Replace("    jsr clear", "    lda cl\n    jsr clear", StringComparison.Ordinal);
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(at, at), "    lda cl\n"));
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new { textDocument = new { uri = Uri }, position = new Position(13, 10) }, timeout);
+            new { textDocument = new { uri = Uri }, position = Locate.At(edited, "lda cl|") }, timeout);
 
         // Nothing in the list carries prose; the one the caret lands on is resolved.
         Assert.All(items, item => Assert.Null(item.Documentation));

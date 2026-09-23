@@ -1,4 +1,3 @@
-using Norristown.LanguageServer.Protocol;
 using StreamJsonRpc;
 
 namespace Norristown.Tests.LanguageServer;
@@ -24,7 +23,7 @@ public sealed class StandardModuleRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source));
 
-        var definition = await client.DefinitionAsync(Uri, new Position(4, 19), timeout);
+        var definition = await client.DefinitionAsync(Uri, Locate.At(Source, ".byte |screen("), timeout);
         Assert.NotNull(definition);
         Assert.Equal("nt65:/cbm.nt65", definition.Uri);
 
@@ -44,12 +43,12 @@ public sealed class StandardModuleRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source));
 
-        Assert.Null(await client.PrepareRenameAsync(Uri, new Position(4, 19), timeout));
+        Assert.Null(await client.PrepareRenameAsync(Uri, Locate.At(Source, ".byte |screen("), timeout));
         var refused = await Assert.ThrowsAsync<RemoteInvocationException>(
-            () => client.RenameAsync(Uri, new Position(4, 19), "shown", timeout));
+            () => client.RenameAsync(Uri, Locate.At(Source, ".byte |screen("), "shown", timeout));
         Assert.Contains("comes with nt65", refused.Message, StringComparison.Ordinal);
 
-        var edit = await client.RenameAsync(Uri, new Position(4, 33), "petscii_text", timeout);
+        var edit = await client.RenameAsync(Uri, Locate.At(Source, ", |text("), "petscii_text", timeout);
         Assert.NotNull(edit?.Changes);
         Assert.Equal([Uri], edit.Changes.Keys);
         Assert.Equal(2, edit.Changes[Uri].Count);

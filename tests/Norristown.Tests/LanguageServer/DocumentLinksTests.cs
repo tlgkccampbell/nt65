@@ -15,14 +15,15 @@ public sealed class DocumentLinksTests
     public async Task EachIncbinPathLinksToTheFileBesideIt()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await OpenAsync("""
+        const string Source = """
             .module main
             .segment RODATA
             .data tiles:  .incbin "art/tiles.bin"
             .data part:   .incbin "../shared/font.chr", 0, 8
             .data none:   .byte 1
             .export tiles, part, none
-            """, timeout);
+            """;
+        await using var client = await OpenAsync(Source, timeout);
 
         var links = await LinksAsync(client, timeout);
 
@@ -31,8 +32,9 @@ public sealed class DocumentLinksTests
             links.Select(link => link.Target));
 
         // The link's range is the written path, quotes included, so a click anywhere on it follows it.
-        Assert.Equal(new Position(2, 22), links[0].Range.Start);
-        Assert.Equal(new Position(2, 37), links[0].Range.End);
+        var path = Locate.Span(Source, "\"art/tiles.bin\"");
+        Assert.Equal(path.Start, links[0].Range.Start);
+        Assert.Equal(path.End, links[0].Range.End);
     }
 
     /// <summary>An <c>.incbin</c> whose path is given by a constant's name, not a string, has no link.</summary>

@@ -1,8 +1,5 @@
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one these tests mean.
-using Range = Norristown.LanguageServer.Protocol.Range;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -61,13 +58,13 @@ public sealed class FamilyRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `play::triangle` on line 23, and the `ch` of the `.multiproc` on line 9.
-        var folded = await client.DefinitionAsync(Uri, new Position(23, 14), timeout);
+        var folded = await client.DefinitionAsync(Uri, Locate.At(Source, "play::|triangle"), timeout);
         Assert.Equal(Uri, folded?.Uri);
-        Assert.Equal(new Range(new Position(9, 24), new Position(9, 26)), folded?.Range);
+        Assert.Equal(Locate.Span(Source, ".multiproc Channel, |ch"), folded?.Range);
 
         // `stop::triangle` on line 24, and the `ch` of the `.proc` on line 16.
-        var written = await client.DefinitionAsync(Uri, new Position(24, 14), timeout);
-        Assert.Equal(new Range(new Position(16, 14), new Position(16, 16)), written?.Range);
+        var written = await client.DefinitionAsync(Uri, Locate.At(Source, "stop::|triangle"), timeout);
+        Assert.Equal(Locate.Span(Source, ".proc |ch"), written?.Range);
     }
 
     /// <summary>
@@ -80,7 +77,7 @@ public sealed class FamilyRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var edit = await client.RenameAsync(Uri, new Position(23, 14), "noise", timeout);
+        var edit = await client.RenameAsync(Uri, Locate.At(Source, "play::|triangle"), "noise", timeout);
         Assert.NotNull(edit);
         var edits = edit.Changes[Uri];
 
@@ -94,11 +91,11 @@ public sealed class FamilyRequestsTests
     public async Task CompletionAfterAScopeOffersTheInstances()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await OpenAsync(timeout, Source.Replace(
-            "    jsr play::triangle", "    jsr play::", StringComparison.Ordinal));
+        var text = Source.Replace("    jsr play::triangle", "    jsr play::", StringComparison.Ordinal);
+        await using var client = await OpenAsync(timeout, text);
 
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(Uri), new Position(23, 14)), timeout);
+            new TextDocumentPositionParams(new TextDocumentIdentifier(Uri), Locate.At(text, "jsr play::|")), timeout);
 
         var labels = items.Select(item => item.Label).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(["pulse1", "pulse2", "triangle"], labels.Order(StringComparer.Ordinal));
@@ -116,8 +113,8 @@ public sealed class FamilyRequestsTests
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(Uri)), timeout);
-        var folded = await client.HoverAsync(Uri, new Position(9, 24), timeout);
-        var written = await client.HoverAsync(Uri, new Position(16, 14), timeout);
+        var folded = await client.HoverAsync(Uri, Locate.At(Source, ".multiproc Channel, |ch"), timeout);
+        var written = await client.HoverAsync(Uri, Locate.At(Source, ".proc |ch"), timeout);
 
         // Only `main`, on line 22, has lenses. The hover is the same in either form, on the
         // `.multiproc`'s binding on line 9 and on the name of the `.each`'s `.proc` on line 16.
@@ -146,8 +143,7 @@ public sealed class FamilyRequestsTests
     [Fact]
     public async Task AnInstanceNamedAtACallHoversWithItsOwnCost()
     {
-        var timeout = TestTimeout.Token();
-        await using var client = await OpenAsync(timeout, """
+        const string Text = """
             .module main
             .enum Channel {
                 pulse1
@@ -168,11 +164,13 @@ public sealed class FamilyRequestsTests
                 jsr play::triangle
                 rts
             }
-            """);
+            """;
+        var timeout = TestTimeout.Token();
+        await using var client = await OpenAsync(timeout, Text);
         await client.NextDiagnosticsAsync(timeout);
 
-        var call = await client.HoverAsync(Uri, new Position(17, 14), timeout);
-        var binding = await client.HoverAsync(Uri, new Position(8, 24), timeout);
+        var call = await client.HoverAsync(Uri, Locate.At(Text, "play::|triangle"), timeout);
+        var binding = await client.HoverAsync(Uri, Locate.At(Text, ".multiproc Channel, |ch"), timeout);
 
         Assert.Contains("cost       8 cycles\n", call?.Contents.Value, StringComparison.Ordinal);
         Assert.DoesNotContain("pulse1", call?.Contents.Value, StringComparison.Ordinal);

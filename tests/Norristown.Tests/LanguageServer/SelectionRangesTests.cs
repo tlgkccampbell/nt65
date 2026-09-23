@@ -35,7 +35,7 @@ public sealed class SelectionRangesTests
 
         // The caret on `origin`, in `lda origin,x`: the name, the operand it is part of, the
         // instruction, and the whole routine declaration.
-        var chain = Assert.Single(await client.SelectionRangesAsync(Uri, new Position(5, 10), timeout));
+        var chain = Assert.Single(await client.SelectionRangesAsync(Uri, Locate.At(Source, "lda or|igin"), timeout));
         Assert.Equal(
             [
                 "origin",

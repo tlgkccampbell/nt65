@@ -80,7 +80,7 @@ public sealed class ViewRequestsTests
 
         // An unsaved edit: the call is given a name nothing declares.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(15, 16), new Position(15, 22)), "MISSING"));
+            Locate.Span(Source, "ptr, |SCREEN"), "MISSING"));
         _ = await client.NextDiagnosticsAsync(Uri, timeout);
 
         // Once the output has been requested, the server says when the program has settled after
@@ -108,7 +108,7 @@ public sealed class ViewRequestsTests
         await using var client = await OpenAsync(timeout);
 
         var expansion = await client.RequestAsync<ExpansionResult?>("nt65/expansion",
-            new ExpansionParams(new TextDocumentIdentifier(Uri), new Position(15, 6)), timeout);
+            new ExpansionParams(new TextDocumentIdentifier(Uri), Locate.At(Source, "se|t16!")), timeout);
         Assert.NotNull(expansion);
         Assert.Equal("set16!(ptr, SCREEN)", expansion.Title);
         Assert.Equal("expands to 4 lines · 8 bytes · 10 cycles", expansion.Summary);
@@ -118,7 +118,7 @@ public sealed class ViewRequestsTests
 
         // Hover over the call shows the signature and the comment as for any macro, then the
         // summary line, then the expansion itself.
-        var hover = await client.HoverAsync(Uri, new Position(15, 6), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Source, "se|t16!"), timeout);
         Assert.NotNull(hover);
         Assert.Contains(".macro set16(dest: operand, value)", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Matches(@"expands to\s+4 lines · 8 bytes · 10 cycles", hover.Contents.Value);
@@ -137,7 +137,7 @@ public sealed class ViewRequestsTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, """
+        const string Text = """
             .module main
             .macro clear(n: const) {
                 .repeat n, i {
@@ -150,10 +150,11 @@ public sealed class ViewRequestsTests
                 clear!(5)
                 rts
             }
-            """);
+            """;
+        await client.OpenAsync(Uri, Text);
         Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(Uri, new Position(9, 6), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Text, "cl|ear!"), timeout);
         Assert.NotNull(hover);
         var said = hover.Contents.Value;
         Assert.Matches(@"expands to\s+10 lines · ", said);
@@ -177,7 +178,7 @@ public sealed class ViewRequestsTests
         const string escaped = "file:///c%3A/work/main.nt65";
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(escaped, """
+        const string Text = """
             .module main
             .macro clear(n: const) {
                 .repeat n, i {
@@ -190,10 +191,11 @@ public sealed class ViewRequestsTests
                 clear!(5)
                 rts
             }
-            """);
+            """;
+        await client.OpenAsync(escaped, Text);
         Assert.Empty((await client.NextDiagnosticsAsync(escaped, timeout)).Diagnostics);
 
-        var hover = await client.HoverAsync(escaped, new Position(9, 6), timeout);
+        var hover = await client.HoverAsync(escaped, Locate.At(Text, "cl|ear!"), timeout);
         Assert.NotNull(hover);
         var link = hover.Contents.Value.Split("command:nt65.showExpansion?")[1].Split(')')[0];
         using var parsed = JsonDocument.Parse(System.Uri.UnescapeDataString(link));
@@ -218,7 +220,7 @@ public sealed class ViewRequestsTests
         var actions = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
             new CodeActionParams(
                 new TextDocumentIdentifier(Uri),
-                new Range(new Position(15, 6), new Position(15, 6)),
+                new Range(Locate.At(Source, "se|t16!"), Locate.At(Source, "se|t16!")),
                 new CodeActionContext([])),
             timeout);
         var inline = Assert.Single(actions, action => action.Title == "Inline `set16!`");
@@ -239,7 +241,7 @@ public sealed class ViewRequestsTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, """
+        const string Text = """
             .module main
             .macro twice(n) {
                 .byte n, n
@@ -251,13 +253,14 @@ public sealed class ViewRequestsTests
             .export .data table {
                 pair!(3)
             }
-            """);
+            """;
+        await client.OpenAsync(Uri, Text);
         Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
 
         var actions = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
             new CodeActionParams(
                 new TextDocumentIdentifier(Uri),
-                new Range(new Position(5, 6), new Position(5, 6)),
+                new Range(Locate.At(Text, "tw|ice!"), Locate.At(Text, "tw|ice!")),
                 new CodeActionContext([])),
             timeout);
         var refused = Assert.Single(actions, action => action.Title == "Inline `twice!`");

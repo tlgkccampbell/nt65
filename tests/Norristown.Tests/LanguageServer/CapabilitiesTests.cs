@@ -87,7 +87,7 @@ public sealed class CapabilitiesTests : IDisposable
         Assert.Equal([null, "CODE", "CODE"], outline.Select(item => item.ContainerName));
         Assert.All(outline, item => Assert.Equal(Uri, item.Location.Uri));
 
-        var edit = await client.RenameAsync(Uri, new Position(6, 7), "later", timeout);
+        var edit = await client.RenameAsync(Uri, Locate.At(Main, ".proc s|tep"), "later", timeout);
         Assert.NotNull(edit);
         Assert.Equal([Uri], edit.Changes.Keys);
         Assert.Null(edit.DocumentChanges);
@@ -106,15 +106,17 @@ public sealed class CapabilitiesTests : IDisposable
         await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout);
         await client.OpenAsync(Uri, Main);
         await client.NextDiagnosticsAsync(Uri, timeout);
+        var inserted = Locate.At(Main, "rts");
         await client.ChangeAsync(Uri, 7, new TextDocumentContentChangeEvent(
-            new Range(new Position(4, 4), new Position(4, 4)), "nop\n    "));
+            new Range(inserted, inserted), "nop\n    "));
         await client.NextDiagnosticsAsync(Uri, timeout);
 
         var segment = Assert.Single(await client.SymbolsAsync(Uri, timeout));
         Assert.Equal("CODE", segment.Name);
         Assert.Equal(["reset", "step"], segment.Children!.Select(item => item.Name));
 
-        var edit = await client.RenameAsync(Uri, new Position(7, 7), "later", timeout);
+        var edited = Main.Insert(Main.IndexOf("rts", StringComparison.Ordinal), "nop\n    ");
+        var edit = await client.RenameAsync(Uri, Locate.At(edited, ".proc s|tep"), "later", timeout);
         Assert.NotNull(edit);
         var one = Assert.Single(edit.DocumentChanges!);
         Assert.Equal(Uri, one.TextDocument.Uri);

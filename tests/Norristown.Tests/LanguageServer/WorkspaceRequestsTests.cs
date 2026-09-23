@@ -46,11 +46,11 @@ public sealed class WorkspaceRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `clear` on `jsr clear`, declared by gfx.nt65.
-        var definition = await client.DefinitionAsync(MainUri, new Position(4, 8), timeout);
+        var definition = await client.DefinitionAsync(MainUri, Locate.At(Main, "jsr |clear"), timeout);
 
         Assert.NotNull(definition);
         Assert.Equal(GfxUri, definition.Uri);
-        Assert.Equal(new Range(new Position(6, 6), new Position(6, 11)), definition.Range);
+        Assert.Equal(Locate.Span(Gfx, ".proc |clear"), definition.Range);
     }
 
     /// <summary>Hover on a name from another module says which module it came from.</summary>
@@ -60,7 +60,7 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(MainUri, new Position(4, 8), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Main, "jsr |clear"), timeout);
 
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n.proc gfx::clear\n```", hover.Contents.Value, StringComparison.Ordinal);
@@ -84,7 +84,7 @@ public sealed class WorkspaceRequestsTests
 
         // From the declaration in gfx.nt65: the `.export`, the `.proc`, and in main the `.use`
         // and the call.
-        var references = await client.ReferencesAsync(GfxUri, new Position(6, 6), true, timeout);
+        var references = await client.ReferencesAsync(GfxUri, Locate.At(Gfx, ".proc |clear"), true, timeout);
 
         Assert.Equal([GfxUri, GfxUri, MainUri, MainUri], references.Select(r => r.Uri));
     }
@@ -96,7 +96,7 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var edit = await client.RenameAsync(MainUri, new Position(4, 8), "wipe", timeout);
+        var edit = await client.RenameAsync(MainUri, Locate.At(Main, "jsr |clear"), "wipe", timeout);
 
         Assert.NotNull(edit);
         Assert.Equal([GfxUri, MainUri], edit.Changes.Keys.Order(StringComparer.Ordinal));
@@ -112,21 +112,22 @@ public sealed class WorkspaceRequestsTests
     [Fact]
     public async Task ARenameKeepsAnAliasApartFromTheNameItStandsFor()
     {
+        const string Text = ".module main\n.use gfx::clear as wipe\n.segment CODE\n.proc main {\n    jsr wipe\n    rts\n}\n";
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx));
-        await client.OpenAsync(MainUri, ".module main\n.use gfx::clear as wipe\n.segment CODE\n.proc main {\n    jsr wipe\n    rts\n}\n");
+        await client.OpenAsync(MainUri, Text);
         await NextForAsync(client, MainUri, timeout);
 
-        var alias = await client.RenameAsync(MainUri, new Position(4, 8), "erase", timeout);
+        var alias = await client.RenameAsync(MainUri, Locate.At(Text, "jsr |wipe"), "erase", timeout);
         Assert.NotNull(alias);
         Assert.Equal([MainUri], alias.Changes.Keys);
         Assert.Equal([1, 4], alias.Changes[MainUri].Select(change => change.Range.Start.Line));
 
-        var symbol = await client.RenameAsync(GfxUri, new Position(6, 6), "blank", timeout);
+        var symbol = await client.RenameAsync(GfxUri, Locate.At(Gfx, ".proc |clear"), "blank", timeout);
         Assert.NotNull(symbol);
         Assert.Equal(2, symbol.Changes[GfxUri].Count);
         var inMain = Assert.Single(symbol.Changes[MainUri]);
-        Assert.Equal(new Range(new Position(1, 10), new Position(1, 15)), inMain.Range);
+        Assert.Equal(Locate.Span(Text, "gfx::|clear"), inMain.Range);
     }
 
     /// <summary>A name another module keeps to itself is reported as private, not as missing.</summary>
@@ -154,7 +155,7 @@ public sealed class WorkspaceRequestsTests
 
         // `.export clear, SCREEN` becomes `.export SCREEN`.
         await client.ChangeAsync(GfxUri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(1, 8), new Position(1, 15)), ""));
+            new TextDocumentContentChangeEvent(Locate.Span(Gfx, ".export |clear, "), ""));
 
         var published = await NextForAsync(client, MainUri, timeout);
         Assert.Equal("`gfx::clear` is not exported by module `gfx`",
@@ -174,15 +175,17 @@ public sealed class WorkspaceRequestsTests
 
         // A comment line above `.proc clear`, which moves it down a line. Nothing about
         // main.nt65 changes, so gfx.nt65 is the file the server publishes for.
+        var above = Locate.At(Gfx, ".proc clear");
+        var edited = Gfx.Replace(".proc clear", "; wipes the screen\n.proc clear", StringComparison.Ordinal);
         await client.ChangeAsync(GfxUri, 2,
-            new TextDocumentContentChangeEvent(new Range(new Position(6, 0), new Position(6, 0)), "; wipes the screen\n"));
+            new TextDocumentContentChangeEvent(new Range(above, above), "; wipes the screen\n"));
         await NextForAsync(client, GfxUri, timeout);
 
-        var definition = await client.DefinitionAsync(MainUri, new Position(4, 8), timeout);
+        var definition = await client.DefinitionAsync(MainUri, Locate.At(Main, "jsr |clear"), timeout);
         Assert.NotNull(definition);
-        Assert.Equal(new Range(new Position(7, 6), new Position(7, 11)), definition.Range);
+        Assert.Equal(Locate.Span(edited, ".proc |clear"), definition.Range);
 
-        var references = await client.ReferencesAsync(GfxUri, new Position(7, 6), true, timeout);
+        var references = await client.ReferencesAsync(GfxUri, Locate.At(edited, ".proc |clear"), true, timeout);
         Assert.Equal([GfxUri, GfxUri, MainUri, MainUri], references.Select(r => r.Uri));
     }
 
@@ -205,12 +208,12 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Sys, User, timeout);
 
-        var definition = await client.DefinitionAsync(MainUri, new Position(3, 13), timeout);
-        var hover = await client.HoverAsync(MainUri, new Position(3, 13), timeout);
+        var definition = await client.DefinitionAsync(MainUri, Locate.At(User, "main: s|td"), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(User, "main: s|td"), timeout);
 
         Assert.NotNull(definition);
         Assert.Equal(GfxUri, definition.Uri);
-        Assert.Equal(new Range(new Position(1, 19), new Position(1, 22)), definition.Range);
+        Assert.Equal(Locate.Span(Sys, ".signature |std"), definition.Range);
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n.export .signature sys::std = a8\n```", hover.Contents.Value, StringComparison.Ordinal);
     }

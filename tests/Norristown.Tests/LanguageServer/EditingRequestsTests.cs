@@ -547,7 +547,7 @@ public sealed class EditingRequestsTests
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
-        var hover = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc |copy"), timeout);
 
         Assert.Equal(
             [
@@ -833,7 +833,7 @@ public sealed class EditingRequestsTests
         Assert.Equal("clear", clear.Name);
         Assert.Equal("gfx", clear.ContainerName);
         Assert.Equal(GfxUri, clear.Location.Uri);
-        Assert.Equal(new Position(8, 6), clear.Location.Range.Start);
+        Assert.Equal(Locate.At(Gfx, ".proc |clear"), clear.Location.Range.Start);
         Assert.Equal([("Sprite", "gfx")], (await client.RequestAsync<IReadOnlyList<SymbolInformation>>("workspace/symbol",
             new WorkspaceSymbolParams("sprite"), timeout)).Select(s => (s.Name, s.ContainerName)));
     }
@@ -899,8 +899,8 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var routine = await client.HoverAsync(MainUri, new Position(2, 7), timeout);
-        var scope = await client.HoverAsync(MainUri, new Position(4, 6), timeout);
+        var routine = await client.HoverAsync(MainUri, Locate.At(Source, ".proc m|ain"), timeout);
+        var scope = await client.HoverAsync(MainUri, Locate.At(Source, ".s|cope"), timeout);
 
         Assert.Contains("```nt65\n.proc main\n```", routine?.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("preserves  Y, C", routine?.Contents.Value, StringComparison.Ordinal);
@@ -929,8 +929,8 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var entry = await client.HoverAsync(MainUri, new Position(3, 4), timeout);
-        var after = await client.HoverAsync(MainUri, new Position(5, 4), timeout);
+        var entry = await client.HoverAsync(MainUri, Locate.At(Source, "txa"), timeout);
+        var after = await client.HoverAsync(MainUri, Locate.At(Source, "sty $10"), timeout);
 
         Assert.Contains(
             "A       as entered\nX       as entered\nY       as entered\nC       as entered\n```",
@@ -968,7 +968,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $11"), timeout);
 
         // One path falls through the `lda` and the other branches over it.
         Assert.Contains(
@@ -998,7 +998,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(6, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
         // The `php` is on top; under it is the accumulator, which `txa` filled with X.
         Assert.Contains(
@@ -1026,7 +1026,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(4, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
         Assert.Contains("\nstack   unknown", hover?.Contents.Value, StringComparison.Ordinal);
     }
@@ -1056,7 +1056,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(10, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
         Assert.Contains("        A as entered\n        and 1 more\n```", hover?.Contents.Value, StringComparison.Ordinal);
     }
@@ -1087,7 +1087,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(11, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
         Assert.Contains("\nstack   frame vars\n```", hover?.Contents.Value, StringComparison.Ordinal);
     }
@@ -1115,7 +1115,7 @@ public sealed class EditingRequestsTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var hover = await client.HoverAsync(MainUri, new Position(7, 4), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
         Assert.Contains(
             "stack   X as entered, 8-bit\n        status a8, i8\n        A as entered, 8-bit\n```",

@@ -115,8 +115,7 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.cpu 65816\nFLAGS = $20\n.segment CODE\n"
             + ".proc widen: a8, i8 -> a16 {\n    rep FLAGS\n    rts\n}\n";
 
-        var start = Main.IndexOf("rep FLAGS", StringComparison.Ordinal);
-        var caret = new Position(Main[..start].Count(c => c == '\n'), 4);
+        var caret = Locate.At(Main, "rep FLAGS");
         Assert.DoesNotContain(
             Actions(Main, new Range(caret, caret)),
             action => action.Title.StartsWith("Write it as `.ensure", StringComparison.Ordinal));
@@ -171,7 +170,8 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.segment CODE\n.proc main {\n    lda #0\n    sta $0400\n    rts\n}\n";
 
-        var action = Single(Main, new Range(new Position(3, 0), new Position(5, 0)), "Extract into a `.proc`");
+        var selection = new Range(Locate.At(Main, "    lda #0"), Locate.At(Main, "    rts"));
+        var action = Single(Main, selection, "Extract into a `.proc`");
 
         Assert.Equal("refactor.extract", action.Kind);
         Assert.Equal(
@@ -190,7 +190,8 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.segment CODE\n.proc main {\n@wait:\n    lda $d012\n    cmp #100\n    rts\n}\n";
 
-        var action = Single(Main, new Range(new Position(3, 0), new Position(6, 0)), "Extract into a `.proc`");
+        var selection = new Range(Locate.At(Main, "@wait:"), Locate.At(Main, "    rts"));
+        var action = Single(Main, selection, "Extract into a `.proc`");
 
         var written = Editing.Apply(Main, action.Edit.Changes[Uri]);
         Assert.Equal(
@@ -213,7 +214,7 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc main {\n    lda #0\n    rts\n}\n";
 
         Assert.DoesNotContain(
-            Actions(Main, new Range(new Position(3, 0), new Position(5, 0))),
+            Actions(Main, new Range(Locate.At(Main, "    lda #0"), Locate.At(Main, "}"))),
             action => action.Title == "Extract into a `.proc`");
     }
 
@@ -227,7 +228,8 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.cpu 65c02\n.segment CODE\n.proc main {\n"
             + "@wait:\n    brk #0\n    lda $d012\n    bne @next\n    bra @wait\n@next:\n    jmp @wait\n}\n";
 
-        var action = Single(Main, new Range(new Position(4, 0), new Position(11, 0)), "Extract into a `.proc`");
+        var selection = new Range(Locate.At(Main, "@wait:"), Locate.At(Main, "}"));
+        var action = Single(Main, selection, "Extract into a `.proc`");
 
         Assert.Contains("jsr wait", Editing.Apply(Main, action.Edit.Changes[Uri]), StringComparison.Ordinal);
     }
@@ -246,7 +248,7 @@ public sealed class RefactorsTests
             + ".proc other {\n    rts\n}\n";
 
         Assert.DoesNotContain(
-            Actions(main, new Range(new Position(4, 0), new Position(6, 0))),
+            Actions(main, new Range(Locate.At(main, "    lda #0"), Locate.At(main, "}"))),
             action => action.Title == "Extract into a `.proc`");
     }
 
@@ -257,7 +259,8 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc main {\n    rts\n}\n"
             + ".macpack longbranch\n.zeropage\nptr: .res 2\n.code\n.proc old\n    lda #$00\n.endproc\n";
 
-        var action = Single(Main, new Range(new Position(5, 0), new Position(12, 0)), "Read the selection as nt65");
+        var selection = new Range(Locate.At(Main, ".macpack"), Locate.At(Main, ".endproc\n|"));
+        var action = Single(Main, selection, "Read the selection as nt65");
 
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    rts\n}\n"
@@ -280,7 +283,8 @@ public sealed class RefactorsTests
             + ".ifdef DEBUG\nTRACE = 1 .bitand 3\n.endif\n"
             + ":   bne :-\n";
 
-        var action = Single(Main, new Range(new Position(5, 0), new Position(15, 0)), "Read the selection as nt65");
+        var selection = new Range(Locate.At(Main, ".macro mov"), Locate.At(Main, "bne :-\n|"));
+        var action = Single(Main, selection, "Read the selection as nt65");
 
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    rts\n}\n"

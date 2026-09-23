@@ -100,7 +100,7 @@ public sealed class WorkspaceTests
     {
         var workspace = OpenSource(out var opened);
         var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
-            [new TextDocumentContentChangeEvent(new Range(new Position(2, 9), new Position(2, 10)), "1")]);
+            [new TextDocumentContentChangeEvent(Locate.Span(Source, "ldx #|0"), "1")]);
 
         Assert.NotNull(changed);
         Assert.Equal(2, changed.Version);

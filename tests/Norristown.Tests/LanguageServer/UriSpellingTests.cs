@@ -1,8 +1,5 @@
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one this test means.
-using Range = Norristown.LanguageServer.Protocol.Range;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -52,7 +49,7 @@ public sealed class UriSpellingTests
         Assert.Contains(GfxUri, (await client.NextDiagnosticsAsync(GfxUri, timeout)).Uri, StringComparison.Ordinal);
 
         // `clear` on `jsr clear`, declared in the other file.
-        var at = new Position(5, 9);
+        var at = Locate.At(Main, "jsr c|lear");
         var definition = await client.DefinitionAsync(MainUri, at, timeout);
         Assert.Equal(GfxUri, definition!.Uri);
 
@@ -71,7 +68,7 @@ public sealed class UriSpellingTests
         var fixes = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
             new CodeActionParams(
                 new TextDocumentIdentifier(GfxUri),
-                new Range(new Position(3, 0), new Position(3, 4)),
+                Locate.Span(Gfx, "rows"),
                 new CodeActionContext([])),
             timeout);
         Assert.NotEmpty(fixes);

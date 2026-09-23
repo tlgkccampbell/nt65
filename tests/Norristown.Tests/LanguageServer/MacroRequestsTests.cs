@@ -68,12 +68,12 @@ public sealed class MacroRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `value` in `lda #<value` is the parameter the header declares.
-        var parameter = await client.DefinitionAsync(Uri, new Position(4, 11), timeout);
+        var parameter = await client.DefinitionAsync(Uri, Locate.At(Source, "#<v|alue"), timeout);
         Assert.NotNull(parameter);
         Assert.Equal(3, parameter.Range.Start.Line);
 
         // A call goes to the macro it names, without expanding anything.
-        var macro = await client.DefinitionAsync(Uri, new Position(20, 4), timeout);
+        var macro = await client.DefinitionAsync(Uri, Locate.At(Source, "set16!"), timeout);
         Assert.NotNull(macro);
         Assert.Equal(3, macro.Range.Start.Line);
     }
@@ -85,7 +85,8 @@ public sealed class MacroRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var uses = await client.ReferencesAsync(Uri, new Position(3, 29), includeDeclaration: false, timeout);
+        var uses = await client.ReferencesAsync(
+            Uri, Locate.At(Source, "operand, v|alue"), includeDeclaration: false, timeout);
         Assert.Equal([4], uses.Select(use => use.Range.Start.Line));
     }
 
@@ -96,7 +97,7 @@ public sealed class MacroRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var edit = await client.RenameAsync(Uri, new Position(3, 29), "amount", timeout);
+        var edit = await client.RenameAsync(Uri, Locate.At(Source, "operand, v|alue"), "amount", timeout);
         Assert.NotNull(edit);
         Assert.Equal([3, 4], edit.Changes[Uri].Select(change => change.Range.Start.Line).Order());
     }
@@ -112,10 +113,10 @@ public sealed class MacroRequestsTests
         await using var client = await OpenAsync(timeout);
 
         // `@target:` is declared on line 19 and used on line 22, inside the block.
-        var uses = await client.ReferencesAsync(Uri, new Position(19, 0), includeDeclaration: true, timeout);
+        var uses = await client.ReferencesAsync(Uri, Locate.At(Source, "@target:"), includeDeclaration: true, timeout);
         Assert.Equal([19, 22], uses.Select(use => use.Range.Start.Line).Order());
 
-        var edit = await client.RenameAsync(Uri, new Position(22, 12), "@here", timeout);
+        var edit = await client.RenameAsync(Uri, Locate.At(Source, "lda |@target"), "@here", timeout);
         Assert.NotNull(edit);
         Assert.Equal([19, 22], edit.Changes[Uri].Select(change => change.Range.Start.Line).Order());
     }
@@ -130,7 +131,8 @@ public sealed class MacroRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var inTheBody = await client.ReferencesAsync(Uri, new Position(12, 0), includeDeclaration: true, timeout);
+        var inTheBody = await client.ReferencesAsync(
+            Uri, Locate.At(Source, "@loop:"), includeDeclaration: true, timeout);
         Assert.Equal([12, 15], inTheBody.Select(use => use.Range.Start.Line).Order());
         Assert.DoesNotContain(inTheBody, use => use.Range.Start.Line == 19);
     }
@@ -142,7 +144,7 @@ public sealed class MacroRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, new Position(20, 4), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Source, "set16!"), timeout);
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n.macro set16(dest: operand, value)\n```", hover.Contents.Value, StringComparison.Ordinal);
     }
@@ -212,17 +214,17 @@ public sealed class MacroRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Typed));
 
-        var imm = (await client.HoverAsync(Uri, new Position(6, 23), timeout))?.Contents.Value ?? "";
+        var imm = (await client.HoverAsync(Uri, Locate.At(Typed, "== i|mm"), timeout))?.Contents.Value ?? "";
         Assert.Contains("mode imm", imm, StringComparison.Ordinal);
         Assert.Contains("imm: an immediate", imm, StringComparison.Ordinal);
         Assert.Contains(".mode(src)", imm, StringComparison.Ordinal);
         Assert.DoesNotContain("never", imm, StringComparison.Ordinal);
 
-        var y = (await client.HoverAsync(Uri, new Position(6, 37), timeout))?.Contents.Value ?? "";
+        var y = (await client.HoverAsync(Uri, Locate.At(Typed, "reg != y|"), timeout))?.Contents.Value ?? "";
         Assert.Contains("word y", y, StringComparison.Ordinal);
         Assert.Contains("one of the words x or y", y, StringComparison.Ordinal);
 
-        var absx = (await client.HoverAsync(Uri, new Position(8, 29), timeout))?.Contents.Value ?? "";
+        var absx = (await client.HoverAsync(Uri, Locate.At(Typed, "== a|bsx"), timeout))?.Contents.Value ?? "";
         Assert.Contains("src is never absx: it may be imm, abs", absx, StringComparison.Ordinal);
     }
 
@@ -241,13 +243,13 @@ public sealed class MacroRequestsTests
         var said = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal(("comparison-never-holds", DiagnosticSeverity.Warning, 8), (said.Code, said.Severity, said.Range.Start.Line));
 
-        var definition = await client.DefinitionAsync(Uri, new Position(15, 11), timeout);
+        var definition = await client.DefinitionAsync(Uri, Locate.At(Typed, "play!(k|ick"), timeout);
         Assert.Equal(2, definition?.Range.Start.Line);
-        var hover = await client.HoverAsync(Uri, new Position(15, 11), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Typed, "play!(k|ick"), timeout);
         Assert.Contains("Instrument::kick", hover?.Contents.Value, StringComparison.Ordinal);
 
         // The `kick` passed as the operand argument names the data, since an operand takes an address.
-        var data = await client.DefinitionAsync(Uri, new Position(16, 33), timeout);
+        var data = await client.DefinitionAsync(Uri, Locate.At(Typed, "6, k|ick"), timeout);
         Assert.Equal(13, data?.Range.Start.Line);
 
         var legend = client.Initialized.Capabilities.SemanticTokensProvider!.Legend;

@@ -56,7 +56,7 @@ public sealed class PublishingTests
 
         // `clear` is removed from the export line, which changes main's diagnostics and no others.
         await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(1, 8), new Position(1, 15)), ""));
+            Locate.Span(Gfx, ".export |clear, "), ""));
 
         var edited = await client.NextDiagnosticsAsync(timeout);
         Assert.Equal(GfxUri, edited.Uri);
@@ -85,11 +85,12 @@ public sealed class PublishingTests
         // is a name nothing declares.
         var version = 1;
         var published = new List<PublishDiagnosticsParams>();
+        var letter = Locate.Span(Main, "jsr clea|r");
         for (var i = 0; i < 10; i++)
         {
             var (range, written) = i % 2 == 0
-                ? (new Range(new Position(5, 12), new Position(5, 13)), "")
-                : (new Range(new Position(5, 12), new Position(5, 12)), "r");
+                ? (letter, "")
+                : (new Range(letter.Start, letter.Start), "r");
             await client.ChangeAsync(MainUri, ++version, new TextDocumentContentChangeEvent(range, written));
             published.Add(await client.NextDiagnosticsAsync(MainUri, timeout));
             while (held.Waiting > 0)
@@ -120,13 +121,13 @@ public sealed class PublishingTests
 
         // A keystroke in a routine body: nothing outside main can have changed.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(7, 4), new Position(7, 7)), "nop"));
+            Locate.Span(Main, "rts"), "nop"));
         await client.NextDiagnosticsAsync(MainUri, timeout);
         await held.ReleaseAsync(timeout);
 
         // A constant that main reads, changed in gfx: now something outside gfx has changed.
         await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(3, 9), new Position(3, 14)), "$0800"));
+            Locate.Span(Gfx, "$0400"), "$0800"));
         await client.NextDiagnosticsAsync(GfxUri, timeout);
         await held.ReleaseAsync(timeout);
 

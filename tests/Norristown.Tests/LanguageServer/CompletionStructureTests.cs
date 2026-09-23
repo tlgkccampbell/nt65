@@ -64,7 +64,7 @@ public sealed class CompletionStructureTests
         Assert.Null(One(items, ".res").InsertTextFormat);
         Assert.Equal(".res", Written(items, ".res"));
 
-        var inside = await CompletionAsync(client, new Position(14, 4), timeout);
+        var inside = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
         Assert.Null(One(inside, "lda").InsertTextFormat);
         Assert.Equal("lda ", Written(inside, "lda"));
     }
@@ -97,13 +97,13 @@ public sealed class CompletionStructureTests
 
         // Where a name goes: the labels of the routine the caret is in, then the file's names,
         // then the prefixes, such as `$`, that start a number that is not written in decimal.
-        var named = await CompletionAsync(client, new Position(13, 8), timeout);
+        var named = await CompletionAsync(client, Locate.At(Source, "bne |@again"), timeout);
         var reached = (string label) => One(named, label).SortText!;
         Assert.True(string.CompareOrdinal(reached("@again"), reached("SCREEN")) < 0, "this routine's labels first");
         Assert.True(string.CompareOrdinal(reached("SCREEN"), reached("$")) < 0, "the file's names before the marks");
 
         // Where a statement goes: the language's directives first, and the instructions last.
-        var starting = await CompletionAsync(client, new Position(14, 4), timeout);
+        var starting = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
         var order = (string label) => One(starting, label).SortText!;
         Assert.True(string.CompareOrdinal(order(".byte"), order("lda")) < 0, "the words before the instructions");
 

@@ -153,8 +153,8 @@ public sealed class SemanticTokensTests
         // rather than all of them again.
         var whole = await client.SemanticTokensAsync(Uri, timeout);
         Assert.NotNull(whole.ResultId);
-        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
-            new Range(new Position(24, 0), new Position(24, 0)), "\n"));
+        var routine = Locate.At(Source, ".export .proc main");
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(routine, routine), "\n"));
         await client.NextDiagnosticsAsync(timeout);
 
         // A line added above the routine changes one number: how many lines the routine's first
