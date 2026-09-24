@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -19,6 +20,10 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     // opposite reason: the parser does report them, and a table lookup for every node that has
     // one would be paid on every parse.
     private static readonly ConditionalWeakTable<GreenNode, SyntaxAnnotation[]> annotationTable = new();
+
+    // The nodes that more than one place in a file may hold, which Report checks against. Only a
+    // debug build adds to it, so a release build pays nothing beyond the empty table.
+    private static readonly ConditionalWeakTable<GreenNode, GreenNode> sharedNodes = new();
 
     private ImmutableArray<GreenDiagnostic> diagnostics;
 
@@ -83,14 +88,23 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     /// parser still has it in hand, before it goes into a parent, so that every parent can roll
     /// <see cref="ContainsDiagnostics"/> up in its constructor. A node object shared by more than
     /// one place in the file, such as a token from the lexer's cache or the shared missing token
-    /// of a kind, is never given one, and keeps only what its constructor gave it.
+    /// of a kind, is never given one, and keeps only what its constructor gave it. Such a node is
+    /// marked with <see cref="MarkShared"/>, and a debug build asserts that it is not reported on.
     /// </summary>
     /// <param name="diagnostic">The diagnostic, placed within this node.</param>
     internal void Report(GreenDiagnostic diagnostic)
     {
+        Debug.Assert(!sharedNodes.TryGetValue(this, out _), "a shared node is never given a diagnostic");
         diagnostics = Diagnostics.Add(diagnostic);
         Flags |= GreenFlags.ContainsDiagnostics;
     }
+
+    /// <summary>
+    /// Records that this node may be held by more than one place in a file, so that a debug build
+    /// fails when <see cref="Report"/> is given it. A release build removes every call.
+    /// </summary>
+    [Conditional("DEBUG")]
+    internal void MarkShared() => sharedNodes.AddOrUpdate(this, this);
 
     /// <summary>
     /// Returns a copy of this node with <paramref name="wanted"/> in place of the annotations it

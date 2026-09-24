@@ -81,6 +81,7 @@ internal static class GreenCache
             return hit;
         }
         var created = new GreenToken(kind, text.ToString(), leading, trailing, null);
+        created.MarkShared();
         table[slot] = created;
         return created;
     }

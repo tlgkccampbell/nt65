@@ -98,6 +98,7 @@ internal sealed class GreenToken : GreenNode
         if (missing[index] is { } shared)
             return shared;
         var created = new GreenToken(kind, null);
+        created.MarkShared();
         return Interlocked.CompareExchange(ref missing[index], created, null) ?? created;
     }
 
