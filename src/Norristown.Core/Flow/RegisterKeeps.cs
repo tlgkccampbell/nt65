@@ -447,7 +447,7 @@ public static class RegisterKeeps
                 : state.Stack is null && state.WhyStack is { } lost
                     ? Cause.Because(lost)
                     : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
-                        + "at the point where the entry value is back";
+                        + "at the point where the entry value is restored";
             report.Add(new Diagnostic(at,
                 Catalogue.KeepsBroken.Message(
                     region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
@@ -472,7 +472,7 @@ public static class RegisterKeeps
                 : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
                     + $"to keep {items}";
             return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}, "
-                + "or write `.next ?` here to end the path unchecked";
+                + "or add `.next ?` here to end the path unchecked";
         }
 
         /// <summary>Returns what one block does to the registers, from the state that reaches it.</summary>

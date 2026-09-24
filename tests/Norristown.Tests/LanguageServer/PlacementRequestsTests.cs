@@ -35,7 +35,7 @@ public sealed class PlacementRequestsTests
         Assert.NotNull(hover);
         var text = hover.Contents.Value;
         Assert.Contains("module part", text, StringComparison.Ordinal);
-        Assert.Contains("placed: its bytes are written where it is placed", text, StringComparison.Ordinal);
+        Assert.Contains("placed (its bytes are emitted where another module places it with `.place`)", text, StringComparison.Ordinal);
         Assert.Contains("the output of `main`", text, StringComparison.Ordinal);
 
         var definition = Lsp.ToPlacedDefinition(analysis, model, at);

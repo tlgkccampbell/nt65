@@ -55,7 +55,7 @@ public sealed class ModuleTests
             ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n"));
 
         Assert.Equal(
-            ["main.nt65:4: `clear` is not declared here, and module `gfx` exports it: write `gfx::clear`, "
+            ["main.nt65:4: `clear` is not declared here, and module `gfx` exports it: use `gfx::clear`, "
                 + "or bring it in with `.use gfx::clear`"],
             program.Problems());
     }

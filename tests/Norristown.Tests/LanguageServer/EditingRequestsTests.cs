@@ -556,13 +556,13 @@ public sealed class EditingRequestsTests
         Assert.Equal(
             [
                 "18 cycles, 18+ with calls, excluding move and CHROUT",
-                "not counted: a block move takes 7 cycles a byte, and how many is in A",
+                "not counted: a block move takes 7 cycles per byte, and the number of bytes is in A",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
         Assert.Contains(
             """
             cost       18 cycles, 18+ with calls
-            excluding  move: a block move takes 7 cycles a byte, and how many is in A
+            excluding  move: a block move takes 7 cycles per byte, and the number of bytes is in A
                        CHROUT: no code in the program
             """.ReplaceLineEndings("\n"),
             hover?.Contents.Value,
@@ -593,7 +593,7 @@ public sealed class EditingRequestsTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            ["not counted: a block move takes 7 cycles a byte, and how many is in A"],
+            ["not counted: a block move takes 7 cycles per byte, and the number of bytes is in A"],
             Costs(lenses).Select(lens => lens.Command.Title));
     }
 

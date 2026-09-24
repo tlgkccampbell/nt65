@@ -326,7 +326,7 @@ public sealed class SyntaxGeneratorTests
     public void ANodeIsWrittenOnce()
     {
         var twice = Assert.Throws<InvalidOperationException>(() => Files($"{Widget}\n{Widget}"));
-        Assert.Contains("WidgetSyntax is written twice", twice.Message);
+        Assert.Contains("WidgetSyntax is declared twice", twice.Message);
     }
 
     /// <summary>

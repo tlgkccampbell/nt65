@@ -10,7 +10,7 @@
 
 .struct Palette {
     colors: .word[3]
-    tiles:  .byte[]             ;! error[member-count-not-a-number]: `tiles` needs an element count: write `.byte[n]`
+    tiles:  .byte[]             ;! error[member-count-not-a-number]: `tiles` needs an element count: use `.byte[n]`
 }
 
 .segment RODATA
@@ -19,12 +19,12 @@
 .data long:  .addr[2] {                  ;! error[element-count-mismatch]: this array is declared with 2 elements, but 3 given
     0, 0, 0
 }
-.data none:    .word[]                     ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: write `.word[n]` to reserve n elements
+.data none:    .word[]                     ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.word[n]` to reserve n elements
 .data padding: .res 4                   ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
 
 ; An element is a value, or a record for an array of records.
 .data records: .type Point[] {
-    { x = 1 }, 5                        ;! error[element-not-a-record]: each element of a `Point` array is a record, written `{ member = value }`
+    { x = 1 }, 5                        ;! error[element-not-a-record]: each element of a `Point` array is a record, given as `{ member = value }`
 }
 .data bytes: .byte[] {
     1, { x = 1 }                        ;! error[element-not-a-value]: a `.byte` element is a single value, not a braced record or list

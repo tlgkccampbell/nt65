@@ -46,8 +46,8 @@
 
 ; Inline data that does not match the declaration.
 .proc talk: a8, i8 {
-    jsr print               ;! error[inline-data-missing]: `print` expects one `.strz` written after each call, and none follows this one
-    jsr beep                ;! error[inline-data-missing]: `beep` expects 2 bytes of data written after each call, and 1 byte follows this one
+    jsr print               ;! error[inline-data-missing]: `print` expects one `.strz` directly after each call, and none follows this one
+    jsr beep                ;! error[inline-data-missing]: `beep` expects 2 bytes of data directly after each call, and 1 byte follows this one
     .byte 1
     rts
 }
@@ -55,7 +55,7 @@
 ; Data reached by falling through.
 .proc skip: a8, i8 {
     lda #1
-    .byte $2c               ;! error[runs-into-data]: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead
+    .byte $2c               ;! error[runs-into-data]: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead
     lda #2
     rts
 }
@@ -98,7 +98,7 @@
     rep #$30
     halfway:
     .state a16, native
-    ldx #$1234              ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `halfway` can be entered from outside `partly`, and its `.state` does not say the width of X and Y: the `.state` after `halfway` can say `i8` or `i16`
+    ldx #$1234              ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `halfway` can be entered from outside `partly`, and its `.state` does not declare the width of X and Y: the `.state` after `halfway` can declare `i8` or `i16`
     sep #$30
     rts
 }
@@ -116,7 +116,7 @@
     resumed:
     .state a16, i16, native
     plp
-    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump in has not pushed what the path above the label has: the pushes above `resumed` belong on the same side of it as what reads them, and `args n` on `saved_across` is how a second entry point says what its caller pushed
+    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; `args n` on `saved_across` declares what the caller of a second entry point pushed
     sep #$30
     rts
 }
@@ -136,7 +136,7 @@
     .frame local: Local
     laid_out:
     .state a16, i16, native
-    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump in has not pushed what the path above the label has: the pushes above `laid_out` belong on the same side of it as what reads them, and `args n` on `framed` is how a second entry point says what its caller pushed
+    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; `args n` on `framed` declares what the caller of a second entry point pushed
     pla
     rts
 }
@@ -147,10 +147,10 @@
 
 ; A jump to a label on data.
 .proc onto_data: a8, i8 {
-    beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data saying where flow goes
+    beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data stating where flow goes
     rts
 @data:
-    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is written after it: add a `.fallthrough` naming the routine it runs into, or write `.next ?` to end the path
+    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` to end the path
 }
 
 ; Falling off the end, and a `.fallthrough` naming a routine that is not the next one written.
@@ -160,12 +160,12 @@
 }
 
 .proc off_the_end: a8, i8 {
-    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is written after it: add a `.fallthrough` naming the routine it runs into, or write `.next ?` to end the path
+    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` to end the path
 }
 
 .proc not_adjacent: a8, i8 {
     nop
-    .fallthrough falls      ;! error[fallthrough-not-adjacent]: `falls` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
+    .fallthrough falls      ;! error[fallthrough-not-adjacent]: `falls` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
 }
 
 ; A `.next` on a return says the return is a jump to the routines it names, which is a tail

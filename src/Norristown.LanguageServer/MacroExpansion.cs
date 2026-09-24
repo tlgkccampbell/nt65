@@ -424,7 +424,7 @@ internal sealed class MacroExpansion
             if (Given(parameter, name, at) is { } replacement)
                 edits[name.Span.Start] = (name.Span.End, replacement);
             else
-                Refuse($"the argument for `{parameter.Name}` cannot be replacement out as text here");
+                Refuse($"the argument for `{parameter.Name}` cannot be substituted as text here");
         }
 
         var built = new StringBuilder();

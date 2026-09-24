@@ -29,4 +29,4 @@ BAD_MASK  = P & $0f == 0    ;! error[operators-need-parentheses]: `&` and `==` n
 BAD_LOGIC = P || Q && R     ;! error[operators-need-parentheses]: `||` and `&&` need parentheses to show which applies first
 
 ; A byte operator reads as if it applied to the whole expression.
-BAD_BYTE  = <SCREEN + 1     ;! error[byte-operator-needs-parentheses]: unary `<` binds tighter than `+`: write `(<x) + y` or `<(x + y)` to say which is meant
+BAD_BYTE  = <SCREEN + 1     ;! error[byte-operator-needs-parentheses]: unary `<` binds tighter than `+`: use `(<x) + y` or `<(x + y)` to show which is meant

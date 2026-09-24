@@ -493,7 +493,7 @@ internal sealed partial class Evaluator
             // An import declares nothing about its shape unless it gives an element type, and
             // nt65 does not read ca65 source to find one.
             SymbolKind.ImportedAddress when symbol.Data is null =>
-                "an import that does not say what its bytes are: `.import name: .byte[n]` says",
+                "an import that does not declare what its bytes are: `.import name: .byte[n]` declares them",
             _ => null,
         };
         if (what is null)

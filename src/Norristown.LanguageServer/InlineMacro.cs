@@ -42,13 +42,13 @@ internal static class InlineMacro
         {
             yield return Refused(title,
                 $"`{macro.Name}!` is declared in {Named(macro.Tree.Path)}: its body's names are looked up in that file, "
-                + "and written out here they would be looked up in this one, where they may mean something else");
+                + "and once inlined here they would be looked up in this one, where they may mean something else");
             yield break;
         }
         if (InABody(call))
         {
             yield return Refused(title,
-                "the call is written in a macro body, where what its arguments stand for is not known "
+                "the call is inside a macro body, where what its arguments stand for is not known "
                 + "until the body is expanded");
             yield break;
         }

@@ -13,7 +13,7 @@
 .data nothing:  .byte .strcat()                 ;! error[builtin-arguments]: `.strcat` takes `.strcat(part, ...)`: at least one text or number
 
 ; Text is ASCII outside a charmap, and a call building text from a literal is outside one.
-.data accent: .byte .strcat("é")              ;! error[text-not-ascii]: text is ASCII outside a charmap; write `\xHH` for a byte above $7f
+.data accent: .byte .strcat("é")              ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
 
 ; There is still no arithmetic on text: `.strcat` joins it.
 JOINED = "A" + "B"                              ;! error[operator-on-text]: `+` cannot be used on a string

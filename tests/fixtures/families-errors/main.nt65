@@ -31,12 +31,12 @@
 ; A scope or data block named after the binding would declare itself and everything inside it
 ; once per member, which a family may not do.
 .each Channel, ch {
-    .scope ch {                 ;! error[family-declares-too-much]: `ch` would declare one scope per member, repeating everything inside it: a family declares only routines and data, so write one family per role, such as `note::ch` and `stop::ch`
+    .scope ch {                 ;! error[family-declares-too-much]: `ch` would declare one scope per member, repeating everything inside it: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
         VALUE = 1
     }
 }
 .each Channel, ch {
-    .data ch {                  ;! error[family-declares-too-much]: `ch` would declare one `.data` block per member, repeating everything inside it: a family declares only routines and data, so write one family per role, such as `note::ch` and `stop::ch`
+    .data ch {                  ;! error[family-declares-too-much]: `ch` would declare one `.data` block per member, repeating everything inside it: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
         .byte 1
     }
 }

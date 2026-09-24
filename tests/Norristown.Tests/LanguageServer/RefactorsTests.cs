@@ -106,7 +106,7 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    rep #$20\n    rts\n}\n";
 
-        var ensured = Single(Main, "rep #$20", "Write it as `.ensure a16`");
+        var ensured = Single(Main, "rep #$20", "Rewrite as `.ensure a16`");
         var edited = Editing.Apply(Main, ensured.Edit.Changes[Uri]);
         Assert.Equal(
             ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    .ensure a16\n    rts\n}\n",
@@ -130,7 +130,7 @@ public sealed class RefactorsTests
         var caret = Locate.At(Main, "rep FLAGS");
         Assert.DoesNotContain(
             Actions(Main, new Range(caret, caret)),
-            action => action.Title.StartsWith("Write it as `.ensure", StringComparison.Ordinal));
+            action => action.Title.StartsWith("Rewrite as `.ensure", StringComparison.Ordinal));
     }
 
     /// <summary>A number in an operand is given a name at the top of the file.</summary>

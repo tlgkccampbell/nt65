@@ -38,7 +38,7 @@ public static class NodeTable
             if (named.TryGetValue(node.Name, out var first))
             {
                 throw Bad(element,
-                    $"{node.Name} is written twice, here and at line {((IXmlLineInfo)first).LineNumber}");
+                    $"{node.Name} is declared twice, here and at line {((IXmlLineInfo)first).LineNumber}");
             }
             named.Add(node.Name, element);
             nodes.Add(node);

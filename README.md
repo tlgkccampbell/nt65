@@ -41,7 +41,7 @@ nt65 lsp
 `nt65.json` in the directory it runs in or the nearest one above it, and writes one ca65 source
 per module; `--check` reports and writes nothing, `--watch` builds again whenever the program
 changes, and `--json` writes one object per diagnostic for tools that are not editors.
-`nt65 fmt` writes files in the one layout nt65 sources are written in, or with `--check` lists
+`nt65 fmt` rewrites files in nt65's one standard layout, or with `--check` lists
 the ones that are not in it and exits 1. `nt65 lsp` serves the language server on standard
 input and output. `nt65 --help` lists every option; §5.3 of the design describes the project
 file and the command line.
@@ -50,7 +50,7 @@ file and the command line.
 
 The language server is plain LSP over stdio, and `nt65 lsp` starts it from the installed tool,
 so an editor needs nothing of nt65's but a few lines of configuration. `NT65_SERVER_LOG` names
-a file the server writes what it says about itself to, which is where to look when an editor
+a file the server writes its log to, which is where to look when an editor
 starts it and shows nothing.
 
 **Neovim** (0.11 or later) takes the file type and the server as configuration, in

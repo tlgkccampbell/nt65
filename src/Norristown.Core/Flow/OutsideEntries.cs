@@ -40,10 +40,10 @@ public sealed class OutsideEntries
     /// paths.
     /// </summary>
     public static Cause UnknownStack(Symbol label, Symbol routine) => new(
-        $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and a jump in has not "
-            + "pushed what the path above the label has",
-        $"the pushes above `{label.DisplayName}` belong on the same side of it as what reads them, and `args n` "
-            + $"on `{routine.DisplayName}` is how a second entry point says what its caller pushed");
+        $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and a jump to it has not "
+            + "pushed what the path above the label pushes",
+        $"move the pushes above `{label.DisplayName}` to the same side of it as the code that reads them; `args n` "
+            + $"on `{routine.DisplayName}` declares what the caller of a second entry point pushed");
 
     /// <summary>Returns whether control may reach <paramref name="block"/>'s label from outside its routine.</summary>
     public bool Reaches(BasicBlock block)

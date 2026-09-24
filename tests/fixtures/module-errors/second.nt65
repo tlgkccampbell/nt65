@@ -22,8 +22,8 @@ shared = 4
 .proc use {
     lda #first::hidden      ;! error[not-exported]: `first::hidden` is not exported by module `first`
     lda #nowhere            ;! error[not-declared]: `nowhere` is not declared
-    lda #SMALL              ;! error[export-ambiguous]: `SMALL` is ambiguous: modules `first` and `third` both export it, and both are brought in with `::*`; write `third::SMALL` to choose
-    lda #first              ;! error[module-used-as-a-name]: `first` is a module: a name in it is written `first::name`
+    lda #SMALL              ;! error[export-ambiguous]: `SMALL` is ambiguous: modules `first` and `third` both export it, and both are brought in with `::*`; use `third::SMALL` to choose
+    lda #first              ;! error[module-used-as-a-name]: `first` is a module: a name in it is `first::name`
     .use first::SMALL       ;! error[use-misplaced]: `.use` belongs at the top level of a module
     rts
 }

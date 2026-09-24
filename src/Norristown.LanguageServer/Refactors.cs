@@ -271,7 +271,7 @@ internal static class Refactors
                     (flags & 0x20) != 0 ? $"a{width}" : null,
                     (flags & 0x10) != 0 ? $"i{width}" : null,
                 }.OfType<string>());
-                yield return new Change($"Write it as `.ensure {items}`", CodeActionKinds.Rewrite,
+                yield return new Change($"Rewrite as `.ensure {items}`", CodeActionKinds.Rewrite,
                     [new Edit(tree, statement.Span, $".ensure {items}")]);
             }
             yield break;

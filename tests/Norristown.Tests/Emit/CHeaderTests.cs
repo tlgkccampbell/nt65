@@ -94,9 +94,9 @@ public sealed class CHeaderTests
             extern unsigned long wide[3];
             extern unsigned char text[3];
 
-            /* What a routine takes and returns is the programmer's to declare. Each is declared
+            /* nt65 does not know what a routine takes or returns, so each routine is declared
                `void name(void)` unless NT65_OWN_name is defined before this header is included,
-               and then a prototype of the programmer's own declares it instead. */
+               in which case your own prototype declares it instead. */
             #ifndef NT65_OWN_draw
             extern void draw(void);
             #endif

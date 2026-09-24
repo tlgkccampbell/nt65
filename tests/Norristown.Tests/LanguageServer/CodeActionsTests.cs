@@ -25,17 +25,17 @@ public sealed class CodeActionsTests
             ".export .proc main {\n    jmp ($1234)\n    .next ?\n}\n"
         },
         {
-            "Say it runs into `after` with `.fallthrough`",
+            "Add `.fallthrough after`",
             ".export .proc main {\n    .if 1 {\n        nop\n    }\n}\n.export .proc after {\n    rts\n}\n",
             ".export .proc main {\n    .if 1 {\n        nop\n    }\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
         },
         {
-            "Say the branch is always taken with `.next @over`",
+            "Add `.next @over`: the branch is always taken",
             ".export .proc main {\n    sec\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
             ".export .proc main {\n    sec\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"
         },
         {
-            "Write it as `.fallthrough`",
+            "Change to `.fallthrough`",
             ".export .proc main {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
             ".export .proc main {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
         },

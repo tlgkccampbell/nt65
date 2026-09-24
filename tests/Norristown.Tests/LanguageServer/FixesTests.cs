@@ -34,7 +34,7 @@ public sealed class FixesTests
             ".proc irq: interrupt {\n    rti\n}\n"
         },
         {
-            "Write it as `.strz`",
+            "Change to `.strz`",
             ".data title: .asciiz \"hi\"\n",
             ".data title: .strz \"hi\"\n"
         },
@@ -69,12 +69,12 @@ public sealed class FixesTests
             ".export marker: abs\n.data marker: .word 0\n"
         },
         {
-            "Write it as `(1 & 2) == 0`",
+            "Change to `(1 & 2) == 0`",
             "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
             "MASK = (1 & 2) == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
         {
-            "Write it as `1 & (2 == 0)`",
+            "Change to `1 & (2 == 0)`",
             "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
             "MASK = 1 & (2 == 0)\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
@@ -137,11 +137,11 @@ public sealed class FixesTests
         var (analysis, model) = Analyzed(Header + Body);
 
         var actions = CodeActions.In(analysis, model, Whole)
-            .Where(action => action.Title.StartsWith("Say the width here", StringComparison.Ordinal))
+            .Where(action => action.Title.StartsWith("Add `.ensure", StringComparison.Ordinal))
             .ToList();
 
         Assert.Equal(
-            ["Say the width here with `.ensure a8`", "Say the width here with `.ensure a16`"],
+            ["Add `.ensure a8`", "Add `.ensure a16`"],
             actions.Select(action => action.Title));
         Assert.All(actions, action => Assert.False(action.IsPreferred));
         Assert.Equal(
@@ -181,12 +181,12 @@ public sealed class FixesTests
     /// a trailing comment the brace is inserted before the comment rather than after it.
     /// </summary>
     [Theory]
-    [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
-    [InlineData(".export .proc main   ; note\n}\n", "Write the `{`", ".export .proc main {   ; note\n}\n")]
-    [InlineData("MASK = (1 + 2\n", "Write the `)`", "MASK = (1 + 2)\n")]
-    [InlineData(".export .proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Write the `]`",
+    [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Insert the missing `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
+    [InlineData(".export .proc main   ; note\n}\n", "Insert the missing `{`", ".export .proc main {   ; note\n}\n")]
+    [InlineData("MASK = (1 + 2\n", "Insert the missing `)`", "MASK = (1 + 2)\n")]
+    [InlineData(".export .proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Insert the missing `]`",
         ".export .proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
-    [InlineData(".use gfx::{clear\n", "Write the `}`", ".use gfx::{clear}\n")]
+    [InlineData(".use gfx::{clear\n", "Insert the missing `}`", ".use gfx::{clear}\n")]
     public void AMissingBracketIsInsertedWhereTheTreeHoldsItsPlace(string body, string title, string repaired)
     {
         var (analysis, model) = Analyzed(Header + body);
@@ -207,7 +207,7 @@ public sealed class FixesTests
         const string Body = ".export .proc main: a8, i8\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Write the `{`");
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Insert the missing `{`");
 
         var repaired = Editing.Apply(Header + Body, action.Edit.Changes[Uri]);
         var (after, _) = Analyzed(repaired);

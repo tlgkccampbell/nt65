@@ -80,7 +80,7 @@
     rts
 }
 
-.proc backwards: a8, i8, dbr = [$3f..$00] {    ;! error[state-banks-invalid]: `dbr = [$3f..$00]` is not a valid set of banks: each item is a constant bank, or a range written low to high, such as `$00..$3f`
+.proc backwards: a8, i8, dbr = [$3f..$00] {    ;! error[state-banks-invalid]: `dbr = [$3f..$00]` is not a valid set of banks: each item is a constant bank, or a range given low to high, such as `$00..$3f`
     rts
 }
 
@@ -93,7 +93,7 @@
 
 ; `d:` needs D to be known, and an address inside the 256-byte page that starts at D.
 .proc through: a8, i8 -> a8, i8, dp? {
-    lda d:$2105             ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and `through` says `dp*`, which assumes nothing about D
+    lda d:$2105             ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and `through` declares `dp*`, which assumes nothing about D
     pea $2100
     pld
     lda d:$2205             ;! error[direct-page-out-of-reach]: `d:$2205` is reached through the direct page at $2100, which covers only $2100 to $21ff
@@ -101,7 +101,7 @@
     lda d:$2105,y           ;! error[direct-page-form-missing]: `lda` has no direct-page form of this operand, which `d:` asks for
     tax
     tcd
-    lda d:$2105             ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and D is not known here: a `.state dp = ...` says what it is
+    lda d:$2105             ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and D is not known here: a `.state dp = ...` declares what it is
     rts
 }
 
@@ -122,7 +122,7 @@
 .proc changes: a8, i8 {
     pea $2100
     pld
-    rts                     ;! error[asserted-item-not-restored]: `rts`: `changes` says `dp*`, so D must be what it was on entry, but here it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `changes` declares `dp*`, so D must be what it was on entry, but here it may not be
 }
 
 ; A `.state` asserts as well as sets.

@@ -268,7 +268,7 @@ public sealed class ViewRequestsTests
             timeout);
         var refused = Assert.Single(actions, action => action.Title == "Inline `twice!`");
         Assert.NotNull(refused.Disabled);
-        Assert.Contains("written in a macro body", refused.Disabled.Reason, StringComparison.Ordinal);
+        Assert.Contains("inside a macro body", refused.Disabled.Reason, StringComparison.Ordinal);
         Assert.Empty(refused.Edit.Changes);
     }
 

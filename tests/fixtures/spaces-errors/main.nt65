@@ -19,7 +19,7 @@
 
 ; A space that holds data holds no instructions.
 .proc on_spc: a8, i8 {
-    nop                                 ;! error[code-in-a-data-space]: segment "SPCIMAGE" is in space `spc`, which holds data, not code for this processor: write another processor's code there as data or macro calls
+    nop                                 ;! error[code-in-a-data-space]: segment "SPCIMAGE" is in space `spc`, which holds data, not code for this processor: put another processor's code there as data or macro calls
     rts
 }
 

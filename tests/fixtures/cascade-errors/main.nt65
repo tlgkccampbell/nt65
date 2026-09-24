@@ -32,7 +32,7 @@
     lda #lib::twice(3)
 
     ; A name another module exports, used without its module's path, and then used correctly.
-    lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here, and module `lib` exports it: write `lib::thrice`, or bring it in with `.use lib::thrice`
+    lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here, and module `lib` exports it: use `lib::thrice`, or bring it in with `.use lib::thrice`
     lda #lib::thrice(1)
 
     ; A call through a pointer with no `.next` leaves the state as it was.
@@ -68,7 +68,7 @@ rts
 .segment CODE
 ; A 16-bit value in an immediate of unknown width is one mistake, not two.
 .proc unknown: a? {
-    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown` says `a?` at entry: an `.ensure` sets it
+    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown` declares `a?` at entry: an `.ensure` sets it
     sep #$20
     rts
 }

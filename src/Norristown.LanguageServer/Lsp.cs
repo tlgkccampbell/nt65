@@ -181,9 +181,9 @@ internal static class Lsp
         var card = new Card($"module {placed.Path}", new HashSet<string>(["declared", "written in"], StringComparer.Ordinal));
         card.Row("declared", placements.DeclaredFor(placed.Tree) switch
         {
-            ModulePlacement.Placed => "placed: its bytes are written where it is placed",
-            ModulePlacement.Placeable => "placeable: placed at most once, and alone where nothing places it",
-            _ => "alone: it has an output of its own, and is not placed",
+            ModulePlacement.Placed => "placed (its bytes are emitted where another module places it with `.place`)",
+            ModulePlacement.Placeable => "placeable (at most one module may place it with `.place`; if none does, it gets its own output)",
+            _ => "alone (it has its own output, and no module places it)",
         });
         if (placements.UnitOf(placed.Tree) is { IsPlaced: true, Root: var root }
             && analysis.ModelFor(root.Path)?.FileScope.Module is { } unit)

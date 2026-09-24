@@ -48,25 +48,25 @@ public sealed record CommandLine(
         `init` writes an nt65.json and a src/main.nt65 that builds, in this directory or the one
         named, and refuses to overwrite either.
 
-        `fmt` writes files in the one layout nt65 sources are written in, or with `--check`
-        lists the ones that are not in it already and exits 1. Named nothing, it formats every
-        file the project names.
+        `fmt` rewrites files in nt65's one standard layout, or with `--check` lists the ones
+        that are not in it already and exits 1. Named nothing, it formats every file the
+        project names.
 
         `remap-dbg` runs after the link: it makes the debug file ld65 wrote name the `.nt65`
         sources as well as the `.s` files, from the `.s.lines` map beside each one, in place
         unless `--out` gives somewhere else.
 
-        `explain` says what a diagnostic is about, which its one line has no room for; the name
+        `explain` describes what a diagnostic means, which its one line has no room for; the name
         is the one in brackets after the message. Named nothing, it lists them; given
         `--markdown`, it writes them all as one Markdown page.
 
         `lsp` serves the language server on standard input and output, for an editor that speaks
-        LSP; it takes nothing else, and what it says about itself goes to standard error.
+        LSP; it takes nothing else, and its own log goes to standard error.
 
         `import-inc` writes an nt65 module of constants from a ca65 include file of them, once,
         for a person to read and keep. It writes to standard output unless `-o` names a file.
-        A line it cannot convert is written out as a comment saying so and counted on standard
-        error. nt65 reads no ca65 at build time, and this does not change that.
+        A line it cannot convert is kept as a comment that explains why, and counted on
+        standard error. nt65 reads no ca65 at build time, and this does not change that.
 
         options:
           --project <file>      the project file, or the directory that holds nt65.json

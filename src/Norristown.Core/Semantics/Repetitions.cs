@@ -156,7 +156,7 @@ public static class Repetitions
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
-            ("an export or an import", "it names one symbol, and the body is written out once per iteration"),
+            ("an export or an import", "it names one symbol, and the body is expanded once per iteration"),
         CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
         SegmentDeclarationSyntax =>
             ("a segment declaration",

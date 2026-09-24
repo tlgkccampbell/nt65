@@ -270,7 +270,7 @@ internal sealed class Requirements
         var routine = region.Routine.DisplayName;
         var message = own
             ? Catalogue.RoutineRunsOffTheEnd.Message(
-                routine, "its end", "is written after it",
+                routine, "its end", "is emitted after it",
                 "add a `.fallthrough` naming the routine it runs into")
             : Catalogue.RoutineRunsOffTheEnd.Message(
                 routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");

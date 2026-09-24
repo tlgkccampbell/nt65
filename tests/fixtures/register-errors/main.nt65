@@ -17,7 +17,7 @@
 ; The promise is checked at every way out of the routine.
 .proc breaks_it: keeps x {
     ldx #1
-    rts                     ;! error[keeps-broken]: `breaks_it` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is back
+    rts                     ;! error[keeps-broken]: `breaks_it` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
 }
 
 ; A save that is not restored on every path does not count on the path that skips the restore.
@@ -29,7 +29,7 @@
 @quiet:
     sec
     lda #0
-    rts                     ;! error[keeps-broken]: `forgets_the_carry` promises `keeps a, c`, but A, C are not the same as on entry here: restore them before returning, or add `.state keeps a, c` at the point where the entry value is back
+    rts                     ;! error[keeps-broken]: `forgets_the_carry` promises `keeps a, c`, but A, C are not the same as on entry here: restore them before returning, or add `.state keeps a, c` at the point where the entry value is restored
 }
 
 ; A `.state keeps` where the register was never destroyed is one nobody needed.
@@ -46,7 +46,7 @@
     rts
 }
 
-.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature says what it keeps
+.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature declares what it keeps
     lda #0
 }
 
@@ -62,7 +62,7 @@
     halfway:
     .state ?
     pla
-    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across`, and a jump in has not pushed what the path above the label has: the pushes above `halfway` belong on the same side of it as what reads them, and `args n` on `saves_across` is how a second entry point says what its caller pushed
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; `args n` on `saves_across` declares what the caller of a second entry point pushed
 }
 
 .proc jumps_in {
@@ -72,7 +72,7 @@
 ; A jump into another routine's label is a way out of this one: control never comes back here,
 ; so what this routine hands its caller is what the routine the label is in hands back.
 .proc hands_off: keeps a {
-    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `loses_a` does not promise to keep a: add `keeps a` to `loses_a` if it preserves it, or write `.next ?` here to end the path unchecked
+    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `loses_a` does not promise to keep a: add `keeps a` to `loses_a` if it preserves it, or add `.next ?` here to end the path unchecked
 }
 
 .proc loses_a {
@@ -84,7 +84,7 @@
 
 ; A branch into another routine's label is the same way out, on the path where it is taken.
 .proc branches_in: keeps x {
-    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway`, and `loses_x` does not promise to keep x: add `keeps x` to `loses_x` if it preserves it, or write `.next ?` here to end the path unchecked
+    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway`, and `loses_x` does not promise to keep x: add `keeps x` to `loses_x` if it preserves it, or add `.next ?` here to end the path unchecked
     rts
 }
 
@@ -112,13 +112,13 @@
 ; it: on the path it is taken, control goes there and comes back to this routine's caller.
 .proc branches_off: keeps a {
     ldx #1
-    bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or write `.next ?` here to end the path unchecked
+    bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or add `.next ?` here to end the path unchecked
     rts
 }
 
 ; And so is a `.next` naming one, which is how a jump through a pointer says where it goes.
 .proc next_hands_off: keeps a {
-    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or write `.next ?` here to end the path unchecked
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or add `.next ?` here to end the path unchecked
     .next loses_it
 }
 

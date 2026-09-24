@@ -21,7 +21,7 @@ SIZE = -1
 ; A repetition's body is written out once per iteration, so it cannot hold a declaration that
 ; names one symbol for the whole file.
 .repeat 2, i {
-    .export here                ;! error[declaration-in-a-repetition]: an export or an import cannot be inside a `.repeat` or `.each` body: it names one symbol, and the body is written out once per iteration
+    .export here                ;! error[declaration-in-a-repetition]: an export or an import cannot be inside a `.repeat` or `.each` body: it names one symbol, and the body is expanded once per iteration
 }
 
 .enum Cmd {

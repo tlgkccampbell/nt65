@@ -156,8 +156,7 @@ public sealed class InlayHintsTests
 
         var hints = await client.InlayHintsAsync(Uri, 0, 200, timeout);
         Assert.Equal(
-            "What reaches the next line is `a8, i16, native`, and what reached this one was "
-                + "`a16, i16, native`.",
+            "The processor state changes from `a16, i16, native` to `a8, i16, native` after this line.",
             hints.Single(hint => hint.Position.Line == 41).Tooltip!.Value);
         Assert.Equal(
             "`jeq` cannot reach its target in the two-byte form, so it is written as a `bne` over "

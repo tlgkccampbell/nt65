@@ -14,13 +14,13 @@
 ; An immediate needs a known width.
 .segment CODE
 .proc unknown_width: a? {
-    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown_width` says `a?` at entry: an `.ensure` sets it
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `unknown_width` declares `a?` at entry: an `.ensure` sets it
     rts
 }
 
 ; `i*` assumes nothing, so the width it keeps is not known inside the routine.
 .proc kept: i* {
-    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `kept` says `i*`, which assumes nothing about it
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `kept` declares `i*`, which assumes nothing about it
     rts
 }
 
@@ -46,7 +46,7 @@
 
 .proc changed: a* {
     rep #$20
-    rts                     ;! error[asserted-item-not-restored]: `rts`: `changed` says `a*`, so A must be as wide as it was on entry, but here it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `changed` declares `a*`, so A must be as wide as it was on entry, but here it may not be
 }
 
 ; A call has to meet the routine's entry, and use the instruction its distance calls for.
@@ -73,7 +73,7 @@
 ; An assertion that disagrees with what is known.
 .proc asserted: a8 {
     .state a16              ;! error[state-width-mismatch]: `.state a16` does not match: A is 8-bit here
-    .state near             ;! error[state-item-not-a-point]: `near` describes a whole routine, not one point in it: write it in the routine's signature, not in `.state`
+    .state near             ;! error[state-item-not-a-point]: `near` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
     rts                     ;! error[return-state-mismatch]: `rts`: `asserted` declares it returns with `a8`, but A is 16-bit here
 }
 
@@ -129,6 +129,6 @@
 
 .proc swapped: a8, i8 {
     xce
-    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it says what it is
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it declares what it is
     .next ?
 }

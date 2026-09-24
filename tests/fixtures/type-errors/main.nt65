@@ -15,7 +15,7 @@
     x:      .word
     y:      .word
     bad:    .strz "no"    ;! error[member-reserves-nothing]: `bad` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
-    colors: .word 16        ;! error[member-has-no-value]: `colors` is a struct member and cannot have a value: for several `.word` elements, write `.word[n]`
+    colors: .word 16        ;! error[member-has-no-value]: `colors` is a struct member and cannot have a value: for several `.word` elements, use `.word[n]`
 }
 
 .union Value {
@@ -49,7 +49,7 @@
     level = 1               ;! error[member-unknown]: `Named` has no member `level`
     count = 2               ;! error[member-given-twice]: `count` is given a value twice: a member is named at most once
 }
-.data flat: .type Named { at = 3 }   ;! error[member-needs-a-record]: `at` is a `Point` record, so its value is written in braces: `{ member = value }`
+.data flat: .type Named { at = 3 }   ;! error[member-needs-a-record]: `at` is a `Point` record, so its value goes in braces: `{ member = value }`
 .data both: .type Value { b = 1, w = 2 } ;! error[union-many-members-given]: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
 .data mistakes {
     .byte screen("hi")  ;! error[charmap-has-no-entry]: charmap `screen` has no entry for `h`

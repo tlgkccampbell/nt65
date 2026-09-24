@@ -28,7 +28,7 @@ public static class Catalogue
     ];
 
     private static DiagnosticArea ReadingALine { get; } =
-        Opens("Reading a line", "Syntax: numbers, text, braces, and what may be written where on a line.");
+        Opens("Reading a line", "Syntax: numbers, text, braces, and what may appear where on a line.");
 
     internal static DiagnosticDescriptor NumberInvalid { get; } = Entry(
         "number-invalid",
@@ -77,7 +77,7 @@ public static class Catalogue
         "escape-hex-digits",
         Severity.Error,
         "`\\x` must be followed by two hexadecimal digits",
-        "A `\\xHH` escape gives one byte as exactly two hexadecimal digits, as in `\\x0d` or `\\xff`. Write a "
+        "A `\\xHH` escape gives one byte as exactly two hexadecimal digits, as in `\\x0d` or `\\xff`. Add a "
             + "leading zero for a value below `$10`.");
 
     internal static DiagnosticDescriptor EscapeUnknown { get; } = Entry(
@@ -85,7 +85,7 @@ public static class Catalogue
         Severity.Error,
         "unknown escape `\\{0}`",
         "The escapes are `\\n`, `\\r`, `\\t`, `\\0`, `\\\\`, `\\\"`, `\\'` and `\\xHH`, the same in a character "
-            + "literal and in a string. To write a backslash itself, use `\\\\`. Each unknown escape is reported "
+            + "literal and in a string. For a backslash itself, use `\\\\`. Each unknown escape is reported "
             + "separately, since each needs its own correction.");
 
     internal static DiagnosticDescriptor TextUnterminated { get; } = Entry(
@@ -99,14 +99,14 @@ public static class Catalogue
         "character-empty",
         Severity.Error,
         "empty character literal",
-        "A character literal is one character, which is one value. Text is written in double quotes.");
+        "A character literal is one character, which is one value. Text goes in double quotes.");
 
     internal static DiagnosticDescriptor CharacterTooLong { get; } = Entry(
         "character-too-long",
         Severity.Error,
         "a character literal holds exactly one character",
-        "A character literal is one value. Several characters are text, written in double quotes, and a data "
-            + "declaration writes their bytes.");
+        "A character literal is one value. Several characters are text, which goes in double quotes, and a data "
+            + "declaration emits their bytes.");
 
     internal static DiagnosticDescriptor BlockNotClosed { get; } = Entry(
         "block-not-closed",
@@ -146,9 +146,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor Ca65Tag { get; } = Entry(
         "ca65-tag",
         Severity.Error,
-        "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`",
-        "A record type is written the same way wherever it is used, and a count is written in brackets after it, "
-            + "as every other count is.");
+        "`.tag T` is `.type T` in nt65, and `.tag T, n` is `.type T[n]`",
+        "A record type has the same form wherever it is used, and a count goes in brackets after it, "
+            + "as every other count does.");
 
     internal static DiagnosticDescriptor Ca65BlockEnd { get; } = Entry(
         "ca65-block-end",
@@ -160,7 +160,7 @@ public static class Catalogue
     internal static DiagnosticDescriptor DataNeedsAName { get; } = Entry(
         "data-needs-a-name",
         Severity.Error,
-        "`.data` declares data, and needs a name: the segment is written `.segment DATA`",
+        "`.data` declares data, and needs a name: the segment is `.segment DATA`",
         "`.data` is a declaration, and a declaration has a name. The segment called DATA is named on a "
             + "`.segment` line.");
 
@@ -168,8 +168,8 @@ public static class Catalogue
         "data-values-need-braces",
         Severity.Error,
         "{0}",
-        "The values of an array (a declaration with a count, `[n]`) or of a record (`.type T`) are written in "
-            + "braces, as in `{ 1, 2 }`, so that where the values end is written down rather than worked out from "
+        "The values of an array (a declaration with a count, `[n]`) or of a record (`.type T`) go in "
+            + "braces, as in `{ 1, 2 }`, so that where the values end is stated rather than worked out from "
             + "the count.");
 
     internal static DiagnosticDescriptor ExpectedName { get; } = Entry(
@@ -177,7 +177,7 @@ public static class Catalogue
         Severity.Error,
         "expected {0}",
         "A declaration, a parameter, a path or a `.use` item needs a name at this point, and the line does not "
-            + "have one. The message says which name is expected; add it. nt65 never makes up a name, so nothing "
+            + "have one. The message shows which name is expected; add it. nt65 never makes up a name, so nothing "
             + "after the missing one on the line is read.");
 
     internal static DiagnosticDescriptor ExpectedStatement { get; } = Entry(
@@ -200,7 +200,7 @@ public static class Catalogue
         Severity.Error,
         "expected an index between the brackets: `name[i]` is element `i` of `name`",
         "The brackets after a name pick one element of what it declares, and the brackets here are empty. A count "
-            + "is written on the declaration; an index is written on a use of it.");
+            + "goes on the declaration; an index goes on a use of it.");
 
     internal static DiagnosticDescriptor ExpectedParenthesis { get; } = Entry(
         "expected-parenthesis",
@@ -219,14 +219,14 @@ public static class Catalogue
         "expected-bracket",
         Severity.Error,
         "expected {0}",
-        "A count, an index, a long indirect operand or a list of banks is written in brackets, and one of them is "
+        "A count, an index, a long indirect operand or a list of banks goes in brackets, and one of them is "
             + "not closed or not opened.");
 
     internal static DiagnosticDescriptor ExpectedDotDot { get; } = Entry(
         "expected-dot-dot",
         Severity.Error,
         "expected {0}",
-        "A range is written from its lower end to its higher, with `..` between them.");
+        "A range gives its lower end first and its higher end second, with `..` between them.");
 
     internal static DiagnosticDescriptor ExpectedEquals { get; } = Entry(
         "expected-equals",
@@ -254,15 +254,15 @@ public static class Catalogue
         "expected-text",
         Severity.Error,
         "expected {0}",
-        "A message, or a linker name, is written in double quotes. nt65 has no bare-word text.");
+        "A message, or a linker name, goes in double quotes. nt65 has no bare-word text.");
 
     internal static DiagnosticDescriptor ExpectedDataType { get; } = Entry(
         "expected-data-type",
         Severity.Error,
         "expected {0}",
-        "A `.data` declaration or a typed import says what its bytes are: a number type such as `.byte` or "
+        "A `.data` declaration or a typed import states what its bytes are: a number type such as `.byte` or "
             + "`.word`, an address type such as `.addr`, or a record type, `.type T`; a `.data` declaration may "
-            + "also include a file with `.incbin`. What is written here is none of those.");
+            + "also include a file with `.incbin`. What is here is none of those.");
 
     internal static DiagnosticDescriptor ExpectedMemberValue { get; } = Entry(
         "expected-member-value",
@@ -274,7 +274,7 @@ public static class Catalogue
         "expected-cpu",
         Severity.Error,
         "expected {0}",
-        "`.cpu` names one of the processors nt65 knows, written as the project file writes it.");
+        "`.cpu` names one of the processors nt65 knows, spelled as in the project file.");
 
     internal static DiagnosticDescriptor ExpectedAddressSize { get; } = Entry(
         "expected-address-size",
@@ -287,9 +287,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor ImportNeedsAnElementType { get; } = Entry(
         "import-needs-an-element-type",
         Severity.Error,
-        "`{0}` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`",
-        "A typed import describes storage another object holds, so it writes an element type and a count. A "
-            + "directive that reads a file or writes text describes bytes this program would emit, and an import "
+        "`{0}` is not an element type: an import states what its bytes are as `.byte`, `.word`, `.addr` or `.type T`",
+        "A typed import describes storage another object holds, so it gives an element type and a count. A "
+            + "directive that includes a file or emits text describes bytes this program would emit, and an import "
             + "emits none.");
 
     internal static DiagnosticDescriptor ImportHoldsNoValues { get; } = Entry(
@@ -311,16 +311,17 @@ public static class Catalogue
         "expected-placement",
         Severity.Error,
         "expected {0}",
-        "A module's declaration may say whether another module places it, with `placed` or `placeable` after a "
-            + "`:`, and there is nothing else it may say there.");
+        "A `.module` line may mark the module, after a `:`, as `placed` (another module always includes it with "
+            + "`.place`) or `placeable` (at most one module may place it; if none does, it gets its own output). "
+            + "Nothing else may go there.");
 
     internal static DiagnosticDescriptor ExpectedParameterKind { get; } = Entry(
         "expected-parameter-kind",
         Severity.Error,
         "expected {0}",
-        "A macro parameter may say what kind of argument it takes, with one of a fixed set of words: `expr`, "
+        "A macro parameter may declare what kind of argument it takes, with one of a fixed set of words: `expr`, "
             + "`const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`, or the name of an enum. A "
-            + "parameter that says nothing takes an expression.");
+            + "parameter that declares no kind takes an expression.");
 
     internal static DiagnosticDescriptor ExpectedStateItem { get; } = Entry(
         "expected-state-item",
@@ -347,7 +348,7 @@ public static class Catalogue
         "nesting-too-deep",
         Severity.Error,
         "expression nested more than {0} levels deep: nt65 reads no further",
-        "nt65 stops reading an expression nested deeper than this limit. The limit is far beyond anything written "
+        "nt65 stops reading an expression nested deeper than this limit. The limit is far beyond anything typed "
             + "by hand; it is there so that a half-typed line of brackets cannot overflow the stack and crash the "
             + "assembler or the editor's language server.");
 
@@ -386,21 +387,21 @@ public static class Catalogue
         "nt65's `.assert` takes no level: remove `{0}`, since a failed assertion is always an error",
         "ca65's `.assert` takes a level such as `warning` or `error`, because ca65 cannot always decide the "
             + "condition itself. nt65 always reports a failed assertion as an error, checking it as soon as the "
-            + "value is known and otherwise leaving it for the linker. Write `.assert condition, \"message\"`; the "
+            + "value is known and otherwise leaving it for the linker. Use `.assert condition, \"message\"`; the "
             + "fix removes the level.");
 
     internal static DiagnosticDescriptor SegmentNameQuoted { get; } = Entry(
         "segment-name-quoted",
         Severity.Error,
-        "a segment name is written without quotes: `.segment {0}`",
-        "Segments are a table of their own and share no namespace with symbols, so a segment name is written as a "
+        "a segment name takes no quotes: `.segment {0}`",
+        "Segments are a table of their own and share no namespace with symbols, so a segment name is a plain "
             + "word. The quotes are ca65's habit.");
 
     internal static DiagnosticDescriptor ModuleNameQuoted { get; } = Entry(
         "module-name-quoted",
         Severity.Error,
-        "a module name is written without quotes: `.module hw::vic`",
-        "A module name is a path of plain names, such as `hw::vic`, written without quotes.");
+        "a module name takes no quotes: `.module hw::vic`",
+        "A module name is a path of plain names, such as `hw::vic`, with no quotes.");
 
     internal static DiagnosticDescriptor ExportDeclaresNothing { get; } = Entry(
         "export-declares-nothing",
@@ -422,7 +423,7 @@ public static class Catalogue
         "data-body-needs-a-count",
         Severity.Error,
         "values in a body need a count: `{0}[] {{` counts them",
-        "A body of values belongs to an array, and an array says how many elements it holds. `[]` counts the "
+        "A body of values belongs to an array, and an array states how many elements it holds. `[]` counts the "
             + "values given, which is what a body without a count usually meant.");
 
     internal static DiagnosticDescriptor StateItemUnknown { get; } = Entry(
@@ -430,7 +431,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not a processor-state item",
         "The items a signature, a `.state` or an `.ensure` may hold are a fixed set, such as `a8`, `i16`, `dp = 0` "
-            + "or `keeps x`. This word looks like an item, or is written in an item's form, but is not one; check "
+            + "or `keeps x`. This word looks like an item, or has an item's form, but is not one; check "
             + "its spelling. A plain word that is not an item is read as the name of a signature set.");
 
     internal static DiagnosticDescriptor OperatorsNeedParentheses { get; } = Entry(
@@ -439,12 +440,12 @@ public static class Catalogue
         "`{0}` and `{1}` need parentheses to show which applies first",
         "nt65 gives every operator a precedence, but refuses two combinations that readers often misjudge: a shift "
             + "or bitwise operator with a different operator as its operand, and different logical operators "
-            + "mixed. Add parentheses to say which applies first; the fix can add them.");
+            + "mixed. Add parentheses to show which applies first; the fix can add them.");
 
     internal static DiagnosticDescriptor ByteOperatorNeedsParentheses { get; } = Entry(
         "byte-operator-needs-parentheses",
         Severity.Error,
-        "unary `{0}` binds tighter than `{1}`: write `({0}x) {1} y` or `{2}(x {1} y)` to say which is meant",
+        "unary `{0}` binds tighter than `{1}`: use `({0}x) {1} y` or `{2}(x {1} y)` to show which is meant",
         "The byte operators bind tighter than any binary operator, so `<label + 1` means `(<label) + 1`, the low "
             + "byte plus one, not the low byte of `label + 1`. Because that is easy to misread, nt65 asks for "
             + "parentheses rather than guessing.");
@@ -453,8 +454,8 @@ public static class Catalogue
         "not-a-function",
         Severity.Error,
         "`{0}` is not a function",
-        "The built-in functions are a fixed set. A function the program declares is a `.func` and is written "
-            + "without the leading `.`.");
+        "The built-in functions are a fixed set. A function the program declares is a `.func`, and its name "
+            + "has no leading `.`.");
 
     private static DiagnosticArea Names { get; } =
         Opens("Names", "Declarations, scopes, modules and what a path reaches.");
@@ -464,7 +465,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not declared{1}",
         "Nothing in scope here declares the name. Where a name one letter away is declared, or another module "
-            + "exports it, the message says so, because that is nearly always what was meant.");
+            + "exports it, the message reports it, because that is nearly always what was meant.");
 
     internal static DiagnosticDescriptor NotDeclaredIn { get; } = Entry(
         "not-declared-in",
@@ -484,7 +485,7 @@ public static class Catalogue
     internal static DiagnosticDescriptor DeclaredInAnotherModule { get; } = Entry(
         "declared-in-another-module",
         Severity.Error,
-        "`{0}` is not declared here, and module `{1}` exports it: write `{2}::{3}`, or bring it in with `.use {4}::{5}`",
+        "`{0}` is not declared here, and module `{1}` exports it: use `{2}::{3}`, or bring it in with `.use {4}::{5}`",
         "The name is not in scope in this file, and exactly one module in the program exports it, which is almost "
             + "always the one meant.");
 
@@ -499,16 +500,16 @@ public static class Catalogue
         "module-unknown",
         Severity.Error,
         "no module `{0}` is in this build",
-        "A path written from the root of the modules names a module the program has. A module the project's "
+        "A path that starts from the root of the modules names a module the program has. A module the project's "
             + "`files` do not name is not part of the program.");
 
     internal static DiagnosticDescriptor ExportAmbiguous { get; } = Entry(
         "export-ambiguous",
         Severity.Error,
-        "`{0}` is ambiguous: modules `{1}` and `{2}` both export it, and both are brought in with `::*`; write "
+        "`{0}` is ambiguous: modules `{1}` and `{2}` both export it, and both are brought in with `::*`; use "
             + "`{3}::{4}` to choose",
         "Two modules brought in with `.use module::*` export the same name, so which one is meant would depend on "
-            + "the order the `.use` lines are read in. Write the full path, or bring in the one you mean by name "
+            + "the order the `.use` lines are read in. Use the full path, or bring in the one you mean by name "
             + "with `.use module::name`, which takes precedence over `::*`.");
 
     internal static DiagnosticDescriptor NotAScope { get; } = Entry(
@@ -569,13 +570,13 @@ public static class Catalogue
     internal static DiagnosticDescriptor ModuleUsedAsAName { get; } = Entry(
         "module-used-as-a-name",
         Severity.Error,
-        "`{0}` is a module: a name in it is written `{1}::name`",
+        "`{0}` is a module: a name in it is `{1}::name`",
         "A module is not a value and has no address. What is wanted is a name inside it.");
 
     internal static DiagnosticDescriptor NameAloneOnALine { get; } = Entry(
         "name-alone-on-a-line",
         Severity.Error,
-        "`{0}` is {1}, and only a `block` parameter may be written alone on a line",
+        "`{0}` is {1}, and only a `block` parameter may stand alone on a line",
         "A name on a line by itself inserts a macro's `block` parameter at that point. Any other name needs more "
             + "on the line: `name:` declares a label, `name = value` a constant, and `name!` calls a macro.");
 
@@ -657,10 +658,10 @@ public static class Catalogue
         Severity.Error,
         "module `{0}` is not marked as placeable: declare it `.module {0}: placed` so that another module can "
             + "place it",
-        "A module whose `.module` line says nothing is assembled on its own, into an output file of its own. A "
-            + "module that another module places has to say so on its own `.module` line, so that its file can be "
-            + "read correctly by itself: `placed` means it is only ever placed, and `placeable` means it may be "
-            + "placed or stand alone. The fix marks it `placed`.");
+        "A module whose `.module` line has no marker is assembled on its own, into an output file of its own. A "
+            + "module that another module places has to state that on its own `.module` line, so that its file can "
+            + "be read correctly by itself: `placed` means another module always places it, and `placeable` means "
+            + "at most one module may place it, and if none does, it gets its own output. The fix marks it `placed`.");
 
     internal static DiagnosticDescriptor PlacedTwice { get; } = Entry(
         "placed-twice",
@@ -673,8 +674,8 @@ public static class Catalogue
         "placement-cycle",
         Severity.Error,
         "this `.place` would make a module place itself: {0}",
-        "A module and everything it places are laid out as one translation unit, in the order the `.place` lines "
-            + "say, which a cycle cannot be.");
+        "A module and everything it places are laid out as one translation unit, in the order of the `.place` "
+            + "lines, which a cycle cannot be.");
 
     internal static DiagnosticDescriptor PlacedNowhere { get; } = Entry(
         "placed-nowhere",
@@ -710,7 +711,7 @@ public static class Catalogue
         "`{0}` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a "
             + "different name",
         "Names brought in with `.use` share the file's namespace with its own declarations, so one name cannot "
-            + "mean both. Write `.use module::name as other` to bring it in under a different name.");
+            + "mean both. Use `.use module::name as other` to bring it in under a different name.");
 
     internal static DiagnosticDescriptor UseStarNotAModule { get; } = Entry(
         "use-star-not-a-module",
@@ -760,7 +761,7 @@ public static class Catalogue
         "segment-region-misplaced",
         Severity.Error,
         "a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME {{ }}` places what it holds",
-        "A `.segment NAME` region says where everything after it in the file goes, which only makes sense at file "
+        "A `.segment NAME` region sets where everything after it in the file goes, which only makes sense at file "
             + "level. Inside a block, the block form places what it holds.");
 
     internal static DiagnosticDescriptor SignatureSetNameIsAnItem { get; } = Entry(
@@ -783,7 +784,7 @@ public static class Catalogue
         Severity.Error,
         "{0}",
         "A family, a `.proc` or `.data` named after an `.each` binding, declares one name per enum member into the "
-            + "scope around the `.each`. So the `.each` must be where those declarations could be written "
+            + "scope around the `.each`. So the `.each` must be where those declarations could appear "
             + "directly, at file level or in a `.scope`, and must walk a named enum, whose member names become the "
             + "declared names.");
 
@@ -798,10 +799,10 @@ public static class Catalogue
         "family-declares-too-much",
         Severity.Error,
         "`{0}` would declare one {1} per member, repeating everything inside it: a family declares only routines "
-            + "and data, so write one family per role, such as `note::{2}` and `stop::{3}`",
+            + "and data, so declare one family per role, such as `note::{2}` and `stop::{3}`",
         "A family declares one routine or data declaration per enum member. A scope or `.data` block named after "
             + "the binding would repeat everything inside it once per member, which is really several families "
-            + "written as one. Write one family per role instead, each inside the scope for that role.");
+            + "in one. Declare one family per role instead, each inside the scope for that role.");
 
     internal static DiagnosticDescriptor FamilyMemberCollides { get; } = Entry(
         "family-member-collides",
@@ -824,7 +825,7 @@ public static class Catalogue
         "`.defined` tests only build defines, and `{0}` is declared by the program: to check the program, use "
             + "`.assert`",
         "Conditions are decided before the program is read, from the build configuration alone, so `.defined` of a "
-            + "name the program declares would be false whatever the program says. `.defined` therefore takes only "
+            + "name the program declares would be false whatever the program declares. `.defined` therefore takes only "
             + "defines. To check something about the program, use `.assert`, which the analysis can answer.");
 
     internal static DiagnosticDescriptor DefineRedeclared { get; } = Entry(
@@ -841,8 +842,8 @@ public static class Catalogue
             + "leaves, or `?` if that is unknown",
         "On the 65816, register widths and other processor state matter at every call. A routine with no body, an "
             + "extern proc or an imported routine, is all the analysis has to go on at its callers, so its "
-            + "signature has to say what state it expects and what it leaves, for example `.proc TOOLBOX = "
-            + "$E10000: a16, i16`. `?` says that nothing is known.");
+            + "signature has to declare what state it expects and what it leaves, for example `.proc TOOLBOX = "
+            + "$E10000: a16, i16`. `?` states that nothing is known.");
 
     internal static DiagnosticDescriptor ExportNarrowsAddressSize { get; } = Entry(
         "export-narrows-address-size",
@@ -867,14 +868,14 @@ public static class Catalogue
         "`{0}` is never used: nothing names it, and it is not exported",
         "Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data "
             + "that holds values may be there for where it lands, so only a declaration that reserves storage is "
-            + "reported. A declaration another module writes without the export is named, wrongly, and is reported "
-            + "there instead.");
+            + "reported. A declaration that another module names although it is not exported is "
+            + "reported there instead, as an error.");
 
     internal static DiagnosticDescriptor UnusedUseItem { get; } = Entry(
         "unused-use-item",
         Severity.Warning,
         "`{0}` is brought in and nothing names it: the `.use` item may go",
-        "The `.use` brings the name in and the file never writes it. A `.export .use` re-exports rather than "
+        "The `.use` brings the name in and the file never uses it. A `.export .use` re-exports rather than "
             + "uses, and is not reported.");
 
     private static DiagnosticArea Values { get; } =
@@ -961,7 +962,7 @@ public static class Catalogue
         "builtin-arguments",
         Severity.Error,
         "`{0}` takes {1}",
-        "The built-in function was given the wrong number or kind of arguments. The message says what it takes.");
+        "The built-in function was given the wrong number or kind of arguments. The message states what it takes.");
 
     internal static DiagnosticDescriptor DivisionByZero { get; } = Entry(
         "division-by-zero",
@@ -974,7 +975,7 @@ public static class Catalogue
         "operator-on-text",
         Severity.Error,
         "`{0}` cannot be used on a string",
-        "Text is a sequence of bytes for a data declaration to write. The arithmetic and bitwise operators are on "
+        "Text is a sequence of bytes for a data declaration to emit. The arithmetic and bitwise operators are on "
             + "numbers: `.strcat` joins texts, `.strsub` takes part of one, and `.strat` reads one of its bytes.");
 
     internal static DiagnosticDescriptor ScopeHasNoAddress { get; } = Entry(
@@ -1011,7 +1012,7 @@ public static class Catalogue
         "element-index-out-of-range",
         Severity.Error,
         "{0}",
-        "The declaration says how many elements it holds, and this index is not one of them.");
+        "The declaration states how many elements it holds, and this index is not one of them.");
 
     internal static DiagnosticDescriptor NothingToMeasure { get; } = Entry(
         "nothing-to-measure",
@@ -1034,7 +1035,7 @@ public static class Catalogue
         "cannot compute `.sizeof({0})`: a macro call inside it is expanded only after constants are known; "
             + "`.spanof({1})` gives its size at link time",
         "Constants and data sizes are worked out before any macro is expanded, and how many bytes a macro call in "
-            + "a data declaration writes is known only once it is expanded. So the declaration's size is not a "
+            + "a data declaration emits is known only once it is expanded. So the declaration's size is not a "
             + "constant. `.spanof` asks the linker for the size instead, which makes it a link-time value.");
 
     internal static DiagnosticDescriptor SizeofDependsOnAlignment { get; } = Entry(
@@ -1059,7 +1060,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is {1}: `{2}` measures a `.data` declaration, a routine or a type",
         "The measuring functions take something that occupies bytes, such as a `.data` declaration or a routine, "
-            + "or a type, which says how many bytes it takes. A label is only a position and a scope only groups "
+            + "or a type, which states how many bytes it takes. A label is only a position and a scope only groups "
             + "names, so neither has a size. An import can be measured once it states its type, as in `.import "
             + "name: .byte[n]`.");
 
@@ -1100,8 +1101,8 @@ public static class Catalogue
         Severity.Error,
         "an `.if` condition cannot call a `.func`",
         "Conditions decide which declarations exist, and a `.func` is one of those declarations, so a condition "
-            + "cannot depend on it. Use a define or a `.config` setting, or write the expression out in the "
-            + "condition.");
+            + "cannot depend on it. Use a define or a `.config` setting, or put the expression in the "
+            + "condition itself.");
 
     internal static DiagnosticDescriptor SelectArguments { get; } = Entry(
         "select-arguments",
@@ -1127,7 +1128,7 @@ public static class Catalogue
         Severity.Error,
         "`.cpu` cannot be inside an `.if`: conditions can test the processor, so it must be set first",
         "Conditions can test the processor with `.target` and `.has`, so the processor has to be known before any "
-            + "condition is evaluated. Write `.cpu` outside every `.if`, or set the processor in the project file "
+            + "condition is evaluated. Put `.cpu` outside every `.if`, or set the processor in the project file "
             + "or on the command line.");
 
     internal static DiagnosticDescriptor CpuDisagrees { get; } = Entry(
@@ -1149,7 +1150,7 @@ public static class Catalogue
         Severity.Error,
         "`.config` must be at file level, outside every block",
         "A `.config` declares a setting that the build can give a value. Which settings a module has cannot depend "
-            + "on a condition or be nested inside another declaration, so `.config` is written at the top level of "
+            + "on a condition or be nested inside another declaration, so `.config` goes at the top level of "
             + "the file.");
 
     internal static DiagnosticDescriptor ConfigIsText { get; } = Entry(
@@ -1178,7 +1179,7 @@ public static class Catalogue
         "declaration-in-a-repetition",
         Severity.Error,
         "{0} cannot be inside a `.repeat` or `.each` body: {1}",
-        "A `.repeat` or `.each` body is written out once per iteration. Exports, imports, routines, segments and "
+        "A `.repeat` or `.each` body is expanded once per iteration. Exports, imports, routines, segments and "
             + "definitions each name one thing for the whole program, so declaring them again on every iteration "
             + "makes no sense. Move the statement outside the body.");
 
@@ -1186,14 +1187,14 @@ public static class Catalogue
         "repeat-count-not-constant",
         Severity.Error,
         "a `.repeat` count must be a constant",
-        "How many times the body is written out decides what the program contains, so the count has to be known "
+        "How many times the body is expanded decides what the program contains, so the count has to be known "
             + "while nt65 builds.");
 
     internal static DiagnosticDescriptor RepeatCountNegative { get; } = Entry(
         "repeat-count-negative",
         Severity.Error,
         "a `.repeat` count cannot be negative, and this one is {0}",
-        "A repetition runs a number of turns, and a negative number of turns is not one.");
+        "A repetition runs its body a whole number of times, and that number cannot be negative.");
 
     internal static DiagnosticDescriptor EachNotOverAList { get; } = Entry(
         "each-not-over-a-list",
@@ -1236,16 +1237,16 @@ public static class Catalogue
     internal static DiagnosticDescriptor MemberHasNoValue { get; } = Entry(
         "member-has-no-value",
         Severity.Error,
-        "`{0}` is a struct member and cannot have a value: for several `{1}` elements, write `{1}[n]`",
-        "A `.struct` or `.union` member only reserves room at an offset and holds no data, so a value written "
+        "`{0}` is a struct member and cannot have a value: for several `{1}` elements, use `{1}[n]`",
+        "A `.struct` or `.union` member only reserves room at an offset and holds no data, so a value "
             + "after its type is an error. `colors: .word 16` would reserve one word, not sixteen; several "
-            + "elements of one type are written as a count, `colors: .word[16]`.");
+            + "elements of one type take a count, `colors: .word[16]`.");
 
     internal static DiagnosticDescriptor MemberCountNotANumber { get; } = Entry(
         "member-count-not-a-number",
         Severity.Error,
-        "`{0}` needs an element count: write `{1}[n]`",
-        "How many elements a member holds is part of its type, so the count must be written as a number. `[]`, "
+        "`{0}` needs an element count: use `{1}[n]`",
+        "How many elements a member holds is part of its type, so the count must be given as a number. `[]`, "
             + "which counts the values given, has nothing to count in a `.struct`.");
 
     internal static DiagnosticDescriptor MemberReservesNothing { get; } = Entry(
@@ -1253,14 +1254,14 @@ public static class Catalogue
         Severity.Error,
         "`{0}` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`",
         "A `.struct` member only reserves room at its offset, so it is declared with an element type or with "
-            + "`.res`. A directive that writes data, such as `.strz`, reserves nothing a member can use.");
+            + "`.res`. A directive that emits data, such as `.strz`, reserves nothing a member can use.");
 
     internal static DiagnosticDescriptor TargetArgument { get; } = Entry(
         "target-argument",
         Severity.Error,
         "`.target` takes {0}",
-        "`.target` asks whether the program is built for one named processor, spelled as the project file "
-            + "spells it.");
+        "`.target` asks whether the program is built for one named processor, spelled as in the project "
+            + "file.");
 
     internal static DiagnosticDescriptor HasArgument { get; } = Entry(
         "has-argument",
@@ -1277,7 +1278,7 @@ public static class Catalogue
         "declaration-in-a-macro-body",
         Severity.Error,
         "{0} cannot be inside a macro body: {1}",
-        "A macro body is written out at each call, in the module that calls it. These statements would either "
+        "A macro body is expanded at each call, in the module that calls it. These statements would either "
             + "declare a name in the caller or make something that exists once for the whole program depend on how "
             + "many times the macro is called. Move the statement outside the macro.");
 
@@ -1337,8 +1338,8 @@ public static class Catalogue
     internal static DiagnosticDescriptor BlockArgumentInParentheses { get; } = Entry(
         "block-argument-in-parentheses",
         Severity.Error,
-        "`{0}` is a `block` parameter: write its block after the parentheses, not inside them",
-        "A block argument is written after the call's parentheses, as `name!(...) { ... }`, where it reads like "
+        "`{0}` is a `block` parameter: put its block after the parentheses, not inside them",
+        "A block argument goes after the call's parentheses, as `name!(...) { ... }`, where it reads like "
             + "any other block of code.");
 
     internal static DiagnosticDescriptor BlockArgumentUnexpected { get; } = Entry(
@@ -1359,14 +1360,14 @@ public static class Catalogue
         Severity.Error,
         "the block given to `{0}!` must leave the processor state as it found it: it starts with `{1}` and ends "
             + "with `{2}`",
-        "A macro that takes a block writes its own code around the block, and that code assumes the register "
+        "A macro that takes a block emits its own code around the block, and that code assumes the register "
             + "widths and mode are the same after the block as before it. Restore them at the end of the block.");
 
     internal static DiagnosticDescriptor ParameterAfterBlock { get; } = Entry(
         "parameter-after-block",
         Severity.Error,
-        "`{0}` comes after the `block` parameter `{1}`, and a block is written after the parentheses",
-        "A block is written after the parentheses, so a `block` parameter is the last one.");
+        "`{0}` comes after the `block` parameter `{1}`, and a block goes after the parentheses",
+        "A block goes after the parentheses, so a `block` parameter is the last one.");
 
     internal static DiagnosticDescriptor ParameterAfterList { get; } = Entry(
         "parameter-after-list",
@@ -1400,7 +1401,7 @@ public static class Catalogue
         "ident-argument-not-a-name",
         Severity.Error,
         "`{0}` takes a name, and this is not one",
-        "An `ident` parameter stands for a name the body declares or writes, so the argument has to be one.");
+        "An `ident` parameter stands for a name the body declares or uses, so the argument has to be one.");
 
     internal static DiagnosticDescriptor ExpressionArgumentBraced { get; } = Entry(
         "expression-argument-braced",
@@ -1413,7 +1414,7 @@ public static class Catalogue
         "const-argument-out-of-range",
         Severity.Error,
         "`{0}` takes a constant from {1} to {2}, and {3}",
-        "A `const(low..high)` parameter says the range it takes, so a call outside it is told at the call, with "
+        "A `const(low..high)` parameter states the range it takes, so a call outside it is reported at the call, with "
             + "the limits, rather than by an `.assert` in the body.");
 
     internal static DiagnosticDescriptor EnumArgumentNotAMember { get; } = Entry(
@@ -1428,7 +1429,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` takes {1}, and this is `{2}`",
         "An `operand(...)` parameter lists the addressing modes it takes, as `.mode` names them, with `zp`, `zpx` "
-            + "and `zpy` for a direct-page address, so a call in another mode is told at the call.");
+            + "and `zpy` for a direct-page address, so a call in another mode is reported at the call.");
 
     internal static DiagnosticDescriptor ParameterRangeInvalid { get; } = Entry(
         "parameter-range-invalid",
@@ -1464,15 +1465,15 @@ public static class Catalogue
         "expansion-limit",
         Severity.Error,
         "the expansions in this file come to more than {0} statements, which is as far as nt65 goes",
-        "Expansion is bounded, and the bound is far beyond any program written by hand. Reaching it means a "
+        "Expansion is bounded, and the bound is far beyond any program typed by hand. Reaching it means a "
             + "repetition or a nest of macros is multiplying out further than was meant.");
 
     internal static DiagnosticDescriptor RepeatTooMany { get; } = Entry(
         "repeat-too-many",
         Severity.Error,
         "this repetition runs {0} times, more than the limit of {1}",
-        "nt65 limits how many times a `.repeat` or `.each` body can be written out, which bounds how much one line "
-            + "of source can expand to. The limit is far beyond anything written by hand; reaching it usually "
+        "nt65 limits how many times a `.repeat` or `.each` body can be expanded, which bounds how much one line "
+            + "of source can expand to. The limit is far beyond anything typed by hand; reaching it usually "
             + "means the count is wrong.");
 
     private static DiagnosticArea Data { get; } =
@@ -1481,9 +1482,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor ElementCountEmpty { get; } = Entry(
         "element-count-empty",
         Severity.Error,
-        "`[]` takes its count from the values given, and there are none: write `{0}[n]` to reserve n elements",
+        "`[]` takes its count from the values given, and there are none: use `{0}[n]` to reserve n elements",
         "`[]` means as many elements as there are values, and no values are given. To reserve room without giving "
-            + "values, write the count, as in `.byte[16]`; the elements are filled with zeros.");
+            + "values, give the count, as in `.byte[16]`; the elements are filled with zeros.");
 
     internal static DiagnosticDescriptor ElementCountNotConstant { get; } = Entry(
         "element-count-not-constant",
@@ -1503,7 +1504,7 @@ public static class Catalogue
         Severity.Error,
         "this array is declared with {0} {1}, but {2} given",
         "A declaration with a count holds exactly that many elements: nt65 neither pads missing values nor drops "
-            + "extra ones. Correct the count, or write `[]` to take the count from the values.");
+            + "extra ones. Correct the count, or use `[]` to take the count from the values.");
 
     internal static DiagnosticDescriptor ElementNotAValue { get; } = Entry(
         "element-not-a-value",
@@ -1514,9 +1515,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor ElementNotARecord { get; } = Entry(
         "element-not-a-record",
         Severity.Error,
-        "each element of {0} is {1}, written `{{ member = value }}`",
-        "Each element of an array of records is written as a record, so that which member each value goes to is "
-            + "written down.");
+        "each element of {0} is {1}, given as `{{ member = value }}`",
+        "Each element of an array of records is given as a record, so that which member each value goes to is "
+            + "stated.");
 
     internal static DiagnosticDescriptor ElementIsOneValue { get; } = Entry(
         "element-is-one-value",
@@ -1546,8 +1547,8 @@ public static class Catalogue
     internal static DiagnosticDescriptor MemberNeedsARecord { get; } = Entry(
         "member-needs-a-record",
         Severity.Error,
-        "`{0}` is a `{1}` record, so its value is written in braces: `{{ member = value }}`",
-        "The member is itself a record, so its value is written as one, naming its members.");
+        "`{0}` is a `{1}` record, so its value goes in braces: `{{ member = value }}`",
+        "The member is itself a record, so its value is given as one, naming its members.");
 
     internal static DiagnosticDescriptor MemberNeedsAList { get; } = Entry(
         "member-needs-a-list",
@@ -1566,7 +1567,7 @@ public static class Catalogue
         "member-count-mismatch",
         Severity.Error,
         "`{0}` holds {1} {2}, and this list gives {3}",
-        "A member holds exactly as many elements as its type says.");
+        "A member holds exactly as many elements as its type states.");
 
     internal static DiagnosticDescriptor MemberTextTooLong { get; } = Entry(
         "member-text-too-long",
@@ -1578,7 +1579,7 @@ public static class Catalogue
         "member-not-text",
         Severity.Error,
         "`{0}` is one `{1}`, and this text is {2} bytes: text takes a member reserved with `.res`",
-        "A member of a plain type holds one value. Room for text is reserved with `.res`, which says how much.");
+        "A member of a plain type holds one value. Room for text is reserved with `.res`, which states how much.");
 
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
         "strz-not-text",
@@ -1596,9 +1597,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor TextNotAscii { get; } = Entry(
         "text-not-ascii",
         Severity.Error,
-        "text is ASCII outside a charmap; write `\\xHH` for a byte above $7f",
-        "Which byte a character above $7f becomes depends on an encoding nt65 does not choose. A charmap says "
-            + "what the bytes are, and `\\xHH` writes one directly.");
+        "text is ASCII outside a charmap; use `\\xHH` for a byte above $7f",
+        "Which byte a character above $7f becomes depends on an encoding nt65 does not choose. A charmap states "
+            + "what the bytes are, and `\\xHH` gives one directly.");
 
     internal static DiagnosticDescriptor CharmapValueNotAByte { get; } = Entry(
         "charmap-value-not-a-byte",
@@ -1618,7 +1619,7 @@ public static class Catalogue
         "address-does-not-fit",
         Severity.Error,
         "`{0}` is {1} address, and {2}: {3}",
-        "The address is wider than the place it is written into, and ca65 would stop with a range error. Write the "
+        "The address is wider than the place it is written into, and ca65 would stop with a range error. Use the "
             + "part of the address that fits, as the message suggests.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
@@ -1632,7 +1633,7 @@ public static class Catalogue
         Severity.Error,
         "{0} does not fit in {1}",
         "The value does not fit the bytes the declaration reserves for it. A wider type, or one of the byte "
-            + "operators, says which part was meant.");
+            + "operators, shows which part was meant.");
 
     internal static DiagnosticDescriptor ResCountNotConstant { get; } = Entry(
         "res-count-not-constant",
@@ -1665,15 +1666,15 @@ public static class Catalogue
         Severity.Error,
         "a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros "
             + "where no values are given",
-        "In nt65, `.res` is only padding inside a declaration. A named declaration says what its bytes are with a "
+        "In nt65, `.res` is only padding inside a declaration. A named declaration states what its bytes are with a "
             + "type: `buf: .res 16` in ca65 becomes `.data buf: .byte[16]`, which reserves the same room.");
 
     internal static DiagnosticDescriptor AlignNotADeclaration { get; } = Entry(
         "align-not-a-declaration",
         Severity.Error,
-        "`.align` cannot be a named declaration: write it between declarations",
+        "`.align` cannot be a named declaration: put it between declarations",
         "An `.align` is padding that positions the next declaration. It has no content of its own to name, so it "
-            + "is written on its own between declarations.");
+            + "stands on its own between declarations.");
 
     private static DiagnosticArea Placement { get; } =
         Opens("Placement", "Segments, where a declaration sits and how wide an address is.");
@@ -1697,11 +1698,11 @@ public static class Catalogue
     internal static DiagnosticDescriptor CodeInADataSpace { get; } = Entry(
         "code-in-a-data-space",
         Severity.Error,
-        "segment \"{0}\" is in space `{1}`, which holds data, not code for this processor: write another "
+        "segment \"{0}\" is in space `{1}`, which holds data, not code for this processor: put another "
             + "processor's code there as data or macro calls",
         "An address space declared as `\"data\"` in the project's `spaces` is another processor's memory, such as "
-            + "a sound CPU's RAM. nt65 does not assemble that processor's instructions, so its code is written as "
-            + "data, or through macros that write the bytes. A space whose code this program's processor runs is "
+            + "a sound CPU's RAM. nt65 does not assemble that processor's instructions, so its code is given as "
+            + "data, or through macros that emit the bytes. A space whose code this program's processor runs is "
             + "declared as `\"code\"`.");
 
     internal static DiagnosticDescriptor TransferToAnotherSpace { get; } = Entry(
@@ -1777,9 +1778,9 @@ public static class Catalogue
     internal static DiagnosticDescriptor SegmentMirrorInvalid { get; } = Entry(
         "segment-mirror-invalid",
         Severity.Error,
-        "each mirror must be a constant bank, or a range of banks written lower first, such as `$00..$3f`",
+        "each mirror must be a constant bank, or a range of banks given lower first, such as `$00..$3f`",
         "`mirrors = [...]` lists the other banks in which the segment's home bank also appears. Each item is a "
-            + "constant bank from $00 to $ff, or a range of them written with the lower bank first, such as "
+            + "constant bank from $00 to $ff, or a range of them given with the lower bank first, such as "
             + "`$00..$3f`.");
 
     internal static DiagnosticDescriptor SegmentMirrorsNeedABank { get; } = Entry(
@@ -1803,7 +1804,7 @@ public static class Catalogue
         Severity.Error,
         "{0} is not in any segment: put a `.segment NAME` line above it, or place it in a `.segment NAME` block",
         "Every byte goes in a segment, and the linker decides where each segment goes. Unlike ca65, which starts "
-            + "in `CODE`, nt65 has no default segment, and nothing is placed just by being written first. Put a "
+            + "in `CODE`, nt65 has no default segment, and nothing is placed just by coming first. Put a "
             + "`.segment` line, such as `.segment CODE`, above it.");
 
     internal static DiagnosticDescriptor InstructionInData { get; } = Entry(
@@ -1811,7 +1812,7 @@ public static class Catalogue
         Severity.Error,
         "{0} in a `.proc`, not in a `.data` declaration",
         "A `.data` declaration holds only data. Instructions go in a routine (`.proc`), where the flow analysis "
-            + "can follow them. Opcodes written out by hand belong in data as `.byte` values.");
+            + "can follow them. Hand-assembled opcodes belong in data as `.byte` values.");
 
     internal static DiagnosticDescriptor InstructionOutsideARoutine { get; } = Entry(
         "instruction-outside-a-routine",
@@ -1833,7 +1834,7 @@ public static class Catalogue
         Severity.Error,
         "{0} is declared `far`, and a far address needs the 65816",
         "A far address is a 24-bit bank and offset, which only the 65816 has. ca65 rejects `far` on every other "
-            + "processor, so nt65 reports it where it is written rather than writing output ca65 would reject. "
+            + "processor, so nt65 reports it where it is declared rather than emitting output ca65 would reject. "
             + "Declare the segment or import `abs` or `zp`, or build for the 65816.");
 
     private static DiagnosticArea Instructions { get; } =
@@ -1844,7 +1845,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not available on the {1}{2}",
         "The program is built for one processor, and this instruction is not in its set. Where another processor "
-            + "nt65 knows has it, the message says which.");
+            + "nt65 knows has it, the message names that processor.");
 
     internal static DiagnosticDescriptor OperandMissing { get; } = Entry(
         "operand-missing",
@@ -1864,7 +1865,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is a string, and an instruction's operand must be a number or an address",
         "An instruction's operand is a number or an address. A string is a sequence of bytes, which a data "
-            + "directive writes into a `.data` declaration.");
+            + "directive emits in a `.data` declaration.");
 
     internal static DiagnosticDescriptor OperandHasNoNextByte { get; } = Entry(
         "operand-has-no-next-byte",
@@ -1903,7 +1904,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is for a far target, and this one is {1}: use `{2}`",
         "`jml` and `jsl` take a three-byte address and are for targets in another bank. This target is in reach of "
-            + "the shorter form, which is smaller and faster. A constant address is taken as written, so `jml "
+            + "the shorter form, which is smaller and faster. A constant address is taken as given, so `jml "
             + "$008000` is allowed.");
 
     internal static DiagnosticDescriptor BranchOutOfReach { get; } = Entry(
@@ -1921,7 +1922,7 @@ public static class Catalogue
         "`{0}` has no {1} form of this operand on the {2}: remove the address-size prefix",
         "An address-size prefix (`z:`, `a:`, `f:`) asks for one particular form of the instruction, and on this "
             + "processor the instruction has no form of that width for this operand. nt65 does not silently drop a "
-            + "prefix it cannot honour. Remove the prefix, or write the operand in a shape that has that form.");
+            + "prefix it cannot honour. Remove the prefix, or give the operand a shape that has that form.");
 
     internal static DiagnosticDescriptor AddressingModeTooNarrow { get; } = Entry(
         "addressing-mode-too-narrow",
@@ -1999,7 +2000,7 @@ public static class Catalogue
         "config-warned",
         Severity.Warning,
         "{0}",
-        "The build reached a `.warning` directive. The message is the file's own text, and the build carries on.");
+        "The build reached a `.warning` directive. The message is the file's own text, and the build continues.");
 
     private static DiagnosticArea ControlFlow { get; } =
         Opens("Control flow", "Where execution goes, and the annotations the analysis needs where it cannot see.");
@@ -2008,7 +2009,7 @@ public static class Catalogue
         "annotation-about-nothing",
         Severity.Error,
         "`{0}` applies to the statement above it, and there is none",
-        "An annotation such as `.next` or `.patch` is written directly after the statement it describes, so it "
+        "An annotation such as `.next` or `.patch` goes directly after the statement it describes, so it "
             + "reads next to it. Here there is no statement above it to apply to. Move it to just below the "
             + "statement it is about.");
 
@@ -2027,24 +2028,24 @@ public static class Catalogue
         Severity.Warning,
         "`{0}` is never reached: no code falls into it and nothing refers to it",
         "The code above the label does not fall through into it, and nothing branches, jumps or calls to it or "
-            + "takes its address. If it is reached in a way nt65 cannot see, write a `.state` after the label to "
+            + "takes its address. If it is reached in a way nt65 cannot see, add a `.state` after the label to "
             + "declare it an entry point; otherwise the code is dead and can be removed.");
 
     internal static DiagnosticDescriptor RunsIntoData { get; } = Entry(
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls through into this data: add a `.next` after the data saying where flow goes "
+        "the instruction above falls through into this data: add a `.next` after the data stating where flow goes "
             + "instead",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
-            + "in the `.byte $2c` skip trick or an opcode written out as bytes. nt65 cannot follow flow through "
-            + "data, so write a `.next` after the data naming where flow really goes. If the instruction above is "
+            + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
+            + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
             + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead.");
 
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         "routine-runs-off-the-end",
         Severity.Warning,
-        "`{0}` runs off {1} into whatever {2}: {3}, or write `.next ?` to end the path",
-        "The routine's last instruction does not return, jump or branch away, so execution carries on into "
+        "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` to end the path",
+        "The routine's last instruction does not return, jump or branch away, so execution continues into "
             + "whatever the linker puts after it. Usually an `rts`, `rtl` or `jmp` is missing. Where running on "
             + "was meant, end the body with `.fallthrough NAME`, naming the routine it runs into; nt65 checks that "
             + "NAME starts where this routine ends, and checks it as a tail call. `.next ?` ends the path without "
@@ -2062,7 +2063,7 @@ public static class Catalogue
         Severity.Error,
         "table `{0}` holds no code labels for `.next` to follow",
         "A `.next` may name a table of addresses, and flow then goes to each code label the table holds. This "
-            + "table holds none, so it says nothing about where flow goes. Name the labels directly, or fill the "
+            + "table holds none, so it gives no information about where flow goes. Name the labels directly, or fill the "
             + "table with code labels.");
 
     internal static DiagnosticDescriptor NextTargetNotATable { get; } = Entry(
@@ -2077,29 +2078,29 @@ public static class Catalogue
         "next-successors-known",
         Severity.Error,
         "`.next` is not allowed here: nt65 already knows that {0} {1}{2}",
-        "`.next` tells nt65 where flow goes after a statement it cannot follow by itself: an indirect jump or "
+        "`.next` states where flow goes after a statement it cannot follow by itself: an indirect jump or "
             + "call, an `rts` or `rtl` used as a jump, a jump to a computed address, or data that execution falls "
-            + "into. After a conditional branch it may name the branch's own target, to say the branch is always "
+            + "into. After a conditional branch it may name the branch's own target, to state that the branch is always "
             + "taken. After any other statement nt65 already knows where flow goes, and a `.next` could only "
-            + "contradict it. To say a routine runs into the one written after it, use `.fallthrough`; `.next ?` "
+            + "contradict it. To state that a routine runs into the one after it, use `.fallthrough`; `.next ?` "
             + "may end a path after any statement.");
 
     internal static DiagnosticDescriptor NextNotTheBranchTarget { get; } = Entry(
         "next-not-the-branch-target",
         Severity.Error,
-        "`.next` after {0} can name only the branch's own target, `{1}`, to say the branch is always taken",
-        "Under a conditional branch, a `.next` says the branch is always taken, because the flags are known there, "
+        "`.next` after {0} can name only the branch's own target, `{1}`, to state that the branch is always taken",
+        "Under a conditional branch, a `.next` states that the branch is always taken, because the flags are known there, "
             + "so flow never continues past it. It must then name exactly the branch's own target; naming anything "
             + "else would claim the branch goes somewhere its operand does not. To end the path there instead, "
-            + "write `.next ?`.");
+            + "use `.next ?`.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
         "fallthrough-misplaced",
         Severity.Error,
         "`.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved",
-        "`.fallthrough NAME` says that every path reaching the end of the routine runs on into routine NAME, so it "
+        "`.fallthrough NAME` states that every path reaching the end of the routine runs on into routine NAME, so it "
             + "is about the end of the body, not the statement above it. It stands last in a `.proc` body, or last "
-            + "in a branch of an `.if` chain that is itself last in the body, to any depth; conditions are settled "
+            + "in a branch of an `.if` chain that is itself last in the body, to any depth; conditions are resolved "
             + "before analysis, so in each build at most one remains, and it is last. It may not appear in a macro "
             + "body, a block argument or a repetition, and nothing may follow it or the chain it ends.");
 
@@ -2107,15 +2108,15 @@ public static class Catalogue
         "fallthrough-not-a-routine",
         Severity.Error,
         "`{0}` is {1}, not a routine: `.fallthrough` names the routine execution runs into",
-        "`.fallthrough` says this routine runs on into the first byte of another routine, so it must name a `.proc`.");
+        "`.fallthrough` states that this routine runs on into the first byte of another routine, so it must name a `.proc`.");
 
     internal static DiagnosticDescriptor FallthroughNotAdjacent { get; } = Entry(
         "fallthrough-not-adjacent",
         Severity.Error,
-        "`{0}` does not start where this routine ends: `.fallthrough` can only name the routine written directly "
+        "`{0}` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly "
             + "after it in the same segment",
         "A routine that reaches its end runs on into whatever comes next in its segment: the next thing the file "
-            + "writes to that segment, even when regions of other segments come between in the text, as ca65 lays "
+            + "puts in that segment, even when regions of other segments come between in the text, as ca65 lays "
             + "the bytes out. `.fallthrough` must name that routine; naming any other would claim something the "
             + "bytes do not do. Move the routines so the named one comes directly after, or end this one with a "
             + "`jmp`.");
@@ -2125,10 +2126,10 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is in segment \"{2}\", and this routine ends in \"{1}\": a routine can only run into what comes "
             + "next in its own segment",
-        "A segment's bytes are laid out in the order they are written, whatever other segments are written in "
+        "A segment's bytes are laid out in the order they appear, whatever other segments appear in "
             + "between, so the end of a routine is followed by the next thing in its own segment. A routine in "
             + "another segment cannot be what it runs into. Across a `.place`, what comes next is the placed "
-            + "module's first routine in this segment, or what the placing file writes next in it.");
+            + "module's first routine in this segment, or what the placing file puts next in it.");
 
     internal static DiagnosticDescriptor FallthroughNotPlaced { get; } = Entry(
         "fallthrough-not-placed",
@@ -2145,7 +2146,7 @@ public static class Catalogue
         Severity.Error,
         "{0} is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call",
         "The call goes to an address read at run time, so the analysis cannot tell which routine it reaches or "
-            + "check the call. Write a `.next` after it naming the routines it may call, or the table that holds "
+            + "check the call. Add a `.next` after it naming the routines it may call, or the table that holds "
             + "them; each is then checked as a call.");
 
     internal static DiagnosticDescriptor IndirectJumpUnchecked { get; } = Entry(
@@ -2154,7 +2155,7 @@ public static class Catalogue
         "{0} is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or "
             + "`.next ?` to end the path",
         "The jump goes to an address read at run time. A `.next` after it names the labels it may reach, or the "
-            + "jump table that holds them, and the analysis carries on at each. `.next ?` says the path ends here, "
+            + "jump table that holds them, and the analysis continues at each. `.next ?` states that the path ends here, "
             + "and nothing beyond it is checked.");
 
     internal static DiagnosticDescriptor ComputedJumpUnchecked { get; } = Entry(
@@ -2162,17 +2163,17 @@ public static class Catalogue
         Severity.Error,
         "{0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, "
             + "or `.next ?` to end the path",
-        "The target is an expression rather than a label, so the analysis has no label at which to carry on. A "
+        "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
             + "`.next` after the jump names the labels it may reach. Where the target is not the start of an "
-            + "instruction, such as a jump into the middle of one, write `.next ?` to end the path there.");
+            + "instruction, such as a jump into the middle of one, use `.next ?` to end the path there.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         "pushed-return-unchecked",
         Severity.Error,
         "`{0}` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it "
             + "goes",
-        "The block pushes an address and then returns to it, the RTS trick, so the return is a jump in disguise "
-            + "and nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.");
+        "The block pushes an address and then executes a return, which jumps to that address (the \"RTS "
+            + "trick\"), so nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.");
 
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
         "jump-target-not-a-label",
@@ -2187,9 +2188,9 @@ public static class Catalogue
         "jump-into-data",
         Severity.Error,
         "`{0}` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data "
-            + "saying where flow goes",
+            + "stating where flow goes",
         "The label marks data, so the processor would run those bytes as code. A `.state` after the label declares "
-            + "it an entry point and what the processor state is there, and a `.next` after the data says where "
+            + "it an entry point and what the processor state is there, and a `.next` after the data states where "
             + "flow goes from there.");
 
     internal static DiagnosticDescriptor EntryNotDeclared { get; } = Entry(
@@ -2224,8 +2225,8 @@ public static class Catalogue
         "self-modifying-unchecked",
         Severity.Error,
         "{0} modifies the instruction at `{1}`: add `.patch {2}` after it to mark the self-modifying code",
-        "The store writes into an instruction's bytes, so that instruction does not do what its text says. A "
-            + "`.patch` naming the instruction's label, written after the store, acknowledges it and tells a "
+        "The store writes into an instruction's bytes, so that instruction does not do what its source text shows. A "
+            + "`.patch` naming the instruction's label, added after the store, acknowledges it and shows a "
             + "reader that the instruction is changed at run time.");
 
     internal static DiagnosticDescriptor HandlerCalled { get; } = Entry(
@@ -2248,23 +2249,23 @@ public static class Catalogue
         "noreturn-returns",
         Severity.Error,
         "`{0}` is declared `noreturn`, but `{1}` returns from it",
-        "The routine's signature says it never returns, and its callers are checked on that promise: nothing after "
+        "The routine's signature declares that it never returns, and its callers are checked on that promise: nothing after "
             + "a call to it is expected to run. Leave it some other way, such as a `jmp`, or remove `noreturn` "
             + "from its signature.");
 
     internal static DiagnosticDescriptor InlineDataMissing { get; } = Entry(
         "inline-data-missing",
         Severity.Error,
-        "`{0}` expects {1} written after each call, and {2}",
-        "The routine's `inline` signature item says each call is followed by data, which the routine reads and "
+        "`{0}` expects {1} directly after each call, and {2}",
+        "The routine's `inline` signature item declares that each call is followed by data, which the routine reads and "
             + "returns past. This call is not followed by that data, so the routine would skip over the wrong "
-            + "bytes. Write the data directly after the call, in the same segment and with no label between.");
+            + "bytes. Put the data directly after the call, in the same segment and with no label between.");
 
     internal static DiagnosticDescriptor InlineCountNotConstant { get; } = Entry(
         "inline-count-not-constant",
         Severity.Error,
         "`{0}` has `{1}`, and the byte count it gives must be a constant",
-        "How many bytes the routine skips after each call decides where flow carries on, so the count in `inline "
+        "How many bytes the routine skips after each call decides where flow continues, so the count in `inline "
             + "N` must be a number nt65 knows while it builds, and not negative.");
 
     internal static DiagnosticDescriptor TailCallToHandler { get; } = Entry(
@@ -2290,10 +2291,10 @@ public static class Catalogue
         "keeps-broken",
         Severity.Error,
         "`{0}` promises `keeps {1}`, but {2} {3} not the same as on entry here{4}",
-        "The routine's signature says it keeps these registers: every path that leaves it returns them holding the "
+        "The routine's signature declares that it keeps these registers: every path that leaves it returns them holding the "
             + "value they had on entry, and callers rely on that. On this path the analysis sees a register "
             + "changed and not restored. Save and restore it, for example with `pha` and `pla`, or, where it is "
-            + "restored in a way the analysis cannot see, write `.state keeps REG` at that point.");
+            + "restored in a way the analysis cannot see, add `.state keeps REG` at that point.");
 
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
         "keeps-redundant",
@@ -2314,15 +2315,15 @@ public static class Catalogue
         "On the 65816 an immediate operand such as `lda #` or `ldx #` is one byte or two depending on the M or X "
             + "flag, so nt65 has to know how wide A, or X and Y, is on that line. Here it does not: the paths that "
             + "reach the line disagree, something the analysis cannot follow changed the flags, the routine's "
-            + "signature says `a*` or `i*`, or no path reaches the line at all. Put `.ensure a8`, `a16`, `i8` or "
-            + "`i16` before the line to set the width, write a `.state` after a label to declare it, or give the "
+            + "signature declares `a*` or `i*`, or no path reaches the line at all. Put `.ensure a8`, `a16`, `i8` or "
+            + "`i16` before the line to set the width, add a `.state` after a label to declare it, or give the "
             + "width in the routine's signature.");
 
     internal static DiagnosticDescriptor ImmediateInEmulation { get; } = Entry(
         "immediate-in-emulation",
         Severity.Error,
         "`{0} #` has a 16-bit width here, but the processor is in emulation mode, where A, X and Y are always 8-bit",
-        "In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags say, so an "
+        "In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags are, so an "
             + "immediate is always one byte. The analysis finds a 16-bit width and emulation mode on the same "
             + "path, which cannot both be true. Check the signature or `.state` that declared the 16-bit width, or "
             + "the `xce` that entered emulation mode.");
@@ -2331,7 +2332,7 @@ public static class Catalogue
         "width-in-emulation",
         Severity.Error,
         "{0} is impossible in emulation mode, where A, X and Y are always 8-bit",
-        "In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags say, so a `.state` "
+        "In emulation mode the processor forces A, X and Y to 8 bits whatever the M and X flags are, so a `.state` "
             + "or signature that declares `emu` together with `a16` or `i16` describes a state the processor "
             + "cannot be in. Declare `a8` and `i8`, or leave the widths out: `emu` already implies them.");
 
@@ -2339,7 +2340,7 @@ public static class Catalogue
         "ensure-needs-native",
         Severity.Error,
         "`.ensure {0}` needs native mode, and {1}",
-        "`.ensure a16` and `.ensure i16` write a `rep`, and 16-bit widths exist only in native mode: in emulation "
+        "`.ensure a16` and `.ensure i16` emit a `rep`, and 16-bit widths exist only in native mode: in emulation "
             + "mode A, X and Y stay 8-bit whatever `rep` does. Switch to native mode (`clc` then `xce`) before the "
             + "`.ensure`, or, where the analysis cannot see the mode, declare it with `native` in the routine's "
             + "signature or a `.state native`.");
@@ -2348,14 +2349,14 @@ public static class Catalogue
         "ensure-item-not-a-width",
         Severity.Error,
         "`.ensure` takes only `a8`, `a16`, `i8` and `i16`, not `{0}`",
-        "`.ensure` writes the `rep` or `sep` that makes a register width true, and widths are the only part of the "
+        "`.ensure` emits the `rep` or `sep` that makes a register width true, and widths are the only part of the "
             + "processor state it can set that way. To declare anything else at a point, such as the mode, D or B, "
             + "use `.state`.");
 
     internal static DiagnosticDescriptor StateItemNotAPoint { get; } = Entry(
         "state-item-not-a-point",
         Severity.Error,
-        "`{0}` describes a whole routine, not one point in it: write it in the routine's signature, not in `.state`",
+        "`{0}` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`",
         "A `.state` declares the processor state at one line: register widths, mode, D and B. Items that describe "
             + "the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, a "
             + "signature set, or a `*` item meaning unchanged since entry, belong in the signature after the "
@@ -2420,7 +2421,7 @@ public static class Catalogue
         "return-state-mismatch",
         Severity.Error,
         "{0}`{1}` declares it returns {2}, but {3}",
-        "A routine's signature says what state it returns in: the state after `->`, or its entry state when there "
+        "A routine's signature declares what state it returns in: the state after `->`, or its entry state when there "
             + "is no `->`. Callers rely on it. On this path the state at the return, or for a tail call the state "
             + "when the routine jumped to returns, is different. Restore the state before returning, or correct "
             + "the signature.");
@@ -2428,8 +2429,8 @@ public static class Catalogue
     internal static DiagnosticDescriptor AssertedItemNotRestored { get; } = Entry(
         "asserted-item-not-restored",
         Severity.Error,
-        "{0}`{1}` says `{2}`, so {3} must be {4}, but {5} it may not be",
-        "A `*` item in a signature, such as `a*` or `dp*`, says the routine returns that part of the processor "
+        "{0}`{1}` declares `{2}`, so {3} must be {4}, but {5} it may not be",
+        "A `*` item in a signature, such as `a*` or `dp*`, means that the routine returns that part of the processor "
             + "state exactly as it found it on entry, whatever it was. On this path the routine may have changed "
             + "it without restoring it. Restore it before returning, for example with `php` and `plp` around a "
             + "width change, or by saving and restoring D or B.");
@@ -2439,7 +2440,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` must call a named routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import, whose "
             + "signature is checked",
-        "On the 65816 every call is checked against the called routine's signature, which says what register "
+        "On the 65816 every call is checked against the called routine's signature, which declares what register "
             + "widths, mode, D and B it expects. A call to a bare address, or to anything else without a "
             + "signature, cannot be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` "
             + "import.");
@@ -2501,7 +2502,7 @@ public static class Catalogue
         "relative-call-needs-phk",
         Severity.Error,
         "`{0}` is far: push the bank with `phk` before the `per` of this relative call",
-        "A relative call is written as a `per` that pushes the return address, then a branch to the routine. `per` "
+        "A relative call is a `per` that pushes the return address, then a branch to the routine. `per` "
             + "pushes only 16 bits, but a far routine returns with `rtl`, which pulls three bytes: the address and "
             + "the bank. Put a `phk` before the `per` so the bank is on the stack.");
 
@@ -2516,7 +2517,7 @@ public static class Catalogue
         "args-not-pushed",
         Severity.Error,
         "`{0}` declares `args {1}`, bytes the caller pushes before the call, but {2}",
-        "`args n` in a routine's signature says the caller pushes n bytes of arguments before calling it, and the "
+        "`args n` in a routine's signature states that the caller pushes n bytes of arguments before calling it, and the "
             + "routine reads or pulls exactly that many. At this call fewer bytes are on the stack than that, "
             + "counting what the calling routine has pushed since its entry. Push the arguments before the call.");
 
@@ -2557,7 +2558,7 @@ public static class Catalogue
         "range-bank-mismatch",
         Severity.Error,
         "{0} is reachable only from banks {1}, but B is {2} here",
-        "The project file's `ranges` say which banks each absolute address can be reached from, for hardware that "
+        "The project file's `ranges` state which banks each absolute address can be reached from, for hardware that "
             + "is mirrored only in some banks. Here the data bank register B may hold a bank outside that set, so "
             + "the operand would reach something else. Set B to one of the listed banks, or use a long operand.");
 
@@ -2565,15 +2566,15 @@ public static class Catalogue
         "mirror-bank-mismatch",
         Severity.Error,
         "`{0}` is in segment \"{1}\", {2}, but this reaches it through bank {3}",
-        "The segment's `bank` and `mirrors` in the project file say which banks its contents appear in. This long "
+        "The segment's `bank` and `mirrors` in the project file state which banks its contents appear in. This long "
             + "address names the routine in a bank that is neither, so it would land somewhere else. Use an "
             + "address in the segment's bank or in one of its mirrors.");
 
     internal static DiagnosticDescriptor FrameNotARecord { get; } = Entry(
         "frame-not-a-record",
         Severity.Error,
-        "`.frame {0}` needs a struct or union type: its size says how many stack bytes the frame covers",
-        "`.frame name: T` lays out the top of the stack as the struct or union T, and T's size says how many bytes "
+        "`.frame {0}` needs a struct or union type: its size gives how many stack bytes the frame covers",
+        "`.frame name: T` lays out the top of the stack as the struct or union T, and T's size gives how many bytes "
             + "the frame covers. Anything else has no members or size to lay out. Give the frame a struct or union "
             + "type.");
 
@@ -2591,15 +2592,15 @@ public static class Catalogue
         "`{0}` is an offset from the stack pointer, but how many bytes are pushed here is not known{1}",
         "A frame member becomes an `n,s` operand whose offset counts every byte pushed since the `.frame`. Where "
             + "the paths reaching this line push different amounts, or something the analysis cannot follow moved "
-            + "the stack pointer, the offset cannot be worked out. Make every path push the same bytes, or write "
-            + "the `.frame` again after the point where the stack changes.");
+            + "the stack pointer, the offset cannot be worked out. Make every path push the same bytes, or repeat "
+            + "the `.frame` after the point where the stack changes.");
 
     internal static DiagnosticDescriptor FrameGone { get; } = Entry(
         "frame-gone",
         Severity.Error,
         "`{0}` is in frame `{1}`, which has been pulled off the stack here",
         "The bytes the frame covered have been pulled off the stack by this point, so its members no longer name "
-            + "anything. Use the member before those pulls, or write a new `.frame` for what is on the stack now.");
+            + "anything. Use the member before those pulls, or add a new `.frame` for what is on the stack now.");
 
     internal static DiagnosticDescriptor FrameMemberNotStackRelative { get; } = Entry(
         "frame-member-not-stack-relative",
@@ -2677,7 +2678,7 @@ public static class Catalogue
         "project-not-an-object",
         Severity.Error,
         "{0} must hold one JSON object",
-        "The top level of the project file is one JSON object, whose keys say what the program is built from and "
+        "The top level of the project file is one JSON object, whose keys state what the program is built from and "
             + "how.");
 
     internal static DiagnosticDescriptor ProjectKeyUnknown { get; } = Entry(
@@ -2692,7 +2693,7 @@ public static class Catalogue
         "project-cpu-unknown",
         Severity.Error,
         "`{0}` is not a supported `cpu`: use {1}",
-        "`cpu` names the processor the program is written for, spelt exactly as one of the listed names.");
+        "`cpu` names the processor the program is built for, spelt exactly as one of the listed names.");
 
     internal static DiagnosticDescriptor ProjectNotAList { get; } = Entry(
         "project-not-a-list",
@@ -2779,7 +2780,7 @@ public static class Catalogue
         "project-space-holds-unknown",
         Severity.Error,
         "space `{0}` must be \"code\" or \"data\"",
-        "Each entry under `spaces` names an address space and says what it holds. \"code\" means the space runs "
+        "Each entry under `spaces` names an address space and states what it holds. \"code\" means the space runs "
             + "this program's processor, and nt65 checks its code; \"data\" means anything else, including code "
             + "for another processor, which nt65 treats as data and macro calls.");
 
@@ -2787,7 +2788,7 @@ public static class Catalogue
         "project-segment-key-unknown",
         Severity.Error,
         "segment \"{0}\" cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`",
-        "A segment's entry says how wide its addresses are (`size`), which direct page and banks its contents are "
+        "A segment's entry states how wide its addresses are (`size`), which direct page and banks its contents are "
             + "reached through (`dp`, `bank`, `mirrors`), and which address space it is in (`space`). Any other "
             + "key is an error, so that a misspelt one does not silently do nothing.");
 
@@ -2824,14 +2825,14 @@ public static class Catalogue
         "ranges-overlap",
         Severity.Error,
         "`{0}` overlaps `{1}-{2}`: an address can be in only one range",
-        "Each range says which banks its addresses can be reached from, so an address in two ranges would have two "
+        "Each range states which banks its addresses can be reached from, so an address in two ranges would have two "
             + "answers. Change the ranges so they do not overlap.");
 
     internal static DiagnosticDescriptor BanksNotAList { get; } = Entry(
         "banks-not-a-list",
         Severity.Error,
         "`{0}` must be a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]",
-        "Banks are written as a JSON array. Each item is one bank, as a number or a string, or a string holding a "
+        "Banks are given as a JSON array. Each item is one bank, as a number or a string, or a string holding a "
             + "range of banks such as \"$00-$3f\".");
 
     internal static DiagnosticDescriptor BankInvalid { get; } = Entry(
@@ -2872,7 +2873,7 @@ public static class Catalogue
         "args-not-constant",
         Severity.Error,
         "`{0}` needs a constant: the byte count has to be known while nt65 builds",
-        "`args n` says how many bytes the caller pushes before the call. The analysis uses it to check every call "
+        "`args n` states how many bytes the caller pushes before the call. The analysis uses it to check every call "
             + "and to work out where the routine finds its arguments on the stack, so n has to be a constant "
             + "expression that nt65 can evaluate while it builds.");
 
@@ -2880,7 +2881,7 @@ public static class Catalogue
         "args-out-of-range",
         Severity.Error,
         "`{0}` is out of range: the byte count must be from 0 to $ffff",
-        "`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the most the 65816's stack can hold.");
+        "`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the largest amount the 65816's stack can hold.");
 
     internal static DiagnosticDescriptor NoreturnDeclaresAnExit { get; } = Entry(
         "noreturn-declares-an-exit",
@@ -2913,14 +2914,14 @@ public static class Catalogue
         "handler-noreturn",
         Severity.Error,
         "`{0}` does not apply to an interrupt handler, which leaves with `rti` and has no caller to return to",
-        "`noreturn` says a routine never comes back to its caller. An interrupt handler has no caller: the "
+        "`noreturn` means that a routine never comes back to its caller. An interrupt handler has no caller: the "
             + "processor enters it, and `rti` resumes the interrupted code. Remove `noreturn`.");
 
     internal static DiagnosticDescriptor HandlerKeeps { get; } = Entry(
         "handler-keeps",
         Severity.Error,
         "`{0}` does not apply to an interrupt handler: give the mode it is entered in, `native` or `emu`, or nothing",
-        "A `*` item says a routine hands a part of the state back to its caller as it found it. An interrupt "
+        "A `*` item means that a routine hands a part of the state back to its caller as it found it. An interrupt "
             + "handler has no caller: the processor enters it and `rti` leaves it. Give the mode the handler is "
             + "entered in with `native` or `emu`, or leave the mode out.");
 
@@ -2959,16 +2960,16 @@ public static class Catalogue
     internal static DiagnosticDescriptor StateBanksInvalid { get; } = Entry(
         "state-banks-invalid",
         Severity.Error,
-        "`{0}` is not a valid set of banks: each item is a constant bank, or a range written low to high, such as "
+        "`{0}` is not a valid set of banks: each item is a constant bank, or a range given low to high, such as "
             + "`$00..$3f`",
-        "A set of banks is written in square brackets, as in `dbr = [$00..$3f, $80..$bf]`. Each item is a constant "
+        "A set of banks goes in square brackets, as in `dbr = [$00..$3f, $80..$bf]`. Each item is a constant "
             + "bank number or a range `low..high`, and the set names at least one bank.");
 
     internal static DiagnosticDescriptor SignatureSetNotFirst { get; } = Entry(
         "signature-set-not-first",
         Severity.Error,
         "signature set `{0}` must come first in its list: the items after it change what it gives",
-        "A signature set supplies a group of items, and the items written after it adjust or override them. So the "
+        "A signature set supplies a group of items, and the items after it adjust or override them. So the "
             + "set comes first in its list, and the rest read as changes to it.");
 
     internal static DiagnosticDescriptor SignatureSetNotASet { get; } = Entry(
@@ -2976,13 +2977,13 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is {1}, not a signature set: a bare name among a signature's items has to name a `.signature` set",
         "A bare name among a signature's items refers to a set declared with `.signature`, whose items it brings "
-            + "in. Anything else in a signature is written as an item, such as `a16` or `dbr = $7e`.");
+            + "in. Anything else in a signature is given as an item, such as `a16` or `dbr = $7e`.");
 
     internal static DiagnosticDescriptor MacroKeeps { get; } = Entry(
         "macro-keeps",
         Severity.Error,
         "`{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose "
-            + "signature says what it keeps",
+            + "signature declares what it keeps",
         "A macro's body is expanded into a routine, so what it saves and restores is part of what that routine "
             + "keeps, and `keeps` belongs in the routine's signature. Remove it from the macro's.");
 
@@ -2997,7 +2998,7 @@ public static class Catalogue
         "macro-distance",
         Severity.Error,
         "`{0}` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place",
-        "A macro is not called and does not return: its body is written out where it is used. `near`, `far`, "
+        "A macro is not called and does not return: its body is expanded where it is used. `near`, `far`, "
             + "`inline`, `args` and `interrupt` describe how a routine is called, entered or left, so they do not "
             + "apply to it. Remove the item.");
 
@@ -3006,14 +3007,14 @@ public static class Catalogue
         Severity.Error,
         "`{0}` contradicts the earlier `{1}`: a routine is either near or far",
         "A near routine is called with `jsr` and returns with `rts`; a far one is called with `jsl` and returns "
-            + "with `rtl`. A routine is one or the other, so its signature says `near` or `far` once. Remove one "
+            + "with `rtl`. A routine is one or the other, so its signature declares `near` or `far` once. Remove one "
             + "of them.");
 
     internal static DiagnosticDescriptor SignatureItemTwice { get; } = Entry(
         "signature-item-twice",
         Severity.Error,
         "`{0}` and `{1}` both describe the same part of the state",
-        "Each part of the processor state is declared once in a signature, so what it says does not depend on the "
+        "Each part of the processor state is declared once in a signature, so what it declares does not depend on the "
             + "order its items are read in. Keep one of the two items.");
 
     internal static DiagnosticDescriptor UnchangedNeedsEntry { get; } = Entry(
@@ -3022,14 +3023,14 @@ public static class Catalogue
         "`{0}` after `->` needs `{1}` before it too: a routine can promise to return a part unchanged only if it "
             + "assumes nothing about it on entry",
         "A `*` after the arrow promises that the routine returns that part of the state as its caller left it. "
-            + "That promise only means something when the entry also says `*`, accepting whatever the caller has. "
-            + "If the entry gives a value, write that value after the arrow instead.");
+            + "That promise only means something when the entry also declares `*`, accepting whatever the caller has. "
+            + "If the entry gives a value, put that value after the arrow instead.");
 
     internal static DiagnosticDescriptor ItemBelongsAtEntry { get; } = Entry(
         "item-belongs-at-entry",
         Severity.Error,
         "`{0}` {1}, and belongs before `->`",
-        "What a routine is and how it is called are true of it from entry to exit, so they are written once, "
+        "What a routine is and how it is called are true of it from entry to exit, so they are declared once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
     // The list is found by reflecting over the class rather than listed by hand, so that a new
@@ -3060,7 +3061,7 @@ public static class Catalogue
     private static DiagnosticDescriptor Entry(string id, Severity severity, string format, string explanation) =>
         new(
             id,
-            opening ?? throw new InvalidOperationException($"`{id}` is written above the first heading"),
+            opening ?? throw new InvalidOperationException($"`{id}` is declared above the first heading"),
             severity,
             format,
             explanation);

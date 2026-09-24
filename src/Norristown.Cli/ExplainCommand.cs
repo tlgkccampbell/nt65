@@ -57,7 +57,7 @@ internal static class ExplainCommand
     /// <summary>Lists every diagnostic name with its default severity, for someone looking one up.</summary>
     private static void List(TextWriter output)
     {
-        output.WriteLine("every diagnostic nt65 reports; `nt65 explain <name>` says what one is about.");
+        output.WriteLine("every diagnostic nt65 reports; `nt65 explain <name>` explains one.");
         output.WriteLine();
         var width = Catalogue.All.Max(descriptor => descriptor.Id.Length);
         foreach (var descriptor in Catalogue.All)

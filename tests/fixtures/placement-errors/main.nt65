@@ -4,14 +4,14 @@
 .segment CODE
 .export .proc first {
     lda #1
-    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
+    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
 }
 
 .place inner
 
 .export .proc third {
     lda #3
-    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `fourth` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
+    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `fourth` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
 }
 
 .place middle                       ; its bytes go between `third` and `fourth`

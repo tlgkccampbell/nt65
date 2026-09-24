@@ -149,7 +149,7 @@ public static class BuildCommand
             return new BuildResult(1, root, watched);
         if (compilation.IsCpuAssumed)
         {
-            error.WriteLine($"nt65: note: nothing says which processor this program is for, so it is built for the "
+            error.WriteLine($"nt65: note: nothing declares which processor this program is for, so it is built for the "
                 + $"{CpuNames.Format(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
         }
 

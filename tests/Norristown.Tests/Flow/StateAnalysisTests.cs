@@ -29,7 +29,7 @@ public sealed class StateAnalysisTests
     public void ARepInAnUnknownModeLeavesTheWidthsUnknown()
     {
         Assert.Contains("main.nt65:3: `lda #` needs the width of A, and it is not known here, because `rep #$20` widens nothing "
-            + "in emulation mode, and the mode is not known: a `.state` before it says which mode it is",
+            + "in emulation mode, and the mode is not known: a `.state` before it declares which mode it is",
             Problems(".proc p: e? {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
     }
 
@@ -258,7 +258,7 @@ public sealed class StateAnalysisTests
 
         var problem = Assert.Single(analysis.Diagnostics);
         Assert.Equal(9, problem.Span.Line);
-        Assert.Equal("`lda #` needs the width of A, and it is not known here, because `p` says `a?` at entry: "
+        Assert.Equal("`lda #` needs the width of A, and it is not known here, because `p` declares `a?` at entry: "
             + "an `.ensure` sets it", problem.Message);
         Assert.Equal(5, Assert.Single(problem.Related).Span.Line);
     }

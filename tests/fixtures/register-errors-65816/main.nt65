@@ -23,7 +23,7 @@
     pha
     jsr twiddle
     pla
-    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is back
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
 }
 
 ; The same on the 65816, where the label's `.state` also declares the widths a jump in is checked
@@ -33,7 +33,7 @@
     halfway:
     .state a8, i8, native
     pla
-    rts                     ;! error[keeps-broken]: `saves_across_a_label` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across_a_label`, and a jump in has not pushed what the path above the label has: the pushes above `halfway` belong on the same side of it as what reads them, and `args n` on `saves_across_a_label` is how a second entry point says what its caller pushed
+    rts                     ;! error[keeps-broken]: `saves_across_a_label` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across_a_label`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; `args n` on `saves_across_a_label` declares what the caller of a second entry point pushed
 }
 
 .proc jumps_in: a8, i8 {
@@ -44,7 +44,7 @@
 ; that routine hands back: its `keeps` is taken at its word, just as for a jump to the routine
 ; itself, since control comes back from neither.
 .proc hands_off: a8, i8, keeps a {
-    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `widens` does not promise to keep a: add `keeps a` to `widens` if it preserves it, or write `.next ?` here to end the path unchecked
+    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `widens` does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
 }
 
 .proc widens: a8, i8 {
@@ -70,12 +70,12 @@
 ; hand control on the same way: control comes back from neither.
 .proc branches_off: a8, i8, keeps a {
     ldx #1
-    bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or write `.next ?` here to end the path unchecked
+    bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
     rts
 }
 
 .proc next_hands_off: a8, i8, keeps a {
-    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or write `.next ?` here to end the path unchecked
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
     .next widens
 }
 

@@ -44,9 +44,9 @@ public sealed class ParserTests
     [InlineData("p || q && r", "`||` and `&&` need parentheses to show which applies first")]
     [InlineData("p && q ^^ r", "`^^` and `&&` need parentheses to show which applies first")]
     // A byte operator that reads as if it applied to the whole expression.
-    [InlineData("<label + 1", "unary `<` binds tighter than `+`: write `(<x) + y` or `<(x + y)` to say which is meant")]
-    [InlineData(">label * 2", "unary `>` binds tighter than `*`: write `(>x) * y` or `>(x * y)` to say which is meant")]
-    [InlineData("1 + <label + 2", "unary `<` binds tighter than `+`: write `(<x) + y` or `<(x + y)` to say which is meant")]
+    [InlineData("<label + 1", "unary `<` binds tighter than `+`: use `(<x) + y` or `<(x + y)` to show which is meant")]
+    [InlineData(">label * 2", "unary `>` binds tighter than `*`: use `(>x) * y` or `>(x * y)` to show which is meant")]
+    [InlineData("1 + <label + 2", "unary `<` binds tighter than `+`: use `(<x) + y` or `<(x + y)` to show which is meant")]
     public void ParenthesesAreRequiredWhereTheOrderIsEasyToMisread(string expression, string message) =>
         Assert.Equal([message], Errors(".word " + expression));
 
@@ -190,13 +190,13 @@ public sealed class ParserTests
     [InlineData(".proc p: a9 {", "`a9` is not a processor-state item")]
     [InlineData(".proc p: near = 1 {", "`near` is not a processor-state item")]
     [InlineData(".scope gfx", "expected `{`")]
-    [InlineData(".segment \"X\"", "a segment name is written without quotes: `.segment X`")]
+    [InlineData(".segment \"X\"", "a segment name takes no quotes: `.segment X`")]
     [InlineData(".segment X: word", "expected `zp`, `abs` or `far`")]
     [InlineData(".segment {", "expected a segment name")]
     [InlineData(".segment X: zp, page = 1", "expected `dp`, `bank`, `mirrors` or `space`")]
     [InlineData(".rodata {", "ca65's `.rodata` is `.segment RODATA` in nt65")]
-    [InlineData(".tag Point", "`.tag T` is written `.type T`, and `.tag T, n` is `.type T[n]`")]
-    [InlineData(".data {", "`.data` declares data, and needs a name: the segment is written `.segment DATA`")]
+    [InlineData(".tag Point", "`.tag T` is `.type T` in nt65, and `.tag T, n` is `.type T[n]`")]
+    [InlineData(".data {", "`.data` declares data, and needs a name: the segment is `.segment DATA`")]
     [InlineData(".data x .byte", "expected `:` and what the data is, or `{` for mixed data")]
     [InlineData(".data x: lda", "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, `.type T`, or bytes such as `.incbin`")]
     [InlineData(".data x: .byte[4 {", "expected `]`")]
@@ -212,7 +212,7 @@ public sealed class ParserTests
     [InlineData(".word (1 + 2", "expected `)`")]
     [InlineData(".import x: quad", "expected `zp`, `abs`, `far`, `proc(...)` or what the data is")]
     [InlineData(".import x: .incbin \"a.bin\"",
-        "`.incbin` is not an element type: an import says what its bytes are as `.byte`, `.word`, `.addr` or `.type T`")]
+        "`.incbin` is not an element type: an import states what its bytes are as `.byte`, `.word`, `.addr` or `.type T`")]
     [InlineData(".import x: .byte 1, 2",
         "an import describes its `.byte` data but cannot give it values: the bytes are defined in another object file")]
     [InlineData(".export", "expected a name to export")]

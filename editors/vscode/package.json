@@ -156,7 +156,7 @@
         "nt65.inlayHints.impliedValues": {
           "type": "boolean",
           "default": true,
-          "description": "Show the value an enum member takes from the one before it, where a struct or union member lands, and what a constant written as a sum works out to."
+          "description": "Show the value an enum member takes from the one before it, where a struct or union member lands, and what a constant given as a sum works out to."
         },
         "nt65.inlayHints.parameterNames": {
           "type": "boolean",

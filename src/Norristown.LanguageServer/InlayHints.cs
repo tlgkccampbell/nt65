@@ -185,7 +185,7 @@ internal static class InlayHints
             && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
         return new Mark(
             (calls ? "→ " : "") + string.Join(" ", parts),
-            $"What reaches the next line is `{now}`, and what reached this one was `{was}`.");
+            $"The processor state changes from `{was}` to `{now}` after this line.");
     }
 
     /// <summary>

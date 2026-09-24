@@ -29,7 +29,7 @@
 
 .proc not_adjacent: a8 {
     lda #1
-    .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
+    .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
 }
 
 .proc first: a8 {
@@ -61,12 +61,12 @@
 ; instruction or a direct call, the error says to write `.fallthrough` instead.
 .proc after_lda: a8 {
     lda #4
-    .next after_call    ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `lda #4` continues with the next statement; to say this routine runs into the one after it, use `.fallthrough`
+    .next after_call    ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `lda #4` continues with the next statement; if this routine runs into the one after it, use `.fallthrough`
 }
 
 .proc after_call: a8 {
     jsr first
-    .next in_the_middle ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jsr first` calls `first` and comes back; to say this routine runs into the one after it, use `.fallthrough`
+    .next in_the_middle ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jsr first` calls `first` and comes back; if this routine runs into the one after it, use `.fallthrough`
 }
 
 ; A `.next` in the middle of a body says nothing that is not already known either.
@@ -120,7 +120,7 @@
 .proc taken_not_adjacent: a8 {
     lda #7
     .if 1 {
-        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` can only name the routine written directly after it in the same segment
+        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
     } .else {
         .fallthrough no_such_routine
     }

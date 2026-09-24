@@ -539,7 +539,7 @@ public sealed class ControlFlow
     private static string? Uncounted(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
         {
-            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles a byte, and how many is in A",
+            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and the number of bytes is in A",
             MnemonicKind.Jam => "`jam` stops the processor, and nothing after it runs until a reset",
             _ => null,
         };
@@ -990,7 +990,7 @@ public sealed class ControlFlow
             diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
                 Catalogue.NextSuccessorsKnown.Message(
                     $"`{unit.Step.Statement.GetText().Trim()}`", does,
-                    ends ? "; to say this routine runs into the one after it, use `.fallthrough`" : ""))
+                    ends ? "; if this routine runs into the one after it, use `.fallthrough`" : ""))
             {
                 Fix = rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null,
             });

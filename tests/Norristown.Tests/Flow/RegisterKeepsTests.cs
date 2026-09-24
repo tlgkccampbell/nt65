@@ -146,7 +146,7 @@ public sealed class RegisterKeepsTests
     {
         Assert.Equal(
             ["main.nt65:3: `p` promises `keeps x`, but X is not the same as on entry here: "
-                + "restore it before returning, or add `.state keeps x` at the point where the entry value is back"],
+                + "restore it before returning, or add `.state keeps x` at the point where the entry value is restored"],
             Problems(".proc p: keeps x {\n    ldx #1\n    rts\n}\n"));
     }
 
@@ -170,7 +170,7 @@ public sealed class RegisterKeepsTests
 
         Assert.Equal(
             ["main.nt65:8: `p` promises `keeps x`, but X is not the same as on entry here: "
-                + "restore it before returning, or add `.state keeps x` at the point where the entry value is back"],
+                + "restore it before returning, or add `.state keeps x` at the point where the entry value is restored"],
             Problems(saved + ".proc p: keeps x {\n    stx xsave\n    ldx #1\n    ldx xsave\n    rts\n}\n"));
         Assert.Empty(Problems(
             saved + ".proc p: keeps x {\n    stx xsave\n    ldx #1\n    ldx xsave\n    .state keeps x\n    rts\n}\n"));
@@ -197,7 +197,7 @@ public sealed class RegisterKeepsTests
     {
         Assert.Equal(
             ["main.nt65:3: `p` promises `keeps a`, but A is not the same as on entry here: "
-                + "restore it before returning, or add `.state keeps a` at the point where the entry value is back"],
+                + "restore it before returning, or add `.state keeps a` at the point where the entry value is restored"],
             Problems(".proc p: interrupt, keeps a {\n    lda #1\n    rti\n}\n"));
     }
 
@@ -267,7 +267,7 @@ public sealed class RegisterKeepsTests
         Assert.Empty(Wide(".proc p: a8, keeps a {\n    pha\n    lda #1\n    pla\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:5: `p` promises `keeps a`, but A is not the same as on entry here: "
-                + "restore it before returning, or add `.state keeps a` at the point where the entry value is back"],
+                + "restore it before returning, or add `.state keeps a` at the point where the entry value is restored"],
             Wide(".proc p: a8, keeps a -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
     }
 

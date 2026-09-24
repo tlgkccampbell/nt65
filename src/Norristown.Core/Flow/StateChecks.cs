@@ -117,7 +117,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.WidthUnknown.Message(
                 text,
                 Format(register),
-                $"`{Owner(step, routine)}` says `{item}*`, which assumes nothing about it"), Declares(step, item, routine));
+                $"`{Owner(step, routine)}` declares `{item}*`, which assumes nothing about it"), Declares(step, item, routine));
         }
         else if (!IsKnown(width))
         {
@@ -126,7 +126,7 @@ internal sealed class StateChecks
                 Catalogue.WidthUnknown.Message(
                     text,
                     Format(register),
-                    "it is not known here" + (why is null ? ": a `.state` says what it is" : Cause.Because(why))),
+                    "it is not known here" + (why is null ? ": a `.state` declares what it is" : Cause.Because(why))),
                 Ensure(step, item));
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
@@ -646,12 +646,12 @@ internal sealed class StateChecks
         if (state.D.Kind == StateValueKind.Unchanged)
         {
             Report(step, Catalogue.DirectPageUnknown.Message(
-                what, $"`{Owner(step, routine)}` says `dp*`, which assumes nothing about D"));
+                what, $"`{Owner(step, routine)}` declares `dp*`, which assumes nothing about D"));
         }
         else if (!state.D.IsKnown)
         {
             Report(step, Catalogue.DirectPageUnknown.Message(
-                what, "D is not known here: a `.state dp = ...` says what it is"));
+                what, "D is not known here: a `.state dp = ...` declares what it is"));
         }
         else if (address < state.D.Value || address > state.D.Value + 0xff)
         {

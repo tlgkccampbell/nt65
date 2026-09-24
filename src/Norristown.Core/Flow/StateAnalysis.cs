@@ -129,7 +129,7 @@ public sealed class StateAnalysis : IProcessorStates
 
     private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
-        : new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
+        : new($"`{routine.DisplayName}` declares `{item}` at entry", "an `.ensure` sets it");
 
     /// <summary>
     /// Returns how many bytes a push or pull of a register this wide moves, or null when that is
@@ -206,8 +206,8 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private static Cause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
-            + $"say the width of {register}",
-        $"the `.state` after `{label.DisplayName}` can say `{item}8` or `{item}16`");
+            + $"declare the width of {register}",
+        $"the `.state` after `{label.DisplayName}` can declare `{item}8` or `{item}16`");
 
     private static AnalysisStack? Push(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Push(StackEntry.Opaque, count) : null;
@@ -389,7 +389,7 @@ public sealed class StateAnalysis : IProcessorStates
             return inherited;
 
         if (step.Statement is StateDirectiveSyntax)
-            return new("a `.state` says so", "the `.state` can say what it is");
+            return new("a `.state` declares it unknown", "the `.state` can declare what it is");
         if (step.Statement is not InstructionStatementSyntax statement)
             return null;
         var mode = state.Processor.E;
@@ -400,14 +400,14 @@ public sealed class StateAnalysis : IProcessorStates
             // lost the stack, which is nearer the mistake than the `php` above it.
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
-            MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
+            MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && Constant(step) is not null
-                => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
+                => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it declares which mode it is"),
             MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
             MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
-                => new($"{quoted} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
+                => new($"{quoted} calls through a pointer, and its `.next` names no routine", "a `.next` that names them lets their exit state flow here"),
             MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{quoted} returns with it unknown", "an `.ensure` after it sets it"),
-            _ => new($"{quoted} makes it unknown", "a `.state` after it says what it is"),
+            _ => new($"{quoted} makes it unknown", "a `.state` after it declares what it is"),
         };
     }
 

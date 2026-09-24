@@ -56,7 +56,7 @@
     widen!()                ;! error[return-state-mismatch]: `widen!` declares it returns with `a16`, but A is 8-bit at the end of its body
     rep #$20
     sep #$20
-    index!(1)               ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `index!` says `i*`, which assumes nothing about it
+    index!(1)               ;! error[width-unknown]: `ldx #` needs the width of X and Y, and `index!` declares `i*`, which assumes nothing about it
     keep!() {               ;! error[block-changes-state]: the block given to `keep!` must leave the processor state as it found it: it starts with `a8, i*, native` and ends with `a16, i*, native`;! error[return-state-mismatch]: `keep!` declares it returns with `a8`, but A is 16-bit at the end of its body
         rep #$20
     }

@@ -46,14 +46,14 @@ internal static class Fixes
 
             case FixKind.Fallthrough when fix is { Text: { } routine, At: { } closer }:
                 var last = closer.Line - 1;
-                yield return Fix(diagnostic, $"Say it runs into `{routine}` with `.fallthrough`",
+                yield return Fix(diagnostic, $"Add `.fallthrough {routine}`",
                     [new Edit(tree, new TextSpan(tree.LineStarts[last], 0),
                         $"{Edits.IndentOf(tree, last)}    .fallthrough {routine}\n")]);
                 break;
 
             case FixKind.AlwaysTaken when fix is { Text: { } target, At: { } branch }:
                 var after = branch.Line - 1;
-                yield return Fix(diagnostic, $"Say the branch is always taken with `.next {target}`",
+                yield return Fix(diagnostic, $"Add `.next {target}`: the branch is always taken",
                     [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
                 break;
 
@@ -95,7 +95,7 @@ internal static class Fixes
 
             case FixKind.Spelling when fix.Text is { } spelled:
                 yield return Fix(diagnostic,
-                    spelled == "}" ? "Close the block with `}`" : $"Write it as `{spelled}`",
+                    spelled == "}" ? "Close the block with `}`" : $"Change to `{spelled}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), spelled)]);
                 break;
 
@@ -144,7 +144,7 @@ internal static class Fixes
             case FixKind.Width when fix.Text is { } item:
                 foreach (var width in (int[])[8, 16])
                 {
-                    yield return Fix(diagnostic, $"Say the width here with `.ensure {item}{width}`",
+                    yield return Fix(diagnostic, $"Add `.ensure {item}{width}`",
                         [Edits.InsertBefore(tree, line, $".ensure {item}{width}")], preferred: false);
                 }
                 break;
@@ -173,7 +173,7 @@ internal static class Fixes
 
             case FixKind.MissingPiece when fix.Text is { } piece:
                 if (Piece(tree, diagnostic, piece) is { } inserted)
-                    yield return Fix(diagnostic, $"Write the `{piece}`", [inserted]);
+                    yield return Fix(diagnostic, $"Insert the missing `{piece}`", [inserted]);
                 break;
 
             default:
@@ -436,7 +436,7 @@ internal static class Fixes
         {
             var grouped = tree.Text[outer.Span.Start..open] + "(" + tree.Text[open..close] + ")"
                 + tree.Text[close..outer.Span.End];
-            yield return Fix(diagnostic, $"Write it as `{grouped.Trim()}`",
+            yield return Fix(diagnostic, $"Change to `{grouped.Trim()}`",
                 [new Edit(tree, new TextSpan(open, 0), "("), new Edit(tree, new TextSpan(close, 0), ")")],
                 preferred: false);
         }

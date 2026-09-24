@@ -73,8 +73,8 @@ public sealed class RequirementsTests
 
         var only = Assert.Single(analysis.Diagnostics);
         Assert.Equal(Severity.Warning, only.Severity);
-        Assert.Equal("`first` runs off its end into whatever is written after it: add a `.fallthrough` naming the routine "
-            + "it runs into, or write `.next ?` to end the path", only.Message);
+        Assert.Equal("`first` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine "
+            + "it runs into, or use `.next ?` to end the path", only.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", only.Fix?.At), only.Fix);
         Assert.Equal(6, only.Fix?.At?.Line);
     }
@@ -136,8 +136,8 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             [
-                "main.nt65:8: `print` expects one `.strz` written after each call, and none follows this one",
-                "main.nt65:9: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead",
+                "main.nt65:8: `print` expects one `.strz` directly after each call, and none follows this one",
+                "main.nt65:9: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead",
             ],
             Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
     }
@@ -289,7 +289,7 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             ["main.nt65:8: `p` runs off the end of a segment block into whatever that segment holds next: "
-                + "add a `.next` saying where flow goes, or write `.next ?` to end the path"],
+                + "add a `.next` saying where flow goes, or use `.next ?` to end the path"],
             Program(Text).Problems());
     }
 

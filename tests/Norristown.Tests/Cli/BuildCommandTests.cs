@@ -192,7 +192,7 @@ public sealed class BuildCommandTests : IDisposable
 
         (code, printed) = Run(alone, "build", "other.nt65");
         Assert.Equal(0, code);
-        Assert.Contains("nt65: note: nothing says which processor this program is for, so it is built for the 6502", printed);
+        Assert.Contains("nt65: note: nothing declares which processor this program is for, so it is built for the 6502", printed);
     }
 
     /// <summary>

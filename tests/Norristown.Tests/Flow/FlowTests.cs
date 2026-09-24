@@ -240,7 +240,7 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    lda #1\n    .byte $2c\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:5: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead"],
+            ["main.nt65:5: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead"],
             problems);
     }
 
@@ -284,7 +284,7 @@ public sealed class FlowTests
             ".proc set {\n    beq @two\n    lda #1\n    .byte $2c\n@two:\n    lda #2\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:6: the instruction above falls through into this data: add a `.next` after the data saying where flow goes instead"],
+            ["main.nt65:6: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead"],
             problems);
     }
 

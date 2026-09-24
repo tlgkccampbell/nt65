@@ -28,7 +28,7 @@
       "allOf": [{ "$ref": "#/definitions/defines" }]
     },
     "diagnostics": {
-      "description": "How much each diagnostic matters to this project, by name, over what nt65 reports it as. `nt65 explain <name>` says what one is about.",
+      "description": "How much each diagnostic matters to this project, by name, over what nt65 reports it as. `nt65 explain <name>` describes one.",
       "allOf": [{ "$ref": "#/definitions/diagnostics" }],
       "examples": [{ "unused-symbol": "off", "mnemonic-name": "error" }]
     },
@@ -506,7 +506,7 @@
           "allOf": [{ "$ref": "#/definitions/number" }]
         },
         "mirrors": {
-          "description": "The other banks the segment appears in, written as `ranges` writes banks. A segment with mirrors needs a bank.",
+          "description": "The other banks the segment appears in, in the same form as the banks in `ranges`. A segment with mirrors needs a bank.",
           "allOf": [{ "$ref": "#/definitions/banks" }]
         },
         "space": {

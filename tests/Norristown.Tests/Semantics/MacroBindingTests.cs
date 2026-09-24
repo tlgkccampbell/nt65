@@ -195,7 +195,7 @@ public sealed class MacroBindingTests
         var model = Analysis.Model(".module main\n.macro m(body: block, n) {\n    body\n}\n");
 
         Assert.Equal(
-            ["2: `n` comes after the `block` parameter `body`, and a block is written after the parentheses"],
+            ["2: `n` comes after the `block` parameter `body`, and a block goes after the parentheses"],
             model.Problems());
     }
 
@@ -206,7 +206,7 @@ public sealed class MacroBindingTests
         var model = Analysis.Model(".module main\n.macro m(n: const, body: block) {\n    body\n    n\n}\n");
 
         Assert.Equal(
-            ["4: `n` is a macro parameter, and only a `block` parameter may be written alone on a line"],
+            ["4: `n` is a macro parameter, and only a `block` parameter may stand alone on a line"],
             model.Problems());
     }
 

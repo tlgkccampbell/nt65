@@ -128,9 +128,9 @@ public sealed class CHeader
         if (routines.Count > 0)
         {
             Line("");
-            Line("/* What a routine takes and returns is the programmer's to declare. Each is declared");
+            Line("/* nt65 does not know what a routine takes or returns, so each routine is declared");
             Line("   `void name(void)` unless NT65_OWN_name is defined before this header is included,");
-            Line("   and then a prototype of the programmer's own declares it instead. */");
+            Line("   in which case your own prototype declares it instead. */");
         }
         foreach (var routine in routines)
         {
