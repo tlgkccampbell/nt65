@@ -27,7 +27,7 @@ internal static class DocumentLinks
             }
             links.Add(new Protocol.DocumentLink(
                 Lsp.ToRange(model.Tree, literal.Span),
-                Lsp.ToUri(Paths.Beside(model.Tree.Path, path))));
+                Uris.ToUri(Paths.Beside(model.Tree.Path, path))));
         }
         return links;
     }

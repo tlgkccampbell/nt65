@@ -46,7 +46,7 @@ internal static class CodeActions
         var edits = change.Edits
             .GroupBy(edit => edit.Tree)
             .ToDictionary(
-                group => Lsp.ToUri(group.Key.Path),
+                group => Uris.ToUri(group.Key.Path),
                 group => (IReadOnlyList<Protocol.TextEdit>)[.. group
                     .OrderBy(edit => edit.Span.Start)
                     .Select(edit => new Protocol.TextEdit(Lsp.ToRange(edit.Tree, edit.Span), edit.Text))]);
@@ -73,7 +73,7 @@ internal static class CodeActions
         {
             return new Protocol.Command(
                 "Rename", "nt65.rename",
-                [Lsp.ToUri(existing.File), existing.Line - 1, existing.StartColumn - 1]);
+                [Uris.ToUri(existing.File), existing.Line - 1, existing.StartColumn - 1]);
         }
         if (change.Names is not { } placeholder)
             return null;
@@ -92,6 +92,6 @@ internal static class CodeActions
 
         var line = text[..at].Count(c => c == '\n');
         var character = at - (text[..at].LastIndexOf('\n') + 1);
-        return new Protocol.Command("Rename", "nt65.rename", [Lsp.ToUri(tree.Path), line, character]);
+        return new Protocol.Command("Rename", "nt65.rename", [Uris.ToUri(tree.Path), line, character]);
     }
 }

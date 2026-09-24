@@ -137,7 +137,7 @@ internal static class MovedFiles
     private static void Add(
         Dictionary<string, List<Protocol.TextEdit>> edits, string path, string text, TextSpan at, string included)
     {
-        var uri = Lsp.ToUri(path);
+        var uri = Uris.ToUri(path);
         if (!edits.TryGetValue(uri, out var found))
             edits[uri] = found = [];
         found.Add(new Protocol.TextEdit(Range(text, at), included));

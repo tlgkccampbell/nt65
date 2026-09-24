@@ -25,7 +25,7 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// Returns the client's form of the URI for the file that a URI produced by the compiler
     /// points at.
     /// </summary>
-    public string ToClient(string uri) => workspace.UriOf(Workspace.PathOf(uri));
+    public string ToClient(string uri) => workspace.UriOf(Uris.ToPath(uri));
 
     /// <summary>Returns a location with its URI converted to the client's form.</summary>
     public Location ToClient(Location location) => location with { Uri = ToClient(location.Uri) };

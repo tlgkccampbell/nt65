@@ -28,7 +28,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             workspace.Open(new TextDocumentItem(GeneratedProject.Uri(i), "nt65", 1, GeneratedProject.Text(i, Files)));
 
         var watch = Stopwatch.StartNew();
-        var first = workspace.AnalysisFor(Workspace.PathOf(GeneratedProject.Uri(0)));
+        var first = workspace.AnalysisFor(Uris.ToPath(GeneratedProject.Uri(0)));
         output.WriteLine($"{Files} files, first analysis: {watch.Elapsed.TotalMilliseconds:0} ms");
         Assert.Empty(first.Diagnostics);
 
@@ -76,7 +76,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var uri = GeneratedProject.Uri(0);
         workspace.Open(new TextDocumentItem(uri, "nt65", 1, text));
         output.WriteLine($"{text.Count(c => c == '\n')} lines in one file");
-        Assert.Empty(workspace.AnalysisFor(Workspace.PathOf(uri)).Diagnostics);
+        Assert.Empty(workspace.AnalysisFor(Uris.ToPath(uri)).Diagnostics);
 
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "cpx #8"), 9, 10, "9", "8");
@@ -119,7 +119,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             _ = Lsp.ToDiagnostics(own.Diagnostics, own.Tree, own.Configuration);
             atOnce.Add(watch.Elapsed.TotalMilliseconds);
 
-            var analysis = workspace.AnalysisFor(Workspace.PathOf(uri));
+            var analysis = workspace.AnalysisFor(Uris.ToPath(uri));
             foreach (var file in workspace.ToPublish())
                 _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
             wholeProgram.Add(watch.Elapsed.TotalMilliseconds);

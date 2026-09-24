@@ -151,7 +151,7 @@ internal static class CallHierarchy
     /// </summary>
     private static Symbol? Routine(ProgramAnalysis analysis, Protocol.CallHierarchyItem item)
     {
-        var path = Workspace.PathOf(item.Uri);
+        var path = Uris.ToPath(item.Uri);
         if (analysis.ModelFor(path) is not { } model)
             return null;
         var start = model.Tree.GetPosition(item.SelectionRange.Start.Line, item.SelectionRange.Start.Character);
@@ -171,7 +171,7 @@ internal static class CallHierarchy
         return new Protocol.CallHierarchyItem(
             routine.Name,
             Protocol.SymbolKind.Function,
-            Lsp.ToUri(routine.Tree.Path),
+            Uris.ToUri(routine.Tree.Path),
             Lsp.ToRange(routine.Tree, covered),
             Lsp.ToRange(routine.Tree, routine.NameSpan),
             routine.PathName);

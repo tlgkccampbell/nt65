@@ -31,7 +31,7 @@ public sealed class PlacementRequestsTests
         var (analysis, model) = Analyzed(Main, Part);
         var at = Main.IndexOf("part", StringComparison.Ordinal) + 1;
 
-        var hover = Lsp.ToHover(analysis, model, at);
+        var hover = Norristown.LanguageServer.Hover.At(analysis, model, at);
         Assert.NotNull(hover);
         var text = hover.Contents.Value;
         Assert.Contains("module part", text, StringComparison.Ordinal);

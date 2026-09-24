@@ -38,22 +38,6 @@ internal sealed class Workspace
     private ProgramAnalysis? loose;
     private ProgramAnalysis? loosePrevious;
 
-    /// <summary>
-    /// Returns the logical path a URI names, with <c>/</c> separators, which is the form that
-    /// diagnostics and output carry. A URI that is not a file is returned unchanged.
-    /// </summary>
-    public static string PathOf(string uri)
-    {
-        if (Lsp.StandardPath(uri) is { } standard)
-            return standard;
-        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile)
-            return uri;
-        // VS Code escapes a drive's colon, `file:///c%3A/src`, which .NET does not take for a
-        // drive and gives back as `/c:/src`.
-        var path = parsed.LocalPath.Replace('\\', '/');
-        return path.Length >= 3 && path[0] == '/' && char.IsAsciiLetter(path[1]) && path[2] == ':' ? path[1..] : path;
-    }
-
     /// <summary>Returns a file's text, or null when it cannot be read.</summary>
     public static string? Read(string path)
     {
@@ -79,7 +63,7 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            roots = [.. rootUris.Select(PathOf).Where(root => root.Length > 0)];
+            roots = [.. rootUris.Select(Uris.ToPath).Where(root => root.Length > 0)];
             configuration = active;
             projects.Clear();
             foreach (var root in roots)
@@ -105,9 +89,9 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            var gone = removed.Select(PathOf).ToHashSet(StringComparer.Ordinal);
+            var gone = removed.Select(Uris.ToPath).ToHashSet(StringComparer.Ordinal);
             IReadOnlyList<string> folders = [.. roots.Where(root => !gone.Contains(root))
-                .Concat(added.Select(PathOf))
+                .Concat(added.Select(Uris.ToPath))
                 .Where(root => root.Length > 0)
                 .Distinct(StringComparer.Ordinal)];
             Load(folders, configuration);
@@ -141,7 +125,7 @@ internal sealed class Workspace
     /// <summary>Takes a newly opened document and parses it.</summary>
     public Document Open(TextDocumentItem item)
     {
-        var document = new Document(item.Uri, item.Version, SyntaxTree.Parse(PathOf(item.Uri), item.Text));
+        var document = new Document(item.Uri, item.Version, SyntaxTree.Parse(Uris.ToPath(item.Uri), item.Text));
         lock (gate)
         {
             open[item.Uri] = document;
@@ -190,7 +174,7 @@ internal sealed class Workspace
         {
             if (open.TryGetValue(uri, out var document))
                 return document;
-            return named.TryGetValue(PathOf(uri), out var canonical) ? open.GetValueOrDefault(canonical) : null;
+            return named.TryGetValue(Uris.ToPath(uri), out var canonical) ? open.GetValueOrDefault(canonical) : null;
         }
     }
 
@@ -204,7 +188,7 @@ internal sealed class Workspace
         lock (gate)
         {
             var changed = false;
-            foreach (var path in uris.Select(PathOf))
+            foreach (var path in uris.Select(Uris.ToPath))
             {
                 if (Paths.Normalized(path).Split('/')[^1] == ProjectFile.Name)
                 {
@@ -335,7 +319,7 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            return named.GetValueOrDefault(path) ?? Lsp.ToUri(path);
+            return named.GetValueOrDefault(path) ?? Uris.ToUri(path);
         }
     }
 

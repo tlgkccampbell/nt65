@@ -56,7 +56,7 @@ public sealed class ForeignMacroLineTests
         var sta = main.Offset("sta");
         Assert.Equal(sta, analysis.File("defs.nt65").Offset("lda"));
 
-        var hover = Lsp.ToHover(analysis, main, sta);
+        var hover = Hover.At(analysis, main, sta);
 
         Assert.NotNull(hover);
         Assert.StartsWith("```nt65\nsta $10  ; store accumulator\n```", hover.Contents.Value, StringComparison.Ordinal);

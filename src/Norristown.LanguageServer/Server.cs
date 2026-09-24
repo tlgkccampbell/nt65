@@ -342,7 +342,7 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         var (edit, messages) = MovedFiles.For(
             workspace,
-            [.. request.Files.Select(file => (Workspace.PathOf(file.OldUri), Workspace.PathOf(file.NewUri)))]);
+            [.. request.Files.Select(file => (Uris.ToPath(file.OldUri), Uris.ToPath(file.NewUri)))]);
         foreach (var message in messages)
             await ShowAsync(MessageType.Warning, message).ConfigureAwait(false);
         return outgoing.ToClient(edit);
@@ -363,7 +363,7 @@ internal sealed class Server : IDisposable
     public string? StandardModule(StandardModuleParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return StandardModules.Text(Workspace.PathOf(request.TextDocument.Uri));
+        return StandardModules.Text(Uris.ToPath(request.TextDocument.Uri));
     }
 
     /// <summary>
@@ -383,7 +383,7 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         watchingOutput = true;
         var uri = request.TextDocument.Uri;
-        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
+        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
         cancellation.ThrowIfCancellationRequested();
         return LanguageServer.Output.Of(
             workspace.AnalysisFor(path), workspace.SettingsFor(path), path,
@@ -475,8 +475,8 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/hover")]
-    public Hover? Hover(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? Lsp.ToHover(asked.Analysis, asked.Model, asked.Position) : null;
+    public Protocol.Hover? Hover(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        At(request, cancellation) is { } asked ? LanguageServer.Hover.At(asked.Analysis, asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request, CancellationToken cancellation) =>
@@ -503,7 +503,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     [JsonRpcMethod("textDocument/prepareRename")]
     public Protocol.Range? PrepareRename(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? Lsp.ToRenameRange(asked.Model, asked.Position) : null;
+        At(request, cancellation) is { } asked ? LanguageServer.Rename.RangeAt(asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/rename")]
     public WorkspaceEdit? Rename(RenameParams request, CancellationToken cancellation)
@@ -513,7 +513,7 @@ internal sealed class Server : IDisposable
 
         // A new name the language will not accept is returned as a failed request, which the
         // client shows for the programmer to correct, rather than as an empty edit.
-        var (edit, problem) = Lsp.ToRename(asked.Program, asked.Model, asked.Position, request.NewName);
+        var (edit, problem) = LanguageServer.Rename.EditAt(asked.Program, asked.Model, asked.Position, request.NewName);
         return problem is null ? outgoing.ToClient(edit) : throw new LocalRpcException(problem);
     }
 
@@ -613,7 +613,7 @@ internal sealed class Server : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();
         return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(
-            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
+            workspace.AnalysisFor(Uris.ToPath(request.Item.Uri)), request.Item, cancellation));
     }
 
     [JsonRpcMethod("callHierarchy/outgoingCalls")]
@@ -622,7 +622,7 @@ internal sealed class Server : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();
         return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(
-            workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
+            workspace.AnalysisFor(Uris.ToPath(request.Item.Uri)), request.Item, cancellation));
     }
 
     [JsonRpcMethod("textDocument/codeAction")]
@@ -880,7 +880,7 @@ internal sealed class Server : IDisposable
         // can only have changed if the edit reached past the file it was made in. An edit that
         // did not needs no refresh, because the client re-fetches for the document it is
         // showing by itself.
-        if (!refresh || (changed is not null && !workspace.ReachedOtherFiles(Workspace.PathOf(changed))))
+        if (!refresh || (changed is not null && !workspace.ReachedOtherFiles(Uris.ToPath(changed))))
             return;
         if (client.RefreshesTokens)
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
@@ -1022,7 +1022,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     private SemanticModel? Model(string uri)
     {
-        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
+        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
         return workspace.AnalysisFor(path).ModelFor(path);
     }
 

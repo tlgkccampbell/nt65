@@ -82,7 +82,7 @@ internal static class MacroCallHover
         var line = model.Tree.GetLineIndex(position);
         var character = position - model.Tree.LineStarts[line];
         var arguments = Uri.EscapeDataString(
-            JsonSerializer.Serialize(new object[] { Lsp.ToUri(model.Tree.Path), line, character }));
+            JsonSerializer.Serialize(new object[] { Uris.ToUri(model.Tree.Path), line, character }));
         return $"[Show expansion](command:nt65.showExpansion?{arguments}) — {rest} more line{(rest == 1 ? "" : "s")}";
     }
 }

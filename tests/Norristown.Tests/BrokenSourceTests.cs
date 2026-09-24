@@ -124,12 +124,12 @@ public sealed class BrokenSourceTests
         void Answer(string request, Action work) =>
             Answered(problems, () => $"{where}: {request} at {at.Line + 1}:{at.Character + 1}", work);
 
-        Answer("hover", () => Lsp.ToHover(analysis, model, caret));
+        Answer("hover", () => Hover.At(analysis, model, caret));
         Answer("definition", () => Lsp.ToDefinition(program, model, caret));
         Answer("references", () => Lsp.ToReferences(program, model, caret, includeDeclaration: true));
         Answer("highlights", () => Lsp.ToHighlights(model, caret));
-        Answer("prepare rename", () => Lsp.ToRenameRange(model, caret));
-        Answer("rename", () => Lsp.ToRename(program, model, caret, "renamed"));
+        Answer("prepare rename", () => Rename.RangeAt(model, caret));
+        Answer("rename", () => Rename.EditAt(program, model, caret, "renamed"));
         Answer("completion", () => Completion.At(program, model, analysis.Cpu, caret, snippets: true));
         Answer("signature help", () => CallHelp.At(program, model, caret));
         Answer("code actions", () =>

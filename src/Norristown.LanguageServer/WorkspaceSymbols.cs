@@ -76,7 +76,7 @@ internal static class WorkspaceSymbols
                 found.Add((score, new Protocol.SymbolInformation(
                     item.Name,
                     Lsp.ToSymbolKind(item.Kind),
-                    new Protocol.Location(Lsp.ToUri(tree.Path), Lsp.ToRange(tree, item.NameSpan)),
+                    new Protocol.Location(Uris.ToUri(tree.Path), Lsp.ToRange(tree, item.NameSpan)),
                     container)));
             }
 

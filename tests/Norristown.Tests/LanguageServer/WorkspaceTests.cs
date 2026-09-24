@@ -33,8 +33,8 @@ public sealed class WorkspaceTests
     [Fact]
     public void AWorkspacePathComesFromItsUri()
     {
-        Assert.Equal(Named, Workspace.PathOf(Uri));
-        Assert.Equal("untitled:Untitled-1", Workspace.PathOf("untitled:Untitled-1"));
+        Assert.Equal(Named, Uris.ToPath(Uri));
+        Assert.Equal("untitled:Untitled-1", Uris.ToPath("untitled:Untitled-1"));
     }
 
     /// <summary>
@@ -47,17 +47,17 @@ public sealed class WorkspaceTests
     [Fact]
     public void ARootedPathComesBackAsAFileUriOnEveryHost()
     {
-        Assert.Equal("file:///home/u/p/main.nt65", Lsp.ToUri("/home/u/p/main.nt65"));
-        Assert.Equal("file:///c:/work/main.nt65", Lsp.ToUri("/c:/work/main.nt65"));
+        Assert.Equal("file:///home/u/p/main.nt65", Uris.ToUri("/home/u/p/main.nt65"));
+        Assert.Equal("file:///c:/work/main.nt65", Uris.ToUri("/c:/work/main.nt65"));
 
         // Characters a URI cannot hold are escaped in any file name.
-        Assert.Equal("file:///home/u/my%20file.nt65", Lsp.ToUri("/home/u/my file.nt65"));
-        Assert.Equal("file:///home/u/a%23b.nt65", Lsp.ToUri("/home/u/a#b.nt65"));
+        Assert.Equal("file:///home/u/my%20file.nt65", Uris.ToUri("/home/u/my file.nt65"));
+        Assert.Equal("file:///home/u/a%23b.nt65", Uris.ToUri("/home/u/a#b.nt65"));
 
         // An untitled document and a file the editor named relatively are not paths, so they
         // come back as they went in.
-        Assert.Equal("untitled:Untitled-1", Lsp.ToUri("untitled:Untitled-1"));
-        Assert.Equal("main.nt65", Lsp.ToUri("main.nt65"));
+        Assert.Equal("untitled:Untitled-1", Uris.ToUri("untitled:Untitled-1"));
+        Assert.Equal("main.nt65", Uris.ToUri("main.nt65"));
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public sealed class WorkspaceTests
                 """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
             File.WriteAllText(Path.Combine(root.FullName, "main.nt65"), ".module main\n.if DEBUG {\n    .error \"built for debugging\"\n}\n");
             var uri = new Uri(root.FullName).AbsoluteUri;
-            var main = Workspace.PathOf(new Uri(Path.Combine(root.FullName, "main.nt65")).AbsoluteUri);
+            var main = Uris.ToPath(new Uri(Path.Combine(root.FullName, "main.nt65")).AbsoluteUri);
             var workspace = new Workspace();
 
             workspace.Load(uri);
